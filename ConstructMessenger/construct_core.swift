@@ -5831,6 +5831,14 @@ public enum CfeIncomingEvent: Equatable, Hashable {
      */
     case heartbeatReceived(contactId: String, messageId: String, data: Data, msgNum: UInt32
     )
+    /**
+     * The platform is about to tear down the ratchet with `contact_id` and asks whether it may.
+     * Answered with `SendEndSession` or `EndSessionSuppressed` + `ScheduleTimer`, from the same
+     * window the core's own teardowns use. `peer_on_dead_session` is the platform's evidence
+     * that the previous teardown never landed.
+     */
+    case teardownRequested(contactId: String, peerOnDeadSession: Bool
+    )
 
 
 
@@ -5882,6 +5890,9 @@ public struct FfiConverterTypeCfeIncomingEvent: FfiConverterRustBuffer {
         )
         
         case 12: return .heartbeatReceived(contactId: try FfiConverterString.read(from: &buf), messageId: try FfiConverterString.read(from: &buf), data: try FfiConverterData.read(from: &buf), msgNum: try FfiConverterUInt32.read(from: &buf)
+        )
+        
+        case 13: return .teardownRequested(contactId: try FfiConverterString.read(from: &buf), peerOnDeadSession: try FfiConverterBool.read(from: &buf)
         )
         
         default: throw UniffiInternalError.unexpectedEnumCase
@@ -5967,6 +5978,12 @@ public struct FfiConverterTypeCfeIncomingEvent: FfiConverterRustBuffer {
             FfiConverterString.write(messageId, into: &buf)
             FfiConverterData.write(data, into: &buf)
             FfiConverterUInt32.write(msgNum, into: &buf)
+            
+        
+        case let .teardownRequested(contactId,peerOnDeadSession):
+            writeInt(&buf, Int32(13))
+            FfiConverterString.write(contactId, into: &buf)
+            FfiConverterBool.write(peerOnDeadSession, into: &buf)
             
         }
     }

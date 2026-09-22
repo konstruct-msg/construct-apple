@@ -31,14 +31,6 @@ final class SessionCoordinator: MessageRouterDelegate {
     /// Forwarded to ChatsViewModel — fires when an E2E-encrypted delivery receipt is decrypted.
     var onE2EDeliveryReceiptDecrypted: (([String]) -> Void)?
 
-    /// Tracks when we last sent END_SESSION to each peer to prevent loop storms.
-    private var endSessionSentAt: [String: Date] = [:]
-    /// How many times we have re-notified a peer that kept using a session we had torn down.
-    /// Bounded by `SessionReducer.endSessionMaxUnackedRetries` — evidence buys a few fast retries,
-    /// not an open channel. Cleared when a session is established (the teardown clearly landed).
-    private var endSessionUnackedRetries: [String: Int] = [:]
-    private let endSessionCooldown: TimeInterval = 30.0
-
     /// When we last *received* END_SESSION from a peer (any role). Used to suppress an
     /// immediate outbound END_SESSION if the first post-reset msg0 fails AEAD — that
     /// message is often a race/stale wire frame; the peer usually follows with
@@ -259,7 +251,11 @@ final class SessionCoordinator: MessageRouterDelegate {
                 )
                 return
             }
-            self.messageRouter(self.messageRouter, needsEndSession: peer)
+            // Pre-approved, and it has to be: this fires *because* the machine granted the owed
+            // teardown, and the grant opened a fresh window. Asking again would land inside that
+            // window, defer the debt it came to pay, and arm another alarm — a teardown that
+            // re-owes itself every window and never leaves the device.
+            self.handleNeedsEndSession(peer, preapproved: true)
         }
         startCooldownPurgeTimer()
     }
@@ -344,9 +340,9 @@ final class SessionCoordinator: MessageRouterDelegate {
 
     /// Send END_SESSION to a peer and archive + clear the local session.
     ///
-    /// Rate-limited recovery paths (`sendEndSessionRateLimited`, the otpk-unreproducible path)
-    /// decide via `SessionReducer.shouldSendEndSession` *before* calling this; must-send paths
-    /// (logout, manual reset, terminal init/heal failures) call it directly and always send.
+    /// Gated recovery paths pass `rateLimited: true` and the window is asked for per device in
+    /// the loop below — the core's window, via `recordEndSessionSendIfAllowed`. Must-send paths
+    /// (logout, manual reset) call this directly and always send.
     ///
     /// The local teardown is conditional on the session still being the one we condemned. The
     /// logout broadcast inherits that check; skipping a teardown there is harmless because
@@ -480,50 +476,69 @@ final class SessionCoordinator: MessageRouterDelegate {
         return attempted
     }
 
-    /// Single rate-limited END_SESSION entry point for storm-prone recovery paths
-    /// (DR-diverge). Suppresses repeats within `endSessionCooldown` per peer via the pure
-    /// Single authority for the outbound END_SESSION per-peer cooldown: consults
-    /// `SessionReducer.shouldSendEndSession` and, iff allowed, records the send time. Returns whether
-    /// the caller may proceed. Both the general rate-limited path and the typed-OTPK reset path gate
-    /// through this, so the cooldown read-and-record can't drift between the two sites.
-    /// Keyed by **device**, because the thing it rate-limits is.
+    /// Ask the core whether this ratchet may be torn down now.
     ///
-    /// The teardown became per-device when the plan moved to the core, and this gate stayed on the
-    /// account outside the loop. One account-level timestamp then stood for N sends: tearing down
-    /// device A silenced device B for the whole cooldown, and B is exactly the device that might be
-    /// on a session we cannot read. The retry budget compounded it — one budget shared by every
-    /// device of the account, spent by whichever failed first.
+    /// The window is the machine's — `orchestration::session_machine`, reached through the same
+    /// `handle_event` the core's own teardowns take. It used to be here as well: a 30 s
+    /// `endSessionSentAt` beside the core's 5 s `cooldowns`, two gates on one envelope to one
+    /// device, and what a peer actually experienced was whichever noticed first. See
+    /// `decisions/session-is-one-state-machine.md`, step 2.
+    ///
+    /// A refusal is not a drop. The core records the debt and arms the alarm that pays it, which
+    /// is what the `scheduleTimer` in the returned list is; executing the list here is what arms
+    /// it. `sendEndSession` is deliberately a no-op in the executor — the send belongs to the
+    /// caller that asked.
+    ///
+    /// `peerStillOnDeadSession` is evidence the previous teardown never landed: a message arrived
+    /// on a session we no longer hold. What it buys — a faster retry, three of them — is the
+    /// machine's to decide, not this site's.
+    ///
+    /// Keyed by **device**, because the thing it rate-limits is. The teardown became per-device
+    /// when the plan moved to the core, and this gate spent a while on the account outside the
+    /// loop: one timestamp stood for N sends, so tearing down device A silenced device B for the
+    /// whole window — and B is exactly the device that might be on a session we cannot read.
     private func recordEndSessionSendIfAllowed(
         _ deviceId: String,
-        peerStillOnDeadSession: Bool = false,
-        now: Date = Date()
+        peerStillOnDeadSession: Bool = false
     ) -> Bool {
-        guard SessionReducer.shouldSendEndSession(
-            lastSentAt: endSessionSentAt[deviceId],
-            now: now,
-            cooldown: endSessionCooldown,
-            peerStillOnDeadSession: peerStillOnDeadSession,
-            unackedRetries: endSessionUnackedRetries[deviceId] ?? 0
-        ) else { return false }
-        endSessionSentAt[deviceId] = now
-        // Only evidence-driven sends consume the retry budget. A first send, or one on the
-        // ordinary cooldown, is not a re-notification.
-        if peerStillOnDeadSession {
-            endSessionUnackedRetries[deviceId, default: 0] += 1
+        let event = CfeIncomingEvent.teardownRequested(
+            contactId: deviceId,
+            peerOnDeadSession: peerStillOnDeadSession
+        )
+        guard let actions = try? CryptoManager.shared.handleOrchestratorEvent(
+            event,
+            tag: "teardown_requested"
+        ) else {
+            // The core is the only thing that holds sessions, so a core that cannot answer holds
+            // none — there is nothing to tear down and no one to tell.
+            Log.error(
+                "END_SESSION not asked for device \(deviceId.prefix(8))… — core did not answer",
+                category: "SessionCoordinator"
+            )
+            return false
         }
-        return true
+        SessionActionExecutor.shared.execute(actions)
+        return actions.contains { action in
+            if case .sendEndSession = action { return true }
+            return false
+        }
     }
 
-    /// `SessionReducer.shouldSendEndSession` decision, and records the attempt time.
-    /// Returns `true` iff a send was attempted (records + proceeds even if the network send
-    /// throws, matching the prior inline behaviour). Must-send paths — logout broadcast,
-    /// manual reset, terminal init/heal failures — call `sendEndSession` directly and are
-    /// intentionally not rate-limited.
+    /// Single gated END_SESSION entry point for the storm-prone recovery paths (DR diverge,
+    /// terminal init failure). Returns `true` iff a send was attempted — attempted, not
+    /// delivered, because a network failure still spent the window and the caller must not
+    /// immediately retry into it. Must-send paths — logout broadcast, manual reset — call
+    /// `sendEndSession` directly and are intentionally not gated.
+    ///
+    /// `gated: false` is for a caller that is already holding the machine's answer: the alarm
+    /// that pays an owed teardown fires with a grant in hand, and asking again would land inside
+    /// the window that grant just opened and defer the very debt it came to pay.
     @discardableResult
     private func sendEndSessionRateLimited(
         to userId: String,
         reason: String,
-        peerStillOnDeadSession: Bool = false
+        peerStillOnDeadSession: Bool = false,
+        gated: Bool = true
     ) async -> Bool {
         Log.info("Sending END_SESSION to \(userId.prefix(8))… (\(reason))", category: "SessionCoordinator")
         do {
@@ -540,7 +555,7 @@ final class SessionCoordinator: MessageRouterDelegate {
                 to: userId,
                 reason: reason,
                 peerOnDeadSession: peerStillOnDeadSession,
-                rateLimited: true
+                rateLimited: gated
             ) > 0
         } catch {
             Log.error("Failed to send END_SESSION to \(userId.prefix(8))…: \(error)", category: "SessionCoordinator")
@@ -718,6 +733,12 @@ final class SessionCoordinator: MessageRouterDelegate {
     /// `reinitAndAnnounceAsInitiator` asked the key service for an account that does not exist and
     /// every recovery on this path failed `notFound`, three attempts at a time. See `PeerAddress`.
     func messageRouter(_ router: MessageRouter, needsEndSession peer: PeerAddress) {
+        handleNeedsEndSession(peer, preapproved: false)
+    }
+
+    /// - Parameter preapproved: the caller already holds the machine's grant for this device and
+    ///   must not ask for a second one. Only the owed-teardown alarm does.
+    private func handleNeedsEndSession(_ peer: PeerAddress, preapproved: Bool) {
         Task { [weak self] in
             guard let self else { return }
             // Our own half of every tie-break below. Empty means the Keychain is unreadable, in
@@ -764,7 +785,8 @@ final class SessionCoordinator: MessageRouterDelegate {
                 guard await self.sendEndSessionRateLimited(
                     to: divergedDevice,
                     reason: "session_out_of_sync",
-                    peerStillOnDeadSession: true
+                    peerStillOnDeadSession: true,
+                    gated: !preapproved
                 ) else {
                     return
                 }
@@ -778,10 +800,12 @@ final class SessionCoordinator: MessageRouterDelegate {
                 return
             }
 
-            // The same cooldown, consulted rather than spent: it exists to bound how often we
-            // re-drive a handshake with one peer, and that bound has to survive the send it used to
-            // be attached to.
-            guard self.recordEndSessionSendIfAllowed(divergedDevice, peerStillOnDeadSession: true) else {
+            // The same window, and asked for even though what goes out is a SESSION_RESET_INIT
+            // rather than an END_SESSION: the bound is on how often we re-drive a handshake with
+            // one peer, and SRI *is* the teardown on this branch — "archive what you hold, here
+            // is the new one". A bound attached only to the envelope it was first written for
+            // would not survive the branch that stopped sending that envelope.
+            guard preapproved || self.recordEndSessionSendIfAllowed(divergedDevice, peerStillOnDeadSession: true) else {
                 Log.info("DR diverge: re-init cooldown active for \(peer), skipping", category: "SessionInit")
                 return
             }
@@ -1181,20 +1205,21 @@ final class SessionCoordinator: MessageRouterDelegate {
                 )
 
             case .sendTypedOtpk:
-                // Must carry the typed reason; still respect per-peer cooldown.
-                if self.recordEndSessionSendIfAllowed(userId) {
-                    do {
-                        try await self.sendEndSession(
-                            to: userId,
-                            reason: "session_init_failed_otpk_unreproducible",
-                            resetReason: .otpkUnreproducible,
-                            peerOnDeadSession: failureAction.peerOnDeadSession
-                        )
-                    } catch {
-                        Log.error("SESSION_STATE[init_failed_end_session]: \(error.localizedDescription) for \(userId.prefix(8))…", category: "SessionInit")
-                    }
-                } else {
-                    Log.info("END_SESSION cooldown active for \(userId.prefix(8))…, skipping (session_init_failed_otpk_unreproducible)", category: "SessionCoordinator")
+                // Must carry the typed reason; the window is asked for per device inside the
+                // send, like every other gated path. It was asked for here until 2026-09-22, and
+                // with `userId` — an account, into a gate keyed by device. That ask matched no
+                // device's window, spent a phase under an id the core holds no ratchet for, and
+                // then sent ungated to every device the plan named.
+                do {
+                    try await self.sendEndSession(
+                        to: userId,
+                        reason: "session_init_failed_otpk_unreproducible",
+                        resetReason: .otpkUnreproducible,
+                        peerOnDeadSession: failureAction.peerOnDeadSession,
+                        rateLimited: true
+                    )
+                } catch {
+                    Log.error("SESSION_STATE[init_failed_end_session]: \(error.localizedDescription) for \(userId.prefix(8))…", category: "SessionInit")
                 }
 
             case .sendPlain:
@@ -1340,14 +1365,11 @@ final class SessionCoordinator: MessageRouterDelegate {
             }
 
             if success {
-                // New session established — reset END_SESSION cooldown so future failures are handled.
-                // Per device, like the gate: a session established with one device says nothing
-                // about another's, and clearing the whole account's budget would hand a device
-                // that is genuinely stuck a fresh allowance of retries.
-                if let openedDevice {
-                    endSessionSentAt.removeValue(forKey: openedDevice)
-                    endSessionUnackedRetries.removeValue(forKey: openedDevice)
-                }
+                // The END_SESSION window and its retry budget are settled by the machine, on the
+                // `sessionInitCompleted` fed a few lines below — a session that exists again is
+                // proof the teardown landed. Per device, because that event names one: clearing
+                // the whole account would hand a device that is genuinely stuck a fresh
+                // allowance, and a session with one device says nothing about another's.
                 lastInboundEndSessionAt.removeValue(forKey: userId)
                 // And stand down any END_SESSION-scheduled INITIATOR re-init: it would delete
                 // the RESPONDER session we just established.
@@ -1717,20 +1739,18 @@ final class SessionCoordinator: MessageRouterDelegate {
     private func purgeStaleCooldowns() {
         assertMainThread()
         let now = Date()
-        // Cooldown entries older than 2× their window are safe to remove
-        let endSessionTTL = endSessionCooldown * 2
+        // Cooldown entries older than 2× their window are safe to remove. The END_SESSION window
+        // is no longer among them: the core sweeps its own on `gc_sweep`, and the rule that makes
+        // the sweep safe — a spent retry budget outlives the window that spent it — is a
+        // transition in `session_machine`, not a timer here.
         let resendTTL = resendCooldown * 2
 
-        endSessionUnackedRetries = endSessionUnackedRetries.filter { endSessionSentAt[$0.key] != nil }
-        let beforeES = endSessionSentAt.count
-        endSessionSentAt = endSessionSentAt.filter { now.timeIntervalSince($0.value) < endSessionTTL }
         let beforeRA = resendAttemptedAt.count
         resendAttemptedAt = resendAttemptedAt.filter { now.timeIntervalSince($0.value) < resendTTL }
 
-        let removedES = beforeES - endSessionSentAt.count
         let removedRA = beforeRA - resendAttemptedAt.count
-        if removedES + removedRA > 0 {
-            Log.debug("Purged \(removedES) endSession + \(removedRA) resend cooldown entries", category: "SessionInit")
+        if removedRA > 0 {
+            Log.debug("Purged \(removedRA) resend cooldown entries", category: "SessionInit")
         }
     }
 

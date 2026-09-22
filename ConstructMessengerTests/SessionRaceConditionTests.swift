@@ -288,32 +288,16 @@ final class SessionRaceConditionTests: XCTestCase {
             [.queueMessage])
     }
 
-    // MARK: 11. END_SESSION cooldown — the single rate-limit decision
+    // MARK: 11. Inbound control coalescing — the window that is still the client's
 
-    /// Pins the storm-prevention rate limit used by the unified END_SESSION choke point.
+    /// The outbound END_SESSION window left this layer on 2026-09-22 (it is
+    /// `orchestration::session_machine`'s, asked through `CfeIncomingEvent.teardownRequested`).
+    /// The receive-side coalesce is not the same question and stays: it is about how often we
+    /// *act on* a control message, which is a property of the inbound path.
     @MainActor
-    func testShouldSendEndSession_RateLimit() {
+    func testShouldHandleInboundControl_RateLimit() {
         let now = Date()
         let cooldown: TimeInterval = 30
-
-        // Never sent before → allowed.
-        XCTAssertTrue(SessionReducer.shouldSendEndSession(lastSentAt: nil, now: now, cooldown: cooldown))
-
-        // Sent just now → suppressed.
-        XCTAssertFalse(SessionReducer.shouldSendEndSession(
-            lastSentAt: now.addingTimeInterval(-1), now: now, cooldown: cooldown))
-
-        // Within the window → suppressed.
-        XCTAssertFalse(SessionReducer.shouldSendEndSession(
-            lastSentAt: now.addingTimeInterval(-29), now: now, cooldown: cooldown))
-
-        // Exactly at the boundary → allowed (>= cooldown).
-        XCTAssertTrue(SessionReducer.shouldSendEndSession(
-            lastSentAt: now.addingTimeInterval(-30), now: now, cooldown: cooldown))
-
-        // Well past the window → allowed.
-        XCTAssertTrue(SessionReducer.shouldSendEndSession(
-            lastSentAt: now.addingTimeInterval(-120), now: now, cooldown: cooldown))
 
         // Receive-side control coalesce uses the same window semantics.
         XCTAssertTrue(SessionReducer.shouldHandleInboundControl(

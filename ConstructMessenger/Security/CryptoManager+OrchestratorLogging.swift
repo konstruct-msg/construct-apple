@@ -51,6 +51,8 @@ extension CryptoManager {
             return "networkReconnected"
         case .appLaunched:
             return "appLaunched"
+        case .teardownRequested(let contactId, let peerOnDeadSession):
+            return "teardownRequested contactId=\(contactId.prefix(8))… evidence=\(peerOnDeadSession)"
         case .timerFired(let timerId):
             return "timerFired id=\(timerId.prefix(24))…"
         case .ackDbResult(let messageId, let isProcessed):
