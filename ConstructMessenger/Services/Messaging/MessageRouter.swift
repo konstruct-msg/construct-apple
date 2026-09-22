@@ -540,7 +540,13 @@ final class MessageRouter {
                 // Once per message per window keeps the recovery and removes the loop: a lost
                 // receipt is cosmetic and rare, and receipts do not stop redelivery anyway — the
                 // stream cursor does.
-                if ReceiptResendThrottle.shared.shouldSend(messageId: message.id) {
+                //
+                // Not for a SENDER_SYNC: it is our own account's copy, there is no sender waiting
+                // for a checkmark, and on a pending-messages replay its `to` is empty — the
+                // "other side" of a message from ourselves is then nobody at all.
+                if message.isSenderSync {
+                    // nothing owed
+                } else if ReceiptResendThrottle.shared.shouldSend(messageId: message.id) {
                     OutboundSessionService.sendDeliveryReceipt(for: [message.id], to: otherUserId, in: context)
                 } else {
                     PerformanceMetrics.shared.record(.receiptResendThrottled, label: "duplicate_delivery")

@@ -5,6 +5,16 @@ struct ChunkedMessagePlan {
     let messageId: UUID
     let payloads: [Data]
     let originalLength: Int
+
+    /// One frame holding the whole payload — a control carrier, never split. The frame is
+    /// `ChunkedMessageCodec.frameWhole`; this is only the shape the pipeline sends.
+    static func whole(_ payload: Data, contentType: UInt8, messageId: UUID) -> ChunkedMessagePlan {
+        ChunkedMessagePlan(
+            messageId: messageId,
+            payloads: [ChunkedMessageCodec.frameWhole(payload, contentType: contentType, messageId: messageId)],
+            originalLength: payload.count
+        )
+    }
 }
 
 final class ChunkedMessageSender {

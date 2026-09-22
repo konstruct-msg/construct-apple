@@ -304,9 +304,8 @@ final class OutboundSessionService {
     /// (END_SESSION, SRI, ping/ready, heartbeat, receipts, profile shares, edits) never have a
     /// row on the sender's side, so a receipt for one could not move anything even if sent.
     ///
-    /// Resolves the recipient identity key synchronously on the caller's context queue, then
-    /// hands the id to `DeliveryReceiptBatcher`. Fail-closed under stealth: dropped, never sent
-    /// identified.
+    /// Hands the id to `DeliveryReceiptBatcher`; the seal key is each device's own, resolved by
+    /// the pipeline at send time. Fail-closed under stealth: dropped, never sent identified.
     ///
     /// The send is **not** immediate. Ids owed to the same contact inside the batcher's window
     /// leave as one receipt, which is what the `messageIds` list in the proto was always for. Under
@@ -334,25 +333,15 @@ final class OutboundSessionService {
             )
             return
         }
-        let identityKey: Data? = {
-            guard StealthPolicy.shared.shouldUseSealedSender() else { return nil }
-            let request = User.fetchRequest()
-            request.predicate = NSPredicate(format: "id == %@", contactId)
-            request.fetchLimit = 1
-            do {
-                return try context.fetch(request).first?.knownIdentityKey
-            } catch {
-                Log.error("Failed to load identity key for encrypted receipt to \(contactId.prefix(8))…: \(error)", category: "OutboundSession")
-                return nil
-            }
-        }()
+        // A replayed SENDER_SYNC from the pending-messages RPC arrives with `to` empty, and the
+        // router's "other side" of a message from our own account is that `to`. Nobody is at
+        // an empty address; until 2026-09-22 this fell through to "no session" and was quiet,
+        // and once the receipt went per device it read as "no known device" and nudged a session
+        // re-establish for a peer named "".
+        guard !contactId.isEmpty else { return }
         Task { @MainActor in
             for messageId in messageIds {
-                DeliveryReceiptBatcher.shared.enqueue(
-                    messageId: messageId,
-                    to: contactId,
-                    recipientIdentityKey: identityKey
-                )
+                DeliveryReceiptBatcher.shared.enqueue(messageId: messageId, to: contactId)
             }
         }
     }
@@ -368,14 +357,32 @@ final class OutboundSessionService {
     /// Fail-closed like every other sealed control message: the key is a secret, so it is sealed
     /// or it is not sent. There is no identified fallback and there must not be — an unsealed one
     /// hands any relay a credential it can spend on us.
-    func sendIntakeKey(to contactId: String, recipientIdentityKey: Data?) async {
+    /// The devices of `contactId` we hold a session with — the ones a control can reach, and the
+    /// ones the intake bookkeeping is asked about. A peer recorded before `PeerDevice` existed
+    /// answers with its pinned device.
+    static func sessionDevices(of contactId: String) -> [String] {
+        let context = PersistenceController.shared.container.viewContext
+        var devices = SessionAddressing.devices(ofPeer: contactId, in: context).map(\.deviceId)
+        if devices.isEmpty, let pinned = SessionAddressing.contactId(forPeer: contactId) {
+            devices = [pinned]
+        }
+        return devices.filter { CryptoManager.shared.hasSession(for: $0) }
+    }
+
+    /// Whether any device of `contactId` we can reach is still without our intake key.
+    static func peerNeedsOurIntakeKey(_ contactId: String) -> Bool {
+        !IntakeCredentialService.shared.devicesNeedingOurKey(among: sessionDevices(of: contactId)).isEmpty
+    }
+
+    func sendIntakeKey(to contactId: String) async {
         guard let myId = AuthSessionManager.shared.currentUserId, !myId.isEmpty else { return }
-        guard CryptoManager.shared.hasSession(for: contactId) else { return }
-        guard let identityKey = recipientIdentityKey, StealthPolicy.shared.shouldUseSealedSender() else {
-            // No key to seal to, or stealth off. Leave the peer unmarked so the next send retries;
-            // marking it here would spend the one chance this mechanism gets per contact.
+        guard StealthPolicy.shared.shouldUseSealedSender() else {
+            // Stealth off: the key would go out identified, and the mechanism it feeds is the
+            // sealed one. Leave the peer unmarked so the next send retries.
             return
         }
+        let owed = IntakeCredentialService.shared.devicesNeedingOurKey(among: Self.sessionDevices(of: contactId))
+        guard !owed.isEmpty else { return }
 
         let key = IntakeCredentialService.shared.ownIntakeKey()
         let frameId = UUID().uuidString.lowercased()
@@ -385,48 +392,25 @@ final class OutboundSessionService {
             // SealedInner are told nothing — the same treatment every framed control type gets,
             // and here it is load-bearing rather than consistent: a relay that could read byte 5
             // would read the key itself.
-            let wirePayload = try encryptOutgoing(
-                plaintext: ChunkedMessageCodec.frameWhole(
-                    key, contentType: 27, messageId: UUID(uuidString: frameId) ?? UUID()
-                ),
-                messageId: frameId,
+            //
+            // One copy per device of theirs that we hold a session with: the key is the account's,
+            // but each of their devices seals to us on its own and needs it in hand. Until
+            // 2026-09-22 only the pinned device got it, and the sibling's envelopes to us went on
+            // buying tokens.
+            let report = try await OutboundMessagePipeline.shared.sendToRecipientDevices(
+                plan: .whole(key, contentType: 27, messageId: UUID(uuidString: frameId) ?? UUID()),
+                baseMessageId: frameId,
+                senderId: myId,
                 recipientId: contactId,
-                contentType: 0
+                timestamp: UInt64(Date().timeIntervalSince1970),
+                kind: .control,
+                onlyDevices: owed
             )
-            let sealedInner = try await StealthSenderService.buildSealedInner(
-                recipientUserId: contactId,
-                recipientIdentityKey: identityKey,
-                encryptedPayload: wirePayload,
-                contentType: .generic
-            )
-            _ = try await StealthSendRecovery.sendSealed(sealedInner, rebuild: { afterCredentialRejection in
-                try await StealthSenderService.buildSealedInner(
-                    recipientUserId: contactId,
-                    recipientIdentityKey: identityKey,
-                    encryptedPayload: wirePayload,
-                    contentType: .generic,
-                    afterCredentialRejection: afterCredentialRejection
-                )
-            }, send: { inner in
-                if FeatureFlags.sealedSenderUnauthenticatedTransport {
-                    return try await MessagingServiceClient.shared.sendSealedMessage(sealedInner: inner)
-                } else {
-                    return try await MessagingServiceClient.shared.sendMessage(
-                        messageId: frameId,
-                        recipientId: contactId,
-                        senderId: myId,
-                        conversationId: ConversationId.direct(myUserId: myId, theirUserId: contactId),
-                        encryptedPayload: wirePayload,
-                        timestamp: UInt64(Date().timeIntervalSince1970),
-                        sealing: .sealed(inner)
-                    )
-                }
-            })
-            // Marked only after the send returned. Marking before would cost this contact the
-            // mechanism permanently on one failed RPC, and the saving it buys is per-message
-            // forever — far more than the one envelope a retry costs.
-            await MainActor.run { IntakeCredentialService.shared.markOurKeySent(to: contactId) }
-            Log.info("Intake: handed our key to \(contactId.prefix(8))…", category: "Intake")
+            // Marked per device, and only after that device's send returned. Marking before would
+            // cost the device the mechanism permanently on one failed RPC — and the saving it buys
+            // is per-message forever, far more than the one envelope a retry costs.
+            IntakeCredentialService.shared.markOurKeySent(to: report.accepted)
+            Log.info("Intake: handed our key to \(report.accepted.count)/\(owed.count) device(s) of \(contactId.prefix(8))…", category: "Intake")
         } catch {
             Log.info("Intake: could not hand our key to \(contactId.prefix(8))… (\(error.localizedDescription)) — will retry on the next send", category: "Intake")
         }
@@ -437,16 +421,17 @@ final class OutboundSessionService {
     /// Payload format: binary proto `Shared_Proto_Signaling_V1_DeliveryReceipt` with
     /// `.direct(DirectReceipt{ messageIds, status: .delivered, timestamp, senderDeviceID, recipientUserID })`.
     /// The binary format aligns with the binary-data-pipeline rule in AGENTS.md.
+    ///
+    /// One copy per device of theirs we hold a session with. The message came from one of their
+    /// devices, but every one of them shows it — the sibling has the sender-sync copy under the
+    /// same id — and a checkmark that lands on one device only is what a two-device sender saw
+    /// until 2026-09-22: the row on their iPad never moved. Best-effort, as before: a device
+    /// without a session is not opened for a receipt.
     func sendEncryptedDeliveryReceipt(
         messageIds: [String],
-        to contactId: String,
-        recipientIdentityKey: Data? = nil
+        to contactId: String
     ) async {
         guard let myId = AuthSessionManager.shared.currentUserId, !myId.isEmpty else { return }
-        guard CryptoManager.shared.hasSession(for: contactId) else {
-            Log.debug("E2E receipt skip — no session for \(contactId.prefix(8))…", category: "OutboundSession")
-            return
-        }
         let receiptId = UUID().uuidString.lowercased()
 
         // Build binary proto payload: Shared_Proto_Signaling_V1_DeliveryReceipt
@@ -468,85 +453,30 @@ final class OutboundSessionService {
             // The type rides in KNST byte 5, inside the ciphertext. Both the orchestrator and
             // `SealedInner` are told nothing (0 / UNSPECIFIED) so the server cannot tell a receipt
             // from a message body. See decisions/sealed-content-type-inside-the-plaintext-frame.md.
-            let wirePayload = try encryptOutgoing(
-                plaintext: ChunkedMessageCodec.frameWhole(
-                    payloadData, contentType: 14, messageId: UUID(uuidString: receiptId) ?? UUID()
-                ),
-                messageId: receiptId,
+            //
+            // Fail-closed: while stealth is on a receipt is sealed or dropped — NEVER sent
+            // identified; the pipeline throws `StealthDowngradeBlocked` rather than downgrade.
+            // Receipts carry tokens like any sealed send — no content-type exemption exists (see
+            // decisions/sealed-sender-anti-abuse-economics.md) — and N copies to one account ride
+            // on one spend unit.
+            let report = try await OutboundMessagePipeline.shared.sendToRecipientDevices(
+                plan: .whole(payloadData, contentType: 14, messageId: UUID(uuidString: receiptId) ?? UUID()),
+                baseMessageId: receiptId,
+                senderId: myId,
                 recipientId: contactId,
-                contentType: 0
+                timestamp: UInt64(Date().timeIntervalSince1970),
+                kind: .control
             )
-            var sealedInner: Data? = nil
-            if let identityKey = recipientIdentityKey, StealthPolicy.shared.shouldUseSealedSender() {
-                do {
-                    sealedInner = try await StealthSenderService.buildSealedInner(
-                        recipientUserId: contactId,
-                        recipientIdentityKey: identityKey,
-                        encryptedPayload: wirePayload,
-                        contentType: .generic
-                    )
-                } catch {
-                    Log.error("E2E receipt: seal failed: \(error)", category: "OutboundSession")
-                    PerformanceMetrics.shared.record(.stealthSealFailure, label: "receipt")
-                }
-            }
-
-            // Fail-closed: while stealth is on a receipt is sealed or dropped — NEVER sent identified.
-            // A delivery receipt is best-effort; revealing the real senderId to deliver one would hand
-            // the server the exact deanonymization sealed sender exists to prevent. Same invariant as
-            // message bodies (ChunkedMessageSender / StealthSendRecovery); the identified `else` below
-            // is therefore reachable only when stealth is off.
-            if StealthPolicy.shared.shouldUseSealedSender() && sealedInner == nil {
-                Log.error("E2E receipt: cannot seal (recipient IK/cert unavailable) — DROPPED, sender not revealed → \(contactId.prefix(8))…", category: "OutboundSession")
-                PerformanceMetrics.shared.record(.stealthSealFailure, label: "receipt-dropped")
-                if recipientIdentityKey == nil {
-                    // No recipient identity key → nudge bundle/session so a later receipt can seal.
-                    SessionLifecycleController.shared.reestablishSessionForQueuedOutbound(to: contactId)
-                }
-                return
-            }
-
-            if let sealedInner, let identityKey = recipientIdentityKey {
-                // Sealed receipt with one-shot enforce recovery (fresh token + tag on
-                // privacy_pass rejection; DR payload reused). Receipts carry tokens like
-                // any sealed send — no content-type exemption exists (see decisions/
-                // sealed-sender-anti-abuse-economics.md); never downgrades to identified.
-                _ = try await StealthSendRecovery.sendSealed(sealedInner, rebuild: { afterCredentialRejection in
-                    try await StealthSenderService.buildSealedInner(
-                        recipientUserId: contactId,
-                        recipientIdentityKey: identityKey,
-                        encryptedPayload: wirePayload,
-                        contentType: .generic,
-                        afterCredentialRejection: afterCredentialRejection
-                    )
-                }, send: { inner in
-                    if FeatureFlags.sealedSenderUnauthenticatedTransport {
-                        // stealth-sealed-sender-v2 Phase 2: dedicated unauthenticated RPC/channel.
-                        return try await MessagingServiceClient.shared.sendSealedMessage(sealedInner: inner)
-                    } else {
-                        return try await MessagingServiceClient.shared.sendMessage(
-                            messageId: receiptId,
-                            recipientId: contactId,
-                            senderId: myId,
-                            conversationId: ConversationId.direct(myUserId: myId, theirUserId: contactId),
-                            encryptedPayload: wirePayload,
-                            timestamp: UInt64(Date().timeIntervalSince1970),
-                            sealing: .sealed(inner)
-                        )
-                    }
-                })
+            if report.copies.isEmpty {
+                Log.debug("E2E receipt skip — no session for \(contactId.prefix(8))…", category: "OutboundSession")
             } else {
-                _ = try await MessagingServiceClient.shared.sendMessage(
-                    messageId: receiptId,
-                    recipientId: contactId,
-                    senderId: myId,
-                    conversationId: ConversationId.direct(myUserId: myId, theirUserId: contactId),
-                    encryptedPayload: wirePayload,
-                    timestamp: UInt64(Date().timeIntervalSince1970),
-                    sealing: .identified(.stealthDisabled)
-                )
+                Log.info("E2E receipt sent: \(messageIds.count) msg(s) → \(contactId.prefix(8))… on \(report.accepted.count)/\(report.copies.count) device(s)", category: "OutboundSession")
             }
-            Log.info("E2E receipt sent: \(messageIds.count) msg(s) → \(contactId.prefix(8))…", category: "OutboundSession")
+        } catch let blocked as StealthDowngradeBlocked {
+            Log.error("E2E receipt: cannot seal — DROPPED, sender not revealed → \(contactId.prefix(8))… (\(blocked.reason))", category: "OutboundSession")
+            PerformanceMetrics.shared.record(.stealthSealFailure, label: "receipt-dropped")
+            // No device to seal to → nudge bundle/session so a later receipt can seal.
+            SessionLifecycleController.shared.reestablishSessionForQueuedOutbound(to: contactId)
         } catch {
             Log.error("E2E receipt failed to \(contactId.prefix(8))…: \(error.localizedDescription)", category: "OutboundSession")
         }

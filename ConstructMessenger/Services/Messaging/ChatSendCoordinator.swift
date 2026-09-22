@@ -601,18 +601,9 @@ final class ChatSendCoordinator {
                     // including the delivery receipt for this very message, which is 36–38% of the
                     // bill on its own. Off the send path, because a control envelope must not delay
                     // the bubble the user is watching.
-                    //
-                    // Still one envelope to the pinned device — a control that addresses the
-                    // account, encrypted and sealed for the device the seam resolves. Its
-                    // per-device form is with the other account-addressed controls, not here.
-                    if IntakeCredentialService.shared.peerNeedsOurKey(recipientId) {
-                        let pinnedKey = StealthSenderService.recipientIdentityKey(
-                            recipientId: recipientId, context: self.viewContext
-                        )
+                    if OutboundSessionService.peerNeedsOurIntakeKey(recipientId) {
                         Task {
-                            await OutboundSessionService.shared.sendIntakeKey(
-                                to: recipientId, recipientIdentityKey: pinnedKey
-                            )
+                            await OutboundSessionService.shared.sendIntakeKey(to: recipientId)
                         }
                     }
                     let deliveryStatus: DeliveryStatus

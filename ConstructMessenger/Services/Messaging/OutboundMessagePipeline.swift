@@ -111,6 +111,20 @@ final class OutboundMessagePipeline {
 
     private init() {}
 
+    /// What is being sent, which decides what the send is owed afterwards.
+    enum Kind {
+        /// A message with a row: retained for retry, mapped for server receipts, owed to every
+        /// device of the recipient — one without a session gets one opened from its bundle.
+        case message
+        /// A control carrier with no row — a delivery receipt, the intake key. Best-effort, as
+        /// these always were: nothing retained, nothing queued, and sent only to the devices we
+        /// already hold a session with. Opening a session to deliver a checkmark would spend a
+        /// one-time pre-key and start a handshake for a claim the next message repeats anyway;
+        /// a sibling without a session gets nothing, which is what every device but the pinned
+        /// one got before 2026-09-22.
+        case control
+    }
+
     /// Send `plan` to every device of `recipientId`, or to `onlyDevices` of them.
     ///
     /// Throws only for what stops the whole send before any device is tried, or what stopped
@@ -124,18 +138,27 @@ final class OutboundMessagePipeline {
         senderId: String,
         recipientId: String,
         timestamp: UInt64,
+        kind: Kind = .message,
         spendUnit callerSpendUnit: TokenSpendUnit? = nil,
         onlyDevices: [String]? = nil
     ) async throws -> RecipientSendReport {
-        // Anything owed to this recipient rides out with the message instead of waiting for the
-        // receipt grid. Receipts are the only traffic this client emits as a reflex to someone
-        // else's action; next to a send the user just made they are timed by the user instead.
-        // Receipts themselves do not come through here — `sendEncryptedDeliveryReceipt` calls the
-        // messaging client directly — so this cannot re-enter.
-        DeliveryReceiptBatcher.shared.flushPiggyback(to: recipientId)
+        if kind == .message {
+            // Anything owed to this recipient rides out with the message instead of waiting for
+            // the receipt grid. Receipts are the only traffic this client emits as a reflex to
+            // someone else's action; next to a send the user just made they are timed by the user
+            // instead. A control does not carry them — a receipt is itself one, and would re-enter.
+            DeliveryReceiptBatcher.shared.flushPiggyback(to: recipientId)
+        }
 
         let stealthOn = StealthPolicy.shared.shouldUseSealedSender()
-        let targets = try await recipientTargets(for: recipientId, stealthOn: stealthOn)
+        var targets = try await recipientTargets(for: recipientId, stealthOn: stealthOn)
+        if kind == .control {
+            targets = targets.filter { CryptoManager.shared.hasSession(for: $0.deviceId) }
+            guard !targets.isEmpty else {
+                Log.debug("Outbound: control \(baseMessageId.prefix(8))… to \(recipientId.prefix(8))… — no device with a session", category: "Outbound")
+                return RecipientSendReport(copies: [], status: SendMessageResponse(messageId: baseMessageId, status: "sent"), owed: [])
+            }
+        }
         let planned = onlyDevices.map { owed in targets.filter { owed.contains($0.deviceId) } } ?? targets
         guard !planned.isEmpty else {
             // A retry narrowed to devices that are no longer in the set — revoked, or pruned by a
@@ -182,6 +205,7 @@ final class OutboundMessagePipeline {
                     senderId: senderId,
                     recipientId: recipientId,
                     timestamp: timestamp,
+                    kind: kind,
                     stealthOn: stealthOn,
                     spendUnit: spendUnit,
                     ourIdentityPrivate: ourIdentityPrivate
@@ -205,6 +229,7 @@ final class OutboundMessagePipeline {
         }
 
         let report = Self.fold(copies, baseMessageId: baseMessageId)
+        guard kind == .message else { return report }
         // The §C gate: a device of the recipient did not get its copy of a message the sender
         // will consider sent. Counted per device, here, because this is now the only place a
         // recipient device is reached and the only place its loss is known.
@@ -304,6 +329,7 @@ final class OutboundMessagePipeline {
         senderId: String,
         recipientId: String,
         timestamp: UInt64,
+        kind: Kind,
         stealthOn: Bool,
         spendUnit: TokenSpendUnit?,
         ourIdentityPrivate: Data?
@@ -332,12 +358,14 @@ final class OutboundMessagePipeline {
                 messageId: chunkMessageId,
                 recipientId: target.deviceId
             )
-            OutgoingWirePayloadStore.shared.saveChunk(
-                baseMessageId: baseMessageId,
-                chunkMessageId: chunkMessageId,
-                wirePayload: encryptedPayload,
-                recipientDeviceId: target.deviceId
-            )
+            if kind == .message {
+                OutgoingWirePayloadStore.shared.saveChunk(
+                    baseMessageId: baseMessageId,
+                    chunkMessageId: chunkMessageId,
+                    wirePayload: encryptedPayload,
+                    recipientDeviceId: target.deviceId
+                )
+            }
 
             let response = try await Self.sendEncrypted(
                 encryptedPayload,
@@ -354,8 +382,8 @@ final class OutboundMessagePipeline {
             responses.append(response)
 
             // Sealed path: the server reassigns wire ids — remember them so server-side delivery
-            // receipts can be matched back to the local message row.
-            if !response.messageId.isEmpty {
+            // receipts can be matched back to the local message row. A control has no row.
+            if kind == .message, !response.messageId.isEmpty {
                 ServerMessageIdMap.shared.record(serverId: response.messageId, localId: baseMessageId)
             }
             // A partial set never reassembles, so a refused chunk owes the device the whole

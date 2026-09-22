@@ -126,10 +126,18 @@ final class IntakeCredentialService {
     private let keychain = KeychainManager.shared
     private let defaults = UserDefaults.standard
 
-    /// Accounts we have already handed our key to. Not secret — it is a list of who we talk to,
-    /// which Core Data holds anyway — and deliberately not in the Keychain, where a per-contact
+    /// **Devices** we have already handed our key to. Not secret — it is a list of who we talk
+    /// to, which Core Data holds anyway — and deliberately not in the Keychain, where a per-contact
     /// item would be a second copy of the contact graph in a store that has no reason to carry one.
-    private static let sentToKey = "construct.intake.sentTo.v1"
+    ///
+    /// Keyed by device since 2026-09-22; `v1` held accounts. The key is the account's, but each
+    /// device of theirs seals to us on its own and needs it in hand, and an account-level mark set
+    /// by the first device meant the second never got it: measured on the stand, the sibling's
+    /// every envelope to us "pays a token" (`no_key_for_peer`) while the account read as served.
+    /// The v1 set is dropped rather than migrated — its entries could only ever have meant the
+    /// pinned device, and re-sending once per contact, lazily, is one envelope each.
+    private static let sentToKey = "construct.intake.sentTo.v2"
+    private static let legacySentToKey = "construct.intake.sentTo.v1"
     private static let lastPublishedEpochKey = "construct.intake.lastPublishedEpoch.v1"
     /// Peers whose credential the server refused, keyed by account, valued by the epoch it was
     /// refused in. Not persisted beyond UserDefaults and not secret — same reasoning as `sentToKey`.
@@ -282,19 +290,21 @@ final class IntakeCredentialService {
 
     // MARK: - Lazy distribution
 
-    /// Does this peer still need our key?
+    /// Which of `devices` still need our key.
     ///
     /// Grandfathering is lazy by decision: sweeping the contact graph on upgrade would mean a
     /// hundred sealed control envelopes at once, each of which must itself be paid for, and would
     /// pay that for contacts the user may never write to again. The graph migrates in the order it
-    /// is actually used.
-    func peerNeedsOurKey(_ accountId: String) -> Bool {
-        !sentTo().contains(normalise(accountId))
+    /// is actually used. The caller names the devices — the ones it holds a session with — because
+    /// this service does not know a peer's device set and must not grow a copy of it.
+    func devicesNeedingOurKey(among devices: [String]) -> [String] {
+        let sent = sentTo()
+        return devices.filter { !sent.contains(normalise($0)) }
     }
 
-    func markOurKeySent(to accountId: String) {
+    func markOurKeySent(to devices: [String]) {
         var set = sentTo()
-        set.insert(normalise(accountId))
+        for device in devices { set.insert(normalise(device)) }
         defaults.set(Array(set), forKey: Self.sentToKey)
     }
 
@@ -303,10 +313,12 @@ final class IntakeCredentialService {
     /// Rotation *is* revocation — there is no server-side deny entry for one contact, by design.
     func forgetWhoHasOurKey() {
         defaults.removeObject(forKey: Self.sentToKey)
+        defaults.removeObject(forKey: Self.legacySentToKey)
     }
 
     private func sentTo() -> Set<String> {
-        Set(defaults.stringArray(forKey: Self.sentToKey) ?? [])
+        defaults.removeObject(forKey: Self.legacySentToKey)
+        return Set(defaults.stringArray(forKey: Self.sentToKey) ?? [])
     }
 
     private func normalise(_ accountId: String) -> String {
