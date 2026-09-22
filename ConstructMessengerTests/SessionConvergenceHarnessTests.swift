@@ -640,28 +640,20 @@ final class SessionConvergenceHarnessTests: XCTestCase {
                        "RESPONDER acknowledges via session_ready only (ping is legacy, not canonical)")
     }
 
-    // END_SESSION-on-init-failure branch policy: the single authority for the grace/otpk/plain
-    // decision that used to be nested inline `if`s in SessionCoordinator. otpk-unreproducible must
-    // ALWAYS win (the typed 3-DH hint has to reach the peer), even inside the inbound-END_SESSION
-    // grace window; a plain fail inside grace is a stale-wire race and must be suppressed (not
-    // amplify the reset storm); a plain fail outside grace sends an ordinary rate-limited reset.
-    func testInitFailureAction_GraceOtpkTruthTable() {
-        // otpk=false, grace=false → plain reset
-        XCTAssertEqual(
-            SessionReducer.initFailureAction(otpkUnreproducible: false, withinInboundGrace: false),
-            .sendPlain)
-        // otpk=false, grace=true → suppress (likely race right after inbound END_SESSION)
-        XCTAssertEqual(
-            SessionReducer.initFailureAction(otpkUnreproducible: false, withinInboundGrace: true),
-            .suppressWithinGrace)
-        // otpk=true, grace=false → typed 3-DH hint
-        XCTAssertEqual(
-            SessionReducer.initFailureAction(otpkUnreproducible: true, withinInboundGrace: false),
-            .sendTypedOtpk)
-        // otpk=true, grace=true → typed hint STILL wins (bypasses grace)
-        XCTAssertEqual(
-            SessionReducer.initFailureAction(otpkUnreproducible: true, withinInboundGrace: true),
-            .sendTypedOtpk)
+    // END_SESSION-on-init-failure branch policy: the single authority for the otpk/plain decision
+    // that used to be nested inline `if`s in SessionCoordinator. Both branches send; what differs
+    // is what each one declares it knows, and therefore whether the peer's own teardown may
+    // silence it. The grace that used to be the third input is the machine's window now
+    // (`decisions/session-is-one-state-machine.md`, step 2) and is tested in construct-core.
+    func testInitFailureAction_OtpkDecidesTheBranchAndTheCause() {
+        XCTAssertEqual(SessionReducer.initFailureAction(otpkUnreproducible: false), .sendPlain)
+        XCTAssertEqual(SessionReducer.initFailureAction(otpkUnreproducible: true), .sendTypedOtpk)
+        // The typed 3-DH hint has to reach the peer even right after they tore down: it is the
+        // only thing that breaks the 4-DH retry loop, and they cannot derive it.
+        XCTAssertEqual(SessionReducer.initFailureAction(otpkUnreproducible: true).cause, .explained)
+        // A plain failure in the same moment is a stale-wire race, and a teardown back at the peer
+        // repeats what they just told us.
+        XCTAssertEqual(SessionReducer.initFailureAction(otpkUnreproducible: false).cause, .blind)
     }
 
     // END_SESSION-receipt branch policy: natural RESPONDER waits; natural INITIATOR coalesces onto

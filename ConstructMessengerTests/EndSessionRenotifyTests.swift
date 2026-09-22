@@ -53,7 +53,14 @@ final class EndSessionWindowIsNotInTheCoordinatorTests: XCTestCase {
         let source = coordinatorSource
         XCTAssertFalse(source.isEmpty, "SessionCoordinator.swift must be readable from the test bundle")
 
-        for carrier in ["endSessionSentAt", "endSessionUnackedRetries", "endSessionCooldown"] {
+        for carrier in [
+            "endSessionSentAt", "endSessionUnackedRetries", "endSessionCooldown",
+            // The inbound half, gone 2026-09-22 with the second of step 2's five timers. It held
+            // 20 s against the core's 30 s and answered the same question — may an END_SESSION go
+            // to this device — from the other side of it. `CfeIncomingEvent.peerToreDown` opens
+            // the one window now.
+            "lastInboundEndSessionAt", "postEndSessionInitFailGrace",
+        ] {
             // The word may still appear in prose explaining where the window went; a declaration
             // may not.
             XCTAssertFalse(
@@ -62,6 +69,26 @@ final class EndSessionWindowIsNotInTheCoordinatorTests: XCTestCase {
                 + "asked through CfeIncomingEvent.teardownRequested"
             )
         }
+    }
+
+    /// The peer's teardown is reported to the machine, not remembered here.
+    ///
+    /// The delegate that receives an inbound END_SESSION is where the 20 s map was written; if
+    /// the report goes missing, nothing suppresses the blind teardown that follows a failed
+    /// post-reset init, and the storm the grace was added for comes back — silently, because the
+    /// suppression that disappears leaves no log line of its own.
+    ///
+    /// Mutation: delete the `peerToreDown` call — this reddens.
+    func testAnInboundTeardownIsReportedToTheMachine() {
+        let source = coordinatorSource
+        guard let handler = source.range(of: "receivedEndSession peer: PeerAddress") else {
+            return XCTFail("the inbound END_SESSION delegate is gone — if it moved, this moves with it")
+        }
+        let body = source[handler.lowerBound...].prefix(2_000)
+        XCTAssertTrue(
+            body.contains("peerToreDown"),
+            "an inbound teardown must open the machine's window; a map here is the second one"
+        )
     }
 
     /// And the gate asks the core rather than a predicate. `shouldSendEndSession` is gone from

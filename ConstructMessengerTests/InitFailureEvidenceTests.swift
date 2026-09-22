@@ -16,6 +16,12 @@
 //
 //  The evidence now belongs to the branch rather than to the three call sites that act on it.
 //
+//  2026-09-22: the branch carries a second value for the same reason. `peerOnDeadSession` answers
+//  `plan_teardown`; `cause` answers the window in `orchestration::session_machine`. They were one
+//  `Bool` until step 2 of `decisions/session-is-one-state-machine.md`, and one `Bool` cannot say
+//  "tell this device even though we hold no session with it" and "this teardown may be silenced
+//  by the peer's own" separately — which is what the two branches here need it to say.
+//
 
 import XCTest
 @testable import Construct_Messenger
@@ -24,10 +30,7 @@ final class InitFailureEvidenceTests: XCTestCase {
 
     /// The typed branch is the one the field failure ran through.
     func testTheOtpkBranchCarriesEvidence() {
-        let action = SessionReducer.initFailureAction(
-            otpkUnreproducible: true,
-            withinInboundGrace: false
-        )
+        let action = SessionReducer.initFailureAction(otpkUnreproducible: true)
         XCTAssertEqual(action, .sendTypedOtpk)
         XCTAssertTrue(
             action.peerOnDeadSession,
@@ -36,21 +39,8 @@ final class InitFailureEvidenceTests: XCTestCase {
         )
     }
 
-    /// The otpk hint bypasses the inbound grace, so it must keep the evidence there too.
-    func testTheOtpkBranchCarriesEvidenceEvenInsideTheInboundGrace() {
-        let action = SessionReducer.initFailureAction(
-            otpkUnreproducible: true,
-            withinInboundGrace: true
-        )
-        XCTAssertEqual(action, .sendTypedOtpk)
-        XCTAssertTrue(action.peerOnDeadSession)
-    }
-
     func testThePlainInitFailureCarriesEvidence() {
-        let action = SessionReducer.initFailureAction(
-            otpkUnreproducible: false,
-            withinInboundGrace: false
-        )
+        let action = SessionReducer.initFailureAction(otpkUnreproducible: false)
         XCTAssertEqual(action, .sendPlain)
         XCTAssertTrue(
             action.peerOnDeadSession,
@@ -58,28 +48,36 @@ final class InitFailureEvidenceTests: XCTestCase {
         )
     }
 
-    /// The one branch that must NOT claim evidence: it sends nothing, and a flag on a suppressed
-    /// branch would read as permission to send if anyone later moved the check.
-    func testTheSuppressedBranchClaimsNoEvidence() {
-        let action = SessionReducer.initFailureAction(
-            otpkUnreproducible: false,
-            withinInboundGrace: true
-        )
-        XCTAssertEqual(action, .suppressWithinGrace)
-        XCTAssertFalse(action.peerOnDeadSession)
+    /// **The typed hint is never silenced.** It used to bypass a 20 s grace computed in the
+    /// coordinator; it now declares `Explained`, which is the cause the machine does not answer
+    /// away. Declaring `.blind` here would be invisible — the teardown would be swallowed inside
+    /// the peer's quiet and the 4-DH retry loop this reason exists to break would continue.
+    func testTheOtpkBranchIsNeverSilencedByThePeersOwnTeardown() {
+        XCTAssertEqual(SessionReducer.initFailureAction(otpkUnreproducible: true).cause, .explained)
     }
 
-    /// Pins the asymmetry itself rather than three separate values: every branch that sends
-    /// carries evidence, and the one that does not send does not. A future branch added without
-    /// deciding this question fails here rather than shipping as a silent `.skip`.
-    func testEveryBranchThatSendsCarriesEvidence() {
-        let all: [SessionReducer.InitFailureAction] = [.sendTypedOtpk, .sendPlain, .suppressWithinGrace]
+    /// **The plain branch is the one the grace was for.** A plain AEAD failure right after the
+    /// peer tore down is a stale-wire race, and answering it with a teardown is the storm. It
+    /// declares `Blind`, which is the one cause the peer's own teardown answers away.
+    func testThePlainBranchIsTheOneThePeersTeardownAnswers() {
+        XCTAssertEqual(SessionReducer.initFailureAction(otpkUnreproducible: false).cause, .blind)
+    }
+
+    /// Pins the asymmetry itself rather than three separate values: every branch here sends, so
+    /// every branch carries evidence, and what separates them is the cause. A branch added
+    /// without deciding both questions fails here rather than shipping as a silent `.skip` or a
+    /// silently swallowed teardown.
+    func testEveryBranchDecidesBothQuestions() {
+        let all: [SessionReducer.InitFailureAction] = [.sendTypedOtpk, .sendPlain]
         for action in all {
-            let sends = action != .suppressWithinGrace
-            XCTAssertEqual(
-                action.peerOnDeadSession, sends,
+            XCTAssertTrue(
+                action.peerOnDeadSession,
                 "\(action): a branch that sends END_SESSION after a failed init must carry evidence"
             )
         }
+        XCTAssertEqual(
+            Set(all.map(\.cause)), [.explained, .blind],
+            "the two branches must not declare the same cause — that is the fold that hid them"
+        )
     }
 }

@@ -149,6 +149,16 @@ final class SessionActionExecutor {
                 category: "SessionActionExecutor"
             )
 
+        case .endSessionNotNeeded(let contactId):
+            // The peer tore this ratchet down itself, so there is nothing to tell it. Unlike
+            // `endSessionSuppressed` this owes nothing and arms no timer — the list carries no
+            // `scheduleTimer`, and adding one here would rebuild the thing the 20 s inbound grace
+            // prevented: a guaranteed teardown back at a peer that has already reset.
+            Log.info(
+                "END_SESSION not needed for \(contactId.prefix(8))… — the peer tore this session down itself",
+                category: "SessionActionExecutor"
+            )
+
         case .messageQueuedPendingInit(let contactId, let queuedCount):
             // Held inside the core behind an in-flight init and drained on SessionInitCompleted.
             // Nothing is lost — which is the point of it having a name.

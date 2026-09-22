@@ -326,14 +326,17 @@ enum SessionReducer {
     }
 
     /// What to do about END_SESSION after a RESPONDER `initReceivingSession` failure — the single
-    /// authority for the grace/otpk/plain branch that used to be nested inline `if`s in
-    /// `SessionCoordinator`. The window is asked for separately, per device, at the send site —
-    /// and it is the core's (`orchestration::session_machine`); this only chooses the *branch*.
+    /// authority for the otpk/plain branch that used to be nested inline `if`s in
+    /// `SessionCoordinator`. Whether the teardown may actually go out is asked separately, per
+    /// device, at the send site — and it is the core's (`orchestration::session_machine`); this
+    /// only chooses the *branch*, and with it the cause the send declares.
+    ///
+    /// There was a third case, `suppressWithinGrace`, for a plain AEAD failure right after the
+    /// peer tore down — a stale-wire race that must not be answered with a teardown. It did not
+    /// disappear: `.sendPlain` declares itself `Blind` at the send site, and the machine answers
+    /// it with `EndSessionNotNeeded` for exactly that window. The difference is that the typed
+    /// branch is no longer folded in with it.
     enum InitFailureAction: Equatable {
-        /// Plain AEAD fail right after we *received* END_SESSION — usually a stale-wire race.
-        /// Do not amplify the reset storm; wait for the peer's SRI / next msg0 (responder
-        /// fallback still covers a stuck INITIATOR).
-        case suppressWithinGrace
         /// Peer used a 4-DH OTPK we cannot reproduce → send a typed END_SESSION carrying
         /// `.otpkUnreproducible` so they re-init WITHOUT one (3-DH is always reproducible,
         /// breaking the 4-DH retry loop). Bypasses the inbound grace — the hint must reach them.
@@ -362,18 +365,42 @@ enum SessionReducer {
         var peerOnDeadSession: Bool {
             switch self {
             case .sendTypedOtpk, .sendPlain: return true
-            case .suppressWithinGrace:       return false
+            }
+        }
+
+        /// What this teardown **knows**, which is what the machine holds it to.
+        ///
+        /// Beside `peerOnDeadSession` and deliberately not derived from it: that one answers
+        /// `plan_teardown` ("is there a device we hold no session with that must still be told"),
+        /// this one answers the window ("may an envelope go out now"). Both are true of both
+        /// branches for the first question and differ on the second, which is how one `Bool`
+        /// standing for both made a blind teardown and an explained one indistinguishable.
+        ///
+        /// Here rather than at the send sites for the reason the neighbour gives: a policy
+        /// repeated at call sites is the shape that drifts. Getting this wrong is not visible —
+        /// `.blind` on the typed branch would be silently swallowed inside the peer's quiet, and
+        /// the 4-DH retry loop it exists to break would simply continue.
+        var cause: CfeTearDownCause {
+            switch self {
+            // The peer cannot work out for itself that the one-time pre-key it chose is
+            // unreproducible. Silence is the loop continuing, so this is never silenced.
+            case .sendTypedOtpk: return .explained
+            // A plain AEAD failure right after the peer tore down is a stale-wire race, and a
+            // teardown back at them repeats what they just said. This is the branch the 20 s
+            // inbound grace existed for.
+            case .sendPlain: return .blind
             }
         }
     }
 
-    static func initFailureAction(
-        otpkUnreproducible: Bool,
-        withinInboundGrace: Bool
-    ) -> InitFailureAction {
-        if otpkUnreproducible { return .sendTypedOtpk }
-        if withinInboundGrace { return .suppressWithinGrace }
-        return .sendPlain
+    /// The inbound grace used to be the second line of this function, as a `Bool` the caller
+    /// computed from its own 20 s map. It is the machine's now — asked per device, inside the
+    /// send, as `CfeTearDownCause` — because the answer differs between the two branches left
+    /// here and a `Bool` checked before the branch could not tell them apart: a plain teardown
+    /// after the peer tore down repeats what they said, while the typed one carries the reason
+    /// their next attempt needs. See `decisions/session-is-one-state-machine.md`, step 2.
+    static func initFailureAction(otpkUnreproducible: Bool) -> InitFailureAction {
+        otpkUnreproducible ? .sendTypedOtpk : .sendPlain
     }
 
     /// What to do when an END_SESSION is *received* from a peer — the single branch authority for
