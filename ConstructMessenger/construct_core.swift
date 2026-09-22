@@ -7927,16 +7927,15 @@ public func planReceivingDecrypt(sessionDeviceIds: [String], preferredDeviceId: 
  * Every device that must receive its own ciphertext of an outgoing message.
  * The caller owns the account-space facts — whose devices these are, and whether the
  * recipient is itself — and passes them in; the decision over the sets is made here.
- * Empty strings mean "unknown"/"none" for `our_device_id` and `primary_send_covered`.
+ * An empty `our_device_id` means "unknown", and then no own-replica copy is planned.
  */
-public func planSend(recipientDeviceIds: [String], ownDeviceIds: [String], ourDeviceId: String, recipientIsSelf: Bool, primarySendCovered: String) -> [DeliveryTarget]  {
+public func planSend(recipientDeviceIds: [String], ownDeviceIds: [String], ourDeviceId: String, recipientIsSelf: Bool) -> [DeliveryTarget]  {
     return try!  FfiConverterSequenceTypeDeliveryTarget.lift(try! rustCall() {
     uniffi_construct_core_fn_func_plan_send(
         FfiConverterSequenceString.lower(recipientDeviceIds),
         FfiConverterSequenceString.lower(ownDeviceIds),
         FfiConverterString.lower(ourDeviceId),
-        FfiConverterBool.lower(recipientIsSelf),
-        FfiConverterString.lower(primarySendCovered),$0
+        FfiConverterBool.lower(recipientIsSelf),$0
     )
 })
 }
@@ -8392,7 +8391,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_func_plan_receiving_decrypt() != 26416) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_func_plan_send() != 10892) {
+    if (uniffi_construct_core_checksum_func_plan_send() != 48521) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_func_pp_blind_token() != 34290) {

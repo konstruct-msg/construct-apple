@@ -133,10 +133,10 @@ final class DeviceDeliveryPlanTests: XCTestCase {
     ///
     /// Until 2026-09-22 the plan subtracted `primarySendCovered` — the device the ordinary send
     /// had reached by the pinned key — which is what made one of the recipient's devices a
-    /// different kind of recipient from the others. The core still takes the parameter; this
-    /// app hands it the empty string, and the guard below pins that nothing passes anything else.
+    /// different kind of recipient from the others. The parameter is gone from the core as well
+    /// now, so the guard below is on the name rather than on its value.
     ///
-    /// Mutation: pass a device id as `primarySendCovered` again — this reddens.
+    /// Mutation: drop a recipient device from the plan — this reddens.
     func testEveryRecipientDeviceIsPlannedAndNoneIsPrivileged() {
         let targets = DeviceDeliveryPlan.targets(
             recipientDevices: [device("r1"), device("r2"), device("r3")],
@@ -165,9 +165,9 @@ final class DeviceDeliveryPlanTests: XCTestCase {
         XCTAssertEqual(targets[1].identityPublic, targets[1].bundle?.identityPublic)
     }
 
-    /// The source guard for the above: `primarySendCovered:` is passed exactly once in the app,
-    /// as the empty string, from the one translation site. A second site, or a value, is the
-    /// primary send coming back.
+    /// The source guard for the above: nothing in the app names a covered device at all. The
+    /// parameter no longer exists in the core, so a line mentioning it is either a call that will
+    /// not compile or the primary send being written back in by hand.
     func testNothingInTheAppNamesACoveredDevice() throws {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
@@ -183,7 +183,7 @@ final class DeviceDeliveryPlanTests: XCTestCase {
                 sites.append("\(url.lastPathComponent): \(t)")
             }
         }
-        XCTAssertEqual(sites, ["DeviceDeliveryPlan.swift: primarySendCovered: \"\""], "\(sites)")
+        XCTAssertEqual(sites, [], "\(sites)")
     }
 
     // MARK: - Where the device set comes from

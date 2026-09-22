@@ -153,8 +153,9 @@ enum DeviceDeliveryPlan {
     /// the recipient's devices was reached by a path with delivery status, a retry store and
     /// privacy-pass recovery, and the rest by a path with none of those. Every recipient device
     /// is a target now, and one sender handles them all
-    /// (`OutboundMessagePipeline.sendToRecipientDevices`). The core's `plan_send` still takes the
-    /// parameter and is handed the empty string; removing it there is a core change.
+    /// (`OutboundMessagePipeline.sendToRecipientDevices`). The core's `plan_send` lost the
+    /// parameter too, once Android stopped sending that way — there is no longer a value it could
+    /// correctly take.
     ///
     /// - Parameters:
     ///   - recipientDevices: the devices of the person we are writing to. Empty when writing to
@@ -184,8 +185,7 @@ enum DeviceDeliveryPlan {
             // than being answered with a guess: without our own device id no replica copy is
             // planned at all, and that refusal is the core's, not ours.
             ourDeviceId: ourDeviceId ?? "",
-            recipientIsSelf: recipientIsSelf,
-            primarySendCovered: ""
+            recipientIsSelf: recipientIsSelf
         )
 
         // Re-associated **by device id, never by position**. The material the caller needs is in

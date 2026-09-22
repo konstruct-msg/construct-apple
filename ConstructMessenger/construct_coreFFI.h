@@ -1148,7 +1148,7 @@ RustBuffer uniffi_construct_core_fn_func_plan_receiving_decrypt(RustBuffer sessi
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_PLAN_SEND
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_PLAN_SEND
-RustBuffer uniffi_construct_core_fn_func_plan_send(RustBuffer recipient_device_ids, RustBuffer own_device_ids, RustBuffer our_device_id, int8_t recipient_is_self, RustBuffer primary_send_covered, RustCallStatus *_Nonnull out_status
+RustBuffer uniffi_construct_core_fn_func_plan_send(RustBuffer recipient_device_ids, RustBuffer own_device_ids, RustBuffer our_device_id, int8_t recipient_is_self, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_PP_BLIND_TOKEN
