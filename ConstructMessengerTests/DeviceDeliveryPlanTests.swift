@@ -186,6 +186,55 @@ final class DeviceDeliveryPlanTests: XCTestCase {
         XCTAssertEqual(sites, ["DeviceDeliveryPlan.swift: primarySendCovered: \"\""], "\(sites)")
     }
 
+    // MARK: - Where the device set comes from
+
+    /// The device the peer linked after we pinned their set. Nothing local names it — it has never
+    /// written to us — so if the directory's answer does not enter the plan, it never gets a copy.
+    ///
+    /// Mutation: return `local` unconditionally — this reddens.
+    func testADeviceOnlyTheDirectoryKnowsIsPlanned() {
+        let known = device("r1")
+        let newlyLinked = bundle("r2")
+        let merged = PlannedRecipientDevice.merge(local: [known], directory: [newlyLinked])
+        XCTAssertEqual(merged.map(\.deviceId), ["r1", "r2"])
+    }
+
+    /// A device we hold and the directory does not name is **kept**. The answer is narrowed by the
+    /// request and again by this client dropping a device whose hybrid-PQ bundle failed to verify;
+    /// that device is alive and we may hold a live session with it. Only `active_devices` removes
+    /// a device, in `reconcileDevices`.
+    ///
+    /// Mutation: build the result from `directory` alone — this reddens.
+    func testADeviceTheDirectoryDidNotNameIsKept() {
+        // A row as the send path builds it from `PeerDevice`: a key, no bundle.
+        let held = PlannedRecipientDevice(deviceId: "r1", identityPublic: Data(repeating: 7, count: 32))
+        let merged = PlannedRecipientDevice.merge(local: [held], directory: [bundle("r2")])
+        XCTAssertEqual(merged.map(\.deviceId), ["r1", "r2"])
+        XCTAssertNil(merged.first { $0.deviceId == "r1" }?.bundle, "the local row is carried as it is")
+    }
+
+    /// Where both name a device, the directory entry wins — it carries the bundle, and a caller
+    /// with one opens a session without a second fetch.
+    func testTheDirectoryEntryCarriesTheBundleForADeviceWeAlreadyHold() {
+        let merged = PlannedRecipientDevice.merge(local: [device("r1")], directory: [bundle("r1")])
+        XCTAssertEqual(merged.map(\.deviceId), ["r1"])
+        XCTAssertNotNil(merged.first?.bundle)
+    }
+
+    /// No answer from the key server is not an empty device set: it is no answer. Planning from
+    /// nothing would drop every copy to a peer whose bundles are momentarily unavailable.
+    func testAnEmptyDirectoryLeavesTheLocalSetAlone() {
+        let merged = PlannedRecipientDevice.merge(local: [device("r1"), device("r2")], directory: [])
+        XCTAssertEqual(merged.map(\.deviceId), ["r1", "r2"])
+    }
+
+    /// First contact: nothing local, and the plan is the account's devices — all of them.
+    func testFirstContactPlansEveryDeviceTheDirectoryNames() {
+        let merged = PlannedRecipientDevice.merge(local: [], directory: [bundle("r1"), bundle("r2")])
+        XCTAssertEqual(merged.map(\.deviceId), ["r1", "r2"])
+        XCTAssertTrue(merged.allSatisfy { $0.bundle != nil })
+    }
+
     // MARK: - What the copy says out loud
 
     /// A single-chunk copy carries no chunk suffix; a multi-chunk one carries it after the tag, so

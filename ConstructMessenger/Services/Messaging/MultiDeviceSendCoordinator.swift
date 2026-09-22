@@ -98,6 +98,10 @@ final class MultiDeviceSendCoordinator {
     /// response, wherever in the app it was made.
     private let recipientCacheTTL: TimeInterval = 300
 
+    /// When `refreshRecipientDevices` last asked, so a peer whose bundles are unavailable is asked
+    /// at the TTL's pace rather than on every chat open.
+    private var lastRefreshAttempt: [String: Date] = [:]
+
     /// True while `drainRetryQueue` is running, so a failing retry re-uses its entry instead of
     /// appending a second one. Safe as a plain `Bool` because the class is `@MainActor` and the
     /// drain never suspends between reading it and clearing it in a `defer`.
@@ -128,6 +132,53 @@ final class MultiDeviceSendCoordinator {
         )
         recipientDeviceCache[recipientUserId] = DeviceCache(bundles: fetched, fetchedAt: Date())
         return fetched
+    }
+
+    /// What the key server last said about this peer's devices, **without asking it again.**
+    ///
+    /// The send path merges this into the plan (`PlannedRecipientDevice.merge`) because it is free
+    /// and carries bundles; it never reaches for the network to get it, which is the whole point
+    /// of planning from `PeerDevice`.
+    func knownRecipientDevices(for recipientUserId: String) -> [DeviceBundleData]? {
+        cachedRecipientBundles(for: recipientUserId)
+    }
+
+    /// Ask the key server who this peer's devices are, when nothing recent has said.
+    ///
+    /// **A peer's new device is otherwise invisible.** `PeerDevice` is written from what arrives —
+    /// an inbound message, a bundle response some other path made — and a device that has not
+    /// written to us produces neither. The TTL on the cache above bounds the window only for a
+    /// peer we are *already* fetching bundles for, which stops happening the moment we hold a
+    /// session with every device we know: then nothing asks again, ever, and the five minutes that
+    /// comment claims is unbounded in fact. This is the call that asks.
+    ///
+    /// Best-effort by construction: a failure leaves the plan on the set we hold, which is what a
+    /// send would have used anyway. Driven by opening a conversation rather than by sending, so
+    /// the key server sees one request per peer per TTL at most — the same request it already
+    /// serves when a session is opened, and not a per-message signal of an active conversation.
+    ///
+    /// The refusal is throttled with the answer: a fetch that throws does not fill the cache, so
+    /// without `lastRefreshAttempt` a peer whose bundles are unavailable would be asked again on
+    /// every appearance of the chat.
+    func refreshRecipientDevices(for recipientUserId: String) async {
+        guard !recipientUserId.isEmpty else { return }
+        guard cachedRecipientBundles(for: recipientUserId) == nil else { return }
+        if let attempted = lastRefreshAttempt[recipientUserId],
+           Date().timeIntervalSince(attempted) < recipientCacheTTL { return }
+        lastRefreshAttempt[recipientUserId] = Date()
+
+        do {
+            let devices = try await recipientBundles(for: recipientUserId)
+            Log.info(
+                "MultiDevice: device set for \(recipientUserId.prefix(8))… refreshed — \(devices.count) device(s)",
+                category: "MultiDevice"
+            )
+        } catch {
+            Log.info(
+                "MultiDevice: device set for \(recipientUserId.prefix(8))… not refreshed (\(error.localizedDescription)) — planning from what we hold",
+                category: "MultiDevice"
+            )
+        }
     }
 
     private func cachedRecipientBundles(for recipientUserId: String) -> [DeviceBundleData]? {

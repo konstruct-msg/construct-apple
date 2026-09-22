@@ -266,12 +266,28 @@ final class OutboundMessagePipeline {
     /// key for at all: nothing can be encrypted to and nothing sealed.
     private func recipientTargets(for recipientId: String, stealthOn: Bool) async throws -> [DeviceDeliveryTarget] {
         let context = PersistenceController.shared.container.viewContext
-        var devices = SessionAddressing.devices(ofPeer: recipientId, in: context).map {
+        let local = SessionAddressing.devices(ofPeer: recipientId, in: context).map {
             PlannedRecipientDevice(deviceId: $0.deviceId, identityPublic: $0.identityKey)
+        }
+        // Free when it is there, never fetched for: the plan is built from what we hold, and the
+        // directory only adds what it already knows.
+        var devices = PlannedRecipientDevice.merge(
+            local: local,
+            directory: MultiDeviceSendCoordinator.shared.knownRecipientDevices(for: recipientId) ?? []
+        )
+        if devices.isEmpty {
+            // Nothing pinned and nothing cached: this is a first send, and the one thing we must
+            // not do is guess a single device. Until 2026-09-22 the plan fell straight through to
+            // the pinned key — one device — and the directory was consulted afterwards, by
+            // `ensureSession`, for the device already planned; so the first message to a peer
+            // reached one of their devices and every message after it reached all of them.
+            let fetched = try? await MultiDeviceSendCoordinator.shared.recipientBundles(for: recipientId)
+            devices = (fetched ?? []).map(PlannedRecipientDevice.init)
         }
         if devices.isEmpty,
            let pinned = SessionAddressing.pinnedIdentityKey(ofUser: recipientId),
            let pinnedDevice = SessionAddressing.cryptoIdentity(ofIdentityKey: pinned) {
+            // The offline answer, and only that: the key server was asked and did not answer.
             devices = [PlannedRecipientDevice(deviceId: pinnedDevice, identityPublic: pinned)]
         }
         guard !devices.isEmpty else {

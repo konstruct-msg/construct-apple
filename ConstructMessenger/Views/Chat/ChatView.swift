@@ -1141,6 +1141,10 @@ struct ChatView: View {
         // their keys, opportunistically re-key to a fresh session (no-op otherwise).
         if let contactId = viewModel.chat.otherUser?.id, !contactId.isEmpty {
             Task { await SessionInitializationService.shared.upgradeAtRiskSessionIfPeerFresh(userId: contactId) }
+            // Who this person's devices are, when nothing recent has said. Opening the chat is the
+            // trigger rather than sending, so the key server is asked once per peer per TTL and
+            // never per message. Best-effort; see `refreshRecipientDevices`.
+            Task { await MultiDeviceSendCoordinator.shared.refreshRecipientDevices(for: contactId) }
         }
         setActiveChatState(isActive: true)
         // Active chat owns continuous voice playback: advance to the next voice message

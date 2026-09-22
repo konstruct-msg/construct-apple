@@ -11,10 +11,13 @@ import Foundation
 ///
 /// Two sources, one shape. The local set (`PeerDevice`: device id and identity key, on disk)
 /// names every device we have been told about and needs no network; a bundle fetch names the
-/// same devices with the material to open a session. A send to a peer we already hold sessions
-/// with is built from the first, so it does not depend on the key server — which is
+/// account's devices with the material to open a session. A send to a peer we already hold
+/// sessions with is built from the first, so it does not depend on the key server — which is
 /// rate-limited, destructive and sometimes unreachable — and a bundle is fetched only for a
 /// device that turns out to need one.
+///
+/// The local set is what we were **told**, though, and only an inbound message tells us. See
+/// `merge(local:directory:)` for the device that never writes.
 struct PlannedRecipientDevice {
     let deviceId: String
     /// The device's X25519 identity key — what the copy is sealed to and the tag is keyed on.
@@ -30,6 +33,39 @@ struct PlannedRecipientDevice {
 
     init(_ device: DeviceBundleData) {
         self.init(deviceId: device.deviceId, identityPublic: device.bundle.identityPublic, bundle: device.bundle)
+    }
+
+    /// The devices a send plans for, from the rows we hold and what the key server last said.
+    ///
+    /// **Neither source is authoritative alone, and neither may overwrite the other.**
+    ///
+    /// A device in `directory` and not in `local` is the whole point: a peer who linked a device
+    /// after we pinned their set has one nothing has told us about, and nothing will — a device
+    /// that has not written to us is silent by construction. Until 2026-09-22 such a device was
+    /// reached only once it wrote first.
+    ///
+    /// A device in `local` and not in `directory` is **kept**. The directory answer is narrowed
+    /// twice before it arrives here — by the request, and by this client dropping any device whose
+    /// hybrid-PQ bundle failed verification — so its absence means "no usable bundle in this
+    /// answer", not "gone". Removal is `SessionAddressing.reconcileDevices`'s job, from
+    /// `active_devices`, which is the server stating its own set rather than us inferring one.
+    /// Reading absence here as removal would drop a device we hold a live session with because one
+    /// bundle was unreadable.
+    ///
+    /// Where both name a device the directory entry wins: it carries the bundle, which the caller
+    /// needs to open a session without a second fetch. The two keys agree by construction — a
+    /// device id is `SHA256(identity_public)[0..16]` and both sources check that before storing.
+    static func merge(local: [PlannedRecipientDevice], directory: [DeviceBundleData]) -> [PlannedRecipientDevice] {
+        guard !directory.isEmpty else { return local }
+        var byId: [String: DeviceBundleData] = [:]
+        for device in directory { byId[device.deviceId] = device }
+
+        var merged = local.map { row in
+            byId[row.deviceId].map(PlannedRecipientDevice.init) ?? row
+        }
+        let known = Set(local.map(\.deviceId))
+        merged.append(contentsOf: directory.filter { !known.contains($0.deviceId) }.map(PlannedRecipientDevice.init))
+        return merged
     }
 }
 
