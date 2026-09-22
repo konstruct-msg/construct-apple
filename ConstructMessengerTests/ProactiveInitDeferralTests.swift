@@ -98,6 +98,57 @@ final class ProactiveInitDeferralTests: XCTestCase {
         }
     }
 
+    // MARK: - Which devices a run touches
+
+    private let pinned = "6f5e37acb2914d0e8a7c1f30d4b6e592"
+    private let sibling = "b814c8ab1d2e4f60913a7c5d8e2f0a43"
+
+    /// A device we hold no session with is opened, whoever it is. That is the whole point of a
+    /// run reaching every device: before 2026-09-22 the init fetched one bundle, so an account's
+    /// second device had no session until it wrote to us first.
+    func testADeviceWithNoSessionIsOpened() {
+        XCTAssertEqual(
+            SessionInitializationService.initAction(device: sibling, resolvedDevice: pinned, hasSession: false),
+            .open
+        )
+        XCTAssertEqual(
+            SessionInitializationService.initAction(device: pinned, resolvedDevice: pinned, hasSession: false),
+            .open
+        )
+    }
+
+    /// A sibling's live session is left alone. A heal is triggered by something that went wrong
+    /// with *a* session, and tearing down the ratchet of a device nobody complained about is the
+    /// defect the reset cut removed from the receive side.
+    ///
+    /// Mutation: replace on every device — this reddens.
+    func testASiblingSessionIsNotTornDownByARunAboutSomeoneElse() {
+        XCTAssertEqual(
+            SessionInitializationService.initAction(device: sibling, resolvedDevice: pinned, hasSession: true),
+            .leave
+        )
+    }
+
+    /// The device the account resolves to keeps the replace-and-reopen behaviour, because no
+    /// caller names a device and that one is what "re-establish with this person" has always
+    /// meant. The asymmetry is deliberate and is the machine's to remove.
+    func testTheResolvedDeviceIsTheOneAHealReplaces() {
+        XCTAssertEqual(
+            SessionInitializationService.initAction(device: pinned, resolvedDevice: pinned, hasSession: true),
+            .replace
+        )
+    }
+
+    /// Nothing resolved — a peer we have pinned no key for — and a session already held: leave
+    /// it. Replacing on an unnameable peer would make "we cannot say which device this is" mean
+    /// "tear down whatever we find", which is the opposite of what it says.
+    func testAnUnnameablePeerReplacesNothing() {
+        XCTAssertEqual(
+            SessionInitializationService.initAction(device: pinned, resolvedDevice: nil, hasSession: true),
+            .leave
+        )
+    }
+
     /// The deferral is not a failure, and it must not read as one. A caller that logs
     /// `errorDescription` should say what happened rather than blame the peer or the network.
     func testTheDeferralExplainsItself() {

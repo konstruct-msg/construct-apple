@@ -263,10 +263,14 @@ class SessionInitializationService {
     /// straight to a degraded (at-risk) init instead of burning 2 × 60 s on retries.
     /// Outcome of one proactive-init run, shared with every coalesced caller.
     private enum ProactiveInitOutcome {
-        /// The device the session was opened with — derived from the bundle's identity key, so
-        /// it is the ratchet's own name and the address every handshake control about this
-        /// session must carry. `nil` only under the test override, which opens nothing.
-        case success(device: String?)
+        /// The devices sessions were opened with — each derived from the bundle's identity key,
+        /// so each is a ratchet's own name and the address the handshake controls about that
+        /// session must carry. Empty only under the test override, which opens nothing.
+        ///
+        /// A **list**, because an account is a set of devices and an init that names one of them
+        /// is an init that leaves the rest dark until they write first. See
+        /// `decisions/a-peer-is-a-set-of-devices.md`.
+        case success(devices: [String])
         case failure(Error)
     }
 
@@ -321,17 +325,21 @@ class SessionInitializationService {
     ///   typed message, a queued one, a handshake we owe. No default on purpose: the one call site
     ///   that answers `false` is the one that caused the 2026-09-04 outage, and a default would
     ///   let the next call site inherit an answer nobody chose.
-    /// Returns the device the session was opened with, or `nil` when none was. A caller that
-    /// then speaks for the session — SESSION_RESET_INIT, `session_ready` — addresses that device:
-    /// the bundle the key server answered with names one device of the account, and it is not
-    /// necessarily the pinned one the account would resolve to.
+    /// Returns the devices sessions were opened with — empty when none was. A caller that then
+    /// speaks for a session — SESSION_RESET_INIT, `session_ready` — addresses **each** of them:
+    /// the announcement is about a ratchet, and there is one ratchet per device.
+    ///
+    /// Until 2026-09-22 this returned one device and there was one to return: the run fetched a
+    /// single bundle, which the key server answers with one device of the account, so an account
+    /// with two devices got one INITIATOR session and its sibling stayed dark until it wrote to
+    /// us first.
     @discardableResult
     func initializeSessionProactively(
         userId: String,
         hasOutboundWork: Bool,
         onSuccess: @escaping () -> Void,
         onFailure: @escaping (Error) -> Void
-    ) async -> String? {
+    ) async -> [String] {
         // Asked here, before the bundle fetch, because the fetch is what spends the peer's
         // one-time prekey. Asking after it would answer a question that has already cost what it
         // was meant to save.
@@ -353,7 +361,7 @@ class SessionInitializationService {
                 category: "SessionInit"
             )
             onFailure(SessionError.initiationDeferred(decision: "\(decision)"))
-            return nil
+            return []
         }
 
         let outcome: ProactiveInitOutcome
@@ -365,10 +373,10 @@ class SessionInitializationService {
                 guard let self else { return .failure(CryptoManagerError.coreNotInitialized) }
                 #if DEBUG
                 if let override = self.proactiveInitOverrideForTests {
-                    return await override(userId) ? .success(device: nil) : .failure(CryptoManagerError.coreNotInitialized)
+                    return await override(userId) ? .success(devices: []) : .failure(CryptoManagerError.coreNotInitialized)
                 }
                 #endif
-                return await self.performProactiveInit(userId: userId)
+                return await self.performProactiveInit(userId: userId, hasOutboundWork: hasOutboundWork)
             }
             proactiveInitTasks[userId] = task
             outcome = await task.value
@@ -376,18 +384,179 @@ class SessionInitializationService {
         }
 
         switch outcome {
-        case .success(let device):
+        case .success(let devices):
             onSuccess()
-            return device
+            return devices
         case .failure(let error):
             onFailure(error)
-            return nil
+            return []
+        }
+    }
+
+    /// One device of the peer, and the bundle a session with it opens from.
+    private struct InitTarget {
+        let deviceId: String
+        let bundle: PublicKeyBundleData
+    }
+
+    /// What a run does about one device of the account.
+    enum InitAction: Equatable {
+        /// No session: open one.
+        case open
+        /// A session is there and this is the device the caller's reason is about.
+        case replace
+        /// A session is there and nothing said it was broken.
+        case leave
+    }
+
+    /// Whether a proactive init touches this device, and whether it tears down what is there.
+    ///
+    /// **The one remaining privilege, stated rather than implicit.** No caller names a device —
+    /// they say "re-establish with this person" — so the device the account resolves to is the one
+    /// a heal is taken to be about, and it keeps the replace-and-reopen behaviour it has always
+    /// had. Every other device is only ever **added**: a session with a sibling is not torn down
+    /// by a decision taken about another device, which is the rule the 2026-09-22 reset cut
+    /// established on the receive side and the same rule here.
+    ///
+    /// Naming the device in the call removes the asymmetry, and that is the machine's job —
+    /// `decisions/session-is-one-state-machine.md`.
+    nonisolated static func initAction(device: String, resolvedDevice: String?, hasSession: Bool) -> InitAction {
+        guard hasSession else { return .open }
+        return device == resolvedDevice ? .replace : .leave
+    }
+
+    /// What one device's init did.
+    private enum DeviceInitResult {
+        case opened
+        /// Nothing to do, or the core said not now — neither is a failure.
+        case skipped(String)
+        /// The core refused the bundle: the peer's signed pre-key is older than it allows.
+        case stale(days: Double)
+        case failed(Error)
+    }
+
+    /// Every device of `userId` the key server will hand a bundle for, each with its own.
+    ///
+    /// Plural, because an account is a set of devices: `getPreKeyBundle` (singular) answers with
+    /// **one** device chosen by the server, and building an account's sessions from it opens one
+    /// and leaves the rest dark. It is kept as the fallback — a narrowed answer, or a server that
+    /// cannot answer plurally, then degrades to what this did before rather than to nothing.
+    ///
+    /// The plural fetch is also what writes `PeerDevice` (`KeyServiceClient` →
+    /// `SessionAddressing.reconcileDevices`), so an init is a moment the device set is learned.
+    private func initTargets(userId: String) async throws -> [InitTarget] {
+        do {
+            // Consuming, because a run that reaches a device with no session runs X3DH with it
+            // and X3DH is what spends a one-time pre-key. The server spends one per device it
+            // answers for, so a heal of a peer whose sibling is already open pays one pre-key it
+            // does not use. That is the price of one request instead of one per device, and the
+            // ladder below does the opposite on a retry, where the waste would repeat.
+            let devices = try await KeyServiceClient.shared.getPreKeyBundles(
+                userId: userId, consumeOneTimePrekey: true
+            )
+            if !devices.isEmpty {
+                return devices.map { InitTarget(deviceId: $0.deviceId, bundle: $0.bundle) }
+            }
+            Log.info(
+                "SESSION_STATE[init_targets_empty]: key server named no device for \(userId.prefix(8))… — asking for one",
+                category: "SessionInit"
+            )
+        } catch let rpc as RPCError where rpc.code == .notFound {
+            // Answered, not failed. Asking again through the singular path would spend a second
+            // request to be told the same thing — see `fetchPublicKeyWithRetry`.
+            VanishedPeerStore.shared.markVanished(userId)
+            throw SessionError.peerNotFound
+        } catch {
+            Log.info(
+                "SESSION_STATE[init_targets_fallback]: bundles for \(userId.prefix(8))… unavailable (\(error.localizedDescription)) — falling back to one device",
+                category: "SessionInit"
+            )
+        }
+
+        let bundle = try await fetchPublicKeyWithRetry(userId: userId, consumeOneTimePrekey: true)
+        guard let device = SessionAddressing.cryptoIdentity(ofIdentityKey: bundle.identityPublic) else {
+            throw CryptoManagerError.sessionNotFound
+        }
+        return [InitTarget(deviceId: device, bundle: bundle)]
+    }
+
+    /// Fresh bundles for the devices a stale signed pre-key sent back round the ladder.
+    ///
+    /// Asked one device at a time, unlike the first pass: the plural fetch spends a one-time
+    /// pre-key for **every** device it answers for, and on a retry all but these already have
+    /// their session. A peer's pre-key pool is not large — a hundred uploaded at link time, and
+    /// they have been observed diverging from the server's count — so a retry pays for what it
+    /// retries and nothing else.
+    private func retryTargets(userId: String, devices: Set<String>) async -> [InitTarget] {
+        var targets: [InitTarget] = []
+        for device in devices.sorted() {
+            guard let bundle = try? await fetchPublicKeyWithRetry(
+                userId: userId, deviceId: device, consumeOneTimePrekey: true
+            ) else { continue }
+            targets.append(InitTarget(deviceId: device, bundle: bundle))
+        }
+        return targets
+    }
+
+    /// Open a session with one device, or say why not.
+    ///
+    /// **Which device is replaced and which is only added.** A session already held is left alone
+    /// unless it is the one the account currently resolves to — the device today's callers mean
+    /// when they say "re-establish with this person", since none of them names a device. So a
+    /// heal keeps the behaviour it has, and a sibling is never torn down by a decision taken about
+    /// another device (the rule the 2026-09-22 reset cut established). Naming the device in the
+    /// call is the machine's job: `decisions/session-is-one-state-machine.md`.
+    private func initSession(
+        with target: InitTarget,
+        userId: String,
+        resolvedDevice: String?,
+        hasOutboundWork: Bool,
+        allowStale: Bool
+    ) -> DeviceInitResult {
+        let action = Self.initAction(
+            device: target.deviceId,
+            resolvedDevice: resolvedDevice,
+            hasSession: CryptoManager.shared.hasSession(for: target.deviceId)
+        )
+        guard action != .leave else { return .skipped("session exists") }
+        let replaces = action == .replace
+        // Per device, not per account: the core ranks **this pair** to decide whether opening now
+        // walks into a collision, and for a second device the answer can differ from the pinned
+        // one's. `peerInitInFlight` is still account-wide — that store cannot say which device
+        // sent the init it holds.
+        let decision = planInitiation(context: InitiationContext(
+            myDeviceId: KeychainManager.shared.loadDeviceID() ?? "",
+            peerDeviceId: target.deviceId,
+            ourInitInFlight: false,
+            peerInitInFlight: peerInitInFlight?(userId) ?? false,
+            haveOutboundWork: hasOutboundWork
+        ))
+        guard decision == .initiate || decision == .joinInFlight else {
+            return .skipped("core said \(decision)")
+        }
+
+        do {
+            try initializeSession(
+                userId: target.deviceId,
+                bundle: target.bundle,
+                deleteExisting: replaces,
+                allowStale: allowStale
+            )
+            return .opened
+        } catch SessionError.peerSPKStale(let days) {
+            return .stale(days: days)
+        } catch {
+            return .failed(error)
         }
     }
 
     /// The actual init run. Never call directly — go through `initializeSessionProactively`
     /// so concurrent callers coalesce onto a single session.
-    private func performProactiveInit(userId: String) async -> ProactiveInitOutcome {
+    ///
+    /// **One run, N sessions.** Until 2026-09-22 it fetched one bundle and opened one session,
+    /// and the account's other devices were reached only after they wrote to us first — the
+    /// establishment half of `a-peer-is-a-set-of-devices`.
+    private func performProactiveInit(userId: String, hasOutboundWork: Bool) async -> ProactiveInitOutcome {
         Log.info("SESSION_STATE[proactive_init_start]: userId=\(userId.prefix(8))...", category: "SessionInit")
 
         let staleSPKMaxRetries = 2
@@ -398,50 +567,94 @@ class SessionInitializationService {
         /// offline for a long time and no amount of waiting will help — degrade instead.
         let staleSPKFastFailDays: Double = 30.25
 
+        let resolvedDevice = SessionAddressing.contactId(forPeer: userId)
+        var opened: [String] = []
+        /// A device we already hold a session with and left alone. Not an opening, and not a
+        /// failure either: the caller's `onSuccess` is what flushes a queue, and a run that
+        /// found every session already in place must not report that nothing happened.
+        var heldAlready = false
         var lastError: Error?
+        /// Devices whose bundle the core refused as stale and that a fresher answer may fix.
+        /// Empty on the first pass, where every device is tried.
+        var retryOnly: Set<String> = []
+
         for attempt in 0...staleSPKMaxRetries {
             if attempt > 0 {
-                Log.info("SESSION_STATE[stale_spk_retry_\(attempt)]: waiting \(staleSPKRetryDelay)s for peer SPK rotation to propagate — userId=\(userId.prefix(8))…", category: "SessionInit")
+                Log.info("SESSION_STATE[stale_spk_retry_\(attempt)]: waiting \(staleSPKRetryDelay)s for peer SPK rotation to propagate — userId=\(userId.prefix(8))…, devices=\(retryOnly.count)", category: "SessionInit")
                 try? await Task.sleep(nanoseconds: staleSPKRetryDelay * 1_000_000_000)
                 guard !Task.isCancelled else { break }
             }
 
-            do {
-                let bundle = try await fetchPublicKeyWithRetry(userId: userId, consumeOneTimePrekey: true)
-                try initializeSession(userId: userId, bundle: bundle, deleteExisting: true)
-
-                let device = SessionAddressing.cryptoIdentity(ofIdentityKey: bundle.identityPublic)
-                Log.info("SESSION_STATE[proactive_init_success]: userId=\(userId.prefix(8))... device=\(device?.prefix(8) ?? "?")", category: "SessionInit")
-                return .success(device: device)
-            } catch SessionError.peerSPKStale(let days) where attempt < staleSPKMaxRetries && days < staleSPKFastFailDays {
-                // SPK is barely past the staleness limit — peer may have just come online
-                // and rotated. Wait for server bundle cache to propagate.
-                Log.error("Peer SPK stale for \(userId.prefix(8))… (\(String(format: "%.1f", days))d) — will retry in \(staleSPKRetryDelay)s (\(attempt + 1)/\(staleSPKMaxRetries))", category: "SessionInit")
-                lastError = SessionError.peerSPKStale(ageDays: days)
-                continue
-            } catch SessionError.peerSPKStale(let days) {
-                // SPK is well past the staleness limit — peer has been offline for a long
-                // time and won't rotate by waiting. Rather than dead-ending, fall back to a
-                // DEGRADED init so the message can still be established + queued. The session
-                // is flagged at-risk; if the peer rotated and dropped the old SPK private key,
-                // the first message fails to decrypt and the existing healing path repairs it.
-                // See the stale-peer-reachability decision record.
-                Log.error("SESSION_STATE[stale_spk_degraded_init]: peer \(userId.prefix(8))… SPK is \(String(format: "%.1f", days))d old (≥\(staleSPKFastFailDays)d) — initiating degraded (at-risk) session", category: "SessionInit")
+            let targets: [InitTarget]
+            if attempt == 0 {
                 do {
-                    let bundle = try await fetchPublicKeyWithRetry(userId: userId, consumeOneTimePrekey: true)
-                    try initializeSession(userId: userId, bundle: bundle, deleteExisting: true, allowStale: true)
-                    let device = SessionAddressing.cryptoIdentity(ofIdentityKey: bundle.identityPublic)
-                    Log.info("SESSION_STATE[proactive_init_success_degraded]: userId=\(userId.prefix(8))… device=\(device?.prefix(8) ?? "?")", category: "SessionInit")
-                    return .success(device: device)
+                    targets = try await initTargets(userId: userId)
                 } catch {
-                    Log.error("SESSION_STATE[degraded_init_failed]: \(error.localizedDescription) for \(userId.prefix(8))…", category: "SessionInit")
                     lastError = error
                     break
                 }
-            } catch {
-                lastError = error
-                break
+            } else {
+                targets = await retryTargets(userId: userId, devices: retryOnly)
+                guard !targets.isEmpty else { break }
             }
+
+            var stale: [(target: InitTarget, days: Double)] = []
+            for target in targets where attempt == 0 || retryOnly.contains(target.deviceId) {
+                guard !opened.contains(target.deviceId) else { continue }
+                switch initSession(
+                    with: target, userId: userId, resolvedDevice: resolvedDevice,
+                    hasOutboundWork: hasOutboundWork, allowStale: false
+                ) {
+                case .opened:
+                    opened.append(target.deviceId)
+                case .skipped(let why):
+                    heldAlready = heldAlready || CryptoManager.shared.hasSession(for: target.deviceId)
+                    Log.info("SESSION_STATE[proactive_init_skipped]: \(target.deviceId.prefix(8))… — \(why)", category: "SessionInit")
+                case .stale(let days):
+                    stale.append((target, days))
+                case .failed(let error):
+                    Log.error("SESSION_STATE[proactive_init_device_failed]: \(target.deviceId.prefix(8))… — \(error.localizedDescription)", category: "SessionInit")
+                    lastError = error
+                }
+            }
+
+            // Everything that could open is open. What is left is a stale signed pre-key, which
+            // has two answers and they are told apart by how stale: barely past the limit means
+            // the peer may have just rotated and the server's cache has not caught up, so wait;
+            // well past it means the peer has been away and waiting changes nothing, so open a
+            // degraded (at-risk) session rather than dead-ending. See `stale-peer-reachability`.
+            let hopeless = stale.filter { $0.days >= staleSPKFastFailDays }
+            let waitable = stale.filter { $0.days < staleSPKFastFailDays }
+            let outOfAttempts = attempt == staleSPKMaxRetries
+            for entry in hopeless + (outOfAttempts ? waitable : []) {
+                Log.error("SESSION_STATE[stale_spk_degraded_init]: \(entry.target.deviceId.prefix(8))… SPK is \(String(format: "%.1f", entry.days))d old — initiating degraded (at-risk) session", category: "SessionInit")
+                switch initSession(
+                    with: entry.target, userId: userId, resolvedDevice: resolvedDevice,
+                    hasOutboundWork: hasOutboundWork, allowStale: true
+                ) {
+                case .opened:
+                    opened.append(entry.target.deviceId)
+                case .skipped(let why):
+                    Log.info("SESSION_STATE[degraded_init_skipped]: \(entry.target.deviceId.prefix(8))… — \(why)", category: "SessionInit")
+                case .stale(let days):
+                    lastError = SessionError.peerSPKStale(ageDays: days)
+                case .failed(let error):
+                    Log.error("SESSION_STATE[degraded_init_failed]: \(error.localizedDescription) for \(entry.target.deviceId.prefix(8))…", category: "SessionInit")
+                    lastError = error
+                }
+            }
+
+            guard !waitable.isEmpty, !outOfAttempts else { break }
+            retryOnly = Set(waitable.map(\.target.deviceId))
+            lastError = SessionError.peerSPKStale(ageDays: waitable[0].days)
+        }
+
+        guard opened.isEmpty, !heldAlready else {
+            Log.info(
+                "SESSION_STATE[proactive_init_success]: userId=\(userId.prefix(8))… opened=\(opened.map { $0.prefix(8) }.joined(separator: ",")) held=\(heldAlready)",
+                category: "SessionInit"
+            )
+            return .success(devices: opened)
         }
 
         let finalError = lastError ?? NetworkError.connectionFailed

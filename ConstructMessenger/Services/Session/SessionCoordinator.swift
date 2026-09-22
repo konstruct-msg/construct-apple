@@ -985,10 +985,13 @@ final class SessionCoordinator: MessageRouterDelegate {
                     Log.error("SESSION_STATE[initiator_announce_fail]: \(err.localizedDescription) for \(userId.prefix(8))…", category: "SessionInit")
                 }
             )
-            // The device the init opened with, not the one the account resolves to: the key
-            // server answered with one device's bundle, and the announcement is about that
-            // ratchet. Unnamed (init failed), the account falls back to the pinned device as before.
-            await self.emitHandshakeControls(.tieBreakWin, to: PeerAddress(account: userId, device: opened))
+            // The devices the init opened, not the one the account resolves to: an announcement
+            // is about a ratchet and there is one per device. Nothing opened (the init failed, or
+            // every session was already in place), the account falls back to the pinned device as
+            // before.
+            for device in opened.isEmpty ? [nil] : opened.map(Optional.init) {
+                await self.emitHandshakeControls(.tieBreakWin, to: PeerAddress(account: userId, device: device))
+            }
         }
         startTieBreakWatchdog(for: userId)
     }
@@ -1038,7 +1041,10 @@ final class SessionCoordinator: MessageRouterDelegate {
                     Log.error("SESSION_STATE[zombie_recover_fail]: \(err.localizedDescription) for \(userId.prefix(8))…", category: "SessionInit")
                 }
             )
-            await self.emitHandshakeControls(.tieBreakWin, to: PeerAddress(account: userId, device: opened))
+            // One announcement per opened ratchet; see the twin above.
+            for device in opened.isEmpty ? [nil] : opened.map(Optional.init) {
+                await self.emitHandshakeControls(.tieBreakWin, to: PeerAddress(account: userId, device: device))
+            }
         }
         startTieBreakWatchdog(for: userId)
     }
@@ -1971,7 +1977,9 @@ final class SessionCoordinator: MessageRouterDelegate {
                             Log.error("SESSION_STATE[watchdog_reinit_fail]: \(err.localizedDescription)", category: "SessionInit")
                         }
                     )
-                    await self.sendSessionResetInit(to: PeerAddress(account: userId, device: opened))
+                    for device in opened.isEmpty ? [nil] : opened.map(Optional.init) {
+                        await self.sendSessionResetInit(to: PeerAddress(account: userId, device: device))
+                    }
                 case .giveUp:
                     // Confirm window exhausted — stop retrying, release the gate, drain the buffer
                     // (rather than waiting for the lazy TTL / next reconnect). New sends flow; if the

@@ -34,8 +34,12 @@ final class ChatTextPreferenceTests: XCTestCase {
 
     /// The terminal face is what the product looks like. An unset preference must not quietly
     /// change that for everyone who never opens Appearance.
-    func testTheDefaultFaceIsMono() {
-        XCTAssertEqual(ChatTextPreference.face, .mono)
+    /// `.system` since 2026-09-21 (`cc29a9da`): the chrome is monospace and the message face is
+    /// the one thing the reader picks, defaulting to the platform's. This asserted `.mono` until
+    /// then, and went on asserting it after the decision — a red test that named a choice nobody
+    /// had reversed.
+    func testTheDefaultFaceIsSystem() {
+        XCTAssertEqual(ChatTextPreference.face, .system)
     }
 
     func testTheStoredFaceIsHonoured() {
@@ -47,9 +51,12 @@ final class ChatTextPreferenceTests: XCTestCase {
 
     /// A value nobody wrote — a downgrade, a corrupted domain, a future build's option — falls to
     /// the default rather than to whatever `Face(rawValue:)` does with it.
-    func testAnUnknownStoredFaceFallsBackToMono() {
+    /// A stored value nothing recognises is not a choice, so it falls back to the same default a
+    /// reader who never chose gets — `.system` since 2026-09-21, not `.mono`.
+    func testAnUnknownStoredFaceFallsBackToTheDefault() {
         UserDefaults.standard.set("comic", forKey: ChatTextPreference.faceKey)
-        XCTAssertEqual(ChatTextPreference.face, .mono)
+        XCTAssertEqual(ChatTextPreference.face, ChatTextPreference.defaultFace)
+        XCTAssertEqual(ChatTextPreference.face, .system)
     }
 
     // MARK: - Size

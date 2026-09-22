@@ -161,16 +161,16 @@ final class SealingExemptionSiteTests: XCTestCase {
         // The stealth-off branches. These exist only because DEBUG can turn stealth off; in
         // Release `StealthPolicy.isEnabled` is a compile-time `true` and the chokepoint refuses
         // every one of them. Their number is the number of send paths, so it shrinks when paths
-        // are merged and not otherwise.
+        // are merged and not otherwise — and on 2026-09-22 four of them became one:
+        // `ChunkedMessageDelivery`, `MessageRetryManager` and `MultiDeviceSendCoordinator` all
+        // send through `OutboundMessagePipeline` now, and `ChatSessionManager`'s init ping with
+        // them. That is the §B send merge showing up here as a shorter list.
         .stealthDisabled: [
             "MessagingServiceClient.swift",     // END_SESSION, which has its own RPC
             "CallManager.swift",                // WebRTC signalling
-            "MessageRetryManager.swift",        // queued-chunk retry
-            "ChunkedMessageDelivery.swift",     // message bodies
+            "OutboundMessagePipeline.swift",    // every message and control body — see below
             "OutboundSessionService.swift",     // heartbeat and delivery receipt
             "SessionCoordinator.swift",         // session control
-            "ChatSessionManager.swift",         // init ping
-            "MultiDeviceSendCoordinator.swift", // fan-out to a peer's devices, once §B sealed it
         ],
     ]
 

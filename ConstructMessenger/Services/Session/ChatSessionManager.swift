@@ -147,20 +147,17 @@ final class ChatSessionManager {
 
     func initializeSessionProactively(userId: String) async {
         viewModel?.isInitializingSession = true
-        await sessionInitService.initializeSessionProactively(
+        var succeeded = false
+        let opened = await sessionInitService.initializeSessionProactively(
             userId: userId,
             // Reached from opening a conversation and from sending into one; both are a person
             // waiting on this session, which is what the flag means.
             hasOutboundWork: true,
             onSuccess: { [weak self] in
                 guard let self else { return }
+                succeeded = true
                 self.viewModel?.isSessionReady = true
                 self.viewModel?.isInitializingSession = false
-                Task { [weak self] in
-                    guard let self else { return }
-                    await self.sendSessionInitPing(to: userId)
-                    self.onSessionReady?(userId)
-                }
             },
             onFailure: { [weak self] error in
                 guard let self else { return }
@@ -177,88 +174,70 @@ final class ChatSessionManager {
                 self.onSessionFailed?(userId, error.userFacingMessage)
             }
         )
+        guard succeeded else { return }
+        // The ping is about the ratchets this run built, so it is addressed to them. Empty means
+        // the sessions were already in place and nothing new claimed `msgNum=0`; then the ping
+        // goes to every device we hold a session with, which is what it has always done.
+        await sendSessionInitPing(to: userId, devices: opened)
+        onSessionReady?(userId)
     }
 
-    /// Post-init ping (msgNum=0) announcing our fresh ratchet to the peer.
+    /// Post-init ping (msgNum=0) announcing our fresh ratchets to the peer.
     ///
-    /// This is the third session-control chokepoint. `f39e03b4` sealed the other two
-    /// (`sendSessionControlCore`, `sendEndSession`) and missed this one, so under always-on
-    /// stealth it kept emitting an identified `senderId` on every establishment — the exact
-    /// sender→recipient+conversation signal the sealed control channel exists to close
-    /// (observed 2026-07-31: SRI and session_ready sent as `[STEALTH]`, this ping as a plain
-    /// user id in the same instant). Sealed here on the same fail-closed pattern:
-    /// no recipient identity key / seal failure ⇒ the ping is skipped, never downgraded.
-    /// Skipping is safe — the ping is an optimisation, and the peer still establishes from
-    /// the X3DH carrier plus the tie-break watchdog.
-    func sendSessionInitPing(to userId: String) async {
-        guard CryptoManager.shared.hasSession(for: userId) else { return }
+    /// **One per ratchet, through the one sender.** The ping exists to keep `msgNum=0` off user
+    /// content: the first message on a fresh session is the X3DH carrier, and a carrier the peer
+    /// discards costs nothing while a user message lost there is a user message lost. A session is
+    /// a ratchet between two devices, so a peer with two devices has two `msgNum=0` slots and,
+    /// until 2026-09-22, one of them was taken by the ping and the other by whatever the user
+    /// typed — the account-shaped send resolved to the pinned device and the sibling never got
+    /// one.
+    ///
+    /// Sent through `OutboundMessagePipeline` as a control rather than by hand, which is what
+    /// gives each copy the device tag its recipient recognises it by. Two untagged copies of one
+    /// `msgNum=0` message are worse than one: the device that cannot open the other's copy takes
+    /// the recovery path, and for `msgNum == 0` that path fetches a key bundle over the network
+    /// (`DeviceDeliveryPlan`).
+    ///
+    /// Still fail-closed under stealth, and still skippable: the pipeline refuses to downgrade a
+    /// sealed control, and a refused ping only means the peer establishes from the X3DH carrier
+    /// plus the tie-break watchdog, as it did before this existed.
+    ///
+    /// - Parameter devices: the ratchets to announce. Empty means "every device we hold a session
+    ///   with" — the pipeline's own answer.
+    func sendSessionInitPing(to userId: String, devices: [String] = []) async {
         // A SESSION_RESET_INIT is in flight for this peer and owns msgNum=0 on the (now shared,
         // post-coalescing) session. The ping exists only to keep msgNum=0 off user content, so
         // once the SRI has that slot it is redundant — and sending it would put a second X3DH
         // carrier on the wire that the peer can only discard.
+        //
+        // Asked of the account, because that is what the tracker is keyed by. Moving it to the
+        // device belongs with the rest of the confirm gate — `session-is-one-state-machine`.
         guard !SessionConfirmationTracker.shared.isPending(userId) else {
             Log.info("SESSION_STATE[init_ping_skipped]: SESSION_RESET_INIT owns msgNum=0 for \(userId.prefix(8))…", category: "SessionInit")
             return
         }
         guard let myId = AuthSessionManager.shared.currentUserId, !myId.isEmpty else { return }
+        guard let frameType = SessionControlCodec.frameContentType(for: .ping) else { return }
         let pingId = UUID().uuidString.lowercased()
         let nonce = UUID().uuidString
-        // The ping's type rides in KNST byte 5, inside the ciphertext; the server is told nothing.
-        // Outer envelope only — the sealed path declares `.generic` (see `SealedEnvelopeType`).
-        let contentType: Shared_Proto_Core_V1_ContentType = .unspecified
-        let conversationId = ConversationId.direct(myUserId: myId, theirUserId: userId)
-        let timestamp = UInt64(Date().timeIntervalSince1970)
-        do {
-            let payload = try OutboundSessionService.shared.encryptSessionControl(
-                payload: SessionControlCodec.encodePayload(op: .ping, nonce: nonce),
-                messageId: pingId,
-                recipientId: userId,
-                frameAs: SessionControlCodec.frameContentType(for: .ping)
-            )
+        let payload = SessionControlCodec.encodePayload(op: .ping, nonce: nonce)
 
-            if StealthPolicy.shared.shouldUseSealedSender() {
-                let ctx = chat.managedObjectContext ?? PersistenceController.shared.container.viewContext
-                guard let recipientIK = StealthSenderService.recipientIdentityKey(recipientId: userId, context: ctx) else {
-                    throw StealthDowngradeBlocked(reason: "no recipient identity key for init ping → \(userId.prefix(8))…")
-                }
-                let sealedInner = try await StealthSenderService.buildSealedInner(
-                    recipientUserId: userId,
-                    recipientIdentityKey: recipientIK,
-                    encryptedPayload: payload,
-                    contentType: .generic
-                )
-                _ = try await StealthSendRecovery.sendSealed(sealedInner, rebuild: { afterCredentialRejection in
-                    try await StealthSenderService.buildSealedInner(
-                        recipientUserId: userId,
-                        recipientIdentityKey: recipientIK,
-                        encryptedPayload: payload,
-                        contentType: .generic,
-                        afterCredentialRejection: afterCredentialRejection
-                    )
-                }, send: { inner in
-                    try await MessagingServiceClient.shared.sendMessage(
-                        messageId: pingId,
-                        recipientId: userId,
-                        senderId: myId,
-                        conversationId: conversationId,
-                        encryptedPayload: payload,
-                        timestamp: timestamp,
-                        sealing: .sealed(inner)
-                    )
-                })
-            } else {
-                _ = try await MessagingServiceClient.shared.sendMessage(
-                    messageId: pingId,
-                    recipientId: userId,
-                    senderId: myId,
-                    conversationId: conversationId,
-                    encryptedPayload: payload,
-                    timestamp: timestamp,
-                    contentType: contentType,
-                    sealing: .identified(.stealthDisabled)
-                )
-            }
-            Log.info("SESSION_STATE[init_ping_sent]: msgNum=0 ping sent to \(userId.prefix(8))… — user messages follow as msgNum=1+", category: "SessionInit")
+        do {
+            // The ping's type rides in KNST byte 5, inside the ciphertext; the server is told
+            // nothing. Outer envelope only — the sealed path declares `.generic`.
+            let report = try await OutboundMessagePipeline.shared.sendToRecipientDevices(
+                plan: .whole(payload, contentType: frameType, messageId: UUID(uuidString: pingId) ?? UUID()),
+                baseMessageId: pingId,
+                senderId: myId,
+                recipientId: userId,
+                timestamp: UInt64(Date().timeIntervalSince1970),
+                kind: .control,
+                onlyDevices: devices.isEmpty ? nil : devices
+            )
+            Log.info(
+                "SESSION_STATE[init_ping_sent]: msgNum=0 ping sent to \(report.accepted.count) device(s) of \(userId.prefix(8))… — user messages follow as msgNum=1+",
+                category: "SessionInit"
+            )
         } catch let blocked as StealthDowngradeBlocked {
             Log.error("SESSION_STATE[init_ping_downgrade_blocked]: \(blocked.reason) — ping skipped (never sent identified under stealth)", category: "SessionInit")
         } catch {

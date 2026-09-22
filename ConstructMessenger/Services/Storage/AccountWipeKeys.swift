@@ -40,7 +40,10 @@ enum AccountWipeKeys {
         "construct.intake.own",
         "construct.intake.lastPublishedEpoch.v1",
         // Who already holds our key. Wiped because the new account's key is a different secret —
-        // a stale list would suppress the lazy hand-off to every contact it names.
+        // a stale list would suppress the lazy hand-off to every contact it names. Both versions:
+        // v2 is keyed by device (2026-09-22) and v1 by account, and a wipe that left the older one
+        // behind would leave a list nothing reads and nothing clears.
+        "construct.intake.sentTo.v2",
         "construct.intake.sentTo.v1",
         // Peers whose credential the server refused, by epoch. Same shape as `sentTo`: a list of
         // who this account talks to, meaningless — and misleading — under the next account.

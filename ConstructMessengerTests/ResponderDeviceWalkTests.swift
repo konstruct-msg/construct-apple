@@ -171,15 +171,19 @@ final class ResponderDeviceWalkTests: XCTestCase {
         )
     }
 
-    /// The INITIATOR side of the same fact. A proactive init opens a session with the one device
-    /// whose bundle the key server answered with, and the SESSION_RESET_INIT / `session_ready`
-    /// that speak for it must go to *that* device — addressed to the account they resolved to the
-    /// pinned device, which after a re-init from the peer's other device was a ratchet nobody
-    /// held. Every handshake control emitted after an init therefore names the device the init
-    /// returned; an `.account(` there is the old addressing coming back.
+    /// The INITIATOR side of the same fact. A proactive init opens a session with **each** device
+    /// of the account, and the SESSION_RESET_INIT / `session_ready` that speak for one must go to
+    /// the device whose ratchet it is — addressed to the account they resolved to the pinned
+    /// device, which after a re-init from the peer's other device was a ratchet nobody held.
     ///
-    /// Mutation: address one `emitHandshakeControls` or `sendSessionResetInit` after
-    /// `initializeSessionProactively` to `.account(userId)` again — this reddens.
+    /// Two things are asserted, and they are different: every handshake control emitted after an
+    /// init names a device (never `.account(`), and it is a device **from the set the init
+    /// returned** — so a second opened device is announced too. Before 2026-09-22 the init
+    /// returned one device because it fetched one bundle; the emission naming it was correct and
+    /// still reached only half of a two-device account.
+    ///
+    /// Mutation: emit outside the `for device in opened` loop, or address `.account(userId)`
+    /// again — either reddens.
     func testHandshakeControlsAfterAnInitNameTheOpenedDevice() throws {
         let text = try sourceOf("ConstructMessenger/Services/Session/SessionCoordinator.swift")
         let lines = text.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
@@ -187,12 +191,17 @@ final class ResponderDeviceWalkTests: XCTestCase {
         for (index, line) in lines.enumerated() {
             let t = line.trimmingCharacters(in: .whitespaces)
             guard t.hasPrefix("await self.emitHandshakeControls(") || t.hasPrefix("await self.sendSessionResetInit(") else { continue }
-            // Only the emissions that follow an init: the one that just opened the session is
-            // the one that knows the device.
-            let window = lines[max(0, index - 14)..<index].joined(separator: "\n")
+            // Only the emissions that follow an init: the one that just opened the sessions is
+            // the one that knows the devices.
+            let window = lines[max(0, index - 20)..<index].joined(separator: "\n")
             guard window.contains("initializeSessionProactively(") else { continue }
             if t.contains(".account(") { offenders.append("\(index + 1): \(t)") }
-            if !t.contains("device: opened") { offenders.append("\(index + 1): does not name the opened device — \(t)") }
+            if !t.contains("device: device") {
+                offenders.append("\(index + 1): does not name a device — \(t)")
+            }
+            if !window.contains("for device in opened") {
+                offenders.append("\(index + 1): emitted outside the walk over the opened devices — \(t)")
+            }
         }
         XCTAssertEqual(offenders, [], offenders.joined(separator: "\n"))
     }
