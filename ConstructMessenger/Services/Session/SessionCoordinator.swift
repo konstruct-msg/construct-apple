@@ -972,7 +972,9 @@ final class SessionCoordinator: MessageRouterDelegate {
         //  2. A peer replying `session_ready` faster than the old post-emit call hit
         //     `markConfirmed`'s `guard removeValue != nil` and was swallowed, leaving the gate up
         //     until the watchdog TTL.
-        SessionConfirmationTracker.shared.markPending(userId)
+        // Raised for the devices we know, then re-raised for the ones the init actually opened:
+        // the devices are not known until the init answers, and the raise cannot wait for it.
+        SessionConfirmationTracker.shared.markPending(.account(userId))
         Task { [weak self] in
             guard let self else { return }
             defer { self.initiatorReinitInFlight.remove(userId) }
@@ -989,6 +991,7 @@ final class SessionCoordinator: MessageRouterDelegate {
             // is about a ratchet and there is one per device. Nothing opened (the init failed, or
             // every session was already in place), the account falls back to the pinned device as
             // before.
+            self.markPendingOnOpened(opened, of: userId)
             for device in opened.isEmpty ? [nil] : opened.map(Optional.init) {
                 await self.emitHandshakeControls(.tieBreakWin, to: PeerAddress(account: userId, device: device))
             }
@@ -1027,7 +1030,7 @@ final class SessionCoordinator: MessageRouterDelegate {
         // Same reasoning as `reinitAndAnnounceAsInitiator`: mark pending synchronously, before
         // any await, so the SRI (not a coalesced init ping) owns msgNum=0 and a fast peer's
         // `session_ready` cannot arrive before the gate exists.
-        SessionConfirmationTracker.shared.markPending(userId)
+        SessionConfirmationTracker.shared.markPending(.account(userId))
         let endInit = beginInit(scope)
         Task { [weak self] in
             guard let self else { endInit(); return }
@@ -1042,6 +1045,7 @@ final class SessionCoordinator: MessageRouterDelegate {
                 }
             )
             // One announcement per opened ratchet; see the twin above.
+            self.markPendingOnOpened(opened, of: userId)
             for device in opened.isEmpty ? [nil] : opened.map(Optional.init) {
                 await self.emitHandshakeControls(.tieBreakWin, to: PeerAddress(account: userId, device: device))
             }
@@ -1633,17 +1637,32 @@ final class SessionCoordinator: MessageRouterDelegate {
     /// the outgoing side was flushed at these sites, which is precisely why the incoming side had
     /// to be a discard rather than a hold — there was nowhere for a held message to be released.
     /// A future fourth release site gets both by construction.
-    /// Account-keyed, and blocked on §D for the opposite reason to the outbound side: the gate is
-    /// *raised* where we know the device (we are about to send an SRI to it), and *released* by an
-    /// inbound `session_ready` / ping whose sender the relay does not name. Keying it by device
-    /// would mean a confirmation that cannot name itself never releases the gate, and sends to
-    /// that peer deadlock — strictly worse than the coarse key.
-    private func releaseConfirmGate(for userId: String, lapsed: Bool = false) {
+    /// Re-raise the gate on the ratchets the init actually opened, replacing the placeholder.
+    ///
+    /// The placeholder exists because the raise cannot wait: a gate raised after the init would
+    /// be a gate a fast peer's `session_ready` slips past, which is the race the synchronous
+    /// raise at the call sites was written for. So the account is held first and the devices
+    /// replace it here.
+    private func markPendingOnOpened(_ opened: [String], of account: String) {
+        for device in opened {
+            SessionConfirmationTracker.shared.markPending(PeerAddress(account: account, device: device))
+        }
+    }
+
+    /// **Named by device since 2026-09-22.** The gate is *raised* where the device is known (we
+    /// are about to send an SRI to it) and *released* by an inbound `session_ready` or ping —
+    /// which, since §D, names its sending device on every sealed delivery. The account key was
+    /// the right one while that name was missing: a confirmation that cannot name itself would
+    /// never release a device-keyed gate, and sends to that peer would deadlock. That is still
+    /// the rule for a delivery that names nothing — `markConfirmed` with no device settles the
+    /// account — and it is now the exception rather than the shape.
+    private func releaseConfirmGate(_ peer: PeerAddress, lapsed: Bool = false) {
         assertMainThread()
+        let userId = peer.account
         if lapsed {
             SessionConfirmationTracker.shared.releaseLapsed(userId)
         } else {
-            SessionConfirmationTracker.shared.markConfirmed(userId)
+            SessionConfirmationTracker.shared.markConfirmed(peer)
         }
         sendSessionQueuedMessages(for: userId)
         if let context = viewContext {
@@ -1987,7 +2006,7 @@ final class SessionCoordinator: MessageRouterDelegate {
                     Log.info("SESSION_STATE[tie_break_watchdog]: confirm window exhausted for \(userId.prefix(8))… — releasing gate + flushing buffers", category: "SessionInit")
                     // Give-up path for the incoming hold too: replay it and let the ordinary
                     // decrypt/heal decision run now that the gate no longer suppresses it.
-                    self.releaseConfirmGate(for: userId, lapsed: true)
+                    self.releaseConfirmGate(.account(userId), lapsed: true)
                     self.tieBreakWatchdogs.removeValue(forKey: userId)
                     return
                 }
@@ -2133,7 +2152,7 @@ final class SessionCoordinator: MessageRouterDelegate {
                 // INITIATOR session_ready, that confirmation will never arrive (the peer is the
                 // INITIATOR here) — release the stale pending flag and flush both buffers
                 // so sends stop deadlocking on a session_ready that won't come.
-                releaseConfirmGate(for: peerId)
+                releaseConfirmGate(PeerAddress(account: peerId, device: messageData.senderDeviceId))
                 return
             case .ready:
                 Log.info("SESSION_STATE[session_ready_received]: RESPONDER \(peerId.prefix(8))… confirmed (content_type=26)", category: "SessionCoordinator")
@@ -2141,7 +2160,7 @@ final class SessionCoordinator: MessageRouterDelegate {
                 cancelResponderFallback(for: peerId)
                 cancelPendingEndSessionReinit(for: peerId, reason: "session_ready")
                 markActive(.forAccount(peerId))
-                releaseConfirmGate(for: peerId)
+                releaseConfirmGate(PeerAddress(account: peerId, device: messageData.senderDeviceId))
                 return
             case .end, .unspecified, .UNRECOGNIZED:
                 break  // fall through to normal handling
@@ -2169,7 +2188,7 @@ final class SessionCoordinator: MessageRouterDelegate {
             cancelPendingEndSessionReinit(for: messageData.from, reason: "ping_received_legacy")
             // See the typed-ping case above: a RESPONDER session exists, so release any stale
             // INITIATOR-pending buffer instead of waiting for a session_ready that won't arrive.
-            releaseConfirmGate(for: messageData.from)
+            releaseConfirmGate(PeerAddress(account: messageData.from, device: messageData.senderDeviceId))
             return
         }
 
@@ -2183,7 +2202,7 @@ final class SessionCoordinator: MessageRouterDelegate {
             cancelResponderFallback(for: peerId)
             cancelPendingEndSessionReinit(for: peerId, reason: "session_ready_legacy")
             markActive(.forAccount(peerId))
-            SessionConfirmationTracker.shared.markConfirmed(peerId)
+            SessionConfirmationTracker.shared.markConfirmed(PeerAddress(account: peerId, device: messageData.senderDeviceId))
             sendSessionQueuedMessages(for: peerId)
             return
         }

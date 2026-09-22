@@ -244,7 +244,7 @@ final class ConfirmGateHoldTests: XCTestCase {
     func testLazyExpiryLeavesAClaimableLapse() {
         let tracker = SessionConfirmationTracker.shared
         let peer = "lapse-peer-\(UUID().uuidString)"
-        tracker.markPending(peer)
+        tracker.markPending(.account(peer))
 
         // Not yet expired: nothing to settle.
         XCTAssertTrue(tracker.isPending(peer))
@@ -265,12 +265,12 @@ final class ConfirmGateHoldTests: XCTestCase {
         let tracker = SessionConfirmationTracker.shared
 
         let confirmed = "confirmed-peer-\(UUID().uuidString)"
-        tracker.markPending(confirmed)
-        tracker.markConfirmed(confirmed)
+        tracker.markPending(.account(confirmed))
+        tracker.markConfirmed(.account(confirmed))
         XCTAssertFalse(tracker.consumeLapse(confirmed), "the peer-ack path replays the hold itself")
 
         let lapsed = "watchdog-peer-\(UUID().uuidString)"
-        tracker.markPending(lapsed)
+        tracker.markPending(.account(lapsed))
         tracker.releaseLapsed(lapsed)
         XCTAssertFalse(tracker.consumeLapse(lapsed), "the watchdog give-up path replays it itself")
     }
@@ -281,11 +281,88 @@ final class ConfirmGateHoldTests: XCTestCase {
     func testConfirmAfterLapseDoesNotLeaveADoubleReplay() {
         let tracker = SessionConfirmationTracker.shared
         let peer = "raced-peer-\(UUID().uuidString)"
-        tracker.markPending(peer)
+        tracker.markPending(.account(peer))
         tracker.expireForTesting(peer)
         _ = tracker.isPending(peer)          // records the lapse
-        tracker.markConfirmed(peer)          // peer ack lands late and replays
+        tracker.markConfirmed(.account(peer)) // peer ack lands late and replays
         XCTAssertFalse(tracker.consumeLapse(peer), "one release, one replay")
+    }
+
+    // MARK: - A confirmation is about one ratchet
+
+    private func device(_ byte: UInt8) -> String {
+        String(repeating: String(format: "%02x", byte), count: 16)
+    }
+
+    /// Two devices of one account, two SRIs, one `session_ready`. The ratchet that answered is
+    /// confirmed; the one that did not still holds the gate, because sending now would put user
+    /// content on a ratchet nobody has acknowledged — which is the whole job of the gate.
+    ///
+    /// Mutation: key the tracker by account again — the first confirmation releases both and this
+    /// reddens.
+    @MainActor
+    func testOneDeviceConfirmingDoesNotReleaseItsSibling() {
+        let tracker = SessionConfirmationTracker.shared
+        let account = "acct-\(UUID().uuidString)"
+        let first = device(0xa1), second = device(0xb2)
+
+        tracker.markPending(PeerAddress(account: account, device: first))
+        tracker.markPending(PeerAddress(account: account, device: second))
+        tracker.markConfirmed(PeerAddress(account: account, device: first))
+
+        XCTAssertTrue(tracker.isPending(account), "the sibling's ratchet is still unconfirmed")
+
+        tracker.markConfirmed(PeerAddress(account: account, device: second))
+        XCTAssertFalse(tracker.isPending(account), "both ratchets confirmed — nothing left to hold")
+    }
+
+    /// A `session_ready` that names no device — unsealed, or a client older than the sender
+    /// certificate — settles the account. A gate nothing can release is a conversation that stops
+    /// sending for the length of the window, which is worse than the coarse answer.
+    @MainActor
+    func testANamelessConfirmationSettlesTheWholeAccount() {
+        let tracker = SessionConfirmationTracker.shared
+        let account = "acct-\(UUID().uuidString)"
+        tracker.markPending(PeerAddress(account: account, device: device(0xc3)))
+        tracker.markPending(PeerAddress(account: account, device: device(0xd4)))
+
+        tracker.markConfirmed(.account(account))
+
+        XCTAssertFalse(tracker.isPending(account))
+    }
+
+    /// The gate goes up before the init can say which devices it opened, so it is raised on the
+    /// account and the init's answer replaces it. The placeholder must not outlive that answer:
+    /// confirming the opened ratchet would otherwise leave an account-keyed entry holding sends
+    /// for the rest of the window.
+    ///
+    /// Mutation: drop `dropPlaceholder` from `markPending` — this reddens.
+    @MainActor
+    func testTheAccountPlaceholderIsReplacedByTheDevicesTheInitOpened() {
+        let tracker = SessionConfirmationTracker.shared
+        let account = "acct-\(UUID().uuidString)"
+        let opened = device(0xe5)
+
+        tracker.markPending(.account(account))          // raised before the init answers
+        tracker.markPending(PeerAddress(account: account, device: opened))
+        tracker.markConfirmed(PeerAddress(account: account, device: opened))
+
+        XCTAssertFalse(tracker.isPending(account), "nothing but the replaced placeholder was left")
+    }
+
+    /// One watchdog serves the conversation, so its tick reads the ratchet that has waited
+    /// longest. Reading the youngest would keep a long-held gate up past its window.
+    @MainActor
+    func testTheWatchdogReadsTheOldestUnconfirmedRatchet() {
+        let tracker = SessionConfirmationTracker.shared
+        let account = "acct-\(UUID().uuidString)"
+        let old = device(0xf6), young = device(0x17)
+
+        tracker.markPending(PeerAddress(account: account, device: old))
+        tracker.expireForTesting(account)                       // backdates what exists so far
+        tracker.markPending(PeerAddress(account: account, device: young))
+
+        XCTAssertEqual(tracker.watchdogTick(account), .giveUp, "the oldest decides")
     }
 
     // MARK: - Not covered here, on purpose

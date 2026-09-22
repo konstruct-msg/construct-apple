@@ -1622,15 +1622,19 @@ final class MessageRouter {
     ) {
         PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId, in: context)
 
+        // The ratchet the confirmation is about — the sending device, which a sealed delivery
+        // names since §D. Empty (an unsealed or older peer) settles the account, which is the
+        // safety valve rather than the shape: see `SessionConfirmationTracker.markConfirmed`.
+        let peer = PeerAddress(account: otherUserId, device: message.senderDeviceId)
         switch op {
         case .ready:
-            Log.info("SESSION_STATE[session_ready_received]: RESPONDER \(otherUserId.prefix(8))… confirmed session — discarding control signal", category: "MessageRouter")
-            releaseConfirmGate(for: otherUserId, chat: chat, in: context)
+            Log.info("SESSION_STATE[session_ready_received]: RESPONDER \(peer.description) confirmed session — discarding control signal", category: "MessageRouter")
+            releaseConfirmGate(peer, chat: chat, in: context)
         default: // .ping (and any other non-ready signal routed here)
-            Log.info("SESSION_STATE[session_ping_received]: discarding session ping from \(otherUserId.prefix(8))…", category: "MessageRouter")
+            Log.info("SESSION_STATE[session_ping_received]: discarding session ping from \(peer.description)", category: "MessageRouter")
             // A ping means the peer initiated and a RESPONDER session is established on our side,
             // so stop buffering outgoing messages that were waiting for a session_ready.
-            releaseConfirmGate(for: otherUserId, chat: chat, in: context)
+            releaseConfirmGate(peer, chat: chat, in: context)
         }
     }
 
@@ -1638,11 +1642,12 @@ final class MessageRouter {
     /// `SessionCoordinator.releaseConfirmGate` — the two classes both release the gate, and a
     /// release that flushes only one side is what made an incoming hold impossible before.
     private func releaseConfirmGate(
-        for userId: String,
+        _ peer: PeerAddress,
         chat: Chat,
         in context: NSManagedObjectContext
     ) {
-        SessionConfirmationTracker.shared.markConfirmed(userId)
+        let userId = peer.account
+        SessionConfirmationTracker.shared.markConfirmed(peer)
         if let myId = AuthSessionManager.shared.currentUserId {
             MessageRetryManager.shared.sendQueuedMessages(
                 for: chat, recipientId: userId, currentUserId: myId, context: context
