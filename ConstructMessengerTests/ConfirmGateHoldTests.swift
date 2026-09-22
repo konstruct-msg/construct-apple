@@ -192,10 +192,33 @@ final class ConfirmGateHoldTests: XCTestCase {
         XCTAssertEqual(queue.count(for: "peer-b"), 1, "draining one peer must not touch another")
     }
 
+    /// A teardown or SESSION_RESET_INIT from one device of the account drops what *that* device
+    /// queued and leaves the sibling's handshake for the bundle fetch already in flight. Stand,
+    /// 2026-09-22: C's reset made A and B each send an init; the second cleared the account
+    /// queue, the responder plan ran with one carrier, and A re-sent its init every thirty
+    /// seconds, a one-time pre-key each, for a session C had never been asked to open.
+    ///
+    /// Mutation: make `remove(for:device:)` clear the account — this reddens.
+    @MainActor
+    func testARemovalNamedForOneDeviceKeepsTheSiblingsHandshake() {
+        let queue = PendingSessionQueue()
+        let peer = "7574fdec-ca31-44ac-9d43-0e6e870fe4d5"
+        queue.enqueue(Self.message(id: "b-init", device: "b814c8ab96bc4496b80795fa256eed9f"), for: peer)
+        queue.enqueue(Self.message(id: "a-init", device: "c6bfaaefcdd4e6cac587d22c69129d6e"), for: peer)
+        queue.enqueue(Self.message(id: "unnamed"), for: peer)
+
+        queue.remove(for: peer, device: "c6bfaaefcdd4e6cac587d22c69129d6e")
+
+        XCTAssertEqual(queue.messages(for: peer).map(\.id), ["b-init"],
+                       "the sibling's init stays; the unattributable one goes with the named device's")
+        queue.remove(for: peer, device: nil)
+        XCTAssertEqual(queue.count(for: peer), 0, "no device named clears the account, as before")
+    }
+
     // MARK: - Helpers
 
-    private static func message(id: String) -> ChatMessage {
-        ChatMessage(
+    private static func message(id: String, device: String = "") -> ChatMessage {
+        var message = ChatMessage(
             id: id,
             from: "7574fdec-ca31-44ac-9d43-0e6e870fe4d5",
             to: "0a1c609f-b37d-4d67-b7b2-b0f8ec16d167",
@@ -205,6 +228,8 @@ final class ConfirmGateHoldTests: XCTestCase {
             suiteId: 0,
             timestamp: 1_785_854_458
         )
+        message.senderDeviceId = device
+        return message
     }
 
     // MARK: - Every path that drops the gate must settle the hold

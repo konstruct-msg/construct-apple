@@ -263,7 +263,10 @@ class SessionInitializationService {
     /// straight to a degraded (at-risk) init instead of burning 2 × 60 s on retries.
     /// Outcome of one proactive-init run, shared with every coalesced caller.
     private enum ProactiveInitOutcome {
-        case success
+        /// The device the session was opened with — derived from the bundle's identity key, so
+        /// it is the ratchet's own name and the address every handshake control about this
+        /// session must carry. `nil` only under the test override, which opens nothing.
+        case success(device: String?)
         case failure(Error)
     }
 
@@ -318,12 +321,17 @@ class SessionInitializationService {
     ///   typed message, a queued one, a handshake we owe. No default on purpose: the one call site
     ///   that answers `false` is the one that caused the 2026-09-04 outage, and a default would
     ///   let the next call site inherit an answer nobody chose.
+    /// Returns the device the session was opened with, or `nil` when none was. A caller that
+    /// then speaks for the session — SESSION_RESET_INIT, `session_ready` — addresses that device:
+    /// the bundle the key server answered with names one device of the account, and it is not
+    /// necessarily the pinned one the account would resolve to.
+    @discardableResult
     func initializeSessionProactively(
         userId: String,
         hasOutboundWork: Bool,
         onSuccess: @escaping () -> Void,
         onFailure: @escaping (Error) -> Void
-    ) async {
+    ) async -> String? {
         // Asked here, before the bundle fetch, because the fetch is what spends the peer's
         // one-time prekey. Asking after it would answer a question that has already cost what it
         // was meant to save.
@@ -345,7 +353,7 @@ class SessionInitializationService {
                 category: "SessionInit"
             )
             onFailure(SessionError.initiationDeferred(decision: "\(decision)"))
-            return
+            return nil
         }
 
         let outcome: ProactiveInitOutcome
@@ -357,7 +365,7 @@ class SessionInitializationService {
                 guard let self else { return .failure(CryptoManagerError.coreNotInitialized) }
                 #if DEBUG
                 if let override = self.proactiveInitOverrideForTests {
-                    return await override(userId) ? .success : .failure(CryptoManagerError.coreNotInitialized)
+                    return await override(userId) ? .success(device: nil) : .failure(CryptoManagerError.coreNotInitialized)
                 }
                 #endif
                 return await self.performProactiveInit(userId: userId)
@@ -368,10 +376,12 @@ class SessionInitializationService {
         }
 
         switch outcome {
-        case .success:
+        case .success(let device):
             onSuccess()
+            return device
         case .failure(let error):
             onFailure(error)
+            return nil
         }
     }
 
@@ -400,8 +410,9 @@ class SessionInitializationService {
                 let bundle = try await fetchPublicKeyWithRetry(userId: userId, consumeOneTimePrekey: true)
                 try initializeSession(userId: userId, bundle: bundle, deleteExisting: true)
 
-                Log.info("SESSION_STATE[proactive_init_success]: userId=\(userId.prefix(8))...", category: "SessionInit")
-                return .success
+                let device = SessionAddressing.cryptoIdentity(ofIdentityKey: bundle.identityPublic)
+                Log.info("SESSION_STATE[proactive_init_success]: userId=\(userId.prefix(8))... device=\(device?.prefix(8) ?? "?")", category: "SessionInit")
+                return .success(device: device)
             } catch SessionError.peerSPKStale(let days) where attempt < staleSPKMaxRetries && days < staleSPKFastFailDays {
                 // SPK is barely past the staleness limit — peer may have just come online
                 // and rotated. Wait for server bundle cache to propagate.
@@ -419,8 +430,9 @@ class SessionInitializationService {
                 do {
                     let bundle = try await fetchPublicKeyWithRetry(userId: userId, consumeOneTimePrekey: true)
                     try initializeSession(userId: userId, bundle: bundle, deleteExisting: true, allowStale: true)
-                    Log.info("SESSION_STATE[proactive_init_success_degraded]: userId=\(userId.prefix(8))…", category: "SessionInit")
-                    return .success
+                    let device = SessionAddressing.cryptoIdentity(ofIdentityKey: bundle.identityPublic)
+                    Log.info("SESSION_STATE[proactive_init_success_degraded]: userId=\(userId.prefix(8))… device=\(device?.prefix(8) ?? "?")", category: "SessionInit")
+                    return .success(device: device)
                 } catch {
                     Log.error("SESSION_STATE[degraded_init_failed]: \(error.localizedDescription) for \(userId.prefix(8))…", category: "SessionInit")
                     lastError = error

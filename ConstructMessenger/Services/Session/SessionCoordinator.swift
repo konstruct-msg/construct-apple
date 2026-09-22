@@ -976,7 +976,7 @@ final class SessionCoordinator: MessageRouterDelegate {
         Task { [weak self] in
             guard let self else { return }
             defer { self.initiatorReinitInFlight.remove(userId) }
-            await self.sessionInitService.initializeSessionProactively(
+            let opened = await self.sessionInitService.initializeSessionProactively(
                 userId: userId,
                 // A divergence forced this; the SESSION_RESET_INIT is itself the thing to send.
                 hasOutboundWork: true,
@@ -985,7 +985,10 @@ final class SessionCoordinator: MessageRouterDelegate {
                     Log.error("SESSION_STATE[initiator_announce_fail]: \(err.localizedDescription) for \(userId.prefix(8))…", category: "SessionInit")
                 }
             )
-            await self.emitHandshakeControls(.tieBreakWin, to: .account(userId))
+            // The device the init opened with, not the one the account resolves to: the key
+            // server answered with one device's bundle, and the announcement is about that
+            // ratchet. Unnamed (init failed), the account falls back to the pinned device as before.
+            await self.emitHandshakeControls(.tieBreakWin, to: PeerAddress(account: userId, device: opened))
         }
         startTieBreakWatchdog(for: userId)
     }
@@ -1026,7 +1029,7 @@ final class SessionCoordinator: MessageRouterDelegate {
         Task { [weak self] in
             guard let self else { endInit(); return }
             defer { endInit() }
-            await self.sessionInitService.initializeSessionProactively(
+            let opened = await self.sessionInitService.initializeSessionProactively(
                 userId: userId,
                 // The peer has queued messages and no session — the queue is the work.
                 hasOutboundWork: true,
@@ -1035,7 +1038,7 @@ final class SessionCoordinator: MessageRouterDelegate {
                     Log.error("SESSION_STATE[zombie_recover_fail]: \(err.localizedDescription) for \(userId.prefix(8))…", category: "SessionInit")
                 }
             )
-            await self.emitHandshakeControls(.tieBreakWin, to: .account(userId))
+            await self.emitHandshakeControls(.tieBreakWin, to: PeerAddress(account: userId, device: opened))
         }
         startTieBreakWatchdog(for: userId)
     }
@@ -1591,6 +1594,29 @@ final class SessionCoordinator: MessageRouterDelegate {
         guard !toProcess.isEmpty, let context = viewContext else { return }
         Log.info("Decrypting \(toProcess.count) queued message(s) for \(userId.prefix(8))...", category: "SessionInit")
         for queuedMsg in toProcess {
+            // A handshake from a device we still hold no session with is not a message to decrypt
+            // on the session that just opened — it is the *next* session to open. The queue holds
+            // one per device when two of the peer's devices reset at once (C's "reset session" on
+            // the stand made A and B each send an init); the walk opens on one carrier, and
+            // routing the other back through the ordinary path hit the ACK store — the reset
+            // handler had marked it processed when it archived — and dropped it. A's watchdog
+            // then re-sent its init thirty seconds later, a one-time pre-key each time.
+            if SessionReducer.receivingInitKind(
+                   messageNumber: queuedMsg.messageNumber,
+                   oneTimePreKeyId: queuedMsg.oneTimePreKeyId,
+                   kemCiphertextBytes: queuedMsg.kemCiphertext.count,
+                   pqMessageEpoch: queuedMsg.pqMessageEpoch,
+                   isSessionResetInit: queuedMsg.isSessionResetInit
+               ) == .handshake,
+               !queuedMsg.senderDeviceId.isEmpty,
+               !CryptoManager.shared.hasSession(for: queuedMsg.senderDeviceId) {
+                Log.info(
+                    "SESSION_STATE[drain_reopen]: queued handshake \(queuedMsg.id.prefix(8))… is from \(queuedMsg.senderDeviceId.prefix(8))…, which has no session — opening it next",
+                    category: "SessionInit"
+                )
+                messageRouter.reopenQueuedHandshake(queuedMsg, from: userId, in: context)
+                continue
+            }
             messageRouter.routeIncomingMessage(queuedMsg, in: context)
         }
     }
@@ -1935,7 +1961,7 @@ final class SessionCoordinator: MessageRouterDelegate {
                 case .retry:
                     // RESPONDER still silent — re-send a fresh X3DH init (msgNum=0) it can accept.
                     Log.info("SESSION_STATE[tie_break_watchdog]: no ack — re-sending SESSION_RESET_INIT for \(userId.prefix(8))…", category: "SessionInit")
-                    await self.sessionInitService.initializeSessionProactively(
+                    let opened = await self.sessionInitService.initializeSessionProactively(
                         userId: userId,
                         // The watchdog fires because our own SRI went unacknowledged — the work is
                         // the re-send.
@@ -1945,7 +1971,7 @@ final class SessionCoordinator: MessageRouterDelegate {
                             Log.error("SESSION_STATE[watchdog_reinit_fail]: \(err.localizedDescription)", category: "SessionInit")
                         }
                     )
-                    await self.sendSessionResetInit(to: .account(userId))
+                    await self.sendSessionResetInit(to: PeerAddress(account: userId, device: opened))
                 case .giveUp:
                     // Confirm window exhausted — stop retrying, release the gate, drain the buffer
                     // (rather than waiting for the lazy TTL / next reconnect). New sends flow; if the

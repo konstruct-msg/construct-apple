@@ -33,11 +33,10 @@ final class PendingSessionQueue {
     /// Enqueue `message` for `userId`. No-op when the queue is already at capacity.
     /// Returns `true` if the message was accepted, `false` if the cap was hit.
     @discardableResult
-    // Keyed by **account**, and it cannot move to a device until §D of the multi-device plan
-    // lands. Everything here is filed from an incoming envelope, and the relay blanks
-    // `sender_device` by design — there is no device to key by at the moment a message is held.
-    // Step 1 of `session-is-one-state-machine` lists this queue, and measuring it is what showed
-    // §D is *inside* that step rather than after it.
+    // Keyed by **account**. Everything here is filed from an incoming envelope; the device the
+    // envelope names is on the message (`senderDeviceId`, from the sealed certificate — the
+    // half of §D that works), so a removal can be narrowed to one device even though the key
+    // is the account. Step 1 of `session-is-one-state-machine` lists this queue.
     func enqueue(_ message: ChatMessage, for userId: String) -> Bool {
         let current = queues[userId]?.count ?? 0
         guard current < maxPerUser else { return false }
@@ -55,6 +54,25 @@ final class PendingSessionQueue {
     /// Remove all queued messages for `userId` without returning them.
     func remove(for userId: String) {
         queues.removeValue(forKey: userId)
+    }
+
+    /// Remove the queued messages `device` wrote, and only those.
+    ///
+    /// A teardown or a SESSION_RESET_INIT from one device of the account says nothing about the
+    /// sibling's handshake, which may be sitting here waiting for the same bundle fetch. Until
+    /// 2026-09-22 both handlers cleared the whole account: on the stand, C's "reset session"
+    /// made A and B each send a SESSION_RESET_INIT, the second dropped the first from this queue,
+    /// the responder plan ran with one carrier, and A's watchdog re-sent its init every thirty
+    /// seconds — a one-time pre-key each — for a session C had never been asked to open.
+    ///
+    /// A message with no device (an unsealed carrier from a sender that predates §D) cannot be
+    /// attributed and is dropped with the rest, which is what the account-wide clear did.
+    /// `nil` clears the account, as before, for callers that have no device to name.
+    func remove(for userId: String, device: String?) {
+        guard let device, !device.isEmpty else { return remove(for: userId) }
+        guard let held = queues[userId] else { return }
+        let kept = held.filter { !$0.message.senderDeviceId.isEmpty && $0.message.senderDeviceId != device }
+        if kept.isEmpty { queues.removeValue(forKey: userId) } else { queues[userId] = kept }
     }
 
     // MARK: - Read

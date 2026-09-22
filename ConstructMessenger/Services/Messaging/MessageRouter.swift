@@ -2190,10 +2190,10 @@ final class MessageRouter {
         // 2. Re-queue outgoing messages sent under the old session (cannot be decrypted by peer).
         requeueUndeliveredOutgoing(for: userId, in: context)
 
-        // 3. Remove stale pending messages and clear heal queue. Account-keyed still: an SRI from
-        //    one device drops a sibling's queued handshake here. Item 3 of
-        //    `a-peer-is-a-set-of-devices`, not closed by this change.
-        pendingQueue.remove(for: userId)
+        // 3. Remove stale pending messages *from this device* and clear the heal queue. An SRI
+        //    from one device used to drop the sibling's queued handshake here — see
+        //    `PendingSessionQueue.remove(for:device:)`. The heal queue stays account-keyed.
+        pendingQueue.remove(for: userId, device: peer.device)
         SessionHealingService.shared.clearQueue(for: userId, in: context)
 
         // 4. Route the X3DH payload as a fresh msgNum=0 — triggers normal RESPONDER init path.
@@ -2208,6 +2208,19 @@ final class MessageRouter {
             Log.info("SESSION_RESET_INIT: old session archived, RESPONDER init triggered for \(userId.prefix(8))…", category: "MessageRouter")
         } catch {
             Log.error("SESSION_RESET_INIT: failed to resolve chat for \(userId.prefix(8))…: \(error)", category: "MessageRouter")
+        }
+    }
+
+    /// A handshake left in the pending queue after a session opened on a *different* device of
+    /// the same account. It has been through the reset handler once — archived, queued, marked
+    /// processed — so the ordinary route would drop it at the ACK store; this re-enters the
+    /// RESPONDER path the way the reset handler does, with the dedup bypassed.
+    func reopenQueuedHandshake(_ message: ChatMessage, from userId: String, in context: NSManagedObjectContext) {
+        do {
+            let (chat, isNewChat) = try findOrCreateChat(for: userId, in: context)
+            handleFirstMessage(message, from: userId, chat: chat, isNewChat: isNewChat, in: context, forceReinit: true)
+        } catch {
+            Log.error("Reopen: failed to resolve chat for \(userId.prefix(8))…: \(error)", category: "MessageRouter")
         }
     }
 
@@ -2294,8 +2307,10 @@ final class MessageRouter {
         //    re-encrypted and re-sent once the new session is established.
         requeueUndeliveredOutgoing(for: userId, in: context)
 
-        // 3. Remove any pending *incoming* messages and healing queue for this user
-        pendingQueue.remove(for: userId)
+        // 3. Remove any pending *incoming* messages from the device that tore down, and the
+        //    healing queue for this user. The sibling's queued handshake is not this device's to
+        //    drop — see `PendingSessionQueue.remove(for:device:)`.
+        pendingQueue.remove(for: userId, device: peer.device)
         SessionHealingService.shared.clearQueue(for: userId, in: context)
 
         // 4. Notify coordinator so the natural INITIATOR can prewarm immediately.
