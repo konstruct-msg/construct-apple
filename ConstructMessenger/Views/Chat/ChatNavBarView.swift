@@ -13,7 +13,6 @@ struct ChatNavBarView: View {
     let contactKTStatus: KTStatus
     let isEditMode: Bool
     let canStartCall: Bool
-    let isSearchActive: Bool
     let onBack: () -> Void
     let onOpenProfile: () -> Void
     let onDoneEdit: () -> Void
@@ -109,10 +108,10 @@ struct ChatNavBarView: View {
                     )
                 }
                 navIconButton(
-                    systemName: isSearchActive ? "xmark" : "magnifyingglass",
+                    systemName: "magnifyingglass",
                     size: CTLayout.navIconSizeLg,
                     weight: .medium,
-                    accessibilityKey: isSearchActive ? "close" : "search_messages",
+                    accessibilityKey: "search_messages",
                     action: onToggleSearch
                 )
             }
@@ -166,4 +165,3 @@ struct ChatNavBarView: View {
         }
     }
 }
-

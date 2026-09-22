@@ -252,7 +252,7 @@ struct ChatView: View {
             // === Floating capsule glass panels (Apple capsulization) ===
             // Top: nav + banners (capsule style)
             VStack(spacing: ChatUIConstants.Shell.floatingChromeSpacing) {
-                chatNavBar
+                chatTopChrome(resultCount: renderedMessages.count)
                     .padding(.horizontal, ChatUIConstants.Shell.floatingChromeHorizontal)
                     .padding(.top, ChatUIConstants.Shell.floatingChromeTop + callBarInset)
 
@@ -281,13 +281,6 @@ struct ChatView: View {
         }
         .overlay {
             ChatDropOverlayView(isVisible: isChatDropTargeted)
-        }
-        .overlay(alignment: .top) {
-            ChatSearchOverlayView(
-                isSearchActive: $isSearchActive,
-                searchText: $searchText,
-                resultCount: renderedMessages.count
-            )
         }
         .sheet(isPresented: $showingUserProfile) {
             if let user = viewModel.chat.otherUser {
@@ -524,6 +517,24 @@ struct ChatView: View {
     
     // MARK: - CT Navigation Bar
 
+    @ViewBuilder
+    private func chatTopChrome(resultCount: Int) -> some View {
+        switch ChatTopChromeMode.resolve(isSearchActive: isSearchActive) {
+        case .navigation:
+            chatNavBar
+        case .search:
+            ChatSearchChromeView(
+                searchText: $searchText,
+                resultCount: resultCount,
+                onClose: {
+                    withAnimation {
+                        isSearchActive = false
+                    }
+                }
+            )
+        }
+    }
+
     private var chatNavBar: some View {
         ChatNavBarView(
             title: viewModel.chat.otherUser?.resolvedDisplayName ?? NSLocalizedString("chat", comment: ""),
@@ -531,7 +542,6 @@ struct ChatView: View {
             contactKTStatus: contactKTStatus,
             isEditMode: isEditMode,
             canStartCall: canStartCall,
-            isSearchActive: isSearchActive,
             onBack: { dismiss() },
             onOpenProfile: { showingUserProfile = true },
             onDoneEdit: {
@@ -544,8 +554,7 @@ struct ChatView: View {
             onStartVideoCall: startVideoCall,
             onToggleSearch: {
                 withAnimation {
-                    isSearchActive.toggle()
-                    if !isSearchActive { searchText = "" }
+                    isSearchActive = true
                 }
             },
             onKTWarningTap: {

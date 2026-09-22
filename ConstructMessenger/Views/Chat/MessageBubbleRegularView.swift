@@ -64,6 +64,10 @@ struct MessageBubbleRegularView: View {
         message.isSentByMe || message.isEdited || shouldShowTimestamp
     }
 
+    private var hasReplyReference: Bool {
+        message.replyToMessageId?.isEmpty == false
+    }
+
     var body: some View {
         // Parse once per body pass to avoid repeated JSON decode attempts.
         // The sticker is asked first and typed: it has no text form, so no parser below would
@@ -219,7 +223,7 @@ struct MessageBubbleRegularView: View {
                         .padding(.horizontal, ChatUIConstants.Bubble.horizontalPadding)
                         .padding(
                             .top,
-                            message.replyToContent != nil
+                            hasReplyReference
                                 ? ChatUIConstants.Bubble.tightVerticalPadding
                                 : ChatUIConstants.Bubble.verticalPadding
                         )
@@ -259,9 +263,13 @@ struct MessageBubbleRegularView: View {
                             .onChange(of: geo.frame(in: .global).minY) { _, _ in
                                 bubbleGlobalFrame = geo.frame(in: .global)
                                 if showReactionCapsule { updateCapsulePlacement() }
-                            }
+                        }
                     }
                 }
+                .padding(
+                    .bottom,
+                    ReactionBadgeLayout.reservedOverflow(hasBadges: !reactionBadges.isEmpty)
+                )
 
                 if isLastInGroup && shouldShowMetaRow {
                     HStack(spacing: ChatUIConstants.Bubble.stackSpacing) {
@@ -492,40 +500,12 @@ struct MessageBubbleRegularView: View {
 
     @ViewBuilder
     private var replyIndicatorView: some View {
-        let hasReply = message.replyToMessageId != nil && !(message.replyToMessageId ?? "").isEmpty
-        if hasReply {
-            Button {
-                onJumpToReply?(message)
-            } label: {
-                HStack(spacing: ChatUIConstants.Bubble.stackSpacing) {
-                    Rectangle()
-                        .fill(Color.CT.accentDim)
-                        .frame(width: ChatUIConstants.Bubble.replyAccentWidth)
-
-                    if let replyContent = message.replyToContent {
-                        ReplyPreviewContent(
-                            content: replyContent,
-                            messageId: message.replyToMessageId,
-                            thumbnailSize: ChatUIConstants.Bubble.replyThumbnailSize,
-                            lineLimit: 2
-                        )
-                        .padding(.vertical, ChatUIConstants.Bubble.tightVerticalPadding)
-                        .padding(.trailing, ChatUIConstants.Bubble.tightVerticalPadding)
-                    } else {
-                        Text("Original message")
-                            .font(CTFont.regular(ChatUIConstants.Typography.systemSize))
-                            .foregroundColor(Color.CT.textDim)
-                            .padding(.vertical, ChatUIConstants.Bubble.tightVerticalPadding)
-                            .padding(.trailing, ChatUIConstants.Bubble.tightVerticalPadding)
-                    }
-                }
-                .padding(.horizontal, ChatUIConstants.Bubble.horizontalPadding)
-                .padding(.top, ChatUIConstants.Bubble.verticalPadding)
-                .padding(.bottom, ChatUIConstants.Bubble.tightVerticalPadding)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(NSLocalizedString("jump_to_replied_message", comment: "Jump to the message this reply quotes"))
+        if hasReplyReference {
+            MessageBubbleReplyPreview(
+                content: message.replyToContent,
+                messageId: message.replyToMessageId,
+                onTap: { onJumpToReply?(message) }
+            )
         }
     }
 
@@ -720,5 +700,55 @@ struct MessageBubbleRegularView: View {
                 // under it, and the 8pt is the gap it settles into.
                 .offset(x: swipeOffset + 8)
         }
+    }
+}
+
+/// One owner for in-bubble reply geometry. The old implementation padded both the preview content
+/// and its button, producing a large inert band. This keeps one compact inset while retaining the
+/// platform hit target for the jump action.
+struct MessageBubbleReplyPreview: View {
+    let content: String?
+    let messageId: String?
+    let onTap: () -> Void
+
+    var body: some View {
+        Button(action: onTap) {
+            HStack(spacing: ChatUIConstants.Bubble.stackSpacing) {
+                Rectangle()
+                    .fill(Color.CT.accentDim)
+                    .frame(
+                        width: ChatUIConstants.Bubble.replyAccentWidth,
+                        height: CTLayout.hitTarget
+                            - (2 * ChatUIConstants.Bubble.tightVerticalPadding)
+                    )
+
+                Group {
+                    if let content {
+                        ReplyPreviewContent(
+                            content: content,
+                            messageId: messageId,
+                            thumbnailSize: ChatUIConstants.Bubble.replyThumbnailSize,
+                            lineLimit: 2
+                        )
+                    } else {
+                        Text(NSLocalizedString("message_unavailable", comment: ""))
+                            .font(CTFont.ui(ChatUIConstants.Typography.systemSize))
+                            .foregroundColor(Color.CT.textDim)
+                    }
+                }
+                .padding(.trailing, ChatUIConstants.Bubble.tightVerticalPadding)
+            }
+            .padding(.horizontal, ChatUIConstants.Bubble.horizontalPadding)
+            .padding(.vertical, ChatUIConstants.Bubble.tightVerticalPadding)
+            .frame(minHeight: CTLayout.hitTarget, alignment: .leading)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(
+            NSLocalizedString(
+                "jump_to_replied_message",
+                comment: "Jump to the message this reply quotes"
+            )
+        )
     }
 }

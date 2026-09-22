@@ -59,59 +59,57 @@ struct ChatSelectionBarView: View {
     }
 }
 
-struct ChatSearchOverlayView: View {
-    @Binding var isSearchActive: Bool
+enum ChatTopChromeMode: Equatable {
+    case navigation
+    case search
+
+    static func resolve(isSearchActive: Bool) -> Self {
+        isSearchActive ? .search : .navigation
+    }
+}
+
+/// Search is an alternative occupant of the chat's top-chrome slot, not an overlay below it.
+/// The parent owns presentation; this view owns only the search controls and result count.
+struct ChatSearchChromeView: View {
     @Binding var searchText: String
     let resultCount: Int
+    let onClose: () -> Void
 
     var body: some View {
-        if isSearchActive {
-            VStack(spacing: CTLayout.inlinePad) {
-                HStack(alignment: .center, spacing: CTLayout.chromeGap) {
-                    CTSearchBar(
-                        text: $searchText,
-                        placeholder: LocalizedStringKey("search_messages")
-                    )
+        VStack(spacing: CTLayout.inlinePad) {
+            HStack(alignment: .center, spacing: CTLayout.chromeGap) {
+                CTSearchBar(
+                    text: $searchText,
+                    placeholder: LocalizedStringKey("search_messages")
+                )
 
-                    Button {
-                        withAnimation {
-                            isSearchActive = false
-                            searchText = ""
-                        }
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: CTLayout.navIconSize, weight: .regular))
-                            .foregroundStyle(Color.CT.accentDim)
-                            .frame(width: CTLayout.hitTarget, height: CTLayout.hitTarget)
-                            .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(NSLocalizedString("close", comment: ""))
+                Button(action: onClose) {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: CTLayout.navIconSize, weight: .regular))
+                        .foregroundStyle(Color.CT.accentDim)
+                        .frame(width: CTLayout.hitTarget, height: CTLayout.hitTarget)
+                        .contentShape(Rectangle())
                 }
-                .padding(.horizontal, CTLayout.edgePad)
-
-                if !searchText.isEmpty {
-                    HStack {
-                        Text(
-                            String(
-                                format: NSLocalizedString("chat_search_results", comment: ""),
-                                resultCount
-                            )
-                        )
-                        .font(CTFont.secondary)
-                        .foregroundStyle(Color.CT.textDim)
-                        Spacer()
-                    }
-                    .padding(.horizontal, CTLayout.edgePad + 4)
-                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(NSLocalizedString("close", comment: ""))
             }
-            // Sit below the floating glass chat nav (navBarHeight + top padding).
-            .padding(.top, CTLayout.navBarHeight + CTLayout.chromeGap + 4)
-            .padding(.bottom, CTLayout.inlinePad)
-            .background(
-                Color.CT.bg.opacity(0.92)
-                    .background(.ultraThinMaterial)
-            )
+
+            if !searchText.isEmpty {
+                HStack {
+                    Text(
+                        String(
+                            format: NSLocalizedString("chat_search_results", comment: ""),
+                            resultCount
+                        )
+                    )
+                    .font(CTFont.secondary)
+                    .foregroundStyle(Color.CT.textDim)
+                    Spacer()
+                }
+                .padding(.horizontal, CTLayout.inlinePad)
+            }
         }
+        .padding(.bottom, CTLayout.inlinePad)
+        .background(Color.CT.bg.opacity(0.92))
     }
 }

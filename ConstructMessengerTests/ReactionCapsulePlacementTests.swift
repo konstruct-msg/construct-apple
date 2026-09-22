@@ -25,6 +25,17 @@ final class ReactionCapsulePlacementTests: XCTestCase {
         XCTAssertNil(transaction.animation)
     }
 
+    func testBadgeOverflowIsPartOfTranscriptGeometry() {
+        XCTAssertEqual(
+            ReactionBadgeLayout.reservedOverflow(hasBadges: false),
+            0
+        )
+        XCTAssertEqual(
+            ReactionBadgeLayout.reservedOverflow(hasBadges: true),
+            ChatUIConstants.Reaction.badgeOverlap
+        )
+    }
+
     #if canImport(UIKit)
     @MainActor
     func testCapsuleIntrinsicHeightMatchesReservedHeight() {

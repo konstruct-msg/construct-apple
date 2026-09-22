@@ -384,8 +384,10 @@ private final class StateMachine: @unchecked Sendable {
     /// endpoint behind it lives until the last `Arc` in Rust goes, and the stats task in
     /// `startReceivePump` holds one for as long as it is polling. So an abandoned QUIC connection
     /// kept its endpoint driver running, and on a network that answers UDP with ICMP unreachables
-    /// that driver burns a core — `spin_free_socket` absorbs the errors without spinning *per
-    /// error*, but nothing was asking why the socket was still being polled at all. Build 630,
+    /// that driver burns a core. At the time `spin_free_socket` converted each real error into a
+    /// synthetic `WouldBlock`; the 2026-09-21 recurrence proved the pending error could re-arm
+    /// immediately, so the wrapper now terminates the endpoint on a real receive error. Explicit
+    /// retirement remains necessary for the ordinary no-error teardown path. Build 630,
     /// 2026-08-22, nine minutes after the client had given up on QUIC entirely:
     ///
     ///     11:34:41  Fast-UDP (QUIC/H3) failed to open [accept_timeout] — H2 for the rest of this session
