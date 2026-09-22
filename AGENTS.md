@@ -191,10 +191,20 @@ core, and let the core decide which of them the operation touches. Building the 
 did the translation here is exactly the inversion that produced `MultiDeviceSendCoordinator`.
 
 Current known exceptions, with their destination — do not treat them as settled placements:
-the account-keyed `sessionPhases` / confirm-gate / heal walk, and `contactId(forPeer:)` on the
-hot path, are the leftover of a coordinator that still decides; they belong in the core machine
-(`decisions/session-is-one-state-machine.md`). `PeerDevice` is a legitimate local store but is not
-the authority on a peer's device set. See `decisions/a-peer-is-a-set-of-devices.md`.
+the account-keyed `sessionPhases` / confirm-gate / heal walk are the leftover of a coordinator that
+still decides; they belong in the core machine (`decisions/session-is-one-state-machine.md`).
+`PeerDevice` is a legitimate local store but is not the authority on a peer's device set. See
+`decisions/a-peer-is-a-set-of-devices.md`.
+
+**Everything below the seam takes a device id.** `encryptMessage`, `hasSession`, `archiveSession`,
+`restoreSession`, `getSessionHealth`, `sessionEpoch`, the background decrypt — each names one
+ratchet, and `SessionAddressing.asDevice(_:)` checks that rather than resolving, logging an error
+with the caller's name when it is handed an account. A caller holding an account expands it with
+`deviceIds(ofPeer:)` and acts on the whole set, or asks one of the folds
+(`hasSessionWithAnyDevice(ofPeer:)` and friends). `pinnedDevice(ofPeer:)` — the single device a
+peer's one pinned key names — is the offline answer and nothing else; it may not appear under the
+crypto layer, and `CryptoIdentitySpaceTests` fails if it does, or if anyone takes `.first` of a
+device set.
 
 ## Architecture invariants
 
