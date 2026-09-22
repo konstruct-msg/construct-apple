@@ -63,18 +63,23 @@ final class OutgoingMirrorTests: XCTestCase {
     }
 
     /// Mutation: call `sendSenderSync` directly from `MessageRetryManager` again — this reddens.
+    ///
+    /// Since 2026-09-22 the mirror has one half — the recipient's devices are reached by the
+    /// send itself (`OutboundMessagePipeline.sendToRecipientDevices`), which is why that name is
+    /// the second entry here: a send path that calls `sendSenderSync` and the pipeline separately
+    /// has re-created the two halves under new names.
     func testNobodyOutsideTheCoordinatorCallsOneHalfOfTheMirror() throws {
-        for half in ["sendSenderSync", "fanOutToRecipientDevices"] {
-            let outside = try callers(of: half)
-            XCTAssertTrue(
-                outside.isEmpty,
-                """
-                \(outside.sorted().joined(separator: ", ")) call \(half) directly.
-                A send path must mirror through `mirrorOutgoing`, which does both halves — \
-                calling one is how the retry path came to sync nothing and fan out nothing.
-                """
-            )
-        }
+        let outside = try callers(of: "sendSenderSync")
+        XCTAssertTrue(
+            outside.isEmpty,
+            """
+            \(outside.sorted().joined(separator: ", ")) call sendSenderSync directly.
+            A send path must mirror through `mirrorOutgoing` — calling the half is how the retry \
+            path came to sync nothing.
+            """
+        )
+        XCTAssertTrue(try callers(of: "fanOutToRecipientDevices").isEmpty,
+                      "the fan-out was removed with the primary send; nothing may grow one back")
     }
 
     /// Both retry branches have to call it, or the defect is back with the calls merely renamed.

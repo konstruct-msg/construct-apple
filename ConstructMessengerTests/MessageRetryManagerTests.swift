@@ -38,7 +38,8 @@ final class MessageRetryManagerTests: XCTestCase {
         OutgoingWirePayloadStore.shared.saveChunk(
             baseMessageId: sendable.id,
             chunkMessageId: sendable.id,
-            wirePayload: Data([0x01, 0x02, 0x03])
+            wirePayload: Data([0x01, 0x02, 0x03]),
+            recipientDeviceId: nil
         )
 
         defer {

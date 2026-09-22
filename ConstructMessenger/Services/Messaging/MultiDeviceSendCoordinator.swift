@@ -2,15 +2,22 @@
 //  MultiDeviceSendCoordinator.swift
 //  Construct Messenger
 //
-//  Handles multi-device message fan-out and SenderSync.
+//  SenderSync — and the bookkeeping for copies the recipient's devices are still owed.
 //
 //  Overview
 //  ────────
-//  After the primary message send (handled by ChunkedMessageSender), this coordinator:
-//  1. Fan-out  — sends to all OTHER recipient devices (if they have bundles on the server).
-//  2. SenderSync — sends a copy to the sender's own other devices so conversation history
-//     stays in sync. The server-side content type is SENDER_SYNC (= 23), which the
-//     receiving device displays as an outgoing bubble in the same conversation.
+//  A message reaches the recipient's devices through `OutboundMessagePipeline.sendToRecipientDevices`,
+//  one copy per device. This coordinator does what is left around that:
+//  1. SenderSync — a copy to the sender's own other devices so conversation history stays in
+//     sync. The server-side content type is SENDER_SYNC (= 23), which the receiving device
+//     displays as an outgoing bubble in the same conversation.
+//  2. The recipient bundle cache the pipeline opens sessions from, and the retry queue for
+//     devices a send did not reach.
+//
+//  Until 2026-09-22 it also held the fan-out to the recipient's *other* devices — "other" than
+//  the one the ordinary send reached — with its own session rule, seal key and failure handling.
+//  There is no primary send now (`decisions/a-peer-is-a-set-of-devices.md`, item 1), so there is
+//  no "other" and no fan-out; the loop is the pipeline's.
 //
 //  Session key convention
 //  ──────────────────────
@@ -35,25 +42,6 @@
 import Foundation
 import CoreData
 import CryptoKit
-
-/// What a fan-out attempt left behind.
-///
-/// Returned so the retry drain can narrow the entry it is holding to exactly what this attempt
-/// lost. Without it a re-plan that reached one device and lost another would stay a re-plan, and
-/// the next pass would send the first device a second ciphertext of the same message.
-enum FanoutOutcome: Equatable {
-    /// Every device the plan named has its copy — or the plan named none, which for a
-    /// single-device recipient is the ordinary answer.
-    case complete
-    /// These devices still need it. Never empty; `replan` is the empty case, and the two mean
-    /// different things to the next attempt.
-    case owed([String])
-    /// Nothing was sent, and nothing can name the devices — the bundle fetch is what failed. The
-    /// next attempt starts from a fresh plan.
-    case replan
-    /// Not a transport failure and not worth retrying: no sender device id, or no chunks.
-    case notRetryable
-}
 
 @MainActor
 final class MultiDeviceSendCoordinator {
@@ -127,6 +115,21 @@ final class MultiDeviceSendCoordinator {
     /// rewritten by `SessionAddressing.reconcileDevices` from the `active_devices` of every
     /// bundles response the app makes, so a device linked or revoked since this entry was built
     /// shows up here without a fetch of our own.
+    /// The recipient's device bundles, from the cache while it holds and fetched otherwise.
+    ///
+    /// The one place the key server is asked for a peer's bundles on the send path, so the cache
+    /// above and `PeerDevice` (written by `KeyServiceClient` from every answer) see every fetch.
+    /// Consumes a one-time pre-key only when a device we hold no session with will spend one.
+    func recipientBundles(for recipientUserId: String) async throws -> [DeviceBundleData] {
+        if let cached = cachedRecipientBundles(for: recipientUserId) { return cached }
+        let fetched = try await KeyServiceClient.shared.getPreKeyBundles(
+            userId: recipientUserId,
+            consumeOneTimePrekey: fanOutNeedsOneTimePrekey(for: recipientUserId)
+        )
+        recipientDeviceCache[recipientUserId] = DeviceCache(bundles: fetched, fetchedAt: Date())
+        return fetched
+    }
+
     private func cachedRecipientBundles(for recipientUserId: String) -> [DeviceBundleData]? {
         guard let cache = recipientDeviceCache[recipientUserId],
               Date().timeIntervalSince(cache.fetchedAt) < recipientCacheTTL
@@ -316,15 +319,11 @@ final class MultiDeviceSendCoordinator {
         return tag
     }
 
-    /// Fan-out: send `plaintext` to ALL of the recipient's devices.
-    ///
-    /// Intended for use after the primary send (which already covers the recipient's
-    /// Everyone besides the recipient's primary device who must learn of this message:
-    /// the sender's own other devices, and the recipient's other devices.
+    /// Our own other devices learn of an outgoing message.
     ///
     /// **The single answer to that question.** It had two callers and two answers until
-    /// 2026-08-30: `ChatSendCoordinator` ran both halves after a successful first attempt, and
-    /// `MessageRetryManager` ran neither. A message that failed its first send and succeeded on
+    /// 2026-08-30: `ChatSendCoordinator` mirrored after a successful first attempt and
+    /// `MessageRetryManager` did not. A message that failed its first send and succeeded on
     /// retry therefore reached exactly one device, permanently, while the sender's UI said sent.
     /// Measured on a three-device run that day: fifteen sends, two mirrored.
     ///
@@ -332,20 +331,18 @@ final class MultiDeviceSendCoordinator {
     /// look identical from the outside, and the devices that never learn of the message have
     /// nothing to notice.
     ///
-    /// - Parameters:
-    ///   - wirePlaintext: pre-KNST `MessageContent` bytes — what SenderSync re-frames per own
-    ///     device. Not display JSON (see local-message-payload-binary.md C1c).
-    ///   - chunks: the **same** KNST payloads the primary send used, so the recipient's other
-    ///     devices see one framing of one message.
+    /// The recipient's devices are not this function's since 2026-09-22 — every one of them is
+    /// reached by the send itself (`OutboundMessagePipeline.sendToRecipientDevices`).
+    ///
+    /// - Parameter wirePlaintext: pre-KNST `MessageContent` bytes — what SenderSync re-frames per
+    ///   own device. Not display JSON (see local-message-payload-binary.md C1c).
     func mirrorOutgoing(
         wirePlaintext: Data,
-        chunks: [Data],
         messageId: String,
         recipientUserId: String,
         senderUserId: String,
         senderDeviceId: String,
-        timestamp: UInt64,
-        peerSpendUnit: TokenSpendUnit? = nil
+        timestamp: UInt64
     ) async {
         await sendSenderSync(
             plaintext: wirePlaintext,
@@ -355,204 +352,13 @@ final class MultiDeviceSendCoordinator {
             senderDeviceId: senderDeviceId,
             timestamp: timestamp
         )
-        // Discarded here on purpose: on a first attempt the function has already queued whatever
-        // it owes. The outcome exists for the drain, which is holding an entry it must narrow
-        // rather than add to.
-        _ = await fanOutToRecipientDevices(
-            chunks: chunks,
-            messageId: messageId,
-            recipientUserId: recipientUserId,
-            senderUserId: senderUserId,
-            senderDeviceId: senderDeviceId,
-            timestamp: timestamp,
-            spendUnit: peerSpendUnit
-        )
-    }
-
-    /// default device via the plain `userId` session). Each device gets its own
-    /// E2EE session keyed by `recipientUserId:deviceId`.
-    ///
-    /// Errors per-device are logged and skipped; the function never throws.
-    ///
-    /// `chunks` are the **same KNST payloads the primary send used**, not the raw plaintext. The
-    /// copies differ from the primary send only in which session encrypts them, so rebuilding a
-    /// plan here would be a second framing of one message — and it used to be worse than that:
-    /// this path sent the plaintext in a single shot with `chunkCount: 1`, so any message that
-    /// needed chunking arrived at the peer's other devices as one oversized frame nothing could
-    /// reassemble. It had no caller, so nobody saw it.
-    func fanOutToRecipientDevices(
-        chunks: [Data],
-        messageId: String,
-        recipientUserId: String,
-        senderUserId: String,
-        senderDeviceId: String,
-        timestamp: UInt64,
-        onlyDevices: [String]? = nil,
-        spendUnit callerSpendUnit: TokenSpendUnit? = nil
-    ) async -> FanoutOutcome {
-        // Four ways out of this function, three of them silent until 2026-08-30. A skipped
-        // device is not visible anywhere else: the message is delivered, the sender sees "sent",
-        // and only a device that never heard of it could tell — which it cannot. So each exit
-        // says which one it was, and — where a retry could help — leaves an entry naming what is
-        // still owed.
-        //
-        // These first two do not: without a sender device id there is no tag to compute and no
-        // identity to send as, and empty chunks mean the caller framed nothing. Neither is a
-        // transport failure, so neither is retryable; queueing them would be a queue that drains
-        // into the same wall every thirty seconds.
-        guard !senderDeviceId.isEmpty, !chunks.isEmpty else {
-            await recordSkip(
-                senderDeviceId.isEmpty ? "no_sender_device" : "no_chunks",
-                peer: recipientUserId
-            )
-            return .notRetryable
-        }
-        do {
-            // Cache first: this used to open with the fetch, so every message to a multi-device
-            // recipient cost a key-service round trip and pushed the conversation past
-            // `BUNDLE_RATE_LIMIT_PER_MIN`. See `recipientCacheTTL` for what bounds the staleness.
-            //
-            // And the fetch consumes a one-time pre-key only when one will actually be spent —
-            // the comment here used to say "a device we have no session with yet needs X3DH"
-            // while the call asked unconditionally.
-            let bundles: [DeviceBundleData]
-            if let cached = cachedRecipientBundles(for: recipientUserId) {
-                bundles = cached
-            } else {
-                let fetched = try await KeyServiceClient.shared.getPreKeyBundles(
-                    userId: recipientUserId,
-                    consumeOneTimePrekey: fanOutNeedsOneTimePrekey(for: recipientUserId)
-                )
-                recipientDeviceCache[recipientUserId] = DeviceCache(bundles: fetched, fetchedAt: Date())
-                bundles = fetched
-            }
-            guard !bundles.isEmpty else {
-                await recordSkip("no_bundles", peer: recipientUserId)
-                enqueueRetry(messageId, recipientUserId, senderUserId, owed: [])
-                return .replan
-            }
-
-            let ourIdentityKey = KeychainManager.shared.loadDeviceIdentityKey()
-            let targets = DeviceDeliveryPlan.targets(
-                recipientDevices: bundles,
-                ownDevices: [],
-                ourDeviceId: senderDeviceId,
-                recipientIsSelf: false,
-                // The primary send already reached the device the recipient's pinned key names —
-                // it is the session `SessionAddressing` resolves to. Planning a copy for it would
-                // put two ciphertexts of one message through one ratchet.
-                primarySendCovered: SessionAddressing.contactId(forPeer: recipientUserId)
-            )
-            // Not a plan of our own — the plan is the core's, above, and this only drops the
-            // entries a retry must not repeat. A device that already has its copy would get a
-            // second ciphertext of one message through one ratchet and render it twice, so a
-            // retry narrows to what a previous attempt said it owed and never widens.
-            let planned = onlyDevices.map { owed in
-                targets.filter { owed.contains($0.deviceId) }
-            } ?? targets
-            guard !planned.isEmpty else {
-                // Two different silences. On a first attempt this is the ordinary single-device
-                // recipient whose only device the primary send already covered — debug, and not a
-                // skip. On a retry it means the devices a previous attempt owed are no longer in
-                // the plan: revoked, or a partial bundle list. The entry is left to exhaust rather
-                // than dropped, because those two causes are not separable here and giving up on
-                // the second would lose a copy that a later fetch could still place.
-                Log.debug(
-                    "MultiDevice fan-out: no targets for \(recipientUserId.prefix(8))… — " +
-                    "\(bundles.count) device(s) known" +
-                    (onlyDevices.map { ", none of the \($0.count) owed still planned" }
-                        ?? ", primary send covered the rest"),
-                    category: "MultiDevice"
-                )
-                return .complete
-            }
-
-            // One Privacy Pass spend for the whole logical message, across every device and every
-            // chunk. The unit of spend is a message to a **person**, and `token_spend_id` is bound
-            // to `recipient_user_id`, so N copies to one recipient are covered once. Sealing the
-            // fan-out is what makes this matter: an unsealed copy paid nothing, and paying per
-            // envelope instead would multiply a three-photo album by the recipient's device count
-            // and empty a young account's hourly allowance on one tap.
-            // The caller's unit when there is one: these copies and the primary send are one
-            // logical message to one account, and the server keys the unit by
-            // `recipient_user_id`. Minting a fresh one here would pay twice for the same message.
-            let spendUnit: TokenSpendUnit?
-            if let callerSpendUnit {
-                spendUnit = callerSpendUnit
-            } else {
-                spendUnit = TokenSpendUnit.forEnvelopeCount(
-                    TokenSpendUnit.envelopeCount(
-                        chunkCount: chunks.count, recipientDeviceCount: planned.count
-                    )
-                )
-            }
-
-            var owed: [String] = []
-            for target in planned {
-                // The tag replaces `-fd-<deviceId.prefix(8)>`, which named the target device in
-                // plain hex to the relay on every copy it routed — the leak closed for the
-                // own-replica path on 2026-08-17 and left standing here, on the neighbouring path
-                // carrying the same fact. Nothing ever read that suffix back, so nothing depended
-                // on it either.
-                let tag = Self.senderSyncTag(
-                    baseMessageId: messageId,
-                    targetDeviceId: target.deviceId,
-                    targetIdentityPublic: target.identityPublic,
-                    ourIdentityPrivateKey: ourIdentityKey
-                )
-                var landed = true
-                for (index, payload) in chunks.enumerated() {
-                    let ok = await sendToDevice(
-                        plaintext: payload,
-                        messageId: DeviceDeliveryPlan.wireId(
-                            baseMessageId: messageId, tag: tag,
-                            audience: target.audience,
-                            chunkIndex: index, chunkCount: chunks.count
-                        ),
-                        networkRecipientUserId: recipientUserId,
-                        contactId: target.deviceId,
-                        bundle: target.bundle,
-                        senderUserId: senderUserId,
-                        recipientDeviceId: target.deviceId,
-                        timestamp: timestamp,
-                        contentType: .e2EeSignal,
-                        audience: .peerDevice(identityKey: target.identityPublic),
-                        spendUnit: spendUnit
-                    )
-                    // One failed chunk owes the whole message to that device, not the chunk: a
-                    // partial set never reassembles, so re-sending only the missing frame would
-                    // leave the copy exactly as undeliverable as it is now. The chunk loop is not
-                    // cut short for the same reason a device failure does not stop the others —
-                    // one device's broken session says nothing about the next chunk's.
-                    if !ok { landed = false }
-                }
-                if !landed { owed.append(target.deviceId) }
-            }
-            if owed.isEmpty {
-                // Everything the plan named is delivered. Clears an entry left by an earlier
-                // attempt — without this the queue would keep re-sending a message that has
-                // already arrived, which is worse than the gap it was built to close.
-                FanoutRetryQueue.shared.remove(key: "\(messageId)|\(recipientUserId)")
-                return .complete
-            } else {
-                enqueueRetry(messageId, recipientUserId, senderUserId, owed: owed)
-                return .owed(owed)
-            }
-        } catch {
-            await recordSkip("bundle_fetch_failed", peer: recipientUserId, error: error)
-            // The 2026-08-28 shape: a single fetch, timed out, no retry, and the copy never
-            // existed. Empty `owed` because the call that would have named the devices is the one
-            // that failed — the drain re-plans from scratch, which is correct since nothing went.
-            enqueueRetry(messageId, recipientUserId, senderUserId, owed: [])
-            return .replan
-        }
     }
 
     /// Send the copies earlier attempts owed, for entries whose backoff has elapsed.
     ///
-    /// Called when the network comes back, beside the primary send's own queue drain — the two
-    /// answer different questions ("did it reach the recipient" versus "did it reach all of their
-    /// devices") and a message can be complete by the first and owed by the second.
+    /// Called when the network comes back, beside `MessageRetryManager`'s drain — the two answer
+    /// different questions ("is the message in their mailbox" versus "did every device of theirs
+    /// get its copy") and a message can be complete by the first and owed by the second.
     ///
     /// The payload is rebuilt from the persisted row rather than stored, for the reason given on
     /// `FanoutRetryEntry`. That inherits `recoverWirePlaintext`'s limit: a media message cannot be
@@ -624,35 +430,35 @@ final class MultiDeviceSendCoordinator {
                 continue
             }
 
-            let outcome = await fanOutToRecipientDevices(
-                chunks: plan.payloads,
-                messageId: entry.baseMessageId,
-                recipientUserId: entry.recipientUserId,
-                senderUserId: entry.senderUserId.isEmpty ? currentUserId : entry.senderUserId,
-                senderDeviceId: myDeviceId,
-                timestamp: UInt64(Date().timeIntervalSince1970),
-                // Empty means the fetch never named anyone, so the retry re-plans; a named set
-                // narrows to exactly the devices the previous attempt lost.
-                onlyDevices: entry.owedDeviceIds.isEmpty ? nil : entry.owedDeviceIds
-            )
-
-            // The entry is updated from what this attempt actually lost, not left as it was. A
-            // re-plan that reaches one device and loses another has to come out of the pass naming
-            // only the one it lost: leaving it a re-plan would send the first device a second
-            // ciphertext of the same message on the next drain, which is the defect this whole
-            // line of work exists to remove, re-entered from the repair side.
-            switch outcome {
-            case .complete:
-                FanoutRetryQueue.shared.remove(key: entry.key)
-            case .owed(let still):
-                FanoutRetryQueue.shared.replaceOwed(key: entry.key, owed: still)
-            case .replan:
-                // Still nothing that can name the devices. The entry keeps its spent attempt and
-                // its shape; the next pass tries the fetch again.
-                break
-            case .notRetryable:
-                PerformanceMetrics.shared.record(.fanoutRetryGaveUp, label: "not_retryable")
-                FanoutRetryQueue.shared.remove(key: entry.key)
+            do {
+                let report = try await OutboundMessagePipeline.shared.sendToRecipientDevices(
+                    plan: plan,
+                    baseMessageId: entry.baseMessageId,
+                    senderId: entry.senderUserId.isEmpty ? currentUserId : entry.senderUserId,
+                    recipientId: entry.recipientUserId,
+                    timestamp: UInt64(Date().timeIntervalSince1970),
+                    spendUnit: TokenSpendUnitStore.paidUnit(
+                        baseMessageId: entry.baseMessageId, recipientId: entry.recipientUserId
+                    ),
+                    // Empty means the previous attempt could not name anyone, so the retry sends
+                    // to the whole set; a named set narrows to exactly the devices it lost.
+                    onlyDevices: entry.owedDeviceIds.isEmpty ? nil : entry.owedDeviceIds
+                )
+                // The entry is updated from what this attempt actually lost, not left as it was.
+                // A pass that reaches one device and loses another has to come out naming only
+                // the one it lost: otherwise the next drain sends the first device a second
+                // ciphertext of the same message, which is the defect this whole line of work
+                // exists to remove, re-entered from the repair side.
+                if report.owed.isEmpty {
+                    FanoutRetryQueue.shared.remove(key: entry.key)
+                } else {
+                    FanoutRetryQueue.shared.replaceOwed(key: entry.key, owed: report.owed)
+                }
+            } catch {
+                // The whole attempt failed before or across every device — the certificate, the
+                // transport, no device known. The entry keeps its spent attempt and its shape;
+                // the next pass tries again.
+                await recordSkip("retry_send_failed", peer: entry.recipientUserId, error: error)
             }
         }
     }
@@ -662,7 +468,7 @@ final class MultiDeviceSendCoordinator {
     /// A drain pass that fails must not enqueue a fresh entry beside the one it is working on —
     /// that would reset the attempt count and make the queue immortal. The drain owns the
     /// lifecycle of an entry it picked up; this only creates one for a first-time failure.
-    private func enqueueRetry(
+    func noteOwed(
         _ messageId: String,
         _ recipientUserId: String,
         _ senderUserId: String,
@@ -680,7 +486,7 @@ final class MultiDeviceSendCoordinator {
     /// SenderSync: send a copy of an outgoing message to all of the sender's OWN
     /// other devices, encrypted with per-device sessions, content type = senderSync.
     ///
-    /// `plaintext` MUST be the same **wire** bytes used for the primary send
+    /// `plaintext` MUST be the same **wire** bytes the recipient's copies were built from
     /// (`MessageContent` / pre-KNST payload), NOT display JSON or CTM1. This coordinator
     /// applies the same KNST chunking as `ChunkedMessageSender` so large albums and voice
     /// descriptors reassemble on the peer device. Receiving side stores CTM1 via the
@@ -689,8 +495,8 @@ final class MultiDeviceSendCoordinator {
     /// Receiving devices show this as an outgoing bubble (sent by the local user)
     /// in the conversation with `originalRecipientUserId`.
     ///
-    /// IMPORTANT: Multi-device internal traffic (SenderSync, fan-out to own devices,
-    /// broadcast resets) deliberately does NOT use Stealth/Sealed Sender.
+    /// IMPORTANT: Multi-device internal traffic (SenderSync, broadcast resets) deliberately
+    /// does NOT use Stealth/Sealed Sender.
     /// Server already knows this is the same user account. See stealth scope decisions.
     ///
     /// Errors are logged and swallowed — SenderSync is best-effort.
@@ -714,7 +520,7 @@ final class MultiDeviceSendCoordinator {
             )
             guard !otherDevices.isEmpty else { return }
 
-            // Same framing as the primary send path so the peer reassembler can rebuild
+            // Same framing as the recipient copies so the sibling's reassembler can rebuild
             // MessageContent → CTM1. UUID from base messageId when well-formed.
             let planId = UUID(uuidString: messageId) ?? UUID()
 
@@ -755,7 +561,7 @@ final class MultiDeviceSendCoordinator {
             // no own devices to sync to either.
             let ourIdentityKey = KeychainManager.shared.loadDeviceIdentityKey()
 
-            // Targets from the same place the recipient fan-out gets them, so "which devices, and
+            // Targets from the same plan the recipient copies come from, so "which devices, and
             // is this one of them" is answered once. `otherDevices` has already dropped this
             // device; the plan drops it again, which is deliberate — the filter belongs to the
             // decision, not to whichever caller remembered it.
@@ -803,12 +609,11 @@ final class MultiDeviceSendCoordinator {
                         ),
                         networkRecipientUserId: senderUserId,
                         contactId: target.deviceId,
+                        // Own devices come from a bundle fetch, so the plan always carries one.
                         bundle: target.bundle,
                         senderUserId: senderUserId,
                         recipientDeviceId: target.deviceId,
                         timestamp: timestamp,
-                        contentType: .senderSync,
-                        audience: .ownDevice,
                         spendUnit: syncSpendUnit
                     )
                 }
@@ -825,16 +630,16 @@ final class MultiDeviceSendCoordinator {
 
     /// One device did not get its copy — count it and say why.
     ///
-    /// Every exit from the fan-out used to be a `Log.info` and a `return`, which is why the
+    /// Every exit from the old fan-out used to be a `Log.info` and a `return`, which is why the
     /// release gate for §C could not be evaluated: nothing separated "this account has one device"
     /// from "the second device was never reached". See `MetricEvent.fanoutDeviceSkipped` for the
-    /// closed set of reasons and for why this counts occurrences rather than devices.
+    /// closed set of reasons. The recipient copies count themselves in the pipeline now; what is
+    /// left here is our own devices' sync and a retry attempt that failed whole.
     ///
     /// The `believed=` figure comes from `PeerDevice` — the durable account → devices directory
     /// filled at the same seam that fetches bundles — and is deliberately not folded into the
-    /// counter. It is what we were last told, possibly hours ago; on the fetch-side reasons it is
-    /// the only device count available precisely because the call that would refresh it is the one
-    /// that just failed. A belief in the log, a fact in the metric.
+    /// counter. It is what we were last told, possibly hours ago. A belief in the log, a fact in
+    /// the metric.
     private func recordSkip(
         _ reason: String,
         peer: String,
@@ -856,7 +661,7 @@ final class MultiDeviceSendCoordinator {
         let target = device.map { " device=\($0.prefix(8))…" } ?? ""
         let why = error.map { ": \($0)" } ?? ""
         Log.info(
-            "MultiDevice fan-out skipped for \(peer.prefix(8))… — reason=\(reason)" +
+            "MultiDevice copy skipped for \(peer.prefix(8))… — reason=\(reason)" +
             "\(target) believed=\(believed)\(why)",
             category: "MultiDevice"
         )
@@ -884,43 +689,31 @@ final class MultiDeviceSendCoordinator {
         return all.filter { $0.deviceId != myDeviceId }
     }
 
-    /// Whose device this copy is going to — which is the only thing that decides whether it may
-    /// travel unsealed.
+    /// One copy to one of **our own** devices: ensures a session exists, encrypts, sends.
+    /// Swallows errors — counted as `sync_send_failed`, not retried.
     ///
-    /// The caller answers because the caller is the only one that knows. `sendToDevice` used to
-    /// hardcode `.identified(.ownDevices)` for both of its callers, and for one of them the claim
-    /// was false: a copy to a **peer's** device has `senderUserId` = us and
-    /// `networkRecipientUserId` = them, so the relay got exactly the pair sealed sender exists to
-    /// hide — once per extra device of theirs, per message.
-    enum DeviceCopyAudience {
-        /// A peer's device. Sealed to the identity key from the bundle we just fetched for it —
-        /// the value is in the caller's hand, which is the point: `recipientIdentityKey` would go
-        /// looking for it in a store that holds one key per account and does not know this device.
-        case peerDevice(identityKey: Data)
-
-        /// One of our own devices. The pair is (me, me), which the relay knows from the
-        /// authenticated channel before it opens the envelope, and `conversation_id` is empty — so
-        /// a seal would hide nothing. See `SealingExemption.ownDevices`.
-        case ownDevice
-    }
-
-    /// Core per-device send: ensures session exists, encrypts, sends. Swallows errors.
+    /// Unsealed, and that is the one legitimate exemption: the pair is (me, me), which the relay
+    /// knows from the authenticated channel before it opens the envelope, and `conversation_id`
+    /// is empty — so a seal would hide nothing. See `SealingExemption.ownDevices`. A copy to a
+    /// **peer's** device is a different thing and does not come through here: the pair (me, them)
+    /// is exactly what sealed sender hides, and `OutboundMessagePipeline.sendEncrypted` seals it.
+    /// Until 2026-08-30 this function served both with the exemption hardcoded, and for the peer
+    /// copies the claim was false — once per extra device of theirs, per message.
     private func sendToDevice(
         plaintext: Data,
         messageId: String,
         networkRecipientUserId: String,
         contactId: String,
-        bundle: PublicKeyBundleData,
+        bundle: PublicKeyBundleData?,
         senderUserId: String,
         recipientDeviceId: String,
         timestamp: UInt64,
-        contentType: Shared_Proto_Core_V1_ContentType,
-        audience: DeviceCopyAudience,
         spendUnit: TokenSpendUnit? = nil
     ) async -> Bool {
         do {
             // Ensure a session exists for this contactId; never clobber an existing one.
             if !CryptoManager.shared.hasSession(for: contactId) {
+                guard let bundle else { throw CryptoManagerError.sessionNotFound }
                 do {
                     _ = try SessionInitializationService.shared.initializeSession(
                         userId: contactId,
@@ -945,34 +738,6 @@ final class MultiDeviceSendCoordinator {
                 recipientId: contactId
             )
 
-            // §B: the copy answers the sealing question by audience, not by being multi-device
-            // traffic. A peer's device is sealed to its own identity key — the same key its ratchet
-            // already runs on, so this is not a stronger claim about that key than the session
-            // already makes, and the receiving device opens it with its own private key.
-            let sealing: SendSealing
-            switch audience {
-            case .ownDevice:
-                sealing = .identified(.ownDevices)
-            case .peerDevice(let identityKey):
-                if StealthPolicy.shared.shouldUseSealedSender() {
-                    sealing = .sealed(try await StealthSenderService.buildSealedInner(
-                        recipientUserId: networkRecipientUserId,
-                        recipientIdentityKey: identityKey,
-                        encryptedPayload: encPayload,
-                        // Generic on purpose. The outer type used to be `.e2EeSignal`, which let the
-                        // server tell a body copy from a control copy; under a seal the baseline is
-                        // the field's absence, and the real type rides in KNST byte 5 inside the
-                        // ciphertext like every other sealed body.
-                        contentType: .generic,
-                        spendUnit: spendUnit
-                    ))
-                } else {
-                    // DEBUG only: `StealthPolicy.isEnabled` is a compile-time `true` in Release, and
-                    // the chokepoint refuses this branch whenever stealth is on.
-                    sealing = .identified(.stealthDisabled)
-                }
-            }
-
             // conversation_id stays empty on purpose. `direct:<me>:<partner>` names the person on
             // the other side, in the clear, once per extra device per message — for a multi-device
             // account it handed the server exactly the pairing sealed sender exists to hide.
@@ -989,28 +754,22 @@ final class MultiDeviceSendCoordinator {
                 conversationId: "",
                 encryptedPayload: encPayload,
                 timestamp: timestamp,
-                // Written only on the unsealed branch by `buildEnvelope`, because the outer field is
-                // visible to the relay. On the sealed branch the device is derived from the key the
-                // seal was built against, so "who can open this" and "where does it go" stay one
-                // value rather than two that must be kept in agreement.
+                // Written on the unsealed branch by `buildEnvelope`, because the outer field is
+                // visible to the relay — and the relay already knows this pair.
                 recipientDeviceId: recipientDeviceId,
-                contentType: contentType,
-                sealing: sealing
+                contentType: .senderSync,
+                sealing: .identified(.ownDevices)
             )
 
             CryptoManager.shared.saveSessionToKeychain(for: contactId)
-            Log.info(
-                "MultiDevice[\(contentType == .senderSync ? "sync" : "fanout")]: sent to \(contactId.prefix(20))…",
-                category: "MultiDevice"
-            )
+            Log.info("MultiDevice[sync]: sent to \(contactId.prefix(20))…", category: "MultiDevice")
             return true
         } catch {
-            // A device that did not get its copy, and the one reason here where we know exactly
-            // which device it was — the loop is holding it. SENDER_SYNC is labelled apart because
-            // it is a device of *ours*, and "the peer never saw it" and "my iPad never saw it" are
-            // different failures with the same shape.
+            // A device of *ours* that did not get its copy — labelled apart from a peer's device,
+            // because "the peer never saw it" and "my iPad never saw it" are different failures
+            // with the same shape.
             await recordSkip(
-                contentType == .senderSync ? "sync_send_failed" : "send_failed",
+                "sync_send_failed",
                 peer: networkRecipientUserId,
                 error: error,
                 device: contactId

@@ -1,41 +1,46 @@
 //
-//  PrimarySendTag.swift
+//  AccountSendTag.swift
 //  Construct Messenger
 //
-//  Naming the sending device on the ordinary send, the way the fan-out already does.
+//  Naming the sending device on a send that still addresses an account.
 //
 
 import Foundation
 
-/// The wire id an ordinary send travels under.
+/// The wire id a send travels under when its caller addressed an account rather than a device.
 ///
-/// ## Why the ordinary send needs one at all
+/// ## Who still does that
 ///
-/// `DeviceDeliveryPlan.wireId` marks and tags every **fan-out** copy, and `primarySendCovered` is
-/// precisely what keeps the recipient's pinned device out of that fan-out — the ordinary send has
-/// already reached it. So the pinned device, which receives most of the traffic and *all* of it
-/// when the peer has one device, was the only target getting a bare UUID.
+/// Not messages. A message is N copies, one per recipient device, and each arrives at
+/// `MessagingServiceClient.sendMessage` already tagged by `DeviceDeliveryPlan.wireId` — this
+/// returns those untouched. What comes here bare is the traffic that still speaks to the account
+/// and lets the seam pick the device: session controls, receipts, the intake key, call signalling.
+/// Named `PrimarySendTag` until 2026-09-22, when the primary send stopped existing
+/// (`decisions/a-peer-is-a-set-of-devices.md`, item 1).
 ///
-/// The consequence is not cosmetic. A session is a ratchet between two devices, so a recipient
-/// choosing which session to decrypt with needs the sending device, and an untagged id names
-/// nobody. The receive path then guessed by walking, and on a failure the core faithfully named
-/// the session it had been fed — so a message from the peer's Desktop archived the session with
-/// their iPhone. Measured 2026-09-03: 20 of 20 incoming messages attributed to the pinned device,
-/// 0 to the other, 6 of 6 archives on the wrong one.
+/// ## Why those need one at all
 ///
-/// ## Why this is safe to change
+/// A session is a ratchet between two devices, so a recipient choosing which session to decrypt
+/// with needs the sending device, and an untagged id names nobody. The receive path then guessed
+/// by walking, and on a failure the core faithfully named the session it had been fed — so a
+/// message from the peer's Desktop archived the session with their iPhone. Measured 2026-09-03:
+/// 20 of 20 incoming messages attributed to the pinned device, 0 to the other, 6 of 6 archives on
+/// the wrong one. The sealed certificate carries the sender device too, since §D's client half;
+/// the tag is what an unsealed control has.
 ///
-/// The envelope id is not the message's identity. The recipient stores an incoming message under
-/// the id in its **KNST frame**, inside the ciphertext (`saveMessage`, `e2eMessageId`), because the
-/// server already reassigns envelope ids on the sealed-sender path. Receipts, edits and replies
-/// all reference that inner id, so lengthening the outer one changes nothing they read.
+/// ## The key the tag is computed against
+///
+/// The **target device's**, always. A tag is a MAC under the pair secret of our identity key and
+/// the receiving device's, and until 2026-09-22 a send that named a device other than the pinned
+/// one (`recipientDeviceId`) was tagged under the *pinned* key — a tag the named device could
+/// never verify, so it read as "for a sibling". A named device is looked up by its own key; only
+/// an unnamed send falls back to the pinned device and the pinned key, which are one pair.
 ///
 /// ## What it does not do
 ///
 /// Nothing here reaches the network. The target device and its identity key are the ones the
-/// ciphertext was already encrypted for — `SessionAddressing` resolved them a moment earlier — so
-/// tagging costs one X25519 and no bundle fetch.
-enum PrimarySendTag {
+/// ciphertext was already encrypted for, so tagging costs one X25519 and no bundle fetch.
+enum AccountSendTag {
 
     /// The key material the tag needs, as a seam.
     ///
@@ -49,11 +54,21 @@ enum PrimarySendTag {
         var ourIdentityPrivate: () -> Data?
         var pinnedIdentityPublic: (String) -> Data?
         var pinnedDevice: (String) -> String?
+        /// The identity key of a named device — `PeerDevice`, then the pinned rows.
+        var deviceIdentityPublic: (String) -> Data?
 
         static let production = Keys(
             ourIdentityPrivate: { KeychainManager.shared.loadDeviceIdentityKey() },
             pinnedIdentityPublic: { SessionAddressing.pinnedIdentityKey(ofUser: $0) },
-            pinnedDevice: { SessionAddressing.contactId(forPeer: $0) }
+            pinnedDevice: { SessionAddressing.contactId(forPeer: $0) },
+            deviceIdentityPublic: { deviceId in
+                // A private context: `sendMessage` runs off the main actor, and the view
+                // context read from another thread returns an empty result rather than an error.
+                let ctx = PersistenceController.shared.container.newBackgroundContext()
+                var key: Data?
+                ctx.performAndWait { key = SessionAddressing.identityKey(ofDevice: deviceId, in: ctx) }
+                return key
+            }
         )
     }
 
@@ -72,7 +87,7 @@ enum PrimarySendTag {
     ///     marker in the id and `DeviceCopyWireId` reads the last one.
     ///   - recipientId: the account being written to.
     ///   - recipientDeviceId: the device the ciphertext was encrypted for, when the caller knows
-    ///     it. Falls back to the peer's pinned device, which is what the ordinary encrypt used.
+    ///     it — tagged under that device's key. Falls back to the peer's pinned device and key.
     static func wireId(
         baseMessageId: String,
         recipientId: String,
@@ -90,10 +105,17 @@ enum PrimarySendTag {
         // whichever chunk arrives first.
         let (logicalId, chunkIndex) = Self.splitChunkSuffix(baseMessageId)
 
-        let target = recipientDeviceId.flatMap { $0.isEmpty ? nil : $0 }
-            ?? keys.pinnedDevice(recipientId)
+        let target: String?
+        let peerKey: Data?
+        if let named = recipientDeviceId, !named.isEmpty {
+            target = named
+            peerKey = keys.deviceIdentityPublic(named)
+        } else {
+            target = keys.pinnedDevice(recipientId)
+            peerKey = keys.pinnedIdentityPublic(recipientId)
+        }
         guard let target, !target.isEmpty,
-              let peerKey = keys.pinnedIdentityPublic(recipientId), !peerKey.isEmpty,
+              let peerKey, !peerKey.isEmpty,
               let ourKey = keys.ourIdentityPrivate(), !ourKey.isEmpty,
               let tag = SenderSyncDeviceTag.tag(
                   baseMessageId: logicalId,

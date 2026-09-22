@@ -66,8 +66,8 @@ final class SessionLifecycleController {
     }
 
     /// Send END_SESSION to a specific contact and archive local state.
-    func sendEndSession(to userId: String, reason: String = "manual_reset") async throws {
-        try await coordinator.sendEndSession(to: userId, reason: reason)
+    func sendEndSession(to userId: String, devices: [String]? = nil, reason: String = "manual_reset") async throws {
+        try await coordinator.sendEndSession(to: userId, devices: devices, reason: reason)
     }
 
     /// Broadcast END_SESSION to all active sessions (used on logout).

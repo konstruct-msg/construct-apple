@@ -541,71 +541,51 @@ final class ChatSendCoordinator {
                     try? await Task.sleep(for: .milliseconds(Int(jitterMs)))
                 }
                 do {
-                    let recipientIdentityKey: Data? = await {
-                        guard StealthPolicy.shared.shouldUseSealedSender() else { return nil }
-                        if let k = self.sessionManager.cachedIdentityKey { return k }
-                        return await self.fetchRecipientIdentityKeyForEdit(recipientId: recipientId, context: self.viewContext)
-                    }()
-                    // One spend unit for this message to this person: it covers the primary
-                    // envelope below AND the fan-out copies `mirrorOutgoing` sends to their other
-                    // devices a few lines down. Both paths reach one `recipient_user_id`, which is
-                    // exactly what the server keys `token_spend_id` by, so one token pays for all
-                    // of them. Before this the two paths minted a unit each and a two-device peer
-                    // cost two tokens a message.
+                    // One spend unit for this message to this person: it covers every copy the
+                    // pipeline sends — one per device of theirs — because all of them reach one
+                    // `recipient_user_id`, which is exactly what the server keys `token_spend_id`
+                    // by, so one token pays for all of them.
                     //
                     // Minted unconditionally rather than sized from a device count. Sizing is what
                     // broke it: this site asked `PeerDeviceRegistry`, which only `KeyServiceClient`
                     // writes and which reads 1 for a peer whose second device we learned about from
-                    // a bundle fetch elsewhere — so `forEnvelopeCount` returned nil, the fan-out
-                    // then minted nothing either, and a two-device peer cost two tokens a message.
-                    // Measured 2026-09-11: zero "covered by unit" lines in 71 spends.
+                    // a bundle fetch elsewhere — so `forEnvelopeCount` returned nil and a two-device
+                    // peer cost two tokens a message. Measured 2026-09-11: zero "covered by unit"
+                    // lines in 71 spends.
                     //
                     // A unit that ends up covering one envelope costs nothing — the server takes the
                     // identical `redeem_token` path for the first envelope either way — and it is
                     // also what lets `MessageRetryManager` reuse the redemption instead of buying a
                     // second token for the same body.
                     let peerSpendUnit = TokenSpendUnit.forMessage()
-                    let aggregated = try await OutboundMessagePipeline.shared.sendChunks(
+                    let report = try await OutboundMessagePipeline.shared.sendToRecipientDevices(
                         plan: plan,
                         baseMessageId: messageId,
                         senderId: currentUserId,
                         recipientId: recipientId,
-                        conversationId: ConversationId.direct(myUserId: currentUserId, theirUserId: recipientId),
                         timestamp: message.timestamp,
-                        recipientIdentityKey: recipientIdentityKey,
                         spendUnit: peerSpendUnit
                     )
+                    let aggregated = report.status
                     TrafficProtectionService.shared.recordRealMessageSent()
                     if let myDeviceId = AuthSessionManager.shared.currentDeviceId, !myDeviceId.isEmpty {
-                        // C1c: sync the same wire bytes as the primary send (MessageContent / pre-KNST),
+                        // C1c: sync the same wire bytes as the send (MessageContent / pre-KNST),
                         // not display JSON. Coordinator re-applies KNST framing per own device.
                         let wireForSync = plaintextData
-                        let chunksForFanOut = plan.payloads
                         Task { [weak self] in
                             _ = self
-                            // Our own other devices, then the recipient's. The primary send above
-                            // reached one of theirs — the device their pinned key names — and the
-                            // server copies that envelope to all their streams, but only that
-                            // device holds the session that opens it.
+                            // Our own other devices. The recipient's were all reached by the send
+                            // above, or are owed in its report and queued from there.
                             //
                             // One call, because the retry path must make the same one: see
                             // `mirrorOutgoing`.
                             await MultiDeviceSendCoordinator.shared.mirrorOutgoing(
                                 wirePlaintext: wireForSync,
-                                chunks: chunksForFanOut,
                                 messageId: messageId,
                                 recipientUserId: recipientId,
                                 senderUserId: currentUserId,
                                 senderDeviceId: myDeviceId,
-                                timestamp: message.timestamp,
-                                peerSpendUnit: peerSpendUnit
-                            )
-                            // The fan-out is the payer whenever the primary send could not be (an
-                            // empty wallet on the first envelope does not condemn the rest — see
-                            // TokenSpendUnit). Recording here as well as below is why a retry of
-                            // such a message still rides on a redemption rather than buying one.
-                            TokenSpendUnitStore.remember(
-                                peerSpendUnit, baseMessageId: messageId, recipientId: recipientId
+                                timestamp: message.timestamp
                             )
                         }
                     }
@@ -621,10 +601,17 @@ final class ChatSendCoordinator {
                     // including the delivery receipt for this very message, which is 36–38% of the
                     // bill on its own. Off the send path, because a control envelope must not delay
                     // the bubble the user is watching.
+                    //
+                    // Still one envelope to the pinned device — a control that addresses the
+                    // account, encrypted and sealed for the device the seam resolves. Its
+                    // per-device form is with the other account-addressed controls, not here.
                     if IntakeCredentialService.shared.peerNeedsOurKey(recipientId) {
-                        Task { [recipientIdentityKey] in
+                        let pinnedKey = StealthSenderService.recipientIdentityKey(
+                            recipientId: recipientId, context: self.viewContext
+                        )
+                        Task {
                             await OutboundSessionService.shared.sendIntakeKey(
-                                to: recipientId, recipientIdentityKey: recipientIdentityKey
+                                to: recipientId, recipientIdentityKey: pinnedKey
                             )
                         }
                     }
@@ -643,14 +630,19 @@ final class ChatSendCoordinator {
                         if aggregated.errorCode == "encryptionFailed" {
                             deliveryStatus = .failed
                             OutgoingWirePayloadStore.shared.remove(baseMessageId: messageId)
-                            Log.error("encryptionFailed from server — triggering END_SESSION for \(self.chat.otherUser?.id.prefix(8) ?? "?")\(traceTag)", category: "ChatViewModel")
-                            if let peerId = self.chat.otherUser?.id {
-                                Task {
-                                    try? await SessionLifecycleController.shared.sendEndSession(
-                                        to: peerId,
-                                        reason: "server_encryption_rejected"
-                                    )
-                                }
+                            // The refusal was of a ciphertext, so it names the ratchet that
+                            // produced it — one device's — and the teardown goes to that device,
+                            // not to whichever device the account resolves to.
+                            let refused = report.copies
+                                .filter { $0.response?.errorCode == "encryptionFailed" }
+                                .map(\.deviceId)
+                            Log.error("encryptionFailed from server — triggering END_SESSION for \(recipientId.prefix(8))… devices=\(refused.map { $0.prefix(8) })\(traceTag)", category: "ChatViewModel")
+                            Task {
+                                try? await SessionLifecycleController.shared.sendEndSession(
+                                    to: recipientId,
+                                    devices: refused.isEmpty ? nil : refused,
+                                    reason: "server_encryption_rejected"
+                                )
                             }
                         } else if aggregated.retryable {
                             deliveryStatus = .queued
@@ -980,7 +972,6 @@ final class ChatSendCoordinator {
             in: viewContext
         )
 
-        let conversationId = ConversationId.direct(myUserId: currentUserId, theirUserId: recipientId)
         Task { [weak self] in
             guard let self else { return }
             do {
@@ -989,18 +980,12 @@ final class ChatSendCoordinator {
                     plaintext: payload,
                     messageId: UUID(uuidString: actionId) ?? UUID()
                 )
-                let recipientIdentityKey: Data? = StealthPolicy.shared.shouldUseSealedSender()
-                    ? await fetchRecipientIdentityKeyForEdit(recipientId: recipientId, context: viewContext)
-                    : nil
-
-                _ = try await OutboundMessagePipeline.shared.sendChunks(
+                _ = try await OutboundMessagePipeline.shared.sendToRecipientDevices(
                     plan: chunkPlan,
                     baseMessageId: actionId,
                     senderId: currentUserId,
                     recipientId: recipientId,
-                    conversationId: conversationId,
-                    timestamp: UInt64(Date().timeIntervalSince1970),
-                    recipientIdentityKey: recipientIdentityKey
+                    timestamp: UInt64(Date().timeIntervalSince1970)
                 )
 
                 if let myDeviceId = AuthSessionManager.shared.currentDeviceId, !myDeviceId.isEmpty {
@@ -1009,7 +994,6 @@ final class ChatSendCoordinator {
                     // that never sees it renders the transcript differently from its siblings.
                     await MultiDeviceSendCoordinator.shared.mirrorOutgoing(
                         wirePlaintext: payload,
-                        chunks: chunkPlan.payloads,
                         messageId: actionId,
                         recipientUserId: recipientId,
                         senderUserId: currentUserId,
@@ -1041,7 +1025,6 @@ final class ChatSendCoordinator {
     func editMessage(_ message: Message, newText: String, editingBinding: @escaping () -> Void) {
         guard let recipientId = chat.otherUser?.id,
               let currentUserId = AuthSessionManager.shared.currentUserId else { return }
-        let conversationId = ConversationId.direct(myUserId: currentUserId, theirUserId: recipientId)
         // For a media message, editing the caption must rebuild the album (binary wire +
         // local JSON) — sending plain text would replace the descriptor and destroy the media.
         // Read displayText here (current actor) before hopping onto the Task.
@@ -1076,18 +1059,12 @@ final class ChatSendCoordinator {
                 let editActionId = UUID().uuidString.lowercased()
                 let plan = ChunkedMessageSender.shared.buildPlan(plaintext: editPayload, messageId: UUID(uuidString: editActionId) ?? UUID())
 
-                let recipientIdentityKey: Data? = StealthPolicy.shared.shouldUseSealedSender()
-                    ? await fetchRecipientIdentityKeyForEdit(recipientId: recipientId, context: viewContext)
-                    : nil
-
-                _ = try await OutboundMessagePipeline.shared.sendChunks(
+                _ = try await OutboundMessagePipeline.shared.sendToRecipientDevices(
                     plan: plan,
                     baseMessageId: editActionId,
                     senderId: currentUserId,
                     recipientId: recipientId,
-                    conversationId: conversationId,
-                    timestamp: UInt64(Date().timeIntervalSince1970),
-                    recipientIdentityKey: recipientIdentityKey
+                    timestamp: UInt64(Date().timeIntervalSince1970)
                 )
 
                 let editedDate = Date()
@@ -1108,10 +1085,6 @@ final class ChatSendCoordinator {
                 ErrorRouter.shared.report(.unknown(String(format: NSLocalizedString("edit_message_failed", comment: ""), error.localizedDescription)))
             }
         }
-    }
-
-    private func fetchRecipientIdentityKeyForEdit(recipientId: String, context: NSManagedObjectContext) async -> Data? {
-        StealthSenderService.recipientIdentityKey(recipientId: recipientId, context: context)
     }
 
     // MARK: - Retry

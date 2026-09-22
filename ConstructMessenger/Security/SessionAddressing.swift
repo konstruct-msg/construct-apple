@@ -519,9 +519,9 @@ enum SessionAddressing {
     /// A private context with `performAndWait` is safe from any thread and reads the same store.
     /// The identity public key we pinned for `userId`, or `nil` when we hold none.
     ///
-    /// Internal rather than private since 2026-09-05: `PrimarySendTag` needs the key itself, not
-    /// the device id derived from it, to compute the pair secret that names our device to the
-    /// recipient. Deriving the id and then looking the key back up would be the same read twice.
+    /// Internal rather than private since 2026-09-05: `AccountSendTag` and the outbound pipeline's
+    /// pre-`PeerDevice` fallback need the key itself, not the device id derived from it. Deriving
+    /// the id and then looking the key back up would be the same read twice.
     static func pinnedIdentityKey(ofUser userId: String) -> Data? {
         #if DEBUG
         if let override = pinnedIdentityKeyOverrideForTesting { return override(userId) }

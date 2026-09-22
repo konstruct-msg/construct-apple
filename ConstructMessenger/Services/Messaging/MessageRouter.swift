@@ -297,7 +297,7 @@ final class MessageRouter {
         // Without this the foreign copies take the ordinary decrypt path, fail, and on
         // `messageNumber == 0` reach for a key bundle and can drive session healing — which
         // archives a healthy session. That is the churn the device tag exists to prevent, and it
-        // only became reachable now that anything calls `fanOutToRecipientDevices`.
+        // became reachable the day recipient copies started going out per device (2026-08-30).
         //
         // `.undecidable` means we cannot tell — a peer device we never pinned looks the same as a
         // sibling's copy — and it is treated as ours: attempting a copy costs a failed decrypt,

@@ -370,8 +370,13 @@ final class SessionCoordinator: MessageRouterDelegate {
     /// wrapper reports: attempted, not delivered, because a network failure still consumed the
     /// cooldown and the caller must not immediately retry.
     @discardableResult
+    /// - Parameter devices: when the caller knows which of the peer's devices the teardown is
+    ///   about — the server refused one device's ciphertext, say — the candidates are narrowed to
+    ///   those. The plan is still the core's; this only keeps a device whose session was never in
+    ///   question out of it. `nil` means the whole set, which is the ordinary reset.
     func sendEndSession(
         to peerId: String,
+        devices: [String]? = nil,
         reason: String = "manual_reset",
         resetReason: Shared_Proto_Messaging_V1_SessionResetReason = .unspecified,
         peerOnDeadSession: Bool = false,
@@ -381,10 +386,11 @@ final class SessionCoordinator: MessageRouterDelegate {
         // core has no `ServerUserId`; it does not own "which of them does this teardown touch",
         // which is a plan and therefore protocol — see AGENTS.md, "The core decides, this app
         // executes", and `orchestration::teardown_plan`.
-        let deviceSet = SessionAddressing.deviceIds(
+        var deviceSet = SessionAddressing.deviceIds(
             ofPeer: peerId,
             in: PersistenceController.shared.container.viewContext
         )
+        if let devices { deviceSet = deviceSet.filter { devices.contains($0) } }
         guard !deviceSet.isEmpty else {
             Log.info(
                 "END_SESSION skipped for \(peerId.prefix(8))… — no device can be named (\(reason))",
@@ -2253,10 +2259,6 @@ final class SessionCoordinator: MessageRouterDelegate {
                 return
             }
 
-            // Resolve the recipient identity key once so resent bodies are SEALED — never downgraded
-            // to identified on retry (the server-influence deanonymisation vector).
-            let recipientIdentityKey = StealthSenderService.recipientIdentityKey(recipientId: userId, context: context)
-
             // E14: one save for all "sending" marks instead of save-per-message before network.
             var resendQueue: [(Message, String)] = []
             resendQueue.reserveCapacity(candidates.count)
@@ -2286,21 +2288,20 @@ final class SessionCoordinator: MessageRouterDelegate {
                         continue
                     }
 
-                    let responses = try await ChunkedMessageSender.shared.sendChunks(
+                    // Every device of theirs, sealed per device, through the one sender — a
+                    // resend after a teardown is not a place for a second send path.
+                    let response = try await OutboundMessagePipeline.shared.sendToRecipientDevices(
                         plan: plan,
+                        baseMessageId: msg.id,
                         senderId: myId,
                         recipientId: userId,
-                        conversationId: ConversationId.direct(myUserId: myId, theirUserId: userId),
-                        timestamp: UInt64(msg.timestamp.timeIntervalSince1970),
-                        recipientIdentityKey: recipientIdentityKey
-                    )
-
-                    let response = responses.first ?? SendMessageResponse(messageId: msg.id, status: "sent")
+                        timestamp: UInt64(msg.timestamp.timeIntervalSince1970)
+                    ).status
                     let newStatus: DeliveryStatus
                     switch response.status.lowercased() {
                     case "delivered": newStatus = .delivered
                     case "queued": newStatus = .queued
-                    case "failed": newStatus = .failed
+                    case "failed", "blocked": newStatus = .failed
                     default: newStatus = .sent
                     }
                     msg.deliveryStatus = newStatus

@@ -7,6 +7,32 @@
 
 import Foundation
 
+/// A device of the person we are writing to, as the plan is built from it.
+///
+/// Two sources, one shape. The local set (`PeerDevice`: device id and identity key, on disk)
+/// names every device we have been told about and needs no network; a bundle fetch names the
+/// same devices with the material to open a session. A send to a peer we already hold sessions
+/// with is built from the first, so it does not depend on the key server — which is
+/// rate-limited, destructive and sometimes unreachable — and a bundle is fetched only for a
+/// device that turns out to need one.
+struct PlannedRecipientDevice {
+    let deviceId: String
+    /// The device's X25519 identity key — what the copy is sealed to and the tag is keyed on.
+    let identityPublic: Data
+    /// Present when a fetch supplied it; `nil` for a device from the local set.
+    let bundle: PublicKeyBundleData?
+
+    init(deviceId: String, identityPublic: Data, bundle: PublicKeyBundleData? = nil) {
+        self.deviceId = deviceId
+        self.identityPublic = identityPublic
+        self.bundle = bundle
+    }
+
+    init(_ device: DeviceBundleData) {
+        self.init(deviceId: device.deviceId, identityPublic: device.bundle.identityPublic, bundle: device.bundle)
+    }
+}
+
 /// One device that must receive its own ciphertext of an outgoing message.
 ///
 /// Not `Equatable`: `PublicKeyBundleData` is not, and synthesising it by hand over a bundle whose
@@ -24,16 +50,17 @@ struct DeviceDeliveryTarget {
     }
 
     let deviceId: String
-    /// Everything the session layer needs to reach this device.
+    /// The device's X25519 identity key — the other half of the pair secret the tag is keyed on,
+    /// and the key a copy for this device is sealed to.
+    let identityPublic: Data
+    /// What the session layer needs to *open* a session with this device, when the caller had it.
     ///
     /// The whole bundle rather than just the identity key: the caller needs both, and handing it
     /// one and making it find the other by index in the array the plan was built from is a second
-    /// carrier of the same pairing — one that stays correct only while nothing filters.
-    let bundle: PublicKeyBundleData
+    /// carrier of the same pairing — one that stays correct only while nothing filters. `nil` for
+    /// a recipient device from the local set; the sender fetches one if no session exists.
+    let bundle: PublicKeyBundleData?
     let audience: Audience
-
-    /// The device's X25519 identity key — the other half of the pair secret the tag is keyed on.
-    var identityPublic: Data { bundle.identityPublic }
 }
 
 /// Who gets a copy of an outgoing message, and under which wire id.
@@ -83,10 +110,18 @@ enum DeviceDeliveryPlan {
         }
     }
 
-    /// Every device that must receive a copy, given what the key server returned.
+    /// Every device that must receive a copy.
+    ///
+    /// **There is no primary send.** Until 2026-09-22 the ordinary send reached the device the
+    /// recipient's pinned key named and this plan subtracted it (`primarySendCovered`), so one of
+    /// the recipient's devices was reached by a path with delivery status, a retry store and
+    /// privacy-pass recovery, and the rest by a path with none of those. Every recipient device
+    /// is a target now, and one sender handles them all
+    /// (`OutboundMessagePipeline.sendToRecipientDevices`). The core's `plan_send` still takes the
+    /// parameter and is handed the empty string; removing it there is a core change.
     ///
     /// - Parameters:
-    ///   - recipientDevices: bundles for the person we are writing to. Empty when writing to
+    ///   - recipientDevices: the devices of the person we are writing to. Empty when writing to
     ///     ourselves — see `recipientIsSelf`.
     ///   - ownDevices: bundles for our own account, **including this device**; it is filtered here
     ///     rather than by each caller, because forgetting to is invisible: delivery hands us our
@@ -96,18 +131,11 @@ enum DeviceDeliveryPlan {
     ///     addressed to this device.
     ///   - recipientIsSelf: a note to self. Then the recipient's devices *are* our devices, and
     ///     planning both audiences would send every replica two copies of one message.
-    ///   - primarySendCovered: the recipient device the ordinary send already reached, which is
-    ///     the one their pinned identity key names. Before the addressing flip the primary send
-    ///     went to a session keyed by the account and the per-device copies to sessions keyed by
-    ///     `<userId>:<deviceId>`, so the two could not collide. They are the same session now:
-    ///     planning a copy for that device would put two ciphertexts of one message through one
-    ///     ratchet, and the peer would render it twice.
     static func targets(
-        recipientDevices: [DeviceBundleData],
+        recipientDevices: [PlannedRecipientDevice],
         ownDevices: [DeviceBundleData],
         ourDeviceId: String?,
-        recipientIsSelf: Bool,
-        primarySendCovered: String? = nil
+        recipientIsSelf: Bool
     ) -> [DeviceDeliveryTarget] {
         // **The decision lives in the core** (`orchestration::send_plan`). This is the translation
         // around it: the core is handed device id sets and the account-space facts it cannot
@@ -121,33 +149,37 @@ enum DeviceDeliveryPlan {
             // planned at all, and that refusal is the core's, not ours.
             ourDeviceId: ourDeviceId ?? "",
             recipientIsSelf: recipientIsSelf,
-            primarySendCovered: primarySendCovered ?? ""
+            primarySendCovered: ""
         )
 
-        // Re-associated **by device id, never by position**. The bundles the caller needs are in
+        // Re-associated **by device id, never by position**. The material the caller needs is in
         // two arrays that the plan filters, so an index into either stops meaning what it meant
         // the moment anything is dropped — and dropping is this function's entire content. A
         // device id is `SHA256(identity_public)[0..16]`, so it is unique by construction and this
         // lookup is exact rather than merely convenient.
-        var bundlesById: [String: PublicKeyBundleData] = [:]
-        for device in recipientDevices + ownDevices {
-            bundlesById[device.deviceId] = device.bundle
+        var byId: [String: (identityPublic: Data, bundle: PublicKeyBundleData?)] = [:]
+        for device in recipientDevices {
+            byId[device.deviceId] = (device.identityPublic, device.bundle)
+        }
+        for device in ownDevices {
+            byId[device.deviceId] = (device.bundle.identityPublic, device.bundle)
         }
 
         return plan.compactMap { target in
-            guard let bundle = bundlesById[target.deviceId] else {
+            guard let material = byId[target.deviceId] else {
                 // Unreachable while the caller passes the arrays it derived the ids from. Logged
-                // rather than force-unwrapped because the alternative to a missing bundle is a
-                // crash on the send path, and a skipped copy is recoverable.
+                // rather than force-unwrapped because the alternative to a missing key is a crash
+                // on the send path, and a skipped copy is recoverable.
                 Log.error(
-                    "DeviceDeliveryPlan: no bundle for planned device \(target.deviceId.prefix(8))… — skipping its copy",
+                    "DeviceDeliveryPlan: no key for planned device \(target.deviceId.prefix(8))… — skipping its copy",
                     category: "MultiDevice"
                 )
                 return nil
             }
             return DeviceDeliveryTarget(
                 deviceId: target.deviceId,
-                bundle: bundle,
+                identityPublic: material.identityPublic,
+                bundle: material.bundle,
                 audience: target.audience == .ownReplica ? .ownReplica : .recipient
             )
         }

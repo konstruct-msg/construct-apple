@@ -227,21 +227,19 @@ enum MetricEvent: String {
     /// second device linked at 11:14, the single bundle fetch after it timed out at 11:18, there
     /// was no retry, and the copy simply never existed.
     ///
-    /// `label` = why, a closed set of five:
-    /// `bundle_fetch_failed` (the fetch threw — the 2026-08-28 shape) · `no_bundles` (it returned
-    /// an empty list) · `send_failed` (one device's send threw, the others still went) ·
-    /// `no_sender_device` · `no_chunks`.
+    /// `label` = why, a closed set of three since 2026-09-22:
+    /// `send_failed` (a device's copy did not go — no session and no bundle for it, the encrypt,
+    /// the transport, or a server refusal; one per device, from `OutboundMessagePipeline`, which
+    /// is now the only place a recipient device is reached) · `retry_send_failed` (a whole retry
+    /// attempt threw before or across every device) · `sync_send_failed` (a device of *ours*,
+    /// SENDER_SYNC — labelled apart because "the peer never saw it" and "my iPad never saw it"
+    /// are different failures with the same shape).
     ///
-    /// **Counts occurrences, not devices**, and the distinction is the point rather than a
-    /// shortcut: on `send_failed` the loop knows exactly which device it lost, but on the three
-    /// fetch-side reasons the call that would have named the devices is the one that failed, so a
-    /// device count there could only be a guess dressed as a measurement. The log line beside each
-    /// one carries how many devices we believe the account has, from `PeerDevice`, which is a
-    /// belief and is written as one.
-    ///
-    /// Not recorded when the plan is legitimately empty — a single-device recipient the primary
-    /// send already covered is the overwhelmingly common case and is not a skip. Keeping those
-    /// apart is why "no targets" logs at `debug` and does not come here.
+    /// Until then it had five, three of them fetch-side (`bundle_fetch_failed`, `no_bundles`, …)
+    /// that counted occurrences rather than devices because the call that would have named the
+    /// devices was the one that failed. The device set comes from `PeerDevice` now and a bundle is
+    /// fetched per device that needs one, so every loss is a named device and the count is a
+    /// device count.
     case fanoutDeviceSkipped = "fanout_device_skipped"
 
     /// A copy owed to a recipient's device will never be sent, and the queue has stopped trying.

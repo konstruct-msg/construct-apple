@@ -123,27 +123,21 @@ class ProfileShareViewModel {
             Log.debug("   displayName: \(profileData.displayName)", category: "ProfileShare")
             Log.debug("   avatarMediaId: \(avatarMediaId ?? "nil")", category: "ProfileShare")
 
-            // Stealth support: pass recipient identity key so SealedInner is built when enabled.
-            let recipientIdentityKey: Data? = StealthPolicy.shared.shouldUseSealedSender()
-                ? await fetchRecipientIdentityKey(userId: userId)
-                : nil
-
             // Encrypt and send via E2E message (binary payload)
             Log.debug("Sending profile message for user \(userId), binary size: \(binaryPayload.count) bytes", category: "ProfileShare")
-            let messageId = UUID().uuidString
+            let messageId = UUID().uuidString.lowercased()
             let plan = ChunkedMessageSender.shared.buildPlan(plaintext: binaryPayload, messageId: UUID(uuidString: messageId) ?? UUID())
 
             do {
-                let conversationId = ConversationId.direct(myUserId: currentUserId, theirUserId: userId)
-                let responses = try await ChunkedMessageSender.shared.sendChunks(
+                // Every device of theirs. Until 2026-09-22 this reached the pinned one only, so a
+                // peer's second device never learned our name or avatar.
+                let response = try await OutboundMessagePipeline.shared.sendToRecipientDevices(
                     plan: plan,
+                    baseMessageId: messageId,
                     senderId: currentUserId,
                     recipientId: userId,
-                    conversationId: conversationId,
-                    timestamp: UInt64(Date().timeIntervalSince1970),
-                    recipientIdentityKey: recipientIdentityKey
-                )
-                let response = responses.first ?? SendMessageResponse(messageId: messageId, status: "sent")
+                    timestamp: UInt64(Date().timeIntervalSince1970)
+                ).status
                 if response.status.lowercased() == "blocked" {
                     Log.error("Profile share rejected — sender is blocked by \(userId.prefix(8))…", category: "ProfileShare")
                     completion(false, "blocked")
@@ -158,17 +152,6 @@ class ProfileShareViewModel {
         }
     }
     
-    private func fetchRecipientIdentityKey(userId: String) async -> Data? {
-        do {
-            // Identity key only (stealth sealing) — must not drain the peer's OTPK pool.
-            let bundle = try await KeyServiceClient.shared.getPreKeyBundle(userId: userId, consumeOneTimePrekey: false)
-            return bundle.identityPublic
-        } catch {
-            Log.error("Profile share: failed to fetch bundle for stealth: \(error)", category: "ProfileShare")
-            return nil
-        }
-    }
-
     /// Handle received profile data from another user
     func handleReceivedProfile(_ profileData: ProfileShareData, from userId: String) {
         guard let context = viewContext else { return }

@@ -21,8 +21,6 @@ final class ChatSessionManager {
     private var publicKeyFetchTimer: Timer?
     private let publicKeyFetchTimeout: TimeInterval = 10.0
 
-    var cachedIdentityKey: Data? { recipientBundle?.identityPublic }
-
     // MARK: - Callbacks (userId, reason-string)
 
     var onSessionReady: ((String) -> Void)?
