@@ -247,12 +247,20 @@ private final class Peer {
         awaitingInitiator = true
     }
 
-    /// Model the responder-fallback firing: if the INITIATOR never showed (no session, none in
-    /// flight), override the tie-break and kick off an init — exactly
-    /// `SessionReducer.shouldResponderOverride`. (Final roles still resolve by tie-break once the
-    /// peer responds; the override only breaks the both-waiting deadlock.)
+    /// The responder-fallback's stand-down, simulated.
+    ///
+    /// It was `SessionReducer.shouldResponderOverride` until 2026-09-23, when the wait moved into
+    /// `construct-core` as `RESPONDER_OVERRIDE_MS` — and the gate moved into *nothing*: an
+    /// acknowledged or finished opening clears the phase, so the machine's alarm finds nothing
+    /// left to pay (`the_peers_rebuild_ends_the_turn`). This harness is a wire simulator and
+    /// still has to reproduce the peer-facing behaviour to ask its own question.
+    var wouldTakeTheRole: Bool { !isActive && !isInitializing }
+
+    /// Model the responder-fallback firing: if the INITIATOR never showed, take the role and kick
+    /// off an init. (Final roles still resolve by tie-break once the peer responds; the override
+    /// only breaks the both-waiting deadlock.)
     func fireResponderFallback(to peerId: String, now: Date) {
-        guard SessionReducer.shouldResponderOverride(hasSession: isActive, isInitializing: isInitializing) else { return }
+        guard wouldTakeTheRole else { return }
         awaitingInitiator = false
         if phase == nil { phase = SessionReducer.reduce(phase, on: .initStarted).0 }
         send(.initMsg, to: peerId)
@@ -288,7 +296,7 @@ private final class Peer {
             send(.ready, to: peerId)
         }
         // Both-sides-waiting deadlock (natural RESPONDER, silent INITIATOR) — the responder-fallback.
-        if SessionReducer.shouldResponderOverride(hasSession: isActive, isInitializing: isInitializing), !outbox.isEmpty {
+        if wouldTakeTheRole, !outbox.isEmpty {
             fireResponderFallback(to: peerId, now: now)
         }
         // Abandon a stale half-open init (init sent, no ack, gate lapsed) so the next flush re-inits.
@@ -607,18 +615,12 @@ final class SessionConvergenceHarnessTests: XCTestCase {
                       "RESPONDER traffic reaches the INITIATOR after convergence")
     }
 
-    // Responder-fallback override gate (mirror of the watchdog): override only when the INITIATOR
-    // never showed (no session, none in flight).
-    @MainActor
-    func testShouldResponderOverride_OnlyWhenNoSessionAndIdle() {
-        XCTAssertTrue(SessionReducer.shouldResponderOverride(hasSession: false, isInitializing: false),
-                      "INITIATOR silent + idle → override")
-        XCTAssertFalse(SessionReducer.shouldResponderOverride(hasSession: true, isInitializing: false),
-                       "session already exists → stand down")
-        XCTAssertFalse(SessionReducer.shouldResponderOverride(hasSession: false, isInitializing: true),
-                       "init already underway → stand down")
-        XCTAssertFalse(SessionReducer.shouldResponderOverride(hasSession: true, isInitializing: true))
-    }
+    // `testShouldResponderOverride_OnlyWhenNoSessionAndIdle` was here until 2026-09-23. Both the
+    // wait and its stand-down are the core's now: `RESPONDER_OVERRIDE_MS` and the phase an
+    // acknowledgement clears — `a_reopen_the_peer_should_make_waits_their_turn_out`,
+    // `the_peers_turn_runs_out_and_we_take_the_role`, `the_peers_rebuild_ends_the_turn`. What is
+    // still asked here is the question this file exists for and the Rust tests cannot ask: does
+    // the handshake converge over a lossy wire with both sides deciding independently.
 
     // P1 (one-sided): the natural RESPONDER is waiting on a silent INITIATOR — a permanent deadlock
     // without the fallback. The responder-fallback override must break it: the RESPONDER initiates,
@@ -667,29 +669,17 @@ final class SessionConvergenceHarnessTests: XCTestCase {
         XCTAssertEqual(SessionReducer.initFailureAction(otpkUnreproducible: false).cause, .blind)
     }
 
-    // END_SESSION-receipt branch policy: the role decides, and nothing else is left here.
+    // `testEndSessionReceiptAction_TheRoleIsTheWholeDecision` and
+    // `testTieBreakWatchdogTick_RetriesWithinWindow_GivesUpAfter` stood here until 2026-09-23,
+    // and both pinned a policy that is now `construct-core::session_machine`'s, tested there
+    // against a mock clock: re-announce inside `OPENING_CONFIRM_WINDOW_MS` and give up past it;
+    // rebuild now as the natural INITIATOR, or wait `RESPONDER_OVERRIDE_MS` and then take the
+    // role. Keeping copies here would be the thing this codebase keeps paying for — two
+    // implementations of one decision with a comment promising they agree.
     //
-    // It used to take a second input, `hasPendingReinit`, and the caller answered it from an
-    // `endSessionReinitTasks` map beside a 1.5 s debounce — a coalescer so a backlog flush of N
-    // teardowns produced one re-init instead of N that each destroyed the previous one's session,
-    // and a delay so the rest of that flush (including the peer's own init, which makes us
-    // RESPONDER) landed first. Both are one phase per device now, and `endSessionReinitStillNeeded`
-    // went with them: the core holds the ratchet, so it is the side that can see a session appear.
-    // `decisions/session-is-one-state-machine.md`, step 2, third of its five timers.
-    func testEndSessionReceiptAction_TheRoleIsTheWholeDecision() {
-        XCTAssertEqual(
-            SessionReducer.endSessionReceiptAction(isNaturalInitiator: false),
-            .waitAsResponder)
-        XCTAssertEqual(
-            SessionReducer.endSessionReceiptAction(isNaturalInitiator: true),
-            .requestReopen)
-    }
-
-    // `testTieBreakWatchdogTick_RetriesWithinWindow_GivesUpAfter` stood here until 2026-09-23.
-    // The policy it pinned — re-send inside the window, give up past it — is
-    // `OPENING_CONFIRM_WINDOW_MS` / `SRI_RETRY_MS` in `construct-core::session_machine`, tested
-    // there against a mock clock. Keeping a copy here would be the thing this codebase keeps
-    // paying for: two implementations of one decision with a comment promising they agree.
+    // The receipt branch in particular had already been reduced to its role by the time it moved,
+    // which is the tell: a function whose whole body is `tie_break_role`'s answer is a call to
+    // `tie_break_role` that has not been written yet.
 
 
     // P3: an END_SESSION storm must leave the phase idle with no orphaned buffer, and a subsequent

@@ -403,26 +403,13 @@ enum SessionReducer {
         otpkUnreproducible ? .sendTypedOtpk : .sendPlain
     }
 
-    /// What to do when an END_SESSION is *received* from a peer — the single branch authority for
-    /// `SessionCoordinator.messageRouter(_:receivedEndSession:)`.
-    enum EndSessionReceiptAction: Equatable {
-        /// We are the natural RESPONDER (lower userId): don't re-init, wait for the INITIATOR's
-        /// fresh X3DH (responder fallback covers a stuck INITIATOR).
-        case waitAsResponder
-        /// We are the natural INITIATOR: ask the machine to reopen, and let it say when.
-        case requestReopen
-    }
-
-    /// The `hasPendingReinit` argument is gone with the map that answered it. A backlog flush
-    /// delivering several END_SESSIONs used to schedule one re-init each, and every one after the
-    /// first destroyed the session the previous had just created — so a `[String: Task]` map
-    /// coalesced them, beside a 1.5 s debounce that waited for the same flush to finish. Both are
-    /// one phase per device now (`REOPEN_QUIET_MS`), so N asks are one deferral and there is
-    /// nothing here to remember between them. Step 2 of
-    /// `decisions/session-is-one-state-machine.md`, third of its five timers.
-    static func endSessionReceiptAction(isNaturalInitiator: Bool) -> EndSessionReceiptAction {
-        isNaturalInitiator ? .requestReopen : .waitAsResponder
-    }
+    // `EndSessionReceiptAction` / `endSessionReceiptAction` lived here until 2026-09-23. The
+    // branch was the tie-break, and the tie-break was never this file's — it came from
+    // `SessionAddressing.isNaturalInitiator`, which asks the core's `tie_break_role`. What was
+    // ours was the *consequence*, and the RESPONDER consequence was a 60 s `[String: Task]`
+    // keyed by account. Both halves are `SessionEvent::WantToReopen { peer_rebuilds }` now:
+    // the core ranks the pair it already knows how to rank, and answers with `OpenSession` or
+    // an `OpenDeferred` carrying the length of the wait. Step 2's third and fifth timers.
 
     /// Receive-side control-message coalesce. Server offline queues re-deliver batches of
     /// END_SESSION / SESSION_RESET_INIT for the same peer; acting on each one re-archives
@@ -614,23 +601,18 @@ enum SessionReducer {
         forceThreeDHHintPending ? .threeDH : .fourDH
     }
 
-    /// Responder-fallback override gate — the mirror of the tie-break watchdog. The two are the
-    /// role-split halves of one liveness guarantee ("a stalled handshake gets re-driven by
-    /// *someone*"): the INITIATOR re-sends SRI (the core's `open_confirm:` alarm); the natural RESPONDER, if
-    /// the INITIATOR stays silent past the fallback timeout, **overrides** the tie-break and takes
-    /// the INITIATOR role itself. They are mutually exclusive by role, so they never dueling-init.
-    ///
-    /// Override iff, when the fallback fires, there is still no session and none in flight — i.e. the
-    /// INITIATOR never showed up. If either is true the handshake already progressed; stand down.
-    static func shouldResponderOverride(hasSession: Bool, isInitializing: Bool) -> Bool {
-        !hasSession && !isInitializing
-    }
-
-    // `WatchdogTick` / `tieBreakWatchdogTick` lived here until 2026-09-23. The re-arming,
-    // bounded watchdog they encoded is the core's `open_confirm:` alarm: `ResendSri` while inside
-    // `OPENING_CONFIRM_WINDOW_MS`, `OpeningGaveUp` once past it. The fourth of step 2's five
-    // timers. `shouldResponderOverride` above is still the mirror half — the natural RESPONDER's
-    // 60 s override — and is the fifth.
+    // `WatchdogTick` / `tieBreakWatchdogTick` / `shouldResponderOverride` lived here until
+    // 2026-09-23, and they were the role-split halves of one liveness guarantee: a stalled
+    // handshake gets re-driven by *someone*. The INITIATOR re-announces — the core's
+    // `open_confirm:` alarm, `ResendSri` inside `OPENING_CONFIRM_WINDOW_MS` and `OpeningGaveUp`
+    // past it. The natural RESPONDER, having nothing to announce, waits `RESPONDER_OVERRIDE_MS`
+    // and then takes the role — the core's `reopen:` alarm. Step 2's fourth and fifth timers,
+    // and with them the last of the five.
+    //
+    // The override's own gate went with it rather than moving. `!hasSession && !isInitializing`
+    // was a third reading of what the phase says, asked from inside the timer against two values
+    // this class could see; in the machine an acknowledged or finished opening clears the phase,
+    // so the alarm finds nothing left to pay.
 
 
     /// Does receiving this control op release the confirm gate (RESPONDER acknowledged)?

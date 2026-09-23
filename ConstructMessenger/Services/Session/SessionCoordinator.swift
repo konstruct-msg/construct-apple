@@ -54,15 +54,6 @@ final class SessionCoordinator: MessageRouterDelegate {
     private var initiatorReinitInFlight: Set<String> = []
 
 
-    /// Fallback tasks started when we are the natural RESPONDER (lower deviceId) and receive
-    /// END_SESSION from the INITIATOR. If the INITIATOR does not send a new session init within
-    /// the timeout, we override the natural ordering and proactively initialize ourselves.
-    /// This prevents a permanent session deadlock when the INITIATOR is itself broken/offline.
-    private var responderFallbackTasks: [String: Task<Void, Never>] = [:]
-    /// 60 s gives ICE/network time to stabilise + fetchMissedMessages time to deliver the
-    /// INITIATOR's X3DH message before we override ordering and create a competing session.
-    private let responderFallbackTimeout: TimeInterval = 60.0
-
     /// Called when END_SESSION arrives from a userId that has no Core Data record yet
     /// (brand-new contact). ChatsViewModel subscribes to this callback and adds an ephemeral
     /// stream subscription so the INITIATOR's X3DH message can arrive via live stream.
@@ -806,13 +797,20 @@ final class SessionCoordinator: MessageRouterDelegate {
                 ) else {
                     return
                 }
-                do {
-                    try await Task.sleep(nanoseconds: 300_000_000)
-                } catch {
-                    return
+                // The teardown is out and the rebuild is the peer's to make. Ask for it rather
+                // than schedule it: the machine ranks the pair, hands back a deferral, and its
+                // own alarm takes the role if their rebuild never comes.
+                //
+                // A 300 ms sleep stood here so the END_SESSION would land before the 60 s
+                // `Task.sleep` was armed. Neither is needed: the wait is measured from the
+                // teardown the machine recorded, not from the moment we get around to asking.
+                Log.info("DR diverge: asking for the rebuild of \(peer)", category: "SessionInit")
+                if let actions = try? CryptoManager.shared.handleOrchestratorEvent(
+                    .reopenRequested(contactId: divergedDevice),
+                    tag: "dr_diverge"
+                ) {
+                    SessionActionExecutor.shared.execute(actions)
                 }
-                Log.info("DR diverge: starting RESPONDER fallback for \(peer)", category: "SessionInit")
-                self.startResponderFallback(for: peer.account)
                 return
             }
 
@@ -932,30 +930,29 @@ final class SessionCoordinator: MessageRouterDelegate {
                 tag: "peer_tore_down"
             )
         }
-        // Our own half of every tie-break below. Empty means the Keychain is unreadable, in
-        // which case no session decision can be made at all.
+        // No local identity means the Keychain is unreadable, and then nothing below can be
+        // decided — here or in the core, which ranks the pair against this same id.
         guard !SessionAddressing.localIdentity().isEmpty else { return }
-
-        // `nil` — the peer cannot be named — falls to `.waitAsResponder`: wait for the peer's
-        // init rather than raise one whose role we guessed.
-        switch SessionReducer.endSessionReceiptAction(
-            isNaturalInitiator: SessionAddressing.isNaturalInitiator(againstPeer: userId) ?? false
-        ) {
-        case .waitAsResponder:
-            Log.info("END_SESSION from natural INITIATOR \(userId.prefix(8))… — waiting as RESPONDER", category: "SessionInit")
-            startResponderFallback(for: userId)
-            onEphemeralSubscriptionNeeded?(userId)
-            return
-        case .requestReopen:
-            resendUnconfirmedOutgoingMessagesIfNeeded(to: userId)
-        }
-        // Ask; do not schedule. This was a 1.5 s `Task.sleep` and an `endSessionReinitTasks` map
-        // — a debounce waiting for the rest of the flush, and a coalescer so N teardowns in that
-        // flush produced one re-init instead of N that each destroyed the previous one's session.
-        // Both are the machine's phase now, and the answer arrives as `.openSession` either
-        // immediately or off the core's own alarm. The "has a session appeared meanwhile" guard
-        // went with them: the core holds the ratchet, so it is the one that can see it.
         guard let device else { return }
+
+        // The peer's X3DH is what we are waiting for either way — as the RESPONDER it is the
+        // only thing that will arrive, as the INITIATOR it is what answers ours — and a contact
+        // with no Core Data record yet has no stream subscription to receive it on. This used to
+        // hang off the RESPONDER arm of a role switch here; it is not a role-shaped need.
+        onEphemeralSubscriptionNeeded?(userId)
+
+        // Ask; do not schedule, and do not rank. Two client timers stood here. The first was a
+        // 1.5 s `Task.sleep` with an `endSessionReinitTasks` map beside it — a debounce waiting
+        // out the rest of the flush, and a coalescer so N teardowns in that flush produced one
+        // re-init instead of N that each destroyed the previous one's session. The second was
+        // the role branch: `endSessionReceiptAction` over `isNaturalInitiator`, whose RESPONDER
+        // arm armed a 60 s `[String: Task]` keyed by account — so one device's teardown armed
+        // the wait for the whole person.
+        //
+        // Both are one phase per device now, and both answers arrive as `.openSession`: at once,
+        // after the flush, or when the peer's turn runs out. The "has a session appeared
+        // meanwhile" guard went with them — the core holds the ratchet, so it is the one that
+        // can see it — and so did the resend, which belongs where the rebuild actually starts.
         if let actions = try? CryptoManager.shared.handleOrchestratorEvent(
             .reopenRequested(contactId: device),
             tag: "reopen_requested"
@@ -995,6 +992,12 @@ final class SessionCoordinator: MessageRouterDelegate {
         }
         initiatorReinitInFlight.insert(userId)
         Log.info("SESSION_STATE[initiator_announce]: re-init + SESSION_RESET_INIT for \(userId.prefix(8))… (\(reason))", category: "SessionInit")
+        // The messages that rode the ratchet this replaces. Called here rather than at the
+        // inbound-teardown delegate, which is where the role switch used to put it: a rebuild
+        // held behind the flush quiet reaches this method off the machine's alarm and never
+        // returns to that delegate, so the resend went missing exactly when the hold applied.
+        // It carries its own cooldown and finds nothing to do on a first contact.
+        resendUnconfirmedOutgoingMessagesIfNeeded(to: userId)
         // Mark pending synchronously at announce time, before any await:
         //  1. It gates `sendSessionInitPing`. With proactive-init coalescing the SRI and the ping
         //     share one session, so only one can be msgNum=0 — the SRI must win, it is the X3DH
@@ -1707,8 +1710,6 @@ final class SessionCoordinator: MessageRouterDelegate {
     /// Re-sends any outgoing messages that were marked `.queued` by `requeueUndeliveredOutgoing`
     /// after receiving END_SESSION (i.e. messages encrypted under the now-replaced session).
     private func sendSessionQueuedMessages(for userId: String) {
-        // Session is now established — cancel any pending RESPONDER fallback.
-        cancelResponderFallback(for: userId)
         guard let context = viewContext,
               let myId = AuthSessionManager.shared.currentUserId, !myId.isEmpty else { return }
         let chatFetch = Chat.fetchRequest()
@@ -1994,56 +1995,6 @@ final class SessionCoordinator: MessageRouterDelegate {
         )
     }
 
-    // MARK: - Responder fallback
-
-    /// Starts a fallback task: if the natural INITIATOR hasn't sent a new session init within
-    /// `responderFallbackTimeout` seconds, we override the ordering and init ourselves.
-    private func startResponderFallback(for userId: String) {
-        assertMainThread()
-        responderFallbackTasks[userId]?.cancel()
-        responderFallbackTasks[userId] = Task { [weak self] in
-            guard let self else { return }
-            do {
-                try await Task.sleep(nanoseconds: UInt64(self.responderFallbackTimeout * 1_000_000_000))
-            } catch {
-                return
-            }
-            guard !Task.isCancelled else { return }
-            await MainActor.run {
-                // Override gate — the mirror of the watchdog, via the reducer authority.
-                let scope = SessionScope.forAccount(userId)
-                guard SessionReducer.shouldResponderOverride(
-                    hasSession: CryptoManager.shared.hasSessionWithAnyDevice(ofPeer: userId),
-                    isInitializing: self.isInitializing(scope)
-                ) else {
-                    Log.debug("RESPONDER fallback: session already established / initializing for \(userId.prefix(8))… — skipping", category: "SessionInit")
-                    return
-                }
-                Log.info("RESPONDER fallback: no init from \(userId.prefix(8))… after \(Int(self.responderFallbackTimeout))s — taking INITIATOR role", category: "SessionInit")
-                let endInit = self.beginInit(scope)
-                Task { [weak self] in
-                    guard let self else { return }
-                    defer { Task { @MainActor in endInit() } }
-                    await self.sessionInitService.initializeSessionProactively(
-                        userId: userId,
-                        // The fallback exists because the peer's init never arrived; taking the
-                        // initiator role is the only way the conversation moves.
-                        hasOutboundWork: true,
-                        onSuccess: { Log.info("RESPONDER fallback \(userId.prefix(8))…", category: "SessionInit") },
-                        onFailure: { err in Log.error("RESPONDER fallback \(userId.prefix(8))…: \(err.localizedDescription)", category: "SessionInit") }
-                    )
-                }
-            }
-        }
-    }
-
-    /// Cancels any pending RESPONDER fallback task for `userId`.
-    private func cancelResponderFallback(for userId: String) {
-        assertMainThread()
-        responderFallbackTasks[userId]?.cancel()
-        responderFallbackTasks.removeValue(forKey: userId)
-    }
-
     // MARK: - Message persistence (session-init path only)
 
     private func saveMessage(for chat: Chat, with messageData: ChatMessage, decryptedBytes: Data) {
@@ -2102,9 +2053,10 @@ final class SessionCoordinator: MessageRouterDelegate {
             return
         }
 
-        // Session-handshake ops additionally drive this coordinator's own watchdogs and queues,
-        // so they are re-read here after the router has had its turn. Frame first, envelope second,
-        // for the reason above.
+        // Session-handshake ops additionally drive this coordinator's own queues, so they are
+        // re-read here after the router has had its turn. Frame first, envelope second, for the
+        // reason above. The watchdogs they used to cancel are the machine's phase; what cancels
+        // them is the `releaseConfirmGate` beside each case.
         let frameOp = ChunkedMessageCodec.controlFrame(decryptedBytes)
             .flatMap { SessionControlCodec.op(forContentType: Int($0.contentType)) }
         if let op = frameOp ?? SessionControlCodec.op(forContentType: Int(messageData.contentType)) {
@@ -2112,7 +2064,6 @@ final class SessionCoordinator: MessageRouterDelegate {
             switch op {
             case .resetInit:
                 Log.info("SESSION_RESET_INIT payload discarded (not user-visible, content_type=24)", category: "SessionCoordinator")
-                cancelResponderFallback(for: peerId)
                 // Their own X3DH carrier. It cannot acknowledge ours — they may never have seen
                 // it — but it makes ours moot: their init replaces the ratchet either way, so a
                 // window still waiting on an answer to ours is waiting for one that cannot come.
@@ -2122,7 +2073,6 @@ final class SessionCoordinator: MessageRouterDelegate {
                 return
             case .ping:
                 Log.info("SESSION_STATE[ping_received]: session established as RESPONDER (ping discarded, content_type=25)", category: "SessionCoordinator")
-                cancelResponderFallback(for: peerId)
                 // A RESPONDER session now exists. If we were also waiting on our own
                 // INITIATOR session_ready, that confirmation will never arrive (the peer is the
                 // INITIATOR here) — release the stale pending flag and flush both buffers
@@ -2131,7 +2081,6 @@ final class SessionCoordinator: MessageRouterDelegate {
                 return
             case .ready:
                 Log.info("SESSION_STATE[session_ready_received]: RESPONDER \(peerId.prefix(8))… confirmed (content_type=26)", category: "SessionCoordinator")
-                cancelResponderFallback(for: peerId)
                 markActive(.forAccount(peerId))
                 releaseConfirmGate(PeerAddress(account: peerId, device: messageData.senderDeviceId))
                 return
@@ -2145,7 +2094,6 @@ final class SessionCoordinator: MessageRouterDelegate {
         // iOS format: "__session_reset_init_<UUID>__"; other clients may omit the markers.
         if plaintext.hasPrefix("__session_reset_init") || plaintext.hasPrefix("session_reset_init_") {
             Log.info("SESSION_RESET_INIT payload discarded (not user-visible)", category: "SessionCoordinator")
-            cancelResponderFallback(for: messageData.from)
             // See the typed case above: their carrier makes ours moot.
             releaseConfirmGate(PeerAddress(account: messageData.from, device: messageData.senderDeviceId))
             return
@@ -2156,7 +2104,6 @@ final class SessionCoordinator: MessageRouterDelegate {
         // Format: "__session_ping_<UUID>__" (legacy: "__session_ping__").
         if plaintext.hasPrefix("__session_ping") && plaintext.hasSuffix("__") {
             Log.info("SESSION_STATE[ping_received]: session established as RESPONDER (ping discarded)", category: "SessionCoordinator")
-            cancelResponderFallback(for: messageData.from)
             // See the typed-ping case above: a RESPONDER session exists, so release any stale
             // INITIATOR-pending buffer instead of waiting for a session_ready that won't arrive.
             releaseConfirmGate(PeerAddress(account: messageData.from, device: messageData.senderDeviceId))
@@ -2169,7 +2116,6 @@ final class SessionCoordinator: MessageRouterDelegate {
         if plaintext.hasPrefix("__session_ready") || plaintext.hasPrefix("session_ready_") {
             let peerId = messageData.from
             Log.info("SESSION_STATE[session_ready_received]: RESPONDER \(peerId.prefix(8))… confirmed — session established both sides", category: "SessionCoordinator")
-            cancelResponderFallback(for: peerId)
             markActive(.forAccount(peerId))
             // The same release as the typed twin above. This site used to drop the gate and flush
             // only the outgoing side, leaving held incoming carriers behind — the two flushes are

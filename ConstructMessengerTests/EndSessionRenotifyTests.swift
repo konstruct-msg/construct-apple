@@ -65,6 +65,12 @@ final class EndSessionWindowIsNotInTheCoordinatorTests: XCTestCase {
             // are `REOPEN_QUIET_MS` on one phase per device. A map here again means N re-inits
             // per flush, each destroying the session the previous one built.
             "endSessionReinitTasks", "endSessionReinitDebounceNanos",
+            // The last of the five, gone 2026-09-23. The natural RESPONDER's 60 s wait for a
+            // rebuild that is the peer's to make — keyed by **account**, so one device's teardown
+            // armed the wait for the whole person and the first sibling to answer stood it down
+            // for a ratchet still dead. It is `RESPONDER_OVERRIDE_MS`, and which side waits is
+            // `tie_break_role`, asked in `handle_reopen_requested`.
+            "responderFallbackTasks", "responderFallbackTimeout",
         ] {
             // The word may still appear in prose explaining where the window went; a declaration
             // may not.
@@ -119,6 +125,30 @@ final class EndSessionWindowIsNotInTheCoordinatorTests: XCTestCase {
         XCTAssertFalse(
             body.contains("await Task.sleep("),
             "a delay in this delegate is a second answer to a question the machine already answers"
+        )
+    }
+
+    /// And the reopen is asked for unranked: who rebuilds is the machine's to say.
+    ///
+    /// The branch this replaces read `isNaturalInitiator` — which asked the core's
+    /// `tie_break_role`, so the ranking was never duplicated. What was duplicated is the
+    /// consequence: the RESPONDER arm armed a 60 s task keyed by account, and its stand-down
+    /// condition was a third reading of the phase the core already kept.
+    ///
+    /// Mutation: re-add a `SessionAddressing.isNaturalInitiator` branch around the ask — this
+    /// reddens.
+    func testTheReopenIsAskedForWithoutRankingThePairHere() {
+        let source = coordinatorSource
+        guard let handler = source.range(of: "receivedEndSession peer: PeerAddress") else {
+            return XCTFail("the inbound END_SESSION delegate is gone — if it moved, this moves with it")
+        }
+        let body = source[handler.lowerBound...].prefix(3_000)
+        // The call, not the word: the comment above the ask names the branch it replaced, and
+        // this is the third test in this file to learn it.
+        XCTAssertFalse(
+            body.contains("SessionAddressing.isNaturalInitiator("),
+            "the pair is ranked in handle_reopen_requested; a second ranking here is the branch "
+            + "that carried the 60 s responder fallback"
         )
     }
 
