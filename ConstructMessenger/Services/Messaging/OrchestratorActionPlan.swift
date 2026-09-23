@@ -79,6 +79,8 @@ struct OrchestratorActionPlan {
                 return .endSessionSuppressed(contactId: contactId, retryAfterMs: retryAfterMs)
             case .healSuppressed(let contactId, let retryAfterMs):
                 return .healSuppressed(contactId: contactId, retryAfterMs: retryAfterMs)
+            case .heldPendingAck(let contactId):
+                return .heldPendingAck(contactId: contactId)
             case .messageQueuedPendingInit(let contactId, let queuedCount):
                 return .messageQueuedPendingInit(contactId: contactId, queuedCount: queuedCount)
             default:
@@ -103,6 +105,9 @@ enum IncomingRoutingVerdict: Equatable {
     case fetchPublicKeyBundle(userId: String)
     case endSessionSuppressed(contactId: String, retryAfterMs: UInt64)
     case healSuppressed(contactId: String, retryAfterMs: UInt64)
+    /// Neither heal nor tear down: our own SESSION_RESET_INIT to this **device** has not been
+    /// acknowledged, so the failure is our re-init's own consequence. Buffer and replay.
+    case heldPendingAck(contactId: String)
     case messageQueuedPendingInit(contactId: String, queuedCount: UInt32)
     case none
 }

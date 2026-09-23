@@ -147,6 +147,16 @@ final class SessionActionExecutor {
             // Requires MessageRouter delegate callbacks
             break  // scaffold
 
+        case .heldPendingAck(let contactId):
+            // A verdict `MessageRouter` acts on, because acting on it needs the message: it goes
+            // into the per-peer buffer and is replayed when the wait ends. Nothing to do here
+            // but say so — the switch is exhaustive so that a new verdict cannot arrive with no
+            // reader anywhere, which is the failure this arm exists to make impossible.
+            Log.info(
+                "Held behind our unacked SESSION_RESET_INIT to \(contactId.prefix(8))… — buffered, not torn down",
+                category: "SessionActionExecutor"
+            )
+
         case .healSuppressed(let contactId, let retryAfterMs):
             // Verdict, not a chore: MessageRouter holds the cursor and this executor runs
             // `scheduleTimer` from the same list. The log is informational so a future

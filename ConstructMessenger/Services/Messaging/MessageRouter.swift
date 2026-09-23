@@ -799,9 +799,10 @@ final class MessageRouter {
         // buffer of the gate waiting for them, and the watchdog's next re-init superseded them.
         //
         // Nothing replaces it here. The message goes to the ratchet, which answers the question
-        // exactly — a message it can read is not a peer init — and both refusals it can give
-        // (`sendEndSession`, `sessionHealNeeded`) ask the gate below, where the answer is evidence
-        // rather than a guess. See `SessionReducer.confirmGateAction`.
+        // exactly — a message it can read is not a peer init — and both refusals it can give are
+        // put to the gate by the core, which holds it: a held message comes back as
+        // `.heldPendingAck` instead of `.sendEndSession` / `.sessionHealNeeded`. The content type
+        // the pre-decryption test could not reach travels with the decision, as `is_handshake`.
 
         // Rust orchestrator is the SINGLE decrypt path — no Swift fallback.
         // Изъян 4: If orchestratorCore is nil (e.g. Keychain locked after reboot),
@@ -990,28 +991,30 @@ final class MessageRouter {
             // case must be handled here before the loop falls through to "no routing decision".
             _ = executeRustActions(actions, for: message, chat: chat, otherUserId: otherUserId, in: context)
             return
+        case .heldPendingAck(let heldAgainstDevice):
+            // Our own SESSION_RESET_INIT to `heldAgainstDevice` is unanswered, so this failure
+            // is our re-init's own consequence and not evidence about the peer. Acting on it
+            // answers our own reset with another reset and takes the message with it — on
+            // 2026-08-04 a user's first message after a re-init died exactly that way, held at
+            // `sent` on one side and never rendered on the other.
+            //
+            // The decision is per device and the buffer is per account, and that is not a
+            // disagreement: what replays it is `releaseConfirmGate`, which flushes a peer. The
+            // decision no longer folds, which is the half that was wrong.
+            Log.info("SESSION_STATE[held_pending_ack]: msgNum=\(message.messageNumber) from \(otherUserId.prefix(8))… held behind our unacked SESSION_RESET_INIT to \(heldAgainstDevice.prefix(8))…", category: "SessionInit")
+            streamOutcome = holdUntilConfirmResolves(message, from: otherUserId, reason: "pending_confirm")
+            if isNewChat { context.delete(chat) }
+            return
         case .sessionHealNeeded(let divergedDevice, let role):
             // Named by device by the core; healing, the confirmation tracker and everything else
             // below are keyed by account, which is what this function was called with. Both
             // halves travel from here on, so the tie-break and the session suite id — which are
             // device-keyed and were being asked in the account space — can be asked correctly.
             let peer = PeerAddress(account: otherUserId, device: divergedDevice)
-            let contactId = otherUserId
-            // Same window, same reasoning as `.sendEndSession` below, and until 2026-08-21 this
-            // branch did not ask: healing as RESPONDER runs `archiveSession(.manualReset)`, so
-            // while our own SESSION_RESET_INIT is unacked it destroys the session we created two
-            // seconds ago in answer to a message that is unreadable *because* we created it. The
-            // pre-decryption hold used to keep most of these away from the ratchet; it is gone
-            // (see above), so the guard it implied has to be stated where the damage is done.
-            if case .hold = SessionReducer.confirmGateAction(
-                isPending: CryptoManager.shared.awaitsAcknowledgementFromAnyDevice(ofPeer: contactId),
-                isControlCarrier: message.isEndSession || message.isSessionResetInit
-            ) {
-                Log.info("SESSION_STATE[heal_deferred]: \(contactId.prefix(8))… wants heal while our SESSION_RESET_INIT is unacked — holding, not archiving", category: "SessionInit")
-                streamOutcome = holdUntilConfirmResolves(message, from: contactId, reason: "heal_pending_confirm")
-                if isNewChat { context.delete(chat) }
-                return
-            }
+            // The hold that stood here until 2026-09-23 is `.heldPendingAck` below. It asked
+            // `SessionReducer.confirmGateAction` against a gate the core keeps and folded the
+            // question over the peer's whole device set, so an announcement unanswered by one
+            // device held a genuine heal for its sibling.
             handleRustHealDecision(role: role, peer: peer, message: message, in: context)
             if isNewChat { context.delete(chat) }
             // Queued for heal — hold the cursor until heal drains (success) or clears (give-up).
@@ -1029,24 +1032,7 @@ final class MessageRouter {
             // and the delegate call at the end took the device id all the way to a bundle fetch
             // that asks the server for an account. See `PeerAddress`.
             let peer = PeerAddress(account: otherUserId, device: divergedDevice)
-            // While our own SESSION_RESET_INIT is still unacked we are the side that replaced
-            // the session; the peer is necessarily behind. A decrypt failure here is the
-            // expected consequence of our own re-init, not evidence that the ratchet diverged,
-            // and tearing down answers our own reset with another reset — taking the message
-            // with it. 2026-08-04: a user's first message after a re-init died on exactly this
-            // line, one second after its own msgNum=0 was discarded by the gate above; A held
-            // it at `sent` forever and B never rendered it. Hold instead; the confirm (peer ack
-            // or watchdog give-up) resolves it, and a genuine divergence still tears down then,
-            // one confirm window later.
-            if case .hold = SessionReducer.confirmGateAction(
-                isPending: CryptoManager.shared.awaitsAcknowledgementFromAnyDevice(ofPeer: peer.account),
-                isControlCarrier: message.isEndSession || message.isSessionResetInit
-            ) {
-                Log.info("SESSION_STATE[end_session_deferred]: decrypt failed for \(peer) while our SESSION_RESET_INIT is unacked — holding, not tearing down", category: "SessionInit")
-                streamOutcome = holdUntilConfirmResolves(message, from: peer.account, reason: "dr_fail_pending_confirm")
-                if isNewChat { context.delete(chat) }
-                return
-            }
+            // The same hold, from the same place: `.heldPendingAck` below.
             Log.info("SESSION_STATE[rust_end_session]: DR diverged for \(peer) — sending END_SESSION", category: "SessionInit")
             PerformanceMetrics.shared.record(.undeliveredNoReceipt, label: "rust_end_session")
             // Give-up: resolve each discarded message's watermark as it goes. Bare `remove`

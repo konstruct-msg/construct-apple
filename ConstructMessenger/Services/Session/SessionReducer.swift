@@ -450,48 +450,24 @@ enum SessionReducer {
     // `decisions/session-is-one-state-machine.md`.
 
 
-    /// What the tie-break confirm gate does with an *incoming* message.
-    enum ConfirmGateAction: Equatable {
-        /// Route normally.
-        case route
-        /// Buffer until the gate resolves, then replay (`MessageRouter.replayHeldMessages`).
-        case hold
-    }
-
-    /// The gate's disposition for one incoming message the core has already failed to read —
-    /// the single authority for both points at which that question is asked (`sendEndSession`
-    /// and `sessionHealNeeded`).
-    ///
-    /// Both must **hold**, never discard. Inside our own confirm window we are the side that
-    /// replaced the session, so a message that cannot be read is a consequence of our own re-init,
-    /// not evidence about the peer. Answering it with a discard cost a user message on 2026-08-04:
-    /// the peer's live init was marked processed (so the server never redelivered it) and the
-    /// message that followed it one second later tore the session down and went with it.
-    ///
-    /// Control carriers are exempt. END_SESSION and SESSION_RESET_INIT are what drives the
-    /// convergence the gate is waiting for — holding them would make the gate wait on itself.
-    ///
-    /// **The gate is asked only after decryption, and that is the whole rule.** It used to be
-    /// asked before it too, on `messageNumber == 0`, and that question has no answer at the
-    /// envelope: a DH sending chain restarts at 0 on every ratchet turn, so the predicate reads
-    /// every peer's first message under a fresh chain as a handshake. `session_ready` (ct 26) is
-    /// exactly such a message — it is the RESPONDER's first send under the session *we* created,
-    /// and since 2026-08-03 its type rides inside the ciphertext, so nothing before decryption can
-    /// tell it apart. The gate therefore held its own key: device log 2026-08-21 has 16 of the
-    /// peer's 19 `session_ready` sitting in the buffer of the gate waiting for them, 27 held
-    /// messages of which **none** was ever saved, and 19 dropped as superseded once the watchdog's
-    /// re-init moved the epoch out from under them.
-    ///
-    /// Decryption is the exact test the guess was approximating: a message readable by the session
-    /// we hold is by definition not a peer init we must keep away from the ratchet. So it is fed
-    /// to the ratchet, and only the ratchet's refusal reaches this function.
-    static func confirmGateAction(
-        isPending: Bool,
-        isControlCarrier: Bool
-    ) -> ConfirmGateAction {
-        guard isPending, !isControlCarrier else { return .route }
-        return .hold
-    }
+    // `ConfirmGateAction` / `confirmGateAction` lived here until 2026-09-23, and by then the
+    // gate it read was already the core's phase, reached through
+    // `awaitsAcknowledgementFromAnyDevice`. So the question travelled to the platform and the
+    // answer travelled back for a fact that never left: the core now emits
+    // `Action::HeldPendingAck` in place of the heal or the teardown, and `MessageRouter` buffers.
+    //
+    // Two things the move fixed rather than carried. The question is asked of **one device**,
+    // where this fold made an announcement unanswered by one device hold a genuine teardown for
+    // its sibling. And the carrier exemption travels as `is_handshake` on the routing decision,
+    // read from the post-unseal content type — `messageNumber == 0` never could say it, because
+    // a DH sending chain restarts at 0 on every ratchet turn, which is how the pre-decryption
+    // version of this gate came to hold 16 of the peer's 19 acknowledgements on 2026-08-21.
+    //
+    // What did not move is the reason: inside our own confirm window we are the side that
+    // replaced the session, so a message that cannot be read is a consequence of our own
+    // re-init, not evidence about the peer. Answering it with a teardown cost a user message on
+    // 2026-08-04, and answering it with a heal is worse — `archiveSession(.manualReset)`
+    // destroys the session created two seconds earlier in answer to it.
 
     /// Whether a handshake-control retry may still speak for the session it was created to
     /// announce. Sibling of `shouldTearDownAfterEndSession`, and the same defect: a decision made

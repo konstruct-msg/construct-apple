@@ -38,49 +38,51 @@ import XCTest
 
 final class ConfirmGateHoldTests: XCTestCase {
 
-    // MARK: - The regression: nothing behind the gate may be discarded
+    // MARK: - The gate is not decided here any more
 
-    /// The loss. The core says `sendEndSession`; inside our own confirm window that is the expected
-    /// consequence of the session *we* replaced, not evidence the ratchet diverged. Tearing down
-    /// here answers our own reset with another reset.
+    // Three tests stood here until 2026-09-23, over `SessionReducer.confirmGateAction`: hold a
+    // decrypt failure inside our own confirm window, never hold a control carrier, route
+    // everything with the gate down. All three are `construct-core` now —
+    // `a_teardown_is_held_while_our_own_announcement_is_unanswered`,
+    // `a_heal_is_held_while_our_own_announcement_is_unanswered`,
+    // `a_handshake_carrier_is_not_held_behind_the_wait_it_ends`,
+    // `the_hold_ends_when_the_peer_acknowledges` — plus one this file could not have written,
+    // `the_hold_is_asked_of_one_device_not_of_its_sibling`, because the predicate here took a
+    // fold over the peer's device set as its input and so could not see the device at all.
+    //
+    // What is still asked here is everything the core cannot see: the classifier that tells an
+    // acknowledgement from a handshake, and the buffer the hold writes into.
+
+    /// The router must not grow a second gate. The one that stood here was asked at two call
+    /// sites against a phase the core already kept, and the answer arrived as `.heldPendingAck`
+    /// long before anyone noticed the question had an owner.
     ///
-    /// Mutation: return `.route` once `isPending`.
-    func testDecryptFailureInsideTheWindowIsHeldNotTornDown() {
-        XCTAssertEqual(
-            SessionReducer.confirmGateAction(isPending: true, isControlCarrier: false),
-            .hold,
-            "this is the line the lost «Привет» died on — msgNum=1 of a handshake whose msgNum=0 "
-            + "had just been discarded"
-        )
-    }
-
-    // MARK: - The gate must not swallow the traffic that resolves it
-
-    /// END_SESSION / SESSION_RESET_INIT drive the convergence the gate is waiting for. Holding
-    /// them would make the gate wait on itself for the full 75 s window.
-    ///
-    /// Mutation: drop `!isControlCarrier` from the guard.
-    func testControlCarriersAreNeverHeld() {
-        XCTAssertEqual(
-            SessionReducer.confirmGateAction(isPending: true, isControlCarrier: true),
-            .route
-        )
-    }
-
-    // MARK: - The gate must stay narrow
-
-    /// Gate down: everything routes. The hold is a consequence of *our* pending re-init and must
-    /// not become a blanket buffer on the receive path.
-    ///
-    /// Mutation: drop `isPending` from the guard.
-    func testGateDownRoutesEverything() {
-        for carrier in [true, false] {
-            XCTAssertEqual(
-                SessionReducer.confirmGateAction(isPending: false, isControlCarrier: carrier),
-                .route,
-                "isControlCarrier=\(carrier) must route with no gate"
-            )
+    /// Mutation: re-add a `confirmGateAction`-shaped branch around `.sendEndSession` — this
+    /// reddens.
+    func testTheRouterDecidesNoHoldOfItsOwn() {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("ConstructMessenger/Services/Messaging/MessageRouter.swift")
+        guard let source = try? String(contentsOf: url, encoding: .utf8) else {
+            return XCTFail("MessageRouter.swift must be readable from the test bundle")
         }
+        // The call, not the word: the comments above both former call sites name what left.
+        XCTAssertFalse(
+            source.contains("SessionReducer.confirmGateAction("),
+            "the hold is the core's decision and arrives as .heldPendingAck"
+        )
+        XCTAssertTrue(
+            source.contains("case .heldPendingAck"),
+            "a decision with no reader is a message the core buffered and the platform dropped"
+        )
+        // The one fold left is the *replay*, which is account-shaped because the buffer is: a
+        // drain while any device's gate is still up would re-hold every message and read like a
+        // flush. One use, and it is in `replayHeldMessages`.
+        XCTAssertEqual(
+            source.components(separatedBy: "awaitsAcknowledgementFromAnyDevice").count - 1, 1,
+            "the fold belongs to the replay; the decision is per device and lives in the core"
+        )
     }
 
     // MARK: - 2026-08-21: the gate held its own key
