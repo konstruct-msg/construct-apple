@@ -80,6 +80,19 @@ struct CropOrientation: Equatable, Sendable {
 
 enum CropGeometry {
 
+    /// The scale that belongs to the completed pinch, including the covering floor.
+    ///
+    /// Keep this decision independent of SwiftUI gesture state. The state published by
+    /// `onChanged` can still be one render behind when `onEnded` runs; the gesture's final value
+    /// is the authority for what the user actually did.
+    static func scaleAfterMagnification(
+        _ committed: CGFloat,
+        gestureValue: CGFloat,
+        minimum: CGFloat
+    ) -> CGFloat {
+        max(minimum, committed * gestureValue)
+    }
+
     /// The crop window inside `container`, as large as the aspect allows.
     ///
     /// For `free` the window takes the image's own aspect, so the default crop is the whole

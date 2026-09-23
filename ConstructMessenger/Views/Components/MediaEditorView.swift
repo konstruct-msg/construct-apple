@@ -59,10 +59,15 @@ struct MediaEditorView: View {
                 controls
             }
             .frame(width: geo.size.width, height: geo.size.height)
-            .onAppear { container = stageSize(in: geo.size) }
+            .onAppear {
+                let measured = stageSize(in: geo.size)
+                container = measured
+                reset(for: measured)
+            }
             .onChange(of: geo.size) { _, new in
-                container = stageSize(in: new)
-                reset()
+                let measured = stageSize(in: new)
+                container = measured
+                reset(for: measured)
             }
             .onChange(of: aspect) { _, _ in reset() }
             .onChange(of: orientation) { _, new in
@@ -88,7 +93,14 @@ struct MediaEditorView: View {
 
             Spacer()
 
-            Button { onConfirm(rendered()) } label: {
+            Button {
+                let result = rendered()
+                Log.debug(
+                    "Media editor confirmed: scale=\(scale), output=\(Int(result.size.width))x\(Int(result.size.height))",
+                    category: "MediaEditor"
+                )
+                onConfirm(result)
+            } label: {
                 Text(NSLocalizedString("done", comment: ""))
                     .font(CTFont.medium(13))
                     .tracking(2)
@@ -115,14 +127,24 @@ struct MediaEditorView: View {
                 .gesture(SimultaneousGesture(
                     MagnificationGesture()
                         .onChanged { value in
-                            scale = max(minScale, committedScale * value)
+                            scale = CropGeometry.scaleAfterMagnification(
+                                committedScale, gestureValue: value, minimum: minScale
+                            )
                         }
-                        .onEnded { _ in
-                            committedScale = scale
+                        .onEnded { value in
+                            let finalScale = CropGeometry.scaleAfterMagnification(
+                                committedScale, gestureValue: value, minimum: minScale
+                            )
+                            scale = finalScale
+                            committedScale = finalScale
                             committedOffset = CropGeometry.clampedOffset(
-                                offset, displayedImageSize: displayed, scale: scale, window: window
+                                offset, displayedImageSize: displayed, scale: finalScale, window: window
                             )
                             offset = committedOffset
+                            Log.debug(
+                                "Media editor pinch committed: scale=\(finalScale)",
+                                category: "MediaEditor"
+                            )
                         },
                     DragGesture()
                         .onChanged { value in
@@ -131,9 +153,13 @@ struct MediaEditorView: View {
                                 height: committedOffset.height + value.translation.height
                             )
                         }
-                        .onEnded { _ in
+                        .onEnded { value in
+                            let finalOffset = CGSize(
+                                width: committedOffset.width + value.translation.width,
+                                height: committedOffset.height + value.translation.height
+                            )
                             committedOffset = CropGeometry.clampedOffset(
-                                offset, displayedImageSize: displayed, scale: scale, window: window
+                                finalOffset, displayedImageSize: displayed, scale: scale, window: window
                             )
                             offset = committedOffset
                         }
@@ -231,9 +257,20 @@ struct MediaEditorView: View {
 
     /// Back to the default framing. Touches only the gesture state — the geometry it used to
     /// carry is derived from `container`, so there is nothing here that can go stale.
-    private func reset() {
-        scale = 1
-        committedScale = 1
+    private func reset(for measuredContainer: CGSize? = nil) {
+        let measured = measuredContainer ?? container
+        let measuredWindow = CropGeometry.cropWindow(
+            container: measured,
+            aspect: aspect,
+            imageAspect: orientedAspect
+        )
+        let measuredDisplayed = displayedSize(window: measuredWindow)
+        let initialScale = CropGeometry.minimumScale(
+            displayedImageSize: measuredDisplayed,
+            window: measuredWindow
+        )
+        scale = initialScale
+        committedScale = initialScale
         offset = .zero
         committedOffset = .zero
     }
