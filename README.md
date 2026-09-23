@@ -2,7 +2,7 @@
 
 **Privacy-first, end-to-end encrypted messenger with crypto-agility and post-quantum hybrid cryptography.**
 
-[![Rust](https://img.shields.io/badge/Rust-1.92+-orange.svg)](https://www.rust-lang.org/)
+[![Rust](https://img.shields.io/badge/Rust-1.96+-orange.svg)](https://www.rust-lang.org/)
 [![Swift](https://img.shields.io/badge/Swift-5.9+-red.svg)](https://swift.org/)
 [![UniFFI](https://img.shields.io/badge/UniFFI-0.30-blue.svg)](https://mozilla.github.io/uniffi-rs/)
 [![iOS](https://img.shields.io/badge/iOS-18.5+-black.svg)](https://developer.apple.com/ios/)
@@ -51,7 +51,7 @@ security audit has been done yet — that is on the roadmap, not behind us.
                v
 +-------------------------------------------------------------+
 |   Konstruct server (Rust) behind Traefik                    |
-|   - key bundles, Redpanda Streams offline mailbox           |
+|   - key bundles, Redis-Streams mailbox, Redpanda send bus   |
 |   - NO access to plaintext                                  |
 +-------------------------------------------------------------+
 ```
@@ -81,14 +81,25 @@ Verified against `construct-core` source — names follow NIST FIPS, informal na
 | Component     | Algorithm                         | Status |
 |---------------|-----------------------------------|--------|
 | Key agreement | **X25519 ⊕ ML-KEM-768** (FIPS 203, Kyber-768) | Implemented — PQXDH mixes a Kyber OTPK into the root key |
-| Signatures    | **Ed25519 + ML-DSA-65** (FIPS 204, Dilithium-3) | Implemented in core (client + server, byte-identical), **not yet activated on the wire** — identity signatures are still Ed25519 |
+| Signatures    | **Ed25519 + ML-DSA-65** (FIPS 204, Dilithium-3) | **Live on the wire** for key bundles — the hybrid key, the signed prekey and the Kyber prekey each carry a hybrid signature, checked on every bundle fetch |
 | AEAD / KDF    | ChaCha20-Poly1305 / HKDF-SHA256   | unchanged |
 
 > **Note:** "Hybrid" means classical **and** PQ — both must verify / both must be broken.
 > The ML-DSA-65 signature path uses RustCrypto `ml-dsa` (seed-based) on **both** client and
 > server, so hybrid signatures cross-verify byte-for-byte; a cross-impl interop test pins this.
-> Earlier docs that said "Kyber-1024" or "Dilithium deployed" are wrong — see
-> `construct-docs` for the authoritative protocol spec.
+>
+> **What the hybrid signatures cover, and what is still classical.** A fetched bundle whose
+> hybrid chain is present but invalid is **rejected**, and a peer that once presented a valid
+> chain and later stops presenting one is treated as a downgrade rather than as a legacy client.
+> That pin is client-side on purpose: the server is an adversary in this threat model, so a
+> server-side "require hybrid" could not defend it. What is still classical is the **root** — the
+> hybrid key is bound to the device by an Ed25519 cross-signature over
+> `"KonstruktHybridId-v1" ‖ hybrid_key`, so breaking Ed25519 *today* still lets an attacker
+> substitute the hybrid key. Closing that is a key-transparency and registration change, not a
+> signature-suite change.
+>
+> Earlier docs that say "Kyber-1024" are wrong — the variant is ML-KEM-768. See `construct-docs`
+> for the authoritative protocol spec.
 
 ### Suite binding (anti key-substitution)
 
@@ -136,12 +147,12 @@ All three Rust crates must be cloned alongside this repo:
 The `*.xcframework` binaries are **not** tracked in git — build them after cloning:
 
 ```bash
-# 1. Build the crypto core (iOS device + simulator)
+# 1. Build the crypto core — iOS device + simulator + macOS
 cd ~/Code/construct-messenger
-./build_crypto_lib.sh --ios --sim        # or --all for + macOS
+./build_crypto_lib.sh --all
 
 # 2. Build the transport library
-./build_transport_lib.sh                 # wraps construct-transport/build_ios.sh
+./build_transport_lib.sh --all           # wraps construct-transport/build_ios.sh
 
 # 3. Regenerate UniFFI Swift bindings (after any core API change)
 cd ~/Code/construct-messenger
@@ -149,14 +160,20 @@ cd ~/Code/construct-messenger
 
 # 4. Build & run
 xcodebuild -scheme ConstructMessenger \
-  -destination 'platform=iOS Simulator,name=iPhone 17' build
+  -destination 'platform=iOS Simulator,name=iPhone 18 Pro' build
 # …or open ConstructMessenger.xcodeproj in Xcode and ⌘R
 ```
 
-> Do not pin `OS=` in a destination — simulator runtimes are replaced with every Xcode upgrade and
-> a pinned one stops resolving. Check `xcrun simctl list devices available`.
+> **`--all` on both, unless you are rebuilding one platform on purpose.** A narrowed build leaves
+> the other slices from an older core: `build_crypto_lib.sh` warns when it notices, and
+> `build_transport_lib.sh` silently omits `macos-arm64`, which `Construct Desktop/` then fails to
+> link against — an xcframework that looks perfectly well-formed.
+>
+> Nothing in a `-destination` survives an Xcode upgrade: runtimes are replaced, so never pin
+> `OS=`, and simulator **names** turn over with them (`iPhone 17` no longer exists). Read the
+> current one from `xcrun simctl list devices available` rather than from this file.
 
-**Requirements:** Rust 1.92+ · Xcode 16+ · iOS 18.5+ deployment target · UniFFI 0.30.
+**Requirements:** Rust 1.96+ · Xcode 16+ · iOS 18.5+ deployment target · UniFFI 0.30.
 
 ---
 
@@ -172,9 +189,12 @@ construct-messenger/
 │   │   └── CryptoManager.swift # UniFFI wrapper around construct-core
 │   ├── Networking/gRPC/        # gRPC channel + generated protobuf + VEIL
 │   ├── Utilities/              # CT design tokens (ConstructTheme.swift)
-│   ├── en.lproj / ru.lproj/    # localization (Japanese planned)
+│   ├── Fonts/                  # bundled JetBrains Mono (UIAppFonts lists bare file names)
+│   ├── {en,ru,ja,fr}.lproj/    # localization — all four held to key parity by CI
 │   └── construct_core.swift    # generated UniFFI bindings (do not edit)
-├── ConstructUI/                # standalone SwiftPM package — Xcode Previews sandbox
+├── ConstructMessengerTests/    # the Xcode suite (the ConstructMessenger scheme runs it)
+├── Construct Desktop/          # macOS client — same core + gRPC path, no public build
+├── fastlane/metadata/          # App Store listing copy, per locale — reviewed as a diff
 ├── scripts/                    # build/test/simulator tooling
 ├── tests/                      # Python network + DPI probes (not the Xcode suite)
 ├── docs/                       # reference for tooling in this repo
@@ -198,7 +218,8 @@ cd ~/Code/construct-core && cargo test --features post-quantum
 # iOS app (unit + crypto-wire integration)
 cd ~/Code/construct-messenger
 xcodebuild test -scheme ConstructMessenger \
-  -destination 'platform=iOS Simulator,name=iPhone 17'
+  -destination 'platform=iOS Simulator,name=iPhone 18 Pro' \
+  -parallel-testing-enabled NO
 
 # a single class, without simulator clones
 scripts/test_run.sh ConstructMessengerTests/FooTests
@@ -211,12 +232,13 @@ See [`docs/TESTING.md`](docs/TESTING.md) for the tooling and
 
 ## Status
 
-**App:** v0.18.1 (Alpha, TestFlight) · **Core:** construct-core v0.12.4
+**App:** v0.20.0 (686) — Alpha, TestFlight · **Core:** construct-core v0.17.3
 
 ### Working
 - [x] Rust crypto core — X3DH + Double Ratchet, crypto-agile suites
 - [x] PQXDH — ML-KEM-768 hybrid key agreement
-- [x] Hybrid Ed25519 + ML-DSA-65 signatures in core (client + server parity, cross-verified)
+- [x] Hybrid Ed25519 + ML-DSA-65 signatures — live on the wire for key bundles, with
+      client-side downgrade pinning; client and server share one RustCrypto implementation
 - [x] UniFFI iOS integration; binary (CFE) session persistence
 - [x] QUIC / HTTP-3 / gRPC transport engine (H2 fallback on iOS)
 - [x] VEIL obfuscation (obfs4 + WebTunnel pluggable transports, opt-in)
@@ -230,7 +252,9 @@ See [`docs/TESTING.md`](docs/TESTING.md) for the tooling and
       and that is not the same as working: the two-simulator stand has not yet carried a copy
       through to a second device's transcript, so nothing here has been confirmed on hardware.
       It stays out of the Working list until it has.
-- [ ] Activate hybrid ML-DSA-65 identity signatures on the wire (with smooth migration for existing accounts)
+- [ ] Take the last classical step out of the hybrid signature chain — the hybrid key is still
+      bound to a device by an Ed25519 cross-signature, and the downgrade pin is per-account rather
+      than per-device
 - [ ] Cluster (group) messaging
 - [ ] macOS Desktop — direct core + gRPC path builds; no public build
 - [ ] Android client
