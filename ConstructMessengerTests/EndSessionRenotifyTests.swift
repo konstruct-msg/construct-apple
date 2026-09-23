@@ -60,6 +60,11 @@ final class EndSessionWindowIsNotInTheCoordinatorTests: XCTestCase {
             // to this device — from the other side of it. `CfeIncomingEvent.peerToreDown` opens
             // the one window now.
             "lastInboundEndSessionAt", "postEndSessionInitFailGrace",
+            // The reopen half, gone 2026-09-23 with the third. The debounce waited 1.5 s for the
+            // rest of the peer's flush and the map coalesced that flush into one re-init; both
+            // are `REOPEN_QUIET_MS` on one phase per device. A map here again means N re-inits
+            // per flush, each destroying the session the previous one built.
+            "endSessionReinitTasks", "endSessionReinitDebounceNanos",
         ] {
             // The word may still appear in prose explaining where the window went; a declaration
             // may not.
@@ -88,6 +93,32 @@ final class EndSessionWindowIsNotInTheCoordinatorTests: XCTestCase {
         XCTAssertTrue(
             body.contains("peerToreDown"),
             "an inbound teardown must open the machine's window; a map here is the second one"
+        )
+    }
+
+    /// And the re-init the peer's teardown raises is asked for, not scheduled.
+    ///
+    /// The same delegate held the debounce. If the ask goes missing the natural INITIATOR simply
+    /// never rebuilds, and the peer's 60 s responder fallback covers it — so the failure is a
+    /// minute of silence, not an error, which is why it needs a test rather than a log line.
+    ///
+    /// Mutation: replace the `reopenRequested` call with a `Task.sleep` + re-init — this reddens.
+    func testTheReInitIsAskedForRatherThanScheduled() {
+        let source = coordinatorSource
+        guard let handler = source.range(of: "receivedEndSession peer: PeerAddress") else {
+            return XCTFail("the inbound END_SESSION delegate is gone — if it moved, this moves with it")
+        }
+        let body = source[handler.lowerBound...].prefix(3_000)
+        XCTAssertTrue(
+            body.contains("reopenRequested"),
+            "the machine decides when the ratchet reopens; a sleep here is the debounce back"
+        )
+        // A call, not the word: the comment above the ask names the sleep it replaced, and the
+        // neighbouring carrier test learned the same lesson — prose explaining where a thing went
+        // is not the thing.
+        XCTAssertFalse(
+            body.contains("await Task.sleep("),
+            "a delay in this delegate is a second answer to a question the machine already answers"
         )
     }
 

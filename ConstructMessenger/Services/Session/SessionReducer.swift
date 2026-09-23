@@ -409,27 +409,20 @@ enum SessionReducer {
         /// We are the natural RESPONDER (lower userId): don't re-init, wait for the INITIATOR's
         /// fresh X3DH (responder fallback covers a stuck INITIATOR).
         case waitAsResponder
-        /// We are the natural INITIATOR but a debounced re-init is already pending — a server
-        /// backlog flush delivers several END_SESSIONs at once; one pending re-init per peer is
-        /// enough (each extra one destroyed the session the previous just created → storm).
-        case coalesce
-        /// We are the natural INITIATOR with no pending re-init: schedule the debounced re-init.
-        case scheduleReinit
+        /// We are the natural INITIATOR: ask the machine to reopen, and let it say when.
+        case requestReopen
     }
 
-    static func endSessionReceiptAction(
-        isNaturalInitiator: Bool,
-        hasPendingReinit: Bool
-    ) -> EndSessionReceiptAction {
-        guard isNaturalInitiator else { return .waitAsResponder }
-        return hasPendingReinit ? .coalesce : .scheduleReinit
+    /// The `hasPendingReinit` argument is gone with the map that answered it. A backlog flush
+    /// delivering several END_SESSIONs used to schedule one re-init each, and every one after the
+    /// first destroyed the session the previous had just created — so a `[String: Task]` map
+    /// coalesced them, beside a 1.5 s debounce that waited for the same flush to finish. Both are
+    /// one phase per device now (`REOPEN_QUIET_MS`), so N asks are one deferral and there is
+    /// nothing here to remember between them. Step 2 of
+    /// `decisions/session-is-one-state-machine.md`, third of its five timers.
+    static func endSessionReceiptAction(isNaturalInitiator: Bool) -> EndSessionReceiptAction {
+        isNaturalInitiator ? .requestReopen : .waitAsResponder
     }
-
-    /// After the END_SESSION re-init debounce elapses: only proceed if no session exists yet.
-    /// A session present NOW was established *after* the END_SESSION (typically the peer's fresh
-    /// init from the same stream flush made us RESPONDER); re-initing over it would destroy a
-    /// working session and re-open the desync it just closed.
-    static func endSessionReinitStillNeeded(hasSession: Bool) -> Bool { !hasSession }
 
     /// Receive-side control-message coalesce. Server offline queues re-deliver batches of
     /// END_SESSION / SESSION_RESET_INIT for the same peer; acting on each one re-archives

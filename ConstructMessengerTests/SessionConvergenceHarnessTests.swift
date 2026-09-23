@@ -656,26 +656,22 @@ final class SessionConvergenceHarnessTests: XCTestCase {
         XCTAssertEqual(SessionReducer.initFailureAction(otpkUnreproducible: false).cause, .blind)
     }
 
-    // END_SESSION-receipt branch policy: natural RESPONDER waits; natural INITIATOR coalesces onto
-    // an already-pending re-init (the storm guard — one pending re-init per peer) or schedules one.
-    // Post-debounce, the re-init only proceeds if no session appeared meanwhile (a fresh session
-    // means the peer's init already made us RESPONDER; re-initing over it re-opens the desync).
-    func testEndSessionReceiptAction_RoleAndCoalesce() {
+    // END_SESSION-receipt branch policy: the role decides, and nothing else is left here.
+    //
+    // It used to take a second input, `hasPendingReinit`, and the caller answered it from an
+    // `endSessionReinitTasks` map beside a 1.5 s debounce — a coalescer so a backlog flush of N
+    // teardowns produced one re-init instead of N that each destroyed the previous one's session,
+    // and a delay so the rest of that flush (including the peer's own init, which makes us
+    // RESPONDER) landed first. Both are one phase per device now, and `endSessionReinitStillNeeded`
+    // went with them: the core holds the ratchet, so it is the side that can see a session appear.
+    // `decisions/session-is-one-state-machine.md`, step 2, third of its five timers.
+    func testEndSessionReceiptAction_TheRoleIsTheWholeDecision() {
         XCTAssertEqual(
-            SessionReducer.endSessionReceiptAction(isNaturalInitiator: false, hasPendingReinit: false),
+            SessionReducer.endSessionReceiptAction(isNaturalInitiator: false),
             .waitAsResponder)
         XCTAssertEqual(
-            SessionReducer.endSessionReceiptAction(isNaturalInitiator: false, hasPendingReinit: true),
-            .waitAsResponder, "RESPONDER role wins regardless of a stale pending entry")
-        XCTAssertEqual(
-            SessionReducer.endSessionReceiptAction(isNaturalInitiator: true, hasPendingReinit: true),
-            .coalesce)
-        XCTAssertEqual(
-            SessionReducer.endSessionReceiptAction(isNaturalInitiator: true, hasPendingReinit: false),
-            .scheduleReinit)
-        // Post-debounce stand-down: proceed only when no session exists yet.
-        XCTAssertTrue(SessionReducer.endSessionReinitStillNeeded(hasSession: false))
-        XCTAssertFalse(SessionReducer.endSessionReinitStillNeeded(hasSession: true))
+            SessionReducer.endSessionReceiptAction(isNaturalInitiator: true),
+            .requestReopen)
     }
 
     // Watchdog policy: re-arm (retry SRI) while within the confirm window, give up after it lapses.

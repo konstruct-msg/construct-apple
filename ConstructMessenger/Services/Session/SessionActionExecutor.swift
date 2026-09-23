@@ -23,6 +23,15 @@ final class SessionActionExecutor {
     static let shared = SessionActionExecutor()
     private init() {}
 
+    /// Runs `.openSession`: open a session with this **device** as INITIATOR and announce it.
+    ///
+    /// Supplied by `SessionCoordinator`, which owns the announce (the SRI is its transport) and
+    /// is the only place that can read the device id back to an account. One hook for both
+    /// arrival paths — the immediate answer to `reopenRequested`, and the core's own
+    /// `reopen_quiet:` alarm, which reaches this executor through
+    /// `OutboundSessionService.executeRustTimerActions`.
+    var onOpenSession: ((String) -> Void)?
+
     /// Execute a batch of actions returned by `CryptoManager.handleOrchestratorEvent`.
     ///
     /// Stateless actions execute here; state-bound actions (`.messageDecrypted`
@@ -156,6 +165,37 @@ final class SessionActionExecutor {
             // prevented: a guaranteed teardown back at a peer that has already reset.
             Log.info(
                 "END_SESSION not needed for \(contactId.prefix(8))… — the peer tore this session down itself",
+                category: "SessionActionExecutor"
+            )
+
+        case .openSession(let contactId):
+            // The machine granted the open. Nothing here decides *whether* — a guard at this
+            // point would be the second decider the 1.5 s debounce was.
+            guard let onOpenSession else {
+                Log.error(
+                    "OpenSession for \(contactId.prefix(8))… with no consumer wired — the re-init is lost",
+                    category: "SessionActionExecutor"
+                )
+                return
+            }
+            onOpenSession(contactId)
+
+        case .openDeferred(let contactId, let retryAfterMs):
+            // The peer tore this ratchet down and its rebuild is probably in the same flush.
+            // Informational, like `endSessionSuppressed`: the core armed the alarm and owns the
+            // retry. Arming one here would be the debounce this replaced, rebuilt outside the
+            // machine — and two alarms for one ratchet is how N re-inits per flush happened.
+            Log.info(
+                "Reopen held for \(contactId.prefix(8))… — the peer's teardown flush is still arriving, core retries in \(retryAfterMs)ms",
+                category: "SessionActionExecutor"
+            )
+
+        case .openNotNeeded(let contactId):
+            // The peer's rebuild landed during the quiet, which is what the quiet was for. This
+            // is the line to look for when a re-init "should have" happened and did not — it
+            // used to read `SESSION_STATE[reinit_skipped_fresh_session]`.
+            Log.info(
+                "Reopen not needed for \(contactId.prefix(8))… — a session with this device is back",
                 category: "SessionActionExecutor"
             )
 

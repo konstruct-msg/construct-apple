@@ -21,7 +21,7 @@ extension CryptoManager {
 
         if actions.contains(where: { action in
             switch action {
-            case .sendEndSession, .sessionHealNeeded, .fetchPublicKeyBundle:
+            case .sendEndSession, .sessionHealNeeded, .fetchPublicKeyBundle, .openSession:
                 return true
             default:
                 return false
@@ -55,6 +55,8 @@ extension CryptoManager {
             return "teardownRequested contactId=\(contactId.prefix(8))… cause=\(cause)"
         case .peerToreDown(let contactId):
             return "peerToreDown contactId=\(contactId.prefix(8))…"
+        case .reopenRequested(let contactId):
+            return "reopenRequested contactId=\(contactId.prefix(8))…"
         case .timerFired(let timerId):
             return "timerFired id=\(timerId.prefix(24))…"
         case .ackDbResult(let messageId, let isProcessed):
@@ -78,6 +80,9 @@ extension CryptoManager {
             case .sessionHealNeeded:        labels.insert("heal")
             case .sendEndSession:           labels.insert("end_session")
             case .fetchPublicKeyBundle:     labels.insert("fetch_bundle")
+            case .openSession:              labels.insert("open_session")
+            case .openDeferred:             labels.insert("open_deferred")
+            case .openNotNeeded:            labels.insert("open_not_needed")
             case .notifyError(let code, let msg) where firstError == nil:
                 firstError = (code, msg)
             default: break
