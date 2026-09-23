@@ -41,20 +41,18 @@ final class SessionCoordinator: MessageRouterDelegate {
     private let resendCooldown: TimeInterval = 10.0
     private let resendWindow: TimeInterval = 5 * 60 // 5 minutes
 
-    /// Peers with an INITIATOR re-init currently executing (any entry point). A second re-init
-    /// starting while one is in flight deletes the session the first just created, invalidating
-    /// its SESSION_RESET_INIT before the peer ever sees it — overlaps are dropped; the tie-break
-    /// watchdog re-sends if the surviving SRI is lost.
+    /// Peers with an INITIATOR re-init currently executing (any entry point).
+    ///
+    /// The machine refuses a second `Opening` for a device, but it only learns of this one when
+    /// the SESSION_RESET_INIT is announced — and the window this guards is the one *before* that,
+    /// while the bundle fetch runs. A second re-init starting there deletes the session the first
+    /// just created, invalidating its SRI before the peer ever sees it; overlaps are dropped and
+    /// the core's retry re-sends if the surviving SRI is lost.
+    ///
+    /// Account-keyed on purpose while it lasts: the init runs for a whole account's device set.
+    /// It goes when the announce itself is core-driven — step 5.
     private var initiatorReinitInFlight: Set<String> = []
 
-    /// Watchdog tasks started after a tie-break WIN.
-    /// If the RESPONDER (loser) does not reply within the timeout, re-sends the session ping
-    /// so they can become RESPONDER even after a brief network outage.
-    private var tieBreakWatchdogs: [String: Task<Void, Never>] = [:]
-    /// Interval between SESSION_RESET_INIT re-sends while awaiting the RESPONDER's ack. The watchdog
-    /// re-arms at this cadence and gives up when the confirm window (`SessionConfirmationTracker`)
-    /// lapses — see `SessionReducer.tieBreakWatchdogTick`. (Was a single-shot 30 s timeout.)
-    private let tieBreakWatchdogRetryInterval: TimeInterval = 30.0
 
     /// Fallback tasks started when we are the natural RESPONDER (lower deviceId) and receive
     /// END_SESSION from the INITIATOR. If the INITIATOR does not send a new session init within
@@ -244,6 +242,34 @@ final class SessionCoordinator: MessageRouterDelegate {
             }
             Log.info("SESSION_STATE[reopen_granted]: re-init as natural INITIATOR for \(peer)", category: "SessionInit")
             self.reinitAndAnnounceAsInitiator(to: peer.account, reason: "end_session_received")
+        }
+        // The retry and the bound of an unanswered announcement, both the machine's. They were
+        // `startTieBreakWatchdog` — a `Task.sleep` loop per account that re-sent the SRI and, on
+        // give-up, released the gate. Same two outcomes, decided where the phase is.
+        SessionActionExecutor.shared.onResendSri = { [weak self] deviceId in
+            guard let self else { return }
+            let ctx = self.viewContext ?? PersistenceController.shared.container.viewContext
+            guard let peer = PeerAddress.resolving(device: deviceId, in: ctx) else {
+                Log.info(
+                    "SRI re-send dropped: device \(deviceId.prefix(8))… belongs to no known contact",
+                    category: "SessionCoordinator"
+                )
+                return
+            }
+            Log.info("SESSION_STATE[sri_resend]: no acknowledgement — re-announcing to \(peer)", category: "SessionInit")
+            Task { await self.emitHandshakeControls(.tieBreakWin, to: peer) }
+        }
+        SessionActionExecutor.shared.onOpeningGaveUp = { [weak self] deviceId in
+            guard let self else { return }
+            let ctx = self.viewContext ?? PersistenceController.shared.container.viewContext
+            guard let peer = PeerAddress.resolving(device: deviceId, in: ctx) else { return }
+            Log.info(
+                "SESSION_STATE[opening_gave_up]: confirm window exhausted for \(peer) — releasing the gate and flushing both directions",
+                category: "SessionInit"
+            )
+            // `acknowledged: false` — the machine has already dropped the phase, and telling it
+            // the peer answered would be a lie the next decision reads back.
+            self.releaseConfirmGate(peer, acknowledged: false)
         }
         startCooldownPurgeTimer()
     }
@@ -956,7 +982,7 @@ final class SessionCoordinator: MessageRouterDelegate {
     /// bare `prewarmSessions`, which creates a local INITIATOR session but sends the peer
     /// *nothing*. The peer's RESPONDER wait then timed out after 60s and flipped to
     /// INITIATOR — producing a dueling-initiator deadlock where the winner buffers its
-    /// outgoing messages forever (`SessionConfirmationTracker.pending` never clears) and
+    /// outgoing messages forever (the confirm window never closes) and
     /// holds the loser's inits until the window lapses (`confirm_hold`; before 2026-08-04 it
     /// discarded them, which is how a genuinely live re-init could be lost). Transmitting the SRI here
     /// lets the RESPONDER bootstrap and reply `session_ready`, which clears `pending` and
@@ -977,9 +1003,13 @@ final class SessionCoordinator: MessageRouterDelegate {
         //  2. A peer replying `session_ready` faster than the old post-emit call hit
         //     `markConfirmed`'s `guard removeValue != nil` and was swallowed, leaving the gate up
         //     until the watchdog TTL.
-        // Raised for the devices we know, then re-raised for the ones the init actually opened:
-        // the devices are not known until the init answers, and the raise cannot wait for it.
-        SessionConfirmationTracker.shared.markPending(.account(userId))
+        // Raised for the devices the directory already names, then again for the ones the init
+        // actually opened — the second raise restamps the window at the real announcement. On a
+        // genuine first contact the directory answers nothing and nothing is raised, which costs
+        // nothing: there is no ratchet yet, so there is neither anything to confirm nor anything
+        // to hold. The raise used to be account-keyed for this case; the machine is keyed by
+        // device, and `deviceIds(ofPeer:)` is the same directory the init is about to plan from.
+        announceRaisedFor(SessionAddressing.deviceIds(ofPeer: userId))
         Task { [weak self] in
             guard let self else { return }
             defer { self.initiatorReinitInFlight.remove(userId) }
@@ -996,12 +1026,11 @@ final class SessionCoordinator: MessageRouterDelegate {
             // is about a ratchet and there is one per device. Nothing opened (the init failed, or
             // every session was already in place), the account falls back to the pinned device as
             // before.
-            self.markPendingOnOpened(opened, of: userId)
+            self.announceRaisedFor(opened)
             for device in opened.isEmpty ? [nil] : opened.map(Optional.init) {
                 await self.emitHandshakeControls(.tieBreakWin, to: PeerAddress(account: userId, device: device))
             }
         }
-        startTieBreakWatchdog(for: userId)
     }
 
     /// Re-establish a session for a peer that has QUEUED OUTBOUND messages but no live session
@@ -1012,7 +1041,7 @@ final class SessionCoordinator: MessageRouterDelegate {
     ///
     /// Forces the INITIATOR role and transmits SESSION_RESET_INIT, exactly like a tie-break win,
     /// so the peer bootstraps its RESPONDER session and replies `session_ready`. That clears
-    /// `SessionConfirmationTracker.pending` and flushes the queue via `sendSessionQueuedMessages`
+    /// the confirm window and flushes the queue via `sendSessionQueuedMessages`
     /// → `MessageRetryManager`, where the orphaned ciphertext (bound to the dead ratchet) has been
     /// purged and the recoverable plaintext is re-encrypted under the fresh session.
     ///
@@ -1035,7 +1064,7 @@ final class SessionCoordinator: MessageRouterDelegate {
         // Same reasoning as `reinitAndAnnounceAsInitiator`: mark pending synchronously, before
         // any await, so the SRI (not a coalesced init ping) owns msgNum=0 and a fast peer's
         // `session_ready` cannot arrive before the gate exists.
-        SessionConfirmationTracker.shared.markPending(.account(userId))
+        announceRaisedFor(SessionAddressing.deviceIds(ofPeer: userId))
         let endInit = beginInit(scope)
         Task { [weak self] in
             guard let self else { endInit(); return }
@@ -1050,12 +1079,11 @@ final class SessionCoordinator: MessageRouterDelegate {
                 }
             )
             // One announcement per opened ratchet; see the twin above.
-            self.markPendingOnOpened(opened, of: userId)
+            self.announceRaisedFor(opened)
             for device in opened.isEmpty ? [nil] : opened.map(Optional.init) {
                 await self.emitHandshakeControls(.tieBreakWin, to: PeerAddress(account: userId, device: device))
             }
         }
-        startTieBreakWatchdog(for: userId)
     }
 
     func messageRouter(_ router: MessageRouter, didDecryptDeliveryReceipt messageIds: [String]) {
@@ -1638,9 +1666,12 @@ final class SessionCoordinator: MessageRouterDelegate {
     /// be a gate a fast peer's `session_ready` slips past, which is the race the synchronous
     /// raise at the call sites was written for. So the account is held first and the devices
     /// replace it here.
-    private func markPendingOnOpened(_ opened: [String], of account: String) {
-        for device in opened {
-            SessionConfirmationTracker.shared.markPending(PeerAddress(account: account, device: device))
+    private func announceRaisedFor(_ devices: [String]) {
+        for device in devices {
+            _ = try? CryptoManager.shared.handleOrchestratorEvent(
+                .sriAnnounced(contactId: device),
+                tag: "sri_announced"
+            )
         }
     }
 
@@ -1651,13 +1682,21 @@ final class SessionCoordinator: MessageRouterDelegate {
     /// never release a device-keyed gate, and sends to that peer would deadlock. That is still
     /// the rule for a delivery that names nothing — `markConfirmed` with no device settles the
     /// account — and it is now the exception rather than the shape.
-    private func releaseConfirmGate(_ peer: PeerAddress, lapsed: Bool = false) {
+    private func releaseConfirmGate(_ peer: PeerAddress, acknowledged: Bool = true) {
         assertMainThread()
         let userId = peer.account
-        if lapsed {
-            SessionConfirmationTracker.shared.releaseLapsed(userId)
-        } else {
-            SessionConfirmationTracker.shared.markConfirmed(peer)
+        if acknowledged {
+            // A confirmation that names no device settles the whole account. That is the valve,
+            // not a shortcut: a `session_ready` arriving unsealed, or from a client older than the
+            // sender certificate, cannot say which ratchet it is about, and a gate nothing can
+            // release is a conversation that stops sending for the length of the window.
+            let devices = peer.device.map { [$0] } ?? SessionAddressing.deviceIds(ofPeer: userId)
+            for device in devices {
+                _ = try? CryptoManager.shared.handleOrchestratorEvent(
+                    .peerAcked(contactId: device),
+                    tag: "peer_acked"
+                )
+            }
         }
         sendSessionQueuedMessages(for: userId)
         if let context = viewContext {
@@ -1955,65 +1994,6 @@ final class SessionCoordinator: MessageRouterDelegate {
         )
     }
 
-    // MARK: - Tie-break watchdog
-
-    /// Start a **re-arming, bounded** watchdog that re-sends SESSION_RESET_INIT every
-    /// `tieBreakWatchdogRetryInterval` while the RESPONDER hasn't acked — but only within the confirm
-    /// window (`SessionReducer.tieBreakWatchdogTick`). When the window lapses it gives up cleanly:
-    /// releases the confirm gate and proactively flushes the buffer, so a persistently lost SRI/ping
-    /// can no longer deadlock (the single-shot version fired once then went silent forever, leaving
-    /// `pending` set — the confirm-deadlock root). Cancelled on any RESPONDER ack (ready/ping/SRI).
-    private func startTieBreakWatchdog(for userId: String) {
-        assertMainThread()
-        tieBreakWatchdogs[userId]?.cancel()
-        tieBreakWatchdogs[userId] = Task { [weak self] in
-            guard let self else { return }
-            while !Task.isCancelled {
-                do {
-                    try await Task.sleep(nanoseconds: UInt64(self.tieBreakWatchdogRetryInterval * 1_000_000_000))
-                } catch {
-                    return // cancelled — RESPONDER acked in time
-                }
-                guard !Task.isCancelled else { return }
-                switch SessionConfirmationTracker.shared.watchdogTick(userId) {
-                case .retry:
-                    // RESPONDER still silent — re-send a fresh X3DH init (msgNum=0) it can accept.
-                    Log.info("SESSION_STATE[tie_break_watchdog]: no ack — re-sending SESSION_RESET_INIT for \(userId.prefix(8))…", category: "SessionInit")
-                    let opened = await self.sessionInitService.initializeSessionProactively(
-                        userId: userId,
-                        // The watchdog fires because our own SRI went unacknowledged — the work is
-                        // the re-send.
-                        hasOutboundWork: true,
-                        onSuccess: { },
-                        onFailure: { err in
-                            Log.error("SESSION_STATE[watchdog_reinit_fail]: \(err.localizedDescription)", category: "SessionInit")
-                        }
-                    )
-                    for device in opened.isEmpty ? [nil] : opened.map(Optional.init) {
-                        await self.sendSessionResetInit(to: PeerAddress(account: userId, device: device))
-                    }
-                case .giveUp:
-                    // Confirm window exhausted — stop retrying, release the gate, drain the buffer
-                    // (rather than waiting for the lazy TTL / next reconnect). New sends flow; if the
-                    // session is genuinely broken the peer's decrypt-fail drives normal recovery.
-                    Log.info("SESSION_STATE[tie_break_watchdog]: confirm window exhausted for \(userId.prefix(8))… — releasing gate + flushing buffers", category: "SessionInit")
-                    // Give-up path for the incoming hold too: replay it and let the ordinary
-                    // decrypt/heal decision run now that the gate no longer suppresses it.
-                    self.releaseConfirmGate(.account(userId), lapsed: true)
-                    self.tieBreakWatchdogs.removeValue(forKey: userId)
-                    return
-                }
-            }
-        }
-    }
-
-    /// Cancel the tie-break watchdog for `userId` once communication is confirmed.
-    func cancelTieBreakWatchdog(for userId: String) {
-        assertMainThread()
-        tieBreakWatchdogs[userId]?.cancel()
-        tieBreakWatchdogs.removeValue(forKey: userId)
-    }
-
     // MARK: - Responder fallback
 
     /// Starts a fallback task: if the natural INITIATOR hasn't sent a new session init within
@@ -2132,12 +2112,16 @@ final class SessionCoordinator: MessageRouterDelegate {
             switch op {
             case .resetInit:
                 Log.info("SESSION_RESET_INIT payload discarded (not user-visible, content_type=24)", category: "SessionCoordinator")
-                cancelTieBreakWatchdog(for: peerId)
                 cancelResponderFallback(for: peerId)
+                // Their own X3DH carrier. It cannot acknowledge ours — they may never have seen
+                // it — but it makes ours moot: their init replaces the ratchet either way, so a
+                // window still waiting on an answer to ours is waiting for one that cannot come.
+                // Before the machine this site cancelled the retry and left the gate to lapse
+                // 75 s later, which is the same end reached the slow way.
+                releaseConfirmGate(PeerAddress(account: peerId, device: messageData.senderDeviceId))
                 return
             case .ping:
                 Log.info("SESSION_STATE[ping_received]: session established as RESPONDER (ping discarded, content_type=25)", category: "SessionCoordinator")
-                cancelTieBreakWatchdog(for: peerId)
                 cancelResponderFallback(for: peerId)
                 // A RESPONDER session now exists. If we were also waiting on our own
                 // INITIATOR session_ready, that confirmation will never arrive (the peer is the
@@ -2147,7 +2131,6 @@ final class SessionCoordinator: MessageRouterDelegate {
                 return
             case .ready:
                 Log.info("SESSION_STATE[session_ready_received]: RESPONDER \(peerId.prefix(8))… confirmed (content_type=26)", category: "SessionCoordinator")
-                cancelTieBreakWatchdog(for: peerId)
                 cancelResponderFallback(for: peerId)
                 markActive(.forAccount(peerId))
                 releaseConfirmGate(PeerAddress(account: peerId, device: messageData.senderDeviceId))
@@ -2162,8 +2145,9 @@ final class SessionCoordinator: MessageRouterDelegate {
         // iOS format: "__session_reset_init_<UUID>__"; other clients may omit the markers.
         if plaintext.hasPrefix("__session_reset_init") || plaintext.hasPrefix("session_reset_init_") {
             Log.info("SESSION_RESET_INIT payload discarded (not user-visible)", category: "SessionCoordinator")
-            cancelTieBreakWatchdog(for: messageData.from)
             cancelResponderFallback(for: messageData.from)
+            // See the typed case above: their carrier makes ours moot.
+            releaseConfirmGate(PeerAddress(account: messageData.from, device: messageData.senderDeviceId))
             return
         }
 
@@ -2172,7 +2156,6 @@ final class SessionCoordinator: MessageRouterDelegate {
         // Format: "__session_ping_<UUID>__" (legacy: "__session_ping__").
         if plaintext.hasPrefix("__session_ping") && plaintext.hasSuffix("__") {
             Log.info("SESSION_STATE[ping_received]: session established as RESPONDER (ping discarded)", category: "SessionCoordinator")
-            cancelTieBreakWatchdog(for: messageData.from)
             cancelResponderFallback(for: messageData.from)
             // See the typed-ping case above: a RESPONDER session exists, so release any stale
             // INITIATOR-pending buffer instead of waiting for a session_ready that won't arrive.
@@ -2186,11 +2169,12 @@ final class SessionCoordinator: MessageRouterDelegate {
         if plaintext.hasPrefix("__session_ready") || plaintext.hasPrefix("session_ready_") {
             let peerId = messageData.from
             Log.info("SESSION_STATE[session_ready_received]: RESPONDER \(peerId.prefix(8))… confirmed — session established both sides", category: "SessionCoordinator")
-            cancelTieBreakWatchdog(for: peerId)
             cancelResponderFallback(for: peerId)
             markActive(.forAccount(peerId))
-            SessionConfirmationTracker.shared.markConfirmed(PeerAddress(account: peerId, device: messageData.senderDeviceId))
-            sendSessionQueuedMessages(for: peerId)
+            // The same release as the typed twin above. This site used to drop the gate and flush
+            // only the outgoing side, leaving held incoming carriers behind — the two flushes are
+            // one call precisely so they cannot drift apart again.
+            releaseConfirmGate(PeerAddress(account: peerId, device: messageData.senderDeviceId))
             return
         }
 

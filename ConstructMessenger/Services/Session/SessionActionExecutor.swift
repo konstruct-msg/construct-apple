@@ -32,6 +32,14 @@ final class SessionActionExecutor {
     /// `OutboundSessionService.executeRustTimerActions`.
     var onOpenSession: ((String) -> Void)?
 
+    /// Runs `.resendSri`: announce to this **device** again, because the last SESSION_RESET_INIT
+    /// has gone unanswered for a retry interval.
+    var onResendSri: ((String) -> Void)?
+
+    /// Runs `.openingGaveUp`: the confirm window ran out, so release what was held behind the
+    /// opening — the buffered sends and the held incoming carriers, both, in one call.
+    var onOpeningGaveUp: ((String) -> Void)?
+
     /// Execute a batch of actions returned by `CryptoManager.handleOrchestratorEvent`.
     ///
     /// Stateless actions execute here; state-bound actions (`.messageDecrypted`
@@ -198,6 +206,31 @@ final class SessionActionExecutor {
                 "Reopen not needed for \(contactId.prefix(8))… — a session with this device is back",
                 category: "SessionActionExecutor"
             )
+
+        case .resendSri(let contactId):
+            // The core owns the cadence and the bound; this only carries out the send. A guard
+            // here deciding *whether* would be `tieBreakWatchdogs` rebuilt outside the machine.
+            guard let onResendSri else {
+                Log.error(
+                    "ResendSri for \(contactId.prefix(8))… with no consumer wired — the handshake stalls until the window lapses",
+                    category: "SessionActionExecutor"
+                )
+                return
+            }
+            onResendSri(contactId)
+
+        case .openingGaveUp(let contactId):
+            // Not an error, a bound. Before 2026-08-04 the watchdog was single-shot and this
+            // moment never came: the gate stayed raised, outgoing buffered forever and held
+            // incoming sat behind a deferred cursor.
+            guard let onOpeningGaveUp else {
+                Log.error(
+                    "OpeningGaveUp for \(contactId.prefix(8))… with no consumer wired — the confirm gate stays up",
+                    category: "SessionActionExecutor"
+                )
+                return
+            }
+            onOpeningGaveUp(contactId)
 
         case .messageQueuedPendingInit(let contactId, let queuedCount):
             // Held inside the core behind an in-flight init and drained on SessionInitCompleted.

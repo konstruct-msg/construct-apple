@@ -263,11 +263,24 @@ private final class Peer {
     /// init. Every branch is a production `SessionReducer` decision — this models the *timers* that
     /// re-drive a handshake whose only ack was lost to the wire, not any new policy. The seeded
     /// drop-fuzz calls this during the post-heal window to prove the handshake still converges.
+    /// The core's confirm window, simulated.
+    ///
+    /// It was `SessionReducer.isConfirmBuffering` until 2026-09-23, when the window moved into
+    /// `construct-core` as `OPENING_CONFIRM_WINDOW_MS` — where the policy is now tested
+    /// (`the_wait_is_given_up_when_the_window_runs_out` and its neighbours). This harness is not
+    /// testing that policy; it is a wire simulator, and this is the peer-facing behaviour it has
+    /// to reproduce to ask its own question: does the handshake converge under loss and reorder.
+    func stillAwaitingAck(now: Date) -> Bool {
+        guard let since = confirmPendingSince else { return false }
+        return now.timeIntervalSince(since) < confirmWindow
+    }
+
     func livenessTick(to peerId: String, now: Date) {
         // INITIATOR: re-announce the SRI while still within the confirm window; release once it lapses.
-        switch SessionReducer.tieBreakWatchdogTick(pendingSince: confirmPendingSince, now: now, confirmWindow: confirmWindow) {
-        case .retry:  send(.resetInit, to: peerId)
-        case .giveUp: if confirmPendingSince != nil { confirmPendingSince = nil }
+        if stillAwaitingAck(now: now) {
+            send(.resetInit, to: peerId)
+        } else if confirmPendingSince != nil {
+            confirmPendingSince = nil
         }
         // Established RESPONDER re-sends its ack in case session_ready was dropped (idempotent — a dup
         // ready on an already-active INITIATOR is ignored).
@@ -288,9 +301,7 @@ private final class Peer {
     /// a TTL expiry (isConfirmBuffering → false) actually releases buffered sends — the exact
     /// liveness the ad-hoc 04f16211 patch guaranteed, now under test.
     func flushOrInit(to peerId: String, now: Date) {
-        let buffering = SessionReducer.isConfirmBuffering(
-            pendingSince: confirmPendingSince, now: now, confirmWindow: confirmWindow)
-        if buffering { return }               // gate closed — keep buffering (P2: bounded)
+        if stillAwaitingAck(now: now) { return }   // gate closed — keep buffering (P2: bounded)
         if confirmPendingSince != nil {        // gate self-expired via TTL → release it
             confirmPendingSince = nil
         }
@@ -559,7 +570,7 @@ final class SessionConvergenceHarnessTests: XCTestCase {
 
         // Within the window, A is still gating (buffering) — that's correct, not yet a deadlock.
         XCTAssertTrue(
-            SessionReducer.isConfirmBuffering(pendingSince: h.a.confirmPendingSince, now: h.now, confirmWindow: 75),
+            h.a.stillAwaitingAck(now: h.now),
             "INITIATOR should still be within the confirm window right after the SRI")
         XCTAssertFalse(h.b.delivered.contains("a1"), "A's send is legitimately buffered pre-TTL")
 
@@ -674,37 +685,12 @@ final class SessionConvergenceHarnessTests: XCTestCase {
             .requestReopen)
     }
 
-    // Watchdog policy: re-arm (retry SRI) while within the confirm window, give up after it lapses.
-    // Pins the exact decision the re-armed SessionCoordinator watchdog loops on — the fix for the
-    // single-shot watchdog that fired once then went silent (confirm-deadlock root).
-    @MainActor
-    func testTieBreakWatchdogTick_RetriesWithinWindow_GivesUpAfter() {
-        let started = Date(timeIntervalSince1970: 2_000_000)
-        let window: TimeInterval = 75
+    // `testTieBreakWatchdogTick_RetriesWithinWindow_GivesUpAfter` stood here until 2026-09-23.
+    // The policy it pinned — re-send inside the window, give up past it — is
+    // `OPENING_CONFIRM_WINDOW_MS` / `SRI_RETRY_MS` in `construct-core::session_machine`, tested
+    // there against a mock clock. Keeping a copy here would be the thing this codebase keeps
+    // paying for: two implementations of one decision with a comment promising they agree.
 
-        // Not pending → nothing to do (give up).
-        XCTAssertEqual(
-            SessionReducer.tieBreakWatchdogTick(pendingSince: nil, now: started, confirmWindow: window),
-            .giveUp)
-        // Within the window (30 s, 60 s) → keep re-sending the SRI.
-        XCTAssertEqual(
-            SessionReducer.tieBreakWatchdogTick(
-                pendingSince: started, now: started.addingTimeInterval(30), confirmWindow: window),
-            .retry)
-        XCTAssertEqual(
-            SessionReducer.tieBreakWatchdogTick(
-                pendingSince: started, now: started.addingTimeInterval(60), confirmWindow: window),
-            .retry)
-        // At / past the window (75 s, 90 s) → give up (release + flush).
-        XCTAssertEqual(
-            SessionReducer.tieBreakWatchdogTick(
-                pendingSince: started, now: started.addingTimeInterval(75), confirmWindow: window),
-            .giveUp)
-        XCTAssertEqual(
-            SessionReducer.tieBreakWatchdogTick(
-                pendingSince: started, now: started.addingTimeInterval(90), confirmWindow: window),
-            .giveUp)
-    }
 
     // P3: an END_SESSION storm must leave the phase idle with no orphaned buffer, and a subsequent
     // send must start exactly one fresh init (no dueling storm re-entry).

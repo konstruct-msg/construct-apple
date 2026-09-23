@@ -1036,6 +1036,27 @@ class CryptoManager {
         SessionAddressing.deviceIds(ofPeer: peerId).contains { hasSession(for: $0) }
     }
 
+    /// Whether the ratchet with this **device** was announced and the peer has not answered.
+    ///
+    /// The confirm gate, read from the machine that owns it. Until 2026-09-23 it was a
+    /// `SessionConfirmationTracker` map on this side, raised and dropped beside the core's own
+    /// `Opening` phase with nothing keeping the two in step — and it carried its own 75 s TTL,
+    /// its own 30 s watchdog task, and its own account key.
+    func awaitsAcknowledgement(fromDevice deviceId: String) -> Bool {
+        guard let contactId = SessionAddressing.asDevice(deviceId) else { return false }
+        return orchestratorCore?.awaitsAcknowledgement(contactId: contactId) ?? false
+    }
+
+    /// Whether **any** ratchet with a person is still unacknowledged.
+    ///
+    /// The account-shaped question the send path actually asks: one message becomes a copy per
+    /// device, so a single unanswered ratchet is enough to hold the send — sending would put user
+    /// content on a ratchet the peer may not hold. Folded with `contains`, like every other
+    /// account-shaped answer here, so nothing downstream inherits a device nobody chose.
+    func awaitsAcknowledgementFromAnyDevice(ofPeer peerId: String) -> Bool {
+        SessionAddressing.deviceIds(ofPeer: peerId).contains { awaitsAcknowledgement(fromDevice: $0) }
+    }
+
     /// Whether session state exists for `userId` **anywhere** — loaded in the core, or on disk.
     ///
     /// `hasSession(for:)` answers only the first, because that is what "can I encrypt right now"

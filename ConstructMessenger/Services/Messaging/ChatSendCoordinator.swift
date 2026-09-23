@@ -160,7 +160,8 @@ final class ChatSendCoordinator {
         // bubble with the attachments silently dropped. Let them flow to sendMediaMessage/
         // sendFileMessage instead: the upload latency naturally covers the confirmation window, and
         // that path persists correct display content plus a resendable wire payload.
-        if SessionConfirmationTracker.shared.isPending(recipientId), attachments.isEmpty, fileURLs.isEmpty {
+        if CryptoManager.shared.awaitsAcknowledgementFromAnyDevice(ofPeer: recipientId),
+           attachments.isEmpty, fileURLs.isEmpty {
             let bufferedId = UUID().uuidString
             let stub = ChatMessage(
                 id: bufferedId,

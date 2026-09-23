@@ -456,19 +456,12 @@ enum SessionReducer {
         case other
     }
 
-    /// The INITIATOR (tie-break winner) buffers outgoing and holds the peer's msgNum=0 while
-    /// awaiting the RESPONDER's `session_ready`. This gate is a **hint, never a permanent lock**:
-    /// it self-releases after `confirmWindow` so a lost SESSION_RESET_INIT / lost ping / lost
-    /// session_ready can't deadlock (the class fixed piecemeal in `3f166e61` + `04f16211`, now a
-    /// single tested decision `SessionConfirmationTracker` delegates to).
-    ///
-    /// - Returns: true iff a pending mark exists AND the confirm window has not elapsed — i.e.
-    ///   outgoing should still buffer and the peer's msgNum=0 should still be held
-    ///   (`MessageRouter.holdUntilConfirmResolves`, replayed when the gate falls).
-    static func isConfirmBuffering(pendingSince: Date?, now: Date, confirmWindow: TimeInterval) -> Bool {
-        guard let pendingSince else { return false }
-        return now.timeIntervalSince(pendingSince) < confirmWindow
-    }
+    // `isConfirmBuffering` lived here until 2026-09-23: a pure predicate over a `pendingSince`
+    // stamp the coordinator kept, beside the core's own `Opening` phase, with nothing holding the
+    // two in step. The window is `OPENING_CONFIRM_WINDOW_MS` in the machine now and the question
+    // is `CryptoManager.awaitsAcknowledgement(fromDevice:)`. Step 3 of
+    // `decisions/session-is-one-state-machine.md`.
+
 
     /// What the tie-break confirm gate does with an *incoming* message.
     enum ConfirmGateAction: Equatable {
@@ -623,7 +616,7 @@ enum SessionReducer {
 
     /// Responder-fallback override gate — the mirror of the tie-break watchdog. The two are the
     /// role-split halves of one liveness guarantee ("a stalled handshake gets re-driven by
-    /// *someone*"): the INITIATOR re-sends SRI (`tieBreakWatchdogTick`); the natural RESPONDER, if
+    /// *someone*"): the INITIATOR re-sends SRI (the core's `open_confirm:` alarm); the natural RESPONDER, if
     /// the INITIATOR stays silent past the fallback timeout, **overrides** the tie-break and takes
     /// the INITIATOR role itself. They are mutually exclusive by role, so they never dueling-init.
     ///
@@ -633,24 +626,12 @@ enum SessionReducer {
         !hasSession && !isInitializing
     }
 
-    /// What the tie-break watchdog should do on a tick.
-    enum WatchdogTick: Equatable {
-        /// Re-send SESSION_RESET_INIT — still within the confirm window, RESPONDER hasn't acked.
-        case retry
-        /// The confirm window has lapsed — stop retrying, release the gate, flush the buffer.
-        case giveUp
-    }
+    // `WatchdogTick` / `tieBreakWatchdogTick` lived here until 2026-09-23. The re-arming,
+    // bounded watchdog they encoded is the core's `open_confirm:` alarm: `ResendSri` while inside
+    // `OPENING_CONFIRM_WINDOW_MS`, `OpeningGaveUp` once past it. The fourth of step 2's five
+    // timers. `shouldResponderOverride` above is still the mirror half — the natural RESPONDER's
+    // 60 s override — and is the fifth.
 
-    /// Tie-break watchdog policy: after the INITIATOR sends SESSION_RESET_INIT it waits for the
-    /// RESPONDER's ack (ready/ping); if none comes it re-sends the SRI — but only while still within
-    /// the confirm window (`isConfirmBuffering`). This makes the watchdog **re-arming and bounded**;
-    /// it was previously single-shot (one retry at 30 s, then silence forever — the confirm-deadlock
-    /// root, patched piecemeal in `04f16211`). Folding the retry lifetime onto the confirm window
-    /// keeps the two liveness mechanisms coherent: they give up together, and give-up proactively
-    /// releases the gate + flushes instead of waiting for a lazy TTL read / the next reconnect.
-    static func tieBreakWatchdogTick(pendingSince: Date?, now: Date, confirmWindow: TimeInterval) -> WatchdogTick {
-        isConfirmBuffering(pendingSince: pendingSince, now: now, confirmWindow: confirmWindow) ? .retry : .giveUp
-    }
 
     /// Does receiving this control op release the confirm gate (RESPONDER acknowledged)?
     /// PING and READY both prove a bidirectional session exists (see the transition table in

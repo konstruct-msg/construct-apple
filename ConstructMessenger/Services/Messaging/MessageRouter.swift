@@ -173,7 +173,7 @@ final class MessageRouter {
     /// the drain would be a no-op that read like a flush, so the gate state is asserted here rather
     /// than trusted from the call site.
     func replayHeldMessages(for userId: String, in context: NSManagedObjectContext) {
-        guard !SessionConfirmationTracker.shared.isPending(userId) else {
+        guard !CryptoManager.shared.awaitsAcknowledgementFromAnyDevice(ofPeer: userId) else {
             let held = pendingQueue.count(for: userId)
             if held > 0 {
                 Log.info("SESSION_STATE[confirm_replay_skipped]: gate still up for \(userId.prefix(8))… — \(held) message(s) stay held", category: "MessageRouter")
@@ -782,15 +782,12 @@ final class MessageRouter {
             return
         }
 
-        // The confirm gate can fall inside this call, via its lazy TTL, and that path has no way to
-        // replay what it released — it runs from whatever call site happened to ask, with no
-        // managed-object context. It also beats the watchdog to the entry, so the `.giveUp` replay
-        // never runs (observed in build 575: two peer inits held, zero replayed, cursor deferred
-        // behind them). Settle it here, where the gate matters and a context exists.
-        if !SessionConfirmationTracker.shared.isPending(otherUserId),
-           SessionConfirmationTracker.shared.consumeLapse(otherUserId) {
-            replayHeldMessages(for: otherUserId, in: context)
-        }
+        // Removed 2026-09-23 with `SessionConfirmationTracker`: an "unsettled lapse" set, claimed
+        // once per lapse, because the gate could fall inside a *query* — a lazy TTL running from
+        // whatever call site happened to ask, with no context to replay with, and beating the
+        // watchdog to the entry so the give-up replay never ran (build 575: two peer inits held,
+        // zero replayed, the cursor deferred behind them). The machine's window does not expire
+        // inside a question; it ends on `OpeningGaveUp`, delivered to the one place that can act.
 
         // Removed 2026-08-21: a second `confirmGateAction` call stood here, holding any incoming
         // `messageNumber == 0` while our own SESSION_RESET_INIT was unacked. It was asked before
@@ -1007,7 +1004,7 @@ final class MessageRouter {
             // pre-decryption hold used to keep most of these away from the ratchet; it is gone
             // (see above), so the guard it implied has to be stated where the damage is done.
             if case .hold = SessionReducer.confirmGateAction(
-                isPending: SessionConfirmationTracker.shared.isPending(contactId),
+                isPending: CryptoManager.shared.awaitsAcknowledgementFromAnyDevice(ofPeer: contactId),
                 isControlCarrier: message.isEndSession || message.isSessionResetInit
             ) {
                 Log.info("SESSION_STATE[heal_deferred]: \(contactId.prefix(8))… wants heal while our SESSION_RESET_INIT is unacked — holding, not archiving", category: "SessionInit")
@@ -1042,7 +1039,7 @@ final class MessageRouter {
             // or watchdog give-up) resolves it, and a genuine divergence still tears down then,
             // one confirm window later.
             if case .hold = SessionReducer.confirmGateAction(
-                isPending: SessionConfirmationTracker.shared.isPending(peer.account),
+                isPending: CryptoManager.shared.awaitsAcknowledgementFromAnyDevice(ofPeer: peer.account),
                 isControlCarrier: message.isEndSession || message.isSessionResetInit
             ) {
                 Log.info("SESSION_STATE[end_session_deferred]: decrypt failed for \(peer) while our SESSION_RESET_INIT is unacked — holding, not tearing down", category: "SessionInit")
@@ -1634,7 +1631,7 @@ final class MessageRouter {
 
         // The ratchet the confirmation is about — the sending device, which a sealed delivery
         // names since §D. Empty (an unsealed or older peer) settles the account, which is the
-        // safety valve rather than the shape: see `SessionConfirmationTracker.markConfirmed`.
+        // safety valve rather than the shape: see `SessionCoordinator.releaseConfirmGate`.
         let peer = PeerAddress(account: otherUserId, device: message.senderDeviceId)
         switch op {
         case .ready:
@@ -1657,7 +1654,15 @@ final class MessageRouter {
         in context: NSManagedObjectContext
     ) {
         let userId = peer.account
-        SessionConfirmationTracker.shared.markConfirmed(peer)
+        // A confirmation naming no device settles the account — the valve; see the twin in
+        // `SessionCoordinator`.
+        let devices = peer.device.map { [$0] } ?? SessionAddressing.deviceIds(ofPeer: userId)
+        for device in devices {
+            _ = try? CryptoManager.shared.handleOrchestratorEvent(
+                .peerAcked(contactId: device),
+                tag: "peer_acked"
+            )
+        }
         if let myId = AuthSessionManager.shared.currentUserId {
             MessageRetryManager.shared.sendQueuedMessages(
                 for: chat, recipientId: userId, currentUserId: myId, context: context

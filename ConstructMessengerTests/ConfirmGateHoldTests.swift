@@ -232,137 +232,79 @@ final class ConfirmGateHoldTests: XCTestCase {
         return message
     }
 
-    // MARK: - Every path that drops the gate must settle the hold
+    // MARK: - The gate is the machine's, and this side only asks
 
-    /// The lazy TTL inside `isPending` releases the gate from inside a *query*, so it cannot replay
-    /// what it released — and it beats the 30 s watchdog to the entry, which is why the `.giveUp`
-    /// replay never ran. Build 575, 2026-08-04: `confirm_hold` 2, `confirm_replay` 0, the cursor
-    /// deferred behind both. The lapse must therefore be claimable exactly once by whoever can.
+    /// `SessionConfirmationTracker` was deleted 2026-09-23 (step 3 of
+    /// `decisions/session-is-one-state-machine.md`). Seven tests stood here pinning its
+    /// behaviour — the lazy-TTL lapse bookkeeping, the per-device confirmation, the nameless
+    /// valve, the oldest-ratchet watchdog tick — and what they were really pinning is now
+    /// `Opening { unacked_sri }` in `construct-core::session_machine`, tested there against a
+    /// mock clock. The two that had no Rust equivalent went with the mechanism: the "unsettled
+    /// lapse" set existed only because the gate could expire inside a *query*, from a call site
+    /// with no context to replay with, and the machine's window does not do that — it ends on
+    /// `OpeningGaveUp`, delivered to the one place that can act on it.
     ///
-    /// Mutation: drop the `lapsedUnreplayed.insert(userId)` from the expiry branch.
-    @MainActor
-    func testLazyExpiryLeavesAClaimableLapse() {
-        let tracker = SessionConfirmationTracker.shared
-        let peer = "lapse-peer-\(UUID().uuidString)"
-        tracker.markPending(.account(peer))
-
-        // Not yet expired: nothing to settle.
-        XCTAssertTrue(tracker.isPending(peer))
-        XCTAssertFalse(tracker.consumeLapse(peer), "an unexpired gate has no lapse to claim")
-
-        tracker.expireForTesting(peer)
-        XCTAssertFalse(tracker.isPending(peer), "the TTL must still self-release — no deadlock")
-        XCTAssertTrue(tracker.consumeLapse(peer), "the release left a hold nobody replayed")
-        XCTAssertFalse(tracker.consumeLapse(peer), "claimed once, so two callers cannot both replay")
+    /// What is left for this side to get wrong is asking the wrong thing, so that is what these
+    /// check.
+    private var coordinatorSource: String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("ConstructMessenger/Services/Session/SessionCoordinator.swift")
+        return (try? String(contentsOf: url, encoding: .utf8)) ?? ""
     }
 
-    /// The explicit releases replay as part of dropping the gate, so they must NOT also leave a
-    /// lapse — a second replay would re-route messages the first one already handled.
+    /// The carriers, named — a reader who deletes the map and leaves the timer has left the next
+    /// incident somewhere to grow back from.
     ///
-    /// Mutation: remove `lapsedUnreplayed.remove(userId)` from `markConfirmed`.
+    /// Mutation: re-add `private var tieBreakWatchdogs: [String: Task<Void, Never>] = [:]` —
+    /// this reddens.
     @MainActor
-    func testExplicitReleasesLeaveNothingToSettle() {
-        let tracker = SessionConfirmationTracker.shared
-
-        let confirmed = "confirmed-peer-\(UUID().uuidString)"
-        tracker.markPending(.account(confirmed))
-        tracker.markConfirmed(.account(confirmed))
-        XCTAssertFalse(tracker.consumeLapse(confirmed), "the peer-ack path replays the hold itself")
-
-        let lapsed = "watchdog-peer-\(UUID().uuidString)"
-        tracker.markPending(.account(lapsed))
-        tracker.releaseLapsed(lapsed)
-        XCTAssertFalse(tracker.consumeLapse(lapsed), "the watchdog give-up path replays it itself")
+    func testTheCoordinatorHoldsNoConfirmWindowOfItsOwn() {
+        let source = coordinatorSource
+        XCTAssertFalse(source.isEmpty, "SessionCoordinator.swift must be readable from the test bundle")
+        for carrier in ["tieBreakWatchdogs", "tieBreakWatchdogRetryInterval", "confirmWindow"] {
+            XCTAssertFalse(
+                source.contains("var \(carrier)") || source.contains("let \(carrier)"),
+                "\(carrier) is a second confirm window — the one that counts is the machine's"
+            )
+        }
     }
 
-    /// A lapse recorded by the TTL, then superseded by an explicit confirm, must not survive: the
-    /// confirm's own replay already drained the buffer.
-    @MainActor
-    func testConfirmAfterLapseDoesNotLeaveADoubleReplay() {
-        let tracker = SessionConfirmationTracker.shared
-        let peer = "raced-peer-\(UUID().uuidString)"
-        tracker.markPending(.account(peer))
-        tracker.expireForTesting(peer)
-        _ = tracker.isPending(peer)          // records the lapse
-        tracker.markConfirmed(.account(peer)) // peer ack lands late and replays
-        XCTAssertFalse(tracker.consumeLapse(peer), "one release, one replay")
-    }
-
-    // MARK: - A confirmation is about one ratchet
-
-    private func device(_ byte: UInt8) -> String {
-        String(repeating: String(format: "%02x", byte), count: 16)
-    }
-
-    /// Two devices of one account, two SRIs, one `session_ready`. The ratchet that answered is
-    /// confirmed; the one that did not still holds the gate, because sending now would put user
-    /// content on a ratchet nobody has acknowledged — which is the whole job of the gate.
+    /// And the release tells the machine rather than a map. If it stops, the window runs to its
+    /// 75 s bound on every handshake and the only symptom is slow sends.
     ///
-    /// Mutation: key the tracker by account again — the first confirmation releases both and this
-    /// reddens.
+    /// Mutation: delete the `peerAcked` call from `releaseConfirmGate` — this reddens.
     @MainActor
-    func testOneDeviceConfirmingDoesNotReleaseItsSibling() {
-        let tracker = SessionConfirmationTracker.shared
-        let account = "acct-\(UUID().uuidString)"
-        let first = device(0xa1), second = device(0xb2)
-
-        tracker.markPending(PeerAddress(account: account, device: first))
-        tracker.markPending(PeerAddress(account: account, device: second))
-        tracker.markConfirmed(PeerAddress(account: account, device: first))
-
-        XCTAssertTrue(tracker.isPending(account), "the sibling's ratchet is still unconfirmed")
-
-        tracker.markConfirmed(PeerAddress(account: account, device: second))
-        XCTAssertFalse(tracker.isPending(account), "both ratchets confirmed — nothing left to hold")
+    func testTheReleaseTellsTheMachine() {
+        let source = coordinatorSource
+        guard let release = source.range(of: "private func releaseConfirmGate") else {
+            return XCTFail("the single confirm-gate release is gone — if it moved, this moves with it")
+        }
+        let body = source[release.lowerBound...].prefix(1_500)
+        XCTAssertTrue(
+            body.contains("peerAcked"),
+            "an acknowledgement must reach the phase that is waiting for it"
+        )
     }
 
-    /// A `session_ready` that names no device — unsealed, or a client older than the sender
-    /// certificate — settles the account. A gate nothing can release is a conversation that stops
-    /// sending for the length of the window, which is worse than the coarse answer.
+    /// The account-shaped question is a fold over the device set, not a device the caller picked.
+    /// One message becomes a copy per device, so one unanswered ratchet is enough to hold a send;
+    /// asking about a single device would send on the siblings regardless.
     @MainActor
-    func testANamelessConfirmationSettlesTheWholeAccount() {
-        let tracker = SessionConfirmationTracker.shared
-        let account = "acct-\(UUID().uuidString)"
-        tracker.markPending(PeerAddress(account: account, device: device(0xc3)))
-        tracker.markPending(PeerAddress(account: account, device: device(0xd4)))
-
-        tracker.markConfirmed(.account(account))
-
-        XCTAssertFalse(tracker.isPending(account))
-    }
-
-    /// The gate goes up before the init can say which devices it opened, so it is raised on the
-    /// account and the init's answer replaces it. The placeholder must not outlive that answer:
-    /// confirming the opened ratchet would otherwise leave an account-keyed entry holding sends
-    /// for the rest of the window.
-    ///
-    /// Mutation: drop `dropPlaceholder` from `markPending` — this reddens.
-    @MainActor
-    func testTheAccountPlaceholderIsReplacedByTheDevicesTheInitOpened() {
-        let tracker = SessionConfirmationTracker.shared
-        let account = "acct-\(UUID().uuidString)"
-        let opened = device(0xe5)
-
-        tracker.markPending(.account(account))          // raised before the init answers
-        tracker.markPending(PeerAddress(account: account, device: opened))
-        tracker.markConfirmed(PeerAddress(account: account, device: opened))
-
-        XCTAssertFalse(tracker.isPending(account), "nothing but the replaced placeholder was left")
-    }
-
-    /// One watchdog serves the conversation, so its tick reads the ratchet that has waited
-    /// longest. Reading the youngest would keep a long-held gate up past its window.
-    @MainActor
-    func testTheWatchdogReadsTheOldestUnconfirmedRatchet() {
-        let tracker = SessionConfirmationTracker.shared
-        let account = "acct-\(UUID().uuidString)"
-        let old = device(0xf6), young = device(0x17)
-
-        tracker.markPending(PeerAddress(account: account, device: old))
-        tracker.expireForTesting(account)                       // backdates what exists so far
-        tracker.markPending(PeerAddress(account: account, device: young))
-
-        XCTAssertEqual(tracker.watchdogTick(account), .giveUp, "the oldest decides")
+    func testTheAccountShapedQuestionIsAFold() {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("ConstructMessenger/Security/CryptoManager.swift")
+        let source = (try? String(contentsOf: url, encoding: .utf8)) ?? ""
+        XCTAssertFalse(source.isEmpty, "CryptoManager.swift must be readable from the test bundle")
+        guard let fold = source.range(of: "func awaitsAcknowledgementFromAnyDevice") else {
+            return XCTFail("the fold is gone — the account-shaped answer has to come from somewhere")
+        }
+        let body = source[fold.lowerBound...].prefix(400)
+        XCTAssertTrue(body.contains("deviceIds(ofPeer:"), "the set comes from the directory")
+        XCTAssertTrue(body.contains("contains"), "and is folded, not indexed")
     }
 
     // MARK: - Not covered here, on purpose

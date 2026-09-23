@@ -210,9 +210,10 @@ final class ChatSessionManager {
         // once the SRI has that slot it is redundant — and sending it would put a second X3DH
         // carrier on the wire that the peer can only discard.
         //
-        // Asked of the account, because that is what the tracker is keyed by. Moving it to the
-        // device belongs with the rest of the confirm gate — `session-is-one-state-machine`.
-        guard !SessionConfirmationTracker.shared.isPending(userId) else {
+        // Asked of the account because the answer is: one message becomes a copy per device, so
+        // one unannounced-and-unanswered ratchet is enough. The fold is over the device set the
+        // machine is keyed by — it was a map on this side until 2026-09-23.
+        guard !CryptoManager.shared.awaitsAcknowledgementFromAnyDevice(ofPeer: userId) else {
             Log.info("SESSION_STATE[init_ping_skipped]: SESSION_RESET_INIT owns msgNum=0 for \(userId.prefix(8))…", category: "SessionInit")
             return
         }
