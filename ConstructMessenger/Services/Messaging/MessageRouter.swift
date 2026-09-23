@@ -2498,6 +2498,13 @@ final class MessageRouter {
         message.toUserId = currentUserId
         message.suiteId = 0
         message.timestamp = Date()
+        // A notice has no server position and never gets one, so it carries its own: the column
+        // stayed nil here until the next launch's backfill, and `isRepeatOfLastRow` below sorts
+        // on it. Two notices in one session therefore compared equal and the "newest row" was
+        // decided by a random UUID — the suppression this method performs was reading a coin flip.
+        message.serverOrderKey = ServerMessageOrder.local(
+            timestamp: message.timestamp, messageId: message.id
+        )
         message.isSentByMe = false
         message.deliveryStatus = .delivered
         message.retryCount = 0
@@ -2701,7 +2708,7 @@ final class MessageRouter {
         message.contentType = .regular
         message.timestamp = Date.fromRemoteTimestamp(messageData.timestamp)
         message.serverOrderKey = messageData.serverOrderKey
-            ?? ServerMessageOrder.legacy(timestamp: message.timestamp, messageId: canonicalId)
+            ?? ServerMessageOrder.local(timestamp: message.timestamp, messageId: canonicalId)
         message.isSentByMe = false
         message.deliveryStatus = .delivered
         message.retryCount = 0
@@ -3175,7 +3182,7 @@ final class MessageRouter {
         msg.toUserId = partnerUserId
         msg.timestamp = Date.fromRemoteTimestamp(original.timestamp)
         msg.serverOrderKey = original.serverOrderKey
-            ?? ServerMessageOrder.legacy(timestamp: msg.timestamp, messageId: rowId)
+            ?? ServerMessageOrder.local(timestamp: msg.timestamp, messageId: rowId)
         msg.isSentByMe = true
         msg.deliveryStatus = .sent
         msg.retryCount = 0

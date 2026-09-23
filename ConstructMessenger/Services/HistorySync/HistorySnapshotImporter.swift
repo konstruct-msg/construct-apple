@@ -265,8 +265,11 @@ struct HistorySnapshotImporter {
         row.fromUserId = from
         row.toUserId = to
         row.timestamp = Date(timeIntervalSince1970: TimeInterval(message.timestampUnixMs) / 1000)
-        // Deliberately omitted at this boundary: CTH1 v1 has no server-order field. The normal
-        // persistence backfill assigns the legacy key from this display timestamp.
+        // CTH1 v1 carries no server-order field, so an imported row has no server position and
+        // takes a local key at its display timestamp. Written here rather than left to the
+        // launch-time backfill: between the import and the next launch the column would be nil,
+        // and every transcript fetch in that window orders these rows at random.
+        row.serverOrderKey = ServerMessageOrder.local(timestamp: row.timestamp, messageId: id)
         row.isSentByMe = message.isSentByMe
         row.retryCount = 0
         row.chat = chatResult.chat

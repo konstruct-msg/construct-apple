@@ -79,7 +79,7 @@ class MessagePersistenceService {
             newMessage.serverOrderKey = message.serverOrderKey
                 ?? (isSentByMe
                     ? ServerMessageOrder.pending(localMessageId: newMessage.id)
-                    : ServerMessageOrder.legacy(timestamp: messageTimestamp, messageId: newMessage.id))
+                    : ServerMessageOrder.local(timestamp: messageTimestamp, messageId: newMessage.id))
             newMessage.isSentByMe = isSentByMe
             newMessage.deliveryStatus = status
             newMessage.retryCount = 0

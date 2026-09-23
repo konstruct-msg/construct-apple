@@ -157,9 +157,11 @@ struct PersistenceController {
         }
     }
 
-    /// Assign a deterministic migration key to rows written before transcript ordering became
-    /// server-authoritative. New rows are written with a real server key or an explicit pending
-    /// sentinel, so this fetch is normally empty after the first launch on the new model.
+    /// Assign a deterministic key to rows written before transcript ordering became
+    /// server-authoritative. Every path that creates a row now writes a server key, the pending
+    /// sentinel or a local key, so this fetch is normally empty after the first launch on the new
+    /// model — `TranscriptOrderIsTotalTests` is what holds that, not this comment: it used to say
+    /// the same thing while the system-notice path left the column nil.
     private func backfillMissingServerOrderKeys() {
         let context = container.viewContext
         let request = Message.fetchRequest()
@@ -167,7 +169,7 @@ struct PersistenceController {
         guard let messages = try? context.fetch(request), !messages.isEmpty else { return }
 
         for message in messages {
-            message.serverOrderKey = ServerMessageOrder.legacy(
+            message.serverOrderKey = ServerMessageOrder.local(
                 timestamp: message.safeTimestamp,
                 messageId: message.id
             )

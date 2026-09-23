@@ -54,6 +54,11 @@ final class SystemNoticeRepeatTests: XCTestCase {
         m.fromUserId = from
         m.toUserId = "me"
         m.timestamp = timestamp
+        // Stamped like every production path does. Without it these rows compare equal on the
+        // sort key and the fetch under test picks among them by random UUID — which is why this
+        // suite failed one or two runs in five and was written off as a flake
+        // (`TranscriptOrderIsTotalTests`).
+        m.serverOrderKey = ServerMessageOrder.local(timestamp: timestamp, messageId: m.id)
         m.isSentByMe = false
         m.deliveryStatus = .delivered
         m.applyStoredEncryption(plaintext: text, contactId: "annie")

@@ -33,7 +33,7 @@ final class StickerPreviewTests: XCTestCase {
         row.id = UUID().uuidString.lowercased()
         row.chat = chat
         row.timestamp = Date()
-        row.serverOrderKey = ServerMessageOrder.legacy(timestamp: row.timestamp, messageId: row.id)
+        row.serverOrderKey = ServerMessageOrder.local(timestamp: row.timestamp, messageId: row.id)
         row.isSentByMe = false
         row.fromUserId = "peer"
         row.toUserId = "me"

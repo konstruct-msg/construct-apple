@@ -2161,7 +2161,7 @@ final class SessionCoordinator: MessageRouterDelegate {
         message.toUserId = messageData.to
         message.timestamp = Date.fromRemoteTimestamp(messageData.timestamp)
         message.serverOrderKey = messageData.serverOrderKey
-            ?? ServerMessageOrder.legacy(timestamp: message.timestamp, messageId: canonicalId)
+            ?? ServerMessageOrder.local(timestamp: message.timestamp, messageId: canonicalId)
         message.isSentByMe = false
         message.deliveryStatus = .delivered
         message.retryCount = 0

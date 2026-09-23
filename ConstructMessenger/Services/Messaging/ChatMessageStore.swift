@@ -143,7 +143,7 @@ final class ChatMessageStore: NSObject {
         guard let messages = try? viewContext.fetch(request), !messages.isEmpty else { return }
 
         for message in messages {
-            message.serverOrderKey = ServerMessageOrder.legacy(
+            message.serverOrderKey = ServerMessageOrder.local(
                 timestamp: message.safeTimestamp,
                 messageId: message.id
             )
