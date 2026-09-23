@@ -1509,9 +1509,16 @@ final class SessionCoordinator: MessageRouterDelegate {
 
         guard let context = viewContext else { return }
 
-        let canContinue = SessionHealingService.shared.recordAttempt(
-            for: failedMessage.id, in: context
-        )
+        // One attempt, spent against the core's queue — the one that holds the carrier this heal
+        // is trying to open. It was a second `RustHealingQueue` here until 2026-09-23, keyed by
+        // account and fed a JSON `ChatMessage`, plus a Core Data column nothing read; the core's
+        // own `attempts`, beside the real payload, stayed at zero the whole time.
+        //
+        // Against the **device** the core named, not the account: `scope` is already per device
+        // for the init lock, and the budget is per ratchet for the same reason.
+        let canContinue = peer.deviceOrPinned().map {
+            CryptoManager.shared.recordHealAttempt(forDevice: $0)
+        } ?? false
 
         do {
             // Same walk as the first-message path: a heal that asks for one bundle asks about one
@@ -1535,7 +1542,9 @@ final class SessionCoordinator: MessageRouterDelegate {
 
             if healed {
                 Log.info("SESSION_STATE[heal_success]: session healed for \(userId.prefix(8))…", category: "SessionInit")
-                SessionHealingService.shared.removeRecord(for: failedMessage.id, in: context)
+                // No record to remove here: the session that now exists is what every attempt in
+                // this episode was trying to produce, and `sessionInitCompleted` — raised by the
+                // responder init that just succeeded — settles the episode in the core.
 
                 // The previously-failed X3DH init message is now decrypted and saved — the
                 // sender's checkmark is true, so send the receipt.
@@ -1556,7 +1565,6 @@ final class SessionCoordinator: MessageRouterDelegate {
                     FailedInitMessageStore.shared.add(failedMessage.id)
                     PersistentACKStore.shared.markProcessed(failedMessage.id, senderId: userId, in: context)
                     perform([.clearQueuedMessages], for: userId)
-                    SessionHealingService.shared.clearQueue(for: userId, in: context)
                     let otpkUnreproducible = SessionReinitHintStore.shared.consumeResponderOtpkUnreproducible(for: userId)
                     do {
                         try await sendEndSession(
@@ -1580,7 +1588,6 @@ final class SessionCoordinator: MessageRouterDelegate {
             Log.error("SESSION_STATE[heal_bundle_error]: \(error.localizedDescription) for \(userId.prefix(8))…", category: "SessionInit")
             if !canContinue {
                 perform([.clearQueuedMessages], for: userId)
-                SessionHealingService.shared.clearQueue(for: userId, in: context)
                 do {
                     try await sendEndSession(to: userId, reason: "heal_bundle_unreachable")
                 } catch {
@@ -1600,7 +1607,7 @@ final class SessionCoordinator: MessageRouterDelegate {
     ///
     /// **It is an id and not a position.** Both callers used to pass `skippingFirst: true` and this
     /// skipped `queued.first`, which was only ever the right message by coincidence. The heal path
-    /// opens on `failedMessage`, chosen by `SessionHealingService` and unrelated to queue order;
+    /// opens on `failedMessage`, which the core named and which is unrelated to queue order;
     /// and since the responder walk began trying every eligible carrier (2026-08-31) the first-
     /// message path opens on whichever carrier the peer's device actually sent, which for a
     /// multi-device peer is routinely not the first one queued. Getting it wrong is two failures at

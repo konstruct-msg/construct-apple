@@ -21,7 +21,8 @@ extension CryptoManager {
 
         if actions.contains(where: { action in
             switch action {
-            case .sendEndSession, .sessionHealNeeded, .fetchPublicKeyBundle, .openSession, .resendSri:
+            case .sendEndSession, .sessionHealNeeded, .fetchPublicKeyBundle, .openSession,
+                 .resendSri, .healExhausted:
                 return true
             default:
                 return false
@@ -55,6 +56,8 @@ extension CryptoManager {
             return "teardownRequested contactId=\(contactId.prefix(8))… cause=\(cause)"
         case .peerToreDown(let contactId):
             return "peerToreDown contactId=\(contactId.prefix(8))…"
+        case .healAttempted(let contactId):
+            return "healAttempted contactId=\(contactId.prefix(8))…"
         case .reopenRequested(let contactId):
             return "reopenRequested contactId=\(contactId.prefix(8))…"
         case .sriAnnounced(let contactId):
@@ -88,6 +91,9 @@ extension CryptoManager {
             case .openDeferred:             labels.insert("open_deferred")
             case .openNotNeeded:            labels.insert("open_not_needed")
             case .resendSri:                labels.insert("resend_sri")
+            case .healAttemptAllowed(_, let attempt): labels.insert("heal_attempt[\(attempt)]")
+            case .healExhausted:            labels.insert("heal_exhausted")
+            case .heldPendingAck:           labels.insert("held_pending_ack")
             case .openingGaveUp:            labels.insert("opening_gave_up")
             case .notifyError(let code, let msg) where firstError == nil:
                 firstError = (code, msg)

@@ -1479,11 +1479,6 @@ public protocol OrchestratorCoreProtocol: AnyObject, Sendable {
     
     func hasSession(contactId: String)  -> Bool
     
-    /**
-     * `true` iff `msg_number == 0` (healing-eligible message).
-     */
-    func healingCanHeal(msgNumber: UInt32)  -> Bool
-    
     func hybridSignaturePublicKey()  -> [UInt8]?
     
     func importHybridSignaturePrivateKey(privBytes: [UInt8]) throws 
@@ -1882,18 +1877,6 @@ open func hasSession(contactId: String) -> Bool  {
     uniffi_construct_core_fn_method_orchestratorcore_has_session(
             self.uniffiCloneHandle(),
         FfiConverterString.lower(contactId),$0
-    )
-})
-}
-    
-    /**
-     * `true` iff `msg_number == 0` (healing-eligible message).
-     */
-open func healingCanHeal(msgNumber: UInt32) -> Bool  {
-    return try!  FfiConverterBool.lift(try! rustCall() {
-    uniffi_construct_core_fn_method_orchestratorcore_healing_can_heal(
-            self.uniffiCloneHandle(),
-        FfiConverterUInt32.lower(msgNumber),$0
     )
 })
 }
@@ -2352,261 +2335,6 @@ public func FfiConverterTypeRustAckStore_lift(_ handle: UInt64) throws -> RustAc
 #endif
 public func FfiConverterTypeRustAckStore_lower(_ value: RustAckStore) -> UInt64 {
     return FfiConverterTypeRustAckStore.lower(value)
-}
-
-
-
-
-
-
-/**
- * Thread-safe session healing queue.
- *
- * Replaces Swift `SessionHealingService`.
- */
-public protocol RustHealingQueueProtocol: AnyObject, Sendable {
-    
-    /**
-     * `true` iff `msg_number == 0` — the only case eligible for healing.
-     */
-    func canHeal(msgNumber: UInt32)  -> Bool
-    
-    /**
-     * Enqueue `message_json` for `contact_id` (idempotent).
-     * Persistence is handled by the orchestrator CFE state export.
-     */
-    func enqueue(contactId: String, messageJson: String) 
-    
-    /**
-     * Serialise the queue state to a CFE blob for Keychain persistence.
-     * Returns an empty sequence on serialisation failure.
-     */
-    func exportState()  -> [UInt8]
-    
-    /**
-     * Restore queue state from a CFE blob produced by `export_state`.
-     * Silently no-ops on decode failure.
-     */
-    func importState(data: [UInt8]) 
-    
-    /**
-     * Number of pending healing records.
-     */
-    func len()  -> UInt64
-    
-    /**
-     * Remove expired healing records. Persistence handled by orchestrator CFE.
-     */
-    func pruneExpired() 
-    
-    /**
-     * Increment attempt counter for `contact_id`.
-     */
-    func recordAttempt(contactId: String)  -> HealingAttemptResult
-    
-    /**
-     * Remove the healing record after successful re-key.
-     */
-    func removeRecord(contactId: String)  -> Bool
-    
-}
-/**
- * Thread-safe session healing queue.
- *
- * Replaces Swift `SessionHealingService`.
- */
-open class RustHealingQueue: RustHealingQueueProtocol, @unchecked Sendable {
-    fileprivate let handle: UInt64
-
-    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
-#if swift(>=5.8)
-    @_documentation(visibility: private)
-#endif
-    public struct NoHandle {
-        public init() {}
-    }
-
-    // TODO: We'd like this to be `private` but for Swifty reasons,
-    // we can't implement `FfiConverter` without making this `required` and we can't
-    // make it `required` without making it `public`.
-#if swift(>=5.8)
-    @_documentation(visibility: private)
-#endif
-    required public init(unsafeFromHandle handle: UInt64) {
-        self.handle = handle
-    }
-
-    // This constructor can be used to instantiate a fake object.
-    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
-    //
-    // - Warning:
-    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
-#if swift(>=5.8)
-    @_documentation(visibility: private)
-#endif
-    public init(noHandle: NoHandle) {
-        self.handle = 0
-    }
-
-#if swift(>=5.8)
-    @_documentation(visibility: private)
-#endif
-    public func uniffiCloneHandle() -> UInt64 {
-        return try! rustCall { uniffi_construct_core_fn_clone_rusthealingqueue(self.handle, $0) }
-    }
-public convenience init() {
-    let handle =
-        try! rustCall() {
-    uniffi_construct_core_fn_constructor_rusthealingqueue_new($0
-    )
-}
-    self.init(unsafeFromHandle: handle)
-}
-
-    deinit {
-        try! rustCall { uniffi_construct_core_fn_free_rusthealingqueue(handle, $0) }
-    }
-
-    
-
-    
-    /**
-     * `true` iff `msg_number == 0` — the only case eligible for healing.
-     */
-open func canHeal(msgNumber: UInt32) -> Bool  {
-    return try!  FfiConverterBool.lift(try! rustCall() {
-    uniffi_construct_core_fn_method_rusthealingqueue_can_heal(
-            self.uniffiCloneHandle(),
-        FfiConverterUInt32.lower(msgNumber),$0
-    )
-})
-}
-    
-    /**
-     * Enqueue `message_json` for `contact_id` (idempotent).
-     * Persistence is handled by the orchestrator CFE state export.
-     */
-open func enqueue(contactId: String, messageJson: String)  {try! rustCall() {
-    uniffi_construct_core_fn_method_rusthealingqueue_enqueue(
-            self.uniffiCloneHandle(),
-        FfiConverterString.lower(contactId),
-        FfiConverterString.lower(messageJson),$0
-    )
-}
-}
-    
-    /**
-     * Serialise the queue state to a CFE blob for Keychain persistence.
-     * Returns an empty sequence on serialisation failure.
-     */
-open func exportState() -> [UInt8]  {
-    return try!  FfiConverterSequenceUInt8.lift(try! rustCall() {
-    uniffi_construct_core_fn_method_rusthealingqueue_export_state(
-            self.uniffiCloneHandle(),$0
-    )
-})
-}
-    
-    /**
-     * Restore queue state from a CFE blob produced by `export_state`.
-     * Silently no-ops on decode failure.
-     */
-open func importState(data: [UInt8])  {try! rustCall() {
-    uniffi_construct_core_fn_method_rusthealingqueue_import_state(
-            self.uniffiCloneHandle(),
-        FfiConverterSequenceUInt8.lower(data),$0
-    )
-}
-}
-    
-    /**
-     * Number of pending healing records.
-     */
-open func len() -> UInt64  {
-    return try!  FfiConverterUInt64.lift(try! rustCall() {
-    uniffi_construct_core_fn_method_rusthealingqueue_len(
-            self.uniffiCloneHandle(),$0
-    )
-})
-}
-    
-    /**
-     * Remove expired healing records. Persistence handled by orchestrator CFE.
-     */
-open func pruneExpired()  {try! rustCall() {
-    uniffi_construct_core_fn_method_rusthealingqueue_prune_expired(
-            self.uniffiCloneHandle(),$0
-    )
-}
-}
-    
-    /**
-     * Increment attempt counter for `contact_id`.
-     */
-open func recordAttempt(contactId: String) -> HealingAttemptResult  {
-    return try!  FfiConverterTypeHealingAttemptResult_lift(try! rustCall() {
-    uniffi_construct_core_fn_method_rusthealingqueue_record_attempt(
-            self.uniffiCloneHandle(),
-        FfiConverterString.lower(contactId),$0
-    )
-})
-}
-    
-    /**
-     * Remove the healing record after successful re-key.
-     */
-open func removeRecord(contactId: String) -> Bool  {
-    return try!  FfiConverterBool.lift(try! rustCall() {
-    uniffi_construct_core_fn_method_rusthealingqueue_remove_record(
-            self.uniffiCloneHandle(),
-        FfiConverterString.lower(contactId),$0
-    )
-})
-}
-    
-
-    
-}
-
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public struct FfiConverterTypeRustHealingQueue: FfiConverter {
-    typealias FfiType = UInt64
-    typealias SwiftType = RustHealingQueue
-
-    public static func lift(_ handle: UInt64) throws -> RustHealingQueue {
-        return RustHealingQueue(unsafeFromHandle: handle)
-    }
-
-    public static func lower(_ value: RustHealingQueue) -> UInt64 {
-        return value.uniffiCloneHandle()
-    }
-
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> RustHealingQueue {
-        let handle: UInt64 = try readInt(&buf)
-        return try lift(handle)
-    }
-
-    public static func write(_ value: RustHealingQueue, into buf: inout [UInt8]) {
-        writeInt(&buf, lower(value))
-    }
-}
-
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypeRustHealingQueue_lift(_ handle: UInt64) throws -> RustHealingQueue {
-    return try FfiConverterTypeRustHealingQueue.lift(handle)
-}
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypeRustHealingQueue_lower(_ value: RustHealingQueue) -> UInt64 {
-    return FfiConverterTypeRustHealingQueue.lower(value)
 }
 
 
@@ -3619,83 +3347,6 @@ public func FfiConverterTypeEphemeralKeyPair_lift(_ buf: RustBuffer) throws -> E
 #endif
 public func FfiConverterTypeEphemeralKeyPair_lower(_ value: EphemeralKeyPair) -> RustBuffer {
     return FfiConverterTypeEphemeralKeyPair.lower(value)
-}
-
-
-/**
- * Packed result of `RustHealingQueue.record_attempt`.
- */
-public struct HealingAttemptResult: Equatable, Hashable {
-    /**
-     * "retry_allowed" | "max_attempts_reached" | "not_found"
-     */
-    public var decision: String
-    /**
-     * 1-based attempt number (valid when decision == "retry_allowed").
-     */
-    public var attempt: UInt32
-    /**
-     * Minimum delay before the next retry in ms (exponential backoff: 2s/4s/8s).
-     */
-    public var retryAfterMs: UInt64
-
-    // Default memberwise initializers are never public by default, so we
-    // declare one manually.
-    public init(
-        /**
-         * "retry_allowed" | "max_attempts_reached" | "not_found"
-         */decision: String, 
-        /**
-         * 1-based attempt number (valid when decision == "retry_allowed").
-         */attempt: UInt32, 
-        /**
-         * Minimum delay before the next retry in ms (exponential backoff: 2s/4s/8s).
-         */retryAfterMs: UInt64) {
-        self.decision = decision
-        self.attempt = attempt
-        self.retryAfterMs = retryAfterMs
-    }
-
-    
-}
-
-#if compiler(>=6)
-extension HealingAttemptResult: Sendable {}
-#endif
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public struct FfiConverterTypeHealingAttemptResult: FfiConverterRustBuffer {
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> HealingAttemptResult {
-        return
-            try HealingAttemptResult(
-                decision: FfiConverterString.read(from: &buf), 
-                attempt: FfiConverterUInt32.read(from: &buf), 
-                retryAfterMs: FfiConverterUInt64.read(from: &buf)
-        )
-    }
-
-    public static func write(_ value: HealingAttemptResult, into buf: inout [UInt8]) {
-        FfiConverterString.write(value.decision, into: &buf)
-        FfiConverterUInt32.write(value.attempt, into: &buf)
-        FfiConverterUInt64.write(value.retryAfterMs, into: &buf)
-    }
-}
-
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypeHealingAttemptResult_lift(_ buf: RustBuffer) throws -> HealingAttemptResult {
-    return try FfiConverterTypeHealingAttemptResult.lift(buf)
-}
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypeHealingAttemptResult_lower(_ value: HealingAttemptResult) -> RustBuffer {
-    return FfiConverterTypeHealingAttemptResult.lower(value)
 }
 
 
@@ -5452,6 +5103,17 @@ public enum CfeAction: Equatable, Hashable {
     case heldPendingAck(contactId: String
     )
     /**
+     * The heal budget allows this attempt; `attempt` is its 1-based index.
+     */
+    case healAttemptAllowed(contactId: String, attempt: UInt32
+    )
+    /**
+     * The heal budget for this device is spent, or nothing is queued to spend it from — give up
+     * on the carrier and tear the ratchet down instead.
+     */
+    case healExhausted(contactId: String
+    )
+    /**
      * END_SESSION suppressed by cooldown — the core owes it and sends it in retry_after_ms.
      * Platform must NOT ACK.
      */
@@ -5598,85 +5260,91 @@ public struct FfiConverterTypeCfeAction: FfiConverterRustBuffer {
         case 9: return .heldPendingAck(contactId: try FfiConverterString.read(from: &buf)
         )
         
-        case 10: return .endSessionSuppressed(contactId: try FfiConverterString.read(from: &buf), retryAfterMs: try FfiConverterUInt64.read(from: &buf)
+        case 10: return .healAttemptAllowed(contactId: try FfiConverterString.read(from: &buf), attempt: try FfiConverterUInt32.read(from: &buf)
         )
         
-        case 11: return .endSessionNotNeeded(contactId: try FfiConverterString.read(from: &buf)
+        case 11: return .healExhausted(contactId: try FfiConverterString.read(from: &buf)
         )
         
-        case 12: return .openSession(contactId: try FfiConverterString.read(from: &buf)
+        case 12: return .endSessionSuppressed(contactId: try FfiConverterString.read(from: &buf), retryAfterMs: try FfiConverterUInt64.read(from: &buf)
         )
         
-        case 13: return .openDeferred(contactId: try FfiConverterString.read(from: &buf), retryAfterMs: try FfiConverterUInt64.read(from: &buf)
+        case 13: return .endSessionNotNeeded(contactId: try FfiConverterString.read(from: &buf)
         )
         
-        case 14: return .openNotNeeded(contactId: try FfiConverterString.read(from: &buf)
+        case 14: return .openSession(contactId: try FfiConverterString.read(from: &buf)
         )
         
-        case 15: return .resendSri(contactId: try FfiConverterString.read(from: &buf)
+        case 15: return .openDeferred(contactId: try FfiConverterString.read(from: &buf), retryAfterMs: try FfiConverterUInt64.read(from: &buf)
         )
         
-        case 16: return .openingGaveUp(contactId: try FfiConverterString.read(from: &buf)
+        case 16: return .openNotNeeded(contactId: try FfiConverterString.read(from: &buf)
         )
         
-        case 17: return .messageQueuedPendingInit(contactId: try FfiConverterString.read(from: &buf), queuedCount: try FfiConverterUInt32.read(from: &buf)
+        case 17: return .resendSri(contactId: try FfiConverterString.read(from: &buf)
         )
         
-        case 18: return .saveToSecureStore(slot: try FfiConverterTypeCfeSecureStoreSlot.read(from: &buf), data: try FfiConverterData.read(from: &buf)
+        case 18: return .openingGaveUp(contactId: try FfiConverterString.read(from: &buf)
         )
         
-        case 19: return .persistMessage(messageJson: try FfiConverterString.read(from: &buf)
+        case 19: return .messageQueuedPendingInit(contactId: try FfiConverterString.read(from: &buf), queuedCount: try FfiConverterUInt32.read(from: &buf)
         )
         
-        case 20: return .persistAck(messageId: try FfiConverterString.read(from: &buf), timestamp: try FfiConverterUInt64.read(from: &buf)
+        case 20: return .saveToSecureStore(slot: try FfiConverterTypeCfeSecureStoreSlot.read(from: &buf), data: try FfiConverterData.read(from: &buf)
         )
         
-        case 21: return .pruneAckStore(cutoffTs: try FfiConverterUInt64.read(from: &buf)
+        case 21: return .persistMessage(messageJson: try FfiConverterString.read(from: &buf)
         )
         
-        case 22: return .markMessageDelivered(messageId: try FfiConverterString.read(from: &buf)
+        case 22: return .persistAck(messageId: try FfiConverterString.read(from: &buf), timestamp: try FfiConverterUInt64.read(from: &buf)
         )
         
-        case 23: return .fetchPublicKeyBundle(userId: try FfiConverterString.read(from: &buf)
+        case 23: return .pruneAckStore(cutoffTs: try FfiConverterUInt64.read(from: &buf)
         )
         
-        case 24: return .sendEncryptedMessage(to: try FfiConverterString.read(from: &buf), payload: try FfiConverterData.read(from: &buf), messageId: try FfiConverterString.read(from: &buf), contentType: try FfiConverterUInt8.read(from: &buf)
+        case 24: return .markMessageDelivered(messageId: try FfiConverterString.read(from: &buf)
         )
         
-        case 25: return .sendReceipt(messageId: try FfiConverterString.read(from: &buf), status: try FfiConverterString.read(from: &buf)
+        case 25: return .fetchPublicKeyBundle(userId: try FfiConverterString.read(from: &buf)
         )
         
-        case 26: return .sendEndSession(contactId: try FfiConverterString.read(from: &buf)
+        case 26: return .sendEncryptedMessage(to: try FfiConverterString.read(from: &buf), payload: try FfiConverterData.read(from: &buf), messageId: try FfiConverterString.read(from: &buf), contentType: try FfiConverterUInt8.read(from: &buf)
         )
         
-        case 27: return .notifyNewMessage(chatId: try FfiConverterString.read(from: &buf), preview: try FfiConverterString.read(from: &buf)
+        case 27: return .sendReceipt(messageId: try FfiConverterString.read(from: &buf), status: try FfiConverterString.read(from: &buf)
         )
         
-        case 28: return .notifySessionCreated(contactId: try FfiConverterString.read(from: &buf)
+        case 28: return .sendEndSession(contactId: try FfiConverterString.read(from: &buf)
         )
         
-        case 29: return .notifyError(code: try FfiConverterString.read(from: &buf), message: try FfiConverterString.read(from: &buf)
+        case 29: return .notifyNewMessage(chatId: try FfiConverterString.read(from: &buf), preview: try FfiConverterString.read(from: &buf)
         )
         
-        case 30: return .scheduleTimer(timerId: try FfiConverterString.read(from: &buf), delayMs: try FfiConverterUInt64.read(from: &buf)
+        case 30: return .notifySessionCreated(contactId: try FfiConverterString.read(from: &buf)
         )
         
-        case 31: return .cancelTimer(timerId: try FfiConverterString.read(from: &buf)
+        case 31: return .notifyError(code: try FfiConverterString.read(from: &buf), message: try FfiConverterString.read(from: &buf)
         )
         
-        case 32: return .callSignalDecrypted(contactId: try FfiConverterString.read(from: &buf), messageId: try FfiConverterString.read(from: &buf), protoBytes: try FfiConverterData.read(from: &buf)
+        case 32: return .scheduleTimer(timerId: try FfiConverterString.read(from: &buf), delayMs: try FfiConverterUInt64.read(from: &buf)
         )
         
-        case 33: return .checkAckInDb(messageId: try FfiConverterString.read(from: &buf)
+        case 33: return .cancelTimer(timerId: try FfiConverterString.read(from: &buf)
         )
         
-        case 34: return .sendHeartbeat(contactId: try FfiConverterString.read(from: &buf)
+        case 34: return .callSignalDecrypted(contactId: try FfiConverterString.read(from: &buf), messageId: try FfiConverterString.read(from: &buf), protoBytes: try FfiConverterData.read(from: &buf)
         )
         
-        case 35: return .notifyLinkedDevicesOfSessionReset(contactId: try FfiConverterString.read(from: &buf)
+        case 35: return .checkAckInDb(messageId: try FfiConverterString.read(from: &buf)
         )
         
-        case 36: return .sessionTerminated(contactId: try FfiConverterString.read(from: &buf), archiveBytes: try FfiConverterData.read(from: &buf)
+        case 36: return .sendHeartbeat(contactId: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 37: return .notifyLinkedDevicesOfSessionReset(contactId: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 38: return .sessionTerminated(contactId: try FfiConverterString.read(from: &buf), archiveBytes: try FfiConverterData.read(from: &buf)
         )
         
         default: throw UniffiInternalError.unexpectedEnumCase
@@ -5740,83 +5408,94 @@ public struct FfiConverterTypeCfeAction: FfiConverterRustBuffer {
             FfiConverterString.write(contactId, into: &buf)
             
         
-        case let .endSessionSuppressed(contactId,retryAfterMs):
+        case let .healAttemptAllowed(contactId,attempt):
             writeInt(&buf, Int32(10))
+            FfiConverterString.write(contactId, into: &buf)
+            FfiConverterUInt32.write(attempt, into: &buf)
+            
+        
+        case let .healExhausted(contactId):
+            writeInt(&buf, Int32(11))
+            FfiConverterString.write(contactId, into: &buf)
+            
+        
+        case let .endSessionSuppressed(contactId,retryAfterMs):
+            writeInt(&buf, Int32(12))
             FfiConverterString.write(contactId, into: &buf)
             FfiConverterUInt64.write(retryAfterMs, into: &buf)
             
         
         case let .endSessionNotNeeded(contactId):
-            writeInt(&buf, Int32(11))
+            writeInt(&buf, Int32(13))
             FfiConverterString.write(contactId, into: &buf)
             
         
         case let .openSession(contactId):
-            writeInt(&buf, Int32(12))
+            writeInt(&buf, Int32(14))
             FfiConverterString.write(contactId, into: &buf)
             
         
         case let .openDeferred(contactId,retryAfterMs):
-            writeInt(&buf, Int32(13))
+            writeInt(&buf, Int32(15))
             FfiConverterString.write(contactId, into: &buf)
             FfiConverterUInt64.write(retryAfterMs, into: &buf)
             
         
         case let .openNotNeeded(contactId):
-            writeInt(&buf, Int32(14))
-            FfiConverterString.write(contactId, into: &buf)
-            
-        
-        case let .resendSri(contactId):
-            writeInt(&buf, Int32(15))
-            FfiConverterString.write(contactId, into: &buf)
-            
-        
-        case let .openingGaveUp(contactId):
             writeInt(&buf, Int32(16))
             FfiConverterString.write(contactId, into: &buf)
             
         
-        case let .messageQueuedPendingInit(contactId,queuedCount):
+        case let .resendSri(contactId):
             writeInt(&buf, Int32(17))
+            FfiConverterString.write(contactId, into: &buf)
+            
+        
+        case let .openingGaveUp(contactId):
+            writeInt(&buf, Int32(18))
+            FfiConverterString.write(contactId, into: &buf)
+            
+        
+        case let .messageQueuedPendingInit(contactId,queuedCount):
+            writeInt(&buf, Int32(19))
             FfiConverterString.write(contactId, into: &buf)
             FfiConverterUInt32.write(queuedCount, into: &buf)
             
         
         case let .saveToSecureStore(slot,data):
-            writeInt(&buf, Int32(18))
+            writeInt(&buf, Int32(20))
             FfiConverterTypeCfeSecureStoreSlot.write(slot, into: &buf)
             FfiConverterData.write(data, into: &buf)
             
         
         case let .persistMessage(messageJson):
-            writeInt(&buf, Int32(19))
+            writeInt(&buf, Int32(21))
             FfiConverterString.write(messageJson, into: &buf)
             
         
         case let .persistAck(messageId,timestamp):
-            writeInt(&buf, Int32(20))
+            writeInt(&buf, Int32(22))
             FfiConverterString.write(messageId, into: &buf)
             FfiConverterUInt64.write(timestamp, into: &buf)
             
         
         case let .pruneAckStore(cutoffTs):
-            writeInt(&buf, Int32(21))
+            writeInt(&buf, Int32(23))
             FfiConverterUInt64.write(cutoffTs, into: &buf)
             
         
         case let .markMessageDelivered(messageId):
-            writeInt(&buf, Int32(22))
+            writeInt(&buf, Int32(24))
             FfiConverterString.write(messageId, into: &buf)
             
         
         case let .fetchPublicKeyBundle(userId):
-            writeInt(&buf, Int32(23))
+            writeInt(&buf, Int32(25))
             FfiConverterString.write(userId, into: &buf)
             
         
         case let .sendEncryptedMessage(to,payload,messageId,contentType):
-            writeInt(&buf, Int32(24))
+            writeInt(&buf, Int32(26))
             FfiConverterString.write(to, into: &buf)
             FfiConverterData.write(payload, into: &buf)
             FfiConverterString.write(messageId, into: &buf)
@@ -5824,68 +5503,68 @@ public struct FfiConverterTypeCfeAction: FfiConverterRustBuffer {
             
         
         case let .sendReceipt(messageId,status):
-            writeInt(&buf, Int32(25))
+            writeInt(&buf, Int32(27))
             FfiConverterString.write(messageId, into: &buf)
             FfiConverterString.write(status, into: &buf)
             
         
         case let .sendEndSession(contactId):
-            writeInt(&buf, Int32(26))
+            writeInt(&buf, Int32(28))
             FfiConverterString.write(contactId, into: &buf)
             
         
         case let .notifyNewMessage(chatId,preview):
-            writeInt(&buf, Int32(27))
+            writeInt(&buf, Int32(29))
             FfiConverterString.write(chatId, into: &buf)
             FfiConverterString.write(preview, into: &buf)
             
         
         case let .notifySessionCreated(contactId):
-            writeInt(&buf, Int32(28))
+            writeInt(&buf, Int32(30))
             FfiConverterString.write(contactId, into: &buf)
             
         
         case let .notifyError(code,message):
-            writeInt(&buf, Int32(29))
+            writeInt(&buf, Int32(31))
             FfiConverterString.write(code, into: &buf)
             FfiConverterString.write(message, into: &buf)
             
         
         case let .scheduleTimer(timerId,delayMs):
-            writeInt(&buf, Int32(30))
+            writeInt(&buf, Int32(32))
             FfiConverterString.write(timerId, into: &buf)
             FfiConverterUInt64.write(delayMs, into: &buf)
             
         
         case let .cancelTimer(timerId):
-            writeInt(&buf, Int32(31))
+            writeInt(&buf, Int32(33))
             FfiConverterString.write(timerId, into: &buf)
             
         
         case let .callSignalDecrypted(contactId,messageId,protoBytes):
-            writeInt(&buf, Int32(32))
+            writeInt(&buf, Int32(34))
             FfiConverterString.write(contactId, into: &buf)
             FfiConverterString.write(messageId, into: &buf)
             FfiConverterData.write(protoBytes, into: &buf)
             
         
         case let .checkAckInDb(messageId):
-            writeInt(&buf, Int32(33))
+            writeInt(&buf, Int32(35))
             FfiConverterString.write(messageId, into: &buf)
             
         
         case let .sendHeartbeat(contactId):
-            writeInt(&buf, Int32(34))
+            writeInt(&buf, Int32(36))
             FfiConverterString.write(contactId, into: &buf)
             
         
         case let .notifyLinkedDevicesOfSessionReset(contactId):
-            writeInt(&buf, Int32(35))
+            writeInt(&buf, Int32(37))
             FfiConverterString.write(contactId, into: &buf)
             
         
         case let .sessionTerminated(contactId,archiveBytes):
-            writeInt(&buf, Int32(36))
+            writeInt(&buf, Int32(38))
             FfiConverterString.write(contactId, into: &buf)
             FfiConverterData.write(archiveBytes, into: &buf)
             
@@ -5973,6 +5652,13 @@ public enum CfeIncomingEvent: Equatable, Hashable {
     case reopenRequested(contactId: String
     )
     /**
+     * The platform is about to attempt one heal of `contact_id` and asks whether the budget
+     * allows it. Answered with `HealAttemptAllowed` or `HealExhausted` — never an empty list,
+     * because silence read as permission is an unbounded heal loop.
+     */
+    case healAttempted(contactId: String
+    )
+    /**
      * A SESSION_RESET_INIT has gone out to `contact_id`. A report, not a request: it starts the
      * confirm window and arms the retry the core owns.
      */
@@ -6046,10 +5732,13 @@ public struct FfiConverterTypeCfeIncomingEvent: FfiConverterRustBuffer {
         case 15: return .reopenRequested(contactId: try FfiConverterString.read(from: &buf)
         )
         
-        case 16: return .sriAnnounced(contactId: try FfiConverterString.read(from: &buf)
+        case 16: return .healAttempted(contactId: try FfiConverterString.read(from: &buf)
         )
         
-        case 17: return .peerAcked(contactId: try FfiConverterString.read(from: &buf)
+        case 17: return .sriAnnounced(contactId: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 18: return .peerAcked(contactId: try FfiConverterString.read(from: &buf)
         )
         
         default: throw UniffiInternalError.unexpectedEnumCase
@@ -6153,13 +5842,18 @@ public struct FfiConverterTypeCfeIncomingEvent: FfiConverterRustBuffer {
             FfiConverterString.write(contactId, into: &buf)
             
         
-        case let .sriAnnounced(contactId):
+        case let .healAttempted(contactId):
             writeInt(&buf, Int32(16))
             FfiConverterString.write(contactId, into: &buf)
             
         
-        case let .peerAcked(contactId):
+        case let .sriAnnounced(contactId):
             writeInt(&buf, Int32(17))
+            FfiConverterString.write(contactId, into: &buf)
+            
+        
+        case let .peerAcked(contactId):
+            writeInt(&buf, Int32(18))
             FfiConverterString.write(contactId, into: &buf)
             
         }
@@ -8925,9 +8619,6 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_method_orchestratorcore_has_session() != 45817) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_method_orchestratorcore_healing_can_heal() != 20996) {
-        return InitializationResult.apiChecksumMismatch
-    }
     if (uniffi_construct_core_checksum_method_orchestratorcore_hybrid_signature_public_key() != 51840) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -9009,30 +8700,6 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_method_rustackstore_prune_expired() != 19780) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_method_rusthealingqueue_can_heal() != 46759) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_construct_core_checksum_method_rusthealingqueue_enqueue() != 5619) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_construct_core_checksum_method_rusthealingqueue_export_state() != 8133) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_construct_core_checksum_method_rusthealingqueue_import_state() != 52469) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_construct_core_checksum_method_rusthealingqueue_len() != 8116) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_construct_core_checksum_method_rusthealingqueue_prune_expired() != 54495) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_construct_core_checksum_method_rusthealingqueue_record_attempt() != 50030) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_construct_core_checksum_method_rusthealingqueue_remove_record() != 39701) {
-        return InitializationResult.apiChecksumMismatch
-    }
     if (uniffi_construct_core_checksum_method_rustpqcontributions_clear() != 36635) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -9073,9 +8740,6 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_constructor_rustackstore_new() != 64675) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_construct_core_checksum_constructor_rusthealingqueue_new() != 42495) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_constructor_rustpqcontributions_new() != 4456) {

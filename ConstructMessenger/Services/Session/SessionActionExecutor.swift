@@ -147,6 +147,14 @@ final class SessionActionExecutor {
             // Requires MessageRouter delegate callbacks
             break  // scaffold
 
+        case .healAttemptAllowed, .healExhausted:
+            // Answers to `handleOrchestratorEvent(.healAttempted:)`, read synchronously by
+            // `CryptoManager.recordHealAttempt(forDevice:)` — the caller needs the verdict before
+            // it walks the peer's bundles, so it cannot wait for an executor hook. They appear
+            // here only because the switch is exhaustive, which is what stops a new action from
+            // arriving with no reader anywhere.
+            break
+
         case .heldPendingAck(let contactId):
             // A verdict `MessageRouter` acts on, because acting on it needs the message: it goes
             // into the per-peer buffer and is replayed when the wait ends. Nothing to do here

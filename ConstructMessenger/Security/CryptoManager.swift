@@ -853,7 +853,12 @@ class CryptoManager {
         // identity change, else a re-registered identity inherits the old one's PQ session state
         // and heal queue. (deleteData clears items written via saveData OR saveRawData — same key.)
         KeychainManager.shared.deleteData(forKey: "construct.kyber_session_state")
-        SessionHealingService.shared.clearAll()
+        // The heal queue this app kept for itself, gone 2026-09-23 with the second
+        // `RustHealingQueue`. The blob is still deleted because a build that predates the change
+        // may have written one, and a stale queue restored onto a fresh identity is the
+        // ghost-identity audit of 2026-07-26. The core's own queue goes with `forgetContactState`
+        // / the orchestrator state this teardown already clears.
+        KeychainManager.shared.deleteData(forKey: "construct.healing_queue_state")
 
         // MLS store is signed by the identity key being deleted — a fresh identity
         // can never operate the old groups, so drop the snapshot with the keys.
@@ -1118,6 +1123,29 @@ class CryptoManager {
     func sessionEpoch(for deviceId: String) -> SessionEpoch? {
         guard let sessionId = getSessionHealth(for: deviceId)?.sessionId else { return nil }
         return SessionEpoch(rawValue: sessionId)
+    }
+
+    /// Spend one heal attempt on `deviceId`'s ratchet, and say whether another is allowed.
+    ///
+    /// The count lives with the queued carrier, in the core. This app kept its own until
+    /// 2026-09-23 — a second `RustHealingQueue`, keyed by account and fed a JSON `ChatMessage`,
+    /// plus a Core Data column nothing read — and it was that copy which decided, while the
+    /// core's `attempts` beside the real carrier stayed at zero.
+    ///
+    /// `false` when the budget is spent **and** when the core has nothing queued for this
+    /// device: with no record there is nothing to bound the retries with, and an unbounded heal
+    /// loop is what the budget exists to prevent.
+    func recordHealAttempt(forDevice deviceId: String) -> Bool {
+        guard let contactId = SessionAddressing.asDevice(deviceId) else { return false }
+        guard let actions = try? handleOrchestratorEvent(
+            .healAttempted(contactId: contactId),
+            tag: "heal_attempted"
+        ) else {
+            // The core could not be asked, so nothing counted this attempt. Refusing is the
+            // bounded direction, and the caller's other guards still hold.
+            return false
+        }
+        return !actions.contains { if case .healExhausted = $0 { return true } else { return false } }
     }
 
     /// Get all user IDs with active sessions

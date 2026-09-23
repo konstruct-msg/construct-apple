@@ -72,7 +72,14 @@ enum AccountWipeKeys {
         "construct.orchestrator_state",
         "construct.orchestrator_state.afu_migrated.v1",
         "construct.cryptoKeys.afu_migrated.v2",
+        // The second healing queue, gone 2026-09-23 (step 4). Still wiped: a build predating the
+        // change may have written one, and a stale queue restored onto a fresh identity is the
+        // ghost-identity audit of 2026-07-26.
         "construct.healing_queue_state",
+        // "the dead `HealingMessage` rows have been emptied on this install". Not device-about,
+        // so it leaves with the identity: a wipe empties the store anyway, and a flag claiming
+        // work was done on data that no longer exists is the kind of leftover this list is for.
+        "construct.healingMessage.purged.v1",
         // Copies this account's messages still owe to a recipient's devices (§C). Leaves with the
         // account for the same reason the wire-payload entries do: they name messages and peers of
         // the person signing out, and a drain after a re-registration would try to send them as

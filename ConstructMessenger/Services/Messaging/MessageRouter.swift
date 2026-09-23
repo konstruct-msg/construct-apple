@@ -1061,7 +1061,6 @@ final class MessageRouter {
             // left held messages deferred forever, pinning the device cursor behind messages
             // nothing would ever revisit — invisible while the queue only ever held inits.
             removePendingMessages(for: peer.account)
-            SessionHealingService.shared.clearQueue(for: peer.account, in: context)
             PersistentACKStore.shared.markProcessed(message.id, senderId: peer.account, in: context)
             delegate?.messageRouter(self, needsEndSession: peer)
             if isNewChat { context.delete(chat) }
@@ -2019,12 +2018,12 @@ final class MessageRouter {
             delegate?.messageRouter(self, didWinTieBreak: peer)
         } else {
             // We are RESPONDER (lower deviceId) — peer WINS. Archive our session and heal.
-            guard SessionHealingService.shared.canHeal(message) else {
-                Log.error("SESSION_STATE[heal_limit_exceeded]: too many heal attempts for \(peer) — sending END_SESSION", category: "SessionInit")
-                PerformanceMetrics.shared.record(.undeliveredNoReceipt, label: "heal_limit_exceeded")
-                delegate?.messageRouter(self, needsEndSession: peer)
-                return
-            }
+            //
+            // A `canHeal` guard stood here until 2026-09-23 whose log line said "too many heal
+            // attempts". It asked no such thing: its body was `msg_number == 0`, and this branch
+            // is only reached from a decision the core makes at msgNum 0, so it was always true
+            // and the branch it guarded was unreachable. The budget is spent in
+            // `handleSessionHealNeeded`, against the core's queue, where the carrier is.
             Log.info("SESSION_STATE[heal_triggered]: becoming RESPONDER (core ranked \(ranked)), suiteId=\(suiteId)", category: "SessionInit")
             // The desynchronised session is the one the core just named. Archiving by account
             // resolves through `pinnedDevice(ofPeer:)` to the peer's *pinned* device, which on a
@@ -2033,7 +2032,9 @@ final class MessageRouter {
             if let diverged = peer.deviceOrPinned() {
                 CryptoManager.shared.archiveSession(for: diverged, reason: .manualReset)
             }
-            SessionHealingService.shared.enqueue(message, in: context)
+            // The carrier is already queued: the core's router enqueued its wire payload under
+            // the device when it decided `SessionHealNeeded`. What stood here put a JSON copy of
+            // the same message into a second queue keyed by account, and a third into Core Data.
             pendingQueue.enqueue(message, for: peer.account)
             delegate?.messageRouter(self, needsSessionHeal: peer, failedMessage: message)
         }
@@ -2222,9 +2223,10 @@ final class MessageRouter {
 
         // 3. Remove stale pending messages *from this device* and clear the heal queue. An SRI
         //    from one device used to drop the sibling's queued handshake here — see
-        //    `PendingSessionQueue.remove(for:device:)`. The heal queue stays account-keyed.
+        //    `PendingSessionQueue.remove(for:device:)`. The heal record is settled by the core on
+        //    the `PeerAcked` this path raises — per device, where the account-keyed clear that
+        //    stood here settled a sibling's episode along with this one's.
         pendingQueue.remove(for: userId, device: peer.device)
-        SessionHealingService.shared.clearQueue(for: userId, in: context)
 
         // 4. Route the X3DH payload as a fresh msgNum=0 — triggers normal RESPONDER init path.
         //    forceReinit: the session was just archived above, so the isProcessed dedup in
@@ -2340,10 +2342,10 @@ final class MessageRouter {
         requeueUndeliveredOutgoing(for: userId, in: context)
 
         // 3. Remove any pending *incoming* messages from the device that tore down, and the
-        //    healing queue for this user. The sibling's queued handshake is not this device's to
-        //    drop — see `PendingSessionQueue.remove(for:device:)`.
+        //    pending messages. The sibling's queued handshake is not this device's to drop — see
+        //    `PendingSessionQueue.remove(for:device:)`. The heal record is settled by the core on
+        //    `PeerToreDown`, per device, which is what the account-keyed clear here could not be.
         pendingQueue.remove(for: userId, device: peer.device)
-        SessionHealingService.shared.clearQueue(for: userId, in: context)
 
         // 4. Notify coordinator so the natural INITIATOR can prewarm immediately.
         delegate?.messageRouter(self, receivedEndSession: peer, timestamp: messageTimestamp)

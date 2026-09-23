@@ -101,9 +101,12 @@ class ChatsViewModel {
             didPerformFirstContextSetup = true
             streamLifecycle.forceReconnect()
         }
-        SessionHealingService.shared.restoreQueueState()
         PersistentACKStore.shared.pruneExpired(in: context)
-        SessionHealingService.shared.pruneExpired(in: context)
+        // `SessionHealingService.restoreQueueState` / `pruneExpired` stood here until 2026-09-23.
+        // Both served a second healing queue this app kept beside the core's; the core restores
+        // and prunes its own with the orchestrator state. What is left is the rows a previous
+        // build wrote — see `HealingMessage`.
+        HealingMessagePurge.runOnce(in: context)
     }
 
     // MARK: - Stream (pass-throughs for external callers)
@@ -236,12 +239,8 @@ class ChatsViewModel {
         for device in peerDevices {
             CryptoManager.shared.forgetContactState(for: device)
         }
-        // The core's heal record is not the one this app consults. `SessionHealingService` holds
-        // its **own** `RustHealingQueue` instance — a different object from the one inside
-        // `OrchestratorCore.lifecycle` — and it is that one which answers `canHeal` and counts
-        // attempts. Forgetting in the core leaves it untouched, so the prune has to clear both.
-        // Collapsing the two is step 4 of decisions/session-is-one-state-machine.
-        SessionHealingService.shared.clearQueue(for: userId, in: context)
+        // The second heal record this app used to keep is gone (step 4, 2026-09-23):
+        // `forgetContactState` above drops the core's, which is now the only one.
 
         Log.info(
             "Synapse pruned: \(userId.prefix(8))… — forgot \(peerDevices.count) device session(s)",
