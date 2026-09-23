@@ -66,6 +66,45 @@ struct SessionRestorePlan {
     }
 }
 
+/// What the Keychain session namespace holds, split by whether a per-device restore can name it.
+///
+/// `KeychainSessionAccounts.isSessionState` knowingly accepts three shapes: a `CryptoDeviceId`, a
+/// legacy `ServerUserId`, and the pair `<ServerUserId>:<CryptoDeviceId>` written between dae2aa37
+/// and the move to plain device ids. Only the first names something `restoreSession` can load — it
+/// reads `session_<deviceId>` and nothing else.
+///
+/// A value rather than a filter inside the service, for the reason the plan above is one: the two
+/// leftovers are a number someone has to decide about, and a `compactMap` that drops them silently
+/// is how they would stop being visible. Before this split they were not dropped either — they
+/// were handed to `restoreSession` and refused one `ERROR` at a time, on every launch.
+struct LiveSessionAccounts: Equatable {
+    /// Restorable, in the order the Keychain listed them.
+    let deviceIds: [String]
+    /// `<ServerUserId>:<CryptoDeviceId>` blobs. Reachable only by re-importing under the device
+    /// half, which is a migration of crypto state and belongs in a decision, not in a restore.
+    let strandedPairs: Int
+    /// Pre-2026-08-26 account-keyed blobs. The core no longer keys sessions this way, so these
+    /// name no ratchet at all.
+    let strandedAccounts: Int
+
+    static func classify(_ accounts: [String]) -> LiveSessionAccounts {
+        var deviceIds: [String] = []
+        var pairs = 0
+        var legacy = 0
+        for account in accounts where KeychainSessionAccounts.isLiveSession(account) {
+            guard let contactId = KeychainSessionAccounts.contactId(ofAccount: account) else { continue }
+            if SessionAddressing.isCryptoIdentity(contactId) {
+                deviceIds.append(contactId)
+            } else if KeychainSessionAccounts.perDeviceContact(ofAccount: account) != nil {
+                pairs += 1
+            } else {
+                legacy += 1
+            }
+        }
+        return LiveSessionAccounts(deviceIds: deviceIds, strandedPairs: pairs, strandedAccounts: legacy)
+    }
+}
+
 final class SessionRestoreService {
     private let persistence: PersistenceController
 
@@ -89,8 +128,8 @@ final class SessionRestoreService {
         // Both lists are consumed inline: the plan is the only list in scope below, so there is
         // no second one to iterate by mistake.
         let plan = SessionRestorePlan.make(
-            recentChatContacts: getRecentChatContactIds(limit: limit, context: context),
-            liveSessionContacts: liveSessionContactIds()
+            recentChatContacts: getRecentChatDeviceIds(limit: limit, context: context),
+            liveSessionContacts: liveSessionDeviceIds()
         )
 
         // The interesting number is how many the chat list could not name — before 2026-08-30
@@ -107,13 +146,35 @@ final class SessionRestoreService {
         }
     }
 
-    private func liveSessionContactIds() -> [String] {
-        KeychainManager.shared.sessionAccounts()
-            .filter(KeychainSessionAccounts.isLiveSession)
-            .compactMap(KeychainSessionAccounts.contactId(ofAccount:))
+    private func liveSessionDeviceIds() -> [String] {
+        let held = LiveSessionAccounts.classify(KeychainManager.shared.sessionAccounts())
+        let stranded = held.strandedPairs + held.strandedAccounts
+        if stranded > 0 {
+            Log.info(
+                "Session store holds \(held.strandedPairs) per-device-pair and \(held.strandedAccounts) "
+                + "account-keyed entries that no per-device restore can name — not attempted",
+                category: "SessionRestore"
+            )
+        }
+        return held.deviceIds
     }
 
-    private func getRecentChatContactIds(limit: Int, context: NSManagedObjectContext) -> [String] {
+    /// The devices of the most recent chats, most recent chat first.
+    ///
+    /// Expanded here, not passed on as accounts. `Chat.otherUser?.id` is a `ServerUserId`, and
+    /// everything below the seam takes a `CryptoDeviceId` — so until this expansion existed every
+    /// session the chat list named was refused by `SessionAddressing.asDevice` and counted as a
+    /// failure. Both testers' logs on 2026-09-23 showed it: 1 restored of 5 and 14 of 24, with an
+    /// `ERROR` per refusal. The 2026-08-30 note above diagnosed the chat list as account-space and
+    /// added the session store beside it; it left the account ids themselves going to a per-device
+    /// call.
+    ///
+    /// `limit` still caps *chats*, not devices: it exists so a long chat list does not make launch
+    /// slow, and a peer's second device is not a reason to restore one chat fewer.
+    /// Internal, not private: `SessionRestoreSourcesTests` drives it against an in-memory store.
+    /// The claim worth a test is that an account never leaves this method, and that is not
+    /// visible from the outside of a service whose other half is the Keychain.
+    func getRecentChatDeviceIds(limit: Int, context: NSManagedObjectContext) -> [String] {
         guard context.persistentStoreCoordinator != nil else {
             return []
         }
@@ -124,7 +185,9 @@ final class SessionRestoreService {
 
         do {
             let chats = try context.fetch(fetchRequest)
-            return chats.compactMap { $0.otherUser?.id }
+            return chats
+                .compactMap { $0.otherUser?.id }
+                .flatMap { SessionAddressing.deviceIds(ofPeer: $0, in: context) }
         } catch {
             return []
         }
