@@ -137,6 +137,7 @@ final class MessageRouter {
     private func holdUntilConfirmResolves(
         _ message: ChatMessage,
         from userId: String,
+        heldAgainstDevice: String,
         reason: String
     ) -> StreamCursorTracker.Outcome {
         if pendingQueue.contains(messageId: message.id, for: userId) { return .deferred }
@@ -150,22 +151,36 @@ final class MessageRouter {
         // Stamp the session this was held *against*. Without it the replay cannot tell an init
         // that is still live from one a later handshake has already replaced — see
         // SessionReducer.heldReplayDisposition.
-        // The gate is keyed by account and the epoch is per ratchet, so this stamps the pinned
-        // device's — which is what it stamped before, when `sessionEpoch` resolved the account
-        // itself. Both stamps come from here and from `replayHeldMessages`, so they compare like
-        // for like. The gate's account keying is the coordinator's remaining half
-        // (`decisions/session-is-one-state-machine.md`, steps 3–5), and this moves with it.
-        heldAgainstEpoch[message.id] = SessionAddressing.pinnedDevice(ofPeer: userId)
-            .flatMap { CryptoManager.shared.sessionEpoch(for: $0) }
+        //
+        // The **ratchet that could not read it**, which the core names on `.heldPendingAck`.
+        // Until 2026-09-23 this stamped the pinned device, because the gate was account-keyed and
+        // nothing here knew which ratchet had refused; a peer whose pinned device was not the
+        // sender then had its handshakes compared against an epoch that never moved, so a genuinely
+        // superseded init replayed and a live one could be dropped. An epoch is per ratchet and so
+        // is this.
+        heldAgainst[message.id] = HeldStamp(
+            device: heldAgainstDevice,
+            epoch: CryptoManager.shared.sessionEpoch(for: heldAgainstDevice)
+        )
         Log.info("SESSION_STATE[confirm_hold]: holding msgNum=\(message.messageNumber) from \(userId.prefix(8))… (\(reason)) — buffer \(pendingQueue.count(for: userId))", category: "MessageRouter")
         PerformanceMetrics.shared.record(.confirmHold, label: reason)
         return .deferred
     }
 
-    /// The `SessionEpoch` each held message was set aside against, keyed by message id.
-    /// Cleared as the buffer drains; a held message that never returns takes its entry with it
-    /// through the overflow path.
-    private var heldAgainstEpoch: [String: SessionEpoch?] = [:]
+    /// The ratchet a held message was set aside against: the device whose session refused it, and
+    /// that session's epoch at the moment of the hold.
+    ///
+    /// Both halves are needed at replay. The epoch alone cannot be re-read without knowing which
+    /// device to read it from, and the buffer that carries the message is per **account** — one
+    /// peer, several ratchets — so the device cannot be recovered from the queue it came out of.
+    private struct HeldStamp {
+        let device: String
+        let epoch: SessionEpoch?
+    }
+
+    /// Keyed by message id. Cleared as the buffer drains; a held message that never returns takes
+    /// its entry with it through the overflow path.
+    private var heldAgainst: [String: HeldStamp] = [:]
 
     /// Re-route everything held behind the tie-break confirm gate for `userId`.
     ///
@@ -182,14 +197,16 @@ final class MessageRouter {
         }
         let held = pendingQueue.drain(for: userId)
         guard !held.isEmpty else { return }
-        let current = SessionAddressing.pinnedDevice(ofPeer: userId)
-            .flatMap { CryptoManager.shared.sessionEpoch(for: $0) }
         var replayed = 0
         var superseded = 0
         for message in held {
-            let heldAgainst = heldAgainstEpoch.removeValue(forKey: message.id) ?? nil
+            // Read back from the same ratchet it was stamped against, so the comparison is
+            // like for like. One account's buffer can hold messages from several devices, and a
+            // single `current` read here was the account-shaped half of the same defect.
+            let stamp = heldAgainst.removeValue(forKey: message.id)
+            let current = stamp.flatMap { CryptoManager.shared.sessionEpoch(for: $0.device) }
             switch SessionReducer.heldReplayDisposition(
-                heldAgainst: heldAgainst,
+                heldAgainst: stamp?.epoch ?? nil,
                 current: current,
                 kind: SessionReducer.receivingInitKind(
                     messageNumber: message.messageNumber,
@@ -1002,7 +1019,12 @@ final class MessageRouter {
             // disagreement: what replays it is `releaseConfirmGate`, which flushes a peer. The
             // decision no longer folds, which is the half that was wrong.
             Log.info("SESSION_STATE[held_pending_ack]: msgNum=\(message.messageNumber) from \(otherUserId.prefix(8))… held behind our unacked SESSION_RESET_INIT to \(heldAgainstDevice.prefix(8))…", category: "SessionInit")
-            streamOutcome = holdUntilConfirmResolves(message, from: otherUserId, reason: "pending_confirm")
+            streamOutcome = holdUntilConfirmResolves(
+                message,
+                from: otherUserId,
+                heldAgainstDevice: heldAgainstDevice,
+                reason: "pending_confirm"
+            )
             if isNewChat { context.delete(chat) }
             return
         case .sessionHealNeeded(let divergedDevice, let role):

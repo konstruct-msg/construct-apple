@@ -85,6 +85,37 @@ final class ConfirmGateHoldTests: XCTestCase {
         )
     }
 
+    /// And the stamp a held message carries names the ratchet that refused it.
+    ///
+    /// It stamped `pinnedDevice(ofPeer:)` until 2026-09-23, because the gate was account-keyed
+    /// and nothing here knew which ratchet had refused. For a peer whose pinned device is not the
+    /// sender, that reads an epoch that never moves — so a superseded init replays into a heal
+    /// that archives a healthy session, which is the 2026-08-05 build-579 cascade, and a live one
+    /// can be dropped instead. An epoch is per ratchet, so both ends of the comparison are.
+    ///
+    /// Mutation: stamp `pinnedDevice(ofPeer: userId)` again — this reddens.
+    func testTheHeldStampNamesTheRatchetThatRefusedIt() {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("ConstructMessenger/Services/Messaging/MessageRouter.swift")
+        guard let source = try? String(contentsOf: url, encoding: .utf8) else {
+            return XCTFail("MessageRouter.swift must be readable from the test bundle")
+        }
+        guard let hold = source.range(of: "private func holdUntilConfirmResolves") else {
+            return XCTFail("the hold is gone — if it moved, this test moves with it")
+        }
+        let body = source[hold.lowerBound...].prefix(2_200)
+        XCTAssertTrue(
+            body.contains("sessionEpoch(for: heldAgainstDevice)"),
+            "the core names the ratchet on .heldPendingAck; the stamp must be read from it"
+        )
+        XCTAssertFalse(
+            body.contains("pinnedDevice(ofPeer:"),
+            "the pinned device is the offline answer, not the one that refused this message"
+        )
+    }
+
     // MARK: - 2026-08-21: the gate held its own key
 
     /// The envelope of the peer's `session_ready` — the message that closes the gate. Its type
