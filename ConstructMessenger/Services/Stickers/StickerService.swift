@@ -123,16 +123,20 @@ final class StickerService {
     /// Seed the packs that ship in the app, once each. Verified exactly as a fetched pack is
     /// (`BundledStickerPacks` says where the one DEBUG exemption lies); a pack that fails is
     /// logged and skipped, never trusted for being in the bundle. A pack already seeded is left
-    /// alone even if it is absent now — that is an uninstall, and it stands.
+    /// alone even if it is absent now — that is an uninstall, and it stands. A `retired` pack is
+    /// made present and taken off the picker once (`BundledStickerPacks.retired`), never seeded.
     ///
     /// Returns the ids seeded on this call.
     @discardableResult
     func seedBundledPacks(
         from source: any BundledPackSource = Bundle.main,
-        defaults: UserDefaults = .standard
+        defaults: UserDefaults = .standard,
+        retired: Set<String> = BundledStickerPacks.retired
     ) -> [StickerPackID] {
         var seeded = Set(defaults.stringArray(forKey: BundledStickerPacks.seededDefaultsKey) ?? [])
+        var retiredDone = Set(defaults.stringArray(forKey: BundledStickerPacks.retiredDefaultsKey) ?? [])
         var added: [StickerPackID] = []
+        var changed = false
         for manifestBytes in source.manifests() {
             do {
                 let pack = try StickerPack.verify(
@@ -140,6 +144,20 @@ final class StickerService {
                     allowUnsigned: BundledStickerPacks.allowUnsigned,
                     trustedKeys: trustedKeys()
                 )
+                if retired.contains(pack.id.hex) {
+                    // Present for the messages that name it, never listed by seeding.
+                    if !store.isPresent(pack.id) {
+                        try store.install(pack, manifestBytes: manifestBytes) { source.blob($0.sha256) }
+                        changed = true
+                    }
+                    if !retiredDone.contains(pack.id.hex) {
+                        try store.setInstalled(pack.id, false)
+                        retiredDone.insert(pack.id.hex)
+                        changed = true
+                        Log.info("Bundled sticker pack \(pack.id.hex.prefix(16))… retired from the picker", category: "Stickers")
+                    }
+                    continue
+                }
                 if seeded.contains(pack.id.hex) { continue }
                 if !store.isPresent(pack.id) {
                     try store.install(pack, manifestBytes: manifestBytes) { source.blob($0.sha256) }
@@ -154,6 +172,11 @@ final class StickerService {
         }
         if !added.isEmpty {
             defaults.set(Array(seeded).sorted(), forKey: BundledStickerPacks.seededDefaultsKey)
+        }
+        if changed {
+            defaults.set(Array(retiredDone).sorted(), forKey: BundledStickerPacks.retiredDefaultsKey)
+        }
+        if !added.isEmpty || changed {
             installedGeneration += 1
         }
         return added

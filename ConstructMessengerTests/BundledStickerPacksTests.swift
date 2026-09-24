@@ -143,4 +143,43 @@ final class BundledStickerPacksTests: XCTestCase {
         XCTAssertEqual(service.seedBundledPacks(from: source, defaults: defaults), [id])
         XCTAssertEqual(service.store.installedPacks(), [id])
     }
+
+    // MARK: - Retired
+
+    /// Fresh device: a retired pack is present for the messages that name it, and not listed.
+    /// Mutation that reddens it: seed a retired pack like any other (drop the `retired` branch).
+    func testRetiredPackIsPresentButNotInThePicker() throws {
+        let (source, id) = try fixtureSource()
+        let (service, defaults) = makeService()
+
+        XCTAssertEqual(service.seedBundledPacks(from: source, defaults: defaults, retired: [id.hex]), [])
+        XCTAssertTrue(service.store.isPresent(id), "an old message must still render from the bundle")
+        XCTAssertEqual(service.store.installedPacks(), [])
+    }
+
+    /// Existing device: the pack seeded by an older build is taken off the picker, and its blobs
+    /// stay. Mutation that reddens it: skip `setInstalled(false)` for a pack already present.
+    func testRetiringTakesAnAlreadySeededPackOffThePicker() throws {
+        let (source, id) = try fixtureSource()
+        let (service, defaults) = makeService()
+        XCTAssertEqual(service.seedBundledPacks(from: source, defaults: defaults), [id])
+        let gen = service.installedGeneration
+
+        XCTAssertEqual(service.seedBundledPacks(from: source, defaults: defaults, retired: [id.hex]), [])
+        XCTAssertEqual(service.store.installedPacks(), [])
+        XCTAssertTrue(service.store.isPresent(id))
+        XCTAssertEqual(service.installedGeneration, gen + 1, "the picker must reload to drop it")
+    }
+
+    /// Retiring happens once: a person who installs the pack again keeps it on every later launch.
+    /// Mutation that reddens it: not remembering the retired id (uninstall on every launch).
+    func testAReinstalledRetiredPackStaysInstalled() throws {
+        let (source, id) = try fixtureSource()
+        let (service, defaults) = makeService()
+        _ = service.seedBundledPacks(from: source, defaults: defaults, retired: [id.hex])
+        try service.store.setInstalled(id, true)
+
+        _ = service.seedBundledPacks(from: source, defaults: defaults, retired: [id.hex])
+        XCTAssertEqual(service.store.installedPacks(), [id])
+    }
 }

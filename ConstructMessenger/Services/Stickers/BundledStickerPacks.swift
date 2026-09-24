@@ -42,6 +42,18 @@ enum BundledStickerPacks {
     /// launch. Keyed by pack id, not by file name: a re-signed manifest is the same pack.
     static let seededDefaultsKey = "stickers.bundled.seeded"
 
+    /// Bundled packs a newer pack replaced, by pack id hex. A pack has no versions — its id is the
+    /// hash of its manifest — so a redrawn pack is a different pack, and messages already sent
+    /// keep naming the old one. A retired pack therefore stays in the bundle and is made present,
+    /// so those messages render as images on any device, fetch or no fetch; it is only taken off
+    /// the picker, once, which is what `retiredDefaultsKey` remembers — a person who installs it
+    /// again from the catalog keeps it.
+    static let retired: Set<String> = [
+        // Momo the cat, nine stickers — replaced 2026-09-24 by the fourteen-sticker redraw.
+        "96faa6e6d33167276d172920cd00d8bc8017fc39ab66e366516b338fcfc882f1",
+    ]
+    static let retiredDefaultsKey = "stickers.bundled.retired"
+
     /// Accepted unsigned only where the proto says a client may: DEBUG, own bundle.
     static var allowUnsigned: Bool {
         #if DEBUG
