@@ -150,10 +150,10 @@ struct DesktopSynapsView: View {
             }
         }
         .alert(
-            NSLocalizedString("synaps_prune_title", comment: ""),
+            NSLocalizedString("synapses_prune_title", comment: ""),
             isPresented: $showPruneAlert
         ) {
-            Button(NSLocalizedString("synaps_prune_action", comment: ""), role: .destructive) {
+            Button(NSLocalizedString("synapses_prune_action", comment: ""), role: .destructive) {
                 if let user = pruneTarget {
                     Task { await chatsViewModel.pruneContact(userId: user.id) }
                 }
@@ -162,7 +162,7 @@ struct DesktopSynapsView: View {
             Button(NSLocalizedString("cancel", comment: ""), role: .cancel) { pruneTarget = nil }
         } message: {
             if let name = pruneTarget?.displayName {
-                Text(String(format: NSLocalizedString("synaps_prune_message", comment: ""), name))
+                Text(String(format: NSLocalizedString("synapses_prune_message", comment: ""), name))
             }
         }
     }
@@ -252,10 +252,10 @@ struct DesktopSynapsView: View {
 
     private var emptyState: some View {
         VStack(spacing: 14) {
-            Text(LocalizedStringKey("synaps_empty_title"))
+            Text(LocalizedStringKey("synapses_empty_title"))
                 .font(CTFont.headline)
                 .foregroundStyle(Color.CT.text)
-            Text(LocalizedStringKey("synaps_empty_subtitle"))
+            Text(LocalizedStringKey("synapses_empty_subtitle"))
                 .font(CTFont.secondary)
                 .foregroundStyle(Color.CT.textDim)
                 .multilineTextAlignment(.center)
@@ -470,7 +470,7 @@ private struct DesktopContactNode: View {
             Button(role: .destructive) {
                 onRemove()
             } label: {
-                Text(NSLocalizedString("synaps_prune_action", comment: ""))
+                Text(NSLocalizedString("synapses_prune_action", comment: ""))
             }
         }
         // Profile popover anchored to the node
@@ -573,7 +573,7 @@ private struct DesktopNodePopover: View {
                     .padding(.horizontal, 12)
 
                 popoverButton(
-                    label: NSLocalizedString("synaps_prune_action", comment: ""),
+                    label: NSLocalizedString("synapses_prune_action", comment: ""),
                     symbol: "xmark.circle",
                     color: Color.CT.danger
                 ) {

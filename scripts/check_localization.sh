@@ -61,41 +61,11 @@ STRINGS="$ROOT/ConstructMessenger"
 CODE_ROOTS=("$ROOT/ConstructMessenger" "$ROOT/Construct Desktop")
 FAIL=0
 
-# Keys used in code that resolve to nothing, as of 2026-08-14. Each renders as the
-# raw key on a real screen. Fix them and delete the line; never append.
+# Keys used in code that resolve to nothing. Empty since 2026-09-24: the list seeded
+# on 2026-08-14 was either given a string in all four locales or pointed at a key that
+# already had one (the misspelled `trasncription` included). Fix a new one and do not
+# append it here.
 BASELINE=$(cat <<'EOF'
-DEVELOPER
-MESSAGE_NOTIFICATIONS
-PUSH_NOTIFICATIONS
-backup_restore_required_message
-backup_restore_required_title
-spam_force_banned
-spam_warning_wait
-stt_error_no_model
-stt_error_unavailable
-transcription
-trasncription
-call_status_busy
-call_status_calling
-call_status_connected
-call_status_connecting
-call_status_declined
-call_status_ended
-call_status_failed
-mic_denied_message_macos
-mic_denied_title
-spam_force_send
-spam_seconds
-spam_strong_warning_body
-spam_strong_warning_title
-spam_warning_title
-synaps_empty_subtitle
-synaps_empty_title
-synaps_prune_action
-synaps_prune_message
-synaps_prune_title
-synaps_search_prompt
-voice_ready_to_send
 EOF
 )
 
@@ -148,7 +118,11 @@ if [ -n "$new_unresolved" ]; then
     FAIL=1
 else
     n=$(echo "$unresolved" | grep -c . || true)
-    echo "✓ no new unresolved keys ($n known, listed in BASELINE — still shown raw to users)"
+    if [ "$n" -eq 0 ]; then
+        echo "✓ every localized key used in code has an entry in en.lproj"
+    else
+        echo "✓ no new unresolved keys ($n known, listed in BASELINE — still shown raw to users)"
+    fi
 fi
 
 # A fixed key left in BASELINE hides the next regression behind it.

@@ -1291,3 +1291,20 @@
 "desktop_add_invite_placeholder" = "https://konstruct.cc/add?invite=… または konstruct://add?…";
 "desktop_add_paste_clipboard" = "クリップボードから貼り付け";
 "desktop_add_supported" = "konstruct://add?invite=… または https://konstruct.cc/add?invite=…";
+
+"backup_restore_required_title" = "再起動が必要です";
+"backup_restore_required_message" = "復元を終えるには、コンストラクトを閉じて開き直してください。";
+"spam_warning_title" = "送信中…";
+"spam_warning_wait" = "%d秒お待ちください";
+"spam_strong_warning_title" = "いつもと違う操作";
+"spam_strong_warning_body" = "いつもより速くメッセージを送っています。少し待ってください。";
+"spam_seconds" = "秒";
+"spam_force_send" = "危険を理解したうえで送信する";
+"spam_force_banned" = "あと%d分は待機を省略できません";
+"stt_error_no_model" = "文字起こしのモデルがまだダウンロードされていません。";
+"stt_error_unavailable" = "この端末では文字起こしを利用できません。";
+"call_status_calling" = "発信中…";
+"call_status_connected" = "通話中";
+"mic_denied_title" = "マイクへのアクセスが拒否されました";
+"mic_denied_message_macos" = "ボイスメッセージを送るには、設定でマイクを許可してください。";
+"voice_ready_to_send" = "送信できます";

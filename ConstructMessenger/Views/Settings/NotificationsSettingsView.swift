@@ -133,7 +133,7 @@ struct NotificationsSettingsView: View {
 
                 // MARK: - Message Notifications
                 if notificationsEnabled {
-                    CTSettingsSectionHeader(title: NSLocalizedString("MESSAGE_NOTIFICATIONS", comment: "").uppercased())
+                    CTSettingsSectionHeader(title: NSLocalizedString("message_notifications", comment: "").uppercased())
                     CTSectionGroup {
                         HStack {
                             Text(LocalizedStringKey("show_message_notifications"))
@@ -177,7 +177,7 @@ struct NotificationsSettingsView: View {
                     }
 
                     // MARK: - Push Notifications
-                    CTSettingsSectionHeader(title: NSLocalizedString("PUSH_NOTIFICATIONS", comment: "").uppercased())
+                    CTSettingsSectionHeader(title: NSLocalizedString("push_notifications", comment: "").uppercased())
                     CTSectionGroup {
                         #if targetEnvironment(macCatalyst)
                         VStack(alignment: .leading, spacing: NotificationsSettingsLayout.pushDetailSpacing) {

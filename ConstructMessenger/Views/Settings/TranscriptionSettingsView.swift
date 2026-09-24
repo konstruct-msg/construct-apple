@@ -23,7 +23,7 @@ struct TranscriptionSettingsView: View {
     var body: some View {
         if showNavBar {
             CTNavBar(
-                title: NSLocalizedString("trasncription", comment: ""),
+                title: NSLocalizedString("stt_section_title", comment: ""),
                 showBack: true,
                 backAction: { dismiss() }
             ) {

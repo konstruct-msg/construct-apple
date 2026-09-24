@@ -170,19 +170,19 @@ struct DesktopInCallView: View {
             switch endReason {
             case .hangup(let r):
                 switch r {
-                case .declined:  return NSLocalizedString("call_status_declined", comment: "")
-                case .busy:      return NSLocalizedString("call_status_busy", comment: "")
-                default:         return elapsed > 0 ? formatDuration(elapsed) : NSLocalizedString("call_status_ended", comment: "")
+                case .declined:  return NSLocalizedString("call_declined", comment: "")
+                case .busy:      return NSLocalizedString("call_busy", comment: "")
+                default:         return elapsed > 0 ? formatDuration(elapsed) : NSLocalizedString("call_ended", comment: "")
                 }
-            case .error:   return NSLocalizedString("call_status_failed", comment: "")
-            case .local:   return NSLocalizedString("call_status_ended", comment: "")
-            case .none:    return NSLocalizedString("call_status_ended", comment: "")
+            case .error:   return NSLocalizedString("call_failed", comment: "")
+            case .local:   return NSLocalizedString("call_ended", comment: "")
+            case .none:    return NSLocalizedString("call_ended", comment: "")
             }
         }
         if isConnecting {
             switch session.direction {
             case .outgoing: return NSLocalizedString("call_status_calling", comment: "")
-            case .incoming: return NSLocalizedString("call_status_connecting", comment: "")
+            case .incoming: return NSLocalizedString("call_connecting", comment: "")
             }
         }
         return elapsed > 0 ? formatDuration(elapsed) : NSLocalizedString("call_status_connected", comment: "")

@@ -54,15 +54,15 @@ struct IOSMessageInputView: View {
         .fullScreenCover(item: $attachmentTap) { target in
             attachmentDestination(target)
         }
-        .alert("Microphone Access Denied", isPresented: $showMicPermissionAlert) {
-            Button("Cancel", role: .cancel) {}
-            Button("Settings") {
+        .alert(NSLocalizedString("mic_denied_title", comment: ""), isPresented: $showMicPermissionAlert) {
+            Button(NSLocalizedString("cancel", comment: ""), role: .cancel) {}
+            Button(NSLocalizedString("settings", comment: "")) {
                 if let url = URL(string: UIApplication.openSettingsURLString) {
                     UIApplication.shared.open(url)
                 }
             }
         } message: {
-            Text("Please allow microphone access in Settings to send voice messages.")
+            Text(NSLocalizedString("mic_denied_message_macos", comment: ""))
         }
         .onChange(of: droppedImages) { _, newImages in
             attachments.appendDroppedImages(newImages)

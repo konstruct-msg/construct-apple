@@ -70,7 +70,9 @@ enum DiagnosticsConfig {
     /// Tail window for the recent-log preview. 256 KB holds ~200 lines at any realistic width;
     /// the point is that it is a constant, so the read cost no longer scales with the log file.
     static let recentLogTailBytes: Int = 256 * 1024
-    static let recentLogContainerHeight: CGFloat = 340
+    // recentLogContainerHeight removed 2026-09-23: it sized a nested scroll view,
+    // and a nested scroll view on this screen was the pop crash. The preview
+    // scrolls with the page now.
     // clearLogsRefreshDelay removed 2026-08-04: `clearLogs` now reports completion, so there is
     // nothing left to guess a duration for. A constant with no consumer is a defect (AGENTS.md).
 }

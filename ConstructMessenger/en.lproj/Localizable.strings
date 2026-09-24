@@ -1290,3 +1290,20 @@
 "desktop_add_invite_placeholder" = "https://konstruct.cc/add?invite=… or konstruct://add?…";
 "desktop_add_paste_clipboard" = "Paste from Clipboard";
 "desktop_add_supported" = "konstruct://add?invite=… or https://konstruct.cc/add?invite=…";
+
+"backup_restore_required_title" = "Restart required";
+"backup_restore_required_message" = "Close and reopen Konstruct to finish restoring this backup.";
+"spam_warning_title" = "Sending…";
+"spam_warning_wait" = "Please wait %d seconds";
+"spam_strong_warning_title" = "Unusual activity";
+"spam_strong_warning_body" = "You're sending messages faster than usual. Please wait a moment.";
+"spam_seconds" = "sec";
+"spam_force_send" = "I understand the risk, send anyway";
+"spam_force_banned" = "You can’t skip the wait for %d min";
+"stt_error_no_model" = "No transcription model is downloaded yet.";
+"stt_error_unavailable" = "Transcription isn’t available on this device.";
+"call_status_calling" = "Calling…";
+"call_status_connected" = "Connected";
+"mic_denied_title" = "Microphone access denied";
+"mic_denied_message_macos" = "Allow microphone access in Settings to send voice messages.";
+"voice_ready_to_send" = "Ready to send";

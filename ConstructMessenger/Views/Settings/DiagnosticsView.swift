@@ -22,6 +22,11 @@ struct DiagnosticsView: View {
     
     @State private var logText: String = ""
     @State private var logSize: String = ""
+    /// Bumped when a preview read is no longer the screen's. A read started on
+    /// appear finishes on a background queue; writing that result into a view
+    /// that is already being popped is the update that lands inside the
+    /// dismissal. Leaving the screen retires the generation.
+    @State private var logPreviewGeneration = 0
     @State private var push = PushNotificationManager.shared
     #if DEBUG
     /// The transcript path. Sampled once per chat push, so this lands on the *next* chat you open,
@@ -84,7 +89,13 @@ struct DiagnosticsView: View {
 
     var body: some View {
         ScrollView {
-            LazyVStack(spacing: SettingsLayout.sectionSpacing) {
+            // VStack, not LazyVStack. This screen is popped while its scroll view
+            // is still decelerating — that is what "crash on the way out" is, and
+            // a lazy stack recycles rows during that deceleration. The page is a
+            // handful of sections, not a long list. One scroll view: a second,
+            // nested one around the log preview was in the tree only once the
+            // preview had loaded, which is the "sometimes".
+            VStack(spacing: SettingsLayout.sectionSpacing) {
                 
                 if showNavBar {
                     CTNavBar(
@@ -101,7 +112,7 @@ struct DiagnosticsView: View {
                 // MARK: - Push Notifications
                 VStack(alignment: .leading, spacing: DiagnosticsLayout.sectionHintSpacing) {
                     VStack(alignment: .leading, spacing: 0) {
-                        CTSettingsSectionHeader(title: NSLocalizedString("PUSH_NOTIFICATIONS", comment: ""), color: .orange)
+                        CTSettingsSectionHeader(title: NSLocalizedString("push_notifications", comment: ""), color: .orange)
                         CTSectionGroup {
                             diagRow(
                                 label: NSLocalizedString("diagnostics_permission", comment: ""),
@@ -134,7 +145,7 @@ struct DiagnosticsView: View {
                 // MARK: - Dev Tools (Debug only)
                 VStack(alignment: .leading, spacing: DiagnosticsLayout.sectionHintSpacing) {
                     VStack(alignment: .leading, spacing: 0) {
-                        CTSettingsSectionHeader(title: NSLocalizedString("DEVELOPER", comment: ""), color: .orange)
+                        CTSettingsSectionHeader(title: NSLocalizedString("developer", comment: ""), color: .orange)
                         CTSectionGroup {
                             // The stream cursor, and the way out when it stops moving.
                             //
@@ -322,15 +333,12 @@ struct DiagnosticsView: View {
                     VStack(alignment: .leading, spacing: 0) {
                         CTSettingsSectionHeader(title: NSLocalizedString("diagnostics_recent_logs", comment: ""), color: .orange)
                         CTSectionGroup {
-                            ScrollView {
-                                Text(logText)
-                                    .font(CTFont.mono(DiagnosticsLayout.recentLogFontSize))
-                                    .foregroundStyle(Color.white)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                    .padding(DiagnosticsLayout.recentLogPadding)
-                                    .textSelection(.enabled)
-                            }
-                            .frame(height: DiagnosticsConfig.recentLogContainerHeight)
+                            Text(logText)
+                                .font(CTFont.mono(DiagnosticsLayout.recentLogFontSize))
+                                .foregroundStyle(Color.white)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(DiagnosticsLayout.recentLogPadding)
+                                .textSelection(.enabled)
                         }
                     }
                 }
@@ -364,6 +372,9 @@ struct DiagnosticsView: View {
             // and this screen is exactly where someone goes after a crash.
             CrashDiagnosticsCollector.shared.collectPastPayloads()
             refresh()
+        }
+        .onDisappear {
+            logPreviewGeneration += 1
         }
         #if DEBUG
         .confirmationDialog(
@@ -401,9 +412,12 @@ struct DiagnosticsView: View {
             return
         }
 
+        logPreviewGeneration += 1
+        let generation = logPreviewGeneration
         DispatchQueue.global(qos: .utility).async {
             let preview = Self.readLogPreview(from: first, lineLimit: DiagnosticsConfig.recentLogLineLimit)
             DispatchQueue.main.async {
+                guard generation == logPreviewGeneration else { return }
                 logText = preview
             }
         }

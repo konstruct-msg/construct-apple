@@ -485,7 +485,7 @@
 
 // VEIL mode (tri-state)
 "veil_mode_off" = "désactivé";
-"veil_mode_auto" = "auto";
+"veil_mode_auto" = "automatique";
 "veil_mode_on" = "activé";
 "veil_footer_off" = "Protection du trafic désactivée. Connexion directe uniquement.";
 "veil_footer_off_obf_active" = "VEIL désactivé — le trafic direct est obscurci via QUIC (Salamander).";
@@ -625,7 +625,7 @@
 "orientation_page3_title" = "Trois endroits";
 "orientation_page3_body" = "Chats, c’est là qu’on se parle. Synaps, c’est votre réseau de personnes et les demandes reçues. Réglages contient votre code QR, la récupération et les appareils.";
 "orientation_page3_caption" = "Commencez par Synaps — montrez un QR ou trouvez quelqu’un.";
-"orientation_map_streams" = "Chats";
+"orientation_map_streams" = "Discussions";
 "orientation_map_streams_sub" = "Conversations en tête-à-tête";
 "orientation_map_synaps" = "Synaps";
 "orientation_map_synaps_sub" = "Personnes, recherche, demandes";
@@ -676,7 +676,7 @@
 "diagnostics_not_registered_with_server" = "non — les notifications n’arriveront pas";
 "diagnostics_server_token_warning" = "Le jeton n’est pas enregistré auprès de Konstruct. Revenez aux chats — l’enregistrement sera retenté automatiquement quand l’app redeviendra active.";
 "diagnostics_log_collection" = "Collecte des journaux";
-"diagnostics_status_active" = "Active";
+"diagnostics_status_active" = "Actif";
 "diagnostics_status_off" = "Désactivée";
 "diagnostics_size" = "Taille";
 "diagnostics_share_logs" = "Partager les journaux";
@@ -818,7 +818,7 @@
 "change_photo" = "changer la photo";
 "identity_section" = "identité";
 "account_section" = "compte";
-"bio" = "bio";
+"bio" = "présentation";
 "user_id" = "identifiant";
 "joined" = "inscrit le";
 "changes_encrypted_footer" = "> les modifications sont chiffrées de bout en bout";
@@ -1090,7 +1090,7 @@
 "stt_section_footer" = "Les messages vocaux peuvent être transcrits sur l’appareil. Les modèles sont téléchargés une fois et ne quittent jamais le téléphone.";
 "stt_retry_download" = "réessayer";
 "stt_engine_label" = "Moteur";
-"stt_engine_auto" = "Auto";
+"stt_engine_auto" = "Automatique";
 "stt_engine_whisper" = "Whisper";
 "stt_engine_apple" = "Apple Speech";
 "account_discard_changes_title" = "Abandonner les modifications ?";
@@ -1210,3 +1210,20 @@
 "desktop_add_invite_placeholder" = "https://konstruct.cc/add?invite=… ou konstruct://add?…";
 "desktop_add_paste_clipboard" = "Coller depuis le Presse-papiers";
 "desktop_add_supported" = "konstruct://add?invite=… ou https://konstruct.cc/add?invite=…";
+
+"backup_restore_required_title" = "Redémarrage nécessaire";
+"backup_restore_required_message" = "Fermez et rouvrez Konstruct pour terminer la restauration.";
+"spam_warning_title" = "Envoi…";
+"spam_warning_wait" = "Patientez %d secondes";
+"spam_strong_warning_title" = "Activité inhabituelle";
+"spam_strong_warning_body" = "Vous envoyez des messages plus vite que d’habitude. Patientez un instant.";
+"spam_seconds" = "s";
+"spam_force_send" = "Je comprends le risque, envoyer quand même";
+"spam_force_banned" = "Vous ne pouvez pas passer l’attente pendant %d min";
+"stt_error_no_model" = "Aucun modèle de transcription n’est téléchargé.";
+"stt_error_unavailable" = "La transcription n’est pas disponible sur cet appareil.";
+"call_status_calling" = "Appel…";
+"call_status_connected" = "Connecté";
+"mic_denied_title" = "Accès au micro refusé";
+"mic_denied_message_macos" = "Autorisez le micro dans Réglages pour envoyer des messages vocaux.";
+"voice_ready_to_send" = "Prêt à envoyer";

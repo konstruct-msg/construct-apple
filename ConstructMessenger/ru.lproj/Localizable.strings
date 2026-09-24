@@ -1301,3 +1301,20 @@
 "desktop_add_invite_placeholder" = "https://konstruct.cc/add?invite=… или konstruct://add?…";
 "desktop_add_paste_clipboard" = "Вставить из буфера";
 "desktop_add_supported" = "konstruct://add?invite=… или https://konstruct.cc/add?invite=…";
+
+"backup_restore_required_title" = "Нужно перезапустить";
+"backup_restore_required_message" = "Закройте и снова откройте Конструкт, чтобы закончить восстановление.";
+"spam_warning_title" = "Отправка…";
+"spam_warning_wait" = "Подождите %d с";
+"spam_strong_warning_title" = "Необычная активность";
+"spam_strong_warning_body" = "Сообщения уходят быстрее обычного. Подождите немного.";
+"spam_seconds" = "сек";
+"spam_force_send" = "Я понимаю риск, отправить всё равно";
+"spam_force_banned" = "Пропустить ожидание нельзя ещё %d мин";
+"stt_error_no_model" = "Модель распознавания ещё не скачана.";
+"stt_error_unavailable" = "Распознавание на этом устройстве недоступно.";
+"call_status_calling" = "Вызов…";
+"call_status_connected" = "На связи";
+"mic_denied_title" = "Нет доступа к микрофону";
+"mic_denied_message_macos" = "Разрешите микрофон в настройках, чтобы отправлять голосовые сообщения.";
+"voice_ready_to_send" = "Можно отправить";

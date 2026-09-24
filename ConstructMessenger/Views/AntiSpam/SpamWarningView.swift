@@ -168,13 +168,3 @@ struct SpamStrongWarningSheet: View {
         .presentationDragIndicator(.visible)
     }
 }
-
-// MARK: - Localization keys (add to Localizable.strings)
-//
-//  spam_warning_title          = "Sending…"
-//  spam_warning_wait           = "Please wait %d seconds"
-//  spam_strong_warning_title   = "Unusual activity"
-//  spam_strong_warning_body    = "You're sending messages faster than usual. Please wait a moment."
-//  spam_seconds                = "sec"
-//  spam_force_send             = "I understand the risks, send anyway"
-//  spam_force_banned           = "Force send disabled for %d min"
