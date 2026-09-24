@@ -46,6 +46,7 @@ final class SessionQueueWiringTests: XCTestCase {
         /// ride a parameter called `userId` all the way into a key-service account lookup.
         var bundleAddresses: [PeerAddress] = []
         var endSessionAddresses: [PeerAddress] = []
+        var grantedEndSessionAddresses: [PeerAddress] = []
         var healAddresses: [PeerAddress] = []
 
         func messageRouter(_ router: MessageRouter, needsPublicKeyBundle peer: PeerAddress, for message: ChatMessage) {
@@ -55,6 +56,9 @@ final class SessionQueueWiringTests: XCTestCase {
         func messageRouter(_ router: MessageRouter, needsEndSession peer: PeerAddress) {
             endSessionRequests.append(peer.account)
             endSessionAddresses.append(peer)
+        }
+        func messageRouter(_ router: MessageRouter, coreGrantedEndSession peer: PeerAddress) {
+            grantedEndSessionAddresses.append(peer)
         }
         func messageRouter(_ router: MessageRouter, receivedEndSession peer: PeerAddress, timestamp: UInt64) {}
         func messageRouter(_ router: MessageRouter, isEndSessionStale peer: PeerAddress, timestamp: UInt64) -> Bool { false }
@@ -178,6 +182,10 @@ final class SessionQueueWiringTests: XCTestCase {
         router.routeIncomingMessage(incoming(from: peer, msgNum: 5), in: context)
 
         XCTAssertEqual(delegate.endSessionRequests, [peer], "Mid-ratchet first message must trigger END_SESSION")
+        // An ask, not a grant: this guard runs before the core has decided anything, so the
+        // coordinator must put it to the teardown window. Arriving as a grant would bypass it.
+        XCTAssertTrue(delegate.grantedEndSessionAddresses.isEmpty,
+                      "the app's own guard reached the coordinator as the core's grant")
         XCTAssertTrue(delegate.bundleRequests.isEmpty, "Must not fetch a bundle for a mid-ratchet first message")
         XCTAssertEqual(router.pendingQueue.count(for: peer), 0, "Must not queue an un-initialisable message")
     }
@@ -240,7 +248,8 @@ final class SessionQueueWiringTests: XCTestCase {
         XCTAssertEqual(delegate.endSessionAddresses.map(\.account), [midRatchet],
                        "the END_SESSION path did not run — everything below would read an empty list")
 
-        for address in delegate.bundleAddresses + delegate.endSessionAddresses + delegate.healAddresses {
+        for address in delegate.bundleAddresses + delegate.endSessionAddresses
+            + delegate.grantedEndSessionAddresses + delegate.healAddresses {
             XCTAssertFalse(
                 SessionAddressing.isCryptoIdentity(address.account),
                 "\(address) puts a device id where the key service reads an account UUID"

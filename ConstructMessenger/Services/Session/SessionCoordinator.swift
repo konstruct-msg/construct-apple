@@ -743,8 +743,13 @@ final class SessionCoordinator: MessageRouterDelegate {
         handleNeedsEndSession(peer, preapproved: false)
     }
 
+    func messageRouter(_ router: MessageRouter, coreGrantedEndSession peer: PeerAddress) {
+        handleNeedsEndSession(peer, preapproved: true)
+    }
+
     /// - Parameter preapproved: the caller already holds the machine's grant for this device and
-    ///   must not ask for a second one. Only the owed-teardown alarm does.
+    ///   must not ask for a second one — the owed-teardown alarm, and the core's own
+    ///   `sendEndSession` verdict on an incoming message.
     private func handleNeedsEndSession(_ peer: PeerAddress, preapproved: Bool) {
         Task { [weak self] in
             guard let self else { return }

@@ -39,6 +39,9 @@ final class SealedRoutingBoundaryTests: XCTestCase {
         func messageRouter(_ router: MessageRouter, needsEndSession peer: PeerAddress) {
             endSessionRequests.append(peer.account)
         }
+        func messageRouter(_ router: MessageRouter, coreGrantedEndSession peer: PeerAddress) {
+            endSessionRequests.append(peer.account)
+        }
         func messageRouter(_ router: MessageRouter, receivedEndSession peer: PeerAddress, timestamp: UInt64) {}
         func messageRouter(_ router: MessageRouter, isEndSessionStale peer: PeerAddress, timestamp: UInt64) -> Bool {
             endSessionStaleQueries.append(peer)

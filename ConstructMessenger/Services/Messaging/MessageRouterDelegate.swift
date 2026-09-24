@@ -24,8 +24,20 @@ protocol MessageRouterDelegate: AnyObject {
 
     // MARK: - Session control
 
-    /// The Rust orchestrator detected a session divergence and wants us to send END_SESSION.
+    /// This app wants END_SESSION sent to `peer` — a guard that runs before or around the core
+    /// (no session for a mid-ratchet message, a core that did not load or threw). The conformer
+    /// asks the core's teardown window before sending.
     func messageRouter(_ router: MessageRouter, needsEndSession peer: PeerAddress)
+
+    /// The core already decided: it ran the teardown through its machine, got the grant, and
+    /// opened the window with it. The conformer sends without asking again.
+    ///
+    /// Separate from `needsEndSession` because the two differ in exactly the thing that matters.
+    /// Asking the window on behalf of a grant lands inside the window the grant just opened and
+    /// is refused — build 690, 2026-09-24: every divergence answered with "END_SESSION cooldown
+    /// active, skipping", no teardown ever left either device, and both sides stayed on a
+    /// ratchet neither could read, messages and calls alike.
+    func messageRouter(_ router: MessageRouter, coreGrantedEndSession peer: PeerAddress)
 
     /// An END_SESSION message was successfully received and the session archived.
     func messageRouter(_ router: MessageRouter, receivedEndSession peer: PeerAddress, timestamp: UInt64)

@@ -1062,7 +1062,9 @@ final class MessageRouter {
             // nothing would ever revisit — invisible while the queue only ever held inits.
             removePendingMessages(for: peer.account)
             PersistentACKStore.shared.markProcessed(message.id, senderId: peer.account, in: context)
-            delegate?.messageRouter(self, needsEndSession: peer)
+            // A grant, not an ask: the core's machine produced this action only after it recorded
+            // the teardown. See `coreGrantedEndSession` for what asking again did.
+            delegate?.messageRouter(self, coreGrantedEndSession: peer)
             if isNewChat { context.delete(chat) }
             return
         case .fetchPublicKeyBundle(let lostDevice):
