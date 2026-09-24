@@ -194,6 +194,11 @@ struct VoiceMessageBubbleView: View {
             Text(text)
                 .font(CTFont.ui(ChatUIConstants.Typography.transcriptSize))
                 .foregroundColor(isSentByMe ? Color.CT.outMsgText.opacity(0.85) : Color.CT.textDim)
+                // The transcript arrives after its row was measured, and the eager transcript
+                // stack is laid out in that old height for at least a pass; a stack short of
+                // height compresses its most compressible `Text` — this one, to "…" after a few
+                // words. The message text carries the same modifier for the same reason.
+                .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, ChatUIConstants.Voice.horizontalPadding)
                 .padding(.vertical, ChatUIConstants.Voice.verticalPadding)
