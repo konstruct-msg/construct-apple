@@ -2,6 +2,19 @@
 import Foundation
 import GRPCCore
 
+/// How a receive-pump failure is logged.
+///
+/// `h3: closed` is the parked recv observing a connection this process already
+/// shut down. Anything else — a timeout above all — is a failure.
+enum QuicRecvPumpDisposition: Equatable {
+    case expectedClose
+    case failure
+
+    static func classify(_ description: String) -> Self {
+        description.contains("h3: closed") ? .expectedClose : .failure
+    }
+}
+
 /// gRPC-swift v2 `ClientTransport` backed by the `construct-transport` Rust QUIC/HTTP-3
 /// stack (`QuicChannel` / `QuicStream` over UniFFI).
 ///
@@ -288,7 +301,15 @@ private final class QuicOutbound: ClosableRPCWriterProtocol, @unchecked Sendable
                 continuation.yield(.status(status, trailingMetadata))
                 continuation.finish()
             } catch {
-                Log.error("QUIC recv pump error \(path): \(error)", category: "QuicTransport")
+                // A shutdown this process started arrives here as h3 "closed", the
+                // line after `engine-QUIC connection closed (graceful shutdown)`.
+                // Three of those were the only QUIC errors in the 2026-09-23 France
+                // log. A timeout is not this and stays an error.
+                if QuicRecvPumpDisposition.classify(String(describing: error)) == .expectedClose {
+                    Log.info("QUIC recv pump closed \(path): \(error)", category: "QuicTransport")
+                } else {
+                    Log.error("QUIC recv pump error \(path): \(error)", category: "QuicTransport")
+                }
                 continuation.finish(throwing: error)
             }
         }
