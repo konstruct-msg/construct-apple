@@ -379,6 +379,12 @@ class MessageRetryManager {
         // empty queue is not one.
         guard !queuedMessages.isEmpty else { return }
 
+        // Before the session guard. A placeholder has decrypted content and no wire payload, so
+        // everything below would treat it as a text message — including opening a session for a
+        // queue that owes nothing. A launch that already ran the old reset has these at `.queued`.
+        let sendable = withoutUploadPlaceholders(queuedMessages, context: context)
+        guard !sendable.isEmpty else { return }
+
         // Guard: no live session for this contact.
         //
         // If the crypto core is ready, the absence is real (the "zombie session"): any stored
@@ -393,10 +399,10 @@ class MessageRetryManager {
         // a plain defer is correct — a later forceReconnect re-triggers us once the core builds.
         guard CryptoManager.shared.hasSessionWithAnyDevice(ofPeer: recipientId) else {
             if CryptoManager.shared.isCoreReady {
-                for message in queuedMessages {
+                for message in sendable {
                     OutgoingWirePayloadStore.shared.remove(baseMessageId: message.id)
                 }
-                Log.info("sendQueuedMessages: no session for \(recipientId.prefix(8))… (core ready) — purged \(queuedMessages.count) orphaned payload(s), forcing re-establish", category: "MessageRetryManager")
+                Log.info("sendQueuedMessages: no session for \(recipientId.prefix(8))… (core ready) — purged \(sendable.count) orphaned payload(s), forcing re-establish", category: "MessageRetryManager")
                 SessionLifecycleController.shared.reestablishSessionForQueuedOutbound(to: recipientId)
             } else {
                 Log.debug("sendQueuedMessages: no active session for \(recipientId.prefix(8))… and core not ready — deferring", category: "MessageRetryManager")
@@ -404,13 +410,17 @@ class MessageRetryManager {
             return
         }
 
-        let pendingIds = prepareMessagesForGlobalRetry(queuedMessages, context: context)
+        let pendingIds = prepareMessagesForGlobalRetry(sendable, context: context)
 
         // Messages whose stored wire payload is gone — TTL expiry, or purged above after a
         // zombie-session re-establishment — but whose plaintext is still recoverable. The session
         // is live again here, so re-encrypt them under the current ratchet with a fresh wire id.
-        let reencryptIds = queuedMessages
-            .filter { OutgoingWirePayloadStore.shared.loadChunks(baseMessageId: $0.id) == nil && $0.hasDecryptedContent }
+        let reencryptIds = sendable
+            .filter {
+                OutgoingWirePayloadStore.shared.loadChunks(baseMessageId: $0.id) == nil
+                    && $0.hasDecryptedContent
+                    && !UploadPlaceholderBody.isSentinel($0.displayText)
+            }
             .map { $0.id }
 
         guard !pendingIds.isEmpty || !reencryptIds.isEmpty else {
@@ -425,7 +435,7 @@ class MessageRetryManager {
             // true statement. (Most of these arrived here by demotion from `.delivered` —
             // see `DeliveryStatusTransition` — so the population should stop growing.)
             var stranded = 0
-            for message in queuedMessages where message.deliveryStatus == .queued {
+            for message in sendable where message.deliveryStatus == .queued {
                 message.deliveryStatus = .failed
                 stranded += 1
             }
@@ -442,7 +452,7 @@ class MessageRetryManager {
 
         // Mark the re-encrypt targets as sending up front so the UI reflects progress and the
         // retry count advances exactly once per tick (mirrors prepareMessagesForGlobalRetry).
-        for message in queuedMessages where reencryptIds.contains(message.id) {
+        for message in sendable where reencryptIds.contains(message.id) {
             message.deliveryStatus = .sending
             message.retryCount += 1
             messageQueueManager.markMessageAsSending(message.id)
@@ -601,6 +611,9 @@ class MessageRetryManager {
         guard message.contentType != .media else { return nil }
         let text = message.displayText
         guard !text.isEmpty, !MessageContentType.isControlPayload(text) else { return nil }
+        // An upload placeholder is `.regular` and its decrypted body is non-empty, so without
+        // this it is a text message whose text is the sentinel JSON.
+        guard !UploadPlaceholderBody.isSentinel(text) else { return nil }
 
         var textMsg = Shared_Proto_Messaging_V1_TextMessage()
         textMsg.text = text
@@ -740,11 +753,50 @@ class MessageRetryManager {
         }
     }
 
+    /// Drop upload placeholders out of a retry batch and spend their retry budget.
+    ///
+    /// The launch reset used to park them at `.queued`. This fetch would then re-encrypt the
+    /// sentinel, and the session guard above would open a session for a queue that contains
+    /// nothing sendable. Spending the budget is what makes the next tick's
+    /// `retryCount < ceiling` predicate miss the row; `recoverWirePlaintext` still refuses the
+    /// body if something selects it anyway.
+    private func withoutUploadPlaceholders(
+        _ messages: [Message],
+        context: NSManagedObjectContext
+    ) -> [Message] {
+        let ceiling = Int16(clamping: FeatureFlags.maxMessageRetryAttempts)
+        var sendable: [Message] = []
+        sendable.reserveCapacity(messages.count)
+        var retired = 0
+        for message in messages {
+            if UploadPlaceholderBody.isSentinel(message.displayText),
+               let stored = StuckSend.write(
+                   disposition: .retirePlaceholder,
+                   retryCount: message.retryCount,
+                   retryCeiling: ceiling
+               ) {
+                message.deliveryStatus = stored.status
+                message.retryCount = stored.retryCount
+                retired += 1
+            } else {
+                sendable.append(message)
+            }
+        }
+        if retired > 0 {
+            context.saveAndLog()
+            Log.info(
+                "sendQueuedMessages: retired \(retired) upload placeholder(s) — the body is not a message",
+                category: "MessageRetryManager"
+            )
+        }
+        return sendable
+    }
+
     func prepareMessagesForGlobalRetry(_ messages: [Message], context: NSManagedObjectContext) -> [String] {
         var pendingIds: [String] = []
         pendingIds.reserveCapacity(messages.count)
 
-        for message in messages where message.hasDecryptedContent {
+        for message in messages where message.hasDecryptedContent && !UploadPlaceholderBody.isSentinel(message.displayText) {
             guard OutgoingWirePayloadStore.shared.loadChunks(baseMessageId: message.id) != nil else {
                 switch message.deliveryStatus {
                 case .queued:

@@ -32,25 +32,55 @@ class MessageQueueManager {
 
     // MARK: - Setup
 
-    /// Reset any messages left in `sending` state from a previous app run.
-    /// On force-quit the in-memory `pendingSends` is lost, so those messages
-    /// would never time-out.  Resetting them to `queued` on startup guarantees
-    /// they enter the normal retry pipeline.
+    /// A `.sending` row at launch belongs to a process that is gone: `pendingSends` does not
+    /// survive it, so the live timeout never sees the row. A real message is marked `.failed`,
+    /// which the retry fetch already selects. An upload placeholder is retired instead — writing
+    /// `.queued` here is how its sentinel JSON became a text message.
+    ///
+    /// No age threshold. The owner is this process, and every `.sending` row it does not have in
+    /// `pendingSends` is already orphaned. Waiting N minutes would leave a kill from a few seconds
+    /// ago spinning until a later launch.
     private func resetStuckSendingMessages() {
         let context = PersistenceController.shared.container.viewContext
-        context.perform {
+        let ceiling = Int16(clamping: FeatureFlags.maxMessageRetryAttempts)
+        context.perform { [self] in
+            // Read inside the block. `viewContext.perform` runs now when called on the main
+            // queue, but a send that landed before the block must not be failed with it.
+            let owned = Set(pendingSends.keys)
             let fetchRequest: NSFetchRequest<Message> = Message.fetchRequest()
             fetchRequest.predicate = NSPredicate(
                 format: "deliveryStatusRaw == %d",
                 DeliveryStatus.sending.rawValue
             )
             guard let stuck = try? context.fetch(fetchRequest), !stuck.isEmpty else { return }
+            var failed = 0
+            var retired = 0
             for message in stuck {
-                message.deliveryStatus = .queued
+                let disposition = StuckSend.disposition(
+                    statusIsSending: message.deliveryStatus == .sending,
+                    ownedByThisProcess: owned.contains(message.id),
+                    bodyIsUploadSentinel: UploadPlaceholderBody.isSentinel(message.displayText)
+                )
+                guard let stored = StuckSend.write(
+                    disposition: disposition,
+                    retryCount: message.retryCount,
+                    retryCeiling: ceiling
+                ) else { continue }
+                message.deliveryStatus = stored.status
+                message.retryCount = stored.retryCount
+                switch disposition {
+                case .leave: break
+                case .failForRetry: failed += 1
+                case .retirePlaceholder: retired += 1
+                }
             }
+            guard failed > 0 || retired > 0 else { return }
             do {
                 try context.save()
-                Log.info("Reset \(stuck.count) stuck-sending message(s) to queued on launch", category: "MessageQueue")
+                Log.info(
+                    "Orphaned sends: \(failed) marked failed for retry, \(retired) upload placeholder(s) retired",
+                    category: "MessageQueue"
+                )
             } catch {
                 Log.error("Failed to reset stuck-sending messages: \(error)", category: "MessageQueue")
             }

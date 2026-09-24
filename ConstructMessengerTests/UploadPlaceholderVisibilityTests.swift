@@ -133,4 +133,42 @@ final class UploadPlaceholderVisibilityTests: XCTestCase {
         let parsed = visibleMessages(in: chat).first.flatMap { parseMediaContent(from: $0.displayText) }
         XCTAssertEqual(parsed?.caption, #"say "hi" \ ok"#)
     }
+
+    /// The body the upload writers actually store. Retry rebuilds a text message from any
+    /// non-empty `.regular` row; these two must not be one.
+    func testUploadPlaceholderIsNotRecoverableAsText() {
+        let chat = makeChat()
+        let from = UUID().uuidString
+        let to = UUID().uuidString
+
+        service.savePlaceholderMessage(
+            id: UUID().uuidString,
+            fromUserId: from,
+            toUserId: to,
+            caption: "",
+            items: [MessagePersistenceService.UploadPlaceholderItem()],
+            replyTo: nil,
+            chat: chat,
+            in: context
+        )
+        service.saveVoicePlaceholderMessage(
+            id: UUID().uuidString,
+            fromUserId: from,
+            toUserId: to,
+            duration: 1.5,
+            waveform: [0.2, 0.8],
+            chat: chat,
+            in: context
+        )
+
+        let rows = visibleMessages(in: chat)
+        XCTAssertEqual(rows.count, 2)
+        for row in rows {
+            XCTAssertTrue(UploadPlaceholderBody.isSentinel(row.displayText), row.displayText)
+            XCTAssertNil(
+                MessageRetryManager.recoverWirePlaintext(for: row),
+                "retry would send this JSON as the message text"
+            )
+        }
+    }
 }

@@ -212,7 +212,8 @@ class MessagePersistenceService {
     ) {
         // Sentinel JSON — every entry is flagged `_placeholder` so parseMediaContent()
         // returns non-nil, MediaMessageView renders the upload badge, and the gallery
-        // (`ChatView.mediaMessages`) skips the row.
+        // (`ChatView.mediaMessages`) skips the row. `UploadPlaceholderBody.isSentinel`
+        // is what keeps the retry path from sending this JSON as a text message.
         let entries = (items.isEmpty ? [UploadPlaceholderItem()] : items).map { item -> String in
             guard let mime = item.mimeType, !mime.isEmpty else { return #"{"_placeholder":true}"# }
             return #"{"_placeholder":true,"mediaType":\#(jsonStringLiteral(mime))}"#
@@ -277,6 +278,8 @@ class MessagePersistenceService {
         in context: NSManagedObjectContext
     ) {
         let waveformJson = waveform.map { String(format: "%.4f", $0) }.joined(separator: ",")
+        // `_uploading` is the flag `UploadPlaceholderBody.isSentinel` reads. A finished voice
+        // message does not carry it, and must not: retry would then refuse the row.
         let placeholderJson = """
         {"type":"voice","mediaId":"","mediaUrl":"","mediaKey":"","mediaType":"audio/m4a","size":0,"duration":\(duration),"waveform":[\(waveformJson)],"hash":"","_uploading":true}
         """

@@ -122,8 +122,8 @@ enum DeliveryStatus: Int16 {
     case delivered = 2
     /// Not sent yet, and something will try again: a send that timed out
     /// (`MessageQueueManager`), a message buffered until the peer's session is established
-    /// (`ChatSendCoordinator`, waiting for `session_ready`), a server rejection flagged
-    /// retryable, or a send interrupted by the app being killed (reset on launch).
+    /// (`ChatSendCoordinator`, waiting for `session_ready`), or a server rejection flagged
+    /// retryable. A send interrupted by the app being killed is not left here — see `StuckSend`.
     ///
     /// NOT "the recipient is offline" — that is what the comment here used to say, and it is
     /// what got published on the website's FAQ before anyone checked the call sites.
