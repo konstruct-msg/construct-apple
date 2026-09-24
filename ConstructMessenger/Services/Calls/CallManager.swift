@@ -803,24 +803,34 @@ final class CallManager: CallUIManaging {
             await MainActor.run { [weak self, weak active] in
                 guard let self, let active else { return }
                 guard self.active === active, active.stream === stream else { return }
-                if active.mediaConnected {
-                    // Media (WebRTC/TURN) is P2P and independent of the signaling stream.
-                    // Closing the call here was the ~30s drop: the server closes the idle
-                    // signaling stream and this teardown killed an otherwise-healthy call.
-                    // Keep the call alive and reconnect the stream in the background (needed
-                    // only for renegotiation/hangup; hangup also rides the E2EE path). The
-                    // call ends only on iceConnectionState=failed (onConnectionFailed) or an
-                    // explicit hangup. Capped to avoid a tight loop on repeated closes.
+                let canReconnect = active.mediaConnected
+                    ? active.postMediaStreamReconnects < ActiveCall.maxPostMediaReconnects
+                    : active.streamRetryCount < ActiveCall.maxStreamRetries
+                switch signalingStreamClosedDisposition(
+                    mediaConnected: active.mediaConnected,
+                    awaitingOfferAfterAnswer: active.awaitingOfferAfterAnswer,
+                    canReconnect: canReconnect
+                ) {
+                case .reconnect:
                     active.stream = nil
-                    if active.postMediaStreamReconnects < ActiveCall.maxPostMediaReconnects {
+                    if active.mediaConnected {
                         active.postMediaStreamReconnects += 1
                         Log.info("Signaling stream closed but media is up — reconnecting (\(active.postMediaStreamReconnects)/\(ActiveCall.maxPostMediaReconnects)), keeping call", category: "Calls")
-                        try? self.openStreamIfNeeded()
                     } else {
-                        Log.info("Signaling stream closed but media is up — reconnect cap reached, keeping call on E2EE-only path", category: "Calls")
+                        active.streamRetryCount += 1
+                        Log.info("Signaling stream closed before media — retrying (\(active.streamRetryCount)/\(ActiveCall.maxStreamRetries)), call stays up", category: "Calls")
                     }
-                } else {
-                    Log.error("Signaling stream closed before media connected — ending call", category: "Calls")
+                    try? self.openStreamIfNeeded()
+                case .keepOnMessagePath:
+                    active.stream = nil
+                    Log.info(
+                        active.mediaConnected
+                            ? "Signaling stream closed but media is up — reconnect cap reached, keeping call on E2EE-only path"
+                            : "Signaling stream closed before media — E2EE-only until the \(Int(Self.offerAfterAnswerTimeout))s offer wait decides",
+                        category: "Calls"
+                    )
+                case .endCall:
+                    Log.error("Signaling stream gone before media and nothing else bounds this call — ending", category: "Calls")
                     self.endActiveCall(reason: .local("Signal stream closed"))
                 }
             }

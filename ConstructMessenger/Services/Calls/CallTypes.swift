@@ -228,6 +228,41 @@ func shouldIgnoreSilentPush(foregroundLiveStream: Bool, callNeedsOffer: Bool) ->
     foregroundLiveStream && !callNeedsOffer
 }
 
+/// What a signaling-stream receive loop ending means for the call.
+///
+/// The stream is not the call. Offer, answer, and hangup ride the message path; the stream is
+/// presence, a fast path for ICE — and the only path for the server's own hangup. That last part
+/// is why closing it cannot simply be ignored: the signaling reaper
+/// (`signaling-service/src/registry.rs`, `HangupReason::Timeout`) ends an unanswered call by
+/// sending over the stream, and a call whose stream is gone never hears it. The call may outlive
+/// its stream only while something else bounds it:
+///
+/// - media up — ICE failure or a hangup ends it (the ~30s drop was ending it here);
+/// - answered and waiting for the offer — the 45s offer wait ends it. 2026-09-24, 3C86C064: the
+///   callee answered, the VEIL listener refused the stream, and this end cancelled that wait one
+///   second in, so each side looked like the other had cancelled.
+///
+/// Before media with neither, nothing ends the call: a caller whose stream died would ring until
+/// the user gave up, while the server had already hung up the other side.
+enum SignalingStreamClosedDisposition: Equatable {
+    /// Open the stream again; the call is unaffected.
+    case reconnect
+    /// No more reconnects, but something other than the stream bounds the call.
+    case keepOnMessagePath
+    /// The stream was the last thing that could end this call.
+    case endCall
+}
+
+func signalingStreamClosedDisposition(
+    mediaConnected: Bool,
+    awaitingOfferAfterAnswer: Bool,
+    canReconnect: Bool
+) -> SignalingStreamClosedDisposition {
+    if canReconnect { return .reconnect }
+    if mediaConnected || awaitingOfferAfterAnswer { return .keepOnMessagePath }
+    return .endCall
+}
+
 /// Whether an incoming call should pull missed messages to recover an SDP that has not arrived.
 enum IncomingCallFetchDisposition: Equatable {
     /// The offer is already in hand. A fetch would only replay it.
