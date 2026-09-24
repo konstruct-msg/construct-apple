@@ -146,6 +146,19 @@ final class BundledStickerPacksTests: XCTestCase {
 
     // MARK: - Retired
 
+    /// A retired pack is kept for the messages that name it, so it must still ship; and retiring
+    /// must leave something in the picker. Mutation that reddens it: delete a retired pack's
+    /// manifest from `StickerPacks/`, or retire every bundled pack.
+    func testEveryRetiredPackStillShipsAndOneRemainsListed() throws {
+        let shipped = try Set(Bundle.main.manifests().map {
+            try StickerPack.verify(manifestBytes: $0, allowUnsigned: true, trustedKeys: BundleSigningTrust.trustedKeys()).id.hex
+        })
+        for id in BundledStickerPacks.retired {
+            XCTAssertTrue(shipped.contains(id), "retired pack \(id.prefix(16))… no longer ships — messages naming it lose their images")
+        }
+        XCTAssertFalse(shipped.subtracting(BundledStickerPacks.retired).isEmpty, "every bundled pack is retired — the picker starts empty")
+    }
+
     /// Fresh device: a retired pack is present for the messages that name it, and not listed.
     /// Mutation that reddens it: seed a retired pack like any other (drop the `retired` branch).
     func testRetiredPackIsPresentButNotInThePicker() throws {
