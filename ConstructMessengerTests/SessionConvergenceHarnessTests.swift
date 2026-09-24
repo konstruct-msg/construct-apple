@@ -192,14 +192,19 @@ private final class Peer {
     /// Stamped onto the SESSION_RESET_INIT it emits — the model's establishment "timestamp".
     var initGeneration: UInt64 = 0
     /// The generation of the init that established our current active session. A RESPONDER adopts
-    /// the incoming init's epoch; the INITIATOR uses its own `initGeneration`. Drives the
-    /// production `SessionReducer.isResetInitSuperseded` decision on an inbound SESSION_RESET_INIT.
+    /// the incoming init's epoch; the INITIATOR uses its own `initGeneration`. Drives the core's
+    /// verdict on an inbound SESSION_RESET_INIT.
     var establishedFromEpoch: UInt64 = 0
-    /// The inits this node has already acted on. Models `AppliedInitLedger`: in production the
-    /// identity is the init's X3DH ephemeral public key, and here it is the generation stamped on
-    /// the frame — in both cases two copies of one init carry the same value and a genuine retry
-    /// carries a new one. Without it the harness would keep asserting the pre-fix behaviour.
-    var appliedResetInits = AppliedInitLedger()
+    /// The device id the core's init ledger knows each sender by. The node ids are not device
+    /// ids, and the core is shared by every harness in the process, so each node gets fresh ones
+    /// — a ledger entry left by an earlier test must not read as a redelivery here.
+    private var ledgerDevice: [String: String] = [:]
+    private func ledgerDevice(for peerId: String) -> String {
+        if let known = ledgerDevice[peerId] { return known }
+        let fresh = UUID().uuidString.replacingOccurrences(of: "-", with: "").lowercased()
+        ledgerDevice[peerId] = fresh
+        return fresh
+    }
 
     init(id: String, net: Network, confirmWindow: TimeInterval) {
         self.id = id
@@ -352,21 +357,25 @@ private final class Peer {
             }
 
         case .resetInit:
-            // INITIATOR announced. As RESPONDER, establish and acknowledge. Coalescing is by
-            // *content freshness*, via the production `SessionReducer.isResetInitSuperseded`
-            // (fudge 0 in the clock-free model): an init that pre-dates/exactly-matches our current
-            // establishment is a superseded backlog replay → ignore; a NEWER init is a live re-init
-            // and MUST be applied even while active — dropping it is the 2026-07-26 stranding bug.
+            // INITIATOR announced. As RESPONDER, establish and acknowledge — if the core says so.
+            // A redelivered init (same identity) or one that pre-dates our establishment is a
+            // backlog replay → ignore; a NEWER init is a live re-init and MUST be applied even
+            // while active — dropping it is the 2026-07-26 stranding bug.
+            //
+            // The identity is the generation stamped on the frame, standing in for the X3DH
+            // ephemeral key: two copies of one init carry one, a genuine retry a new one.
+            // Generations become seconds ×100 and the establishment sits 50 s after its own
+            // generation, so for any fudge under 50 s "pre-dates" means generation ≤ ours —
+            // the clock-free model's meaning — without restating the core's fudge here.
             guard !isInitiator(over: peerId) else { break }
-            let currentEpoch: UInt64? = isActive ? establishedFromEpoch : nil
             let initIdentity = withUnsafeBytes(of: epoch.littleEndian) { Data($0) }
-            if !SessionReducer.isResetInitSuperseded(
-                alreadyApplied: appliedResetInits.contains(initIdentity),
-                establishedAt: currentEpoch,
-                timestamp: epoch,
-                fudgeSeconds: 0
-            ) {
-                appliedResetInits.record(initIdentity)
+            let verdict = CryptoManager.shared.judgeResetInit(
+                fromDevice: ledgerDevice(for: peerId),
+                initEphemeral: initIdentity,
+                sentAt: epoch * 100,
+                establishedAt: isActive ? establishedFromEpoch * 100 + 50 : nil
+            )
+            if verdict == .apply {
                 becomeResponder(to: peerId, now: now, epoch: epoch)
             }
 
@@ -485,6 +494,28 @@ private final class Harness {
 // MARK: - Tests
 
 final class SessionConvergenceHarnessTests: XCTestCase {
+
+    private var savedUserId: String?
+
+    /// The init verdict is the core's, so the core must be up — without it `judgeResetInit`
+    /// answers `.apply` to everything and the replay half of the harness asserts nothing.
+    override func setUpWithError() throws {
+        try super.setUpWithError()
+        savedUserId = try MainActor.assumeIsolated {
+            let saved = AuthSessionManager.shared.currentUserId
+            let me = UUID().uuidString
+            AuthSessionManager.shared.updateUserId(me)
+            try CryptoCoreTestBootstrap.ensureCore(localUserId: me)
+            return saved
+        }
+    }
+
+    override func tearDown() {
+        if let savedUserId, !savedUserId.isEmpty {
+            MainActor.assumeIsolated { AuthSessionManager.shared.updateUserId(savedUserId) }
+        }
+        super.tearDown()
+    }
 
     // P1: both sides want to talk at once, reliable network → converge + all DATA delivered.
     // Parameterised over identified + sealed delivery — sealed would have failed on f39e03b4

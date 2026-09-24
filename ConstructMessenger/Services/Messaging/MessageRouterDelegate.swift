@@ -54,7 +54,7 @@ protocol MessageRouterDelegate: AnyObject {
     ///
     /// `initEphemeral` is what makes a redelivery recognisable at all: two copies of one init carry
     /// the same key, and they carry the same `timestamp` too — which is why the timestamp alone
-    /// could not tell them apart. See `SessionReducer.isResetInitSuperseded`.
+    /// could not tell them apart. The core decides and keeps the ledger — `CryptoManager.judgeResetInit`.
     func messageRouter(
         _ router: MessageRouter,
         isResetInitSuperseded peer: PeerAddress,

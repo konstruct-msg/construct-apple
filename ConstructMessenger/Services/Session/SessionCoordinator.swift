@@ -31,10 +31,6 @@ final class SessionCoordinator: MessageRouterDelegate {
     /// Forwarded to ChatsViewModel — fires when an E2E-encrypted delivery receipt is decrypted.
     var onE2EDeliveryReceiptDecrypted: (([String]) -> Void)?
 
-    /// The SESSION_RESET_INITs we have decided to apply, per peer, identified by their X3DH
-    /// ephemeral public key. See `AppliedInitLedger` for why the identity is the key and not a
-    /// timestamp, and why it is in memory only.
-    private var appliedResetInits: [String: AppliedInitLedger] = [:]
     /// Tracks when we last attempted an automatic resend after receiving END_SESSION from a peer.
     /// Prevents resend loops when both sides reset simultaneously.
     private var resendAttemptedAt: [String: Date] = [:]
@@ -883,38 +879,29 @@ final class SessionCoordinator: MessageRouterDelegate {
         timestamp: UInt64,
         initEphemeral: Data
     ) -> Bool {
-        // Same shape as `isEndSessionStale`: a SESSION_RESET_INIT arrives sealed and the sender's
-        // device is not on the envelope, so the scope resolves to the pinned device today.
-        // `appliedResetInits` below stays account-keyed — it is the ledger the state machine
-        // absorbs as a field of `Opening` (see decisions/session-is-one-state-machine, step 2).
-        let userId = peer.account
+        // The core decides and keeps the ledger of applied inits, per device (step 5 of
+        // decisions/session-is-one-state-machine). This used to be `appliedResetInits`, an
+        // account-keyed map here that the machine owning the same ratchet never saw.
+        //
+        // `peer.device` is the sender from the sealed certificate; an unsealed init falls back
+        // to the pinned device, the only session it can be about. No device at all means no
+        // pinned key, so no session to pre-date — apply.
+        guard let device = peer.deviceOrPinned() else {
+            Log.info("SESSION_STATE[reset_init_supersede_check]: \(peer) ts=\(timestamp) no device → apply", category: "SessionInit")
+            return false
+        }
         let established = establishedAt(for: SessionScope(peer))
-        var ledger = appliedResetInits[userId] ?? AppliedInitLedger()
-        let alreadyApplied = ledger.contains(initEphemeral)
-        let superseded = SessionReducer.isResetInitSuperseded(
-            alreadyApplied: alreadyApplied,
-            establishedAt: established,
-            timestamp: timestamp,
-            fudgeSeconds: Self.endSessionStaleFudge
+        let verdict = CryptoManager.shared.judgeResetInit(
+            fromDevice: device,
+            initEphemeral: initEphemeral,
+            sentAt: timestamp,
+            establishedAt: established
         )
-        // Recorded here, at the decision, and not where the re-init finishes — that lag is the
-        // defect. This is the sole caller and it applies the init whenever the answer is `false`,
-        // so "decided to apply" and "applied" are the same event from this method's side.
-        if !superseded {
-            ledger.record(initEphemeral)
-            appliedResetInits[userId] = ledger
-        } else if alreadyApplied {
+        if verdict == .redelivery {
             PerformanceMetrics.shared.record(.resetInitDuplicate, label: "redelivery")
         }
-        // `established == nil` → apply (never strand a possibly-live re-init on a missing record).
-        // A *newer* init (superseded == false) is applied even while a session is active: the peer
-        // has ratcheted onto it and its next msgNum≥1 only decrypts against the new session.
-        if established == nil {
-            Log.info("SESSION_STATE[reset_init_supersede_check]: \(userId.prefix(8))… ts=\(timestamp) established=nil → apply (no establishment record)", category: "SessionInit")
-        } else {
-            Log.info("SESSION_STATE[reset_init_supersede_check]: \(userId.prefix(8))… ts=\(timestamp) established=\(established!) → \(superseded ? "SUPERSEDED (coalesced)" : "fresh (apply re-init)")", category: "SessionInit")
-        }
-        return superseded
+        Log.info("SESSION_STATE[reset_init_supersede_check]: \(peer) ts=\(timestamp) established=\(established.map(String.init) ?? "nil") → \(verdict)", category: "SessionInit")
+        return verdict != .apply
     }
 
     func messageRouter(_ router: MessageRouter, receivedEndSession peer: PeerAddress, timestamp: UInt64) {

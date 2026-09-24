@@ -1148,6 +1148,54 @@ class CryptoManager {
         return !actions.contains { if case .healExhausted = $0 { return true } else { return false } }
     }
 
+    /// What to do with a SESSION_RESET_INIT that just arrived from `deviceId`.
+    enum ResetInitVerdict: Equatable {
+        /// A live re-init: archive and apply, even over an active session.
+        case apply
+        /// This exact init (same X3DH ephemeral key) was already applied — acknowledge only.
+        case redelivery
+        /// Never applied, but sent before the session we hold was established — acknowledge only.
+        case predatesSession
+    }
+
+    /// Ask the core whether to apply an arriving SESSION_RESET_INIT, and let it record the init
+    /// when the answer is `.apply`.
+    ///
+    /// The ledger of applied inits lives in the core's session machine, per device. This app kept
+    /// it until 2026-09-24 as `appliedResetInits`, an account-keyed map beside the coordinator
+    /// the machine never saw — step 5 of `decisions/session-is-one-state-machine.md`.
+    ///
+    /// `establishedAt` is this app's record of when the session with that device was established
+    /// (Unix seconds); the core has no establishment record yet, and the END_SESSION staleness
+    /// check reads the same one.
+    ///
+    /// `.apply` when the core cannot be asked: a redundant re-init is cheap and self-limiting, a
+    /// dropped live one strands the peer on a dead ratchet.
+    func judgeResetInit(
+        fromDevice deviceId: String,
+        initEphemeral: Data,
+        sentAt: UInt64,
+        establishedAt: UInt64?
+    ) -> ResetInitVerdict {
+        guard let contactId = SessionAddressing.asDevice(deviceId),
+              let actions = try? handleOrchestratorEvent(
+                  .resetInitArrived(
+                      contactId: contactId,
+                      initEphemeral: initEphemeral,
+                      sentAtS: sentAt,
+                      establishedAtS: establishedAt
+                  ),
+                  tag: "reset_init_arrived"
+              )
+        else { return .apply }
+        for action in actions {
+            if case .resetInitSuperseded(_, let redelivery) = action {
+                return redelivery ? .redelivery : .predatesSession
+            }
+        }
+        return .apply
+    }
+
     /// Get all user IDs with active sessions
     /// Used for sending END_SESSION to all contacts on logout
     /// Every **device** we hold a ratchet with — the core's contact ids, which are

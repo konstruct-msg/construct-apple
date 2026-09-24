@@ -147,6 +147,13 @@ final class SessionActionExecutor {
             // Requires MessageRouter delegate callbacks
             break  // scaffold
 
+        case .applyResetInit, .resetInitSuperseded:
+            // Answers to `handleOrchestratorEvent(.resetInitArrived:)`, read synchronously by
+            // `CryptoManager.judgeResetInit` — the router decides before it touches the message,
+            // so the verdict cannot wait for an executor hook. Here only because the switch is
+            // exhaustive.
+            break
+
         case .healAttemptAllowed, .healExhausted:
             // Answers to `handleOrchestratorEvent(.healAttempted:)`, read synchronously by
             // `CryptoManager.recordHealAttempt(forDevice:)` — the caller needs the verdict before

@@ -64,6 +64,8 @@ extension CryptoManager {
             return "sriAnnounced contactId=\(contactId.prefix(8))…"
         case .peerAcked(let contactId):
             return "peerAcked contactId=\(contactId.prefix(8))…"
+        case .resetInitArrived(let contactId, let initEphemeral, let sentAtS, let establishedAtS):
+            return "resetInitArrived contactId=\(contactId.prefix(8))… eph=\(initEphemeral.prefix(4).map { String(format: "%02x", $0) }.joined())… ts=\(sentAtS) established=\(establishedAtS.map(String.init) ?? "nil")"
         case .timerFired(let timerId):
             return "timerFired id=\(timerId.prefix(24))…"
         case .ackDbResult(let messageId, let isProcessed):
@@ -95,6 +97,9 @@ extension CryptoManager {
             case .healExhausted:            labels.insert("heal_exhausted")
             case .heldPendingAck:           labels.insert("held_pending_ack")
             case .openingGaveUp:            labels.insert("opening_gave_up")
+            case .applyResetInit:           labels.insert("apply_reset_init")
+            case .resetInitSuperseded(_, let redelivery):
+                labels.insert(redelivery ? "reset_init_redelivery" : "reset_init_predates_session")
             case .notifyError(let code, let msg) where firstError == nil:
                 firstError = (code, msg)
             default: break
