@@ -64,6 +64,16 @@ final class StreamLifecycleCoordinator {
 
     // MARK: - Polling state
 
+    /// A push launch is already `.background`. `didEnterBackground` does not
+    /// fire, so the grace timer — the thing that closes the stream — never starts.
+    private var applicationIsBackground: Bool {
+        #if os(iOS)
+        UIApplication.shared.applicationState == .background
+        #else
+        false
+        #endif
+    }
+
     private var pollingStateHadToken = false
     private var lastPolledStatus: ConnectionStatusManager.ConnectionStatus = .unknown
     private let connectionStatusManager = ConnectionStatusManager.shared
@@ -338,6 +348,15 @@ final class StreamLifecycleCoordinator {
         }
 
         if state.hasToken && state.status != ConnectionStatusManager.ConnectionStatus.disconnected {
+            // A push launch is already in the background, so didEnterBackground
+            // never fires and the 15s grace never closes the socket. Opening a
+            // stream here is what kept ffeeddc6 "online" for 86s on 2026-09-24
+            // while the next message waited for the heartbeat timeout.
+            guard shouldOpenMessageStream(applicationIsBackground: applicationIsBackground) else {
+                Log.info("Background — not opening a MessageStream. A stream opened on a push launch stays online after iOS suspends the process, and the server skips the next push until that socket dies.", category: "StreamLifecycle")
+                pollingStateHadToken = true
+                return
+            }
             if state.pushEnabled {
                 Log.info("Push active — stream connected", category: "StreamLifecycle")
             } else {
@@ -467,10 +486,21 @@ final class StreamLifecycleCoordinator {
                     // the residual churn driver (one full reconnect per incoming message; device
                     // logs showed "Silent push — reconnecting stream" → forceReconnect on every
                     // push). This mirrors the same guard on the BackgroundFetchManager path in
-                    // AppDelegate. When the stream is DOWN (or app backgrounded) we still
-                    // reconnect to fetch pending messages — that is the legitimate wake-up case.
-                    if UIApplication.shared.applicationState == .active, self.streamManager.isConnected {
-                        Log.info("Silent push — foreground stream live, skipping reconnect", category: "StreamLifecycle")
+                    // AppDelegate. Background does not reconnect: the unary fetch is the
+                    // wake, and a stream opened here is what the server treats as presence.
+                    // Foreground with the stream down still reconnects.
+                    let background = UIApplication.shared.applicationState == .background
+                    let foregroundLive = UIApplication.shared.applicationState == .active
+                        && self.streamManager.isConnected
+                    if !shouldReconnectStreamOnSilentPush(
+                        applicationIsBackground: background,
+                        foregroundLiveStream: foregroundLive
+                    ) {
+                        if background {
+                            Log.info("Silent push — background, fetching without opening a stream", category: "StreamLifecycle")
+                        } else {
+                            Log.info("Silent push — foreground stream live, skipping reconnect", category: "StreamLifecycle")
+                        }
                     } else {
                         Log.info("Silent push — reconnecting stream to fetch pending messages", category: "StreamLifecycle")
                         self.forceReconnect()
@@ -605,4 +635,29 @@ final class StreamLifecycleCoordinator {
             self?.handleDeliveryReceipts(messageIds, from: .peerE2E)
         }
     }
+}
+
+/// Whether a status change may open a MessageStream.
+///
+/// Opening one while the app is already in the background marks the account
+/// online (`track_user_online`). The server then skips the silent push. A push
+/// launch never passes through `didEnterBackground`, so the grace timer that
+/// would close the socket never starts, and the next message waits for the
+/// heartbeat timeout. 2026-09-24, ffeeddc6: "Но они у тебя хотя бы приходят"
+/// was sent at 10:41:23 and the banner arrived at 10:42:49.
+func shouldOpenMessageStream(applicationIsBackground: Bool) -> Bool {
+    !applicationIsBackground
+}
+
+/// Whether a silent push may reconnect the stream.
+///
+/// Background: no. The unary fetch is the wake; a reconnect is the stream the
+/// server treats as presence. Foreground with a live stream: no — that was the
+/// reconnect storm. Anything else (foreground, stream down): yes.
+func shouldReconnectStreamOnSilentPush(
+    applicationIsBackground: Bool,
+    foregroundLiveStream: Bool
+) -> Bool {
+    if applicationIsBackground { return false }
+    return !foregroundLiveStream
 }

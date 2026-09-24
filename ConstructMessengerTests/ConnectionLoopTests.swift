@@ -402,6 +402,8 @@ private actor MockProxyEffector: ProxyEffector {
         return startEvent
     }
 
+    func listenerIsAlive() async -> Bool { true }
+
     func stop() async { stops += 1 }
     func updateRelays(_ relays: [VeilRelay]) async { _ = relays }
     func startCalls() -> Int { starts }

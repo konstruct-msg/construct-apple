@@ -133,6 +133,29 @@ actor TransportRouter {
         }
     }
 
+    /// Replace a VEIL listener that iOS reclaimed while the process was suspended,
+    /// and wait until the new one is bound (or the probe has failed).
+    ///
+    /// No-op unless the route is already VEIL. Direct stays direct: the wake
+    /// must not escalate a phone that is talking to the server in the clear.
+    /// The wait is outside `send` — awaiting `veil_start` inside `send` freezes
+    /// the actor for the whole probe.
+    func restartVeilForBackgroundWake() async {
+        switch state {
+        case .veilActive:
+            // A listener that is actually accepting is left alone. Rotating a
+            // healthy one on every background fetch is the churn this wake is
+            // not allowed to become.
+            if await proxyEffector.listenerIsAlive() { return }
+            await send(.backgroundWake)
+        case .veilProbing:
+            break
+        case .offline, .direct, .veilCooldown:
+            return
+        }
+        await proxyStartTask?.value
+    }
+
     /// Kick the FSM into action after init. Should be called once at app startup,
     /// after reachability + VEIL-mode singletons are usable. Idempotent — calling
     /// it on an already-active router is a no-op.

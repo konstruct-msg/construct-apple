@@ -39,6 +39,9 @@ enum TransportReducer {
         case .veilConfigChanged:
             return reduceVEILConfigChanged(state: state)
 
+        case .backgroundWake:
+            return reduceBackgroundWake(state: state)
+
         default:
             break
         }
@@ -86,6 +89,19 @@ enum TransportReducer {
             // Already probing; let the in-flight start finish, then natural cycle picks new config.
             return (state, [])
         case .offline, .direct, .veilCooldown:
+            return (state, [])
+        }
+    }
+
+    /// Same rotation as a config change, and the same refusal to touch direct.
+    /// A background `rpcFailed(.staleLocalProxy)` stays ignored: that one fires
+    /// for every suspended RPC. This event is posted once, by the push wake,
+    /// before the fetch the notification depends on.
+    private static func reduceBackgroundWake(state: TransportState) -> Outcome {
+        switch state {
+        case .veilActive:
+            return rotateRelay()
+        case .veilProbing, .offline, .direct, .veilCooldown:
             return (state, [])
         }
     }
@@ -314,6 +330,8 @@ extension TransportEvent {
             return "veil-mode(\(m.rawValue)\(c ? ",censored" : ""))"
         case .veilConfigChanged:
             return "veil-config-changed"
+        case .backgroundWake:
+            return "background-wake"
         case .proxyStarted(let r, let p, let restarted):
             return "proxy-started(\(r):\(p)\(restarted ? ",new" : ",reuse"))"
         case .proxyStartFailed(let r, let why):

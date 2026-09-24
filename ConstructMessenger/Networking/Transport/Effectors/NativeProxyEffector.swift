@@ -22,6 +22,12 @@ actor NativeProxyEffector: ProxyEffector {
         self.pool = RelayPool(relays: initialRelays, blockedPenalty: blockedPenalty)
     }
 
+    /// The Rust listener, not the Swift flag. After a suspend the flag can say
+    /// the proxy is up while nothing is accepting on the port.
+    func listenerIsAlive() async -> Bool {
+        await proxy.isAlive
+    }
+
     func start() async -> TransportEvent {
         guard !pool.isEmpty else {
             return .proxyStartFailed(relay: nil, reason: "relay pool empty")

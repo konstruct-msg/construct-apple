@@ -253,6 +253,20 @@ class BackgroundFetchManager: NSObject {
                     category: "BackgroundFetch"
                 )
 
+                // 2026-09-24, 9a921fe2: the silent push arrived, then every fetch
+                // died with connection refused on 127.0.0.1:62404. The listener
+                // was gone (iOS had suspended the process) and a background
+                // staleLocalProxy is ignored on purpose, so nothing replaced it
+                // and no banner was posted. Replace it once, before this fetch,
+                // and only when the route is already VEIL.
+                #if os(iOS)
+                // `.inactive` counts: CallKit's answer banner is not `.active`,
+                // and that is when 3C86C064's fetch hit the dead listener.
+                if !AppActivityState.shared.isForeground {
+                    await TransportRouter.shared.restartVeilForBackgroundWake()
+                }
+                #endif
+
                 // ONE page per fetch — deliberately, and this is load-bearing.
                 //
                 // The server now trims `delivery:offline:{user}` on GetPendingMessages too, up to
