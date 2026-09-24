@@ -28,26 +28,20 @@ import GRPCCore
 enum IssuanceOutcome: Equatable {
     case ok(Int)             // n tokens deposited
     case serverDisabled      // server: issuance not configured (UNAVAILABLE "not configured")
-    case rateLimited         // server: 20/hr bucket exhausted (RESOURCE_EXHAUSTED)
+    case rateLimited         // server: hourly cap exhausted (RESOURCE_EXHAUSTED)
     case unauthenticated     // access token rejected (UNAUTHENTICATED)
     case verifyRejected      // every evaluated point failed client verify (bad/rotated issuer key)
     case transportError      // network / plain UNAVAILABLE — transient
     case malformed           // response count mismatch / bad blind output
 
-    /// Steady/expected states back off the full hour; transient transport failures
-    /// retry soon so a network blip doesn't strand the wallet empty for an hour.
-    var backsOffFullHour: Bool {
-        switch self {
-        case .transportError, .unauthenticated: return false
-        default: return true
-        }
-    }
-
     var diagnosticLabel: String {
         switch self {
         case .ok(let n): return "ok(\(n))"
         case .serverDisabled: return "server issuance disabled"
-        case .rateLimited: return "rate limited (20/hr)"
+        // The cap is the server's number (30/hr young, 120/hr mature) and it is
+        // already in the error this label is printed next to. A second copy here
+        // said "20/hr" for two years after the cap stopped being 20.
+        case .rateLimited: return "hourly cap"
         case .unauthenticated: return "unauthenticated"
         case .verifyRejected: return "issuer-key/verify rejected"
         case .transportError: return "transport error"
@@ -125,6 +119,49 @@ final class BlindTokenService {
     /// A wallet this shallow is a cold start — first launch, or a relaunch after it was cleared.
     /// Only a cold start may bypass pacing; banking is never urgent enough to.
     static let coldStartMark = 10
+
+    /// When a cold wallet may stop asking. `balance` tokens are already banked;
+    /// each batch is at most `batchSize`, and the bank is `bankTarget`.
+    ///
+    /// Cold start used to pull one batch and then pace, so the "bank of 120"
+    /// was a 20-token buffer for the whole session that followed a launch.
+    /// The burst that emptied it raced the issuer live and armed the hour-long
+    /// back-off. A cold start is the one moment that may issue every batch the
+    /// bank still has room for; a warm wallet still paces.
+    static func coldStartBatchCount(balance: Int, bankTarget: Int, batchSize: Int) -> Int {
+        guard batchSize > 0, balance < bankTarget else { return 0 }
+        let room = bankTarget - balance
+        return (room + batchSize - 1) / batchSize
+    }
+
+    /// When to ask again after an issuance attempt.
+    ///
+    /// A rate-limit refusal belongs to the UTC hour the server counted
+    /// (`timestamp / 3600` on the issuer). Waiting a flat hour from the refusal
+    /// skips the next window whenever the cap was hit before minute 60 — the
+    /// 14:55 refusal in the 2026-08-04 log would have stayed dark until 15:55.
+    /// Anything that is not the hourly cap keeps its own delay: a disabled
+    /// issuer does not recover because the clock struck, and a transport blip
+    /// must not wait out the hour.
+    static func replenishBackoffDeadline(outcome: IssuanceOutcome, now: Date = Date()) -> Date {
+        switch outcome {
+        case .transportError, .unauthenticated:
+            return now.addingTimeInterval(transientRetry)
+        case .rateLimited:
+            return nextUtcHour(after: now)
+        default:
+            return now.addingTimeInterval(rateLimitBackoff)
+        }
+    }
+
+    /// The next UTC hour boundary strictly after `now`. A refusal that lands
+    /// exactly on the boundary belongs to the window that just opened.
+    static func nextUtcHour(after now: Date) -> Date {
+        let hour: TimeInterval = 3600
+        let t = now.timeIntervalSince1970
+        let next = (floor(t / hour) + 1) * hour
+        return Date(timeIntervalSince1970: next)
+    }
 
     /// How long a send with an empty wallet waits for tokens before going ahead without one.
     /// Sized against the alternative, not against comfort: under `enforce` a token-less send is
@@ -245,8 +282,7 @@ final class BlindTokenService {
             // don't inherit the full hourly lockout that steady server states warrant.
             let outcome = Self.classify(error)
             record(outcome)
-            let backoff = outcome.backsOffFullHour ? Self.rateLimitBackoff : Self.transientRetry
-            backoffUntil = Date().addingTimeInterval(backoff)
+            backoffUntil = Self.replenishBackoffDeadline(outcome: outcome)
             Log.error("BlindToken: replenishment failed [\(outcome.diagnosticLabel)] — \(error)", category: "BlindToken")
         }
     }
@@ -356,9 +392,28 @@ final class BlindTokenService {
             )
             return
         case .coldStart:
-            // Force bypass of pacing for the absolute first batch (a refusal still holds us back).
+            // The one fill that may ignore pacing. A refusal still stops it: the
+            // loop ends when a batch adds nothing, which is the issuer saying the
+            // window is full (a young account's 30, or a mature one's 120).
             pacingUntil = nil
-            Log.info("BlindToken: starting initial bootstrap batch (wallet=\(balance))", category: "BlindToken")
+            let batches = Self.coldStartBatchCount(
+                balance: balance,
+                bankTarget: Self.bankTarget,
+                batchSize: Self.batchSize
+            )
+            Log.info(
+                "BlindToken: cold start filling toward \(Self.bankTarget) (wallet=\(balance), up to \(batches) batch(es))",
+                category: "BlindToken"
+            )
+            for _ in 0..<batches {
+                let before = TokenWalletService.shared.balance
+                let room = Self.bankTarget - before
+                if room <= 0 { break }
+                pacingUntil = nil
+                await replenish(count: min(Self.batchSize, room))
+                if TokenWalletService.shared.balance <= before { break }
+            }
+            return
         case .bank:
             // Below the bank target but not cold. Pull one more batch toward it and let pacing
             // space these out — `replenish` returns immediately while paced, so this stays cheap
@@ -430,8 +485,13 @@ final class BlindTokenService {
         // 2. Send to server.
         let response = try await callIssueTokens(blindedPoints: blindedPoints)
 
-        guard response.evaluatedPoints.count == count else {
-            throw BlindTokenError.responseMismatch(expected: count, got: response.evaluatedPoints.count)
+        // Fewer points than we asked for is the remainder of the hourly cap,
+        // not a truncated response: the issuer grants `min(asked, room)` and
+        // used to reject the whole batch instead, which stranded that room.
+        // More points than we asked for is a response we cannot finalize.
+        let issued = response.evaluatedPoints.count
+        guard issued > 0, issued <= count else {
+            throw BlindTokenError.responseMismatch(expected: count, got: issued)
         }
 
         let serverPubkey = response.serverPubkey.isEmpty ? [UInt8](repeating: 0, count: 32) : Array(response.serverPubkey)
@@ -451,7 +511,7 @@ final class BlindTokenService {
                 throw BlindTokenError.allPointsRejected
             }
             let verified = ppVerifyDleq(
-                blinded: blindedPoints.map { [UInt8]($0) },
+                blinded: blindedPoints.prefix(issued).map { [UInt8]($0) },
                 evaluated: response.evaluatedPoints.map { [UInt8]($0) },
                 proof: [UInt8](response.dleqProof),
                 issuerPublic: pinnedK
@@ -460,12 +520,12 @@ final class BlindTokenService {
                 Log.error("BlindToken: DLEQ proof FAILED against pinned issuer key v\(response.issuerKeyVersion) — rejecting batch (issuer key-tag)", category: "BlindToken")
                 throw BlindTokenError.allPointsRejected
             }
-            Log.info("BlindToken: DLEQ verified against pinned issuer key v\(response.issuerKeyVersion) (\(count) pts)", category: "BlindToken")
+            Log.info("BlindToken: DLEQ verified against pinned issuer key v\(response.issuerKeyVersion) (\(issued) pts)", category: "BlindToken")
         }
 
-        // 3. Finalize each evaluated point.
+        // 3. Finalize each evaluated point. `issued` may be a prefix of `count`.
         var tokens: [BlindToken] = []
-        for i in 0..<count {
+        for i in 0..<issued {
             let evaluated = Array(response.evaluatedPoints[i])
 
             // Optionally verify the point is on-curve + matches server pubkey.
@@ -486,7 +546,7 @@ final class BlindTokenService {
         // Server returned a full response but every point failed client verification —
         // a bad/rotated issuer key, not a transient fault. Surface it distinctly instead
         // of logging "replenished 0" as if it were success.
-        if tokens.isEmpty && count > 0 {
+        if tokens.isEmpty && issued > 0 {
             throw BlindTokenError.allPointsRejected
         }
 
