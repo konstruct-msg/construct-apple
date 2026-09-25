@@ -1008,15 +1008,27 @@ final class SessionCoordinator: MessageRouterDelegate {
         Task { [weak self] in
             guard let self else { return }
             defer { self.initiatorReinitInFlight.remove(userId) }
+            var initFailed = false
             let opened = await self.sessionInitService.initializeSessionProactively(
                 userId: userId,
                 // A divergence forced this; the SESSION_RESET_INIT is itself the thing to send.
                 hasOutboundWork: true,
                 onSuccess: { },
                 onFailure: { err in
+                    initFailed = true
                     Log.error("SESSION_STATE[initiator_announce_fail]: \(err.localizedDescription) for \(userId.prefix(8))…", category: "SessionInit")
                 }
             )
+            // A failed init opened nothing, so the SRI would go out on the ratchet still held — and
+            // the peer, reading an SRI, archives that ratchet and tries to open one from a message
+            // that is not a carrier. On 2026-09-25 the PQXDH v2 upgrade sweep met a peer on an old
+            // build (`PQ_REQUIRED`): the core kept the classical session, as it is designed to,
+            // and this SRI then cost both sides their session. Nothing to announce, so announce
+            // nothing.
+            if initFailed {
+                Log.info("SESSION_STATE[initiator_announce_skipped]: init failed, held session left in place for \(userId.prefix(8))… (\(reason))", category: "SessionInit")
+                return
+            }
             // The devices the init opened, not the one the account resolves to: an announcement
             // is about a ratchet and there is one per device. Nothing opened (the init failed, or
             // every session was already in place), the account falls back to the pinned device as

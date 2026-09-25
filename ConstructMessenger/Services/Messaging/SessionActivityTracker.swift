@@ -129,7 +129,7 @@ final class SessionActivityTracker {
                 let ratchetAge = Int(Date().timeIntervalSince1970 - TimeInterval(health.lastRatchetAt))
                 let activityAge = secondsSinceLastActivity(for: contactId).map { Int($0) }
                 Log.info(
-                    "\(contactId.prefix(8))… sent=\(health.messagesSent) recv=\(health.messagesReceived) skipped=\(health.skippedKeysCount) ratchet_age=\(ratchetAge)s activity_age=\(activityAge.map { "\($0)s" } ?? "unknown") pq=\(health.isPqStrengthened)",
+                    "\(contactId.prefix(8))… sent=\(health.messagesSent) recv=\(health.messagesReceived) skipped=\(health.skippedKeysCount) ratchet_age=\(ratchetAge)s activity_age=\(activityAge.map { "\($0)s" } ?? "unknown") pq=\(health.isPqStrengthened) pq_handshake=\(health.pqHandshake) pq_auth=\(health.pqAuthentication)",
                     category: "SessionActivityTracker"
                 )
             } else {
