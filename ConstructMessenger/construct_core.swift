@@ -606,15 +606,6 @@ fileprivate struct FfiConverterData: FfiConverterRustBuffer {
 
 public protocol ClassicCryptoCoreProtocol: AnyObject, Sendable {
     
-    /**
-     * Mix a ML-KEM-768 shared secret into an existing session's root key.
-     *
-     * Call after init_session (sender) with kem_ss from mlkem768_encapsulate,
-     * or after init_receiving_session (receiver) with kem_ss from mlkem768_decapsulate.
-     * Both sides must call this with the same shared secret to stay in sync.
-     */
-    func applyPqContribution(contactId: String, kemSharedSecret: [UInt8]) throws 
-    
     func decryptMessage(sessionId: String, ephemeralPublicKey: [UInt8], messageNumber: UInt32, content: [UInt8], suiteId: UInt16, pqMessageEpoch: UInt32, pqRatchetField: [UInt8]) throws  -> DecryptedMessageResult
     
     func encryptMessage(sessionId: String, plaintext: String) throws  -> EncryptedMessageComponents
@@ -724,22 +715,6 @@ open class ClassicCryptoCore: ClassicCryptoCoreProtocol, @unchecked Sendable {
 
     
 
-    
-    /**
-     * Mix a ML-KEM-768 shared secret into an existing session's root key.
-     *
-     * Call after init_session (sender) with kem_ss from mlkem768_encapsulate,
-     * or after init_receiving_session (receiver) with kem_ss from mlkem768_decapsulate.
-     * Both sides must call this with the same shared secret to stay in sync.
-     */
-open func applyPqContribution(contactId: String, kemSharedSecret: [UInt8])throws   {try rustCallWithError(FfiConverterTypeCryptoError_lift) {
-    uniffi_construct_core_fn_method_classiccryptocore_apply_pq_contribution(
-            self.uniffiCloneHandle(),
-        FfiConverterString.lower(contactId),
-        FfiConverterSequenceUInt8.lower(kemSharedSecret),$0
-    )
-}
-}
     
 open func decryptMessage(sessionId: String, ephemeralPublicKey: [UInt8], messageNumber: UInt32, content: [UInt8], suiteId: UInt16, pqMessageEpoch: UInt32, pqRatchetField: [UInt8])throws  -> DecryptedMessageResult  {
     return try  FfiConverterTypeDecryptedMessageResult_lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
@@ -1384,8 +1359,6 @@ public protocol OrchestratorCoreProtocol: AnyObject, Sendable {
      */
     func ackMarkProcessed(messageId: String) 
     
-    func applyPqContribution(contactId: String, kemSharedSecret: [UInt8]) throws 
-    
     /**
      * Whether the ratchet with this **device** was announced (SESSION_RESET_INIT sent) and the
      * peer has not acknowledged it yet. The confirm gate; fold it over a peer's device set for
@@ -1393,9 +1366,25 @@ public protocol OrchestratorCoreProtocol: AnyObject, Sendable {
      */
     func awaitsAcknowledgement(contactId: String)  -> Bool
     
+    /**
+     * Start a Kyber SPK rotation (with the classic SPK): the key to upload. Calling it again
+     * before commit/rollback returns the same key, so a retried upload uploads the same key.
+     */
+    func beginKyberSpkRotation() throws  -> KyberPrekeyUpload
+    
     func buildHybridIdentityBindMessage(hybridPublicKey: [UInt8])  -> [UInt8]
     
     func buildX3dhSignMessage(suiteId: UInt8, publicKey: [UInt8])  -> [UInt8]
+    
+    /**
+     * The server confirmed the upload. Returns false if nothing was pending.
+     */
+    func commitKyberSpkRotation()  -> Bool
+    
+    /**
+     * The current Kyber SPK's upload record again, or null before the first commit.
+     */
+    func currentKyberSpkUpload() throws  -> KyberPrekeyUpload?
     
     func decryptMessage(contactId: String, ephemeralPublicKey: [UInt8], messageNumber: UInt32, content: [UInt8], suiteId: UInt16, pqMessageEpoch: UInt32, pqRatchetField: [UInt8]) throws  -> DecryptedMessageResult
     
@@ -1409,11 +1398,7 @@ public protocol OrchestratorCoreProtocol: AnyObject, Sendable {
     
     func ensureHybridSignatureKey() throws  -> [UInt8]
     
-    /**
-     * Export the PQContributionManager state as a CFE binary blob.
-     * Persist under CfeSecureStoreSlot::KyberSessionState.
-     */
-    func exportKyberSessionState() throws  -> [UInt8]
+    func exportKyberPrekeys() throws  -> [UInt8]
     
     func exportOneTimePrekeys() throws  -> [UInt8]
     
@@ -1444,6 +1429,8 @@ public protocol OrchestratorCoreProtocol: AnyObject, Sendable {
      * `plan_teardown`, and forgets afterwards.
      */
     func forgetContactState(contactId: String) 
+    
+    func generateKyberOneTimePrekeys(count: UInt32) throws  -> [KyberPrekeyUpload]
     
     func generateOneTimePrekeys(count: UInt32) throws  -> [OtpkPair]
     
@@ -1483,10 +1470,7 @@ public protocol OrchestratorCoreProtocol: AnyObject, Sendable {
     
     func importHybridSignaturePrivateKey(privBytes: [UInt8]) throws 
     
-    /**
-     * Restore the PQContributionManager state from a CFE blob.
-     */
-    func importKyberSessionState(data: [UInt8]) throws 
+    func importKyberPrekeys(data: [UInt8]) throws 
     
     func importOneTimePrekeys(data: [UInt8]) throws 
     
@@ -1500,11 +1484,19 @@ public protocol OrchestratorCoreProtocol: AnyObject, Sendable {
     
     func initReceivingSession(contactId: String, recipientBundle: BinaryKeyBundle, firstMessage: BinaryFirstMessage) throws  -> SessionInitResult
     
+    func initReceivingSessionFromWirePayload(contactId: String, recipientBundle: BinaryKeyBundle, wirePayload: [UInt8]) throws  -> SessionInitResult
+    
     func initSession(contactId: String, recipientBundle: BinaryKeyBundle) throws  -> String
     
     func initSessionAllowingStale(contactId: String, recipientBundle: BinaryKeyBundle) throws  -> String
     
-    func kyberSpk()  -> KyberSpkRecord?
+    func kyberOneTimePrekeyCount()  -> UInt32
+    
+    /**
+     * Decapsulate with our Kyber prekey `key_id` (0 = current SPK). For history transfer; the
+     * handshake decapsulates inside the core.
+     */
+    func kyberPrekeyDecapsulate(keyId: UInt32, ciphertext: [UInt8]) throws  -> [UInt8]
     
     func oneTimePrekeyCount()  -> UInt32
     
@@ -1524,18 +1516,23 @@ public protocol OrchestratorCoreProtocol: AnyObject, Sendable {
     
     func prekeysAvailableCount()  -> UInt32
     
-    func pruneOneTimePrekeysBelow(minKeepId: UInt32)  -> UInt32
-    
     /**
-     * Register a KEM shared secret as a deferred contribution.
+     * After a replace-all upload of Kyber one-time keys; returns how many were removed.
      */
-    func registerPqDeferred(contactId: String, otpkId: UInt32, sharedSecret: [UInt8]) 
+    func pruneKyberOneTimePrekeysBelow(minKeepId: UInt32)  -> UInt32
+    
+    func pruneOneTimePrekeysBelow(minKeepId: UInt32)  -> UInt32
     
     func removeSession(contactId: String)  -> Bool
     
-    func rotateSignedPrekey() throws  -> RotatedSpkBundle
+    func reopenSession(contactId: String, recipientBundle: BinaryKeyBundle) throws  -> String
     
-    func setKyberSpk(keyId: UInt32, secretKey: [UInt8], publicKey: [UInt8]) 
+    /**
+     * The upload failed.
+     */
+    func rollbackKyberSpkRotation() 
+    
+    func rotateSignedPrekey() throws  -> RotatedSpkBundle
     
     func setLocalUserId(userId: String) 
     
@@ -1627,15 +1624,6 @@ open func ackMarkProcessed(messageId: String)  {try! rustCall() {
 }
 }
     
-open func applyPqContribution(contactId: String, kemSharedSecret: [UInt8])throws   {try rustCallWithError(FfiConverterTypeCryptoError_lift) {
-    uniffi_construct_core_fn_method_orchestratorcore_apply_pq_contribution(
-            self.uniffiCloneHandle(),
-        FfiConverterString.lower(contactId),
-        FfiConverterSequenceUInt8.lower(kemSharedSecret),$0
-    )
-}
-}
-    
     /**
      * Whether the ratchet with this **device** was announced (SESSION_RESET_INIT sent) and the
      * peer has not acknowledged it yet. The confirm gate; fold it over a peer's device set for
@@ -1646,6 +1634,18 @@ open func awaitsAcknowledgement(contactId: String) -> Bool  {
     uniffi_construct_core_fn_method_orchestratorcore_awaits_acknowledgement(
             self.uniffiCloneHandle(),
         FfiConverterString.lower(contactId),$0
+    )
+})
+}
+    
+    /**
+     * Start a Kyber SPK rotation (with the classic SPK): the key to upload. Calling it again
+     * before commit/rollback returns the same key, so a retried upload uploads the same key.
+     */
+open func beginKyberSpkRotation()throws  -> KyberPrekeyUpload  {
+    return try  FfiConverterTypeKyberPrekeyUpload_lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_method_orchestratorcore_begin_kyber_spk_rotation(
+            self.uniffiCloneHandle(),$0
     )
 })
 }
@@ -1665,6 +1665,28 @@ open func buildX3dhSignMessage(suiteId: UInt8, publicKey: [UInt8]) -> [UInt8]  {
             self.uniffiCloneHandle(),
         FfiConverterUInt8.lower(suiteId),
         FfiConverterSequenceUInt8.lower(publicKey),$0
+    )
+})
+}
+    
+    /**
+     * The server confirmed the upload. Returns false if nothing was pending.
+     */
+open func commitKyberSpkRotation() -> Bool  {
+    return try!  FfiConverterBool.lift(try! rustCall() {
+    uniffi_construct_core_fn_method_orchestratorcore_commit_kyber_spk_rotation(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+    /**
+     * The current Kyber SPK's upload record again, or null before the first commit.
+     */
+open func currentKyberSpkUpload()throws  -> KyberPrekeyUpload?  {
+    return try  FfiConverterOptionTypeKyberPrekeyUpload.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_method_orchestratorcore_current_kyber_spk_upload(
+            self.uniffiCloneHandle(),$0
     )
 })
 }
@@ -1715,13 +1737,9 @@ open func ensureHybridSignatureKey()throws  -> [UInt8]  {
 })
 }
     
-    /**
-     * Export the PQContributionManager state as a CFE binary blob.
-     * Persist under CfeSecureStoreSlot::KyberSessionState.
-     */
-open func exportKyberSessionState()throws  -> [UInt8]  {
+open func exportKyberPrekeys()throws  -> [UInt8]  {
     return try  FfiConverterSequenceUInt8.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
-    uniffi_construct_core_fn_method_orchestratorcore_export_kyber_session_state(
+    uniffi_construct_core_fn_method_orchestratorcore_export_kyber_prekeys(
             self.uniffiCloneHandle(),$0
     )
 })
@@ -1786,6 +1804,15 @@ open func forgetContactState(contactId: String)  {try! rustCall() {
         FfiConverterString.lower(contactId),$0
     )
 }
+}
+    
+open func generateKyberOneTimePrekeys(count: UInt32)throws  -> [KyberPrekeyUpload]  {
+    return try  FfiConverterSequenceTypeKyberPrekeyUpload.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_method_orchestratorcore_generate_kyber_one_time_prekeys(
+            self.uniffiCloneHandle(),
+        FfiConverterUInt32.lower(count),$0
+    )
+})
 }
     
 open func generateOneTimePrekeys(count: UInt32)throws  -> [OtpkPair]  {
@@ -1897,11 +1924,8 @@ open func importHybridSignaturePrivateKey(privBytes: [UInt8])throws   {try rustC
 }
 }
     
-    /**
-     * Restore the PQContributionManager state from a CFE blob.
-     */
-open func importKyberSessionState(data: [UInt8])throws   {try rustCallWithError(FfiConverterTypeCryptoError_lift) {
-    uniffi_construct_core_fn_method_orchestratorcore_import_kyber_session_state(
+open func importKyberPrekeys(data: [UInt8])throws   {try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_method_orchestratorcore_import_kyber_prekeys(
             self.uniffiCloneHandle(),
         FfiConverterSequenceUInt8.lower(data),$0
     )
@@ -1949,6 +1973,17 @@ open func initReceivingSession(contactId: String, recipientBundle: BinaryKeyBund
 })
 }
     
+open func initReceivingSessionFromWirePayload(contactId: String, recipientBundle: BinaryKeyBundle, wirePayload: [UInt8])throws  -> SessionInitResult  {
+    return try  FfiConverterTypeSessionInitResult_lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_method_orchestratorcore_init_receiving_session_from_wire_payload(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(contactId),
+        FfiConverterTypeBinaryKeyBundle_lower(recipientBundle),
+        FfiConverterSequenceUInt8.lower(wirePayload),$0
+    )
+})
+}
+    
 open func initSession(contactId: String, recipientBundle: BinaryKeyBundle)throws  -> String  {
     return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
     uniffi_construct_core_fn_method_orchestratorcore_init_session(
@@ -1969,10 +2004,24 @@ open func initSessionAllowingStale(contactId: String, recipientBundle: BinaryKey
 })
 }
     
-open func kyberSpk() -> KyberSpkRecord?  {
-    return try!  FfiConverterOptionTypeKyberSpkRecord.lift(try! rustCall() {
-    uniffi_construct_core_fn_method_orchestratorcore_kyber_spk(
+open func kyberOneTimePrekeyCount() -> UInt32  {
+    return try!  FfiConverterUInt32.lift(try! rustCall() {
+    uniffi_construct_core_fn_method_orchestratorcore_kyber_one_time_prekey_count(
             self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+    /**
+     * Decapsulate with our Kyber prekey `key_id` (0 = current SPK). For history transfer; the
+     * handshake decapsulates inside the core.
+     */
+open func kyberPrekeyDecapsulate(keyId: UInt32, ciphertext: [UInt8])throws  -> [UInt8]  {
+    return try  FfiConverterSequenceUInt8.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_method_orchestratorcore_kyber_prekey_decapsulate(
+            self.uniffiCloneHandle(),
+        FfiConverterUInt32.lower(keyId),
+        FfiConverterSequenceUInt8.lower(ciphertext),$0
     )
 })
 }
@@ -2023,6 +2072,18 @@ open func prekeysAvailableCount() -> UInt32  {
 })
 }
     
+    /**
+     * After a replace-all upload of Kyber one-time keys; returns how many were removed.
+     */
+open func pruneKyberOneTimePrekeysBelow(minKeepId: UInt32) -> UInt32  {
+    return try!  FfiConverterUInt32.lift(try! rustCall() {
+    uniffi_construct_core_fn_method_orchestratorcore_prune_kyber_one_time_prekeys_below(
+            self.uniffiCloneHandle(),
+        FfiConverterUInt32.lower(minKeepId),$0
+    )
+})
+}
+    
 open func pruneOneTimePrekeysBelow(minKeepId: UInt32) -> UInt32  {
     return try!  FfiConverterUInt32.lift(try! rustCall() {
     uniffi_construct_core_fn_method_orchestratorcore_prune_one_time_prekeys_below(
@@ -2030,19 +2091,6 @@ open func pruneOneTimePrekeysBelow(minKeepId: UInt32) -> UInt32  {
         FfiConverterUInt32.lower(minKeepId),$0
     )
 })
-}
-    
-    /**
-     * Register a KEM shared secret as a deferred contribution.
-     */
-open func registerPqDeferred(contactId: String, otpkId: UInt32, sharedSecret: [UInt8])  {try! rustCall() {
-    uniffi_construct_core_fn_method_orchestratorcore_register_pq_deferred(
-            self.uniffiCloneHandle(),
-        FfiConverterString.lower(contactId),
-        FfiConverterUInt32.lower(otpkId),
-        FfiConverterSequenceUInt8.lower(sharedSecret),$0
-    )
-}
 }
     
 open func removeSession(contactId: String) -> Bool  {
@@ -2054,22 +2102,32 @@ open func removeSession(contactId: String) -> Bool  {
 })
 }
     
+open func reopenSession(contactId: String, recipientBundle: BinaryKeyBundle)throws  -> String  {
+    return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_method_orchestratorcore_reopen_session(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(contactId),
+        FfiConverterTypeBinaryKeyBundle_lower(recipientBundle),$0
+    )
+})
+}
+    
+    /**
+     * The upload failed.
+     */
+open func rollbackKyberSpkRotation()  {try! rustCall() {
+    uniffi_construct_core_fn_method_orchestratorcore_rollback_kyber_spk_rotation(
+            self.uniffiCloneHandle(),$0
+    )
+}
+}
+    
 open func rotateSignedPrekey()throws  -> RotatedSpkBundle  {
     return try  FfiConverterTypeRotatedSpkBundle_lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
     uniffi_construct_core_fn_method_orchestratorcore_rotate_signed_prekey(
             self.uniffiCloneHandle(),$0
     )
 })
-}
-    
-open func setKyberSpk(keyId: UInt32, secretKey: [UInt8], publicKey: [UInt8])  {try! rustCall() {
-    uniffi_construct_core_fn_method_orchestratorcore_set_kyber_spk(
-            self.uniffiCloneHandle(),
-        FfiConverterUInt32.lower(keyId),
-        FfiConverterSequenceUInt8.lower(secretKey),
-        FfiConverterSequenceUInt8.lower(publicKey),$0
-    )
-}
 }
     
 open func setLocalUserId(userId: String)  {try! rustCall() {
@@ -2342,199 +2400,6 @@ public func FfiConverterTypeRustAckStore_lower(_ value: RustAckStore) -> UInt64 
 
 
 
-/**
- * Thread-safe store for deferred PQXDH shared secrets.
- *
- * Replaces `pendingPQContributions: [String: [UInt8]] + NSLock` in PQCKeyManager.
- *
- * Protocol: encapsulate (session init) → store SS here → encrypt msg0 with
- * classic-only DR state → consume SS here → applyPqContribution to DR session.
- * Both sides must apply PQ at the same moment; if consume returns null, skip PQ.
- */
-public protocol RustPqContributionsProtocol: AnyObject, Sendable {
-    
-    /**
-     * Discard any pending contribution (e.g. on send failure).
-     */
-    func clear(contactId: String) 
-    
-    /**
-     * `true` if a deferred contribution exists for `contact_id`.
-     */
-    func hasPending(contactId: String)  -> Bool
-    
-    /**
-     * Store the KEM shared secret for `contact_id`.
-     */
-    func storeDeferred(contactId: String, sharedSecret: [UInt8]) 
-    
-    /**
-     * Remove and return the stored shared secret. Returns null if not found.
-     */
-    func takeDeferred(contactId: String)  -> [UInt8]?
-    
-}
-/**
- * Thread-safe store for deferred PQXDH shared secrets.
- *
- * Replaces `pendingPQContributions: [String: [UInt8]] + NSLock` in PQCKeyManager.
- *
- * Protocol: encapsulate (session init) → store SS here → encrypt msg0 with
- * classic-only DR state → consume SS here → applyPqContribution to DR session.
- * Both sides must apply PQ at the same moment; if consume returns null, skip PQ.
- */
-open class RustPqContributions: RustPqContributionsProtocol, @unchecked Sendable {
-    fileprivate let handle: UInt64
-
-    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
-#if swift(>=5.8)
-    @_documentation(visibility: private)
-#endif
-    public struct NoHandle {
-        public init() {}
-    }
-
-    // TODO: We'd like this to be `private` but for Swifty reasons,
-    // we can't implement `FfiConverter` without making this `required` and we can't
-    // make it `required` without making it `public`.
-#if swift(>=5.8)
-    @_documentation(visibility: private)
-#endif
-    required public init(unsafeFromHandle handle: UInt64) {
-        self.handle = handle
-    }
-
-    // This constructor can be used to instantiate a fake object.
-    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
-    //
-    // - Warning:
-    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
-#if swift(>=5.8)
-    @_documentation(visibility: private)
-#endif
-    public init(noHandle: NoHandle) {
-        self.handle = 0
-    }
-
-#if swift(>=5.8)
-    @_documentation(visibility: private)
-#endif
-    public func uniffiCloneHandle() -> UInt64 {
-        return try! rustCall { uniffi_construct_core_fn_clone_rustpqcontributions(self.handle, $0) }
-    }
-public convenience init() {
-    let handle =
-        try! rustCall() {
-    uniffi_construct_core_fn_constructor_rustpqcontributions_new($0
-    )
-}
-    self.init(unsafeFromHandle: handle)
-}
-
-    deinit {
-        try! rustCall { uniffi_construct_core_fn_free_rustpqcontributions(handle, $0) }
-    }
-
-    
-
-    
-    /**
-     * Discard any pending contribution (e.g. on send failure).
-     */
-open func clear(contactId: String)  {try! rustCall() {
-    uniffi_construct_core_fn_method_rustpqcontributions_clear(
-            self.uniffiCloneHandle(),
-        FfiConverterString.lower(contactId),$0
-    )
-}
-}
-    
-    /**
-     * `true` if a deferred contribution exists for `contact_id`.
-     */
-open func hasPending(contactId: String) -> Bool  {
-    return try!  FfiConverterBool.lift(try! rustCall() {
-    uniffi_construct_core_fn_method_rustpqcontributions_has_pending(
-            self.uniffiCloneHandle(),
-        FfiConverterString.lower(contactId),$0
-    )
-})
-}
-    
-    /**
-     * Store the KEM shared secret for `contact_id`.
-     */
-open func storeDeferred(contactId: String, sharedSecret: [UInt8])  {try! rustCall() {
-    uniffi_construct_core_fn_method_rustpqcontributions_store_deferred(
-            self.uniffiCloneHandle(),
-        FfiConverterString.lower(contactId),
-        FfiConverterSequenceUInt8.lower(sharedSecret),$0
-    )
-}
-}
-    
-    /**
-     * Remove and return the stored shared secret. Returns null if not found.
-     */
-open func takeDeferred(contactId: String) -> [UInt8]?  {
-    return try!  FfiConverterOptionSequenceUInt8.lift(try! rustCall() {
-    uniffi_construct_core_fn_method_rustpqcontributions_take_deferred(
-            self.uniffiCloneHandle(),
-        FfiConverterString.lower(contactId),$0
-    )
-})
-}
-    
-
-    
-}
-
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public struct FfiConverterTypeRustPQContributions: FfiConverter {
-    typealias FfiType = UInt64
-    typealias SwiftType = RustPqContributions
-
-    public static func lift(_ handle: UInt64) throws -> RustPqContributions {
-        return RustPqContributions(unsafeFromHandle: handle)
-    }
-
-    public static func lower(_ value: RustPqContributions) -> UInt64 {
-        return value.uniffiCloneHandle()
-    }
-
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> RustPqContributions {
-        let handle: UInt64 = try readInt(&buf)
-        return try lift(handle)
-    }
-
-    public static func write(_ value: RustPqContributions, into buf: inout [UInt8]) {
-        writeInt(&buf, lower(value))
-    }
-}
-
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypeRustPQContributions_lift(_ handle: UInt64) throws -> RustPqContributions {
-    return try FfiConverterTypeRustPQContributions.lift(handle)
-}
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypeRustPQContributions_lower(_ value: RustPqContributions) -> UInt64 {
-    return FfiConverterTypeRustPQContributions.lower(value)
-}
-
-
-
-
-
-
 public protocol TrafficProtectionManagerProtocol: AnyObject, Sendable {
     
     func currentIntervalMs()  -> UInt64
@@ -2721,93 +2586,6 @@ public func FfiConverterTypeTrafficProtectionManager_lower(_ value: TrafficProte
 
 
 /**
- * Токены аутентификации (JWT)
- */
-public struct AuthTokens: Equatable, Hashable {
-    /**
-     * Access token (JWT, живёт 1 час)
-     */
-    public var accessToken: String
-    /**
-     * Refresh token (JWT, живёт 30 дней)
-     */
-    public var refreshToken: String
-    /**
-     * Unix timestamp когда истекает access token
-     */
-    public var expiresAt: Int64
-    /**
-     * User ID (UUID)
-     */
-    public var userId: String
-
-    // Default memberwise initializers are never public by default, so we
-    // declare one manually.
-    public init(
-        /**
-         * Access token (JWT, живёт 1 час)
-         */accessToken: String, 
-        /**
-         * Refresh token (JWT, живёт 30 дней)
-         */refreshToken: String, 
-        /**
-         * Unix timestamp когда истекает access token
-         */expiresAt: Int64, 
-        /**
-         * User ID (UUID)
-         */userId: String) {
-        self.accessToken = accessToken
-        self.refreshToken = refreshToken
-        self.expiresAt = expiresAt
-        self.userId = userId
-    }
-
-    
-}
-
-#if compiler(>=6)
-extension AuthTokens: Sendable {}
-#endif
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public struct FfiConverterTypeAuthTokens: FfiConverterRustBuffer {
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> AuthTokens {
-        return
-            try AuthTokens(
-                accessToken: FfiConverterString.read(from: &buf), 
-                refreshToken: FfiConverterString.read(from: &buf), 
-                expiresAt: FfiConverterInt64.read(from: &buf), 
-                userId: FfiConverterString.read(from: &buf)
-        )
-    }
-
-    public static func write(_ value: AuthTokens, into buf: inout [UInt8]) {
-        FfiConverterString.write(value.accessToken, into: &buf)
-        FfiConverterString.write(value.refreshToken, into: &buf)
-        FfiConverterInt64.write(value.expiresAt, into: &buf)
-        FfiConverterString.write(value.userId, into: &buf)
-    }
-}
-
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypeAuthTokens_lift(_ buf: RustBuffer) throws -> AuthTokens {
-    return try FfiConverterTypeAuthTokens.lift(buf)
-}
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypeAuthTokens_lower(_ value: AuthTokens) -> RustBuffer {
-    return FfiConverterTypeAuthTokens.lower(value)
-}
-
-
-/**
  * Binary first-message bundle for init_receiving_session — no JSON encoding.
  */
 public struct BinaryFirstMessage: Equatable, Hashable {
@@ -2818,10 +2596,13 @@ public struct BinaryFirstMessage: Equatable, Hashable {
     public var suiteId: UInt16
     public var pqMessageEpoch: UInt32
     public var pqRatchetField: [UInt8]
+    public var pqxdhV2: Bool
+    public var kyberPrekeyId: UInt32
+    public var kemCiphertext: [UInt8]
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(ephemeralPublicKey: [UInt8], messageNumber: UInt32, content: [UInt8], oneTimePrekeyId: UInt32, suiteId: UInt16, pqMessageEpoch: UInt32, pqRatchetField: [UInt8]) {
+    public init(ephemeralPublicKey: [UInt8], messageNumber: UInt32, content: [UInt8], oneTimePrekeyId: UInt32, suiteId: UInt16, pqMessageEpoch: UInt32, pqRatchetField: [UInt8], pqxdhV2: Bool, kyberPrekeyId: UInt32, kemCiphertext: [UInt8]) {
         self.ephemeralPublicKey = ephemeralPublicKey
         self.messageNumber = messageNumber
         self.content = content
@@ -2829,6 +2610,9 @@ public struct BinaryFirstMessage: Equatable, Hashable {
         self.suiteId = suiteId
         self.pqMessageEpoch = pqMessageEpoch
         self.pqRatchetField = pqRatchetField
+        self.pqxdhV2 = pqxdhV2
+        self.kyberPrekeyId = kyberPrekeyId
+        self.kemCiphertext = kemCiphertext
     }
 
     
@@ -2851,7 +2635,10 @@ public struct FfiConverterTypeBinaryFirstMessage: FfiConverterRustBuffer {
                 oneTimePrekeyId: FfiConverterUInt32.read(from: &buf), 
                 suiteId: FfiConverterUInt16.read(from: &buf), 
                 pqMessageEpoch: FfiConverterUInt32.read(from: &buf), 
-                pqRatchetField: FfiConverterSequenceUInt8.read(from: &buf)
+                pqRatchetField: FfiConverterSequenceUInt8.read(from: &buf), 
+                pqxdhV2: FfiConverterBool.read(from: &buf), 
+                kyberPrekeyId: FfiConverterUInt32.read(from: &buf), 
+                kemCiphertext: FfiConverterSequenceUInt8.read(from: &buf)
         )
     }
 
@@ -2863,6 +2650,9 @@ public struct FfiConverterTypeBinaryFirstMessage: FfiConverterRustBuffer {
         FfiConverterUInt16.write(value.suiteId, into: &buf)
         FfiConverterUInt32.write(value.pqMessageEpoch, into: &buf)
         FfiConverterSequenceUInt8.write(value.pqRatchetField, into: &buf)
+        FfiConverterBool.write(value.pqxdhV2, into: &buf)
+        FfiConverterUInt32.write(value.kyberPrekeyId, into: &buf)
+        FfiConverterSequenceUInt8.write(value.kemCiphertext, into: &buf)
     }
 }
 
@@ -2898,14 +2688,42 @@ public struct BinaryKeyBundle: Equatable, Hashable {
     public var spkRotationEpoch: UInt32
     public var kyberSpkUploadedAt: UInt64
     public var kyberSpkRotationEpoch: UInt32
+    /**
+     * Kyber signed prekey (ML-KEM-1024, 1568 bytes), its id and signed creation time.
+     */
     public var kyberPreKeyPublic: [UInt8]?
+    public var kyberPreKeyId: UInt32?
+    public var kyberPreKeyCreatedAt: UInt64?
+    public var kyberPreKeySignature: [UInt8]?
+    public var kyberPreKeyHybridSignature: [UInt8]?
+    /**
+     * Kyber one-time prekey (id from 1 000 000), preferred when present and signed.
+     */
     public var kyberOneTimePrekeyPublic: [UInt8]?
     public var kyberOneTimePrekeyId: UInt32?
-    public var supportsPqRatchet: Bool
+    public var kyberOneTimePrekeyCreatedAt: UInt64?
+    public var kyberOneTimePrekeySignature: [UInt8]?
+    public var kyberOneTimePrekeyHybridSignature: [UInt8]?
+    /**
+     * Hybrid identity key (Ed25519 + ML-DSA-65, 1984 bytes; field 20) and the Ed25519
+     * cross-signature binding it to `verifying_key` (field 21). Pinned per device on first use.
+     */
+    public var hybridIdentityKey: [UInt8]?
+    public var hybridIdentitySignature: [UInt8]?
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(identityPublic: [UInt8], signedPrekeyPublic: [UInt8], signature: [UInt8], verifyingKey: [UInt8], suiteId: UInt16, oneTimePrekeyPublic: [UInt8]?, oneTimePrekeyId: UInt32?, spkUploadedAt: UInt64, spkRotationEpoch: UInt32, kyberSpkUploadedAt: UInt64, kyberSpkRotationEpoch: UInt32, kyberPreKeyPublic: [UInt8]?, kyberOneTimePrekeyPublic: [UInt8]?, kyberOneTimePrekeyId: UInt32?, supportsPqRatchet: Bool) {
+    public init(identityPublic: [UInt8], signedPrekeyPublic: [UInt8], signature: [UInt8], verifyingKey: [UInt8], suiteId: UInt16, oneTimePrekeyPublic: [UInt8]?, oneTimePrekeyId: UInt32?, spkUploadedAt: UInt64, spkRotationEpoch: UInt32, kyberSpkUploadedAt: UInt64, kyberSpkRotationEpoch: UInt32, 
+        /**
+         * Kyber signed prekey (ML-KEM-1024, 1568 bytes), its id and signed creation time.
+         */kyberPreKeyPublic: [UInt8]?, kyberPreKeyId: UInt32? = nil, kyberPreKeyCreatedAt: UInt64? = nil, kyberPreKeySignature: [UInt8]? = nil, kyberPreKeyHybridSignature: [UInt8]? = nil, 
+        /**
+         * Kyber one-time prekey (id from 1 000 000), preferred when present and signed.
+         */kyberOneTimePrekeyPublic: [UInt8]?, kyberOneTimePrekeyId: UInt32?, kyberOneTimePrekeyCreatedAt: UInt64? = nil, kyberOneTimePrekeySignature: [UInt8]? = nil, kyberOneTimePrekeyHybridSignature: [UInt8]? = nil, 
+        /**
+         * Hybrid identity key (Ed25519 + ML-DSA-65, 1984 bytes; field 20) and the Ed25519
+         * cross-signature binding it to `verifying_key` (field 21). Pinned per device on first use.
+         */hybridIdentityKey: [UInt8]? = nil, hybridIdentitySignature: [UInt8]? = nil) {
         self.identityPublic = identityPublic
         self.signedPrekeyPublic = signedPrekeyPublic
         self.signature = signature
@@ -2918,9 +2736,17 @@ public struct BinaryKeyBundle: Equatable, Hashable {
         self.kyberSpkUploadedAt = kyberSpkUploadedAt
         self.kyberSpkRotationEpoch = kyberSpkRotationEpoch
         self.kyberPreKeyPublic = kyberPreKeyPublic
+        self.kyberPreKeyId = kyberPreKeyId
+        self.kyberPreKeyCreatedAt = kyberPreKeyCreatedAt
+        self.kyberPreKeySignature = kyberPreKeySignature
+        self.kyberPreKeyHybridSignature = kyberPreKeyHybridSignature
         self.kyberOneTimePrekeyPublic = kyberOneTimePrekeyPublic
         self.kyberOneTimePrekeyId = kyberOneTimePrekeyId
-        self.supportsPqRatchet = supportsPqRatchet
+        self.kyberOneTimePrekeyCreatedAt = kyberOneTimePrekeyCreatedAt
+        self.kyberOneTimePrekeySignature = kyberOneTimePrekeySignature
+        self.kyberOneTimePrekeyHybridSignature = kyberOneTimePrekeyHybridSignature
+        self.hybridIdentityKey = hybridIdentityKey
+        self.hybridIdentitySignature = hybridIdentitySignature
     }
 
     
@@ -2949,9 +2775,17 @@ public struct FfiConverterTypeBinaryKeyBundle: FfiConverterRustBuffer {
                 kyberSpkUploadedAt: FfiConverterUInt64.read(from: &buf), 
                 kyberSpkRotationEpoch: FfiConverterUInt32.read(from: &buf), 
                 kyberPreKeyPublic: FfiConverterOptionSequenceUInt8.read(from: &buf), 
+                kyberPreKeyId: FfiConverterOptionUInt32.read(from: &buf), 
+                kyberPreKeyCreatedAt: FfiConverterOptionUInt64.read(from: &buf), 
+                kyberPreKeySignature: FfiConverterOptionSequenceUInt8.read(from: &buf), 
+                kyberPreKeyHybridSignature: FfiConverterOptionSequenceUInt8.read(from: &buf), 
                 kyberOneTimePrekeyPublic: FfiConverterOptionSequenceUInt8.read(from: &buf), 
                 kyberOneTimePrekeyId: FfiConverterOptionUInt32.read(from: &buf), 
-                supportsPqRatchet: FfiConverterBool.read(from: &buf)
+                kyberOneTimePrekeyCreatedAt: FfiConverterOptionUInt64.read(from: &buf), 
+                kyberOneTimePrekeySignature: FfiConverterOptionSequenceUInt8.read(from: &buf), 
+                kyberOneTimePrekeyHybridSignature: FfiConverterOptionSequenceUInt8.read(from: &buf), 
+                hybridIdentityKey: FfiConverterOptionSequenceUInt8.read(from: &buf), 
+                hybridIdentitySignature: FfiConverterOptionSequenceUInt8.read(from: &buf)
         )
     }
 
@@ -2968,9 +2802,17 @@ public struct FfiConverterTypeBinaryKeyBundle: FfiConverterRustBuffer {
         FfiConverterUInt64.write(value.kyberSpkUploadedAt, into: &buf)
         FfiConverterUInt32.write(value.kyberSpkRotationEpoch, into: &buf)
         FfiConverterOptionSequenceUInt8.write(value.kyberPreKeyPublic, into: &buf)
+        FfiConverterOptionUInt32.write(value.kyberPreKeyId, into: &buf)
+        FfiConverterOptionUInt64.write(value.kyberPreKeyCreatedAt, into: &buf)
+        FfiConverterOptionSequenceUInt8.write(value.kyberPreKeySignature, into: &buf)
+        FfiConverterOptionSequenceUInt8.write(value.kyberPreKeyHybridSignature, into: &buf)
         FfiConverterOptionSequenceUInt8.write(value.kyberOneTimePrekeyPublic, into: &buf)
         FfiConverterOptionUInt32.write(value.kyberOneTimePrekeyId, into: &buf)
-        FfiConverterBool.write(value.supportsPqRatchet, into: &buf)
+        FfiConverterOptionUInt64.write(value.kyberOneTimePrekeyCreatedAt, into: &buf)
+        FfiConverterOptionSequenceUInt8.write(value.kyberOneTimePrekeySignature, into: &buf)
+        FfiConverterOptionSequenceUInt8.write(value.kyberOneTimePrekeyHybridSignature, into: &buf)
+        FfiConverterOptionSequenceUInt8.write(value.hybridIdentityKey, into: &buf)
+        FfiConverterOptionSequenceUInt8.write(value.hybridIdentitySignature, into: &buf)
     }
 }
 
@@ -3175,10 +3017,12 @@ public struct EncryptedMessageComponents: Equatable, Hashable {
     public var suiteId: UInt16
     public var pqMessageEpoch: UInt32
     public var pqRatchetField: [UInt8]
+    public var kemCiphertext: [UInt8]
+    public var kyberPrekeyId: UInt32
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(ephemeralPublicKey: [UInt8], messageNumber: UInt32, content: [UInt8], oneTimePrekeyId: UInt32, storageKey: [UInt8], suiteId: UInt16, pqMessageEpoch: UInt32, pqRatchetField: [UInt8]) {
+    public init(ephemeralPublicKey: [UInt8], messageNumber: UInt32, content: [UInt8], oneTimePrekeyId: UInt32, storageKey: [UInt8], suiteId: UInt16, pqMessageEpoch: UInt32, pqRatchetField: [UInt8], kemCiphertext: [UInt8], kyberPrekeyId: UInt32) {
         self.ephemeralPublicKey = ephemeralPublicKey
         self.messageNumber = messageNumber
         self.content = content
@@ -3187,6 +3031,8 @@ public struct EncryptedMessageComponents: Equatable, Hashable {
         self.suiteId = suiteId
         self.pqMessageEpoch = pqMessageEpoch
         self.pqRatchetField = pqRatchetField
+        self.kemCiphertext = kemCiphertext
+        self.kyberPrekeyId = kyberPrekeyId
     }
 
     
@@ -3210,7 +3056,9 @@ public struct FfiConverterTypeEncryptedMessageComponents: FfiConverterRustBuffer
                 storageKey: FfiConverterSequenceUInt8.read(from: &buf), 
                 suiteId: FfiConverterUInt16.read(from: &buf), 
                 pqMessageEpoch: FfiConverterUInt32.read(from: &buf), 
-                pqRatchetField: FfiConverterSequenceUInt8.read(from: &buf)
+                pqRatchetField: FfiConverterSequenceUInt8.read(from: &buf), 
+                kemCiphertext: FfiConverterSequenceUInt8.read(from: &buf), 
+                kyberPrekeyId: FfiConverterUInt32.read(from: &buf)
         )
     }
 
@@ -3223,6 +3071,8 @@ public struct FfiConverterTypeEncryptedMessageComponents: FfiConverterRustBuffer
         FfiConverterUInt16.write(value.suiteId, into: &buf)
         FfiConverterUInt32.write(value.pqMessageEpoch, into: &buf)
         FfiConverterSequenceUInt8.write(value.pqRatchetField, into: &buf)
+        FfiConverterSequenceUInt8.write(value.kemCiphertext, into: &buf)
+        FfiConverterUInt32.write(value.kyberPrekeyId, into: &buf)
     }
 }
 
@@ -3565,47 +3415,55 @@ public func FfiConverterTypeInviteSignature_lower(_ value: InviteSignature) -> R
 
 
 /**
- * ML-KEM-768 signed prekey held in the core key-state (PQXDH KEM leg).
- * Persisted atomically inside the private-keys CFE blob — replaces the
- * standalone platform Keychain triple (key-store consolidation Phase 2).
+ * One ML-KEM-1024 Kyber prekey to upload (PQXDH v2). Both signatures are over
+ * `"KonstruktX3DH-v1" || 0x00 0x11 || created_at (u64 BE) || public_key`; upload `created_at`
+ * with the key — the signatures cover it.
  */
-public struct KyberSpkRecord: Equatable, Hashable {
+public struct KyberPrekeyUpload: Equatable, Hashable {
     public var keyId: UInt32
     public var publicKey: [UInt8]
-    public var secretKey: [UInt8]
+    public var createdAt: UInt64
+    public var signature: [UInt8]
+    public var hybridSignature: [UInt8]
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(keyId: UInt32, publicKey: [UInt8], secretKey: [UInt8]) {
+    public init(keyId: UInt32, publicKey: [UInt8], createdAt: UInt64, signature: [UInt8], hybridSignature: [UInt8]) {
         self.keyId = keyId
         self.publicKey = publicKey
-        self.secretKey = secretKey
+        self.createdAt = createdAt
+        self.signature = signature
+        self.hybridSignature = hybridSignature
     }
 
     
 }
 
 #if compiler(>=6)
-extension KyberSpkRecord: Sendable {}
+extension KyberPrekeyUpload: Sendable {}
 #endif
 
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-public struct FfiConverterTypeKyberSpkRecord: FfiConverterRustBuffer {
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> KyberSpkRecord {
+public struct FfiConverterTypeKyberPrekeyUpload: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> KyberPrekeyUpload {
         return
-            try KyberSpkRecord(
+            try KyberPrekeyUpload(
                 keyId: FfiConverterUInt32.read(from: &buf), 
                 publicKey: FfiConverterSequenceUInt8.read(from: &buf), 
-                secretKey: FfiConverterSequenceUInt8.read(from: &buf)
+                createdAt: FfiConverterUInt64.read(from: &buf), 
+                signature: FfiConverterSequenceUInt8.read(from: &buf), 
+                hybridSignature: FfiConverterSequenceUInt8.read(from: &buf)
         )
     }
 
-    public static func write(_ value: KyberSpkRecord, into buf: inout [UInt8]) {
+    public static func write(_ value: KyberPrekeyUpload, into buf: inout [UInt8]) {
         FfiConverterUInt32.write(value.keyId, into: &buf)
         FfiConverterSequenceUInt8.write(value.publicKey, into: &buf)
-        FfiConverterSequenceUInt8.write(value.secretKey, into: &buf)
+        FfiConverterUInt64.write(value.createdAt, into: &buf)
+        FfiConverterSequenceUInt8.write(value.signature, into: &buf)
+        FfiConverterSequenceUInt8.write(value.hybridSignature, into: &buf)
     }
 }
 
@@ -3613,15 +3471,15 @@ public struct FfiConverterTypeKyberSpkRecord: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-public func FfiConverterTypeKyberSpkRecord_lift(_ buf: RustBuffer) throws -> KyberSpkRecord {
-    return try FfiConverterTypeKyberSpkRecord.lift(buf)
+public func FfiConverterTypeKyberPrekeyUpload_lift(_ buf: RustBuffer) throws -> KyberPrekeyUpload {
+    return try FfiConverterTypeKyberPrekeyUpload.lift(buf)
 }
 
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-public func FfiConverterTypeKyberSpkRecord_lower(_ value: KyberSpkRecord) -> RustBuffer {
-    return FfiConverterTypeKyberSpkRecord.lower(value)
+public func FfiConverterTypeKyberPrekeyUpload_lower(_ value: KyberPrekeyUpload) -> RustBuffer {
+    return FfiConverterTypeKyberPrekeyUpload.lower(value)
 }
 
 
@@ -3693,7 +3551,7 @@ public func FfiConverterTypeMLDSAKeyPair_lower(_ value: MldsaKeyPair) -> RustBuf
 
 
 /**
- * Result of ML-KEM-768 encapsulation (sender side of PQXDH handshake).
+ * Result of an ML-KEM-1024 encapsulation (history transfer to a peer's Kyber SPK).
  */
 public struct MlkemEncapsulation: Equatable, Hashable {
     public var ciphertext: [UInt8]
@@ -3744,61 +3602,6 @@ public func FfiConverterTypeMLKEMEncapsulation_lift(_ buf: RustBuffer) throws ->
 #endif
 public func FfiConverterTypeMLKEMEncapsulation_lower(_ value: MlkemEncapsulation) -> RustBuffer {
     return FfiConverterTypeMLKEMEncapsulation.lower(value)
-}
-
-
-/**
- * Generated ML-KEM-768 keypair (for Kyber Signed Pre-Key or One-Time Pre-Key upload).
- */
-public struct MlkemKeyPair: Equatable, Hashable {
-    public var publicKey: [UInt8]
-    public var secretKey: [UInt8]
-
-    // Default memberwise initializers are never public by default, so we
-    // declare one manually.
-    public init(publicKey: [UInt8], secretKey: [UInt8]) {
-        self.publicKey = publicKey
-        self.secretKey = secretKey
-    }
-
-    
-}
-
-#if compiler(>=6)
-extension MlkemKeyPair: Sendable {}
-#endif
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public struct FfiConverterTypeMLKEMKeyPair: FfiConverterRustBuffer {
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> MlkemKeyPair {
-        return
-            try MlkemKeyPair(
-                publicKey: FfiConverterSequenceUInt8.read(from: &buf), 
-                secretKey: FfiConverterSequenceUInt8.read(from: &buf)
-        )
-    }
-
-    public static func write(_ value: MlkemKeyPair, into buf: inout [UInt8]) {
-        FfiConverterSequenceUInt8.write(value.publicKey, into: &buf)
-        FfiConverterSequenceUInt8.write(value.secretKey, into: &buf)
-    }
-}
-
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypeMLKEMKeyPair_lift(_ buf: RustBuffer) throws -> MlkemKeyPair {
-    return try FfiConverterTypeMLKEMKeyPair.lift(buf)
-}
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypeMLKEMKeyPair_lower(_ value: MlkemKeyPair) -> RustBuffer {
-    return FfiConverterTypeMLKEMKeyPair.lower(value)
 }
 
 
@@ -4598,7 +4401,6 @@ public func FfiConverterTypeRotatedSpkBundle_lower(_ value: RotatedSpkBundle) ->
 
 
 /**
- * Read-only health snapshot of a Double Ratchet session.
  * Returned by get_session_health(). Does not mutate session state.
  */
 public struct SessionHealthReport: Equatable, Hashable {
@@ -4608,16 +4410,20 @@ public struct SessionHealthReport: Equatable, Hashable {
     public var isPqStrengthened: Bool
     public var lastRatchetAt: UInt64
     public var sessionId: String
+    public var pqAuthentication: PqAuthentication
+    public var pqHandshake: PqHandshake
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(messagesSent: UInt32, messagesReceived: UInt32, skippedKeysCount: UInt32, isPqStrengthened: Bool, lastRatchetAt: UInt64, sessionId: String) {
+    public init(messagesSent: UInt32, messagesReceived: UInt32, skippedKeysCount: UInt32, isPqStrengthened: Bool, lastRatchetAt: UInt64, sessionId: String, pqAuthentication: PqAuthentication, pqHandshake: PqHandshake) {
         self.messagesSent = messagesSent
         self.messagesReceived = messagesReceived
         self.skippedKeysCount = skippedKeysCount
         self.isPqStrengthened = isPqStrengthened
         self.lastRatchetAt = lastRatchetAt
         self.sessionId = sessionId
+        self.pqAuthentication = pqAuthentication
+        self.pqHandshake = pqHandshake
     }
 
     
@@ -4639,7 +4445,9 @@ public struct FfiConverterTypeSessionHealthReport: FfiConverterRustBuffer {
                 skippedKeysCount: FfiConverterUInt32.read(from: &buf), 
                 isPqStrengthened: FfiConverterBool.read(from: &buf), 
                 lastRatchetAt: FfiConverterUInt64.read(from: &buf), 
-                sessionId: FfiConverterString.read(from: &buf)
+                sessionId: FfiConverterString.read(from: &buf), 
+                pqAuthentication: FfiConverterTypePqAuthentication.read(from: &buf), 
+                pqHandshake: FfiConverterTypePqHandshake.read(from: &buf)
         )
     }
 
@@ -4650,6 +4458,8 @@ public struct FfiConverterTypeSessionHealthReport: FfiConverterRustBuffer {
         FfiConverterBool.write(value.isPqStrengthened, into: &buf)
         FfiConverterUInt64.write(value.lastRatchetAt, into: &buf)
         FfiConverterString.write(value.sessionId, into: &buf)
+        FfiConverterTypePqAuthentication.write(value.pqAuthentication, into: &buf)
+        FfiConverterTypePqHandshake.write(value.pqHandshake, into: &buf)
     }
 }
 
@@ -4673,13 +4483,15 @@ public struct SessionInitResult: Equatable, Hashable {
     public var sessionId: String
     public var decryptedMessage: [UInt8]
     public var storageKey: [UInt8]
+    public var kyberPrekeys: [UInt8]?
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(sessionId: String, decryptedMessage: [UInt8], storageKey: [UInt8]) {
+    public init(sessionId: String, decryptedMessage: [UInt8], storageKey: [UInt8], kyberPrekeys: [UInt8]?) {
         self.sessionId = sessionId
         self.decryptedMessage = decryptedMessage
         self.storageKey = storageKey
+        self.kyberPrekeys = kyberPrekeys
     }
 
     
@@ -4698,7 +4510,8 @@ public struct FfiConverterTypeSessionInitResult: FfiConverterRustBuffer {
             try SessionInitResult(
                 sessionId: FfiConverterString.read(from: &buf), 
                 decryptedMessage: FfiConverterSequenceUInt8.read(from: &buf), 
-                storageKey: FfiConverterSequenceUInt8.read(from: &buf)
+                storageKey: FfiConverterSequenceUInt8.read(from: &buf), 
+                kyberPrekeys: FfiConverterOptionSequenceUInt8.read(from: &buf)
         )
     }
 
@@ -4706,6 +4519,7 @@ public struct FfiConverterTypeSessionInitResult: FfiConverterRustBuffer {
         FfiConverterString.write(value.sessionId, into: &buf)
         FfiConverterSequenceUInt8.write(value.decryptedMessage, into: &buf)
         FfiConverterSequenceUInt8.write(value.storageKey, into: &buf)
+        FfiConverterOptionSequenceUInt8.write(value.kyberPrekeys, into: &buf)
     }
 }
 
@@ -4915,10 +4729,11 @@ public struct WirePayload: Equatable, Hashable {
     public var sealedBox: [UInt8]
     public var pqMessageEpoch: UInt32
     public var pqRatchetField: [UInt8]
+    public var pqxdhV2: Bool
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(dhPublicKey: [UInt8], messageNumber: UInt32, oneTimePrekeyId: UInt32, kyberOtpkId: UInt32, previousChainLength: UInt32, suiteId: UInt16, kemCiphertext: [UInt8]?, sealedBox: [UInt8], pqMessageEpoch: UInt32, pqRatchetField: [UInt8]) {
+    public init(dhPublicKey: [UInt8], messageNumber: UInt32, oneTimePrekeyId: UInt32, kyberOtpkId: UInt32, previousChainLength: UInt32, suiteId: UInt16, kemCiphertext: [UInt8]?, sealedBox: [UInt8], pqMessageEpoch: UInt32, pqRatchetField: [UInt8], pqxdhV2: Bool = false) {
         self.dhPublicKey = dhPublicKey
         self.messageNumber = messageNumber
         self.oneTimePrekeyId = oneTimePrekeyId
@@ -4929,6 +4744,7 @@ public struct WirePayload: Equatable, Hashable {
         self.sealedBox = sealedBox
         self.pqMessageEpoch = pqMessageEpoch
         self.pqRatchetField = pqRatchetField
+        self.pqxdhV2 = pqxdhV2
     }
 
     
@@ -4954,7 +4770,8 @@ public struct FfiConverterTypeWirePayload: FfiConverterRustBuffer {
                 kemCiphertext: FfiConverterOptionSequenceUInt8.read(from: &buf), 
                 sealedBox: FfiConverterSequenceUInt8.read(from: &buf), 
                 pqMessageEpoch: FfiConverterUInt32.read(from: &buf), 
-                pqRatchetField: FfiConverterSequenceUInt8.read(from: &buf)
+                pqRatchetField: FfiConverterSequenceUInt8.read(from: &buf), 
+                pqxdhV2: FfiConverterBool.read(from: &buf)
         )
     }
 
@@ -4969,6 +4786,7 @@ public struct FfiConverterTypeWirePayload: FfiConverterRustBuffer {
         FfiConverterSequenceUInt8.write(value.sealedBox, into: &buf)
         FfiConverterUInt32.write(value.pqMessageEpoch, into: &buf)
         FfiConverterSequenceUInt8.write(value.pqRatchetField, into: &buf)
+        FfiConverterBool.write(value.pqxdhV2, into: &buf)
     }
 }
 
@@ -5083,8 +4901,6 @@ public enum CfeAction: Equatable, Hashable {
     )
     case initSession(contactId: String, bundleJson: String
     )
-    case applyPqContribution(contactId: String, kemSs: Data
-    )
     case archiveSession(contactId: String
     )
     case messageDecrypted(contactId: String, messageId: String, plaintext: Data
@@ -5139,7 +4955,8 @@ public enum CfeAction: Equatable, Hashable {
     )
     /**
      * Open a session with `contact_id` now, as INITIATOR, and announce it (X3DH +
-     * SESSION_RESET_INIT) — not a bare local init.
+     * SESSION_RESET_INIT) — not a bare local init. Build it with `reopen_session`, which also
+     * covers a session still held: the PQXDH v2 upgrade sweep asks this for classical sessions.
      */
     case openSession(contactId: String
     )
@@ -5254,115 +5071,112 @@ public struct FfiConverterTypeCfeAction: FfiConverterRustBuffer {
         case 3: return .initSession(contactId: try FfiConverterString.read(from: &buf), bundleJson: try FfiConverterString.read(from: &buf)
         )
         
-        case 4: return .applyPqContribution(contactId: try FfiConverterString.read(from: &buf), kemSs: try FfiConverterData.read(from: &buf)
+        case 4: return .archiveSession(contactId: try FfiConverterString.read(from: &buf)
         )
         
-        case 5: return .archiveSession(contactId: try FfiConverterString.read(from: &buf)
+        case 5: return .messageDecrypted(contactId: try FfiConverterString.read(from: &buf), messageId: try FfiConverterString.read(from: &buf), plaintext: try FfiConverterData.read(from: &buf)
         )
         
-        case 6: return .messageDecrypted(contactId: try FfiConverterString.read(from: &buf), messageId: try FfiConverterString.read(from: &buf), plaintext: try FfiConverterData.read(from: &buf)
+        case 6: return .sessionHealNeeded(contactId: try FfiConverterString.read(from: &buf), role: try FfiConverterString.read(from: &buf)
         )
         
-        case 7: return .sessionHealNeeded(contactId: try FfiConverterString.read(from: &buf), role: try FfiConverterString.read(from: &buf)
+        case 7: return .healSuppressed(contactId: try FfiConverterString.read(from: &buf), retryAfterMs: try FfiConverterUInt64.read(from: &buf)
         )
         
-        case 8: return .healSuppressed(contactId: try FfiConverterString.read(from: &buf), retryAfterMs: try FfiConverterUInt64.read(from: &buf)
+        case 8: return .heldPendingAck(contactId: try FfiConverterString.read(from: &buf)
         )
         
-        case 9: return .heldPendingAck(contactId: try FfiConverterString.read(from: &buf)
+        case 9: return .healAttemptAllowed(contactId: try FfiConverterString.read(from: &buf), attempt: try FfiConverterUInt32.read(from: &buf)
         )
         
-        case 10: return .healAttemptAllowed(contactId: try FfiConverterString.read(from: &buf), attempt: try FfiConverterUInt32.read(from: &buf)
+        case 10: return .healExhausted(contactId: try FfiConverterString.read(from: &buf)
         )
         
-        case 11: return .healExhausted(contactId: try FfiConverterString.read(from: &buf)
+        case 11: return .endSessionSuppressed(contactId: try FfiConverterString.read(from: &buf), retryAfterMs: try FfiConverterUInt64.read(from: &buf)
         )
         
-        case 12: return .endSessionSuppressed(contactId: try FfiConverterString.read(from: &buf), retryAfterMs: try FfiConverterUInt64.read(from: &buf)
+        case 12: return .endSessionNotNeeded(contactId: try FfiConverterString.read(from: &buf)
         )
         
-        case 13: return .endSessionNotNeeded(contactId: try FfiConverterString.read(from: &buf)
+        case 13: return .applyResetInit(contactId: try FfiConverterString.read(from: &buf)
         )
         
-        case 14: return .applyResetInit(contactId: try FfiConverterString.read(from: &buf)
+        case 14: return .resetInitSuperseded(contactId: try FfiConverterString.read(from: &buf), redelivery: try FfiConverterBool.read(from: &buf)
         )
         
-        case 15: return .resetInitSuperseded(contactId: try FfiConverterString.read(from: &buf), redelivery: try FfiConverterBool.read(from: &buf)
+        case 15: return .openSession(contactId: try FfiConverterString.read(from: &buf)
         )
         
-        case 16: return .openSession(contactId: try FfiConverterString.read(from: &buf)
+        case 16: return .openDeferred(contactId: try FfiConverterString.read(from: &buf), retryAfterMs: try FfiConverterUInt64.read(from: &buf)
         )
         
-        case 17: return .openDeferred(contactId: try FfiConverterString.read(from: &buf), retryAfterMs: try FfiConverterUInt64.read(from: &buf)
+        case 17: return .openNotNeeded(contactId: try FfiConverterString.read(from: &buf)
         )
         
-        case 18: return .openNotNeeded(contactId: try FfiConverterString.read(from: &buf)
+        case 18: return .resendSri(contactId: try FfiConverterString.read(from: &buf)
         )
         
-        case 19: return .resendSri(contactId: try FfiConverterString.read(from: &buf)
+        case 19: return .openingGaveUp(contactId: try FfiConverterString.read(from: &buf)
         )
         
-        case 20: return .openingGaveUp(contactId: try FfiConverterString.read(from: &buf)
+        case 20: return .messageQueuedPendingInit(contactId: try FfiConverterString.read(from: &buf), queuedCount: try FfiConverterUInt32.read(from: &buf)
         )
         
-        case 21: return .messageQueuedPendingInit(contactId: try FfiConverterString.read(from: &buf), queuedCount: try FfiConverterUInt32.read(from: &buf)
+        case 21: return .saveToSecureStore(slot: try FfiConverterTypeCfeSecureStoreSlot.read(from: &buf), data: try FfiConverterData.read(from: &buf)
         )
         
-        case 22: return .saveToSecureStore(slot: try FfiConverterTypeCfeSecureStoreSlot.read(from: &buf), data: try FfiConverterData.read(from: &buf)
+        case 22: return .persistMessage(messageJson: try FfiConverterString.read(from: &buf)
         )
         
-        case 23: return .persistMessage(messageJson: try FfiConverterString.read(from: &buf)
+        case 23: return .persistAck(messageId: try FfiConverterString.read(from: &buf), timestamp: try FfiConverterUInt64.read(from: &buf)
         )
         
-        case 24: return .persistAck(messageId: try FfiConverterString.read(from: &buf), timestamp: try FfiConverterUInt64.read(from: &buf)
+        case 24: return .pruneAckStore(cutoffTs: try FfiConverterUInt64.read(from: &buf)
         )
         
-        case 25: return .pruneAckStore(cutoffTs: try FfiConverterUInt64.read(from: &buf)
+        case 25: return .markMessageDelivered(messageId: try FfiConverterString.read(from: &buf)
         )
         
-        case 26: return .markMessageDelivered(messageId: try FfiConverterString.read(from: &buf)
+        case 26: return .fetchPublicKeyBundle(userId: try FfiConverterString.read(from: &buf)
         )
         
-        case 27: return .fetchPublicKeyBundle(userId: try FfiConverterString.read(from: &buf)
+        case 27: return .sendEncryptedMessage(to: try FfiConverterString.read(from: &buf), payload: try FfiConverterData.read(from: &buf), messageId: try FfiConverterString.read(from: &buf), contentType: try FfiConverterUInt8.read(from: &buf)
         )
         
-        case 28: return .sendEncryptedMessage(to: try FfiConverterString.read(from: &buf), payload: try FfiConverterData.read(from: &buf), messageId: try FfiConverterString.read(from: &buf), contentType: try FfiConverterUInt8.read(from: &buf)
+        case 28: return .sendReceipt(messageId: try FfiConverterString.read(from: &buf), status: try FfiConverterString.read(from: &buf)
         )
         
-        case 29: return .sendReceipt(messageId: try FfiConverterString.read(from: &buf), status: try FfiConverterString.read(from: &buf)
+        case 29: return .sendEndSession(contactId: try FfiConverterString.read(from: &buf)
         )
         
-        case 30: return .sendEndSession(contactId: try FfiConverterString.read(from: &buf)
+        case 30: return .notifyNewMessage(chatId: try FfiConverterString.read(from: &buf), preview: try FfiConverterString.read(from: &buf)
         )
         
-        case 31: return .notifyNewMessage(chatId: try FfiConverterString.read(from: &buf), preview: try FfiConverterString.read(from: &buf)
+        case 31: return .notifySessionCreated(contactId: try FfiConverterString.read(from: &buf)
         )
         
-        case 32: return .notifySessionCreated(contactId: try FfiConverterString.read(from: &buf)
+        case 32: return .notifyError(code: try FfiConverterString.read(from: &buf), message: try FfiConverterString.read(from: &buf)
         )
         
-        case 33: return .notifyError(code: try FfiConverterString.read(from: &buf), message: try FfiConverterString.read(from: &buf)
+        case 33: return .scheduleTimer(timerId: try FfiConverterString.read(from: &buf), delayMs: try FfiConverterUInt64.read(from: &buf)
         )
         
-        case 34: return .scheduleTimer(timerId: try FfiConverterString.read(from: &buf), delayMs: try FfiConverterUInt64.read(from: &buf)
+        case 34: return .cancelTimer(timerId: try FfiConverterString.read(from: &buf)
         )
         
-        case 35: return .cancelTimer(timerId: try FfiConverterString.read(from: &buf)
+        case 35: return .callSignalDecrypted(contactId: try FfiConverterString.read(from: &buf), messageId: try FfiConverterString.read(from: &buf), protoBytes: try FfiConverterData.read(from: &buf)
         )
         
-        case 36: return .callSignalDecrypted(contactId: try FfiConverterString.read(from: &buf), messageId: try FfiConverterString.read(from: &buf), protoBytes: try FfiConverterData.read(from: &buf)
+        case 36: return .checkAckInDb(messageId: try FfiConverterString.read(from: &buf)
         )
         
-        case 37: return .checkAckInDb(messageId: try FfiConverterString.read(from: &buf)
+        case 37: return .sendHeartbeat(contactId: try FfiConverterString.read(from: &buf)
         )
         
-        case 38: return .sendHeartbeat(contactId: try FfiConverterString.read(from: &buf)
+        case 38: return .notifyLinkedDevicesOfSessionReset(contactId: try FfiConverterString.read(from: &buf)
         )
         
-        case 39: return .notifyLinkedDevicesOfSessionReset(contactId: try FfiConverterString.read(from: &buf)
-        )
-        
-        case 40: return .sessionTerminated(contactId: try FfiConverterString.read(from: &buf), archiveBytes: try FfiConverterData.read(from: &buf)
+        case 39: return .sessionTerminated(contactId: try FfiConverterString.read(from: &buf), archiveBytes: try FfiConverterData.read(from: &buf)
         )
         
         default: throw UniffiInternalError.unexpectedEnumCase
@@ -5391,140 +5205,134 @@ public struct FfiConverterTypeCfeAction: FfiConverterRustBuffer {
             FfiConverterString.write(bundleJson, into: &buf)
             
         
-        case let .applyPqContribution(contactId,kemSs):
-            writeInt(&buf, Int32(4))
-            FfiConverterString.write(contactId, into: &buf)
-            FfiConverterData.write(kemSs, into: &buf)
-            
-        
         case let .archiveSession(contactId):
-            writeInt(&buf, Int32(5))
+            writeInt(&buf, Int32(4))
             FfiConverterString.write(contactId, into: &buf)
             
         
         case let .messageDecrypted(contactId,messageId,plaintext):
-            writeInt(&buf, Int32(6))
+            writeInt(&buf, Int32(5))
             FfiConverterString.write(contactId, into: &buf)
             FfiConverterString.write(messageId, into: &buf)
             FfiConverterData.write(plaintext, into: &buf)
             
         
         case let .sessionHealNeeded(contactId,role):
-            writeInt(&buf, Int32(7))
+            writeInt(&buf, Int32(6))
             FfiConverterString.write(contactId, into: &buf)
             FfiConverterString.write(role, into: &buf)
             
         
         case let .healSuppressed(contactId,retryAfterMs):
-            writeInt(&buf, Int32(8))
+            writeInt(&buf, Int32(7))
             FfiConverterString.write(contactId, into: &buf)
             FfiConverterUInt64.write(retryAfterMs, into: &buf)
             
         
         case let .heldPendingAck(contactId):
-            writeInt(&buf, Int32(9))
+            writeInt(&buf, Int32(8))
             FfiConverterString.write(contactId, into: &buf)
             
         
         case let .healAttemptAllowed(contactId,attempt):
-            writeInt(&buf, Int32(10))
+            writeInt(&buf, Int32(9))
             FfiConverterString.write(contactId, into: &buf)
             FfiConverterUInt32.write(attempt, into: &buf)
             
         
         case let .healExhausted(contactId):
-            writeInt(&buf, Int32(11))
+            writeInt(&buf, Int32(10))
             FfiConverterString.write(contactId, into: &buf)
             
         
         case let .endSessionSuppressed(contactId,retryAfterMs):
-            writeInt(&buf, Int32(12))
+            writeInt(&buf, Int32(11))
             FfiConverterString.write(contactId, into: &buf)
             FfiConverterUInt64.write(retryAfterMs, into: &buf)
             
         
         case let .endSessionNotNeeded(contactId):
-            writeInt(&buf, Int32(13))
+            writeInt(&buf, Int32(12))
             FfiConverterString.write(contactId, into: &buf)
             
         
         case let .applyResetInit(contactId):
-            writeInt(&buf, Int32(14))
+            writeInt(&buf, Int32(13))
             FfiConverterString.write(contactId, into: &buf)
             
         
         case let .resetInitSuperseded(contactId,redelivery):
-            writeInt(&buf, Int32(15))
+            writeInt(&buf, Int32(14))
             FfiConverterString.write(contactId, into: &buf)
             FfiConverterBool.write(redelivery, into: &buf)
             
         
         case let .openSession(contactId):
-            writeInt(&buf, Int32(16))
+            writeInt(&buf, Int32(15))
             FfiConverterString.write(contactId, into: &buf)
             
         
         case let .openDeferred(contactId,retryAfterMs):
-            writeInt(&buf, Int32(17))
+            writeInt(&buf, Int32(16))
             FfiConverterString.write(contactId, into: &buf)
             FfiConverterUInt64.write(retryAfterMs, into: &buf)
             
         
         case let .openNotNeeded(contactId):
-            writeInt(&buf, Int32(18))
+            writeInt(&buf, Int32(17))
             FfiConverterString.write(contactId, into: &buf)
             
         
         case let .resendSri(contactId):
-            writeInt(&buf, Int32(19))
+            writeInt(&buf, Int32(18))
             FfiConverterString.write(contactId, into: &buf)
             
         
         case let .openingGaveUp(contactId):
-            writeInt(&buf, Int32(20))
+            writeInt(&buf, Int32(19))
             FfiConverterString.write(contactId, into: &buf)
             
         
         case let .messageQueuedPendingInit(contactId,queuedCount):
-            writeInt(&buf, Int32(21))
+            writeInt(&buf, Int32(20))
             FfiConverterString.write(contactId, into: &buf)
             FfiConverterUInt32.write(queuedCount, into: &buf)
             
         
         case let .saveToSecureStore(slot,data):
-            writeInt(&buf, Int32(22))
+            writeInt(&buf, Int32(21))
             FfiConverterTypeCfeSecureStoreSlot.write(slot, into: &buf)
             FfiConverterData.write(data, into: &buf)
             
         
         case let .persistMessage(messageJson):
-            writeInt(&buf, Int32(23))
+            writeInt(&buf, Int32(22))
             FfiConverterString.write(messageJson, into: &buf)
             
         
         case let .persistAck(messageId,timestamp):
-            writeInt(&buf, Int32(24))
+            writeInt(&buf, Int32(23))
             FfiConverterString.write(messageId, into: &buf)
             FfiConverterUInt64.write(timestamp, into: &buf)
             
         
         case let .pruneAckStore(cutoffTs):
-            writeInt(&buf, Int32(25))
+            writeInt(&buf, Int32(24))
             FfiConverterUInt64.write(cutoffTs, into: &buf)
             
         
         case let .markMessageDelivered(messageId):
-            writeInt(&buf, Int32(26))
+            writeInt(&buf, Int32(25))
             FfiConverterString.write(messageId, into: &buf)
             
         
         case let .fetchPublicKeyBundle(userId):
-            writeInt(&buf, Int32(27))
+            writeInt(&buf, Int32(26))
             FfiConverterString.write(userId, into: &buf)
             
         
         case let .sendEncryptedMessage(to,payload,messageId,contentType):
-            writeInt(&buf, Int32(28))
+            writeInt(&buf, Int32(27))
             FfiConverterString.write(to, into: &buf)
             FfiConverterData.write(payload, into: &buf)
             FfiConverterString.write(messageId, into: &buf)
@@ -5532,68 +5340,68 @@ public struct FfiConverterTypeCfeAction: FfiConverterRustBuffer {
             
         
         case let .sendReceipt(messageId,status):
-            writeInt(&buf, Int32(29))
+            writeInt(&buf, Int32(28))
             FfiConverterString.write(messageId, into: &buf)
             FfiConverterString.write(status, into: &buf)
             
         
         case let .sendEndSession(contactId):
-            writeInt(&buf, Int32(30))
+            writeInt(&buf, Int32(29))
             FfiConverterString.write(contactId, into: &buf)
             
         
         case let .notifyNewMessage(chatId,preview):
-            writeInt(&buf, Int32(31))
+            writeInt(&buf, Int32(30))
             FfiConverterString.write(chatId, into: &buf)
             FfiConverterString.write(preview, into: &buf)
             
         
         case let .notifySessionCreated(contactId):
-            writeInt(&buf, Int32(32))
+            writeInt(&buf, Int32(31))
             FfiConverterString.write(contactId, into: &buf)
             
         
         case let .notifyError(code,message):
-            writeInt(&buf, Int32(33))
+            writeInt(&buf, Int32(32))
             FfiConverterString.write(code, into: &buf)
             FfiConverterString.write(message, into: &buf)
             
         
         case let .scheduleTimer(timerId,delayMs):
-            writeInt(&buf, Int32(34))
+            writeInt(&buf, Int32(33))
             FfiConverterString.write(timerId, into: &buf)
             FfiConverterUInt64.write(delayMs, into: &buf)
             
         
         case let .cancelTimer(timerId):
-            writeInt(&buf, Int32(35))
+            writeInt(&buf, Int32(34))
             FfiConverterString.write(timerId, into: &buf)
             
         
         case let .callSignalDecrypted(contactId,messageId,protoBytes):
-            writeInt(&buf, Int32(36))
+            writeInt(&buf, Int32(35))
             FfiConverterString.write(contactId, into: &buf)
             FfiConverterString.write(messageId, into: &buf)
             FfiConverterData.write(protoBytes, into: &buf)
             
         
         case let .checkAckInDb(messageId):
-            writeInt(&buf, Int32(37))
+            writeInt(&buf, Int32(36))
             FfiConverterString.write(messageId, into: &buf)
             
         
         case let .sendHeartbeat(contactId):
-            writeInt(&buf, Int32(38))
+            writeInt(&buf, Int32(37))
             FfiConverterString.write(contactId, into: &buf)
             
         
         case let .notifyLinkedDevicesOfSessionReset(contactId):
-            writeInt(&buf, Int32(39))
+            writeInt(&buf, Int32(38))
             FfiConverterString.write(contactId, into: &buf)
             
         
         case let .sessionTerminated(contactId,archiveBytes):
-            writeInt(&buf, Int32(40))
+            writeInt(&buf, Int32(39))
             FfiConverterString.write(contactId, into: &buf)
             FfiConverterData.write(archiveBytes, into: &buf)
             
@@ -5948,20 +5756,6 @@ public enum CfeSecureStoreSlot: Equatable, Hashable {
     case sessionArchive(contactId: String
     )
     /**
-     * Deferred ML-KEM contribution for one contact. Empty payload means delete.
-     */
-    case pqDeferred(contactId: String
-    )
-    /**
-     * Whole PQContributionManager snapshot.
-     */
-    case kyberSessionState
-    /**
-     * Secret half of a committed ML-KEM signed prekey. No reachable emitter today.
-     */
-    case kyberSignedPrekey(keyId: UInt32
-    )
-    /**
      * Orchestrator coordination state.
      */
     case orchestratorState
@@ -5990,15 +5784,7 @@ public struct FfiConverterTypeCfeSecureStoreSlot: FfiConverterRustBuffer {
         case 2: return .sessionArchive(contactId: try FfiConverterString.read(from: &buf)
         )
         
-        case 3: return .pqDeferred(contactId: try FfiConverterString.read(from: &buf)
-        )
-        
-        case 4: return .kyberSessionState
-        
-        case 5: return .kyberSignedPrekey(keyId: try FfiConverterUInt32.read(from: &buf)
-        )
-        
-        case 6: return .orchestratorState
+        case 3: return .orchestratorState
         
         default: throw UniffiInternalError.unexpectedEnumCase
         }
@@ -6018,22 +5804,8 @@ public struct FfiConverterTypeCfeSecureStoreSlot: FfiConverterRustBuffer {
             FfiConverterString.write(contactId, into: &buf)
             
         
-        case let .pqDeferred(contactId):
-            writeInt(&buf, Int32(3))
-            FfiConverterString.write(contactId, into: &buf)
-            
-        
-        case .kyberSessionState:
-            writeInt(&buf, Int32(4))
-        
-        
-        case let .kyberSignedPrekey(keyId):
-            writeInt(&buf, Int32(5))
-            FfiConverterUInt32.write(keyId, into: &buf)
-            
-        
         case .orchestratorState:
-            writeInt(&buf, Int32(6))
+            writeInt(&buf, Int32(3))
         
         }
     }
@@ -6576,6 +6348,172 @@ public func FfiConverterTypeMlsError_lift(_ buf: RustBuffer) throws -> MlsError 
 public func FfiConverterTypeMlsError_lower(_ value: MlsError) -> RustBuffer {
     return FfiConverterTypeMlsError.lower(value)
 }
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+/**
+ * Read-only health snapshot of a Double Ratchet session.
+ * Whose Kyber key a session's post-quantum layer came from. Anything a person sees about
+ * "PQ" reads this — `is_pq_strengthened` only says a KEM secret was mixed in.
+ */
+
+public enum PqAuthentication: Equatable, Hashable {
+    
+    case unknown
+    case classic
+    case authenticated
+    case unauthenticated
+    case received
+
+
+
+}
+
+#if compiler(>=6)
+extension PqAuthentication: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypePqAuthentication: FfiConverterRustBuffer {
+    typealias SwiftType = PqAuthentication
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> PqAuthentication {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .unknown
+        
+        case 2: return .classic
+        
+        case 3: return .authenticated
+        
+        case 4: return .unauthenticated
+        
+        case 5: return .received
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: PqAuthentication, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case .unknown:
+            writeInt(&buf, Int32(1))
+        
+        
+        case .classic:
+            writeInt(&buf, Int32(2))
+        
+        
+        case .authenticated:
+            writeInt(&buf, Int32(3))
+        
+        
+        case .unauthenticated:
+            writeInt(&buf, Int32(4))
+        
+        
+        case .received:
+            writeInt(&buf, Int32(5))
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypePqAuthentication_lift(_ buf: RustBuffer) throws -> PqAuthentication {
+    return try FfiConverterTypePqAuthentication.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypePqAuthentication_lower(_ value: PqAuthentication) -> RustBuffer {
+    return FfiConverterTypePqAuthentication.lower(value)
+}
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+/**
+ * How a session's post-quantum layer started.
+ */
+
+public enum PqHandshake: Equatable, Hashable {
+    
+    case none
+    case deferredV1
+    case initialV2
+
+
+
+}
+
+#if compiler(>=6)
+extension PqHandshake: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypePqHandshake: FfiConverterRustBuffer {
+    typealias SwiftType = PqHandshake
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> PqHandshake {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .none
+        
+        case 2: return .deferredV1
+        
+        case 3: return .initialV2
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: PqHandshake, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case .none:
+            writeInt(&buf, Int32(1))
+        
+        
+        case .deferredV1:
+            writeInt(&buf, Int32(2))
+        
+        
+        case .initialV2:
+            writeInt(&buf, Int32(3))
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypePqHandshake_lift(_ buf: RustBuffer) throws -> PqHandshake {
+    return try FfiConverterTypePqHandshake.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypePqHandshake_lower(_ value: PqHandshake) -> RustBuffer {
+    return FfiConverterTypePqHandshake.lower(value)
+}
+
 
 // Note that we don't yet support `indirect` for enums.
 // See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
@@ -7236,8 +7174,8 @@ fileprivate struct FfiConverterOptionData: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-fileprivate struct FfiConverterOptionTypeKyberSpkRecord: FfiConverterRustBuffer {
-    typealias SwiftType = KyberSpkRecord?
+fileprivate struct FfiConverterOptionTypeKyberPrekeyUpload: FfiConverterRustBuffer {
+    typealias SwiftType = KyberPrekeyUpload?
 
     public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
         guard let value = value else {
@@ -7245,13 +7183,13 @@ fileprivate struct FfiConverterOptionTypeKyberSpkRecord: FfiConverterRustBuffer 
             return
         }
         writeInt(&buf, Int8(1))
-        FfiConverterTypeKyberSpkRecord.write(value, into: &buf)
+        FfiConverterTypeKyberPrekeyUpload.write(value, into: &buf)
     }
 
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
         switch try readInt(&buf) as Int8 {
         case 0: return nil
-        case 1: return try FfiConverterTypeKyberSpkRecord.read(from: &buf)
+        case 1: return try FfiConverterTypeKyberPrekeyUpload.read(from: &buf)
         default: throw UniffiInternalError.unexpectedOptionalTag
         }
     }
@@ -7399,6 +7337,31 @@ fileprivate struct FfiConverterSequenceTypeDeliveryTarget: FfiConverterRustBuffe
         seq.reserveCapacity(Int(len))
         for _ in 0 ..< len {
             seq.append(try FfiConverterTypeDeliveryTarget.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeKyberPrekeyUpload: FfiConverterRustBuffer {
+    typealias SwiftType = [KyberPrekeyUpload]
+
+    public static func write(_ value: [KyberPrekeyUpload], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeKyberPrekeyUpload.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [KyberPrekeyUpload] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [KyberPrekeyUpload]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeKyberPrekeyUpload.read(from: &buf))
         }
         return seq
     }
@@ -7750,6 +7713,15 @@ public func generateMnemonic(wordCount: UInt8)throws  -> String  {
     )
 })
 }
+/**
+ * Fresh device keys (identity, signing, signed prekey) as a key record.
+ */
+public func generatePrivateKeys()throws  -> [UInt8]  {
+    return try  FfiConverterSequenceUInt8.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_func_generate_private_keys($0
+    )
+})
+}
 public func heartbeatIntervalMs(baseIntervalSec: UInt64) -> UInt64  {
     return try!  FfiConverterUInt64.lift(try! rustCall() {
     uniffi_construct_core_fn_func_heartbeat_interval_ms(
@@ -7798,6 +7770,16 @@ public func hybridVerify(publicKey: [UInt8], message: [UInt8], signature: [UInt8
         FfiConverterSequenceUInt8.lower(publicKey),
         FfiConverterSequenceUInt8.lower(message),
         FfiConverterSequenceUInt8.lower(signature),$0
+    )
+})
+}
+/**
+ * The X25519 identity secret of a key record.
+ */
+public func identityKeyFromKeys(keys: [UInt8])throws  -> Data  {
+    return try  FfiConverterData.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_func_identity_key_from_keys(
+        FfiConverterSequenceUInt8.lower(keys),$0
     )
 })
 }
@@ -7879,35 +7861,12 @@ public func mldsa65Verify(publicKey: [UInt8], message: [UInt8], signature: [UInt
 })
 }
 /**
- * Decapsulate a received ML-KEM-768 ciphertext (receiver side PQXDH).
- * Returns shared_secret to pass to ClassicCryptoCore.apply_pq_contribution.
+ * Encapsulate to an ML-KEM-1024 public key (1568 bytes).
  */
-public func mlkem768Decapsulate(secretKey: [UInt8], ciphertext: [UInt8])throws  -> [UInt8]  {
-    return try  FfiConverterSequenceUInt8.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
-    uniffi_construct_core_fn_func_mlkem768_decapsulate(
-        FfiConverterSequenceUInt8.lower(secretKey),
-        FfiConverterSequenceUInt8.lower(ciphertext),$0
-    )
-})
-}
-/**
- * Encapsulate to a recipient's ML-KEM-768 public key (sender side PQXDH).
- * Returns ciphertext (to include in proto PreKeySignalMessage.kem_ciphertext)
- * and shared_secret (to pass to ClassicCryptoCore.apply_pq_contribution).
- */
-public func mlkem768Encapsulate(publicKey: [UInt8])throws  -> MlkemEncapsulation  {
+public func mlkem1024Encapsulate(publicKey: [UInt8])throws  -> MlkemEncapsulation  {
     return try  FfiConverterTypeMLKEMEncapsulation_lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
-    uniffi_construct_core_fn_func_mlkem768_encapsulate(
+    uniffi_construct_core_fn_func_mlkem1024_encapsulate(
         FfiConverterSequenceUInt8.lower(publicKey),$0
-    )
-})
-}
-/**
- * Generate an ML-KEM-768 keypair for PQC key registration.
- */
-public func mlkem768Keygen()throws  -> MlkemKeyPair  {
-    return try  FfiConverterTypeMLKEMKeyPair_lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
-    uniffi_construct_core_fn_func_mlkem768_keygen($0
     )
 })
 }
@@ -8073,6 +8032,16 @@ public func recommendedSendDelayMs(isHighPriority: Bool, batteryLevel: Float) ->
 })
 }
 /**
+ * The public registration bundle of a key record.
+ */
+public func registrationBundleFieldsFromKeys(keys: [UInt8])throws  -> RegistrationBundleFields  {
+    return try  FfiConverterTypeRegistrationBundleFields_lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_func_registration_bundle_fields_from_keys(
+        FfiConverterSequenceUInt8.lower(keys),$0
+    )
+})
+}
+/**
  * Seal a device's own metadata to one of its account's devices.
  *
  * Same box as `sealed_seal_sender_cert` and the same implementation — two names because
@@ -8140,6 +8109,17 @@ public func sealedVerifySenderCert(userId: String, domain: String, identityKey: 
     )
 })
 }
+/**
+ * Ed25519 signature over bundle_data_json with the key record's signing key.
+ */
+public func signBundleDataWithKeys(keys: [UInt8], bundleDataJson: [UInt8])throws  -> [UInt8]  {
+    return try  FfiConverterSequenceUInt8.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_func_sign_bundle_data_with_keys(
+        FfiConverterSequenceUInt8.lower(keys),
+        FfiConverterSequenceUInt8.lower(bundleDataJson),$0
+    )
+})
+}
 public func signInviteData(data: String, identitySecretKey: [UInt8])throws  -> InviteSignature  {
     return try  FfiConverterTypeInviteSignature_lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
     uniffi_construct_core_fn_func_sign_invite_data(
@@ -8153,6 +8133,16 @@ public func signRecoveryChallenge(privateKey: [UInt8], message: String)throws  -
     uniffi_construct_core_fn_func_sign_recovery_challenge(
         FfiConverterSequenceUInt8.lower(privateKey),
         FfiConverterString.lower(message),$0
+    )
+})
+}
+/**
+ * The Ed25519 signing secret of a key record.
+ */
+public func signingKeyFromKeys(keys: [UInt8])throws  -> Data  {
+    return try  FfiConverterData.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_func_signing_key_from_keys(
+        FfiConverterSequenceUInt8.lower(keys),$0
     )
 })
 }
@@ -8208,12 +8198,6 @@ public func srSealRecoveryBundle(vaultKey: [UInt8], bundle: SrRecoveryBundle)thr
     uniffi_construct_core_fn_func_sr_seal_recovery_bundle(
         FfiConverterSequenceUInt8.lower(vaultKey),
         FfiConverterTypeSrRecoveryBundle_lower(bundle),$0
-    )
-})
-}
-public func supportsPqRatchet() -> Bool  {
-    return try!  FfiConverterBool.lift(try! rustCall() {
-    uniffi_construct_core_fn_func_supports_pq_ratchet($0
     )
 })
 }
@@ -8362,6 +8346,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_func_generate_mnemonic() != 45721) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_construct_core_checksum_func_generate_private_keys() != 4524) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_construct_core_checksum_func_heartbeat_interval_ms() != 51594) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -8375,6 +8362,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_func_hybrid_verify() != 56378) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_func_identity_key_from_keys() != 29768) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_func_import_mls_store_cfe() != 54998) {
@@ -8401,13 +8391,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_func_mldsa65_verify() != 57408) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_func_mlkem768_decapsulate() != 25978) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_construct_core_checksum_func_mlkem768_encapsulate() != 20667) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_construct_core_checksum_func_mlkem768_keygen() != 2851) {
+    if (uniffi_construct_core_checksum_func_mlkem1024_encapsulate() != 55276) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_func_mnemonic_to_seed() != 53142) {
@@ -8449,6 +8433,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_func_recommended_send_delay_ms() != 24315) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_construct_core_checksum_func_registration_bundle_fields_from_keys() != 16104) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_construct_core_checksum_func_seal_to_device_key() != 11700) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -8461,10 +8448,16 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_func_sealed_verify_sender_cert() != 7421) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_construct_core_checksum_func_sign_bundle_data_with_keys() != 50810) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_construct_core_checksum_func_sign_invite_data() != 47259) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_func_sign_recovery_challenge() != 2630) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_func_signing_key_from_keys() != 26397) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_func_sr_create_recovery_shares() != 33586) {
@@ -8480,9 +8473,6 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_func_sr_seal_recovery_bundle() != 62781) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_construct_core_checksum_func_supports_pq_ratchet() != 5109) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_func_test_platform_bridge_roundtrip() != 58358) {
@@ -8507,9 +8497,6 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_func_wire_payload_unpack() != 35590) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_construct_core_checksum_method_classiccryptocore_apply_pq_contribution() != 13706) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_classiccryptocore_decrypt_message() != 12341) {
@@ -8623,16 +8610,22 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_method_orchestratorcore_ack_mark_processed() != 13454) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_method_orchestratorcore_apply_pq_contribution() != 43446) {
+    if (uniffi_construct_core_checksum_method_orchestratorcore_awaits_acknowledgement() != 35656) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_method_orchestratorcore_awaits_acknowledgement() != 35656) {
+    if (uniffi_construct_core_checksum_method_orchestratorcore_begin_kyber_spk_rotation() != 57721) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_orchestratorcore_build_hybrid_identity_bind_message() != 61991) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_orchestratorcore_build_x3dh_sign_message() != 50237) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_orchestratorcore_commit_kyber_spk_rotation() != 27935) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_orchestratorcore_current_kyber_spk_upload() != 38528) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_orchestratorcore_decrypt_message() != 9863) {
@@ -8647,7 +8640,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_method_orchestratorcore_ensure_hybrid_signature_key() != 6511) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_method_orchestratorcore_export_kyber_session_state() != 39459) {
+    if (uniffi_construct_core_checksum_method_orchestratorcore_export_kyber_prekeys() != 29105) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_orchestratorcore_export_one_time_prekeys() != 58452) {
@@ -8663,6 +8656,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_orchestratorcore_forget_contact_state() != 50563) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_orchestratorcore_generate_kyber_one_time_prekeys() != 27977) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_orchestratorcore_generate_one_time_prekeys() != 33822) {
@@ -8698,7 +8694,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_method_orchestratorcore_import_hybrid_signature_private_key() != 32195) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_method_orchestratorcore_import_kyber_session_state() != 41061) {
+    if (uniffi_construct_core_checksum_method_orchestratorcore_import_kyber_prekeys() != 7335) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_orchestratorcore_import_one_time_prekeys() != 21471) {
@@ -8713,13 +8709,19 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_method_orchestratorcore_init_receiving_session() != 36112) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_construct_core_checksum_method_orchestratorcore_init_receiving_session_from_wire_payload() != 56748) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_construct_core_checksum_method_orchestratorcore_init_session() != 15049) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_orchestratorcore_init_session_allowing_stale() != 35577) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_method_orchestratorcore_kyber_spk() != 239) {
+    if (uniffi_construct_core_checksum_method_orchestratorcore_kyber_one_time_prekey_count() != 51317) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_orchestratorcore_kyber_prekey_decapsulate() != 12272) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_orchestratorcore_one_time_prekey_count() != 21478) {
@@ -8734,19 +8736,22 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_method_orchestratorcore_prekeys_available_count() != 33104) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_method_orchestratorcore_prune_one_time_prekeys_below() != 26303) {
+    if (uniffi_construct_core_checksum_method_orchestratorcore_prune_kyber_one_time_prekeys_below() != 38459) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_method_orchestratorcore_register_pq_deferred() != 43713) {
+    if (uniffi_construct_core_checksum_method_orchestratorcore_prune_one_time_prekeys_below() != 26303) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_orchestratorcore_remove_session() != 15351) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_method_orchestratorcore_rotate_signed_prekey() != 11331) {
+    if (uniffi_construct_core_checksum_method_orchestratorcore_reopen_session() != 45402) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_method_orchestratorcore_set_kyber_spk() != 35729) {
+    if (uniffi_construct_core_checksum_method_orchestratorcore_rollback_kyber_spk_rotation() != 39610) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_orchestratorcore_rotate_signed_prekey() != 11331) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_orchestratorcore_set_local_user_id() != 22865) {
@@ -8771,18 +8776,6 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_rustackstore_prune_expired() != 19780) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_construct_core_checksum_method_rustpqcontributions_clear() != 36635) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_construct_core_checksum_method_rustpqcontributions_has_pending() != 44477) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_construct_core_checksum_method_rustpqcontributions_store_deferred() != 22265) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_construct_core_checksum_method_rustpqcontributions_take_deferred() != 5516) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_trafficprotectionmanager_current_interval_ms() != 34869) {
@@ -8813,9 +8806,6 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_constructor_rustackstore_new() != 64675) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_construct_core_checksum_constructor_rustpqcontributions_new() != 4456) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_constructor_trafficprotectionmanager_new() != 21642) {
