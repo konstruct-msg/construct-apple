@@ -71,7 +71,10 @@ final class OutboundSessionService {
         // Delegate to the centralised executor — it handles scheduleTimer/cancelTimer,
         // notifyError, saveToSecureStore, sessionTerminated, and the rest of the
         // CfeAction surface exhaustively. See SessionActionExecutor.
-        SessionActionExecutor.shared.execute(actions)
+        SessionActionExecutor.shared.executeOffRouter(actions, site: "rust_timer") { action in
+            if case .sendEndSession = action { return true }  // `onTimerSendEndSession`, below
+            return false
+        }
 
         // Router-owned actions the executor deliberately no-ops: on the incoming-message
         // path MessageRouter consumes them after `execute` returns. A timer fire never

@@ -1626,10 +1626,13 @@ final class MessageRouter {
         // `SessionCoordinator`.
         let devices = peer.device.map { [$0] } ?? SessionAddressing.deviceIds(ofPeer: userId)
         for device in devices {
-            _ = try? CryptoManager.shared.handleOrchestratorEvent(
+            // Cancels the `open_confirm:` alarm the announcement armed.
+            if let actions = try? CryptoManager.shared.handleOrchestratorEvent(
                 .peerAcked(contactId: device),
                 tag: "peer_acked"
-            )
+            ) {
+                SessionActionExecutor.shared.executeOffRouter(actions, site: "peer_acked")
+            }
         }
         if let myId = AuthSessionManager.shared.currentUserId {
             MessageRetryManager.shared.sendQueuedMessages(

@@ -7,6 +7,7 @@
 /// **Wired call sites**:
 /// - `MessageRouter.executeRustActions` — dispatch on the incoming-message hot path
 /// - `OutboundSessionService.executeRustTimerActions` — fired by Rust timers
+/// - `executeOffRouter` — every other event's answer; logs a router-bound action it cannot run
 ///
 /// State-bound actions (`.messageDecrypted`, `.sessionHealNeeded`, `.sendEndSession`,
 /// `.fetchPublicKeyBundle`) still execute inline in `MessageRouter` because they
@@ -48,6 +49,46 @@ final class SessionActionExecutor {
     func execute(_ actions: [CfeAction]) {
         for action in actions {
             executeOne(action)
+        }
+    }
+
+    /// Execute the core's answer to an event that did **not** come through `MessageRouter`.
+    ///
+    /// Every answer the core gives has to reach here; an event whose result is dropped with
+    /// `_ = try?` is a producer with no consumer. That is how the `open_confirm:` alarm went
+    /// unarmed from 2026-09-23: `SriAnnounced` was written when the core answered it with nothing,
+    /// the core then started answering with the alarm, and the call site kept throwing the answer
+    /// away — so a lost SESSION_RESET_INIT was never re-sent and a confirm window never gave up.
+    ///
+    /// The router-bound actions still `break` in `execute`, because on the router's own paths the
+    /// router carries them out after it returns. Off those paths nobody does, so each one that
+    /// arrives here is logged as dropped instead of disappearing. `consumed` names the ones this
+    /// caller does carry out itself.
+    func executeOffRouter(
+        _ actions: [CfeAction],
+        site: String,
+        consumed: (CfeAction) -> Bool = { _ in false }
+    ) {
+        execute(actions)
+        for action in actions where !consumed(action) {
+            guard let name = Self.routerBoundName(action) else { continue }
+            Log.error(
+                "\(name) reached SessionActionExecutor from \(site) — only MessageRouter carries it out, so it is dropped here",
+                category: "SessionActionExecutor"
+            )
+        }
+    }
+
+    /// The actions only `MessageRouter` can carry out, by name — never the payload, which for a
+    /// decrypted message is plaintext.
+    private static func routerBoundName(_ action: CfeAction) -> String? {
+        switch action {
+        case .persistMessage: return "persistMessage"
+        case .fetchPublicKeyBundle: return "fetchPublicKeyBundle"
+        case .sessionHealNeeded: return "sessionHealNeeded"
+        case .sendEndSession: return "sendEndSession"
+        case .messageDecrypted: return "messageDecrypted"
+        default: return nil
         }
     }
 

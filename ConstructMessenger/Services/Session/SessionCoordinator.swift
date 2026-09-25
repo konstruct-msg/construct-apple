@@ -1427,7 +1427,11 @@ final class SessionCoordinator: MessageRouterDelegate {
                         contactId: resolvedContact,
                         sessionData: Data(sessionBytes)
                     )
-                    _ = try CryptoManager.shared.handleOrchestratorEvent(event, tag: "session_init_completed_responder")
+                    // Persists the session and drains the core's own pending queue. A message
+                    // decrypted in that drain is router-bound and would be lost here; it is
+                    // logged if it ever comes, rather than thrown away with the rest.
+                    let actions = try CryptoManager.shared.handleOrchestratorEvent(event, tag: "session_init_completed_responder")
+                    SessionActionExecutor.shared.executeOffRouter(actions, site: "session_init_completed_responder")
                 } catch {
                     Log.error("SESSION_STATE[init_completed_finalize_failed]: \(error.localizedDescription) for \(userId.prefix(8))…", category: "SessionInit")
                     Task { [weak self] in
@@ -1688,10 +1692,14 @@ final class SessionCoordinator: MessageRouterDelegate {
     /// replace it here.
     private func announceRaisedFor(_ devices: [String]) {
         for device in devices {
-            _ = try? CryptoManager.shared.handleOrchestratorEvent(
+            // The answer is the `open_confirm:` alarm — the re-send and the give-up both hang off
+            // it. Dropped, as it was from 2026-09-23, neither ever happened.
+            if let actions = try? CryptoManager.shared.handleOrchestratorEvent(
                 .sriAnnounced(contactId: device),
                 tag: "sri_announced"
-            )
+            ) {
+                SessionActionExecutor.shared.executeOffRouter(actions, site: "sri_announced")
+            }
         }
     }
 
@@ -1712,10 +1720,13 @@ final class SessionCoordinator: MessageRouterDelegate {
             // release is a conversation that stops sending for the length of the window.
             let devices = peer.device.map { [$0] } ?? SessionAddressing.deviceIds(ofPeer: userId)
             for device in devices {
-                _ = try? CryptoManager.shared.handleOrchestratorEvent(
+                // Cancels the `open_confirm:` alarm the announcement armed.
+                if let actions = try? CryptoManager.shared.handleOrchestratorEvent(
                     .peerAcked(contactId: device),
                     tag: "peer_acked"
-                )
+                ) {
+                    SessionActionExecutor.shared.executeOffRouter(actions, site: "peer_acked")
+                }
             }
         }
         sendSessionQueuedMessages(for: userId)

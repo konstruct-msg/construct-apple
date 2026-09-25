@@ -226,7 +226,7 @@ class AuthViewModel {
         do {
             let actions = try CryptoManager.shared.handleOrchestratorEvent(.appLaunched, tag: "post_auth")
             appLaunchAnnounced = true
-            SessionActionExecutor.shared.execute(actions)
+            SessionActionExecutor.shared.executeOffRouter(actions, site: "app_launched")
         } catch {
             Log.error("AppLaunched not delivered to the core: \(error)", category: "Auth")
         }
