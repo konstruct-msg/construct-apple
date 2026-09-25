@@ -3,7 +3,7 @@
 //  Construct Messenger
 //
 //  Field sizes for CTT1 v2 / CTHF. Opening and reply lengths are sums of
-//  these fields — a literal 6575 / 5421 in production code is a defect.
+//  these fields — a literal 7055 / 5421 in production code is a defect.
 //
 
 import Foundation
@@ -25,7 +25,11 @@ enum CTT1V2Layout {
     static let snapshotIdCount = 16
     static let deviceIdCount = 16
     static let kyberKeyIdCount = 4
-    static let kemCtCount = 1088
+    /// ML-KEM-1024 ciphertext, to the receiving device's Kyber SPK (PQXDH v2). It was 1088
+    /// (ML-KEM-768) before; the version bytes did not change, and every frame is length-checked
+    /// exactly, so a build from before PQXDH v2 refuses these frames as malformed. It could not
+    /// take part anyway: it cannot encapsulate to a 1568-byte key.
+    static let kemCtCount = 1568
     static let ed25519SigCount = 64
     static let mlDsa65SigCount = 3309
     static let hybridSigCount = ed25519SigCount + mlDsa65SigCount
