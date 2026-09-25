@@ -1025,14 +1025,20 @@ final class SessionCoordinator: MessageRouterDelegate {
             // build (`PQ_REQUIRED`): the core kept the classical session, as it is designed to,
             // and this SRI then cost both sides their session. Nothing to announce, so announce
             // nothing.
+            //
+            // And let go of what the gate raised above was holding. The core ends a refused
+            // reopen's `Opening` itself (`OpenFailed`), so the gate is already down; what it held
+            // meanwhile was queued here, and nothing else releases it — no acknowledgement is
+            // coming for an announcement that never went out. Not `acknowledged`: the peer said
+            // nothing.
             if initFailed {
                 Log.info("SESSION_STATE[initiator_announce_skipped]: init failed, held session left in place for \(userId.prefix(8))… (\(reason))", category: "SessionInit")
+                self.releaseConfirmGate(PeerAddress(account: userId), acknowledged: false)
                 return
             }
             // The devices the init opened, not the one the account resolves to: an announcement
-            // is about a ratchet and there is one per device. Nothing opened (the init failed, or
-            // every session was already in place), the account falls back to the pinned device as
-            // before.
+            // is about a ratchet and there is one per device. Nothing opened (every session was
+            // already in place), the account falls back to the pinned device as before.
             self.announceRaisedFor(opened)
             for device in opened.isEmpty ? [nil] : opened.map(Optional.init) {
                 await self.emitHandshakeControls(.tieBreakWin, to: PeerAddress(account: userId, device: device))
