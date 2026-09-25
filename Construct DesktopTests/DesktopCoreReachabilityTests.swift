@@ -16,6 +16,8 @@
 //  initiator, because the capability is read from the *peer's* bundle, and was negotiated down as
 //  responder. Nothing on either platform reported it.
 //
+//  (`supports_pq_ratchet` itself is gone since PQXDH v2: suite 3 is the only suite.)
+//
 //  So the guard's premise — "the core is not reachable here" — is what these tests deny, with the
 //  core's own answers rather than with the fact that they compile. `CoreCapabilityPlatformParityTests`
 //  in the iOS target asserts the other half: that no core call is left iOS-only.
@@ -27,16 +29,22 @@ import CryptoKit
 
 final class DesktopCoreReachabilityTests: XCTestCase {
 
-    /// The one that was guarded, and the value the desktop now puts on the wire — the guard's
-    /// removal made `uploadPreKeys` send exactly this.
-    ///
-    /// Asserted as `true` rather than merely called. A red here means this build's core no longer
-    /// offers suite 3, which is a deliberate change someone must make deliberately: it decides
-    /// what every peer negotiates with this device. `advertised || !advertised` was the first
-    /// draft of this test and is the thing this repo has a rule against — it cannot fail.
-    func testTheDesktopAdvertisesSuiteThree() {
-        XCTAssertTrue(supportsPqRatchet(),
-                      "the core no longer offers suite 3 — every peer will negotiate down")
+    /// The Kyber prekeys a desktop publishes are ML-KEM-1024, and its core can open what is sealed
+    /// to them. Since PQXDH v2 every session's first key depends on this, so a desktop core
+    /// without it could not talk to anyone. (This test asserted `supportsPqRatchet()` before:
+    /// suite 3 is no longer a capability to advertise but the only suite.)
+    func testTheDesktopCoreHoldsAndOpensKyber1024Prekeys() throws {
+        let keys = try createCryptoCore().exportPrivateKeys()
+        let core = try createOrchestratorCoreFromKeys(keysData: keys, myUserId: "desktop-parity")
+        _ = try core.ensureHybridSignatureKey()
+        let spk = try core.beginKyberSpkRotation()
+        XCTAssertEqual(spk.publicKey.count, 1568, "an ML-KEM-1024 encapsulation key")
+
+        let sealed = try mlkem1024Encapsulate(publicKey: spk.publicKey)
+        let opened = try core.kyberPrekeyDecapsulate(keyId: spk.keyId, ciphertext: sealed.ciphertext)
+        XCTAssertEqual(opened, sealed.sharedSecret)
+        XCTAssertEqual(sealed.ciphertext.count, 1568)
+        XCTAssertFalse(sealed.sharedSecret.allSatisfy { $0 == 0 })
     }
 
     /// The identity-space rule, checked against its definition rather than against itself:
@@ -49,18 +57,6 @@ final class DesktopCoreReachabilityTests: XCTestCase {
             .map { String(format: "%02x", $0) }.joined()
         XCTAssertEqual(deriveDeviceId(identityPublicKey: key), expected)
         XCTAssertEqual(deriveDeviceId(identityPublicKey: key).count, 32)
-    }
-
-    /// ML-KEM-768 round-trips on macOS. The PQ half of the handshake is the part a desktop is most
-    /// likely to be quietly missing, because a missing shared secret surfaces as an AEAD failure
-    /// several steps later and on the other device.
-    func testMlKem768RoundTripsOnMacOS() throws {
-        let pair = try mlkem768Keygen()
-        let sealed = try mlkem768Encapsulate(publicKey: pair.publicKey)
-        let opened = try mlkem768Decapsulate(secretKey: pair.secretKey, ciphertext: sealed.ciphertext)
-        XCTAssertEqual(opened, sealed.sharedSecret)
-        XCTAssertEqual(sealed.sharedSecret.count, 32)
-        XCTAssertFalse(sealed.sharedSecret.allSatisfy { $0 == 0 })
     }
 
     /// Hybrid Ed25519 + ML-DSA-65 signing round-trips, and a tampered message fails. The desktop

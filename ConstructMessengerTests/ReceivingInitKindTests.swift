@@ -49,12 +49,12 @@ final class ReceivingInitKindTests: XCTestCase {
     }
 
     func testOtpkMakesItAHandshakeEvenWithEpoch() {
-        XCTAssertEqual(kind(otpk: 1_000_282, kem: 1088, epoch: 0), .handshake)
+        XCTAssertEqual(kind(otpk: 1_000_282, kem: 1568, epoch: 0), .handshake)
         XCTAssertEqual(kind(otpk: 1_000_274), .handshake)
     }
 
     func testKemMakesItAHandshake() {
-        XCTAssertEqual(kind(kem: 1088), .handshake)
+        XCTAssertEqual(kind(kem: 1568), .handshake)
     }
 
     func testSessionResetInitIsAlwaysAHandshake() {

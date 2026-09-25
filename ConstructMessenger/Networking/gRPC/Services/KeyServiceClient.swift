@@ -346,7 +346,8 @@ final class KeyServiceClient: Sendable {
     ///
     /// Empty proto bytes and zero ids read as absent. The PQXDH v2 fields (25–28, 20–21) are
     /// passed through as served; the core decides what it can trust.
-    private static func bundleData(
+    /// Internal, not private, for `PQXDHBundleConversionTests`.
+    static func bundleData(
         _ b: Shared_Proto_Services_V1_PreKeyBundle,
         userId: String,
         verifyingKey: Data

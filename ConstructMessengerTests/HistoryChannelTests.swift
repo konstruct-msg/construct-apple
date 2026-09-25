@@ -17,7 +17,7 @@ final class HistoryChannelTests: XCTestCase {
     private func entry(
         identity: Curve25519.KeyAgreement.PrivateKey = .init(),
         hybrid: Data = Data(repeating: 0x42, count: CTT1V2Layout.hybridPubCount),
-        kyber: Data? = Data(repeating: 0x07, count: 1184),
+        kyber: Data? = Data(repeating: 0x07, count: 1568),
         kyberId: UInt32? = 9,
         deviceIdOverride: String? = nil
     ) -> DeviceBundleData {

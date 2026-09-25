@@ -171,10 +171,10 @@ final class ContactLinkService {
     /// Keep a peer's identity key when nothing else did — the backstop for the sealed-sender
     /// send paths, which cannot seal without it.
     ///
-    /// Four sites hold a peer's identity key and each independently decides whether to keep it:
-    /// `recordAndCheckHybrid` and `updateContactKTStatus` (both write only on the branches they
-    /// care about, and both bail silently when no `User` row exists), this file's invite TOFU, and
-    /// `startChat`. When none of them kept it, `knownIdentityKey` stays nil, `recipientIdentityKey`
+    /// Three sites hold a peer's identity key and each independently decides whether to keep it:
+    /// `updateContactKTStatus` (writes only on `.verified`, and bails silently when no `User` row
+    /// exists), this file's invite TOFU, and `startChat`. (A fourth, `recordAndCheckHybrid`, went
+    /// with the Swift hybrid-bundle check in PQXDH v2.) When none of them kept it, `knownIdentityKey` stays nil, `recipientIdentityKey`
     /// returns nil, and every sealed send to that peer fails closed with `StealthDowngradeBlocked`
     /// — a permanent, silent stall on session control (TODO #45).
     ///

@@ -2,12 +2,11 @@
 //  IdentityKeyRetentionTests.swift
 //  ConstructMessengerTests
 //
-//  A sealed send needs the peer's `knownIdentityKey`. Four sites hold that key and each
+//  A sealed send needs the peer's `knownIdentityKey`. Three sites hold that key and each
 //  independently decides whether to keep it — and every one of them declines silently:
+//  (a fourth, `KeyServiceClient.recordAndCheckHybrid`, was removed with PQXDH v2)
 //
-//    • KeyServiceClient.recordAndCheckHybrid   — writes on .verified/.degraded/identity-changed,
-//                                                and `guard let user … else { return }`
-//    • KeyServiceClient.updateContactKTStatus  — writes on .verified only, same silent guard
+//    • KeyServiceClient.updateContactKTStatus  — writes on .verified only, `guard let user … else { return }`
 //    • ContactLinkService.pinKnownIdentityKey  — same silent guard
 //    • ChatManagementService.startChat         — only when an invite carried a key
 //

@@ -28,21 +28,9 @@ final class BackgroundDecryptTests: XCTestCase {
             self.core = try createOrchestratorCoreFromKeys(keysData: keys, myUserId: userId)
         }
 
-        func rawBundle() throws -> (ip: [UInt8], sp: [UInt8], sig: [UInt8], vk: [UInt8], suiteId: UInt16) {
-            let f = try core.getRegistrationBundleFields()
-            return (f.identityPublic, f.signedPrekeyPublic, f.signature, f.verifyingKey, f.suiteId)
-        }
-
+        /// This device's bundle as the server serves it after PQXDH v2 (`PQXDHTestBundles`).
         func binaryBundle() throws -> BinaryKeyBundle {
-            let b = try rawBundle()
-            return BinaryKeyBundle(
-                identityPublic: b.ip, signedPrekeyPublic: b.sp,
-                signature: b.sig, verifyingKey: b.vk,
-                suiteId: b.suiteId, oneTimePrekeyPublic: nil, oneTimePrekeyId: nil,
-                spkUploadedAt: 0, spkRotationEpoch: 0,
-                kyberSpkUploadedAt: 0, kyberSpkRotationEpoch: 0,
-                kyberPreKeyPublic: nil, kyberOneTimePrekeyPublic: nil, kyberOneTimePrekeyId: nil, supportsPqRatchet: false
-            )
+            try core.pqxdhTestBundle()
         }
 
         /// Alice path: init sender session → encrypt first message → return wire payload.
@@ -50,37 +38,18 @@ final class BackgroundDecryptTests: XCTestCase {
             let bundle = try contact.binaryBundle()
             _ = try core.initSession(contactId: contact.userId, recipientBundle: bundle)
             let comps = try core.encryptMessage(contactId: contact.userId, plaintext: Data(plaintext.utf8))
-            let swiftComps = MessageCryptoService.EncryptedMessageComponents(
-                ephemeralPublicKey: Data(comps.ephemeralPublicKey),
-                messageNumber: comps.messageNumber,
-                content: Data(comps.content),
-                suiteId: 1,
-                oneTimePreKeyId: comps.oneTimePrekeyId,
-                storageKey: Data(comps.storageKey),
-                pqMessageEpoch: 0,
-                pqRatchetField: Data()
-            )
+            let swiftComps = MessageCryptoService.EncryptedMessageComponents(from: comps)
             return try WirePayloadCoder.encode(swiftComps)
         }
 
         /// Bob path: establish receiving session from a wire payload + sender's binary bundle.
         func initReceiver(from sender: Peer, wirePayload: Data) throws {
             let bundle = try sender.binaryBundle()
-            let decoded = try WirePayloadCoder.decode(wirePayload)
-            let unpadded = decoded.content
-            let firstMsg = BinaryFirstMessage(
-                ephemeralPublicKey: decoded.ephemeralPublicKey,
-                messageNumber: decoded.messageNumber,
-                content: [UInt8](unpadded),
-                oneTimePrekeyId: 0,
-                suiteId: decoded.suiteId,
-                pqMessageEpoch: decoded.pqMessageEpoch,
-                pqRatchetField: [UInt8](decoded.pqRatchetField)
-            )
-            _ = try core.initReceivingSession(
+            // The payload as received: the core unpacks the PQXDH v2 header itself.
+            _ = try core.initReceivingSessionFromWirePayload(
                 contactId: sender.userId,
                 recipientBundle: bundle,
-                firstMessage: firstMsg
+                wirePayload: [UInt8](wirePayload)
             )
         }
 
@@ -159,16 +128,7 @@ final class BackgroundDecryptTests: XCTestCase {
 
         // ── Subsequent valid message must still decrypt ─────────────────────────
         let enc3 = try alice.encryptNext("still works", to: bob.userId)
-        let swiftComps3 = MessageCryptoService.EncryptedMessageComponents(
-            ephemeralPublicKey: Data(enc3.ephemeralPublicKey),
-            messageNumber: enc3.messageNumber,
-            content: Data(enc3.content),
-            suiteId: 1,
-            oneTimePreKeyId: enc3.oneTimePrekeyId,
-            storageKey: Data(enc3.storageKey),
-            pqMessageEpoch: 0,
-            pqRatchetField: Data()
-        )
+        let swiftComps3 = MessageCryptoService.EncryptedMessageComponents(from: enc3)
         let wire3 = try WirePayloadCoder.encode(swiftComps3)
         let decrypted3 = try bob.decryptViaWire(wire3, from: alice.userId)
 

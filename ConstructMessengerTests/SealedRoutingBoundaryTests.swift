@@ -288,7 +288,7 @@ final class SealedRebuildFieldPreservationTests: XCTestCase {
             suiteId: 3,
             timestamp: 1_785_665_817,
             oneTimePreKeyId: 1_003_750,
-            kemCiphertext: Data(repeating: 0x33, count: 1088),
+            kemCiphertext: Data(repeating: 0x33, count: 1568),
             contentType: 1,
             kyberOtpkId: 42,
             pqMessageEpoch: 9,

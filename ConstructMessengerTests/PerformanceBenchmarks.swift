@@ -32,16 +32,9 @@ final class PerformanceBenchmarks: XCTestCase {
             self.core = try createOrchestratorCoreFromKeys(keysData: keys, myUserId: userId)
         }
 
+        /// The bundle as the server serves it after PQXDH v2 — see `PQXDHTestBundles`.
         func bundle() throws -> BinaryKeyBundle {
-            let fields = try core.getRegistrationBundleFields()
-            return BinaryKeyBundle(
-                identityPublic: fields.identityPublic, signedPrekeyPublic: fields.signedPrekeyPublic,
-                signature: fields.signature, verifyingKey: fields.verifyingKey,
-                suiteId: fields.suiteId, oneTimePrekeyPublic: nil, oneTimePrekeyId: nil,
-                spkUploadedAt: 0, spkRotationEpoch: 0,
-                kyberSpkUploadedAt: 0, kyberSpkRotationEpoch: 0,
-                kyberPreKeyPublic: nil, kyberOneTimePrekeyPublic: nil, kyberOneTimePrekeyId: nil, supportsPqRatchet: false
-            )
+            try core.pqxdhTestBundle()
         }
 
         func initSenderSession(to contactId: String, bundle: BinaryKeyBundle) throws {
@@ -120,17 +113,7 @@ final class PerformanceBenchmarks: XCTestCase {
                     contactId: bob.userId,
                     plaintext: plaintext
                 ) else { return }
-                let content = Data(rustComponents.content)
-                let components = MessageCryptoService.EncryptedMessageComponents(
-                    ephemeralPublicKey: Data(rustComponents.ephemeralPublicKey),
-                    messageNumber: rustComponents.messageNumber,
-                    content: content,
-                    suiteId: 1,
-                    oneTimePreKeyId: 0,
-                    storageKey: Data(),
-                    pqMessageEpoch: 0,
-                    pqRatchetField: Data()
-                )
+                let components = MessageCryptoService.EncryptedMessageComponents(from: rustComponents)
                 _ = try? WirePayloadCoder.encode(components)
             }
         }
@@ -148,25 +131,7 @@ final class PerformanceBenchmarks: XCTestCase {
 
         // Establish Bob's session via msgNum=0
         let init0 = try alice.core.encryptMessage(contactId: bob.userId, plaintext: Data("__init__".utf8))
-        let init0Padded = Data(init0.content)
-        let firstMsg = BinaryFirstMessage(
-            ephemeralPublicKey: init0.ephemeralPublicKey,
-            messageNumber: init0.messageNumber,
-            // Unpad before handing to the core, exactly like MessageRouter does on receive.
-            // `padCiphertext` prepends a magic+length header and appends random bytes, so a
-            // padded blob is not a valid AEAD ciphertext — passing it straight through made
-            // initReceivingSession fail with "All 1 prekey(s) failed … aead::Error".
-            content: [UInt8](init0Padded),
-            oneTimePrekeyId: init0.oneTimePrekeyId,
-            suiteId: init0.suiteId,
-            pqMessageEpoch: init0.pqMessageEpoch,
-            pqRatchetField: init0.pqRatchetField
-        )
-        _ = try bob.core.initReceivingSession(
-            contactId: alice.userId,
-            recipientBundle: aliceBundle,
-            firstMessage: firstMsg
-        )
+        _ = try bob.core.pqxdhTestReceive(from: alice.userId, senderBundle: aliceBundle, first: init0)
 
         let plaintext = Data("Benchmark round-trip message".utf8)
 
@@ -176,17 +141,7 @@ final class PerformanceBenchmarks: XCTestCase {
                     contactId: bob.userId,
                     plaintext: plaintext
                 ) else { return }
-                let content = Data(rustComponents.content)
-                let components = MessageCryptoService.EncryptedMessageComponents(
-                    ephemeralPublicKey: Data(rustComponents.ephemeralPublicKey),
-                    messageNumber: rustComponents.messageNumber,
-                    content: content,
-                    suiteId: 1,
-                    oneTimePreKeyId: 0,
-                    storageKey: Data(),
-                    pqMessageEpoch: 0,
-                    pqRatchetField: Data()
-                )
+                let components = MessageCryptoService.EncryptedMessageComponents(from: rustComponents)
                 guard let wire = try? WirePayloadCoder.encode(components) else { return }
                 guard let decoded = try? WirePayloadCoder.decode(wire) else { return }
                 let unpadded = decoded.content

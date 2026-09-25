@@ -34,23 +34,15 @@ private final class SessionPeer {
 
     // MARK: Bundle
 
-    typealias Bundle = (identityPublic: [UInt8], signedPrekeyPublic: [UInt8],
-                        signature: [UInt8], verifyingKey: [UInt8], suiteId: UInt16)
+    /// The bundle as the server serves it after PQXDH v2 — see `PQXDHTestBundles`.
+    typealias Bundle = BinaryKeyBundle
 
     func exportBundle() throws -> Bundle {
-        let fields = try core.getRegistrationBundleFields()
-        return (fields.identityPublic, fields.signedPrekeyPublic, fields.signature, fields.verifyingKey, fields.suiteId)
+        try core.pqxdhTestBundle()
     }
 
     private func bundleBytes(from b: Bundle) throws -> BinaryKeyBundle {
-        return BinaryKeyBundle(
-            identityPublic: b.identityPublic, signedPrekeyPublic: b.signedPrekeyPublic,
-            signature: b.signature, verifyingKey: b.verifyingKey,
-            suiteId: b.suiteId, oneTimePrekeyPublic: nil, oneTimePrekeyId: nil,
-            spkUploadedAt: 0, spkRotationEpoch: 0,
-            kyberSpkUploadedAt: 0, kyberSpkRotationEpoch: 0,
-            kyberPreKeyPublic: nil, kyberOneTimePrekeyPublic: nil, kyberOneTimePrekeyId: nil, supportsPqRatchet: false
-        )
+        b
     }
 
     // MARK: Session init (INITIATOR)
@@ -71,7 +63,9 @@ private final class SessionPeer {
             oneTimePrekeyId: result.oneTimePrekeyId,
             suiteId: result.suiteId,
             pqMessageEpoch: result.pqMessageEpoch,
-            pqRatchetField: result.pqRatchetField
+            pqRatchetField: result.pqRatchetField,
+            kemCiphertext: result.kemCiphertext,
+            kyberPrekeyId: result.kyberPrekeyId
         )
     }
 
@@ -118,6 +112,9 @@ private struct EncryptedComponents {
     let suiteId: UInt16
     let pqMessageEpoch: UInt32
     let pqRatchetField: [UInt8]
+    /// The PQXDH v2 header the initiator's first flight carries (empty / 0 otherwise).
+    var kemCiphertext: [UInt8] = []
+    var kyberPrekeyId: UInt32 = 0
 
     func toBinaryFirstMessage() -> BinaryFirstMessage {
         return BinaryFirstMessage(
@@ -127,7 +124,10 @@ private struct EncryptedComponents {
             oneTimePrekeyId: oneTimePrekeyId,
             suiteId: suiteId,
             pqMessageEpoch: pqMessageEpoch,
-            pqRatchetField: pqRatchetField
+            pqRatchetField: pqRatchetField,
+            pqxdhV2: !kemCiphertext.isEmpty,
+            kyberPrekeyId: kyberPrekeyId,
+            kemCiphertext: kemCiphertext
         )
     }
 }
