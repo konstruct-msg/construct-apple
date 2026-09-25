@@ -40,8 +40,8 @@ struct ChatMessage: Codable, Identifiable {
     /// Only meaningful when messageNumber == 0 (X3DH handshake message).
     var oneTimePreKeyId: UInt32 = 0
 
-    /// ML-KEM-768 KEM ciphertext for PQXDH (empty = classic X3DH only).
-    /// Only present when messageNumber == 0 (first message / session initiation).
+    /// ML-KEM-1024 ciphertext of the PQXDH v2 handshake (1568 B). It rides on every message of
+    /// the initiator's first flight, not only msg0, until the peer answers. Empty otherwise.
     var kemCiphertext: Data = Data()
 
     /// **The** content type. Sole routing authority — there is no second representation.
@@ -49,8 +49,8 @@ struct ChatMessage: Codable, Identifiable {
     /// Early-exit predicates (`isEndSession` / `isSessionResetInit` / `isSenderSync`) read this.
     var contentType: UInt8 = 0
 
-    /// Kyber OTPK key ID used by sender (0 = Kyber SPK was used, >0 = Kyber OTPK ID).
-    /// Only meaningful when messageNumber == 0 and kemCiphertext is non-empty.
+    /// The responder's Kyber prekey the sender encapsulated to (signed prekey ids from 1,
+    /// one-time ids from 1 000 000). Meaningful only with a non-empty `kemCiphertext`.
     var kyberOtpkId: UInt32 = 0
 
     /// Suite-3 (PQ_RATCHET) per-message PQ epoch tag from the wire header (0 otherwise).
@@ -219,20 +219,66 @@ struct PublicKeyBundleData: Codable, Sendable {
     let suiteId: UInt16
     var oneTimePreKeyPublic: Data?    // nil if server has no OTPKs left
     var oneTimePreKeyId: UInt32?      // nil if no OTPK available
-    // PQXDH fields (optional for backward compatibility with classic-only servers)
-    var kyberPreKeyPublic: Data?      // ML-KEM-768 SPK public key (1184 bytes)
-    var kyberPreKeyId: UInt32?        // Kyber SPK key ID
-    var kyberPreKeySignature: Data?   // Ed25519 signature over kyber_pre_key
-    var kyberOneTimePreKeyPublic: Data?   // ML-KEM-768 OTPK public key (1184 bytes)
-    var kyberOneTimePreKeyId: UInt32?     // Kyber OTPK key ID
+    // PQXDH v2 (ML-KEM-1024, 1568-byte keys). Each Kyber key comes with its signed creation time
+    // and two signatures over "KonstruktX3DH-v1" || 0x00 0x11 || created_at || key: Ed25519 by
+    // `verifyingKey`, hybrid by `hybridIdentityKey`. The core checks all of it at session init;
+    // nothing here does. Optional so cached JSON written before these fields still decodes.
+    var kyberPreKeyPublic: Data?
+    var kyberPreKeyId: UInt32?
+    var kyberPreKeySignature: Data?
+    var kyberPreKeyCreatedAt: UInt64?
+    var kyberPreKeyHybridSignature: Data?
+    var kyberOneTimePreKeyPublic: Data?
+    var kyberOneTimePreKeyId: UInt32?
+    var kyberOneTimePreKeyCreatedAt: UInt64?
+    var kyberOneTimePreKeySignature: Data?
+    var kyberOneTimePreKeyHybridSignature: Data?
+    /// Hybrid identity (Ed25519 + ML-DSA-65, 1984 B) and the Ed25519 signature binding it to
+    /// `verifyingKey`. The core pins it per device the first time it opens a session.
+    var hybridIdentityKey: Data?
+    var hybridIdentitySignature: Data?
     // SPK freshness fields (populated from server; 0 = legacy server, skip validation)
     var spkUploadedAt: UInt64         // Unix timestamp when SPK was uploaded
     var spkRotationEpoch: UInt32      // Monotonic counter for SPK rotations
     var kyberSpkUploadedAt: UInt64    // Same for Kyber SPK (0 = not provided)
     var kyberSpkRotationEpoch: UInt32 // Same for Kyber SPK (0 = not provided)
-    // Peer supports SuiteID::PQ_RATCHET (3) — sparse continuous PQ ratchet.
-    // Optional so cached JSON written before this field still decodes (nil = false).
-    var supportsPqRatchet: Bool?
+    // `supportsPqRatchet` was removed with PQXDH v2: suite 3 is mandatory. JSON cached with the
+    // key still decodes — an unknown key is ignored.
+
+    /// The bundle as the core takes it, for an INITIATOR init. The one conversion: every Kyber
+    /// field the core needs to trust the key is carried, so none can be dropped on the way.
+    ///
+    /// - Parameter withoutOneTimePrekey: 3-DH re-init (the peer said it could not reproduce our
+    ///   one-time prekey). Only the classic one-time key is dropped; the Kyber one is a separate
+    ///   store the responder names by id.
+    func binaryKeyBundle(withoutOneTimePrekey: Bool = false) -> BinaryKeyBundle {
+        func bytes(_ d: Data?) -> [UInt8]? { d.map { [UInt8]($0) } }
+        return BinaryKeyBundle(
+            identityPublic: [UInt8](identityPublic),
+            signedPrekeyPublic: [UInt8](signedPrekeyPublic),
+            signature: [UInt8](signature),
+            verifyingKey: [UInt8](verifyingKey),
+            suiteId: suiteId,
+            oneTimePrekeyPublic: withoutOneTimePrekey ? nil : bytes(oneTimePreKeyPublic),
+            oneTimePrekeyId: withoutOneTimePrekey ? nil : oneTimePreKeyId,
+            spkUploadedAt: spkUploadedAt,
+            spkRotationEpoch: spkRotationEpoch,
+            kyberSpkUploadedAt: kyberSpkUploadedAt,
+            kyberSpkRotationEpoch: kyberSpkRotationEpoch,
+            kyberPreKeyPublic: bytes(kyberPreKeyPublic),
+            kyberPreKeyId: kyberPreKeyId,
+            kyberPreKeyCreatedAt: kyberPreKeyCreatedAt,
+            kyberPreKeySignature: bytes(kyberPreKeySignature),
+            kyberPreKeyHybridSignature: bytes(kyberPreKeyHybridSignature),
+            kyberOneTimePrekeyPublic: bytes(kyberOneTimePreKeyPublic),
+            kyberOneTimePrekeyId: kyberOneTimePreKeyId,
+            kyberOneTimePrekeyCreatedAt: kyberOneTimePreKeyCreatedAt,
+            kyberOneTimePrekeySignature: bytes(kyberOneTimePreKeySignature),
+            kyberOneTimePrekeyHybridSignature: bytes(kyberOneTimePreKeyHybridSignature),
+            hybridIdentityKey: bytes(hybridIdentityKey),
+            hybridIdentitySignature: bytes(hybridIdentitySignature)
+        )
+    }
 }
 
 /// Bundle for a single device of a user — returned by GetPreKeyBundles (multi-device).

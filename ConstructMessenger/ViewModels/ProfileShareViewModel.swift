@@ -73,11 +73,11 @@ class ProfileShareViewModel {
                     // Real X3DH init (no session yet) — legitimately consumes an OTPK.
                     let bundle = try await service.fetchPublicKeyWithRetry(userId: userId, consumeOneTimePrekey: true)
                     do {
-                        try service.initializeSession(userId: userId, bundle: bundle, deleteExisting: false)
+                        try service.initializeSession(userId: userId, bundle: bundle)
                     } catch SessionError.peerSPKStale {
                         // Contact offline too long to rotate their SPK — degrade so the profile
                         // still shares. Flags the session at-risk (see stale-peer-reachability).
-                        try service.initializeSession(userId: userId, bundle: bundle, deleteExisting: false, allowStale: true)
+                        try service.initializeSession(userId: userId, bundle: bundle, allowStale: true)
                     }
                     Log.info("Session initialized for profile share with \(userId)", category: "ProfileShare")
                 } catch {

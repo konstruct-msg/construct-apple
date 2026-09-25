@@ -599,9 +599,14 @@ struct UserProfileView: View {
         hasSession = sessionExists
         if sessionExists && suiteId > 0 {
             var label = cryptoSuiteName(suiteId: suiteId)
-            // PQXDH handshake strengthening failed for this session (Kyber decaps
-            // error) — the session is classical-only even if keys were offered.
-            if KeychainManager.shared.loadPQXDHDowngradeFlag(for: user.id) {
+            // A session opened before PQXDH v2 has no ML-KEM in its first key (or only the old
+            // deferred contribution) until the upgrade sweep replaces it. The core's health report
+            // says which, per device; the Keychain flag this read before is gone with the path
+            // that set it.
+            let preV2 = SessionAddressing.deviceIds(ofPeer: user.id).contains { device in
+                CryptoManager.shared.getSessionHealth(for: device).map { $0.pqHandshake != .initialV2 } ?? false
+            }
+            if preV2 {
                 label += " · PQXDH degraded"
             }
             sessionSuiteLabel = label

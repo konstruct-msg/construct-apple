@@ -334,7 +334,9 @@ class CryptoManager {
                     needsFullOtpkReplacement = true
                 }
             }
-            PQCKeyManager.loadCFESnapshot(into: newCore)
+            if !KyberPrekeyService.restore(into: newCore) {
+                needsFullOtpkReplacement = true
+            }
             loadOrchestratorStateCFE(into: newCore)
             orchestratorCore = newCore
             Log.info("Rust core reloaded from Keychain (CFE)", category: "CryptoManager")
@@ -678,57 +680,11 @@ class CryptoManager {
         let spk: Data? = (try? localBundlePublicKeys().signedPrekeyPublic).flatMap { pub in
             try? signHybridPrekey(suiteId: 0x01, publicKey: pub)
         }
-        // Kyber SPK is managed outside main KeyManager for now.
-        let kyber: Data? = (try? PQCKeyManager.shared.kyberSPKPublic()).flatMap { pub in
-            try? signHybridPrekey(suiteId: 0x10, publicKey: pub)
-        }
+        // The Kyber SPK's hybrid signature is the core's, made when the key was: it covers the
+        // signed `created_at` as well as the key (PQXDH v2), so it cannot be produced from the
+        // public key here.
+        let kyber: Data? = (try? currentKyberSpkUpload()).map { Data($0.hybridSignature) }
         return (spk, kyber)
-    }
-
-    /// Apply a Kyber KEM shared secret to the named DR session.
-    func applyPqContribution(contactId: String, kemSharedSecret: [UInt8]) throws {
-        coreLock.lock()
-        defer { coreLock.unlock() }
-        guard let core = orchestratorCore else { throw CryptoManagerError.coreNotInitialized }
-        guard let resolved = SessionAddressing.asDevice(contactId) else {
-            throw CryptoManagerError.sessionNotFound
-        }
-        try core.applyPqContribution(contactId: resolved, kemSharedSecret: kemSharedSecret)
-    }
-
-    /// Register a Kyber KEM shared secret for deferred application and persist CFE snapshot.
-    @discardableResult
-    func registerPqDeferred(contactId: String, otpkId: UInt32, sharedSecret: [UInt8]) -> Bool {
-        coreLock.lock()
-        defer { coreLock.unlock() }
-        guard let core = orchestratorCore else { return false }
-        guard let resolved = SessionAddressing.asDevice(contactId) else { return false }
-        core.registerPqDeferred(contactId: resolved, otpkId: otpkId, sharedSecret: sharedSecret)
-        PQCKeyManager.saveCFESnapshot(to: core)
-        return true
-    }
-
-    /// Export the Kyber session state as a CFE blob.
-    func exportKyberSessionState() -> [UInt8]? {
-        coreLock.lock()
-        defer { coreLock.unlock() }
-        return try? orchestratorCore?.exportKyberSessionState()
-    }
-
-    /// Import Kyber session state from a CFE blob.
-    func importKyberSessionState(_ data: [UInt8]) throws {
-        coreLock.lock()
-        defer { coreLock.unlock() }
-        guard let core = orchestratorCore else { throw CryptoManagerError.coreNotInitialized }
-        try core.importKyberSessionState(data: data)
-    }
-
-    /// Persist the current Kyber CFE snapshot to Keychain.
-    func savePQCSnapshot() {
-        coreLock.lock()
-        defer { coreLock.unlock() }
-        guard let core = orchestratorCore else { return }
-        PQCKeyManager.saveCFESnapshot(to: core)
     }
 
     /// Rotate the signed pre-key and return the new public material.
@@ -771,23 +727,78 @@ class CryptoManager {
         return orchestratorCore?.pruneOneTimePrekeysBelow(minKeepId: minKeepId) ?? 0
     }
 
-    /// Store the ML-KEM-768 SPK in the core key-state (serialized via coreLock).
-    /// Commit-after-confirm: call only once the server confirmed the public upload,
-    /// then `persistCoreState()` — the key persists inside the private-keys CFE blob.
-    /// Returns false when the core is not initialized.
-    func setKyberSpk(keyId: UInt32, secretKey: Data, publicKey: Data) -> Bool {
+    // MARK: - Kyber prekeys (ML-KEM-1024, PQXDH v2)
+    //
+    // The core generates, signs and holds them; the seeds never leave it. Every call that changes
+    // them is followed by `KyberPrekeyService.persist()`, as with the classic OTPKs.
+
+    func generateKyberOneTimePrekeys(count: UInt32) throws -> [KyberPrekeyUpload] {
         coreLock.lock()
         defer { coreLock.unlock() }
-        guard let core = orchestratorCore else { return false }
-        core.setKyberSpk(keyId: keyId, secretKey: [UInt8](secretKey), publicKey: [UInt8](publicKey))
-        return true
+        guard let core = orchestratorCore else { throw CryptoManagerError.coreNotInitialized }
+        return try core.generateKyberOneTimePrekeys(count: count)
     }
 
-    /// The ML-KEM-768 SPK held in the core key-state, or nil if none committed yet.
-    func kyberSpk() -> KyberSpkRecord? {
+    func kyberOneTimePrekeyCount() -> UInt32 {
         coreLock.lock()
         defer { coreLock.unlock() }
-        return orchestratorCore?.kyberSpk()
+        return orchestratorCore?.kyberOneTimePrekeyCount() ?? 0
+    }
+
+    /// Same rule as `pruneOneTimePrekeys(below:)`: only after a replace-all upload.
+    func pruneKyberOneTimePrekeys(below minKeepId: UInt32) -> UInt32 {
+        coreLock.lock()
+        defer { coreLock.unlock() }
+        return orchestratorCore?.pruneKyberOneTimePrekeysBelow(minKeepId: minKeepId) ?? 0
+    }
+
+    /// The Kyber SPK to upload with a rotation. Asked again before commit/rollback, it returns the
+    /// same key, so a retried upload uploads the same key.
+    func beginKyberSpkRotation() throws -> KyberPrekeyUpload {
+        coreLock.lock()
+        defer { coreLock.unlock() }
+        guard let core = orchestratorCore else { throw CryptoManagerError.coreNotInitialized }
+        return try core.beginKyberSpkRotation()
+    }
+
+    /// The server confirmed the Kyber SPK from `beginKyberSpkRotation`. False if none was pending.
+    @discardableResult
+    func commitKyberSpkRotation() -> Bool {
+        coreLock.lock()
+        defer { coreLock.unlock() }
+        return orchestratorCore?.commitKyberSpkRotation() ?? false
+    }
+
+    /// The server refused the pending Kyber SPK outright (it stored nothing): forget it, so the
+    /// next rotation starts from a fresh key instead of resending one the server will refuse again.
+    func rollbackKyberSpkRotation() {
+        coreLock.lock()
+        defer { coreLock.unlock() }
+        orchestratorCore?.rollbackKyberSpkRotation()
+    }
+
+    /// The current Kyber SPK's upload record, or nil before the first commit.
+    func currentKyberSpkUpload() throws -> KyberPrekeyUpload? {
+        coreLock.lock()
+        defer { coreLock.unlock() }
+        guard let core = orchestratorCore else { throw CryptoManagerError.coreNotInitialized }
+        return try core.currentKyberSpkUpload()
+    }
+
+    /// Decapsulate with our Kyber prekey `keyId` (0 = the current SPK). History transfer only —
+    /// the session handshake decapsulates inside the core.
+    func kyberPrekeyDecapsulate(keyId: UInt32, ciphertext: Data) throws -> Data {
+        coreLock.lock()
+        defer { coreLock.unlock() }
+        guard let core = orchestratorCore else { throw CryptoManagerError.coreNotInitialized }
+        return Data(try core.kyberPrekeyDecapsulate(keyId: keyId, ciphertext: [UInt8](ciphertext)))
+    }
+
+    func exportKyberPrekeys() throws -> [UInt8] {
+        coreLock.lock()
+        defer { coreLock.unlock() }
+        guard let core = orchestratorCore else { throw CryptoManagerError.coreNotInitialized }
+        return try core.exportKyberPrekeys()
     }
 
     /// Export a session's wire bytes (for session init completed notification).
@@ -812,9 +823,12 @@ class CryptoManager {
         KeychainManager.shared.deleteData(forKey: Self.orchestratorStateCFEKey)
         KeychainManager.shared.deleteAllE2EESessions()
         KeychainManager.shared.deleteOtpks()
+        // Kyber prekeys belong to the identity being replaced, like the classic OTPKs above.
+        KeychainManager.shared.deleteKyberPrekeys()
         // The new identity hasn't published a hybrid PQ key yet — drop the previous identity's
         // published flag so SPK rotation doesn't attach a hybrid signature the server can't verify.
         HybridIdentityService.resetPublishState()
+        KyberPrekeyService.resetPublishState()
         Log.info("Prepared clean crypto state for device link", category: "CryptoManager")
     }
 
@@ -845,14 +859,12 @@ class CryptoManager {
         // Delete all individual keys and ALL sessions
         KeychainManager.shared.deleteAllKeys()
         KeychainManager.shared.deleteOtpks()
+        KeychainManager.shared.deleteKyberPrekeys()
         KeychainManager.shared.deleteData(forKey: Self.orchestratorStateCFEKey)
-        KeychainManager.shared.deleteData(forKey: "construct.kyber.spk.public")
-        KeychainManager.shared.deleteData(forKey: "construct.kyber.spk.secret")
-        KeychainManager.shared.deleteData(forKey: "construct.kyber.spk.id")
-        // Ghost-identity audit (2026-07-26): session-scoped state that must not survive an
-        // identity change, else a re-registered identity inherits the old one's PQ session state
-        // and heal queue. (deleteData clears items written via saveData OR saveRawData — same key.)
-        KeychainManager.shared.deleteData(forKey: "construct.kyber_session_state")
+        // What builds before PQXDH v2 kept outside the core: the ML-KEM-768 SPK triple and the
+        // deferred-contribution snapshot. Nothing reads them any more; a fresh identity must not
+        // inherit them either (ghost-identity audit, 2026-07-26).
+        KyberPrekeyService.deleteLegacyItems()
         // The heal queue this app kept for itself, gone 2026-09-23 with the second
         // `RustHealingQueue`. The blob is still deleted because a build that predates the change
         // may have written one, and a stale queue restored onto a fresh identity is the
@@ -873,26 +885,20 @@ class CryptoManager {
         // MARK: - Session Management
 
     /// Initializes a secure session with a recipient using the Rust core.
-    func initializeSession(for userId: String, recipientBundle: (identityPublic: Data, signedPrekeyPublic: Data, signature: Data, verifyingKey: Data, suiteId: String), oneTimePreKeyPublic: Data? = nil, oneTimePreKeyId: UInt32? = nil, kyberPreKeyPublic: Data? = nil, kyberOneTimePreKeyPublic: Data? = nil, kyberOneTimePreKeyId: UInt32? = nil, spkUploadedAt: UInt64 = 0, spkRotationEpoch: UInt32 = 0, kyberSpkUploadedAt: UInt64 = 0, kyberSpkRotationEpoch: UInt32 = 0, supportsPqRatchet: Bool = false, allowStale: Bool = false) throws {
+    func initializeSession(for userId: String, bundle: PublicKeyBundleData, withoutOneTimePrekey: Bool = false, allowStale: Bool = false) throws {
         do {
             try sessionInitService.initializeSession(
                 for: userId,
-                recipientBundle: recipientBundle,
-                oneTimePreKeyPublic: oneTimePreKeyPublic,
-                oneTimePreKeyId: oneTimePreKeyId,
-                kyberPreKeyPublic: kyberPreKeyPublic,
-                kyberOneTimePreKeyPublic: kyberOneTimePreKeyPublic,
-                kyberOneTimePreKeyId: kyberOneTimePreKeyId,
-                spkUploadedAt: spkUploadedAt,
-                spkRotationEpoch: spkRotationEpoch,
-                kyberSpkUploadedAt: kyberSpkUploadedAt,
-                kyberSpkRotationEpoch: kyberSpkRotationEpoch,
-                supportsPqRatchet: supportsPqRatchet,
+                bundle: bundle,
+                withoutOneTimePrekey: withoutOneTimePrekey,
                 allowStale: allowStale,
                 core: orchestratorCore,
-                archiveSession: { [weak self] userId, reason in
-                    Log.info("Existing session found for \(userId) - archiving before reinitialization to prevent desync", category: "CryptoManager")
-                    self?.archiveSession(for: userId, reason: reason)
+                archiveSession: { [weak self] deviceId, reason in
+                    Log.info("Existing session found for \(deviceId) - archiving before reinitialization to prevent desync", category: "CryptoManager")
+                    self?.archiveSession(for: deviceId, reason: reason)
+                },
+                archiveReplacedSession: { [weak self] deviceId, sessionData, reason in
+                    self?.storeReplacedSessionArchive(sessionData, for: deviceId, reason: reason)
                 },
                 saveSession: { [weak self] deviceId in
                     self?.saveSessionToKeychain(forDevice: deviceId)
@@ -968,8 +974,12 @@ class CryptoManager {
             } else {
                 Log.info("No OTPKs found in Keychain — key_manager will have empty OTPK store", category: "CryptoManager")
             }
-            // Restore Kyber deferred contribution state from CFE snapshot.
-            PQCKeyManager.loadCFESnapshot(into: newCore)
+            // Restore the Kyber prekeys. A blob that will not import leaves the core without the
+            // one-time keys the server still serves, and the next ids it issues collide with
+            // theirs — the same state a lost classic OTPK blob is, with the same repair.
+            if !KyberPrekeyService.restore(into: newCore) {
+                needsFullOtpkReplacement = true
+            }
             // Restore ACK cache, healing queue, and init locks.
             loadOrchestratorStateCFE(into: newCore)
             migrateSessionsIfNeeded(core: newCore)

@@ -546,50 +546,6 @@ final class OutboundSessionService {
             CryptoManager.shared.saveOrchestratorStateCFE()
             return true // a terminated session — not the active sending chain
 
-        case .pqDeferred(let contactId):
-            let account = KeychainSessionAccounts.account(for: slot)
-            if rawBytes.isEmpty {
-                KeychainManager.shared.deleteData(forKey: account)
-                Log.debug("Deleted PQ deferred for \(contactId.prefix(8))…", category: "OutboundSession")
-            } else {
-                // AfterFirstUnlock: this write also fires during a locked-device background
-                // decrypt. Under the WhenUnlocked default it failed there, losing the deferred
-                // PQ contribution and silently downgrading the session to classical (BS-6).
-                let ok = KeychainManager.shared.saveData(
-                    Data(rawBytes),
-                    forKey: account,
-                    accessible: KeychainManager.cryptoKeyAccessible
-                )
-                if !ok {
-                    Log.error("PERSIST-FAIL PQ deferred \(contactId.prefix(8))… (\(rawBytes.count)B) — session may downgrade to classical (BS-6)", category: "OutboundSession")
-                }
-            }
-            return true // BS-6 (downgrade), not number reuse — must not block a send
-
-        case .kyberSessionState:
-            // `PQCKeyManager.saveCFESnapshot` writes the identical bytes to the identical account
-            // by pulling `exportKyberSessionState()`. This push was ignored until 2026-08-26 —
-            // the string form fell into the "unhandled storage key" branch — so the pull was the
-            // only thing keeping PQ state alive. Both now write the same value to the same place;
-            // the push is the one that fires at the exact moment the state changes.
-            guard !rawBytes.isEmpty else { return true }
-            let ok = KeychainManager.shared.saveData(
-                Data(rawBytes),
-                forKey: KeychainSessionAccounts.kyberSessionState,
-                accessible: KeychainManager.cryptoKeyAccessible
-            )
-            if !ok {
-                Log.error("PERSIST-FAIL Kyber session state (\(rawBytes.count)B) — PQ ratchet state may desync on next launch", category: "OutboundSession")
-            }
-            return true
-
-        case .kyberSignedPrekey(let keyId):
-            // No reachable emitter: `commit_spk_rotation` is called only from its own tests, and
-            // the Kyber SPK is rotated through `PreKeyRotationService`. Loud rather than silent —
-            // if this ever fires, the rotation has two implementations and one of them is unread.
-            Log.error("Unexpected KyberSignedPrekey slot (id \(keyId), \(rawBytes.count)B) — nothing reads this; see SecureStoreSlot", category: "OutboundSession")
-            return true
-
         case .orchestratorState:
             guard !rawBytes.isEmpty else {
                 Log.debug("Orchestrator state save with empty data — ignoring", category: "OutboundSession")

@@ -326,11 +326,11 @@ final class SessionCoordinator: MessageRouterDelegate {
             do {
                 let bundle = try await publicKeyBundleHandler.fetchPublicKeyWithRetry(userId: userId)
                 do {
-                    try sessionInitService.initializeSession(userId: userId, bundle: bundle, deleteExisting: true)
+                    try sessionInitService.initializeSession(userId: userId, bundle: bundle)
                 } catch SessionError.peerSPKStale {
                     // Peer's SPK is stale; degrade rather than leave the re-key broken.
                     // The resulting session is flagged at-risk and healed if undecryptable.
-                    try sessionInitService.initializeSession(userId: userId, bundle: bundle, deleteExisting: true, allowStale: true)
+                    try sessionInitService.initializeSession(userId: userId, bundle: bundle, allowStale: true)
                 }
                 Log.info("SESSION_STATE[key_sync_success]: session re-keyed for \(userId.prefix(8))…", category: "SessionInit")
             } catch {

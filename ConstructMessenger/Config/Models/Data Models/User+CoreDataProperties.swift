@@ -62,9 +62,9 @@ extension User {
         set { ktStatusRaw = newValue.rawValue }
     }
 
-    /// Hybrid PQ downgrade protection (Phase 3). `true` once a valid hybrid bundle has been seen
-    /// for the current `knownIdentityKey`. A subsequent Ed25519-only bundle for the same identity
-    /// is treated as a downgrade attack and rejected. Reset when the identity key changes.
+    /// No longer written or read. It was the Swift downgrade pin for the hybrid identity (Phase 3);
+    /// since PQXDH v2 the core refuses a bundle without a trusted hybrid identity outright and pins
+    /// the hybrid key per device itself. The attribute stays so the Core Data model does not change.
     @NSManaged public var hybridCapable: Bool
 
     @NSManaged public var chats: NSSet?

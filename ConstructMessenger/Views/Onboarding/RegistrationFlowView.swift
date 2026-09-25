@@ -448,37 +448,15 @@ struct RegistrationFlowView: View {
                 await BlindTokenService.shared.bootstrapInitialBatch()
             }
 
-            // 6.5 Upload Kyber SPK + OTPKs in a single request (detached — survives view dismissal)
-            Log.info("Uploading Kyber SPK + OTPKs (PQC)...", category: "Registration")
-            do {
-                // Two-phase: generate the Kyber SPK in memory and commit to Keychain ONLY after the
-                // server confirms the upload — never write-before-confirm (would desync the local
-                // private key ahead of the server public on a failed upload). If the detached upload
-                // fails/never completes, the migration flag stays unset and migrateIfNeeded re-drives
-                // it next launch. See key-store-consolidation-and-server-authority (P1).
-                let spk = try PQCKeyManager.shared.generateKyberSPKInMemory()
-                let spkSig = try PQCKeyManager.signKyberKey(publicKey: spk.publicKey)
-                let spkTuple = (keyId: spk.keyId, publicKey: spk.publicKey, signature: spkSig)
-                let capturedDeviceId = deviceId
-                Task.detached(priority: .utility) {
-                    do {
-                        let kyberCount = try await PQCKeyManager.generateAndUploadKyberOtpks(
-                            count: 50,
-                            deviceId: capturedDeviceId,
-                            kyberSignedPreKey: spkTuple
-                        )
-                        try PQCKeyManager.shared.commitKyberSPK(publicKey: spk.publicKey, secretKey: spk.secretKey, keyId: spk.keyId)
-                        UserDefaults.standard.set(true, forKey: "pqcKyberSPKMigrationV1Done")
-                        Log.info("   Kyber SPK uploaded + committed (keyId=\(spk.keyId))", category: "Registration")
-                        Log.info("   Kyber OTPKs on server: \(kyberCount)", category: "Registration")
-                    } catch {
-                        Log.error("   Kyber PQC upload failed (will retry on next launch): \(error)", category: "Registration")
-                    }
-                }
-            } catch {
-                Log.error("   Kyber PQC key generation failed: \(error)", category: "Registration")
+            // 6.5 Publish the Kyber SPK, the first Kyber one-time keys and the hybrid identity in
+            // one request (detached — survives view dismissal). A failure is retried on every
+            // launch: the pending key is persisted, so the retry sends the same one.
+            Log.info("Publishing Kyber prekeys (PQXDH v2)...", category: "Registration")
+            let capturedDeviceId = deviceId
+            Task.detached(priority: .utility) {
+                await KyberPrekeyService.publishIfNeeded(deviceId: capturedDeviceId)
             }
-            
+
             Log.info("   isAuthenticated: \(authViewModel.isAuthenticated)", category: "Registration")
             Log.info("   currentUserId: \(authViewModel.currentUserId ?? "nil")", category: "Registration")
             

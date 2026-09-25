@@ -305,6 +305,19 @@ extension CryptoManager {
         Log.info("Removed session from Keychain: \(contactId)", category: "CryptoManager")
     }
 
+    /// Archive a session that `reopenSession` has just replaced, from the bytes exported before
+    /// the reopen. Unlike `archiveSession(for:reason:)` nothing is removed: the core, the Keychain
+    /// entry and the suite id already hold the new session, which the caller saves next.
+    func storeReplacedSessionArchive(_ sessionData: Data, for deviceId: String, reason: ArchiveReason) {
+        guard let contactId = SessionAddressing.asDevice(deviceId) else { return }
+        archiveManager.storeArchive(
+            SessionArchive(sessionData: sessionData, archivedAt: Date(), reason: reason),
+            for: contactId
+        )
+        let count = archiveManager.loadArchives(for: contactId)?.count ?? 0
+        Log.info("Replaced session archived for \(contactId.prefix(8))… (\(count) total, reason: \(reason.rawValue))", category: "CryptoManager")
+    }
+
     /// Store a session archive produced by Rust's `lifecycle.archive_session` and clear the
     /// Keychain hot entry so `restoreSession()` cannot reimport stale state.
     ///

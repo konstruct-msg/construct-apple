@@ -197,7 +197,6 @@ extension AppError {
                  .invalidKeyData,
                  .invalidSignature,
                  .keyStatePersistFailed:       return .keyOperationFailed(e.localizedDescription)
-            case .pqxdhOtpkMissing:            return .sessionInitFailed(contactId: "")
             }
         case let e as RPCError:
             switch e.code {

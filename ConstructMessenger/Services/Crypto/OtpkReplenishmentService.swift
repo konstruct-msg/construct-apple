@@ -57,14 +57,21 @@ enum OtpkReplenishmentService {
         }
         persistOtpks()
 
+        // The same number of one-time Kyber keys in the same request. The server serves the two
+        // kinds together and a replace-all expires both pools, so uploading them together is
+        // what keeps the pools in step. Empty until the hybrid identity is published (the server
+        // could not verify them before) — the classic keys go regardless.
+        let kyberKeys = await KyberPrekeyService.oneTimeKeysForUpload(count: count)
+
         _ = try await KeyServiceClient.shared.uploadPreKeys(
             deviceId: deviceId,
             preKeys: preKeys,
-            replaceExisting: replaceExisting
+            replaceExisting: replaceExisting,
+            kyberOneTimePreKeys: kyberKeys.isEmpty ? nil : kyberKeys
         )
 
         let mode = replaceExisting ? "replacing all" : "appending"
-        Log.info("OTPK upload (\(mode)): \(pairs.count) keys for device \(deviceId.prefix(8))...", category: "OTPK")
+        Log.info("OTPK upload (\(mode)): \(pairs.count) keys + \(kyberKeys.count) Kyber for device \(deviceId.prefix(8))...", category: "OTPK")
         if replaceExisting {
             CryptoManager.shared.clearNeedsFullOtpkReplacement()
         }
@@ -99,6 +106,9 @@ enum OtpkReplenishmentService {
         // `pruneGraceWindow` keys below the new batch are kept so first messages already in
         // flight against just-replaced keys still decrypt, covered by the server's 48 h
         // soft-expiry; anything older can never be referenced again.
+        if replaceExisting && !kyberKeys.isEmpty {
+            await KyberPrekeyService.afterReplaceAll(uploaded: kyberKeys)
+        }
         if let cutoff = pruneCutoff(replaceExisting: replaceExisting, minNewId: pairs.map(\.keyId).min()) {
             let pruned = CryptoManager.shared.pruneOneTimePrekeys(below: cutoff)
             if pruned > 0 {
@@ -196,18 +206,6 @@ enum OtpkReplenishmentService {
             let (serverCount, recommendedMin) = try await KeyServiceClient.shared.getPreKeyCountFull(deviceId: deviceId)
             let effective = max(recommendedMin, lowWaterMark)
             Log.debug("OTPK server count: \(serverCount) / recommended min: \(effective) [\(source)]", category: "OTPK")
-
-            // Capability re-advertisement: supports_pq_ratchet reaches the server ONLY
-            // inside uploadPreKeys. When a build flips the capability (suite-3 rollout),
-            // a device with a healthy server count would otherwise never re-upload —
-            // peers keep fetching the stale flag and negotiate classic forever.
-            let advertised = supportsPqRatchet()
-            if KeyServiceClient.lastAdvertisedPqRatchet != advertised {
-                let was = KeyServiceClient.lastAdvertisedPqRatchet.map(String.init) ?? "unknown"
-                Log.info("OTPK capability changed (supportsPqRatchet \(was) → \(advertised)) — forcing upload to re-advertise [\(source)]", category: "OTPK")
-                try await generateAndUpload(count: lowWaterMark, deviceId: deviceId)
-                return
-            }
 
             guard serverCount < effective else { return }
 

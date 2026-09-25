@@ -54,9 +54,6 @@ enum KeychainSessionAccounts {
     /// Accounts that are not session state but are named here anyway, because this file is the
     /// one place the Keychain namespace is spelled.
     static let orchestratorState = "construct.orchestrator_state"
-    static let kyberSessionState = "construct.kyber_session_state"
-    static let pqDeferredPrefix = "construct.pq_deferred."
-    static let kyberSignedPrekeyPrefix = "construct.kyber.spk.sk."
 
     /// The account a core `SecureStoreSlot` is stored under on this platform.
     ///
@@ -76,12 +73,6 @@ enum KeychainSessionAccounts {
             // `SessionArchive`, not a single blob, so the write goes through
             // `SessionArchiveManager` — which builds its key from this same function.
             return prefix + archiveInfix + contactId
-        case .pqDeferred(let contactId):
-            return pqDeferredPrefix + contactId
-        case .kyberSessionState:
-            return kyberSessionState
-        case .kyberSignedPrekey(let keyId):
-            return "\(kyberSignedPrekeyPrefix)\(keyId)"
         case .orchestratorState:
             return orchestratorState
         }

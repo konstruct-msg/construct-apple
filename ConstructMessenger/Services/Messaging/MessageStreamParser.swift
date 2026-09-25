@@ -108,7 +108,10 @@ enum MessageStreamParser {
                     pqMessageEpoch: decoded.pqMessageEpoch,
                     pqRatchetField: decoded.pqRatchetField,
                     senderDeviceId: envelope.senderDevice.deviceID,
-                    conversationId: envelope.conversationID
+                    conversationId: envelope.conversationID,
+                    // The responder init opens a session from the payload as received; a first message on
+                    // a sibling's session can arrive as SENDER_SYNC.
+                    rawPayload: envelope.encryptedPayload
                 ), cursor: cursor)
             }
             // Unpack wire payload blob into crypto components.

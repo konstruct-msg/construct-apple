@@ -596,7 +596,10 @@ final class MessagingServiceClient: Sendable {
                     pqMessageEpoch: decoded.pqMessageEpoch,
                     pqRatchetField: decoded.pqRatchetField,
                     senderDeviceId: "",
-                    conversationId: ""
+                    conversationId: "",
+                    // The responder init opens a session from the payload as received; a first message on
+                    // a sibling's session can arrive as SENDER_SYNC.
+                    rawPayload: msg.encryptedPayload
                 )
             }
             // Unpack wire payload blob into crypto components.

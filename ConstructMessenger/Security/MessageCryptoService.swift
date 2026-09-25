@@ -18,6 +18,11 @@ final class MessageCryptoService {
         let storageKey: Data         // 32-byte random key — store in MessageKeyStore keyed by message_id
         let pqMessageEpoch: UInt32   // suite-3 per-message PQ epoch tag (0 otherwise)
         let pqRatchetField: Data     // suite-3 sparse PQ field, serialized (empty = none)
+        /// The PQXDH v2 handshake header: the ML-KEM-1024 ciphertext and the responder's Kyber
+        /// prekey id. Set by the core on every message of the initiator's first flight, until the
+        /// peer answers; empty / 0 otherwise. Goes on the wire as it came (`WirePayloadCoder`).
+        var kemCiphertext: Data = Data()
+        var kyberPrekeyId: UInt32 = 0
     }
 
     struct DecryptResult {
@@ -114,7 +119,9 @@ final class MessageCryptoService {
                 oneTimePreKeyId: rustComponents.oneTimePrekeyId,
                 storageKey: Data(rustComponents.storageKey),
                 pqMessageEpoch: rustComponents.pqMessageEpoch,
-                pqRatchetField: Data(rustComponents.pqRatchetField)
+                pqRatchetField: Data(rustComponents.pqRatchetField),
+                kemCiphertext: Data(rustComponents.kemCiphertext),
+                kyberPrekeyId: rustComponents.kyberPrekeyId
             )
 
             #if DEBUG

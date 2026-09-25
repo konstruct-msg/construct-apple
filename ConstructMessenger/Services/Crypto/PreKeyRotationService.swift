@@ -120,14 +120,18 @@ final class PreKeyRotationService {
 
     /// Atomically rotate both SPKs:
     ///  1. Rust core generates new X25519 SPK (in-core — old key kept for grace period)
-    ///  2. PQCKeyManager generates new Kyber SPK in memory (NOT yet in Keychain)
+    ///  2. The core starts a Kyber SPK rotation: the pending key, signed with its `created_at`,
+    ///     persisted before it leaves the device
     ///  3. Both uploaded in ONE RotateSignedPreKeyRequest RPC
-    ///  4. On server success → commit Kyber SPK to Keychain
+    ///  4. On server success → commit the Kyber rotation (the old key is kept 14 days for first
+    ///     messages in flight) and persist it
     ///  5. Persist Rust core state and update last-rotation timestamp
     ///
     ///  On ANY failure after Phase 1, the Rust core is reloaded from Keychain to
     ///  roll back the in-memory SPK mutation and prevent AEAD decryption failures
-    ///  caused by a desync between the in-memory state and what the server serves.
+    ///  caused by a desync between the in-memory state and what the server serves. The pending
+    ///  Kyber key survives the reload (it was persisted in step 2): it can decapsulate if the
+    ///  server did store it after all, and the next attempt uploads it again rather than a new one.
     private func performAtomicRotation(
         deviceId: String,
         reason: Shared_Proto_Services_V1_SignedPreKeyRotationReason,
@@ -147,13 +151,13 @@ final class PreKeyRotationService {
         let classicSigData = Data(rotatedSpk.signature)
         let classicKey = (keyId: rotatedSpk.keyId, publicKey: classicPubData, signature: classicSigData)
 
-        // Kyber SPK: generated in memory only — NOT committed yet
-        let kyberInMemory: (publicKey: Data, secretKey: Data, keyId: UInt32)
-        let kyberKey: (keyId: UInt32, publicKey: Data, signature: Data)
+        // Kyber SPK: the core's pending key, both signatures over its signed `created_at` made
+        // in the core. Persisted before the upload — a key the server may serve must never exist
+        // only in memory.
+        let kyberKey: KyberPrekeyUpload
         do {
-            kyberInMemory = try PQCKeyManager.shared.generateKyberSPKInMemory()
-            let kyberSig = try PQCKeyManager.signKyberKey(publicKey: kyberInMemory.publicKey)
-            kyberKey = (keyId: kyberInMemory.keyId, publicKey: kyberInMemory.publicKey, signature: kyberSig)
+            kyberKey = try CryptoManager.shared.beginKyberSpkRotation()
+            guard KyberPrekeyService.persist() else { throw PreKeyRotationError.keychainPersistFailed }
         } catch {
             CryptoManager.shared.reloadCoreFromKeychain()
             throw error
@@ -175,7 +179,7 @@ final class PreKeyRotationService {
         let canSignHybrid = allowHybridSPKSignature && hybridPublished
         // Use the core-routed prekey hybrid signer (message format centralized in core).
         let spkHybridSig = canSignHybrid ? (try? CryptoManager.shared.signHybridPrekey(suiteId: 0x01, publicKey: classicPubData)) : nil
-        let kyberHybridSig = canSignHybrid ? (try? CryptoManager.shared.signHybridPrekey(suiteId: 0x10, publicKey: kyberInMemory.publicKey)) : nil
+        let kyberHybridSig = canSignHybrid ? Data(kyberKey.hybridSignature) : nil
         let atomicHybridSent = spkHybridSig != nil && kyberHybridSig != nil
 
         // ── Phase 2: single atomic RPC ───────────────────────────────────────
@@ -196,6 +200,14 @@ final class PreKeyRotationService {
             // about, causing AEAD failures for all incoming session initiations.
             Log.error("SPK rotation RPC failed — rolling back Rust core: \(error)", category: "SPKRotation")
             CryptoManager.shared.reloadCoreFromKeychain()
+            // Any other failure keeps the pending Kyber key: the server may have stored it before
+            // the answer was lost, and the next attempt sends the same key. When the server says
+            // it refused that key, it stored nothing — and it would refuse the same key again
+            // (one that waited past the 30-day age limit, say), so start over from a new one.
+            if Self.isKyberSPKRejection(error) {
+                CryptoManager.shared.rollbackKyberSpkRotation()
+                KyberPrekeyService.persist()
+            }
 
             // Deadlock-breaker: the server rejected the OPTIONAL hybrid SPK signature — it verifies
             // that over its own stored SPK, which mismatches ours when the SPK is desynced (e.g. a
@@ -215,13 +227,14 @@ final class PreKeyRotationService {
 
         // ── Phase 3: commit on success ───────────────────────────────────────
 
-        // Only write Kyber to Keychain AFTER the server confirmed the rotation.
-        // Classic SPK is already updated inside the Rust core; we persist its state.
-        try PQCKeyManager.shared.commitKyberSPK(
-            publicKey: kyberInMemory.publicKey,
-            secretKey: kyberInMemory.secretKey,
-            keyId: kyberInMemory.keyId
-        )
+        // Commit the Kyber rotation only now that the server confirmed it. Classic SPK is already
+        // updated inside the Rust core; we persist its state.
+        CryptoManager.shared.commitKyberSpkRotation()
+        if !KyberPrekeyService.persist() {
+            // The commit is in memory only; a restart comes back with the key still pending,
+            // which decapsulates as well and is committed by the next rotation. Not fatal.
+            Log.error("SPK rotation: Kyber commit not persisted — the key stays pending until the next rotation", category: "SPKRotation")
+        }
         let persisted = CryptoManager.shared.persistCoreState()
         if !persisted {
             // CRITICAL: server has the NEW SPK but Keychain still has the OLD one.
@@ -241,8 +254,9 @@ final class PreKeyRotationService {
         if atomicHybridSent {
             // Hybrid signatures were stored atomically with the rotation — no separate publish
             // needed and no window. Record the new SPK fingerprint so launch publishIfNeeded
-            // doesn't redundantly re-publish.
+            // doesn't redundantly re-publish, and the Kyber SPK the same way.
             await HybridIdentityService.recordHybridPublished(spkPublic: classicPubData)
+            await KyberPrekeyService.recordPublished(deviceId: deviceId, keyId: kyberKey.keyId)
             Log.info("SPK rotation: hybrid signatures stored atomically with rotation", category: "SPKRotation")
         } else {
             // Fallback (hybrid identity not yet published, or signing failed): re-attach the hybrid
@@ -270,6 +284,13 @@ final class PreKeyRotationService {
         // `String(describing:)` avoids a hard dependency on GRPCCore's RPCError type here and
         // works whether the thrown error is an RPCError or a wrapper around one.
         String(describing: error).contains("SPK hybrid signature verification failed")
+    }
+
+    /// True when the server refused the new Kyber SPK itself ("Kyber SPK rotation failed", the
+    /// key-service message for a key that fails its v2 checks). Matched on text like
+    /// `isHybridSPKSignatureRejection`: the server answers `internal` for every failure.
+    private static func isKyberSPKRejection(_ error: Error) -> Bool {
+        String(describing: error).contains("Kyber SPK rotation failed")
     }
 
     // MARK: - Schedule Helpers
@@ -368,7 +389,7 @@ final class PreKeyRotationService {
             // leaves identity/SPK matching yet makes EVERY PQXDH handshake AEAD-fail on the
             // responder (the KEM secret diverges), with no visible desync — the build-497 blocker.
             // Compare it too; "both absent" counts as matching (Ed25519-only / no PQ peer).
-            let localKyber = try? PQCKeyManager.shared.kyberSPKPublic()
+            let localKyber = (try? CryptoManager.shared.currentKyberSpkUpload()).map { Data($0.publicKey) }
             let serverKyber = serverBundle.kyberPreKeyPublic
             let kyberMatch: Bool = {
                 guard let localKyber, !localKyber.isEmpty else { return serverKyber?.isEmpty ?? true }

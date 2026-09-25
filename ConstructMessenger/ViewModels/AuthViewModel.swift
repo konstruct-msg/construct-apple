@@ -195,7 +195,11 @@ class AuthViewModel {
             #if os(macOS)
             Log.debug("Post-auth key maintenance (\(reason), Desktop direct core path)", category: "Auth")
             #endif
-            await PQCKeyManager.migrateIfNeeded(deviceId: deviceId)
+            // Kyber first: its first publish carries the hybrid identity in the same request, which
+            // is what lets the server check the hybrid signature on every Kyber key. The hybrid
+            // publish after it then finds nothing left to do, or re-attaches the classic SPK's
+            // signature after a rotation.
+            await KyberPrekeyService.publishIfNeeded(deviceId: deviceId)
             await HybridIdentityService.publishIfNeeded(deviceId: deviceId)
             await PreKeyRotationService.shared.rotateIfNeeded(deviceId: deviceId)
             await Self.logOwnDeviceSet(userId: userId, thisDeviceId: deviceId)
