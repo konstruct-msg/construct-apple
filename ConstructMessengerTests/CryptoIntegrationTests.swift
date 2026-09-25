@@ -13,7 +13,9 @@ final class CryptoIntegrationTests: XCTestCase {
 
     // MARK: - Helper: Crypto Instance Wrapper
 
-    /// Wrapper around Rust core to simulate independent Alice/Bob instances
+    /// Wrapper around the Rust bootstrap core (`ClassicCryptoCore`) to simulate independent
+    /// Alice/Bob instances. That core opens classical sessions only — the app opens every session
+    /// on `OrchestratorCore`, PQXDH v2; see `CryptoWireIntegrationTests` for that path.
     class TestCryptoInstance {
         let core: ClassicCryptoCore
         let userId: String
@@ -39,7 +41,7 @@ final class CryptoIntegrationTests: XCTestCase {
                 suiteId: recipientBundle.suiteId, oneTimePrekeyPublic: nil, oneTimePrekeyId: nil,
                 spkUploadedAt: 0, spkRotationEpoch: 0,
                 kyberSpkUploadedAt: 0, kyberSpkRotationEpoch: 0,
-                kyberPreKeyPublic: nil, kyberOneTimePrekeyPublic: nil, kyberOneTimePrekeyId: nil, supportsPqRatchet: false
+                kyberPreKeyPublic: nil, kyberOneTimePrekeyPublic: nil, kyberOneTimePrekeyId: nil
             )
             let sessionId = try core.initSession(contactId: contactId, recipientBundle: bundle)
             sessions[contactId] = sessionId
@@ -64,7 +66,7 @@ final class CryptoIntegrationTests: XCTestCase {
                 suiteId: senderBundle.suiteId, oneTimePrekeyPublic: nil, oneTimePrekeyId: nil,
                 spkUploadedAt: 0, spkRotationEpoch: 0,
                 kyberSpkUploadedAt: 0, kyberSpkRotationEpoch: 0,
-                kyberPreKeyPublic: nil, kyberOneTimePrekeyPublic: nil, kyberOneTimePrekeyId: nil, supportsPqRatchet: false
+                kyberPreKeyPublic: nil, kyberOneTimePrekeyPublic: nil, kyberOneTimePrekeyId: nil
             )
             let firstMsg = BinaryFirstMessage(
                 ephemeralPublicKey: [UInt8](firstMessage.ephemeralPublicKey),
@@ -73,7 +75,12 @@ final class CryptoIntegrationTests: XCTestCase {
                 oneTimePrekeyId: 0,
                 suiteId: firstMessage.suiteId,
                 pqMessageEpoch: firstMessage.pqMessageEpoch,
-                pqRatchetField: firstMessage.pqRatchetField
+                pqRatchetField: firstMessage.pqRatchetField,
+                // ClassicCryptoCore is the bootstrap core and opens classical sessions only (its
+                // responder passes no PQXDH input); these tests exercise that core, not v2.
+                pqxdhV2: false,
+                kyberPrekeyId: 0,
+                kemCiphertext: []
             )
             // ✅ NEW API: Returns SessionInitResult with decrypted message
             let result = try core.initReceivingSession(

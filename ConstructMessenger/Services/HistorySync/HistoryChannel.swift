@@ -6,7 +6,9 @@
 //  offering device seals a CTHF file to the new device, how the new device opens one.
 //  Nearby (CTT1 v2) uses the same key material with the other salt; only the carrier of
 //  `kem_ct` differs. Crypto decisions are the core's: encapsulate / decapsulate / sign_hybrid /
-//  hybrid_verify are called, never rebuilt (plan §10).
+//  hybrid_verify are called, never rebuilt (plan §10). The KEM is ML-KEM-1024 to the receiving
+//  device's Kyber SPK since PQXDH v2; the receiving side decapsulates inside the core, which holds
+//  the key's seed and never hands it out.
 //
 
 import CoreData
@@ -34,7 +36,8 @@ struct HistoryLocalKeys {
     let identityPrivate: Data
     let identityPublic: Data
     let hybridPublic: Data
-    let kyberSPKSecret: Data
+    /// Our current Kyber SPK, the key a peer encapsulates to. Its secret stays in the core:
+    /// `CryptoManager.kyberPrekeyDecapsulate`.
     let kyberSPKId: UInt32
 }
 
@@ -61,8 +64,7 @@ enum HistoryChannel {
         else { throw HistoryChannelError.localKeysUnavailable }
         let identityPublic = try Curve25519.KeyAgreement.PrivateKey(rawRepresentation: identityPrivate)
             .publicKey.rawRepresentation
-        let kyberSecret: Data
-        do { kyberSecret = try PQCKeyManager.shared.kyberSPKSecret() } catch {
+        guard let kyberSPK = try? CryptoManager.shared.currentKyberSpkUpload() else {
             throw HistoryChannelError.localKeysUnavailable
         }
         return HistoryLocalKeys(
@@ -73,8 +75,7 @@ enum HistoryChannel {
             identityPrivate: identityPrivate,
             identityPublic: identityPublic,
             hybridPublic: hybridPublic,
-            kyberSPKSecret: kyberSecret,
-            kyberSPKId: PQCKeyManager.shared.kyberSPKId()
+            kyberSPKId: kyberSPK.keyId
         )
     }
 
@@ -134,7 +135,7 @@ enum HistoryChannel {
     // MARK: - File: offering side
 
     /// Seal a phase-3 snapshot of `context` for `peer` into `url`. Header per spec §5: ephemeral
-    /// X25519 × the new device's identity, ML-KEM-768 to its Kyber SPK, HKDF with the file salt,
+    /// X25519 × the new device's identity, ML-KEM-1024 to its Kyber SPK, HKDF with the file salt,
     /// hybrid signature from the core over the tagged header.
     ///
     /// Collects the records before writing — the CTHF writer is not streaming yet (open question
@@ -153,7 +154,7 @@ enum HistoryChannel {
         let peerIdentity = try Curve25519.KeyAgreement.PublicKey(rawRepresentation: peer.identityPublic)
         let ecdh = try eph.sharedSecretFromKeyAgreement(with: peerIdentity)
             .withUnsafeBytes { Data($0) }
-        let kem = try mlkem768Encapsulate(publicKey: [UInt8](peer.kyberSPKPublic))
+        let kem = try mlkem1024Encapsulate(publicKey: [UInt8](peer.kyberSPKPublic))
         let key = TransferCrypto.deriveChannelKey(
             ecdh: ecdh,
             kemSharedSecret: Data(kem.sharedSecret),
@@ -233,13 +234,13 @@ enum HistoryChannel {
         let ourPriv = try Curve25519.KeyAgreement.PrivateKey(rawRepresentation: local.identityPrivate)
         let senderEph = try Curve25519.KeyAgreement.PublicKey(rawRepresentation: header.senderEphPub)
         let ecdh = try ourPriv.sharedSecretFromKeyAgreement(with: senderEph).withUnsafeBytes { Data($0) }
-        let kemSS = try mlkem768Decapsulate(
-            secretKey: [UInt8](local.kyberSPKSecret),
-            ciphertext: [UInt8](header.kemCt)
+        let kemSS = try CryptoManager.shared.kyberPrekeyDecapsulate(
+            keyId: local.kyberSPKId,
+            ciphertext: header.kemCt
         )
         let key = TransferCrypto.deriveChannelKey(
             ecdh: ecdh,
-            kemSharedSecret: Data(kemSS),
+            kemSharedSecret: kemSS,
             salt: .file,
             snapshotId: header.snapshotId
         )

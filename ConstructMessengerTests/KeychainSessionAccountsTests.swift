@@ -156,9 +156,6 @@ final class KeychainSessionAccountsTests: XCTestCase {
         let slots: [CfeSecureStoreSlot] = [
             .session(contactId: contactId),
             .sessionArchive(contactId: contactId),
-            .pqDeferred(contactId: contactId),
-            .kyberSessionState,
-            .kyberSignedPrekey(keyId: 7),
             .orchestratorState
         ]
         let accounts = slots.map(KeychainSessionAccounts.account(for:))
@@ -187,10 +184,7 @@ final class KeychainSessionAccountsTests: XCTestCase {
     ///
     /// Mutation: move any of them into the `session_` namespace — this reddens.
     func testNonSessionSlotsAreNotSweptBySessionWipe() {
-        for slot in [CfeSecureStoreSlot.pqDeferred(contactId: contactId),
-                     .kyberSessionState,
-                     .kyberSignedPrekey(keyId: 7),
-                     .orchestratorState] {
+        for slot in [CfeSecureStoreSlot.orchestratorState] {
             let account = KeychainSessionAccounts.account(for: slot)
             XCTAssertFalse(
                 KeychainSessionAccounts.isSessionState(account),

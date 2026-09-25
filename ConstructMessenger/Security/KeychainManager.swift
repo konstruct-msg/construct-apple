@@ -396,6 +396,23 @@ class KeychainManager {
         delete(forKey: "crypto_otpks")
     }
 
+    // MARK: - Kyber prekeys (ML-KEM-1024) persistence
+
+    /// Save the core's Kyber prekeys (`export_kyber_prekeys`, CFE binary). The seeds are private
+    /// key material and the responder needs them during a locked-device background decrypt.
+    @discardableResult
+    func saveKyberPrekeys(_ data: Data) -> Bool {
+        return save(data, forKey: "crypto_kyber_prekeys", accessible: Self.cryptoKeyAccessible)
+    }
+
+    func loadKyberPrekeysData() -> Data? {
+        load(forKey: "crypto_kyber_prekeys")
+    }
+
+    func deleteKyberPrekeys() {
+        delete(forKey: "crypto_kyber_prekeys")
+    }
+
     // MARK: - MLS group store persistence
 
     /// Save the whole-device MLS store snapshot (CFE binary, msg_type 0x44).
@@ -620,32 +637,6 @@ class KeychainManager {
         delete(forKey: spkEpochKey(for: userId))
     }
 
-    // MARK: - PQXDH Downgrade Flag (per-peer)
-    // Tracks whether PQXDH key agreement was degraded to classical-only for a contact.
-    // Security-relevant: stored in Keychain (not UserDefaults) so it survives reinstall.
-    // An attacker who can clear UserDefaults before app launch could otherwise force
-    // a re-attempt of PQ strengthening that already failed, leaking that it failed.
-
-    private func pqxdhDowngradedKey(for userId: String) -> String {
-        "construct.pqxdh.downgraded.\(userId)"
-    }
-
-    func savePQXDHDowngradeFlag(for userId: String) {
-        var value: UInt8 = 1
-        let data = Data(bytes: &value, count: 1)
-        _ = save(data, forKey: pqxdhDowngradedKey(for: userId), accessible: kSecAttrAccessibleAfterFirstUnlock)
-    }
-
-    func loadPQXDHDowngradeFlag(for userId: String) -> Bool {
-        guard let data = load(forKey: pqxdhDowngradedKey(for: userId)),
-              data.count == 1 else { return false }
-        return data[0] != 0
-    }
-
-    func deletePQXDHDowngradeFlag(for userId: String) {
-        delete(forKey: pqxdhDowngradedKey(for: userId))
-    }
-
     // MARK: - At-Risk Session Flag (per-peer)
     // Set when a session was established via DEGRADED init (peer's SPK was past the
     // staleness limit — see the stale-peer-reachability decision). Such a session is
@@ -777,6 +768,14 @@ class KeychainManager {
     func sessionAccounts() -> [String] {
         accounts(withPrefix: KeychainSessionAccounts.prefix)
             .filter(KeychainSessionAccounts.isSessionState)
+    }
+
+    /// Delete every item whose account starts with `prefix`; returns how many there were.
+    @discardableResult
+    func deleteItems(withAccountPrefix prefix: String) -> Int {
+        let found = accounts(withPrefix: prefix)
+        found.forEach { delete(forKey: $0) }
+        return found.count
     }
 
     private func accounts(withPrefix prefix: String) -> [String] {

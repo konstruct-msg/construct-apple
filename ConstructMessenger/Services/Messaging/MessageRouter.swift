@@ -1000,7 +1000,6 @@ final class MessageRouter {
             // later cursor for the device). Reassembly that never completes is reported by
             // `.chunkReassemblyExpired`; durable reassembly is the real fix.
             _ = executeRustActions(actions, for: message, chat: chat, otherUserId: otherUserId, in: context)
-            applyIncomingPqContribution(plan.kemCiphertext, for: message, contactId: otherUserId)
             return
         case .callSignalDecrypted:
             // ct=12: Rust decrypted the call signal — dispatch to CallManager directly.
@@ -1375,47 +1374,6 @@ final class MessageRouter {
         )
     }
 
-    /// Execute typed actions returned by `OrchestratorCore.handleEvent`.
-    /// Mix the post-quantum contribution the core asked us to decapsulate into the ratchet.
-    ///
-    /// Ordering is the whole content of this function:
-    ///
-    /// * **After the decrypt.** The sender encrypts msg0 against classic-only ratchet state and
-    ///   applies its own contribution immediately afterwards — "both sides must apply PQ at the
-    ///   same moment" (construct-core `RustPqContributions`). Applying before we decrypt the
-    ///   carrier, or on a message the core chose to drop, would drive the root keys apart
-    ///   instead of together, which surfaces as a DR divergence on the peer's *next* message.
-    /// * **After `executeRustActions`.** That is where `saveToSecureStore` lands, carrying
-    ///   session bytes the core exported at decrypt time — i.e. before this mix. Persisting here
-    ///   first would simply be overwritten by those staler bytes.
-    ///
-    /// A no-op unless the core emitted `applyPqContribution`, which it does for every incoming
-    /// X3DH carrier (non-empty KEM ciphertext). The RESPONDER's own session-init path
-    /// decapsulates directly and never reaches here.
-    private func applyIncomingPqContribution(
-        _ kemCiphertext: Data?,
-        for message: ChatMessage,
-        contactId: String
-    ) {
-        guard let kemCiphertext, !kemCiphertext.isEmpty else { return }
-        do {
-            try PQCKeyManager.shared.applyIncomingContribution(
-                kemCiphertext: kemCiphertext,
-                kyberOtpkId: message.kyberOtpkId,
-                contactId: contactId
-            )
-            CryptoManager.shared.saveSessionToKeychain(forDevice: contactId)
-        } catch {
-            // Downgrade rather than tear down: the classic ratchet is intact and the peer stays
-            // reachable. The flag is what stops us claiming a PQ guarantee we do not hold.
-            Log.error(
-                "PQC: incoming contribution FAILED for \(contactId.prefix(8))…: \(error) — session continues classic-only",
-                category: "MessageRouter"
-            )
-            KeychainManager.shared.savePQXDHDowngradeFlag(for: contactId)
-        }
-    }
-
     /// What `executeRustActions` did with the decrypted body — feeds stream-cursor disposition.
     private enum DecryptBodyDisposition {
         /// Fully handled (or terminal drop) for this envelope.
@@ -1424,6 +1382,7 @@ final class MessageRouter {
         case incompleteReassembly
     }
 
+    /// Execute typed actions returned by `OrchestratorCore.handleEvent`.
     @discardableResult
     private func executeRustActions(
         _ actions: [CfeAction],

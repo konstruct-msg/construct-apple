@@ -195,7 +195,12 @@ class AuthViewModel {
             #if os(macOS)
             Log.debug("Post-auth key maintenance (\(reason), Desktop direct core path)", category: "Auth")
             #endif
-            await PQCKeyManager.migrateIfNeeded(deviceId: deviceId)
+            // Kyber first: its first publish carries the hybrid identity in the same request, which
+            // is what lets the server check the hybrid signature on every Kyber key. The hybrid
+            // publish after it then finds nothing left to do, or re-attaches the classic SPK's
+            // signature after a rotation.
+            await KyberPrekeyService.publishIfNeeded(deviceId: deviceId)
+            Self.announceAppLaunchedOnce()
             await HybridIdentityService.publishIfNeeded(deviceId: deviceId)
             await PreKeyRotationService.shared.rotateIfNeeded(deviceId: deviceId)
             await Self.logOwnDeviceSet(userId: userId, thisDeviceId: deviceId)
@@ -203,6 +208,27 @@ class AuthViewModel {
         Task { [weak self] in
             guard self != nil else { return }
             await ServerKeyManager.shared.prefetch()
+        }
+    }
+
+    private static var appLaunchAnnounced = false
+
+    /// Tell the core the app has launched, once per process: it answers with the launch timers,
+    /// among them `pq_upgrade_sweep`, which reopens pre-v2 classical sessions as PQXDH v2 15 s later.
+    ///
+    /// Nothing sent this event until 2026-09-25 — the enum case existed only in the logging
+    /// switch — so the upgrade sweep never ran on iOS and every classical session stayed
+    /// classical. Here and not at core init because the reopen it leads to fetches the peer's
+    /// bundle, which needs an authenticated transport; once, because re-auth runs this path again
+    /// and the core would re-arm the timers each time.
+    private static func announceAppLaunchedOnce() {
+        guard !appLaunchAnnounced else { return }
+        do {
+            let actions = try CryptoManager.shared.handleOrchestratorEvent(.appLaunched, tag: "post_auth")
+            appLaunchAnnounced = true
+            SessionActionExecutor.shared.execute(actions)
+        } catch {
+            Log.error("AppLaunched not delivered to the core: \(error)", category: "Auth")
         }
     }
 

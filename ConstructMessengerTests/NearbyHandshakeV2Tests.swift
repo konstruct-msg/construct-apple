@@ -25,10 +25,10 @@ final class NearbyHandshakeV2Tests: XCTestCase {
     func testLayoutSumsMatchFrozenLengths() {
         XCTAssertEqual(CTT1V2Layout.prefixCount, 46)
         XCTAssertEqual(CTT1V2Layout.prefixCount, NearbyTransferService.HandshakeFrame.byteCount)
-        XCTAssertEqual(CTT1V2Layout.openingCount, 6575)
+        XCTAssertEqual(CTT1V2Layout.openingCount, 7055)
         XCTAssertEqual(CTT1V2Layout.replyCount, 5421)
         XCTAssertEqual(CTT1V2Layout.hybridSigCount, 3373)
-        XCTAssertEqual(CTT1V2Layout.kemCtCount, 1088)
+        XCTAssertEqual(CTT1V2Layout.kemCtCount, 1568, "ML-KEM-1024 since PQXDH v2")
         XCTAssertEqual(CTT1V2Layout.hybridPubCount, 1984)
     }
 

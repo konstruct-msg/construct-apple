@@ -25,8 +25,14 @@ final class HistoryNearbyChannelTests: XCTestCase {
         let identityPublic = identity.publicKey.rawRepresentation
         let deviceHex = deriveDeviceId(identityPublicKey: [UInt8](identityPublic))
         let deviceRaw = try XCTUnwrap(HistoryChannel.rawDeviceId(deviceHex))
-        let kyber = try mlkem768Keygen()
         let hybrid = try CryptoManager.shared.ensureHybridIdentityPublicKey()
+        // The receiving side decapsulates with the core's own Kyber SPK, so the test encapsulates
+        // to that key rather than to one made up here.
+        if try CryptoManager.shared.currentKyberSpkUpload() == nil {
+            _ = try CryptoManager.shared.beginKyberSpkRotation()
+            CryptoManager.shared.commitKyberSpkRotation()
+        }
+        let kyber = try XCTUnwrap(try CryptoManager.shared.currentKyberSpkUpload())
         let local = HistoryLocalKeys(
             userIdDashed: userId,
             userIdRaw: try XCTUnwrap(HistoryAccountID.raw(userId)),
@@ -35,8 +41,7 @@ final class HistoryNearbyChannelTests: XCTestCase {
             identityPrivate: identity.rawRepresentation,
             identityPublic: identityPublic,
             hybridPublic: hybrid,
-            kyberSPKSecret: Data(kyber.secretKey),
-            kyberSPKId: 7
+            kyberSPKId: kyber.keyId
         )
         let peer = HistoryPeerKeys(
             deviceIdHex: deviceHex,
@@ -44,7 +49,7 @@ final class HistoryNearbyChannelTests: XCTestCase {
             identityPublic: identityPublic,
             hybridPublic: hybrid,
             kyberSPKPublic: Data(kyber.publicKey),
-            kyberSPKId: 7
+            kyberSPKId: kyber.keyId
         )
         return (local, peer)
     }

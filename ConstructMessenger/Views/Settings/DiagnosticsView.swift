@@ -528,19 +528,18 @@ struct DiagnosticsView: View {
     /// Re-establish our session with `target` as INITIATOR **without telling the peer**.
     ///
     /// This manufactures, on demand, the asymmetry that otherwise only appears by chance: we hold
-    /// a fresh ratchet, the peer still holds the old one, so our next message reaches them as an
-    /// X3DH carrier (msgNum=0, KEM ciphertext) on a session they already have. That is the input
-    /// the core answers with `[ApplyPQContribution, CheckAckInDb]` — two actions — which the host
-    /// used to mishandle (see decisions/host-dropped-action-returns).
+    /// a fresh ratchet, the peer still holds the old one, so our next message reaches them as a
+    /// PQXDH v2 carrier (msgNum=0, KEM ciphertext in the header) on a session they already have —
+    /// the input a host used to mishandle (see decisions/host-dropped-action-returns).
     ///
     /// `initializeSessionProactively` is exactly the right primitive: it fetches the bundle and
-    /// calls `initializeSession(deleteExisting: true)`, and it does NOT send END_SESSION or a
+    /// replaces the held session (`reopenSession`), and it does NOT send END_SESSION or a
     /// SESSION_RESET_INIT — announcing is the coordinator's job, and announcing is precisely what
     /// we must not do here.
     ///
-    /// Send **two** messages afterwards. The first proves the carrier was decrypted; only the
-    /// second proves the post-quantum contribution was mixed in symmetrically, because an
-    /// asymmetric mix still decrypts msg0 and fails on msg1.
+    /// Send **two** messages afterwards. The first proves the carrier was decrypted; the second,
+    /// which still carries the handshake header until the peer answers, proves the peer kept the
+    /// session it opened from the first.
     private func forceSilentReinit(_ target: ReinitTarget) {
         reinitStatus = "re-initialising…"
         reinitOk = true
@@ -622,10 +621,10 @@ struct DiagnosticsView: View {
         KeychainManager.shared.deleteSessionToken()
         KeychainManager.shared.deleteRefreshToken()
 
-        // Kyber SPK — keys are stored under these fixed names in PQCKeyManager
-        KeychainManager.shared.deleteData(forKey: "construct.kyber.spk.public")
-        KeychainManager.shared.deleteData(forKey: "construct.kyber.spk.secret")
-        KeychainManager.shared.deleteData(forKey: "construct.kyber.spk.id")
+        // Kyber prekeys (the core's store) and whatever an older build kept outside it
+        KeychainManager.shared.deleteKyberPrekeys()
+        KyberPrekeyService.deleteLegacyItems()
+        KyberPrekeyService.resetPublishState()
 
         // Orchestrator CFE state (session archive index, locks, etc.)
         CryptoManager.shared.clearOrchestratorStateCFE()

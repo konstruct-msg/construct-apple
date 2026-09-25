@@ -324,13 +324,13 @@ final class OutboundMessagePipeline {
         }
         do {
             _ = try SessionInitializationService.shared.initializeSession(
-                userId: target.deviceId, bundle: bundle, deleteExisting: false
+                userId: target.deviceId, bundle: bundle
             )
         } catch SessionError.peerSPKStale {
             // Offline too long to rotate its SPK — degrade rather than drop the copy. Flags the
             // session at-risk (see stale-peer-reachability).
             _ = try SessionInitializationService.shared.initializeSession(
-                userId: target.deviceId, bundle: bundle, deleteExisting: false, allowStale: true
+                userId: target.deviceId, bundle: bundle, allowStale: true
             )
         }
     }

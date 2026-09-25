@@ -300,7 +300,7 @@ public nonisolated struct Shared_Proto_Services_V1_PreKeyBundle: @unchecked Send
     set {_uniqueStorage()._generatedAt = newValue}
   }
 
-  /// Kyber signed pre-key public key (ML-KEM-1024, exactly 1184 bytes)
+  /// Kyber signed pre-key public key (ML-KEM-1024, exactly 1568 bytes)
   public var kyberPreKey: Data {
     get {_storage._kyberPreKey ?? Data()}
     set {_uniqueStorage()._kyberPreKey = newValue}
@@ -320,7 +320,8 @@ public nonisolated struct Shared_Proto_Services_V1_PreKeyBundle: @unchecked Send
   /// Clears the value of `kyberPreKeyID`. Subsequent reads from it will return its default value.
   public mutating func clearKyberPreKeyID() {_uniqueStorage()._kyberPreKeyID = nil}
 
-  /// Ed25519 signature over kyber_pre_key (64 bytes)
+  /// Ed25519 signature (64 bytes) over the v2 sign-message for kyber_pre_key and
+  /// kyber_pre_key_created_at (field 25)
   public var kyberPreKeySignature: Data {
     get {_storage._kyberPreKeySignature ?? Data()}
     set {_uniqueStorage()._kyberPreKeySignature = newValue}
@@ -330,7 +331,7 @@ public nonisolated struct Shared_Proto_Services_V1_PreKeyBundle: @unchecked Send
   /// Clears the value of `kyberPreKeySignature`. Subsequent reads from it will return its default value.
   public mutating func clearKyberPreKeySignature() {_uniqueStorage()._kyberPreKeySignature = nil}
 
-  /// Kyber one-time pre-key (ML-KEM-1024, exactly 1184 bytes; single use)
+  /// Kyber one-time pre-key (ML-KEM-1024, exactly 1568 bytes; single use)
   public var kyberOneTimePreKey: Data {
     get {_storage._kyberOneTimePreKey ?? Data()}
     set {_uniqueStorage()._kyberOneTimePreKey = newValue}
@@ -430,8 +431,8 @@ public nonisolated struct Shared_Proto_Services_V1_PreKeyBundle: @unchecked Send
   /// Clears the value of `signedPreKeyHybridSignature`. Subsequent reads from it will return its default value.
   public mutating func clearSignedPreKeyHybridSignature() {_uniqueStorage()._signedPreKeyHybridSignature = nil}
 
-  /// Hybrid signature (3373 bytes) over the Kyber-SPK sign-message
-  /// "KonstruktX3DH-v1" || [0x00, suite_id] || kyber_pre_key. (scope B)
+  /// Hybrid signature (3373 bytes) over the same v2 sign-message as kyber_pre_key_signature
+  /// (field 12), made with the hybrid identity key (field 20).
   public var kyberPreKeyHybridSignature: Data {
     get {_storage._kyberPreKeyHybridSignature ?? Data()}
     set {_uniqueStorage()._kyberPreKeyHybridSignature = newValue}
@@ -441,14 +442,56 @@ public nonisolated struct Shared_Proto_Services_V1_PreKeyBundle: @unchecked Send
   /// Clears the value of `kyberPreKeyHybridSignature`. Subsequent reads from it will return its default value.
   public mutating func clearKyberPreKeyHybridSignature() {_uniqueStorage()._kyberPreKeyHybridSignature = nil}
 
-  /// Supports SuiteID::PQ_RATCHET (3) for sparse continuous post-quantum ratchet.
-  /// When true, initiators that also support it may open new sessions with suite 3
-  /// (self-sustaining PQ material, no further OTPK consumption after the first message).
-  /// Additive capability flag (see PQ_RATCHET_AND_OTPK_ELIMINATION_SPEC).
+  /// Deprecated: PQXDH v2 cores open every session on SuiteID::PQ_RATCHET (3) and ignore this.
+  /// Still written by older clients; kept so the field number is never reused.
   public var supportsPqRatchet: Bool {
     get {_storage._supportsPqRatchet}
     set {_uniqueStorage()._supportsPqRatchet = newValue}
   }
+
+  /// Signed creation time of the Kyber signed pre-key, unix seconds. Part of the message
+  /// fields 12 and 23 sign. Distinct from kyber_spk_uploaded_at (17), which is the server's
+  /// own, unsigned record.
+  public var kyberPreKeyCreatedAt: UInt64 {
+    get {_storage._kyberPreKeyCreatedAt ?? 0}
+    set {_uniqueStorage()._kyberPreKeyCreatedAt = newValue}
+  }
+  /// Returns true if `kyberPreKeyCreatedAt` has been explicitly set.
+  public var hasKyberPreKeyCreatedAt: Bool {_storage._kyberPreKeyCreatedAt != nil}
+  /// Clears the value of `kyberPreKeyCreatedAt`. Subsequent reads from it will return its default value.
+  public mutating func clearKyberPreKeyCreatedAt() {_uniqueStorage()._kyberPreKeyCreatedAt = nil}
+
+  /// Ed25519 signature (64 bytes) over the v2 sign-message for kyber_one_time_pre_key (13)
+  /// and kyber_one_time_pre_key_created_at (27). Present whenever field 13 is.
+  public var kyberOneTimePreKeySignature: Data {
+    get {_storage._kyberOneTimePreKeySignature ?? Data()}
+    set {_uniqueStorage()._kyberOneTimePreKeySignature = newValue}
+  }
+  /// Returns true if `kyberOneTimePreKeySignature` has been explicitly set.
+  public var hasKyberOneTimePreKeySignature: Bool {_storage._kyberOneTimePreKeySignature != nil}
+  /// Clears the value of `kyberOneTimePreKeySignature`. Subsequent reads from it will return its default value.
+  public mutating func clearKyberOneTimePreKeySignature() {_uniqueStorage()._kyberOneTimePreKeySignature = nil}
+
+  /// Signed creation time of the Kyber one-time pre-key, unix seconds.
+  public var kyberOneTimePreKeyCreatedAt: UInt64 {
+    get {_storage._kyberOneTimePreKeyCreatedAt ?? 0}
+    set {_uniqueStorage()._kyberOneTimePreKeyCreatedAt = newValue}
+  }
+  /// Returns true if `kyberOneTimePreKeyCreatedAt` has been explicitly set.
+  public var hasKyberOneTimePreKeyCreatedAt: Bool {_storage._kyberOneTimePreKeyCreatedAt != nil}
+  /// Clears the value of `kyberOneTimePreKeyCreatedAt`. Subsequent reads from it will return its default value.
+  public mutating func clearKyberOneTimePreKeyCreatedAt() {_uniqueStorage()._kyberOneTimePreKeyCreatedAt = nil}
+
+  /// Hybrid signature (3373 bytes) over the same message as field 26, made with the hybrid
+  /// identity key (field 20).
+  public var kyberOneTimePreKeyHybridSignature: Data {
+    get {_storage._kyberOneTimePreKeyHybridSignature ?? Data()}
+    set {_uniqueStorage()._kyberOneTimePreKeyHybridSignature = newValue}
+  }
+  /// Returns true if `kyberOneTimePreKeyHybridSignature` has been explicitly set.
+  public var hasKyberOneTimePreKeyHybridSignature: Bool {_storage._kyberOneTimePreKeyHybridSignature != nil}
+  /// Clears the value of `kyberOneTimePreKeyHybridSignature`. Subsequent reads from it will return its default value.
+  public mutating func clearKyberOneTimePreKeyHybridSignature() {_uniqueStorage()._kyberOneTimePreKeyHybridSignature = nil}
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -621,7 +664,9 @@ public nonisolated struct Shared_Proto_Services_V1_UploadPreKeysRequest: Sendabl
   /// NOTE: field 4 is reserved (was used in a prior version); this field is 11.
   public var replaceExisting: Bool = false
 
-  /// Kyber one-time pre-keys batch (ML-KEM-1024)
+  /// Kyber one-time pre-keys batch (ML-KEM-1024). Each carries both signatures (see
+  /// KyberOneTimePreKey), so the device must have a hybrid identity key — stored, or sent in
+  /// this same request (field 14).
   public var kyberPreKeys: [Shared_Proto_Services_V1_KyberOneTimePreKey] = []
 
   /// Optional: also update Kyber signed pre-key
@@ -667,8 +712,8 @@ public nonisolated struct Shared_Proto_Services_V1_UploadPreKeysRequest: Sendabl
   /// Clears the value of `signedPreKeyHybridSignature`. Subsequent reads from it will return its default value.
   public mutating func clearSignedPreKeyHybridSignature() {self._signedPreKeyHybridSignature = nil}
 
-  /// Hybrid signature (3373 bytes) over the CURRENT Kyber SPK X3DH sign-message
-  /// ("KonstruktX3DH-v1" || [0x00, 0x10] || kyber_signed_pre_key_public). (scope B)
+  /// Hybrid signature (3373 bytes) over the CURRENT Kyber SPK's v2 sign-message
+  /// ("KonstruktX3DH-v1" || [0x00, 0x11] || created_at (u64 BE) || kyber_signed_pre_key_public).
   public var kyberSignedPreKeyHybridSignature: Data {
     get {_kyberSignedPreKeyHybridSignature ?? Data()}
     set {_kyberSignedPreKeyHybridSignature = newValue}
@@ -678,10 +723,7 @@ public nonisolated struct Shared_Proto_Services_V1_UploadPreKeysRequest: Sendabl
   /// Clears the value of `kyberSignedPreKeyHybridSignature`. Subsequent reads from it will return its default value.
   public mutating func clearKyberSignedPreKeyHybridSignature() {self._kyberSignedPreKeyHybridSignature = nil}
 
-  /// Capability declaration: this device supports SuiteID::PQ_RATCHET (3) for
-  /// sparse continuous post-quantum ratchet on established sessions.
-  /// Server persists it and advertises in PreKeyBundle responses.
-  /// Clients should set this to true when they are capable (post-regen of bindings etc.).
+  /// Deprecated: see PreKeyBundle.supports_pq_ratchet.
   public var supportsPqRatchet: Bool = false
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
@@ -737,14 +779,20 @@ public nonisolated struct Shared_Proto_Services_V1_KyberOneTimePreKey: Sendable 
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  /// Key ID (client-generated, unique per device)
+  /// Key ID (client-generated, unique per device; the core numbers these from 1000000)
   public var keyID: UInt32 = 0
 
-  /// ML-KEM-1024 public key (exactly 1184 bytes)
+  /// ML-KEM-1024 public key (exactly 1568 bytes)
   public var publicKey: Data = Data()
 
-  /// Ed25519 signature over public_key (64 bytes)
+  /// Ed25519 signature (64 bytes) over the v2 sign-message
   public var signature: Data = Data()
+
+  /// Signed creation time, unix seconds (required; 0 is rejected)
+  public var createdAt: UInt64 = 0
+
+  /// Hybrid signature (3373 bytes) over the same v2 sign-message, with the hybrid identity key
+  public var hybridSignature: Data = Data()
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -760,11 +808,15 @@ public nonisolated struct Shared_Proto_Services_V1_KyberSignedPreKeyUpload: Send
   /// Key ID
   public var keyID: UInt32 = 0
 
-  /// ML-KEM-1024 public key (exactly 1184 bytes)
+  /// ML-KEM-1024 public key (exactly 1568 bytes)
   public var publicKey: Data = Data()
 
-  /// Ed25519 signature over public_key (64 bytes)
+  /// Ed25519 signature (64 bytes) over the v2 sign-message
   public var signature: Data = Data()
+
+  /// Signed creation time, unix seconds (required; 0 is rejected). The server serves it back
+  /// as PreKeyBundle.kyber_pre_key_created_at.
+  public var createdAt: UInt64 = 0
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -873,8 +925,8 @@ public nonisolated struct Shared_Proto_Services_V1_RotateSignedPreKeyRequest: Se
   /// Clears the value of `signedPreKeyHybridSignature`. Subsequent reads from it will return its default value.
   public mutating func clearSignedPreKeyHybridSignature() {self._signedPreKeyHybridSignature = nil}
 
-  /// Hybrid (ML-DSA) signature over new_kyber_signed_pre_key.public_key (suite 0x10). Stored
-  /// atomically with the rotated Kyber SPK when both are present.
+  /// Hybrid (ML-DSA) signature over new_kyber_signed_pre_key's v2 sign-message (suite 0x11,
+  /// with its created_at). Stored atomically with the rotated Kyber SPK when both are present.
   public var kyberSignedPreKeyHybridSignature: Data {
     get {_kyberSignedPreKeyHybridSignature ?? Data()}
     set {_kyberSignedPreKeyHybridSignature = newValue}
@@ -1245,7 +1297,7 @@ nonisolated extension Shared_Proto_Services_V1_KtInclusionProof: SwiftProtobuf.M
 
 nonisolated extension Shared_Proto_Services_V1_PreKeyBundle: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".PreKeyBundle"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}registration_id\0\u{3}identity_key\0\u{3}signed_pre_key\0\u{3}signed_pre_key_id\0\u{3}signed_pre_key_signature\0\u{3}one_time_pre_key\0\u{3}one_time_pre_key_id\0\u{3}crypto_suite\0\u{3}generated_at\0\u{3}kyber_pre_key\0\u{3}kyber_pre_key_id\0\u{3}kyber_pre_key_signature\0\u{3}kyber_one_time_pre_key\0\u{3}kyber_one_time_pre_key_id\0\u{3}spk_uploaded_at\0\u{3}spk_rotation_epoch\0\u{3}kyber_spk_uploaded_at\0\u{3}kyber_spk_rotation_epoch\0\u{3}bundle_signature\0\u{3}hybrid_identity_key\0\u{3}hybrid_identity_signature\0\u{3}signed_pre_key_hybrid_signature\0\u{3}kyber_pre_key_hybrid_signature\0\u{3}supports_pq_ratchet\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}registration_id\0\u{3}identity_key\0\u{3}signed_pre_key\0\u{3}signed_pre_key_id\0\u{3}signed_pre_key_signature\0\u{3}one_time_pre_key\0\u{3}one_time_pre_key_id\0\u{3}crypto_suite\0\u{3}generated_at\0\u{3}kyber_pre_key\0\u{3}kyber_pre_key_id\0\u{3}kyber_pre_key_signature\0\u{3}kyber_one_time_pre_key\0\u{3}kyber_one_time_pre_key_id\0\u{3}spk_uploaded_at\0\u{3}spk_rotation_epoch\0\u{3}kyber_spk_uploaded_at\0\u{3}kyber_spk_rotation_epoch\0\u{3}bundle_signature\0\u{3}hybrid_identity_key\0\u{3}hybrid_identity_signature\0\u{3}signed_pre_key_hybrid_signature\0\u{3}kyber_pre_key_hybrid_signature\0\u{3}supports_pq_ratchet\0\u{3}kyber_pre_key_created_at\0\u{3}kyber_one_time_pre_key_signature\0\u{3}kyber_one_time_pre_key_created_at\0\u{3}kyber_one_time_pre_key_hybrid_signature\0")
 
   fileprivate class _StorageClass {
     var _registrationID: UInt32 = 0
@@ -1272,6 +1324,10 @@ nonisolated extension Shared_Proto_Services_V1_PreKeyBundle: SwiftProtobuf.Messa
     var _signedPreKeyHybridSignature: Data? = nil
     var _kyberPreKeyHybridSignature: Data? = nil
     var _supportsPqRatchet: Bool = false
+    var _kyberPreKeyCreatedAt: UInt64? = nil
+    var _kyberOneTimePreKeySignature: Data? = nil
+    var _kyberOneTimePreKeyCreatedAt: UInt64? = nil
+    var _kyberOneTimePreKeyHybridSignature: Data? = nil
 
       // This property is used as the initial default value for new instances of the type.
       // The type itself is protecting the reference to its storage via CoW semantics.
@@ -1306,6 +1362,10 @@ nonisolated extension Shared_Proto_Services_V1_PreKeyBundle: SwiftProtobuf.Messa
       _signedPreKeyHybridSignature = source._signedPreKeyHybridSignature
       _kyberPreKeyHybridSignature = source._kyberPreKeyHybridSignature
       _supportsPqRatchet = source._supportsPqRatchet
+      _kyberPreKeyCreatedAt = source._kyberPreKeyCreatedAt
+      _kyberOneTimePreKeySignature = source._kyberOneTimePreKeySignature
+      _kyberOneTimePreKeyCreatedAt = source._kyberOneTimePreKeyCreatedAt
+      _kyberOneTimePreKeyHybridSignature = source._kyberOneTimePreKeyHybridSignature
     }
   }
 
@@ -1348,6 +1408,10 @@ nonisolated extension Shared_Proto_Services_V1_PreKeyBundle: SwiftProtobuf.Messa
         case 22: try { try decoder.decodeSingularBytesField(value: &_storage._signedPreKeyHybridSignature) }()
         case 23: try { try decoder.decodeSingularBytesField(value: &_storage._kyberPreKeyHybridSignature) }()
         case 24: try { try decoder.decodeSingularBoolField(value: &_storage._supportsPqRatchet) }()
+        case 25: try { try decoder.decodeSingularUInt64Field(value: &_storage._kyberPreKeyCreatedAt) }()
+        case 26: try { try decoder.decodeSingularBytesField(value: &_storage._kyberOneTimePreKeySignature) }()
+        case 27: try { try decoder.decodeSingularUInt64Field(value: &_storage._kyberOneTimePreKeyCreatedAt) }()
+        case 28: try { try decoder.decodeSingularBytesField(value: &_storage._kyberOneTimePreKeyHybridSignature) }()
         default: break
         }
       }
@@ -1432,6 +1496,18 @@ nonisolated extension Shared_Proto_Services_V1_PreKeyBundle: SwiftProtobuf.Messa
       if _storage._supportsPqRatchet != false {
         try visitor.visitSingularBoolField(value: _storage._supportsPqRatchet, fieldNumber: 24)
       }
+      try { if let v = _storage._kyberPreKeyCreatedAt {
+        try visitor.visitSingularUInt64Field(value: v, fieldNumber: 25)
+      } }()
+      try { if let v = _storage._kyberOneTimePreKeySignature {
+        try visitor.visitSingularBytesField(value: v, fieldNumber: 26)
+      } }()
+      try { if let v = _storage._kyberOneTimePreKeyCreatedAt {
+        try visitor.visitSingularUInt64Field(value: v, fieldNumber: 27)
+      } }()
+      try { if let v = _storage._kyberOneTimePreKeyHybridSignature {
+        try visitor.visitSingularBytesField(value: v, fieldNumber: 28)
+      } }()
     }
     try unknownFields.traverse(visitor: &visitor)
   }
@@ -1465,6 +1541,10 @@ nonisolated extension Shared_Proto_Services_V1_PreKeyBundle: SwiftProtobuf.Messa
         if _storage._signedPreKeyHybridSignature != rhs_storage._signedPreKeyHybridSignature {return false}
         if _storage._kyberPreKeyHybridSignature != rhs_storage._kyberPreKeyHybridSignature {return false}
         if _storage._supportsPqRatchet != rhs_storage._supportsPqRatchet {return false}
+        if _storage._kyberPreKeyCreatedAt != rhs_storage._kyberPreKeyCreatedAt {return false}
+        if _storage._kyberOneTimePreKeySignature != rhs_storage._kyberOneTimePreKeySignature {return false}
+        if _storage._kyberOneTimePreKeyCreatedAt != rhs_storage._kyberOneTimePreKeyCreatedAt {return false}
+        if _storage._kyberOneTimePreKeyHybridSignature != rhs_storage._kyberOneTimePreKeyHybridSignature {return false}
         return true
       }
       if !storagesAreEqual {return false}
@@ -1783,7 +1863,7 @@ nonisolated extension Shared_Proto_Services_V1_SignedPreKeyUpload: SwiftProtobuf
 
 nonisolated extension Shared_Proto_Services_V1_KyberOneTimePreKey: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".KyberOneTimePreKey"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}key_id\0\u{3}public_key\0\u{1}signature\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}key_id\0\u{3}public_key\0\u{1}signature\0\u{3}created_at\0\u{3}hybrid_signature\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -1794,6 +1874,8 @@ nonisolated extension Shared_Proto_Services_V1_KyberOneTimePreKey: SwiftProtobuf
       case 1: try { try decoder.decodeSingularUInt32Field(value: &self.keyID) }()
       case 2: try { try decoder.decodeSingularBytesField(value: &self.publicKey) }()
       case 3: try { try decoder.decodeSingularBytesField(value: &self.signature) }()
+      case 4: try { try decoder.decodeSingularUInt64Field(value: &self.createdAt) }()
+      case 5: try { try decoder.decodeSingularBytesField(value: &self.hybridSignature) }()
       default: break
       }
     }
@@ -1808,6 +1890,12 @@ nonisolated extension Shared_Proto_Services_V1_KyberOneTimePreKey: SwiftProtobuf
     }
     if !self.signature.isEmpty {
       try visitor.visitSingularBytesField(value: self.signature, fieldNumber: 3)
+    }
+    if self.createdAt != 0 {
+      try visitor.visitSingularUInt64Field(value: self.createdAt, fieldNumber: 4)
+    }
+    if !self.hybridSignature.isEmpty {
+      try visitor.visitSingularBytesField(value: self.hybridSignature, fieldNumber: 5)
     }
     try unknownFields.traverse(visitor: &visitor)
   }
@@ -1816,6 +1904,8 @@ nonisolated extension Shared_Proto_Services_V1_KyberOneTimePreKey: SwiftProtobuf
     if lhs.keyID != rhs.keyID {return false}
     if lhs.publicKey != rhs.publicKey {return false}
     if lhs.signature != rhs.signature {return false}
+    if lhs.createdAt != rhs.createdAt {return false}
+    if lhs.hybridSignature != rhs.hybridSignature {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -1823,7 +1913,7 @@ nonisolated extension Shared_Proto_Services_V1_KyberOneTimePreKey: SwiftProtobuf
 
 nonisolated extension Shared_Proto_Services_V1_KyberSignedPreKeyUpload: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".KyberSignedPreKeyUpload"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}key_id\0\u{3}public_key\0\u{1}signature\0\u{c}\u{4}\u{1}")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}key_id\0\u{3}public_key\0\u{1}signature\0\u{4}\u{2}created_at\0\u{c}\u{4}\u{1}")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -1834,6 +1924,7 @@ nonisolated extension Shared_Proto_Services_V1_KyberSignedPreKeyUpload: SwiftPro
       case 1: try { try decoder.decodeSingularUInt32Field(value: &self.keyID) }()
       case 2: try { try decoder.decodeSingularBytesField(value: &self.publicKey) }()
       case 3: try { try decoder.decodeSingularBytesField(value: &self.signature) }()
+      case 5: try { try decoder.decodeSingularUInt64Field(value: &self.createdAt) }()
       default: break
       }
     }
@@ -1849,6 +1940,9 @@ nonisolated extension Shared_Proto_Services_V1_KyberSignedPreKeyUpload: SwiftPro
     if !self.signature.isEmpty {
       try visitor.visitSingularBytesField(value: self.signature, fieldNumber: 3)
     }
+    if self.createdAt != 0 {
+      try visitor.visitSingularUInt64Field(value: self.createdAt, fieldNumber: 5)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -1856,6 +1950,7 @@ nonisolated extension Shared_Proto_Services_V1_KyberSignedPreKeyUpload: SwiftPro
     if lhs.keyID != rhs.keyID {return false}
     if lhs.publicKey != rhs.publicKey {return false}
     if lhs.signature != rhs.signature {return false}
+    if lhs.createdAt != rhs.createdAt {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

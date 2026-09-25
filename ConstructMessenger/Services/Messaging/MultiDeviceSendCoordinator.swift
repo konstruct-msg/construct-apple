@@ -768,8 +768,7 @@ final class MultiDeviceSendCoordinator {
                 do {
                     _ = try SessionInitializationService.shared.initializeSession(
                         userId: contactId,
-                        bundle: bundle,
-                        deleteExisting: false
+                        bundle: bundle
                     )
                 } catch SessionError.peerSPKStale {
                     // Own replica has been offline too long to rotate its SPK — degrade rather
@@ -777,7 +776,6 @@ final class MultiDeviceSendCoordinator {
                     _ = try SessionInitializationService.shared.initializeSession(
                         userId: contactId,
                         bundle: bundle,
-                        deleteExisting: false,
                         allowStale: true
                     )
                 }

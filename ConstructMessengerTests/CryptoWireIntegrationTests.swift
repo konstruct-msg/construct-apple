@@ -30,46 +30,20 @@ final class CryptoWireIntegrationTests: XCTestCase {
             self.core = try createOrchestratorCoreFromKeys(keysData: keys, myUserId: userId)
         }
 
-        func bundle() throws -> (identityPublic: [UInt8], signedPrekeyPublic: [UInt8],
-                                  signature: [UInt8], verifyingKey: [UInt8], suiteId: UInt16) {
-            let fields = try core.getRegistrationBundleFields()
-            return (fields.identityPublic, fields.signedPrekeyPublic, fields.signature, fields.verifyingKey, fields.suiteId)
-        }
-
-        private func bundleBytes(from b: (identityPublic: [UInt8], signedPrekeyPublic: [UInt8],
-                                          signature: [UInt8], verifyingKey: [UInt8], suiteId: UInt16)) throws -> BinaryKeyBundle {
-            return BinaryKeyBundle(
-                identityPublic: b.identityPublic, signedPrekeyPublic: b.signedPrekeyPublic,
-                signature: b.signature, verifyingKey: b.verifyingKey,
-                suiteId: b.suiteId, oneTimePrekeyPublic: nil, oneTimePrekeyId: nil,
-                spkUploadedAt: 0, spkRotationEpoch: 0,
-                kyberSpkUploadedAt: 0, kyberSpkRotationEpoch: 0,
-                kyberPreKeyPublic: nil, kyberOneTimePrekeyPublic: nil, kyberOneTimePrekeyId: nil, supportsPqRatchet: false
-            )
+        /// The bundle as the server serves it after PQXDH v2 — see `PQXDHTestBundles`.
+        func bundle() throws -> BinaryKeyBundle {
+            try core.pqxdhTestBundle()
         }
 
         /// Initiate session as sender (X3DH)
-        func initSenderSession(to contactId: String,
-                                recipientBundle: (identityPublic: [UInt8], signedPrekeyPublic: [UInt8],
-                                                  signature: [UInt8], verifyingKey: [UInt8], suiteId: UInt16)) throws {
-            let bytes = try bundleBytes(from: recipientBundle)
-            _ = try core.initSession(contactId: contactId, recipientBundle: bytes)
+        func initSenderSession(to contactId: String, recipientBundle: BinaryKeyBundle) throws {
+            _ = try core.initSession(contactId: contactId, recipientBundle: recipientBundle)
         }
 
         /// Encrypt plaintext → EncryptedMessageComponents (wraps Rust core)
         func encryptRaw(_ plaintext: String, to contactId: String) throws -> MessageCryptoService.EncryptedMessageComponents {
             let rustComponents = try core.encryptMessage(contactId: contactId, plaintext: Data(plaintext.utf8))
-            let rawContent = Data(rustComponents.content)
-            return MessageCryptoService.EncryptedMessageComponents(
-                ephemeralPublicKey: Data(rustComponents.ephemeralPublicKey),
-                messageNumber: rustComponents.messageNumber,
-                content: rawContent,
-                suiteId: 1,
-                oneTimePreKeyId: rustComponents.oneTimePrekeyId,
-                storageKey: Data(rustComponents.storageKey),
-                pqMessageEpoch: 0,
-                pqRatchetField: Data()
-            )
+            return MessageCryptoService.EncryptedMessageComponents(from: rustComponents)
         }
 
         /// Encode components to wire payload (same as ChunkedMessageDelivery does)
@@ -93,27 +67,14 @@ final class CryptoWireIntegrationTests: XCTestCase {
             return String(data: Data(plaintextData.plaintext), encoding: .utf8) ?? ""
         }
 
-        /// Initialize receiving session from first wire-encoded message
+        /// Initialize receiving session from first wire-encoded message, the payload as received.
         func initReceiverSession(from contactId: String,
-                                  senderBundle: (identityPublic: [UInt8], signedPrekeyPublic: [UInt8],
-                                                 signature: [UInt8], verifyingKey: [UInt8], suiteId: UInt16),
+                                  senderBundle: BinaryKeyBundle,
                                   wirePayload: Data) throws -> String {
-            let bundle = try bundleBytes(from: senderBundle)
-            let decoded = try WirePayloadCoder.decode(wirePayload)
-            let unpadded = decoded.content
-            let firstMsg = BinaryFirstMessage(
-                ephemeralPublicKey: decoded.ephemeralPublicKey,
-                messageNumber: decoded.messageNumber,
-                content: [UInt8](unpadded),
-                oneTimePrekeyId: 0,
-                suiteId: decoded.suiteId,
-                pqMessageEpoch: decoded.pqMessageEpoch,
-                pqRatchetField: [UInt8](decoded.pqRatchetField)
-            )
-            let result = try core.initReceivingSession(
+            let result = try core.initReceivingSessionFromWirePayload(
                 contactId: contactId,
-                recipientBundle: bundle,
-                firstMessage: firstMsg
+                recipientBundle: senderBundle,
+                wirePayload: [UInt8](wirePayload)
             )
             return String(bytes: result.decryptedMessage, encoding: .utf8) ?? "__binary_init__"
         }
@@ -124,19 +85,12 @@ final class CryptoWireIntegrationTests: XCTestCase {
         /// path (`initSessionAllowingStale`). Verifies the FFI binding + xcframework wiring of
         /// the stale-peer-reachability Phase 1 change end-to-end.
         func initSenderSession(to contactId: String,
-                                recipientBundle: (identityPublic: [UInt8], signedPrekeyPublic: [UInt8],
-                                                  signature: [UInt8], verifyingKey: [UInt8], suiteId: UInt16),
+                                recipientBundle: BinaryKeyBundle,
                                 spkAgeDays: UInt64,
                                 allowStale: Bool) throws {
             let now = UInt64(Date().timeIntervalSince1970)
-            let bundle = BinaryKeyBundle(
-                identityPublic: recipientBundle.identityPublic, signedPrekeyPublic: recipientBundle.signedPrekeyPublic,
-                signature: recipientBundle.signature, verifyingKey: recipientBundle.verifyingKey,
-                suiteId: recipientBundle.suiteId, oneTimePrekeyPublic: nil, oneTimePrekeyId: nil,
-                spkUploadedAt: now - spkAgeDays * 86_400, spkRotationEpoch: 0,
-                kyberSpkUploadedAt: 0, kyberSpkRotationEpoch: 0,
-                kyberPreKeyPublic: nil, kyberOneTimePrekeyPublic: nil, kyberOneTimePrekeyId: nil, supportsPqRatchet: false
-            )
+            var bundle = recipientBundle
+            bundle.spkUploadedAt = now - spkAgeDays * 86_400
             if allowStale {
                 _ = try core.initSessionAllowingStale(contactId: contactId, recipientBundle: bundle)
             } else {
@@ -360,18 +314,29 @@ final class CryptoWireIntegrationTests: XCTestCase {
         try alice.initSenderSession(to: bob.userId, recipientBundle: bobBundle)
 
         let comp = try alice.encryptRaw("Hello", to: bob.userId)
-        var wirePayload = try alice.encodeWire(comp)
+        let wirePayload = try alice.encodeWire(comp)
 
         _ = try bob.initReceiverSession(from: alice.userId, senderBundle: aliceBundle, wirePayload: wirePayload)
 
-        // Send second message, then tamper with the ciphertext bytes
+        // Send second message, then tamper with the sealed box itself. Not by a wire offset: until
+        // Bob answers, Alice's messages still carry the PQXDH v2 header, and a fixed offset past
+        // the fixed header lands in the KEM ciphertext, which a held session ignores.
         let comp2 = try alice.encryptRaw("Second", to: bob.userId)
-        var tamperedWire = try alice.encodeWire(comp2)
-
-        // Flip a bit in the ciphertext (beyond the 36-byte header)
-        if tamperedWire.count > WirePayloadCoder.headerSize + 10 {
-            tamperedWire[WirePayloadCoder.headerSize + 5] ^= 0xFF
-        }
+        var content = comp2.content
+        content[content.count / 2] ^= 0xFF
+        let tampered = MessageCryptoService.EncryptedMessageComponents(
+            ephemeralPublicKey: comp2.ephemeralPublicKey,
+            messageNumber: comp2.messageNumber,
+            content: content,
+            suiteId: comp2.suiteId,
+            oneTimePreKeyId: comp2.oneTimePreKeyId,
+            storageKey: comp2.storageKey,
+            pqMessageEpoch: comp2.pqMessageEpoch,
+            pqRatchetField: comp2.pqRatchetField,
+            kemCiphertext: comp2.kemCiphertext,
+            kyberPrekeyId: comp2.kyberPrekeyId
+        )
+        let tamperedWire = try alice.encodeWire(tampered)
 
         XCTAssertThrowsError(try bob.decodeAndDecrypt(tamperedWire, from: alice.userId),
             "Tampered ciphertext must be rejected by AEAD")

@@ -98,6 +98,9 @@ enum AccountWipeKeys {
         "construct.spk.uploadTimestamp",
         "construct.hybridIdentity.published.v1",
         "construct.hybridIdentity.spkFingerprint.v1",
+        // Which Kyber SPK (device:keyId) the server confirmed. Belongs to this identity's keys:
+        // kept across a wipe it would tell the next identity its SPK was already published.
+        "construct.kyber.v2.published",
 
         // Sealed sender — the cert belongs to the old identity.
         "construct.sealed_sender_cert",
@@ -145,6 +148,9 @@ enum AccountWipeKeys {
         "construct.tokenSpendUnit.v1.",
         "construct.kyber.otpk.sk.",
         "construct.pq_deferred.",
+        // The per-peer PQXDH downgrade flag of builds before PQXDH v2 (Keychain). Nothing writes
+        // it any more; `KyberPrekeyService.deleteLegacyItems` sweeps what an older build left.
+        "construct.pqxdh.downgraded.",
         // Where `SecureStoreSlot.KyberSignedPrekey` would land. No reachable emitter today
         // (`commit_spk_rotation` is called only from its own tests), but a secret key that
         // appears must leave with the account, and classifying it now costs nothing.

@@ -18,10 +18,6 @@ enum CryptoManagerError: Error, LocalizedError, ApplicationLayerError {
     /// The DR state has advanced past this message — attempting decryption would fail and
     /// incorrectly archive the healthy session. Callers should skip silently.
     case duplicateMessage
-    /// Kyber OTPK secret is missing locally for the given key ID.
-    /// Throwing this forces session init to fail, which triggers END_SESSION + clean re-init
-    /// instead of silently establishing a PQ-diverged session that will break on msg1+.
-    case pqxdhOtpkMissing(UInt32)
     case invalidSignature
     /// DR decryption failed in the background path. Session is NOT archived — the
     /// foreground stream will handle recovery when the app becomes active.
@@ -42,7 +38,6 @@ enum CryptoManagerError: Error, LocalizedError, ApplicationLayerError {
         case .invalidCiphertext:                     return "Invalid ciphertext format"
         case .invalidKeyData:                        return "Invalid key data"
         case .duplicateMessage:                      return "Message already processed (ACK cache hit) — skipped to protect DR state"
-        case .pqxdhOtpkMissing(let id):             return "Kyber OTPK id=\(id) not found locally — session init failed to prevent PQ root key divergence"
         case .invalidSignature:                      return "Invalid signature data from Rust core (expected base64)"
         case .decryptionFailedNoArchive(let reason): return "BG decrypt failed (session preserved): \(reason)"
         case .keyStatePersistFailed:                 return "Generated key could not be persisted to Keychain — not released to avoid publishing an identity this device cannot keep"

@@ -113,66 +113,16 @@ final class KeyServiceClient: Sendable {
                 let b = deviceBundle.bundle
                 guard !b.identityKey.isEmpty else { return nil }
 
-                let otpkPublic: Data? = b.oneTimePreKey.isEmpty ? nil : b.oneTimePreKey
-                let otpkId: UInt32? = b.oneTimePreKeyID > 0 ? b.oneTimePreKeyID : nil
-                let kyberPK: Data? = b.hasKyberPreKey && !b.kyberPreKey.isEmpty ? b.kyberPreKey : nil
-
-                // Hybrid PQ verification (Phase 2 only — per-device). The Phase 3 TOFU pin is
-                // per-userId, which can't distinguish a user's devices, so downgrade pinning is
-                // left to the single-fetch path; here a present-but-invalid hybrid bundle drops
-                // that device rather than failing the whole batch.
-                switch HybridBundleVerifier.verify(
-                    hybridIdentityKey: b.hasHybridIdentityKey ? b.hybridIdentityKey : Data(),
-                    hybridIdentitySignature: b.hasHybridIdentitySignature ? b.hybridIdentitySignature : Data(),
-                    verifyingKey: deviceBundle.verifyingKey,
-                    signedPreKey: b.signedPreKey,
-                    signedPreKeyHybridSignature: b.hasSignedPreKeyHybridSignature ? b.signedPreKeyHybridSignature : Data(),
-                    kyberPreKey: kyberPK,
-                    kyberPreKeyHybridSignature: b.hasKyberPreKeyHybridSignature ? b.kyberPreKeyHybridSignature : Data()
-                ) {
-                case .verified:
-                    Log.info("Hybrid PQ bundle verified for device \(deviceBundle.deviceID)", category: "HybridPQ")
-                case .degraded(let reason):
-                    // Authentic hybrid identity, SPK-level attestation unavailable — keep the device
-                    // and proceed via classic X3DH rather than dropping it (peer SPK desync).
-                    Log.fault("Hybrid PQ DEGRADED for device \(deviceBundle.deviceID): \(reason) — keeping device via classic X3DH", category: "HybridPQ")
-                case .absent:
-                    break
-                case .failed(let reason):
-                    Log.error("Hybrid PQ bundle dropped for device \(deviceBundle.deviceID): \(reason)", category: "HybridPQ")
-                    return nil
-                }
-                let kyberPKId: UInt32? = b.hasKyberPreKeyID && b.kyberPreKeyID > 0 ? b.kyberPreKeyID : nil
-                let kyberSig: Data? = b.hasKyberPreKeySignature && !b.kyberPreKeySignature.isEmpty ? b.kyberPreKeySignature : nil
-                let kyberOtpkPK: Data? = b.hasKyberOneTimePreKey && !b.kyberOneTimePreKey.isEmpty ? b.kyberOneTimePreKey : nil
-                let kyberOtpkId: UInt32? = b.hasKyberOneTimePreKeyID && b.kyberOneTimePreKeyID > 0 ? b.kyberOneTimePreKeyID : nil
-
-                let bundle = PublicKeyBundleData(
-                    userId: userId,
-                    username: "",
-                    identityPublic: b.identityKey,
-                    signedPrekeyPublic: b.signedPreKey,
-                    signature: b.signedPreKeySignature,
-                    // Pass through the server-provided per-device Ed25519 verifying key.
-                    // Was hardcoded to Data() — every fan-out/SenderSync session init that
-                    // had to init a fresh session failed in the core with
-                    // "Invalid verifying_key size: expected 32, got 0" (B3, vk=0B). The
-                    // single-fetch path already forwards response.verifyingKey (line ~302).
-                    verifyingKey: deviceBundle.verifyingKey,
-                    suiteId: Self.parseSuiteId(b.cryptoSuite),
-                    oneTimePreKeyPublic: otpkPublic,
-                    oneTimePreKeyId: otpkId,
-                    kyberPreKeyPublic: kyberPK,
-                    kyberPreKeyId: kyberPKId,
-                    kyberPreKeySignature: kyberSig,
-                    kyberOneTimePreKeyPublic: kyberOtpkPK,
-                    kyberOneTimePreKeyId: kyberOtpkId,
-                    spkUploadedAt: b.spkUploadedAt > 0 ? UInt64(b.spkUploadedAt) : (b.generatedAt > 0 ? UInt64(b.generatedAt) : 0),
-                    spkRotationEpoch: b.spkRotationEpoch,
-                    kyberSpkUploadedAt: b.hasKyberSpkUploadedAt ? UInt64(b.kyberSpkUploadedAt) : 0,
-                    kyberSpkRotationEpoch: b.hasKyberSpkRotationEpoch ? b.kyberSpkRotationEpoch : 0,
-                    supportsPqRatchet: b.supportsPqRatchet
-                )
+                // Nothing about the post-quantum keys is judged here. The hybrid identity binding
+                // and both signatures on each Kyber key are the core's to check when a session is
+                // opened, and a bundle it would refuse is refused there, with its reason
+                // (`PQ_REQUIRED: …`). This used to verify the v1 hybrid signatures in Swift and
+                // drop the device on a mismatch.
+                //
+                // The per-device Ed25519 verifying key: was hardcoded to Data() once, and every
+                // fan-out/SenderSync init failed in the core with "Invalid verifying_key size:
+                // expected 32, got 0" (B3, vk=0B).
+                let bundle = Self.bundleData(b, userId: userId, verifyingKey: deviceBundle.verifyingKey)
                 return DeviceBundleData(
                     deviceId: deviceBundle.deviceID,
                     bundle: bundle,
@@ -213,14 +163,13 @@ final class KeyServiceClient: Sendable {
 
     // MARK: - Get Pre-Key Bundle (replaces CryptoAPI.getPublicKey)
 
-    /// Intermediate result of the gRPC fetch + crypto verify. Core Data side effects
-    /// (KT status, hybrid pin) are applied on the MainActor *after* the RPC returns so
+    /// Intermediate result of the gRPC fetch + KT verify. Core Data side effects
+    /// (KT status) are applied on the MainActor *after* the RPC returns so
     /// SwiftUI `@ObservedObject` User rows never receive objectWillChange off-main
     /// (the classic "Publishing changes from background threads is not allowed" warning).
     private struct PreKeyBundleFetchResult: Sendable {
         let data: PublicKeyBundleData
         let deviceID: String
-        let hybridOutcome: HybridBundleVerifier.Outcome
         /// Non-nil when a KT inclusion proof was present and evaluated.
         let ktStatus: KTStatus?
     }
@@ -261,19 +210,6 @@ final class KeyServiceClient: Sendable {
             }
             let bundle = response.bundle
 
-            let otpkPublic: Data? = bundle.oneTimePreKey.isEmpty ? nil : bundle.oneTimePreKey
-            let otpkId: UInt32? = bundle.oneTimePreKeyID > 0 ? bundle.oneTimePreKeyID : nil
-
-            // PQXDH fields (optional — nil if server doesn't support Kyber yet)
-            let kyberPK: Data? = bundle.hasKyberPreKey && !bundle.kyberPreKey.isEmpty ? bundle.kyberPreKey : nil
-            let kyberPKId: UInt32? = bundle.hasKyberPreKeyID && bundle.kyberPreKeyID > 0 ? bundle.kyberPreKeyID : nil
-            let kyberSig: Data? = bundle.hasKyberPreKeySignature && !bundle.kyberPreKeySignature.isEmpty ? bundle.kyberPreKeySignature : nil
-
-            let kyberOtpkPK: Data? = bundle.hasKyberOneTimePreKey && !bundle.kyberOneTimePreKey.isEmpty
-                ? bundle.kyberOneTimePreKey : nil
-            let kyberOtpkId: UInt32? = bundle.hasKyberOneTimePreKeyID && bundle.kyberOneTimePreKeyID > 0
-                ? bundle.kyberOneTimePreKeyID : nil
-
             // KT verification (non-blocking: failure is logged but does not reject the bundle).
             // Core Data write is deferred to MainActor after the RPC — see apply below.
             var ktStatus: KTStatus? = nil
@@ -305,7 +241,7 @@ final class KeyServiceClient: Sendable {
             }
 
             // Hybrid identity KT inclusion proof (defense-in-depth, non-blocking like the
-            // identity KT proof above — the blocking PQ check is HybridBundleVerifier below).
+            // identity KT proof above — the blocking PQ checks are the core's, at session init).
             if response.hasHybridKtProof, bundle.hasHybridIdentityKey, !bundle.hybridIdentityKey.isEmpty {
                 let hp = response.hybridKtProof
                 let serverKey = UserDefaults.standard.data(forKey: VeilCertFetcher.cachedBundleSigningKeyKey)
@@ -328,80 +264,16 @@ final class KeyServiceClient: Sendable {
                 }
             }
 
-            // Hybrid PQ crypto verification only — Core Data pin is applied on MainActor below.
-            let hybridOutcome = HybridBundleVerifier.verify(
-                hybridIdentityKey: bundle.hasHybridIdentityKey ? bundle.hybridIdentityKey : Data(),
-                hybridIdentitySignature: bundle.hasHybridIdentitySignature ? bundle.hybridIdentitySignature : Data(),
-                verifyingKey: response.verifyingKey,
-                signedPreKey: bundle.signedPreKey,
-                signedPreKeyHybridSignature: bundle.hasSignedPreKeyHybridSignature ? bundle.signedPreKeyHybridSignature : Data(),
-                kyberPreKey: kyberPK,
-                kyberPreKeyHybridSignature: bundle.hasKyberPreKeyHybridSignature ? bundle.kyberPreKeyHybridSignature : Data()
-            )
-
-            // Fail hard on identity-level tampering before we touch Core Data.
-            if case .failed(let reason) = hybridOutcome {
-                Log.error("Hybrid PQ bundle REJECTED for device \(response.deviceID): \(reason)", category: "HybridPQ")
-                throw HybridBundleVerificationError(reason: reason)
-            }
-
-            let data = PublicKeyBundleData(
-                userId: userId,
-                username: "",
-                identityPublic: bundle.identityKey,
-                signedPrekeyPublic: bundle.signedPreKey,
-                signature: bundle.signedPreKeySignature,
-                verifyingKey: response.verifyingKey,
-                suiteId: Self.parseSuiteId(bundle.cryptoSuite),
-                oneTimePreKeyPublic: otpkPublic,
-                oneTimePreKeyId: otpkId,
-                kyberPreKeyPublic: kyberPK,
-                kyberPreKeyId: kyberPKId,
-                kyberPreKeySignature: kyberSig,
-                kyberOneTimePreKeyPublic: kyberOtpkPK,
-                kyberOneTimePreKeyId: kyberOtpkId,
-                spkUploadedAt: bundle.spkUploadedAt > 0 ? UInt64(bundle.spkUploadedAt) : (bundle.generatedAt > 0 ? UInt64(bundle.generatedAt) : 0),
-                spkRotationEpoch: bundle.spkRotationEpoch,
-                kyberSpkUploadedAt: bundle.hasKyberSpkUploadedAt ? UInt64(bundle.kyberSpkUploadedAt) : 0,
-                kyberSpkRotationEpoch: bundle.hasKyberSpkRotationEpoch ? bundle.kyberSpkRotationEpoch : 0,
-                supportsPqRatchet: bundle.supportsPqRatchet
-            )
+            let data = Self.bundleData(bundle, userId: userId, verifyingKey: response.verifyingKey)
 
             return PreKeyBundleFetchResult(
                 data: data,
                 deviceID: response.deviceID,
-                hybridOutcome: hybridOutcome,
                 ktStatus: ktStatus
             )
         }
 
         // --- MainActor Core Data side effects (UI-observed User fields) ---
-        let hybridDowngrade = await MainActor.run {
-            Self.recordAndCheckHybrid(
-                userId: userId,
-                identityKey: fetched.data.identityPublic,
-                outcome: fetched.hybridOutcome
-            )
-        }
-
-        switch fetched.hybridOutcome {
-        case .verified:
-            Log.info("Hybrid PQ bundle verified for device \(fetched.deviceID)", category: "HybridPQ")
-        case .degraded(let reason):
-            // Hybrid identity is authentic (cross-sig valid) but the SPK-level hybrid
-            // attestation is unavailable — proceed via classic X3DH rather than hard-block a
-            // desynced peer. The classic Ed25519 SPK signature is still enforced by the core.
-            Log.fault("Hybrid PQ DEGRADED for device \(fetched.deviceID): \(reason) — proceeding via classic X3DH (PQ SPK attestation unavailable; likely peer SPK desync)", category: "HybridPQ")
-        case .absent:
-            if hybridDowngrade {
-                Log.error("Hybrid PQ DOWNGRADE for device \(fetched.deviceID): peer was hybrid-capable, bundle now Ed25519-only", category: "HybridPQ")
-                throw HybridBundleVerificationError(reason: "hybrid downgrade — peer previously presented a hybrid key for this identity")
-            }
-        case .failed:
-            // Already thrown inside the RPC closure.
-            break
-        }
-
         if let ktStatus = fetched.ktStatus {
             await MainActor.run {
                 Self.updateContactKTStatus(
@@ -412,14 +284,15 @@ final class KeyServiceClient: Sendable {
             }
         }
 
-        // Backstop. The two writers above pin `knownIdentityKey` only on the branches they care
-        // about — `.verified`/`.degraded`/identity-changed for hybrid, `.verified` for KT — and both
-        // bail without a word when the `User` row does not exist. On any other combination we have
-        // just fetched, accepted and are about to run X3DH against an identity key that nothing
-        // kept, and every subsequent sealed send to this peer fails closed with
-        // `StealthDowngradeBlocked` (TODO #45). Reached only when the bundle was accepted: a
-        // `.failed` outcome throws inside the RPC closure above, and a hybrid downgrade throws in
-        // the switch.
+        // Backstop. The KT writer above pins `knownIdentityKey` only on `.verified`, and bails
+        // without a word when the `User` row does not exist. Otherwise we have just fetched and
+        // are about to run X3DH against an identity key that nothing kept, and every subsequent
+        // sealed send to this peer fails closed with `StealthDowngradeBlocked` (TODO #45).
+        //
+        // It used to have a second writer: the Swift hybrid-bundle check pinned the key on every
+        // bundle with a valid hybrid identity, silently overwriting a changed one. That check is
+        // gone (the core verifies the hybrid chain at session init and pins the hybrid key per
+        // device); an identity change is now surfaced by KT alone, as for any other key.
         await MainActor.run {
             // A bundle came back, so whatever marked them gone is stale.
             VanishedPeerStore.shared.clear(userId)
@@ -432,9 +305,6 @@ final class KeyServiceClient: Sendable {
                 context: PersistenceController.shared.container.viewContext
             )
         }
-
-        let supportsPqRatchetDescription = fetched.data.supportsPqRatchet.map(String.init) ?? "nil"
-        Log.info("SESSION_STATE[bundle_capabilities]: userId=\(userId.prefix(8))…, device=\(fetched.deviceID.prefix(8))…, supportsPqRatchet=\(supportsPqRatchetDescription)", category: "SessionInit")
 
         return fetched.data
     }
@@ -470,6 +340,48 @@ final class KeyServiceClient: Sendable {
         }
     }
 
+    /// A served bundle as the app carries it until `PublicKeyBundleData.binaryKeyBundle` hands it
+    /// to the core. One reading for both fetch paths: they were two copies of twenty fields, and
+    /// the multi-device one had already lost the verifying key once.
+    ///
+    /// Empty proto bytes and zero ids read as absent. The PQXDH v2 fields (25–28, 20–21) are
+    /// passed through as served; the core decides what it can trust.
+    /// Internal, not private, for `PQXDHBundleConversionTests`.
+    static func bundleData(
+        _ b: Shared_Proto_Services_V1_PreKeyBundle,
+        userId: String,
+        verifyingKey: Data
+    ) -> PublicKeyBundleData {
+        func bytes(_ present: Bool, _ value: Data) -> Data? { present && !value.isEmpty ? value : nil }
+        return PublicKeyBundleData(
+            userId: userId,
+            username: "",
+            identityPublic: b.identityKey,
+            signedPrekeyPublic: b.signedPreKey,
+            signature: b.signedPreKeySignature,
+            verifyingKey: verifyingKey,
+            suiteId: parseSuiteId(b.cryptoSuite),
+            oneTimePreKeyPublic: b.oneTimePreKey.isEmpty ? nil : b.oneTimePreKey,
+            oneTimePreKeyId: b.oneTimePreKeyID > 0 ? b.oneTimePreKeyID : nil,
+            kyberPreKeyPublic: bytes(b.hasKyberPreKey, b.kyberPreKey),
+            kyberPreKeyId: b.hasKyberPreKeyID && b.kyberPreKeyID > 0 ? b.kyberPreKeyID : nil,
+            kyberPreKeySignature: bytes(b.hasKyberPreKeySignature, b.kyberPreKeySignature),
+            kyberPreKeyCreatedAt: b.hasKyberPreKeyCreatedAt ? b.kyberPreKeyCreatedAt : nil,
+            kyberPreKeyHybridSignature: bytes(b.hasKyberPreKeyHybridSignature, b.kyberPreKeyHybridSignature),
+            kyberOneTimePreKeyPublic: bytes(b.hasKyberOneTimePreKey, b.kyberOneTimePreKey),
+            kyberOneTimePreKeyId: b.hasKyberOneTimePreKeyID && b.kyberOneTimePreKeyID > 0 ? b.kyberOneTimePreKeyID : nil,
+            kyberOneTimePreKeyCreatedAt: b.hasKyberOneTimePreKeyCreatedAt ? b.kyberOneTimePreKeyCreatedAt : nil,
+            kyberOneTimePreKeySignature: bytes(b.hasKyberOneTimePreKeySignature, b.kyberOneTimePreKeySignature),
+            kyberOneTimePreKeyHybridSignature: bytes(b.hasKyberOneTimePreKeyHybridSignature, b.kyberOneTimePreKeyHybridSignature),
+            hybridIdentityKey: bytes(b.hasHybridIdentityKey, b.hybridIdentityKey),
+            hybridIdentitySignature: bytes(b.hasHybridIdentitySignature, b.hybridIdentitySignature),
+            spkUploadedAt: b.spkUploadedAt > 0 ? UInt64(b.spkUploadedAt) : (b.generatedAt > 0 ? UInt64(b.generatedAt) : 0),
+            spkRotationEpoch: b.spkRotationEpoch,
+            kyberSpkUploadedAt: b.hasKyberSpkUploadedAt ? UInt64(b.kyberSpkUploadedAt) : 0,
+            kyberSpkRotationEpoch: b.hasKyberSpkRotationEpoch ? b.kyberSpkRotationEpoch : 0
+        )
+    }
+
     // MARK: - Upload Pre-Keys
 
     /// Upload a batch of one-time pre-keys to the server.
@@ -478,8 +390,8 @@ final class KeyServiceClient: Sendable {
         preKeys: [(keyId: UInt32, publicKey: Data)]? = nil,
         signedPreKey: (keyId: UInt32, publicKey: Data, signature: Data)? = nil,
         replaceExisting: Bool = false,
-        kyberSignedPreKey: (keyId: UInt32, publicKey: Data, signature: Data)? = nil,
-        kyberOneTimePreKeys: [(keyId: UInt32, publicKey: Data, signature: Data)]? = nil,
+        kyberSignedPreKey: KyberPrekeyUpload? = nil,
+        kyberOneTimePreKeys: [KyberPrekeyUpload]? = nil,
         hybridIdentity: (key: Data, signature: Data)? = nil,
         signedPreKeyHybridSignature: Data? = nil,
         kyberSignedPreKeyHybridSignature: Data? = nil
@@ -504,19 +416,21 @@ final class KeyServiceClient: Sendable {
                 signed.signature = spk.signature
                 request.signedPreKey = signed
             }
+            // Both Kyber shapes as the core produced them: the signed `created_at` travels with the
+            // key, since both signatures cover it. The SPK's hybrid signature goes in
+            // `kyberSignedPreKeyHybridSignature` below, stored by the server with the hybrid
+            // identity; a one-time key carries its own.
             if let kyberSpk = kyberSignedPreKey {
-                var kSigned = Shared_Proto_Services_V1_KyberSignedPreKeyUpload()
-                kSigned.keyID = kyberSpk.keyId
-                kSigned.publicKey = kyberSpk.publicKey
-                kSigned.signature = kyberSpk.signature
-                request.kyberSignedPreKey = kSigned
+                request.kyberSignedPreKey = Self.kyberSignedUpload(kyberSpk)
             }
             if let kyberOtpks = kyberOneTimePreKeys {
                 request.kyberPreKeys = kyberOtpks.map { key in
                     var kotpk = Shared_Proto_Services_V1_KyberOneTimePreKey()
                     kotpk.keyID = key.keyId
-                    kotpk.publicKey = key.publicKey
-                    kotpk.signature = key.signature
+                    kotpk.publicKey = Data(key.publicKey)
+                    kotpk.signature = Data(key.signature)
+                    kotpk.createdAt = key.createdAt
+                    kotpk.hybridSignature = Data(key.hybridSignature)
                     return kotpk
                 }
             }
@@ -534,37 +448,23 @@ final class KeyServiceClient: Sendable {
                 request.kyberSignedPreKeyHybridSignature = kyberHybridSig
             }
 
-            // Advertise this build's sparse-PQ-ratchet capability (SuiteID 3).
-            // The server persists it (migration 063) and returns it in
-            // PreKeyBundle so peers can negotiate suite-3 sessions.
-            //
-            // Unguarded since 2026-08-30. This sat under `#if os(iOS)` from 2026-07-02, when
-            // macOS reached the core through `EngineAdapter` and could not call this function.
-            // That indirection was retired 2026-07-28; the guard was not, so every macOS device
-            // left the field at proto3's default and told the server it cannot do suite 3.
-            // Nothing reported it: the capability is consumed from the *peer's* bundle, which is
-            // platform-independent, so the desktop negotiated suite 3 as initiator and was
-            // negotiated down as responder — asymmetric, silent, and exactly the divergence that
-            // makes a second device useless as a test instrument.
-            request.supportsPqRatchet = supportsPqRatchet()
+            // `supports_pq_ratchet` is left at its default. Suite 3 is mandatory since PQXDH v2 and
+            // nothing reads the field any more (it is deprecated in the proto).
 
             let response = try await keyClient.uploadPreKeys(
                 request: .init(message: request)
             )
-            // Remember what capability the server now holds — the replenishment
-            // service compares against this to force a re-upload when a build
-            // flips supportsPqRatchet() while the server OTPK count is healthy.
-            UserDefaults.standard.set(request.supportsPqRatchet, forKey: Self.advertisedPqRatchetKey)
             return (classicCount: response.preKeyCount, kyberCount: response.kyberPreKeyCount)
         }
     }
 
-    /// Last `supports_pq_ratchet` value successfully uploaded to the server
-    /// (nil = never uploaded / unknown, e.g. after an app-data reset).
-    static let advertisedPqRatchetKey = "keyservice.advertisedPqRatchet"
-
-    static var lastAdvertisedPqRatchet: Bool? {
-        UserDefaults.standard.object(forKey: advertisedPqRatchetKey) as? Bool
+    private static func kyberSignedUpload(_ key: KyberPrekeyUpload) -> Shared_Proto_Services_V1_KyberSignedPreKeyUpload {
+        var signed = Shared_Proto_Services_V1_KyberSignedPreKeyUpload()
+        signed.keyID = key.keyId
+        signed.publicKey = Data(key.publicKey)
+        signed.signature = Data(key.signature)
+        signed.createdAt = key.createdAt
+        return signed
     }
 
     // MARK: - Get Pre-Key Count
@@ -609,13 +509,13 @@ final class KeyServiceClient: Sendable {
     ///
     /// - Parameters:
     ///   - newClassicKey: New X25519 SPK generated by the Rust core via `rotateSignedPrekey()`
-    ///   - newKyberKey:   New Kyber SPK generated in-memory via `PQCKeyManager.generateKyberSPKInMemory()`
-    ///                    Commit to Keychain only after this call returns successfully.
+    ///   - newKyberKey:   The core's pending Kyber SPK (`beginKyberSpkRotation`). Commit it only
+    ///                    after this call returns successfully.
     @discardableResult
     func rotateSignedPreKey(
         deviceId: String,
         newClassicKey: (keyId: UInt32, publicKey: Data, signature: Data),
-        newKyberKey: (keyId: UInt32, publicKey: Data, signature: Data)? = nil,
+        newKyberKey: KyberPrekeyUpload? = nil,
         reason: Shared_Proto_Services_V1_SignedPreKeyRotationReason = .scheduled,
         // Hybrid (ML-DSA) signatures over the new SPK / Kyber SPK. When provided the server stores
         // them atomically with the rotation, so the published bundle never has a hybrid identity
@@ -640,11 +540,7 @@ final class KeyServiceClient: Sendable {
             }
 
             if let kyberSpk = newKyberKey {
-                var kSigned = Shared_Proto_Services_V1_KyberSignedPreKeyUpload()
-                kSigned.keyID = kyberSpk.keyId
-                kSigned.publicKey = kyberSpk.publicKey
-                kSigned.signature = kyberSpk.signature
-                request.newKyberSignedPreKey = kSigned
+                request.newKyberSignedPreKey = Self.kyberSignedUpload(kyberSpk)
                 if let kyberHybrid = kyberSignedPreKeyHybridSignature, !kyberHybrid.isEmpty {
                     request.kyberSignedPreKeyHybridSignature = kyberHybrid
                 }
@@ -724,55 +620,5 @@ final class KeyServiceClient: Sendable {
                 try? context.save()
             }
         }
-    }
-
-    /// Phase 3 hybrid downgrade protection. Records hybrid capability on a verified bundle and,
-    /// for an Ed25519-only (`.absent`) bundle, reports whether this is a downgrade: the peer was
-    /// previously seen hybrid-capable under the SAME identity key.
-    ///
-    /// **MainActor-only** — same reason as `updateContactKTStatus`.
-    ///
-    /// Returns `true` only when the caller must REJECT the bundle as a downgrade.
-    /// Capability is keyed to `knownIdentityKey`, so a legitimate account reset (new identity key)
-    /// clears the pin instead of false-positiving.
-    @MainActor
-    private static func recordAndCheckHybrid(
-        userId: String,
-        identityKey: Data,
-        outcome: HybridBundleVerifier.Outcome
-    ) -> Bool {
-        let context = PersistenceController.shared.container.viewContext
-        let fetch = User.fetchRequest()
-        fetch.predicate = NSPredicate(format: "id == %@", userId)
-        fetch.fetchLimit = 1
-        guard let user = try? context.fetch(fetch).first else { return false }
-
-        let identityChanged = user.knownIdentityKey != nil && user.knownIdentityKey != identityKey
-        var isDowngrade = false
-
-        switch outcome {
-        case .verified, .degraded:
-            // Pin hybrid capability to this identity. `.degraded` still presents an authentic
-            // (cross-signed) hybrid identity key — the peer IS hybrid-capable, only its SPK-level
-            // attestation is momentarily unavailable — so it must still count against a later
-            // true downgrade to Ed25519-only.
-            user.hybridCapable = true
-            user.knownIdentityKey = identityKey
-        case .absent:
-            if identityChanged {
-                // Legitimate new identity (account reset / new device) — clear the pin, accept.
-                user.hybridCapable = false
-                user.knownIdentityKey = identityKey
-            } else if user.hybridCapable {
-                // Same identity, previously hybrid-capable, now Ed25519-only → downgrade.
-                isDowngrade = true
-            }
-        case .failed:
-            break // caller rejects regardless
-        }
-        if context.hasChanges {
-            try? context.save()
-        }
-        return isDowngrade
     }
 }

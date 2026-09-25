@@ -5,10 +5,10 @@
 //  What the router must do with an orchestrator action list, beyond following its routing verdict.
 //
 //  `handleOrchestratorEvent` returns a SET of instructions, not a single verdict, and the set's
-//  size varies with the message: the core prepends `applyPqContribution` for every incoming X3DH
-//  carrier (non-empty KEM ciphertext) and appends `checkAckInDb` whenever its in-memory ACK cache
-//  misses. Reading that list by position or length is therefore a bug waiting for the first
-//  message that carries both — which is exactly what happened: `actions.count == 1` gated the
+//  size varies with the message: the core appends `checkAckInDb` whenever its in-memory ACK cache
+//  misses, and until PQXDH v2 it also prepended `applyPqContribution` for every incoming X3DH
+//  carrier. Reading that list by position or length is therefore a bug waiting for the first
+//  message that carries two — which is exactly what happened: `actions.count == 1` gated the
 //  `checkAckInDb` round-trip, so a carrier arriving after a restart was ACKed as delivered
 //  without ever being decrypted, and the peer's next message diverged the ratchet.
 //
@@ -19,16 +19,10 @@ import Foundation
 
 /// The instructions `MessageRouter` fulfils itself, recovered from an orchestrator action list.
 ///
-/// Both fields are independent: a list may carry either, both, or neither, in any order, and
-/// alongside any number of actions the generic `SessionActionExecutor` handles.
+/// It may come in any position, alongside any number of actions the generic
+/// `SessionActionExecutor` handles. (There were two until PQXDH v2: the ML-KEM ciphertext of
+/// `applyPqContribution`, which the core now decapsulates itself.)
 struct OrchestratorActionPlan {
-
-    /// ML-KEM ciphertext the core wants decapsulated, from `applyPqContribution`.
-    ///
-    /// The action field is named `kemSs`, but the core passes the CIPHERTEXT — "platform
-    /// decapsulates, feeds ss back" (`orchestrator.rs`). Applying it is the caller's job and
-    /// must happen after the carrier decrypts.
-    let kemCiphertext: Data?
 
     /// Message id whose persisted ACK state the core is asking about, from `checkAckInDb`.
     ///
@@ -37,19 +31,12 @@ struct OrchestratorActionPlan {
     let ackCheckMessageId: String?
 
     init(actions: [CfeAction]) {
-        var kemCiphertext: Data?
         var ackCheckMessageId: String?
         for action in actions {
-            switch action {
-            case .applyPqContribution(_, let kemSs):
-                kemCiphertext = kemSs
-            case .checkAckInDb(let messageId):
+            if case .checkAckInDb(let messageId) = action {
                 ackCheckMessageId = messageId
-            default:
-                break
             }
         }
-        self.kemCiphertext = kemCiphertext
         self.ackCheckMessageId = ackCheckMessageId
     }
 
@@ -94,7 +81,7 @@ struct OrchestratorActionPlan {
 /// What `MessageRouter` does with an orchestrator action list after the ACK round-trip.
 ///
 /// A non-empty list is not automatically a routing verdict: the core prepends/appends
-/// platform chores (`scheduleTimer`, `applyPqContribution`, `persistAck`) around the
+/// platform chores (`scheduleTimer`, `persistAck`) around the
 /// named decision. Reading those chores as "unknown" and falling through to ERROR is
 /// how a cooldown the core had decided became a storm.
 enum IncomingRoutingVerdict: Equatable {

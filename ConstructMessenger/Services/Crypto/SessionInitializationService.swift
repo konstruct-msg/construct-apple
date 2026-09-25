@@ -31,6 +31,12 @@ enum SessionError: Error, LocalizedError, ApplicationLayerError {
     /// otherwise hang.
     case initiationDeferred(decision: String)
 
+    /// The core refused to open the session because the peer's bundle does not carry Kyber keys it
+    /// can trust (`PQ_REQUIRED: <reason>`) — usually a peer still on a build from before PQXDH v2,
+    /// sometimes a key the server served stale or unsigned. No session was created, and a session
+    /// already held was kept.
+    case peerNotPostQuantum(reason: String)
+
     var errorDescription: String? {
         switch self {
         case .staleSPKBundle(let epoch, let knownEpoch):
@@ -45,6 +51,8 @@ enum SessionError: Error, LocalizedError, ApplicationLayerError {
             return "This account no longer exists"
         case .initiationDeferred(let decision):
             return "Session init deferred by the core: \(decision)"
+        case .peerNotPostQuantum:
+            return "Contact's app does not support post-quantum encryption yet — ask them to update the app"
         }
     }
 }
@@ -152,21 +160,14 @@ class SessionInitializationService {
     func initializeSession(
         userId: String,
         bundle: PublicKeyBundleData,
-        deleteExisting: Bool = true,
         allowStale: Bool = false
     ) throws -> Void {
-        // Proactively delete stale session if requested.
-        //
-        // The device is named by the bundle in hand, not by the contact list: this init is about
-        // to open a ratchet with *that* device, so that is the one whose stale session has to go.
-        // Resolving the account instead retired whichever device was pinned — on a multi-device
-        // peer, routinely a healthy session with a device this init never touches.
-        if deleteExisting,
-           let target = SessionAddressing.cryptoIdentity(ofIdentityKey: bundle.identityPublic),
-           CryptoManager.shared.hasSession(for: target) {
-            CryptoManager.shared.archiveSession(for: target, reason: .manualReset)
-            Log.info("Proactively deleted the existing session with \(target.prefix(8))… before initialization.", category: "SessionInit")
-        }
+        // A session already held with this device is not removed first. The init below replaces
+        // it only once the new one is built (`reopenSession`), and keeps it on a refusal — which is
+        // the normal answer while the peer is still on a build from before PQXDH v2. Archiving it
+        // up front, as this did, left the pair with no session at all whenever the init was then
+        // refused. (That was `deleteExisting`, gone with it: a `false` there did not keep the
+        // session either — the layer below archived whatever it found.)
 
         // Epoch replay-attack check: reject bundles where the server's monotonic
         // rotation counter has not advanced beyond what we last saw for this contact.
@@ -188,44 +189,23 @@ class SessionInitializationService {
             throw SessionError.kyberEpochRequired
         }
 
-        let bundleWithSuite = (
-            identityPublic: bundle.identityPublic,
-            signedPrekeyPublic: bundle.signedPrekeyPublic,
-            signature: bundle.signature,
-            verifyingKey: bundle.verifyingKey,
-            suiteId: String(bundle.suiteId)
-        )
-
-        var otpkPublic = bundle.oneTimePreKeyPublic
-        var otpkId = bundle.oneTimePreKeyId
-
         // 3-DH re-init: a prior END_SESSION from this peer signalled it could not reproduce our
         // 4-DH one-time-prekey (otpk-session-init-deadlock lever L2). Drop the classic OTPK and
         // do 3-DH, which the responder can always reproduce from identity + signed prekey —
         // instead of handing it another OTPK it will also reject and looping. Consumed once; a
         // later clean init uses 4-DH again. (The Kyber OTPK is a separate store and is left as-is.)
         let hintPending = SessionReinitHintStore.shared.consumeThreeDHReinit(for: userId)
-        if SessionReducer.nextInitDHMode(forceThreeDHHintPending: hintPending) == .threeDH {
+        let threeDH = SessionReducer.nextInitDHMode(forceThreeDHHintPending: hintPending) == .threeDH
+        if threeDH {
             Log.info("SESSION_STATE[force_3dh_reinit]: \(userId.prefix(8))… — dropping one-time-prekey, using 3-DH", category: "SessionInit")
-            otpkPublic = Data()
-            otpkId = 0
         }
 
         do {
             PerformanceMetrics.shared.start(.sessionInitStart, label: String(userId.prefix(8)))
             try CryptoManager.shared.initializeSession(
                 for: userId,
-                recipientBundle: bundleWithSuite,
-                oneTimePreKeyPublic: otpkPublic,
-                oneTimePreKeyId: otpkId,
-                kyberPreKeyPublic: bundle.kyberPreKeyPublic,
-                kyberOneTimePreKeyPublic: bundle.kyberOneTimePreKeyPublic,
-                kyberOneTimePreKeyId: bundle.kyberOneTimePreKeyId,
-                spkUploadedAt: bundle.spkUploadedAt,
-                spkRotationEpoch: bundle.spkRotationEpoch,
-                kyberSpkUploadedAt: bundle.kyberSpkUploadedAt,
-                kyberSpkRotationEpoch: bundle.kyberSpkRotationEpoch,
-                supportsPqRatchet: bundle.supportsPqRatchet ?? false,
+                bundle: bundle,
+                withoutOneTimePrekey: threeDH,
                 allowStale: allowStale
             )
             PerformanceMetrics.shared.end(.sessionInitStart, endEvent: .sessionInitEnd, label: String(userId.prefix(8)))
@@ -316,7 +296,7 @@ class SessionInitializationService {
     ///
     /// Single-flight is mandatory, not an optimisation. Two runs each fetch a bundle with
     /// `consumeOneTimePrekey: true` (burning two of the peer's OTPKs) and each call
-    /// `initializeSession(deleteExisting: true)`, so the second silently replaces the first's
+    /// `initializeSession`, so the second silently replaces the first's
     /// session. The X3DH carriers already dispatched for run #1 (SESSION_RESET_INIT) then
     /// reference a ratchet we no longer hold, while our own messages continue on run #2 —
     /// the peer establishes from one and receives on the other, and diverges on the very next
@@ -524,7 +504,6 @@ class SessionInitializationService {
             hasSession: CryptoManager.shared.hasSession(for: target.deviceId)
         )
         guard action != .leave else { return .skipped("session exists") }
-        let replaces = action == .replace
         // Per device, not per account: the core ranks **this pair** to decide whether opening now
         // walks into a collision, and for a second device the answer can differ from the pinned
         // one's. `peerInitInFlight` is still account-wide — that store cannot say which device
@@ -544,7 +523,6 @@ class SessionInitializationService {
             try initializeSession(
                 userId: target.deviceId,
                 bundle: target.bundle,
-                deleteExisting: replaces,
                 allowStale: allowStale
             )
             return .opened
@@ -715,7 +693,7 @@ class SessionInitializationService {
             // above deliberately carries none, and a re-key should get full X3DH forward
             // secrecy. Rare and self-throttled (1 h per contact), so the extra RPC is cheap.
             let bundle = try await fetchPublicKeyWithRetry(userId: userId, consumeOneTimePrekey: true)
-            try initializeSession(userId: userId, bundle: bundle, deleteExisting: true)
+            try initializeSession(userId: userId, bundle: bundle)
             Log.info("SESSION_STATE[at_risk_upgraded]: re-keyed to fresh session for \(userId.prefix(8))…", category: "SessionInit")
             await MainActor.run {
                 NotificationCenter.default.post(name: .sessionAtRiskChanged, object: nil, userInfo: ["userId": userId])

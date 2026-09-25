@@ -40,55 +40,29 @@ private final class OrchestratorPeer {
 
     // MARK: Bundle
 
-    typealias Bundle = (identityPublic: [UInt8], signedPrekeyPublic: [UInt8],
-                        signature: [UInt8], verifyingKey: [UInt8], suiteId: UInt16)
+    /// The bundle as the server serves it after PQXDH v2 — see `PQXDHTestBundles`.
+    typealias Bundle = BinaryKeyBundle
 
     func exportBundle() throws -> Bundle {
-        let fields = try core.getRegistrationBundleFields()
-        return (fields.identityPublic, fields.signedPrekeyPublic, fields.signature, fields.verifyingKey, fields.suiteId)
-    }
-
-    private func bundleBytes(from b: Bundle) throws -> BinaryKeyBundle {
-        return BinaryKeyBundle(
-            identityPublic: b.identityPublic, signedPrekeyPublic: b.signedPrekeyPublic,
-            signature: b.signature, verifyingKey: b.verifyingKey,
-            suiteId: b.suiteId, oneTimePrekeyPublic: nil, oneTimePrekeyId: nil,
-            spkUploadedAt: 0, spkRotationEpoch: 0,
-            kyberSpkUploadedAt: 0, kyberSpkRotationEpoch: 0,
-            kyberPreKeyPublic: nil, kyberOneTimePrekeyPublic: nil, kyberOneTimePrekeyId: nil, supportsPqRatchet: false
-        )
+        try core.pqxdhTestBundle()
     }
 
     // MARK: Session init
 
     func initSenderSession(to contactId: String, bundle: Bundle) throws {
-        _ = try core.initSession(contactId: contactId,
-                                 recipientBundle: try bundleBytes(from: bundle))
+        _ = try core.initSession(contactId: contactId, recipientBundle: bundle)
     }
 
     func initReceiverSession(from contactId: String,
                              senderBundle: Bundle,
-                             firstMsg: EncryptedComponents) throws {
-        _ = try core.initReceivingSession(
-            contactId: contactId,
-            recipientBundle: try bundleBytes(from: senderBundle),
-            firstMessage: try firstMsg.toMessageBytes()
-        )
+                             firstMsg: EncryptedMessageComponents) throws {
+        _ = try core.pqxdhTestReceive(from: contactId, senderBundle: senderBundle, first: firstMsg)
     }
 
     // MARK: Low-level encrypt (for session bootstrap)
 
-    func encryptMessage(_ text: String, to contactId: String) throws -> EncryptedComponents {
-        let r = try core.encryptMessage(contactId: contactId, plaintext: Data(text.utf8))
-        return EncryptedComponents(
-            ephemeralPublicKey: r.ephemeralPublicKey,
-            messageNumber: r.messageNumber,
-            content: r.content,
-            oneTimePrekeyId: r.oneTimePrekeyId,
-            suiteId: r.suiteId,
-            pqMessageEpoch: r.pqMessageEpoch,
-            pqRatchetField: r.pqRatchetField
-        )
+    func encryptMessage(_ text: String, to contactId: String) throws -> EncryptedMessageComponents {
+        try core.encryptMessage(contactId: contactId, plaintext: Data(text.utf8))
     }
 
     // MARK: handleEvent wrappers
@@ -140,30 +114,6 @@ private final class OrchestratorPeer {
     }
 }
 
-// MARK: - EncryptedComponents
-
-private struct EncryptedComponents {
-    let ephemeralPublicKey: [UInt8]
-    let messageNumber: UInt32
-    let content: [UInt8]
-    let oneTimePrekeyId: UInt32
-    let suiteId: UInt16
-    let pqMessageEpoch: UInt32
-    let pqRatchetField: [UInt8]
-
-    func toMessageBytes() -> BinaryFirstMessage {
-        return BinaryFirstMessage(
-            ephemeralPublicKey: ephemeralPublicKey,
-            messageNumber: messageNumber,
-            content: content,
-            oneTimePrekeyId: oneTimePrekeyId,
-            suiteId: suiteId,
-            pqMessageEpoch: pqMessageEpoch,
-            pqRatchetField: pqRatchetField
-        )
-    }
-}
-
 // MARK: - Errors
 
 private enum PeerError: Error, CustomStringConvertible {
@@ -182,7 +132,7 @@ private enum PeerError: Error, CustomStringConvertible {
 
 // MARK: - Helpers
 
-/// Bootstraps a two-party session using the classic path (initSession / initReceivingSession).
+/// Bootstraps a two-party PQXDH v2 session (initSession / the responder init from the wire payload).
 /// After this returns, both peers have an active DR session and can exchange messages via handleEvent.
 private func establishSession(alice: OrchestratorPeer,
                               bob: OrchestratorPeer) throws {
@@ -343,31 +293,13 @@ final class CallSignalE2EETests: XCTestCase {
         // Bob → Alice: reply after session init (Bob has been the receiver so far)
         let msg1 = try bob.encryptMessage("hello alice", to: alice.userId)
         let wireMsg1 = try WirePayloadCoder.encode(
-            MessageCryptoService.EncryptedMessageComponents(
-                ephemeralPublicKey: Data(msg1.ephemeralPublicKey),
-                messageNumber: msg1.messageNumber,
-                content: Data(msg1.content),
-                suiteId: 1,
-                oneTimePreKeyId: msg1.oneTimePrekeyId,
-                storageKey: Data(),
-                pqMessageEpoch: 0,
-                pqRatchetField: Data()
-            ))
+            MessageCryptoService.EncryptedMessageComponents(from: msg1))
         _ = try alice.receiveWirePayload(wireMsg1, from: bob.userId, contentType: 1)
 
         // Alice → Bob: normal message
         let aliceMsg = try alice.encryptMessage("hi bob, going to call you", to: bob.userId)
         let wireAliceMsg = try WirePayloadCoder.encode(
-            MessageCryptoService.EncryptedMessageComponents(
-                ephemeralPublicKey: Data(aliceMsg.ephemeralPublicKey),
-                messageNumber: aliceMsg.messageNumber,
-                content: Data(aliceMsg.content),
-                suiteId: 1,
-                oneTimePreKeyId: aliceMsg.oneTimePrekeyId,
-                storageKey: Data(),
-                pqMessageEpoch: 0,
-                pqRatchetField: Data()
-            ))
+            MessageCryptoService.EncryptedMessageComponents(from: aliceMsg))
         _ = try bob.receiveWirePayload(wireAliceMsg, from: alice.userId, contentType: 1)
 
         // Now Alice sends a call signal — should still work after text exchange
