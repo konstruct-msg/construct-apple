@@ -90,11 +90,16 @@ final class CryptoSessionInitializationService {
             let ageDays = Double(ageSecs) / 86400.0
             Log.error("Peer SPK stale for \(userId.prefix(8))… — age ≈ \(String(format: "%.1f", ageDays))d", category: "CryptoManager")
             throw SessionError.peerSPKStale(ageDays: ageDays)
-        } catch CryptoError.SessionInitializationFailed(let message) where message.hasPrefix("PQ_REQUIRED") {
+        } catch CryptoError.SessionInitializationFailed(let message) where message.contains("PQ_REQUIRED") {
             // Nothing was created, and a held session is still there. The reason names what the
             // bundle lacked; the peer is usually on a build from before PQXDH v2.
-            Log.error("SESSION_STATE[pq_required]: \(contactId.prefix(8))… — \(message)", category: "SessionInit")
-            throw SessionError.peerNotPostQuantum(reason: message)
+            //
+            // `contains`, not `hasPrefix`: `CryptoError` is a flat UniFFI error, so `message` is
+            // the core's whole Display text — "Session initialization failed: PQ_REQUIRED: …".
+            // The reason handed on starts at the code.
+            let reason = message.range(of: "PQ_REQUIRED").map { String(message[$0.lowerBound...]) } ?? message
+            Log.error("SESSION_STATE[pq_required]: \(contactId.prefix(8))… — \(reason)", category: "SessionInit")
+            throw SessionError.peerNotPostQuantum(reason: reason)
         } catch {
             Log.error("Rust core initSession failed: \(error)", category: "CryptoManager")
             throw CryptoManagerError.sessionInitializationFailed

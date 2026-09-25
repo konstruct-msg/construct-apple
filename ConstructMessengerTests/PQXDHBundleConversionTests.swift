@@ -75,21 +75,25 @@ final class PQXDHBundleConversionTests: XCTestCase {
     /// The same bundle opens a PQXDH v2 session end to end: the initiator through both
     /// conversions, the responder from the packed first message.
     func testAConvertedBundleOpensAV2Session() throws {
-        let alice = try freshCore("alice-\(UUID().uuidString)")
-        let bob = try freshCore("bob-\(UUID().uuidString)")
+        // Each side names the other by the id that side's core was created with: the AD binds
+        // both local ids, so a session opened under any other name cannot decrypt.
+        let aliceId = "alice-\(UUID().uuidString)"
+        let bobId = "bob-\(UUID().uuidString)"
+        let alice = try freshCore(aliceId)
+        let bob = try freshCore(bobId)
         let vk = Data(try bob.getRegistrationBundleFields().verifyingKey)
-        let bundle = KeyServiceClient.bundleData(try served(by: bob), userId: "bob", verifyingKey: vk)
+        let bundle = KeyServiceClient.bundleData(try served(by: bob), userId: bobId, verifyingKey: vk)
 
-        _ = try alice.initSession(contactId: "bob", recipientBundle: bundle.binaryKeyBundle())
-        let first = try alice.encryptMessage(contactId: "bob", plaintext: Data("hello".utf8))
+        _ = try alice.initSession(contactId: bobId, recipientBundle: bundle.binaryKeyBundle())
+        let first = try alice.encryptMessage(contactId: bobId, plaintext: Data("hello".utf8))
         XCTAssertEqual(first.kemCiphertext.count, 1568, "the first message carries the ML-KEM-1024 ciphertext")
         XCTAssertEqual(first.kyberPrekeyId, bundle.kyberOneTimePreKeyId, "the one-time key is preferred")
 
-        let result = try bob.pqxdhTestReceive(from: "alice", senderBundle: try alice.pqxdhTestBundle(), first: first)
+        let result = try bob.pqxdhTestReceive(from: aliceId, senderBundle: try alice.pqxdhTestBundle(), first: first)
         XCTAssertEqual(result.decryptedMessage, Array("hello".utf8))
         XCTAssertNotNil(result.kyberPrekeys, "the used one-time key was burned: the blob to persist comes back")
-        XCTAssertEqual(alice.getSessionHealth(contactId: "bob")?.pqHandshake, .initialV2)
-        XCTAssertEqual(bob.getSessionHealth(contactId: "alice")?.pqHandshake, .initialV2)
+        XCTAssertEqual(alice.getSessionHealth(contactId: bobId)?.pqHandshake, .initialV2)
+        XCTAssertEqual(bob.getSessionHealth(contactId: aliceId)?.pqHandshake, .initialV2)
     }
 
     /// A 3-DH re-init drops the classic one-time key only; the Kyber one is a separate store.

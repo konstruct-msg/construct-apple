@@ -250,8 +250,9 @@ final class SessionInitAddressesTheDeviceTests: XCTestCase {
     func testRefusedReopenKeepsTheHeldSessionAndSaysWhy() {
         let core = RecordingCore()
         core.sessionExistsFor = [bundleDevice]
+        // Shaped as the core really sends it: a flat UniFFI error carries the whole Display text.
         core.reopenRefusal = CryptoError.SessionInitializationFailed(
-            message: "PQ_REQUIRED: bundle has no hybrid identity key"
+            message: "Session initialization failed: PQ_REQUIRED: bundle has no hybrid identity key"
         )
         var archived: [String] = []
         var saved: [String] = []
