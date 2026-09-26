@@ -4,8 +4,9 @@ import CoreData
 
 /// §B.4: the session heartbeat is addressed to an account and sealed like everything else.
 ///
-/// It was neither. `sendSessionHeartbeat` is reached from `getAllSessionContactIds()` and from
-/// the core's `.sendHeartbeat` action, and both hand it a `CryptoDeviceId`. That id went straight
+/// It was neither. `sendSessionHeartbeat` is reached from `getAllSessionContactIds()` (and was, until
+/// the core's heartbeat was removed on 2026-09-26, from its `.sendHeartbeat` action), and both
+/// hand it a `CryptoDeviceId`. That id went straight
 /// into `Envelope.recipient`, where the server parses a UUID: it got none, `fetch_recipient_device_ids`
 /// returned an empty list, and the envelope was written to a stream keyed by 32 hex characters
 /// that nothing subscribes to. Accepted, acknowledged, delivered nowhere.

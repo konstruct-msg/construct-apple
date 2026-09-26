@@ -83,7 +83,6 @@ final class SessionActionExecutor {
     /// decrypted message is plaintext.
     private static func routerBoundName(_ action: CfeAction) -> String? {
         switch action {
-        case .persistMessage: return "persistMessage"
         case .fetchPublicKeyBundle: return "fetchPublicKeyBundle"
         case .sessionHealNeeded: return "sessionHealNeeded"
         case .sendEndSession: return "sendEndSession"
@@ -124,11 +123,6 @@ final class SessionActionExecutor {
             CryptoManager.shared.acceptSessionTerminated(contactId: contactId, archiveBytes: archiveBytes)
             CryptoManager.shared.saveOrchestratorStateCFE()
 
-        case .persistMessage:
-            // Rust tells us to persist a message it decrypted — currently
-            // handled inline in MessageRouter.handleResolvedMessage.
-            break  // scaffold
-
         // ── ACK ───────────────────────────────────────────────────
         case .persistAck(let messageId, _):
             // The core means "platform must durable-persist this record" (`ack_store.rs:109`).
@@ -161,9 +155,6 @@ final class SessionActionExecutor {
             OutboundSessionService.shared.cancelRustTimer(timerId: timerId)
 
         // ── Network / transport ───────────────────────────────────
-        case .sendHeartbeat(let contactId):
-            Task { await OutboundSessionService.shared.sendSessionHeartbeat(to: contactId) }
-
         case .notifyLinkedDevicesOfSessionReset(let contactId):
             Task { await MultiDeviceSendCoordinator.shared.broadcastSessionReset(contactId: contactId) }
 

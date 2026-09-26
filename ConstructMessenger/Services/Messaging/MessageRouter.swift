@@ -1147,7 +1147,6 @@ final class MessageRouter {
             case .fetchPublicKeyBundle:          return "fetchPublicKeyBundle"
             case .saveToSecureStore:             return "saveToSecureStore"
             case .notifyNewMessage:              return "notifyNewMessage"
-            case .persistMessage:                return "persistMessage"
             case .persistAck:                    return "persistAck"
             case .pruneAckStore:                 return "pruneAckStore"
             case .checkAckInDb:                  return "checkAckInDb"

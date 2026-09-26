@@ -70,8 +70,6 @@ extension CryptoManager {
             return "timerFired id=\(timerId.prefix(24))…"
         case .ackDbResult(let messageId, let isProcessed):
             return "ackDbResult msgId=\(messageId.prefix(8))… processed=\(isProcessed)"
-        case .activeChatChanged(let contactId, let isActive):
-            return "activeChatChanged contactId=\(contactId.prefix(8))… active=\(isActive)"
         case .heartbeatReceived(let contactId, let messageId, let data, let msgNum):
             return "heartbeatReceived from=\(contactId.prefix(8))… msgId=\(messageId.prefix(8))… msgNum=\(msgNum) data=\(data.count)B"
         }

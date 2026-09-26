@@ -196,12 +196,6 @@ struct DesktopChatView: View {
                 viewModel.onViewAppear()
                 loadContactKTStatus()
                 refreshSessionAtRiskState()
-                if let contactId = viewModel.chat.otherUser?.id, !contactId.isEmpty {
-                    _ = try? CryptoManager.shared.handleOrchestratorEvent(
-                        .activeChatChanged(contactId: contactId, isActive: true),
-                        tag: "chat_active_true"
-                    )
-                }
             }
             .onReceive(NotificationCenter.default.publisher(for: .contactKeyChanged)) { note in
                 guard let changedId = note.userInfo?["userId"] as? String,
@@ -211,13 +205,6 @@ struct DesktopChatView: View {
             .onDisappear {
                 replyFocusPeekTask?.cancel()
                 replyFocusPeekTask = nil
-                guard ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] != "1" else { return }
-                if let contactId = viewModel.chat.otherUser?.id, !contactId.isEmpty {
-                    _ = try? CryptoManager.shared.handleOrchestratorEvent(
-                        .activeChatChanged(contactId: contactId, isActive: false),
-                        tag: "chat_active_false"
-                    )
-                }
             }
             .alert(callManager.lastError ?? "", isPresented: Binding(
                 get: { callManager.lastError != nil },
