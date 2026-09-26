@@ -1500,6 +1500,8 @@ public protocol OrchestratorCoreProtocol: AnyObject, Sendable {
     
     func oneTimePrekeyCount()  -> UInt32
     
+    func openReceiving(claimedDevice: String, bundles: [BinaryKeyBundle]) throws  -> ReceivingOpenResult
+    
     /**
      * Every (carrier, bundle) pair worth attempting when opening a receiving session, in order.
      * Both dimensions vary: fixing the carrier and rotating only the bundle finds the session
@@ -2030,6 +2032,16 @@ open func oneTimePrekeyCount() -> UInt32  {
     return try!  FfiConverterUInt32.lift(try! rustCall() {
     uniffi_construct_core_fn_method_orchestratorcore_one_time_prekey_count(
             self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+open func openReceiving(claimedDevice: String, bundles: [BinaryKeyBundle])throws  -> ReceivingOpenResult  {
+    return try  FfiConverterTypeReceivingOpenResult_lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_method_orchestratorcore_open_receiving(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(claimedDevice),
+        FfiConverterSequenceTypeBinaryKeyBundle.lower(bundles),$0
     )
 })
 }
@@ -4222,6 +4234,78 @@ public func FfiConverterTypeReceivingInitCarrier_lift(_ buf: RustBuffer) throws 
 #endif
 public func FfiConverterTypeReceivingInitCarrier_lower(_ value: ReceivingInitCarrier) -> RustBuffer {
     return FfiConverterTypeReceivingInitCarrier.lower(value)
+}
+
+
+public struct ReceivingOpenResult: Equatable, Hashable {
+    public var openedDevice: String?
+    public var openerMessageId: String?
+    public var actions: [CfeAction]
+    public var triedMessageIds: [String]
+    public var droppedMessageIds: [String]
+    public var lastError: String?
+    public var kyberPrekeys: [UInt8]?
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(openedDevice: String?, openerMessageId: String?, actions: [CfeAction], triedMessageIds: [String], droppedMessageIds: [String], lastError: String?, kyberPrekeys: [UInt8]?) {
+        self.openedDevice = openedDevice
+        self.openerMessageId = openerMessageId
+        self.actions = actions
+        self.triedMessageIds = triedMessageIds
+        self.droppedMessageIds = droppedMessageIds
+        self.lastError = lastError
+        self.kyberPrekeys = kyberPrekeys
+    }
+
+    
+}
+
+#if compiler(>=6)
+extension ReceivingOpenResult: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeReceivingOpenResult: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ReceivingOpenResult {
+        return
+            try ReceivingOpenResult(
+                openedDevice: FfiConverterOptionString.read(from: &buf), 
+                openerMessageId: FfiConverterOptionString.read(from: &buf), 
+                actions: FfiConverterSequenceTypeCfeAction.read(from: &buf), 
+                triedMessageIds: FfiConverterSequenceString.read(from: &buf), 
+                droppedMessageIds: FfiConverterSequenceString.read(from: &buf), 
+                lastError: FfiConverterOptionString.read(from: &buf), 
+                kyberPrekeys: FfiConverterOptionSequenceUInt8.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: ReceivingOpenResult, into buf: inout [UInt8]) {
+        FfiConverterOptionString.write(value.openedDevice, into: &buf)
+        FfiConverterOptionString.write(value.openerMessageId, into: &buf)
+        FfiConverterSequenceTypeCfeAction.write(value.actions, into: &buf)
+        FfiConverterSequenceString.write(value.triedMessageIds, into: &buf)
+        FfiConverterSequenceString.write(value.droppedMessageIds, into: &buf)
+        FfiConverterOptionString.write(value.lastError, into: &buf)
+        FfiConverterOptionSequenceUInt8.write(value.kyberPrekeys, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeReceivingOpenResult_lift(_ buf: RustBuffer) throws -> ReceivingOpenResult {
+    return try FfiConverterTypeReceivingOpenResult.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeReceivingOpenResult_lower(_ value: ReceivingOpenResult) -> RustBuffer {
+    return FfiConverterTypeReceivingOpenResult.lower(value)
 }
 
 
@@ -7316,6 +7400,31 @@ fileprivate struct FfiConverterSequenceString: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterSequenceTypeBinaryKeyBundle: FfiConverterRustBuffer {
+    typealias SwiftType = [BinaryKeyBundle]
+
+    public static func write(_ value: [BinaryKeyBundle], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeBinaryKeyBundle.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [BinaryKeyBundle] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [BinaryKeyBundle]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeBinaryKeyBundle.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterSequenceTypeDeliveryTarget: FfiConverterRustBuffer {
     typealias SwiftType = [DeliveryTarget]
 
@@ -8721,6 +8830,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_orchestratorcore_one_time_prekey_count() != 21478) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_orchestratorcore_open_receiving() != 54921) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_orchestratorcore_plan_receiving_init() != 11391) {
