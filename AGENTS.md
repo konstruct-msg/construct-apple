@@ -191,8 +191,11 @@ core, and let the core decide which of them the operation touches. Building the 
 did the translation here is exactly the inversion that produced `MultiDeviceSendCoordinator`.
 
 Current known exceptions, with their destination — do not treat them as settled placements:
-the account-keyed `sessionPhases` / confirm-gate / heal walk are the leftover of a coordinator that
-still decides; they belong in the core machine (`decisions/session-is-one-state-machine.md`).
+the account-keyed `sessionPhases` and the per-scope init locks are the leftover of a coordinator
+that still decides; they belong in the core machine (`decisions/session-is-one-state-machine.md`).
+The confirm-gate hold, the queue of messages waiting for a session and the receiving walk moved
+there on 2026-09-26 — this app keeps envelopes and fetches bundles, and must not grow a second
+queue beside the core's (`decisions/first-contact-queue-keyed-by-claimed-device.md`).
 `PeerDevice` is a legitimate local store but is not the authority on a peer's device set. See
 `decisions/a-peer-is-a-set-of-devices.md`.
 
