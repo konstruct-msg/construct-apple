@@ -5,6 +5,7 @@
 //  Naming the sending device on a send that still addresses an account.
 //
 
+import CoreData
 import Foundation
 
 /// The wire id a send travels under when its caller addressed an account rather than a device.
