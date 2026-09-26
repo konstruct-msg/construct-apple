@@ -70,6 +70,8 @@ struct OrchestratorActionPlan {
                 return .heldPendingAck(contactId: contactId)
             case .messageQueuedPendingInit(let contactId, let queuedCount):
                 return .messageQueuedPendingInit(contactId: contactId, queuedCount: queuedCount)
+            case .duplicateDropped(let messageId):
+                return .duplicate(messageId: messageId)
             default:
                 continue
             }
@@ -96,6 +98,10 @@ enum IncomingRoutingVerdict: Equatable {
     /// acknowledged, so the failure is our re-init's own consequence. Buffer and replay.
     case heldPendingAck(contactId: String)
     case messageQueuedPendingInit(contactId: String, queuedCount: UInt32)
+    /// Already handled — ACK cache, our DB, or a ratchet position whose key is used. Named by the
+    /// core since 2026-09-26 (`DuplicateDropped`); before, it was an empty list that also meant
+    /// "no decision", and after a DB answer of "not processed" it held the stream cursor.
+    case duplicate(messageId: String)
     case none
 }
 

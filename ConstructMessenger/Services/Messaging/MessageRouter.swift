@@ -38,6 +38,81 @@ final class MessageRouter {
     private let chunkReassembler = ChunkedMessageReassembler.shared
     private var processingMessageIds: Set<String> = []
 
+    /// Envelopes of the messages the core is holding in **its** queue (`messageQueuedPendingInit`),
+    /// by message id.
+    ///
+    /// The core owns that queue: which messages wait, in what order, and when they are opened
+    /// (`SessionInitCompleted`, `NetworkReconnected`). What it cannot own is the envelope — the
+    /// account, the conversation, the server order key — because none of that crosses the seam;
+    /// its drain answers with `messageDecrypted(contact, messageId, plaintext)` and nothing else.
+    /// Until 2026-09-26 this router kept no envelope, so a message the core opened in a drain had
+    /// nowhere to be saved: it was thrown away with the rest of the answer, and the redelivery
+    /// that followed found its key already used — a duplicate. This is the platform's half of
+    /// that queue: the data only the platform has, keyed by the id the core names it by.
+    ///
+    /// In memory, like the core's queue: after a restart both are empty, the cursor was held
+    /// (`.deferred`), and the server redelivers. Bounded by `coreQueuedTTL`, because a message
+    /// the core drops or fails in a drain names no id this map could be cleared by.
+    private var coreQueuedEnvelopes: [String: CoreQueuedEnvelope] = [:]
+    private struct CoreQueuedEnvelope {
+        let message: ChatMessage
+        let otherUserId: String
+        let heldAt: Date
+    }
+    private static let coreQueuedTTL: TimeInterval = 600
+
+    private func holdEnvelopeForCoreQueue(_ message: ChatMessage, otherUserId: String) {
+        let now = Date()
+        coreQueuedEnvelopes = coreQueuedEnvelopes.filter { now.timeIntervalSince($0.value.heldAt) < Self.coreQueuedTTL }
+        coreQueuedEnvelopes[message.id] = CoreQueuedEnvelope(message: message, otherUserId: otherUserId, heldAt: now)
+    }
+
+    /// Carry out the core's answer to an event that drains its queue — `SessionInitCompleted`,
+    /// `NetworkReconnected`.
+    ///
+    /// A `messageDecrypted` for a held envelope is saved exactly as a live decrypt is (same
+    /// `executeRustActions`), its durable-ACK obligation settled and its held cursor released.
+    /// Everything else goes through `executeOffRouter`, which logs any router-bound action it has
+    /// no envelope for. A message that failed in the drain was not consumed — a failed decrypt
+    /// restores the ratchet — so its cursor stays held and the server's redelivery takes it
+    /// through the live path, heal and all.
+    func resolveCoreDrain(_ actions: [CfeAction], site: String) {
+        guard let context = viewContext else {
+            SessionActionExecutor.shared.executeOffRouter(actions, site: site)
+            return
+        }
+        SessionActionExecutor.shared.executeOffRouter(actions, site: site) { [coreQueuedEnvelopes] action in
+            if case .messageDecrypted(_, let messageId, _) = action {
+                return coreQueuedEnvelopes[messageId] != nil
+            }
+            return false
+        }
+        for action in actions {
+            guard case .messageDecrypted(_, let messageId, _) = action,
+                  let held = coreQueuedEnvelopes.removeValue(forKey: messageId) else { continue }
+            do {
+                let (chat, _) = try findOrCreateChat(for: held.otherUserId, in: context)
+                _ = executeRustActions([action], for: held.message, chat: chat, otherUserId: held.otherUserId, in: context)
+                if PersistentACKStore.shared.settleDurableWrite(messageId, in: context) {
+                    Log.error(
+                        "PersistAck unmet for \(messageId.prefix(8))… after a core drain (\(site)) — saved, but nothing durable remembers handling it",
+                        category: "MessageRouter"
+                    )
+                }
+                StreamCursorTracker.shared.resolve(messageId: messageId)
+                Log.info(
+                    "SESSION_STATE[core_drain_saved]: \(messageId.prefix(8))… from \(held.otherUserId.prefix(8))… opened by the core's drain (\(site))",
+                    category: "SessionInit"
+                )
+            } catch {
+                Log.error(
+                    "Core drain (\(site)) opened \(messageId.prefix(8))… but its chat could not be found or created: \(error)",
+                    category: "MessageRouter"
+                )
+            }
+        }
+    }
+
     /// Opens the SealedInner at the STEALTH boundary in `routeIncomingMessage`. Injected rather
     /// than reached through `StealthSenderService.shared` so the post-unseal routing decisions
     /// are drivable without Keychain identity keys or a genuine sealed box.
@@ -310,6 +385,10 @@ final class MessageRouter {
             streamOutcome = .skip
             return
         }
+        // A copy the core is still holding came round again (the server redelivers a held
+        // cursor). This pass now owns it; if the core queues it once more, the envelope is kept
+        // again below.
+        coreQueuedEnvelopes.removeValue(forKey: message.id)
 
         // A per-device copy from a peer, addressed to one of our *siblings*.
         //
@@ -1116,11 +1195,26 @@ final class MessageRouter {
             streamOutcome = .deferred
             if isNewChat { context.delete(chat) }
             return
-        case .messageQueuedPendingInit(let contactId, let queuedCount):
-            // Held inside the core behind an in-flight init, drained on SessionInitCompleted.
-            // Nothing is required here — but the watermark must not move past a message the
-            // core has not finished with.
+        case .duplicate:
+            // Handled before: in the core's ACK cache, in our DB, or — since the ratchet names
+            // it — a position whose key a first-message init or an earlier copy already used.
+            // Recorded as processed so the next copy stops at our own ACK check; the cursor
+            // moves past it (`.durable`). Held, it would come back as this same duplicate on
+            // every redelivery.
             SessionActionExecutor.shared.execute(actions)
+            PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId, in: context)
+            Log.debug(
+                "Duplicate named by the core — \(message.id.prefix(8))… msgNum=\(message.messageNumber), recorded and dropped",
+                category: "MessageRouter"
+            )
+            if isNewChat { context.delete(chat) }
+            return
+        case .messageQueuedPendingInit(let contactId, let queuedCount):
+            // Held inside the core, drained on SessionInitCompleted or NetworkReconnected. The
+            // watermark must not move past a message the core has not finished with, and the
+            // envelope has to be kept: the drain names the message by id only (`resolveCoreDrain`).
+            SessionActionExecutor.shared.execute(actions)
+            holdEnvelopeForCoreQueue(message, otherUserId: otherUserId)
             Log.info(
                 "SESSION_STATE[queued_in_core]: \(message.id.prefix(8))… held behind session init for \(contactId.prefix(8))… (\(queuedCount) waiting)",
                 category: "SessionInit"
@@ -1153,6 +1247,7 @@ final class MessageRouter {
             case .endSessionSuppressed:          return "endSessionSuppressed"
             case .healSuppressed:                return "healSuppressed"
             case .messageQueuedPendingInit:      return "messageQueuedPendingInit"
+            case .duplicateDropped:              return "duplicateDropped"
             case .scheduleTimer:                 return "scheduleTimer"
             case .cancelTimer:                   return "cancelTimer"
             default:                             return "unknown(\(action))"

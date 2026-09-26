@@ -370,6 +370,7 @@ extension MessageStreamManager {
                 }
                 // Data plane is up — router must see this (clears direct fail streak).
                 self.reportStreamOpenedToRouter(transportLabel: label, metricsLabel: metricsLabel)
+                self.onStreamConnected?()
             }
         }
 

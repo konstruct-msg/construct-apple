@@ -178,6 +178,9 @@ final class MessageStreamManager {
     var onDeliveryReceipt: (([String]) -> Void)?
     /// Called when server sends KEY_SYNC (contentType=22) — triggers X3DH re-init for userId.
     var onKeySyncReceived: ((String) -> Void)?
+    /// Called on the main actor each time a stream is accepted (first connect and every
+    /// reconnect) — the moment the core is told `NetworkReconnected`.
+    var onStreamConnected: (() -> Void)?
 
     // MARK: - Private State
 

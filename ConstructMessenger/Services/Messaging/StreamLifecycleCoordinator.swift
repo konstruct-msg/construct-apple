@@ -631,6 +631,9 @@ final class StreamLifecycleCoordinator {
         streamManager.onKeySyncReceived = { [weak self] userId in
             self?.sessionCoordinator.handleKeySyncRequest(for: userId)
         }
+        streamManager.onStreamConnected = { [weak self] in
+            self?.sessionCoordinator.networkReconnected()
+        }
         sessionCoordinator.onE2EDeliveryReceiptDecrypted = { [weak self] messageIds in
             self?.handleDeliveryReceipts(messageIds, from: .peerE2E)
         }

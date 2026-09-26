@@ -1427,11 +1427,10 @@ final class SessionCoordinator: MessageRouterDelegate {
                         contactId: resolvedContact,
                         sessionData: Data(sessionBytes)
                     )
-                    // Persists the session and drains the core's own pending queue. A message
-                    // decrypted in that drain is router-bound and would be lost here; it is
-                    // logged if it ever comes, rather than thrown away with the rest.
+                    // Persists the session and drains the core's own pending queue; what the drain
+                    // opens is saved against the envelope the router kept for it.
                     let actions = try CryptoManager.shared.handleOrchestratorEvent(event, tag: "session_init_completed_responder")
-                    SessionActionExecutor.shared.executeOffRouter(actions, site: "session_init_completed_responder")
+                    messageRouter.resolveCoreDrain(actions, site: "session_init_completed_responder")
                 } catch {
                     Log.error("SESSION_STATE[init_completed_finalize_failed]: \(error.localizedDescription) for \(userId.prefix(8))…", category: "SessionInit")
                     Task { [weak self] in
@@ -1690,6 +1689,23 @@ final class SessionCoordinator: MessageRouterDelegate {
     /// be a gate a fast peer's `session_ready` slips past, which is the race the synchronous
     /// raise at the call sites was written for. So the account is held first and the devices
     /// replace it here.
+    /// Tell the core the stream is back, and carry out what it does about it.
+    ///
+    /// The core answers `NetworkReconnected` by draining its own queue — messages that arrived
+    /// while it held no session — and by arming its GC sweep. Nothing sent this event until
+    /// 2026-09-26: the enum case existed, the handler existed, and no platform call reached it
+    /// on iOS. It could not be wired while a drained message had nowhere to be saved; the router
+    /// now keeps the envelope for every message the core queues (`resolveCoreDrain`).
+    func networkReconnected() {
+        guard CryptoManager.shared.isCoreReady else { return }
+        do {
+            let actions = try CryptoManager.shared.handleOrchestratorEvent(.networkReconnected, tag: "network_reconnected")
+            messageRouter.resolveCoreDrain(actions, site: "network_reconnected")
+        } catch {
+            Log.error("NetworkReconnected not delivered to the core: \(error)", category: "SessionCoordinator")
+        }
+    }
+
     private func announceRaisedFor(_ devices: [String]) {
         for device in devices {
             // The answer is the `open_confirm:` alarm — the re-send and the give-up both hang off
