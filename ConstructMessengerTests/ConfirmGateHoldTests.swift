@@ -76,43 +76,10 @@ final class ConfirmGateHoldTests: XCTestCase {
             source.contains("case .heldPendingAck"),
             "a decision with no reader is a message the core buffered and the platform dropped"
         )
-        // The one fold left is the *replay*, which is account-shaped because the buffer is: a
-        // drain while any device's gate is still up would re-hold every message and read like a
-        // flush. One use, and it is in `replayHeldMessages`.
-        XCTAssertEqual(
-            source.components(separatedBy: "awaitsAcknowledgementFromAnyDevice").count - 1, 1,
-            "the fold belongs to the replay; the decision is per device and lives in the core"
-        )
-    }
-
-    /// And the stamp a held message carries names the ratchet that refused it.
-    ///
-    /// It stamped `pinnedDevice(ofPeer:)` until 2026-09-23, because the gate was account-keyed
-    /// and nothing here knew which ratchet had refused. For a peer whose pinned device is not the
-    /// sender, that reads an epoch that never moves — so a superseded init replays into a heal
-    /// that archives a healthy session, which is the 2026-08-05 build-579 cascade, and a live one
-    /// can be dropped instead. An epoch is per ratchet, so both ends of the comparison are.
-    ///
-    /// Mutation: stamp `pinnedDevice(ofPeer: userId)` again — this reddens.
-    func testTheHeldStampNamesTheRatchetThatRefusedIt() {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("ConstructMessenger/Services/Messaging/MessageRouter.swift")
-        guard let source = try? String(contentsOf: url, encoding: .utf8) else {
-            return XCTFail("MessageRouter.swift must be readable from the test bundle")
-        }
-        guard let hold = source.range(of: "private func holdUntilConfirmResolves") else {
-            return XCTFail("the hold is gone — if it moved, this test moves with it")
-        }
-        let body = source[hold.lowerBound...].prefix(2_200)
-        XCTAssertTrue(
-            body.contains("sessionEpoch(for: heldAgainstDevice)"),
-            "the core names the ratchet on .heldPendingAck; the stamp must be read from it"
-        )
+        // No fold at all since 2026-09-26: the replay that needed one is the core's.
         XCTAssertFalse(
-            body.contains("pinnedDevice(ofPeer:"),
-            "the pinned device is the offline answer, not the one that refused this message"
+            source.contains("awaitsAcknowledgementFromAnyDevice("),
+            "the decision and the release are per device and live in the core"
         )
     }
 
@@ -161,69 +128,7 @@ final class ConfirmGateHoldTests: XCTestCase {
         )
     }
 
-    /// The consequence at replay: with the classifier's verdict, the acknowledgement is re-routed
-    /// rather than acknowledged-and-dropped. Under `messageNumber == 0` this returned `.superseded`
-    /// — 19 times in the 2026-08-21 run, each one final.
-    ///
-    /// Mutation: change the `kind == .handshake` guard to `kind != .midRatchet`.
-    func testAFreshChainRestartIsReplayedNotSuperseded() {
-        XCTAssertEqual(
-            SessionReducer.heldReplayDisposition(
-                heldAgainst: Self.heldAgainst,
-                current: Self.replacement,
-                kind: .midSessionLeftover
-            ),
-            .replay,
-            "the epoch moved, but this is not a handshake, so it is not this branch's to drop"
-        )
-    }
-
-    // MARK: - The hold must be bounded and replayable
-
-    /// The buffer the hold writes into is the same per-peer queue the session-init path uses, so
-    /// its cap is what bounds the hold. Beyond it a message really is dropped — the one branch in
-    /// the path that must stay loud (`confirmHoldOverflow`).
-    @MainActor
-    func testHoldBufferAcceptsUntilItsCapThenRefuses() {
-        let queue = PendingSessionQueue()
-        let peer = "7574fdec-ca31-44ac-9d43-0e6e870fe4d5"
-        var accepted = 0
-        for i in 0..<120 where queue.enqueue(Self.message(id: "m\(i)"), for: peer) {
-            accepted += 1
-        }
-        XCTAssertEqual(accepted, 100, "the cap is what makes the hold bounded rather than a leak")
-        XCTAssertFalse(
-            queue.enqueue(Self.message(id: "overflow"), for: peer),
-            "refusal is what the ERROR + confirmHoldOverflow branch keys off"
-        )
-    }
-
-    /// A replay drains: the same message cannot be replayed twice, and the peer's buffer is empty
-    /// afterwards. Without this the gate would re-hold on every release and read like a flush.
-    @MainActor
-    func testReplayDrainsTheBuffer() {
-        let queue = PendingSessionQueue()
-        let peer = "7574fdec-ca31-44ac-9d43-0e6e870fe4d5"
-        queue.enqueue(Self.message(id: "head"), for: peer)
-        queue.enqueue(Self.message(id: "tail"), for: peer)
-
-        let replayed = queue.drain(for: peer)
-
-        XCTAssertEqual(replayed.map(\.id), ["head", "tail"], "order is the ratchet's order")
-        XCTAssertEqual(queue.count(for: peer), 0)
-        XCTAssertTrue(queue.drain(for: peer).isEmpty, "a second release must not re-deliver")
-    }
-
-    /// Holds are per-peer: a gate up for one contact must not delay another's traffic.
-    @MainActor
-    func testHoldsAreIndependentPerPeer() {
-        let queue = PendingSessionQueue()
-        queue.enqueue(Self.message(id: "a"), for: "peer-a")
-        queue.enqueue(Self.message(id: "b"), for: "peer-b")
-
-        XCTAssertEqual(queue.drain(for: "peer-a").map(\.id), ["a"])
-        XCTAssertEqual(queue.count(for: "peer-b"), 1, "draining one peer must not touch another")
-    }
+    // MARK: - The pending queue is per device where a device is named
 
     /// A teardown or SESSION_RESET_INIT from one device of the account drops what *that* device
     /// queued and leaves the sibling's handshake for the bundle fetch already in flight. Stand,
@@ -343,95 +248,57 @@ final class ConfirmGateHoldTests: XCTestCase {
     // MARK: - Not covered here, on purpose
     //
     // That a held message is never `markProcessed`'d — the property that turned this delay into a
-    // permanent loss — is asserted by construction (`holdUntilConfirmResolves` has no ACK call)
+    // permanent loss — is asserted by construction (the `.heldPendingAck` branch has no ACK call)
     // and not by a test: reaching it means standing up MessageRouter with CryptoManager, Core Data
     // and three singletons, and a test that cannot fail against a mutation is worse than none
     // (decisions/ios-semantic-divergence-signals, amendment 2026-08-04). The device-log check is
     // `grep confirm_hold` with no matching `Skipping already-processed` for the same id.
 
-    // MARK: - The replay must know which session it was held against (build 579 regression)
+    // MARK: - The hold is the core's; this side keeps the envelope and does what it is told
+    //
+    // Which messages are held, against which epoch, and which of them are superseded moved to
+    // `construct-core` 2026-09-26 (`Orchestrator::release_confirm_holds`, tested there with the
+    // build-579 and 2026-08-21 cases). What is left to get wrong here is not carrying out the
+    // release, so that is what these check.
 
-    private static let heldAgainst = SessionEpoch(rawValue: "e51d7a03bc9426f8107d3e5ab84c92f6")!
-    private static let replacement = SessionEpoch(rawValue: "77b93c1ae02f56d4b8319ca7e0d452f1")!
+    private func source(_ path: String) -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent(path)
+        return (try? String(contentsOf: url, encoding: .utf8)) ?? ""
+    }
 
-    /// The defect, stated: a peer init held while session A was live, replayed after session B
-    /// replaced it, cannot decrypt — and the failure drove `heal` → `manual_reset`, deleting the
-    /// healthy B. Three times in one hour on 2026-08-05.
-    func testPeerInitHeldAgainstAnOlderSessionIsSuperseded() {
-        XCTAssertEqual(
-            SessionReducer.heldReplayDisposition(
-                heldAgainst: Self.heldAgainst,
-                current: Self.replacement,
-                kind: .handshake
-            ),
-            .superseded
+    /// The release can ride on any event's answer, and several router branches never hand their
+    /// answer to the executor — so it is carried out where every answer passes.
+    ///
+    /// Mutation: drop `dispatchHeldReleases(actions)` from `handleOrchestratorEvent` — this reddens.
+    func testEveryAnswerOfTheCoreCarriesItsReleasesOut() {
+        let crypto = source("ConstructMessenger/Security/CryptoManager.swift")
+        guard let handle = crypto.range(of: "func handleOrchestratorEvent(") else {
+            return XCTFail("the one entry to the core is gone — if it moved, this moves with it")
+        }
+        XCTAssertTrue(
+            crypto[handle.lowerBound...].prefix(1_200).contains("dispatchHeldReleases(actions)"),
+            "a release dropped with an answer is a message held until its envelope expires"
+        )
+        XCTAssertTrue(
+            source("ConstructMessenger/Services/Session/SessionCoordinator.swift")
+                .contains("CryptoManager.shared.onHeldReleased = "),
+            "and something must be listening"
         )
     }
 
-    /// Held against the same session that is still current: nothing replaced it, so it replays.
-    func testPeerInitHeldAgainstTheCurrentSessionReplays() {
-        XCTAssertEqual(
-            SessionReducer.heldReplayDisposition(
-                heldAgainst: Self.heldAgainst,
-                current: Self.heldAgainst,
-                kind: .handshake
-            ),
-            .replay
-        )
-    }
-
-    /// No session now — this init may be the very handshake that establishes one. Dropping it
-    /// here would be the discard that §1d forbids.
-    func testPeerInitWithNoCurrentSessionAlwaysReplays() {
-        XCTAssertEqual(
-            SessionReducer.heldReplayDisposition(
-                heldAgainst: Self.heldAgainst,
-                current: nil,
-                kind: .handshake
-            ),
-            .replay
-        )
-    }
-
-    /// Held while we had no session at all, and one exists now: it was established after this init
-    /// was set aside, so the handshake this init belongs to has already concluded.
-    func testPeerInitHeldWithNoSessionIsSupersededOnceOneExists() {
-        XCTAssertEqual(
-            SessionReducer.heldReplayDisposition(
-                heldAgainst: nil,
-                current: Self.replacement,
-                kind: .handshake
-            ),
-            .superseded
-        )
-    }
-
-    /// A payload is never dropped on age. Losing user content on a guess is the failure the hold
-    /// exists to prevent; an undecryptable payload is the healing path's question, not this one's.
-    func testPayloadAlwaysReplaysHoweverStale() {
-        XCTAssertEqual(
-            SessionReducer.heldReplayDisposition(
-                heldAgainst: Self.heldAgainst,
-                current: Self.replacement,
-                kind: .midRatchet
-            ),
-            .replay
-        )
-    }
-
-    /// The comparison is equality, not ordering. Under `establishedAt` the predicate asked whether
-    /// the current session was *newer* than the held one, which quietly replayed anything that read
-    /// as older — including a replacement whose stamp landed in the same second. Two different
-    /// epochs are two different sessions, in either direction.
-    func testAnyDifferentEpochIsSuperseded() {
-        XCTAssertEqual(
-            SessionReducer.heldReplayDisposition(
-                heldAgainst: Self.replacement,
-                current: Self.heldAgainst,
-                kind: .handshake
-            ),
-            .superseded,
-            "there is no 'older' epoch to make an exception for"
-        )
+    /// The router keeps no replay rule and no buffer of its own beside the core's.
+    ///
+    /// Mutation: bring back `replayHeldMessages` or the per-message epoch stamp — this reddens.
+    func testTheRouterKeepsNoHoldBufferOfItsOwn() {
+        let router = source("ConstructMessenger/Services/Messaging/MessageRouter.swift")
+        XCTAssertFalse(router.isEmpty)
+        for carrier in ["func replayHeldMessages", "var heldAgainst", "heldReplayDisposition("] {
+            XCTAssertFalse(router.contains(carrier), "\(carrier) is a second hold beside the core's")
+        }
+        XCTAssertTrue(router.contains("case .replayHeld"), "the release has a reader")
+        XCTAssertTrue(router.contains("case .heldSuperseded"), "and so does the drop")
     }
 }

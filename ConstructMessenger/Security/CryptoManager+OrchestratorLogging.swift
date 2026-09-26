@@ -94,6 +94,8 @@ extension CryptoManager {
             case .healAttemptAllowed(_, let attempt): labels.insert("heal_attempt[\(attempt)]")
             case .healExhausted:            labels.insert("heal_exhausted")
             case .heldPendingAck:           labels.insert("held_pending_ack")
+            case .replayHeld:               labels.insert("replay_held")
+            case .heldSuperseded:           labels.insert("held_superseded")
             case .openingGaveUp:            labels.insert("opening_gave_up")
             case .applyResetInit:           labels.insert("apply_reset_init")
             case .resetInitSuperseded(_, let redelivery):

@@ -108,6 +108,9 @@ final class SessionActionExecutor {
             break
         case .markMessageDelivered:
             break
+        case .replayHeld, .heldSuperseded:
+            // Carried out where every answer passes, `CryptoManager.dispatchHeldReleases`.
+            break
         case .duplicateDropped:
             // A routing verdict; MessageRouter records the message as processed and moves the
             // cursor past it. Off the router (a drain) it concerns a message already handled.

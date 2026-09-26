@@ -4918,6 +4918,10 @@ public enum CfeAction: Equatable, Hashable {
      */
     case heldPendingAck(contactId: String
     )
+    case replayHeld(messageId: String
+    )
+    case heldSuperseded(messageId: String
+    )
     /**
      * The heal budget allows this attempt; `attempt` is its 1-based index.
      */
@@ -5084,94 +5088,100 @@ public struct FfiConverterTypeCfeAction: FfiConverterRustBuffer {
         case 8: return .heldPendingAck(contactId: try FfiConverterString.read(from: &buf)
         )
         
-        case 9: return .healAttemptAllowed(contactId: try FfiConverterString.read(from: &buf), attempt: try FfiConverterUInt32.read(from: &buf)
+        case 9: return .replayHeld(messageId: try FfiConverterString.read(from: &buf)
         )
         
-        case 10: return .healExhausted(contactId: try FfiConverterString.read(from: &buf)
+        case 10: return .heldSuperseded(messageId: try FfiConverterString.read(from: &buf)
         )
         
-        case 11: return .endSessionSuppressed(contactId: try FfiConverterString.read(from: &buf), retryAfterMs: try FfiConverterUInt64.read(from: &buf)
+        case 11: return .healAttemptAllowed(contactId: try FfiConverterString.read(from: &buf), attempt: try FfiConverterUInt32.read(from: &buf)
         )
         
-        case 12: return .endSessionNotNeeded(contactId: try FfiConverterString.read(from: &buf)
+        case 12: return .healExhausted(contactId: try FfiConverterString.read(from: &buf)
         )
         
-        case 13: return .applyResetInit(contactId: try FfiConverterString.read(from: &buf)
+        case 13: return .endSessionSuppressed(contactId: try FfiConverterString.read(from: &buf), retryAfterMs: try FfiConverterUInt64.read(from: &buf)
         )
         
-        case 14: return .resetInitSuperseded(contactId: try FfiConverterString.read(from: &buf), redelivery: try FfiConverterBool.read(from: &buf)
+        case 14: return .endSessionNotNeeded(contactId: try FfiConverterString.read(from: &buf)
         )
         
-        case 15: return .openSession(contactId: try FfiConverterString.read(from: &buf)
+        case 15: return .applyResetInit(contactId: try FfiConverterString.read(from: &buf)
         )
         
-        case 16: return .openDeferred(contactId: try FfiConverterString.read(from: &buf), retryAfterMs: try FfiConverterUInt64.read(from: &buf)
+        case 16: return .resetInitSuperseded(contactId: try FfiConverterString.read(from: &buf), redelivery: try FfiConverterBool.read(from: &buf)
         )
         
-        case 17: return .openNotNeeded(contactId: try FfiConverterString.read(from: &buf)
+        case 17: return .openSession(contactId: try FfiConverterString.read(from: &buf)
         )
         
-        case 18: return .resendSri(contactId: try FfiConverterString.read(from: &buf)
+        case 18: return .openDeferred(contactId: try FfiConverterString.read(from: &buf), retryAfterMs: try FfiConverterUInt64.read(from: &buf)
         )
         
-        case 19: return .openingGaveUp(contactId: try FfiConverterString.read(from: &buf)
+        case 19: return .openNotNeeded(contactId: try FfiConverterString.read(from: &buf)
         )
         
-        case 20: return .messageQueuedPendingInit(contactId: try FfiConverterString.read(from: &buf), queuedCount: try FfiConverterUInt32.read(from: &buf)
+        case 20: return .resendSri(contactId: try FfiConverterString.read(from: &buf)
         )
         
-        case 21: return .saveToSecureStore(slot: try FfiConverterTypeCfeSecureStoreSlot.read(from: &buf), data: try FfiConverterData.read(from: &buf)
+        case 21: return .openingGaveUp(contactId: try FfiConverterString.read(from: &buf)
         )
         
-        case 22: return .persistAck(messageId: try FfiConverterString.read(from: &buf), timestamp: try FfiConverterUInt64.read(from: &buf)
+        case 22: return .messageQueuedPendingInit(contactId: try FfiConverterString.read(from: &buf), queuedCount: try FfiConverterUInt32.read(from: &buf)
         )
         
-        case 23: return .pruneAckStore(cutoffTs: try FfiConverterUInt64.read(from: &buf)
+        case 23: return .saveToSecureStore(slot: try FfiConverterTypeCfeSecureStoreSlot.read(from: &buf), data: try FfiConverterData.read(from: &buf)
         )
         
-        case 24: return .markMessageDelivered(messageId: try FfiConverterString.read(from: &buf)
+        case 24: return .persistAck(messageId: try FfiConverterString.read(from: &buf), timestamp: try FfiConverterUInt64.read(from: &buf)
         )
         
-        case 25: return .duplicateDropped(messageId: try FfiConverterString.read(from: &buf)
+        case 25: return .pruneAckStore(cutoffTs: try FfiConverterUInt64.read(from: &buf)
         )
         
-        case 26: return .fetchPublicKeyBundle(userId: try FfiConverterString.read(from: &buf)
+        case 26: return .markMessageDelivered(messageId: try FfiConverterString.read(from: &buf)
         )
         
-        case 27: return .sendEncryptedMessage(to: try FfiConverterString.read(from: &buf), payload: try FfiConverterData.read(from: &buf), messageId: try FfiConverterString.read(from: &buf), contentType: try FfiConverterUInt8.read(from: &buf)
+        case 27: return .duplicateDropped(messageId: try FfiConverterString.read(from: &buf)
         )
         
-        case 28: return .sendReceipt(messageId: try FfiConverterString.read(from: &buf), status: try FfiConverterString.read(from: &buf)
+        case 28: return .fetchPublicKeyBundle(userId: try FfiConverterString.read(from: &buf)
         )
         
-        case 29: return .sendEndSession(contactId: try FfiConverterString.read(from: &buf)
+        case 29: return .sendEncryptedMessage(to: try FfiConverterString.read(from: &buf), payload: try FfiConverterData.read(from: &buf), messageId: try FfiConverterString.read(from: &buf), contentType: try FfiConverterUInt8.read(from: &buf)
         )
         
-        case 30: return .notifyNewMessage(chatId: try FfiConverterString.read(from: &buf), preview: try FfiConverterString.read(from: &buf)
+        case 30: return .sendReceipt(messageId: try FfiConverterString.read(from: &buf), status: try FfiConverterString.read(from: &buf)
         )
         
-        case 31: return .notifySessionCreated(contactId: try FfiConverterString.read(from: &buf)
+        case 31: return .sendEndSession(contactId: try FfiConverterString.read(from: &buf)
         )
         
-        case 32: return .notifyError(code: try FfiConverterString.read(from: &buf), message: try FfiConverterString.read(from: &buf)
+        case 32: return .notifyNewMessage(chatId: try FfiConverterString.read(from: &buf), preview: try FfiConverterString.read(from: &buf)
         )
         
-        case 33: return .scheduleTimer(timerId: try FfiConverterString.read(from: &buf), delayMs: try FfiConverterUInt64.read(from: &buf)
+        case 33: return .notifySessionCreated(contactId: try FfiConverterString.read(from: &buf)
         )
         
-        case 34: return .cancelTimer(timerId: try FfiConverterString.read(from: &buf)
+        case 34: return .notifyError(code: try FfiConverterString.read(from: &buf), message: try FfiConverterString.read(from: &buf)
         )
         
-        case 35: return .callSignalDecrypted(contactId: try FfiConverterString.read(from: &buf), messageId: try FfiConverterString.read(from: &buf), protoBytes: try FfiConverterData.read(from: &buf)
+        case 35: return .scheduleTimer(timerId: try FfiConverterString.read(from: &buf), delayMs: try FfiConverterUInt64.read(from: &buf)
         )
         
-        case 36: return .checkAckInDb(messageId: try FfiConverterString.read(from: &buf)
+        case 36: return .cancelTimer(timerId: try FfiConverterString.read(from: &buf)
         )
         
-        case 37: return .notifyLinkedDevicesOfSessionReset(contactId: try FfiConverterString.read(from: &buf)
+        case 37: return .callSignalDecrypted(contactId: try FfiConverterString.read(from: &buf), messageId: try FfiConverterString.read(from: &buf), protoBytes: try FfiConverterData.read(from: &buf)
         )
         
-        case 38: return .sessionTerminated(contactId: try FfiConverterString.read(from: &buf), archiveBytes: try FfiConverterData.read(from: &buf)
+        case 38: return .checkAckInDb(messageId: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 39: return .notifyLinkedDevicesOfSessionReset(contactId: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 40: return .sessionTerminated(contactId: try FfiConverterString.read(from: &buf), archiveBytes: try FfiConverterData.read(from: &buf)
         )
         
         default: throw UniffiInternalError.unexpectedEnumCase
@@ -5229,105 +5239,115 @@ public struct FfiConverterTypeCfeAction: FfiConverterRustBuffer {
             FfiConverterString.write(contactId, into: &buf)
             
         
-        case let .healAttemptAllowed(contactId,attempt):
+        case let .replayHeld(messageId):
             writeInt(&buf, Int32(9))
+            FfiConverterString.write(messageId, into: &buf)
+            
+        
+        case let .heldSuperseded(messageId):
+            writeInt(&buf, Int32(10))
+            FfiConverterString.write(messageId, into: &buf)
+            
+        
+        case let .healAttemptAllowed(contactId,attempt):
+            writeInt(&buf, Int32(11))
             FfiConverterString.write(contactId, into: &buf)
             FfiConverterUInt32.write(attempt, into: &buf)
             
         
         case let .healExhausted(contactId):
-            writeInt(&buf, Int32(10))
+            writeInt(&buf, Int32(12))
             FfiConverterString.write(contactId, into: &buf)
             
         
         case let .endSessionSuppressed(contactId,retryAfterMs):
-            writeInt(&buf, Int32(11))
+            writeInt(&buf, Int32(13))
             FfiConverterString.write(contactId, into: &buf)
             FfiConverterUInt64.write(retryAfterMs, into: &buf)
             
         
         case let .endSessionNotNeeded(contactId):
-            writeInt(&buf, Int32(12))
+            writeInt(&buf, Int32(14))
             FfiConverterString.write(contactId, into: &buf)
             
         
         case let .applyResetInit(contactId):
-            writeInt(&buf, Int32(13))
+            writeInt(&buf, Int32(15))
             FfiConverterString.write(contactId, into: &buf)
             
         
         case let .resetInitSuperseded(contactId,redelivery):
-            writeInt(&buf, Int32(14))
+            writeInt(&buf, Int32(16))
             FfiConverterString.write(contactId, into: &buf)
             FfiConverterBool.write(redelivery, into: &buf)
             
         
         case let .openSession(contactId):
-            writeInt(&buf, Int32(15))
+            writeInt(&buf, Int32(17))
             FfiConverterString.write(contactId, into: &buf)
             
         
         case let .openDeferred(contactId,retryAfterMs):
-            writeInt(&buf, Int32(16))
+            writeInt(&buf, Int32(18))
             FfiConverterString.write(contactId, into: &buf)
             FfiConverterUInt64.write(retryAfterMs, into: &buf)
             
         
         case let .openNotNeeded(contactId):
-            writeInt(&buf, Int32(17))
-            FfiConverterString.write(contactId, into: &buf)
-            
-        
-        case let .resendSri(contactId):
-            writeInt(&buf, Int32(18))
-            FfiConverterString.write(contactId, into: &buf)
-            
-        
-        case let .openingGaveUp(contactId):
             writeInt(&buf, Int32(19))
             FfiConverterString.write(contactId, into: &buf)
             
         
-        case let .messageQueuedPendingInit(contactId,queuedCount):
+        case let .resendSri(contactId):
             writeInt(&buf, Int32(20))
+            FfiConverterString.write(contactId, into: &buf)
+            
+        
+        case let .openingGaveUp(contactId):
+            writeInt(&buf, Int32(21))
+            FfiConverterString.write(contactId, into: &buf)
+            
+        
+        case let .messageQueuedPendingInit(contactId,queuedCount):
+            writeInt(&buf, Int32(22))
             FfiConverterString.write(contactId, into: &buf)
             FfiConverterUInt32.write(queuedCount, into: &buf)
             
         
         case let .saveToSecureStore(slot,data):
-            writeInt(&buf, Int32(21))
+            writeInt(&buf, Int32(23))
             FfiConverterTypeCfeSecureStoreSlot.write(slot, into: &buf)
             FfiConverterData.write(data, into: &buf)
             
         
         case let .persistAck(messageId,timestamp):
-            writeInt(&buf, Int32(22))
+            writeInt(&buf, Int32(24))
             FfiConverterString.write(messageId, into: &buf)
             FfiConverterUInt64.write(timestamp, into: &buf)
             
         
         case let .pruneAckStore(cutoffTs):
-            writeInt(&buf, Int32(23))
+            writeInt(&buf, Int32(25))
             FfiConverterUInt64.write(cutoffTs, into: &buf)
             
         
         case let .markMessageDelivered(messageId):
-            writeInt(&buf, Int32(24))
+            writeInt(&buf, Int32(26))
             FfiConverterString.write(messageId, into: &buf)
             
         
         case let .duplicateDropped(messageId):
-            writeInt(&buf, Int32(25))
+            writeInt(&buf, Int32(27))
             FfiConverterString.write(messageId, into: &buf)
             
         
         case let .fetchPublicKeyBundle(userId):
-            writeInt(&buf, Int32(26))
+            writeInt(&buf, Int32(28))
             FfiConverterString.write(userId, into: &buf)
             
         
         case let .sendEncryptedMessage(to,payload,messageId,contentType):
-            writeInt(&buf, Int32(27))
+            writeInt(&buf, Int32(29))
             FfiConverterString.write(to, into: &buf)
             FfiConverterData.write(payload, into: &buf)
             FfiConverterString.write(messageId, into: &buf)
@@ -5335,63 +5355,63 @@ public struct FfiConverterTypeCfeAction: FfiConverterRustBuffer {
             
         
         case let .sendReceipt(messageId,status):
-            writeInt(&buf, Int32(28))
+            writeInt(&buf, Int32(30))
             FfiConverterString.write(messageId, into: &buf)
             FfiConverterString.write(status, into: &buf)
             
         
         case let .sendEndSession(contactId):
-            writeInt(&buf, Int32(29))
+            writeInt(&buf, Int32(31))
             FfiConverterString.write(contactId, into: &buf)
             
         
         case let .notifyNewMessage(chatId,preview):
-            writeInt(&buf, Int32(30))
+            writeInt(&buf, Int32(32))
             FfiConverterString.write(chatId, into: &buf)
             FfiConverterString.write(preview, into: &buf)
             
         
         case let .notifySessionCreated(contactId):
-            writeInt(&buf, Int32(31))
+            writeInt(&buf, Int32(33))
             FfiConverterString.write(contactId, into: &buf)
             
         
         case let .notifyError(code,message):
-            writeInt(&buf, Int32(32))
+            writeInt(&buf, Int32(34))
             FfiConverterString.write(code, into: &buf)
             FfiConverterString.write(message, into: &buf)
             
         
         case let .scheduleTimer(timerId,delayMs):
-            writeInt(&buf, Int32(33))
+            writeInt(&buf, Int32(35))
             FfiConverterString.write(timerId, into: &buf)
             FfiConverterUInt64.write(delayMs, into: &buf)
             
         
         case let .cancelTimer(timerId):
-            writeInt(&buf, Int32(34))
+            writeInt(&buf, Int32(36))
             FfiConverterString.write(timerId, into: &buf)
             
         
         case let .callSignalDecrypted(contactId,messageId,protoBytes):
-            writeInt(&buf, Int32(35))
+            writeInt(&buf, Int32(37))
             FfiConverterString.write(contactId, into: &buf)
             FfiConverterString.write(messageId, into: &buf)
             FfiConverterData.write(protoBytes, into: &buf)
             
         
         case let .checkAckInDb(messageId):
-            writeInt(&buf, Int32(36))
+            writeInt(&buf, Int32(38))
             FfiConverterString.write(messageId, into: &buf)
             
         
         case let .notifyLinkedDevicesOfSessionReset(contactId):
-            writeInt(&buf, Int32(37))
+            writeInt(&buf, Int32(39))
             FfiConverterString.write(contactId, into: &buf)
             
         
         case let .sessionTerminated(contactId,archiveBytes):
-            writeInt(&buf, Int32(38))
+            writeInt(&buf, Int32(40))
             FfiConverterString.write(contactId, into: &buf)
             FfiConverterData.write(archiveBytes, into: &buf)
             

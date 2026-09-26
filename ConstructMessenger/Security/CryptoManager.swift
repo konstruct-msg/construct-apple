@@ -515,7 +515,34 @@ class CryptoManager {
 
         let actions = try core.handleEvent(event: event)
         logOrchestratorEvent(event, actions: actions, tag: tag)
+        dispatchHeldReleases(actions)
         return actions
+    }
+
+    /// Carries out `replayHeld` / `heldSuperseded`. Set by `SessionCoordinator` to the router.
+    var onHeldReleased: (([CfeAction]) -> Void)?
+
+    /// The core releases what its confirm gate held at the end of **every** event, so the release
+    /// can ride on any answer — an incoming message's, a timer's, a `peerAcked`'s. Carried out
+    /// here, the one place every answer passes, rather than at each call site: several router
+    /// branches never hand their answer to the executor, and a release dropped there is a message
+    /// held until its envelope expires.
+    ///
+    /// On the next main-queue turn, so it runs outside `coreLock` and after the caller has finished
+    /// with the answer it is part of.
+    private func dispatchHeldReleases(_ actions: [CfeAction]) {
+        let releases = actions.filter {
+            switch $0 {
+            case .replayHeld, .heldSuperseded: return true
+            default: return false
+            }
+        }
+        guard !releases.isEmpty else { return }
+        guard let onHeldReleased else {
+            Log.error("\(releases.count) held message(s) released with no router to replay them", category: "CryptoOrchestrator")
+            return
+        }
+        DispatchQueue.main.async { onHeldReleased(releases) }
     }
 
     // MARK: - Locked Core Operation Wrappers

@@ -203,114 +203,49 @@ final class MessageRouter {
 
     // MARK: - Tie-break confirm hold
 
-    /// Hold `message` until the tie-break confirm gate for `userId` resolves — peer ack or
-    /// watchdog give-up, both of which call `replayHeldMessages(for:in:)`.
+    /// Carry out what the core hands back from its confirm-gate hold — `ReplayHeld` and
+    /// `HeldSuperseded`, from whichever event's answer they rode on.
     ///
-    /// Returns the cursor disposition, and deliberately never marks the message processed: a held
-    /// message must stay redeliverable. Giving that up is what turned a decrypt failure inside the
-    /// confirm window into permanent loss rather than a delay.
-    private func holdUntilConfirmResolves(
-        _ message: ChatMessage,
-        from userId: String,
-        heldAgainstDevice: String,
-        reason: String
-    ) -> StreamCursorTracker.Outcome {
-        if pendingQueue.contains(messageId: message.id, for: userId) { return .deferred }
-        guard pendingQueue.enqueue(message, for: userId) else {
-            // Cap reached (100/peer). Now it really is a drop, so say so at ERROR — the one
-            // branch in this path where a message is lost on purpose.
-            Log.error("SESSION_STATE[confirm_hold_overflow]: buffer full for \(userId.prefix(8))… — dropping \(message.id.prefix(8))… (\(reason))", category: "MessageRouter")
-            PerformanceMetrics.shared.record(.confirmHoldOverflow, label: reason)
-            return .durable
-        }
-        // Stamp the session this was held *against*. Without it the replay cannot tell an init
-        // that is still live from one a later handshake has already replaced — see
-        // SessionReducer.heldReplayDisposition.
-        //
-        // The **ratchet that could not read it**, which the core names on `.heldPendingAck`.
-        // Until 2026-09-23 this stamped the pinned device, because the gate was account-keyed and
-        // nothing here knew which ratchet had refused; a peer whose pinned device was not the
-        // sender then had its handshakes compared against an epoch that never moved, so a genuinely
-        // superseded init replayed and a live one could be dropped. An epoch is per ratchet and so
-        // is this.
-        heldAgainst[message.id] = HeldStamp(
-            device: heldAgainstDevice,
-            epoch: CryptoManager.shared.sessionEpoch(for: heldAgainstDevice)
-        )
-        Log.info("SESSION_STATE[confirm_hold]: holding msgNum=\(message.messageNumber) from \(userId.prefix(8))… (\(reason)) — buffer \(pendingQueue.count(for: userId))", category: "MessageRouter")
-        PerformanceMetrics.shared.record(.confirmHold, label: reason)
-        return .deferred
-    }
-
-    /// The ratchet a held message was set aside against: the device whose session refused it, and
-    /// that session's epoch at the moment of the hold.
+    /// The hold is the core's since 2026-09-26: which messages wait, against which ratchet epoch,
+    /// and when the wait ends. Before that this router kept the buffer (`PendingSessionQueue`,
+    /// account-keyed), a stamp per message (`heldAgainst`), and its own replay rule, beside a gate
+    /// the core decided per device — two halves of one decision in two places, and the release
+    /// ran only from the exits this side knew of. What stays here is the envelope, kept like any
+    /// other the core has not finished with (`coreQueuedEnvelopes`).
     ///
-    /// Both halves are needed at replay. The epoch alone cannot be re-read without knowing which
-    /// device to read it from, and the buffer that carries the message is per **account** — one
-    /// peer, several ratchets — so the device cannot be recovered from the queue it came out of.
-    private struct HeldStamp {
-        let device: String
-        let epoch: SessionEpoch?
-    }
-
-    /// Keyed by message id. Cleared as the buffer drains; a held message that never returns takes
-    /// its entry with it through the overflow path.
-    private var heldAgainst: [String: HeldStamp] = [:]
-
-    /// Re-route everything held behind the tie-break confirm gate for `userId`.
-    ///
-    /// Only meaningful once the gate is down: with it still up every message would be re-held and
-    /// the drain would be a no-op that read like a flush, so the gate state is asserted here rather
-    /// than trusted from the call site.
-    func replayHeldMessages(for userId: String, in context: NSManagedObjectContext) {
-        guard !CryptoManager.shared.awaitsAcknowledgementFromAnyDevice(ofPeer: userId) else {
-            let held = pendingQueue.count(for: userId)
-            if held > 0 {
-                Log.info("SESSION_STATE[confirm_replay_skipped]: gate still up for \(userId.prefix(8))… — \(held) message(s) stay held", category: "MessageRouter")
-            }
-            return
-        }
-        let held = pendingQueue.drain(for: userId)
-        guard !held.isEmpty else { return }
-        var replayed = 0
-        var superseded = 0
-        for message in held {
-            // Read back from the same ratchet it was stamped against, so the comparison is
-            // like for like. One account's buffer can hold messages from several devices, and a
-            // single `current` read here was the account-shaped half of the same defect.
-            let stamp = heldAgainst.removeValue(forKey: message.id)
-            let current = stamp.flatMap { CryptoManager.shared.sessionEpoch(for: $0.device) }
-            switch SessionReducer.heldReplayDisposition(
-                heldAgainst: stamp?.epoch ?? nil,
-                current: current,
-                kind: SessionReducer.receivingInitKind(
-                    messageNumber: message.messageNumber,
-                    oneTimePreKeyId: message.oneTimePreKeyId,
-                    kemCiphertextBytes: message.kemCiphertext.count,
-                    pqMessageEpoch: message.pqMessageEpoch,
-                    isSessionResetInit: message.isSessionResetInit
+    /// Reached from `CryptoManager.handleOrchestratorEvent` on the next main-queue turn, never
+    /// inside the caller's own handling of the answer, so a replay cannot re-enter a routing pass.
+    func performHeldReleases(_ actions: [CfeAction]) {
+        guard let context = viewContext else { return }
+        for action in actions {
+            switch action {
+            case .replayHeld(let messageId):
+                guard let held = coreQueuedEnvelopes.removeValue(forKey: messageId) else {
+                    // Redelivered while it waited: the redelivery's own pass took the envelope
+                    // and is routing it now.
+                    Log.debug("Held \(messageId.prefix(8))… released with no envelope — its redelivery owns it", category: "MessageRouter")
+                    continue
+                }
+                Log.info("SESSION_STATE[confirm_replay]: re-routing \(messageId.prefix(8))… from \(held.otherUserId.prefix(8))…", category: "MessageRouter")
+                routeIncomingMessage(held.message, in: context)
+            case .heldSuperseded(let messageId):
+                // Acknowledge: it will never decrypt, and unacked the server redelivers it
+                // forever — the amplifier behind the receipt storm. The one branch of the hold
+                // that ends a message's life, so it is logged by id.
+                let held = coreQueuedEnvelopes.removeValue(forKey: messageId)
+                Log.info(
+                    "SESSION_STATE[confirm_superseded]: dropping \(messageId.prefix(8))… — a handshake for a ratchet that was replaced while it waited",
+                    category: "MessageRouter"
                 )
-            ) {
-            case .replay:
-                replayed += 1
-                routeIncomingMessage(message, in: context)
-            case .superseded:
-                // Acknowledge: it will never decrypt, and leaving it unacked means the server
-                // redelivers it forever — the amplifier behind the receipt storm. Dropping it
-                // silently is what it must NOT do, hence the id on this line: this is the only
-                // branch in the confirm gate that ends a message's life, and on 2026-08-21 it ended
-                // 19 of them under a predicate that had no business naming a handshake.
-                superseded += 1
-                Log.info("SESSION_STATE[confirm_superseded]: dropping \(message.id.prefix(8))… (msgNum=\(message.messageNumber) otpk=\(message.oneTimePreKeyId) kem=\(message.kemCiphertext.count)B epoch=\(message.pqMessageEpoch)) — handshake for a session that no longer exists", category: "MessageRouter")
-                PersistentACKStore.shared.markProcessed(message.id, senderId: userId, in: context)
-                StreamCursorTracker.shared.resolve(messageId: message.id)
+                if let held {
+                    PersistentACKStore.shared.markProcessed(messageId, senderId: held.otherUserId, in: context)
+                }
+                StreamCursorTracker.shared.resolve(messageId: messageId)
                 PerformanceMetrics.shared.record(.confirmReplaySuperseded, label: "handshake")
+            default:
+                continue
             }
         }
-        Log.info(
-            "SESSION_STATE[confirm_replay]: \(replayed) re-routed, \(superseded) superseded of \(held.count) held from \(userId.prefix(8))…",
-            category: "MessageRouter"
-        )
     }
 
     /// Whether a redelivery can be dropped without unsealing it.
@@ -1093,16 +1028,15 @@ final class MessageRouter {
             // 2026-08-04 a user's first message after a re-init died exactly that way, held at
             // `sent` on one side and never rendered on the other.
             //
-            // The decision is per device and the buffer is per account, and that is not a
-            // disagreement: what replays it is `releaseConfirmGate`, which flushes a peer. The
-            // decision no longer folds, which is the half that was wrong.
+            // Per device, decided and held in the core; see `performHeldReleases`.
             Log.info("SESSION_STATE[held_pending_ack]: msgNum=\(message.messageNumber) from \(otherUserId.prefix(8))… held behind our unacked SESSION_RESET_INIT to \(heldAgainstDevice.prefix(8))…", category: "SessionInit")
-            streamOutcome = holdUntilConfirmResolves(
-                message,
-                from: otherUserId,
-                heldAgainstDevice: heldAgainstDevice,
-                reason: "pending_confirm"
-            )
+            // The core keeps the hold and hands it back (`performHeldReleases`); the envelope is
+            // ours to keep until then. Never `markProcessed` — a held message must stay
+            // redeliverable, and giving that up is what turned a decrypt failure inside the
+            // confirm window into permanent loss rather than a delay.
+            holdEnvelopeForCoreQueue(message, otherUserId: otherUserId)
+            PerformanceMetrics.shared.record(.confirmHold, label: "pending_confirm")
+            streamOutcome = .deferred
             if isNewChat { context.delete(chat) }
             return
         case .sessionHealNeeded(let divergedDevice, let role):
@@ -1248,6 +1182,8 @@ final class MessageRouter {
             case .healSuppressed:                return "healSuppressed"
             case .messageQueuedPendingInit:      return "messageQueuedPendingInit"
             case .duplicateDropped:              return "duplicateDropped"
+            case .replayHeld:                    return "replayHeld"
+            case .heldSuperseded:                return "heldSuperseded"
             case .scheduleTimer:                 return "scheduleTimer"
             case .cancelTimer:                   return "cancelTimer"
             default:                             return "unknown(\(action))"
@@ -1733,7 +1669,7 @@ final class MessageRouter {
                 for: chat, recipientId: userId, currentUserId: myId, context: context
             )
         }
-        replayHeldMessages(for: userId, in: context)
+        // What the gate held comes back from the core with its answer to `peerAcked`.
     }
 
     /// `MessageContent.reaction` is metadata on the target, never a transcript row.

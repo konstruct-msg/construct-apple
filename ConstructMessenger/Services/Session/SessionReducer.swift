@@ -486,55 +486,6 @@ enum SessionReducer {
         return announced == current
     }
 
-    /// What to do with a message the confirm gate held, at the moment the gate comes down.
-    enum HeldReplayDisposition: Equatable {
-        /// Still meaningful against the session we have now.
-        case replay
-        /// Belongs to a peer session that a later handshake replaced. Acknowledge and drop.
-        case superseded
-    }
-
-    /// §1c applied to the confirm gate's own buffer: **a held message must carry the identity of
-    /// the session it was held against.**
-    ///
-    /// The 2026-08-05 build-579 log is the third instance of this shape and the first one I wrote
-    /// myself. The gate correctly held peer inits instead of discarding them (§1d) — but the replay
-    /// was unconditional, so when the 75s window lapsed we re-routed inits belonging to peer
-    /// sessions that a *later* handshake had already replaced. The stale one cannot decrypt, the
-    /// core answers `heal`, and healing does `manual_reset`: the healthy session established
-    /// seconds earlier is archived and deleted. Three times in one hour, each followed by
-    /// "the encrypted session with this contact is out of sync" on screen:
-    ///
-    ///     15:23:27  confirm_replay: re-routing 2 held message(s)
-    ///     15:23:27  heal_triggered: becoming RESPONDER
-    ///     15:23:27  Archiving session … reason: manual_reset      ← a 60-second-old good session
-    ///
-    /// Only a peer *init* is dropped. Anything else is replayed whatever its age: dropping user
-    /// content on a guess is the failure §1d exists to prevent, and a payload that cannot decrypt
-    /// is a question for the healing path, not for this one.
-    ///
-    /// `kind` is a ``ReceivingInitKind`` and not a `Bool` on purpose. Both callers used to compute
-    /// it as `messageNumber == 0`, which is the misreading this codebase has now paid for three
-    /// times — the RESPONDER init guard, the deleted-contact guard, and here. A sending chain
-    /// restarts at 0 on every ratchet turn, so that predicate drops the peer's first message under
-    /// a fresh chain, and on 2026-08-21 it dropped 19 of them. Taking the classifier's own type
-    /// means the next call site has to obtain a verdict rather than re-invent one.
-    static func heldReplayDisposition(
-        heldAgainst: SessionEpoch?,
-        current: SessionEpoch?,
-        kind: ReceivingInitKind
-    ) -> HeldReplayDisposition {
-        guard kind == .handshake else { return .replay }
-        // No session now: nothing has superseded it, and it may be the very handshake that
-        // establishes one.
-        guard current != nil else { return .replay }
-        // Any other epoch than the one it was held against — including "held while we had no
-        // session, and one exists now" — means a handshake concluded in the meantime and this init
-        // is a step of it. Equality, not ordering: epochs are identities, and the timestamps this
-        // replaced could not tell a replacement inside the same second from the original.
-        return heldAgainst == current ? .replay : .superseded
-    }
-
     // MARK: - Handshake control emission (the send-side authority)
 
     /// A handshake transition that emits control message(s) to the peer.

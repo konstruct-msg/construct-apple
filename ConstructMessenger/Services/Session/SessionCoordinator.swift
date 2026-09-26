@@ -255,8 +255,12 @@ final class SessionCoordinator: MessageRouterDelegate {
                 category: "SessionInit"
             )
             // `acknowledged: false` — the machine has already dropped the phase, and telling it
-            // the peer answered would be a lie the next decision reads back.
+            // the peer answered would be a lie the next decision reads back. What it held
+            // incoming rides on the same answer as this action.
             self.releaseConfirmGate(peer, acknowledged: false)
+        }
+        CryptoManager.shared.onHeldReleased = { [weak self] actions in
+            self?.messageRouter.performHeldReleases(actions)
         }
         startCooldownPurgeTimer()
     }
@@ -1768,9 +1772,8 @@ final class SessionCoordinator: MessageRouterDelegate {
             }
         }
         sendSessionQueuedMessages(for: userId)
-        if let context = viewContext {
-            messageRouter.replayHeldMessages(for: userId, in: context)
-        }
+        // The incoming half — what the gate held — is the core's to release, and it comes back
+        // with the answer to whichever event lowered the gate (`MessageRouter.performHeldReleases`).
     }
 
     /// Re-sends any outgoing messages that were marked `.queued` by `requeueUndeliveredOutgoing`
