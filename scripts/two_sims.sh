@@ -295,8 +295,13 @@ cmd_up() {
   for r in $(active_roles); do
     boot_sim "$(role_udid "$r")" "$(role_name "$r")"
   done
-  open -a Simulator
-  warn "окна симуляторов Simulator.app раскладывает сам — разведи их один раз руками"
+  # Окно — удобство, не условие: симуляторы загружены и без него, а Simulator.app бывает не
+  # установлен (Xcode без него — стенд тогда работает вслепую, через axe и скриншоты).
+  if open -a Simulator 2>/dev/null; then
+    warn "окна симуляторов Simulator.app раскладывает сам — разведи их один раз руками"
+  else
+    warn "Simulator.app не найден — симуляторы работают без окна (скриншоты: shot)"
+  fi
 }
 
 cmd_install() {
