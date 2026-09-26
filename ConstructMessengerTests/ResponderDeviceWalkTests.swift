@@ -156,6 +156,22 @@ final class ResponderDeviceWalkTests: XCTestCase {
         )
     }
 
+    /// One bundle walk for both responder paths, and one way out of it. The heal kept its own loop
+    /// until 2026-09-26 — the failed message fixed, the bundles rotated by hand — and never told the
+    /// core the session it built existed, so the heal episode stayed open in the core.
+    ///
+    /// Mutation: give the heal its own `for … in candidates` loop, or drop its
+    /// `finishReceivingOpen` — this reddens.
+    func testBothResponderPathsShareOneWalkAndOneFinish() throws {
+        let source = try sourceOf("ConstructMessenger/Services/Session/SessionCoordinator.swift")
+        func count(_ needle: String) -> Int { source.components(separatedBy: needle).count - 1 }
+        XCTAssertEqual(count("handlePublicKeyBundleForIncomingMessage("), 1, "one walk opens receiving sessions")
+        XCTAssertEqual(count("planReceivingInit("), 2, "both paths ask the core for the plan")
+        XCTAssertEqual(count("walkReceivingPlan("), 3, "declared once, walked by both paths")
+        XCTAssertEqual(count("finishReceivingOpen("), 3, "declared once, and both paths tell the core")
+        XCTAssertFalse(source.contains("in candidates.enumerated()"), "no hand-rolled bundle loop")
+    }
+
     /// The repair paths a failed init triggers are for a genuine key desync. With devices left to
     /// try, a failure means only "not this one", and firing them per candidate would call
     /// `verifyAndRepairKeyConsistency` once per device of every account that messages us.

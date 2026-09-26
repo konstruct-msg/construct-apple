@@ -1265,6 +1265,120 @@ final class SessionCoordinator: MessageRouterDelegate {
         return pinnedDevice
     }
 
+    /// What a responder walk opened: the carrier the session opened on, and the device it opened
+    /// against.
+    ///
+    /// The carrier is what the receipt and the ACK belong to — with several carriers in play it is
+    /// routinely not the message that started the walk, and acking the wrong one leaves the real
+    /// handshake queued and holding the stream cursor. The device is derived from the bundle in
+    /// hand by the same `deriveDeviceId` the seam uses, so it answers at first contact, when no
+    /// pinned identity exists yet.
+    private struct ReceivingOpen {
+        let carrier: ChatMessage
+        let device: String?
+    }
+
+    /// Carriers eligible to open a receiving session for `userId`: `preferred` first, then every
+    /// handshake the pending queue holds for the account.
+    private func receivingCarriers(for userId: String, preferred: ChatMessage) -> [ChatMessage] {
+        Self.handshakeCarriers(preferred: preferred, queued: messageRouter.pendingQueue.messages(for: userId))
+    }
+
+    /// Walk the core's plan until one (carrier, bundle) pair opens a receiving session.
+    ///
+    /// The one walk for both callers. The heal path kept its own until 2026-09-26: one carrier —
+    /// the failed message — held fixed while the bundles rotated by hand, under a comment calling
+    /// it "the same walk as the first-message path". It was the one-dimensional search
+    /// `plan_receiving_init` exists to replace, and with a multi-device peer it failed with an AEAD
+    /// error against keys that were entirely valid.
+    private func walkReceivingPlan(
+        for userId: String,
+        carriers: [ChatMessage],
+        candidates: [PublicKeyBundleData],
+        attempts: [ReceivingInitAttempt]
+    ) -> ReceivingOpen? {
+        for (step, attempt) in attempts.enumerated() {
+            let carrier = carriers[Int(attempt.carrierIndex)]
+            let bundle = candidates[Int(attempt.bundleIndex)]
+            let success = publicKeyBundleHandler.handlePublicKeyBundleForIncomingMessage(
+                bundle,
+                message: carrier,
+                isLastCandidate: step == attempts.count - 1
+            ) { [weak self] chat, msg, decryptedBytes in
+                self?.saveMessage(for: chat, with: msg, decryptedBytes: decryptedBytes)
+            }
+            guard success else { continue }
+            if step > 0 {
+                Log.info(
+                    "SESSION_STATE[responder_pair_found]: \(userId.prefix(8))… opened on attempt \(step + 1)/\(attempts.count) — carrier \(attempt.carrierIndex), device \(attempt.bundleIndex); the first pair was not the sender's",
+                    category: "SessionInit"
+                )
+            }
+            return ReceivingOpen(
+                carrier: carrier,
+                device: SessionAddressing.cryptoIdentity(ofIdentityKey: bundle.identityPublic)
+            )
+        }
+        return nil
+    }
+
+    /// Settle a receiving session the walk opened: the receipt and the ACK for the carrier it
+    /// opened on, then `sessionInitCompleted` to the core.
+    ///
+    /// Both callers owe the core that event. Only the first-message path sent it until 2026-09-26;
+    /// the heal path's comment said the responder init raised it, and `init_receiving_session`
+    /// does not. So a heal that worked left the core with the heal episode unsettled, the phase
+    /// unreleased and its own queue undrained — until the next reconnect or launch.
+    private func finishReceivingOpen(_ open: ReceivingOpen, for userId: String, site: String) {
+        // Receipt only after the carrier is decrypted and persisted — it is in the transcript, so
+        // the sender's checkmark is now true.
+        if let context = viewContext {
+            OutboundSessionService.sendDeliveryReceipt(for: [open.carrier.id], to: userId, in: context)
+            PersistentACKStore.shared.markProcessed(open.carrier.id, senderId: userId, in: context)
+        }
+
+        do {
+            // The device the session actually opened against — not the one the contact list can
+            // name. Both `exportSession` and the event below resolve through
+            // `pinnedDevice(ofPeer:)`, which reads the pinned `User.knownIdentityKey`; at first
+            // contact that row is not written yet, and first contact is exactly when a RESPONDER
+            // init runs. `open.device` is derived from the bundle in hand by the same
+            // `deriveDeviceId` the seam uses, so it answers when the pin cannot.
+            //
+            // Devices 2026-09-04 09:38:21, one account and one device on each side: a session
+            // that had just reported `init_receiving_success` and decrypted 46 bytes was answered
+            // here with `sessionNotFound`, and the `catch` below sent END_SESSION over it. The
+            // peer re-initialised one second later and spent another one-time prekey. The session
+            // was never missing; nothing could name it.
+            guard let resolvedContact = Self.finalizeContactId(
+                openedDevice: open.device,
+                pinnedDevice: SessionAddressing.pinnedDevice(ofPeer: userId)
+            ) else {
+                throw CryptoManagerError.sessionNotFound
+            }
+            let sessionBytes = try CryptoManager.shared.exportSession(contactId: resolvedContact)
+            let event = CfeIncomingEvent.sessionInitCompleted(
+                contactId: resolvedContact,
+                sessionData: Data(sessionBytes)
+            )
+            // Releases the machine's phase, settles the heal episode, persists the session and
+            // drains the core's own pending queue; what the drain opens is saved against the
+            // envelope the router kept for it.
+            let actions = try CryptoManager.shared.handleOrchestratorEvent(event, tag: site)
+            messageRouter.resolveCoreDrain(actions, site: site)
+        } catch {
+            Log.error("SESSION_STATE[init_completed_finalize_failed]: \(error.localizedDescription) for \(userId.prefix(8))…", category: "SessionInit")
+            Task { [weak self] in
+                guard let self else { return }
+                do {
+                    try await self.sendEndSession(to: userId, reason: "session_init_completed_failed")
+                } catch {
+                    Log.error("SESSION_STATE[init_completed_end_session_failed]: \(error.localizedDescription) for \(userId.prefix(8))…", category: "SessionInit")
+                }
+            }
+        }
+    }
+
     private func handlePublicKeyBundleNeeded(peer: PeerAddress, message: ChatMessage) async {
         let userId = peer.account
         // Peer-wide, and that is not the seam being dropped: the fetch returns the account's whole
@@ -1289,10 +1403,7 @@ final class SessionCoordinator: MessageRouterDelegate {
             // `queued.first { handshake }`, which is a choice the caller is not in a position to
             // make: with a multi-device peer the queue holds several live handshakes at once and
             // only decryption can say which belongs to which device.
-            let carriers = Self.handshakeCarriers(
-                preferred: message,
-                queued: messageRouter.pendingQueue.messages(for: userId)
-            )
+            let carriers = receivingCarriers(for: userId, preferred: message)
             guard !carriers.isEmpty, let core = CryptoManager.shared.orchestratorCore else {
                 // Refusing to init is right, but refusing *silently* is not: the router has
                 // already enqueued this message and set `streamOutcome = .deferred`, so leaving
@@ -1343,105 +1454,20 @@ final class SessionCoordinator: MessageRouterDelegate {
                 category: "SessionInit"
             )
 
-            var success = false
-            // The carrier the session actually opened on. The receipt and the ACK below belong to
-            // that message, not to the one that triggered the fetch — with several carriers in
-            // play those are routinely different, and acking the wrong one leaves the real
-            // handshake in the queue holding the stream cursor.
-            var opened: ChatMessage?
-            // The device the session opened against, for the per-device cooldown reset below.
-            // Derived rather than looked up: `PublicKeyBundleData` carries the identity key, and
-            // the device id is `deriveDeviceId` of it — the same derivation the seam uses, so the
-            // two cannot disagree.
-            var openedDevice: String?
-            for (step, attempt) in attempts.enumerated() {
-                let carrier = carriers[Int(attempt.carrierIndex)]
-                success = publicKeyBundleHandler.handlePublicKeyBundleForIncomingMessage(
-                    candidates[Int(attempt.bundleIndex)],
-                    message: carrier,
-                    isLastCandidate: step == attempts.count - 1
-                ) { [weak self] chat, msg, decryptedBytes in
-                    self?.saveMessage(for: chat, with: msg, decryptedBytes: decryptedBytes)
-                }
-                if success {
-                    opened = carrier
-                    openedDevice = SessionAddressing.cryptoIdentity(
-                        ofIdentityKey: candidates[Int(attempt.bundleIndex)].identityPublic
-                    )
-                    if step > 0 {
-                        Log.info(
-                            "SESSION_STATE[responder_pair_found]: \(userId.prefix(8))… opened on attempt \(step + 1)/\(attempts.count) — carrier \(attempt.carrierIndex), device \(attempt.bundleIndex); the first pair was not the sender's",
-                            category: "SessionInit"
-                        )
-                    }
-                    break
-                }
-            }
+            let open = walkReceivingPlan(
+                for: userId, carriers: carriers, candidates: candidates, attempts: attempts
+            )
 
-            if success {
+            if let open {
                 // The END_SESSION window, the peer's quiet and the retry budget are all settled
-                // by the machine, on the `sessionInitCompleted` fed a few lines below — a session
-                // that exists again is proof the teardown landed. Per device, because that event
-                // names one: clearing the whole account would hand a device that is genuinely
+                // by the machine, on the `sessionInitCompleted` fed by `finishReceivingOpen` — a
+                // session that exists again is proof the teardown landed. Per device, because that
+                // event names one: clearing the whole account would hand a device that is genuinely
                 // stuck a fresh allowance, and a session with one device says nothing about
                 // another's. The same event stands down a re-init the peer's teardown asked
-                // for, and that used to be a `cancelPendingEndSessionReinit` call here: the
-                // machine's phase goes with the session, so a re-init that would have deleted
-                // the RESPONDER session we just established is answered `OpenNotNeeded` instead.
-
-                // Receipt only after we successfully decrypted + persisted the first message —
-                // it is in the transcript, so the sender's checkmark is now true.
-                if let context = viewContext, let opened {
-                    OutboundSessionService.sendDeliveryReceipt(for: [opened.id], to: userId, in: context)
-                    PersistentACKStore.shared.markProcessed(opened.id, senderId: userId, in: context)
-                }
-
-                // Notify Rust orchestrator that RESPONDER-side session init completed.
-                // Rust clears its init_lock for this contactId. We ignore returned
-                // SaveSessionToSecureStore actions — the session was already persisted
-                // by initReceivingSession above.
-                do {
-                    // The device the session actually opened against — not the one the contact
-                    // list can name. Both `exportSession` and the event below resolve through
-                    // `pinnedDevice(ofPeer:)`, which reads the pinned `User.knownIdentityKey`; at
-                    // first contact that row is not written yet, and first contact is exactly when
-                    // a RESPONDER init runs. `openedDevice` is derived from the bundle in hand by
-                    // the same `deriveDeviceId` the seam uses, so it answers when the pin cannot,
-                    // and passing it through `pinnedDevice(ofPeer:)` is a no-op — a crypto identity
-                    // is returned unchanged.
-                    //
-                    // Devices 2026-09-04 09:38:21, one account and one device on each side: a
-                    // session that had just reported `init_receiving_success` and decrypted 46
-                    // bytes was answered here with `sessionNotFound`, and the `catch` below sent
-                    // END_SESSION over it. The peer re-initialised one second later and spent
-                    // another one-time prekey. The session was never missing; nothing could name
-                    // it.
-                    guard let resolvedContact = Self.finalizeContactId(
-                        openedDevice: openedDevice,
-                        pinnedDevice: SessionAddressing.pinnedDevice(ofPeer: userId)
-                    ) else {
-                        throw CryptoManagerError.sessionNotFound
-                    }
-                    let sessionBytes = try CryptoManager.shared.exportSession(contactId: resolvedContact)
-                    let event = CfeIncomingEvent.sessionInitCompleted(
-                        contactId: resolvedContact,
-                        sessionData: Data(sessionBytes)
-                    )
-                    // Persists the session and drains the core's own pending queue; what the drain
-                    // opens is saved against the envelope the router kept for it.
-                    let actions = try CryptoManager.shared.handleOrchestratorEvent(event, tag: "session_init_completed_responder")
-                    messageRouter.resolveCoreDrain(actions, site: "session_init_completed_responder")
-                } catch {
-                    Log.error("SESSION_STATE[init_completed_finalize_failed]: \(error.localizedDescription) for \(userId.prefix(8))…", category: "SessionInit")
-                    Task { [weak self] in
-                        guard let self else { return }
-                        do {
-                            try await self.sendEndSession(to: userId, reason: "session_init_completed_failed")
-                        } catch {
-                            Log.error("SESSION_STATE[init_completed_end_session_failed]: \(error.localizedDescription) for \(userId.prefix(8))…", category: "SessionInit")
-                        }
-                    }
-                }
+                // for: the machine's phase goes with the session, so a re-init that would have
+                // deleted the RESPONDER session we just established is answered `OpenNotNeeded`.
+                finishReceivingOpen(open, for: userId, site: "session_init_completed_responder")
 
                 // Replenish OTPKs — Bob consumed one OTPK for this X3DH session init.
                 Task {
@@ -1456,11 +1482,11 @@ final class SessionCoordinator: MessageRouterDelegate {
                 // it under the account is the mismatch `SessionScope` exists to remove: hydration
                 // reads this back by device on the next launch.
                 let openedScope = Self.finalizeContactId(
-                    openedDevice: openedDevice,
+                    openedDevice: open.device,
                     pinnedDevice: SessionAddressing.pinnedDevice(ofPeer: userId)
                 ).map(SessionScope.device) ?? scope
                 perform(apply(.initSucceeded(at: UInt64(Date().timeIntervalSince1970)), for: openedScope),
-                        for: userId, alreadyHandled: opened?.id)
+                        for: userId, alreadyHandled: open.carrier.id)
                 // Re-send messages that were re-queued on prior END_SESSION receipt.
                 sendSessionQueuedMessages(for: userId)
                 // Phase 2 of two-phase handshake: notify INITIATOR that RESPONDER
@@ -1468,7 +1494,7 @@ final class SessionCoordinator: MessageRouterDelegate {
                 // any buffered outgoing messages.
                 // Addressed to the device the walk opened with: the ready is encrypted on that
                 // ratchet and sealed to that key, and only that device is waiting for it.
-                let readyTo = PeerAddress(account: userId, device: openedDevice)
+                let readyTo = PeerAddress(account: userId, device: open.device)
                 Task { [weak self] in
                     guard let self else { return }
                     await self.emitHandshakeControls(.becameResponder, to: readyTo)
@@ -1534,38 +1560,35 @@ final class SessionCoordinator: MessageRouterDelegate {
         } ?? false
 
         do {
-            // Same walk as the first-message path: a heal that asks for one bundle asks about one
-            // device, and the device that sent the message it is trying to open may be another of
-            // the account's. Healing against the wrong keys fails exactly as the original init did.
-            let candidates = try await publicKeyBundleHandler.responderBundleCandidates(
-                userId: userId, namedDevice: failedMessage.senderDeviceId
-            )
-
-            var healed = false
-            for (index, bundle) in candidates.enumerated() {
-                healed = publicKeyBundleHandler.handlePublicKeyBundleForIncomingMessage(
-                    bundle,
-                    message: failedMessage,
-                    isLastCandidate: index == candidates.count - 1
-                ) { [weak self] chat, msg, decryptedBytes in
-                    self?.saveMessage(for: chat, with: msg, decryptedBytes: decryptedBytes)
-                }
-                if healed { break }
+            // The walk the first-message path takes, over the same carriers: a heal that holds the
+            // failed message fixed asks about one handshake, and with a multi-device peer the one
+            // the core named is not always the one that opens. `failedMessage` goes first; a
+            // mid-ratchet one is not a carrier at all, and costs no bundle fetch.
+            let carriers = receivingCarriers(for: userId, preferred: failedMessage)
+            var open: ReceivingOpen?
+            if !carriers.isEmpty, let core = CryptoManager.shared.orchestratorCore {
+                let candidates = try await publicKeyBundleHandler.responderBundleCandidates(
+                    userId: userId, namedDevice: failedMessage.senderDeviceId
+                )
+                let attempts = core.planReceivingInit(
+                    carriers: carriers.map(Self.initCarrier),
+                    bundleCount: UInt32(candidates.count)
+                )
+                Log.info(
+                    "SESSION_STATE[heal_plan]: \(userId.prefix(8))… \(carriers.count) carrier(s) × \(candidates.count) device(s) → \(attempts.count) attempt(s)",
+                    category: "SessionInit"
+                )
+                open = walkReceivingPlan(
+                    for: userId, carriers: carriers, candidates: candidates, attempts: attempts
+                )
             }
 
-            if healed {
-                Log.info("SESSION_STATE[heal_success]: session healed for \(userId.prefix(8))…", category: "SessionInit")
-                // No record to remove here: the session that now exists is what every attempt in
-                // this episode was trying to produce, and `sessionInitCompleted` — raised by the
-                // responder init that just succeeded — settles the episode in the core.
-
-                // The previously-failed X3DH init message is now decrypted and saved — the
-                // sender's checkmark is true, so send the receipt.
-                OutboundSessionService.sendDeliveryReceipt(for: [failedMessage.id], to: userId, in: context)
-                PersistentACKStore.shared.markProcessed(failedMessage.id, senderId: userId, in: context)
+            if let open {
+                Log.info("SESSION_STATE[heal_success]: session healed for \(userId.prefix(8))… on \(open.carrier.id.prefix(8))…", category: "SessionInit")
+                finishReceivingOpen(open, for: userId, site: "session_init_completed_heal")
 
                 // Heal does not reset establishment time (no markActive) — drain only.
-                perform([.drainQueuedMessages], for: userId, alreadyHandled: failedMessage.id)
+                perform([.drainQueuedMessages], for: userId, alreadyHandled: open.carrier.id)
             } else {
                 Log.error("SESSION_STATE[heal_failed]: initReceivingSession still failing for \(userId.prefix(8))…", category: "SessionInit")
                 if !canContinue {
@@ -1619,10 +1642,9 @@ final class SessionCoordinator: MessageRouterDelegate {
     /// holding a stream-cursor watermark, which is released here.
     ///
     /// **It is an id and not a position.** Both callers used to pass `skippingFirst: true` and this
-    /// skipped `queued.first`, which was only ever the right message by coincidence. The heal path
-    /// opens on `failedMessage`, which the core named and which is unrelated to queue order;
-    /// and since the responder walk began trying every eligible carrier (2026-08-31) the first-
-    /// message path opens on whichever carrier the peer's device actually sent, which for a
+    /// skipped `queued.first`, which was only ever the right message by coincidence. Since the
+    /// responder walk began trying every eligible carrier (2026-08-31, the heal too since
+    /// 2026-09-26) both paths open on whichever carrier the peer's device actually sent, which for a
     /// multi-device peer is routinely not the first one queued. Getting it wrong is two failures at
     /// once: the real opener is re-routed into a ratchet that has already consumed it, and an
     /// unrelated queued handshake has its watermark released and is dropped without ever being
