@@ -184,6 +184,15 @@ enum MetricEvent: String {
     /// handshake, and its largest single contributor was the peer's own `session_ready`.
     case confirmHold = "confirm_hold"
 
+    /// A message with no session arrived without its sending device named — no sender certificate
+    /// (an identified delivery) and no wire-id tag we could read. `label` = what stood in for the
+    /// name: `pinned` (the account's pinned device) or `none` (a true first contact).
+    ///
+    /// Counted ahead of `decisions/first-contact-queue-keyed-by-claimed-device.md`, which keys the
+    /// core's queue by the named device and refuses `none` instead of guessing. The code says
+    /// only TUI and a DEBUG stealth override produce it; this is what says so in the field.
+    case firstContactUnattributed = "first_contact_unattributed"
+
     /// The confirm hold hit its per-peer cap (100) and a message was genuinely dropped. This is
     /// the only losing branch left in the hold path, so it is the one that must be loud — the
     /// distinction rule 1a exists for: `confirmHold` is "not yet", this is "never".

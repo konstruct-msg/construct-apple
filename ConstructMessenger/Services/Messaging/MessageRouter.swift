@@ -800,6 +800,9 @@ final class MessageRouter {
         Log.info("SESSION_STATE[incoming_message]: userId=\(otherUserId.prefix(8))..., device=\(namedSenderDevice.map { String($0.prefix(8)) } ?? "pinned"), hasSession=\(hasSession), messageId=\(message.id.prefix(8))...", category: "SessionInit")
         
         if !hasSession {
+            if namedSenderDevice == nil {
+                PerformanceMetrics.shared.record(.firstContactUnattributed, label: sessionOwner == nil ? "none" : "pinned")
+            }
             // First message from this user - need to initialize receiving session.
             // handleFirstMessage decides whether the message was queued (.deferred → hold the
             // cursor until drained) or is a give-up (.durable → may advance).
