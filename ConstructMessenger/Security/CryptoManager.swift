@@ -80,7 +80,6 @@ class CryptoManager {
     let sessionRestoreService = SessionRestoreService()
     
     // MARK: - Prekey ID Tracking
-    private let preKeyTracker = PreKeyTrackingStore()
 
     /// True when core was loaded from saved Keychain keys (not freshly generated).
     /// On startup the server's OTPK set may not match the restored core's state,
@@ -198,39 +197,6 @@ class CryptoManager {
 
         Log.info("Generated registration bundle: device_id=\(deviceId)", category: "CryptoManager")
         return (deviceId, bundle, signingKeyData, identityKeyData)
-    }
-
-    // MARK: - Prekey ID Tracking
-    
-    /// Record the signed pre-key a **device** just presented and detect a reinstall or rotation
-    /// of that device. Returns true if its SPK changed since it was last seen.
-    ///
-    /// Per device, not per account: the responder walk calls this once per candidate bundle,
-    /// and an account-keyed slot read the other device's SPK as a change — and archived the
-    /// pinned device's session for it. A change now archives the session of the device whose
-    /// SPK changed, which is the only session the evidence is about.
-    public func trackPreKeyId(_ preKeyId: String, forDevice deviceId: String) -> Bool {
-        let result = preKeyTracker.track(preKeyId: preKeyId, forDevice: deviceId)
-        switch result {
-        case .firstSeen:
-            Log.debug("Tracking prekey for device \(deviceId.prefix(8))…: \(preKeyId.prefix(8))...", category: "CryptoManager")
-            return false
-        case .unchanged, .refused:
-            return false
-        case .changed(let previous):
-            let previousPrefix = previous.isEmpty ? "unknown" : String(previous.prefix(8))
-            Log.info("Prekey changed for device \(deviceId.prefix(8))…: \(previousPrefix)... -> \(preKeyId.prefix(8))...", category: "CryptoManager")
-            Log.info("This indicates app reinstall or key rotation", category: "CryptoManager")
-
-            // Archive that device's session (if any). A device id passes through the seam
-            // unchanged, so this names exactly the ratchet whose SPK moved.
-            if hasSession(for: deviceId) {
-                archiveSession(for: deviceId, reason: .preKeyChanged)
-                Log.info("Session archived due to prekey change", category: "CryptoManager")
-            }
-
-            return true
-        }
     }
 
     // MARK: - Session Persistence
@@ -519,7 +485,8 @@ class CryptoManager {
         return actions
     }
 
-    /// Carries out `replayHeld` / `heldSuperseded`. Set by `SessionCoordinator` to the router.
+    /// Carries out `replayHeld` / `heldSuperseded` / `pendingDropped`. Set by `SessionCoordinator`
+    /// to the router.
     var onHeldReleased: (([CfeAction]) -> Void)?
 
     /// The core releases what its confirm gate held at the end of **every** event, so the release
@@ -533,7 +500,7 @@ class CryptoManager {
     private func dispatchHeldReleases(_ actions: [CfeAction]) {
         let releases = actions.filter {
             switch $0 {
-            case .replayHeld, .heldSuperseded: return true
+            case .replayHeld, .heldSuperseded, .pendingDropped: return true
             default: return false
             }
         }
@@ -1183,6 +1150,54 @@ class CryptoManager {
             return false
         }
         return !actions.contains { if case .healExhausted = $0 { return true } else { return false } }
+    }
+
+    // MARK: - The core's queue of messages waiting for a session
+
+    /// Open a receiving session from what the core holds under `claimedDevice` — the device the
+    /// sender certificate named — against `bundles`, every device of that account. The core plans
+    /// and makes the attempts (`open_receiving`); `nil` only when the core could not be asked.
+    func openReceiving(claimedDevice: String, bundles: [BinaryKeyBundle]) -> ReceivingOpenResult? {
+        coreLock.lock()
+        let result: ReceivingOpenResult?
+        do {
+            result = try orchestratorCore?.openReceiving(claimedDevice: claimedDevice, bundles: bundles)
+        } catch {
+            Log.error("open_receiving refused its bundles for \(claimedDevice.prefix(8))…: \(error)", category: "CryptoOrchestrator")
+            result = nil
+        }
+        coreLock.unlock()
+        return result
+    }
+
+    /// Queue a SESSION_RESET_INIT to open a session from. It is acknowledged before it is acted on,
+    /// so it cannot go through `MessageReceived`: the ACK check would read it as its own duplicate.
+    func queueForOpen(deviceId: String, message: ChatMessage) {
+        coreLock.lock()
+        let actions = orchestratorCore?.queueForOpen(
+            deviceId: deviceId,
+            messageId: message.id,
+            wirePayload: [UInt8](message.rawPayload),
+            contentType: message.contentType
+        ) ?? []
+        coreLock.unlock()
+        dispatchHeldReleases(actions)
+    }
+
+    /// Whether any of `devices` is opening a session with us right now (a handshake of theirs
+    /// queued in the core within the last 20 s).
+    func peerHandshakeHeld(devices: [String]) -> Bool {
+        guard !devices.isEmpty else { return false }
+        coreLock.lock()
+        defer { coreLock.unlock() }
+        return orchestratorCore?.peerHandshakeHeld(devices: devices) ?? false
+    }
+
+    /// How many messages the core holds waiting for a session with `deviceId`.
+    func pendingMessageCount(forDevice deviceId: String) -> Int {
+        coreLock.lock()
+        defer { coreLock.unlock() }
+        return Int(orchestratorCore?.pendingMessageCount(contactId: deviceId) ?? 0)
     }
 
     /// What to do with a SESSION_RESET_INIT that just arrived from `deviceId`.

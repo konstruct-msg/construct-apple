@@ -5,8 +5,9 @@
 //  Pure incoming-message pipeline: validate → decrypt via Rust orchestrator → dispatch
 //  typed events to MessageRouterDelegate (SessionCoordinator).
 //
-//  Owns PendingSessionQueue — messages that arrived before their sender's DR session
-//  was ready. SessionCoordinator drains the queue after successful session init/heal.
+//  Messages that arrive before their sender's session is ready wait in the core's queue, not
+//  here (decisions/first-contact-queue-keyed-by-claimed-device.md). This router keeps only their
+//  envelopes, until the core opens them or drops them.
 //
 
 import Foundation
@@ -19,13 +20,9 @@ import UIKit
 @MainActor
 final class MessageRouter {
 
-    // MARK: - Delegate + queue
+    // MARK: - Delegate
 
     weak var delegate: (any MessageRouterDelegate)?
-
-    /// Messages pending session establishment, keyed by sender userId.
-    /// SessionCoordinator drains this via `drainPendingMessages(for:)` after init/heal.
-    let pendingQueue = PendingSessionQueue()
 
     // MARK: - Core Data
 
@@ -184,21 +181,23 @@ final class MessageRouter {
         return true
     }
 
-    // MARK: - Queue access for SessionCoordinator
+    // MARK: - Envelopes the core is holding
 
-    /// Drain and return all pending messages for `userId` (clears the queue as a side-effect).
-    func drainPendingMessages(for userId: String) -> [ChatMessage] {
-        pendingQueue.drain(for: userId)
+    /// Release envelopes the core no longer holds — dropped with its queue, or given up on — and
+    /// let the stream cursor past them. Never persisted, so nothing else would ever resolve them.
+    func releaseCoreQueued(_ messageIds: [String]) {
+        for id in messageIds {
+            coreQueuedEnvelopes.removeValue(forKey: id)
+            StreamCursorTracker.shared.resolve(messageId: id)
+        }
     }
 
-    /// Clear pending messages for `userId` (e.g. after heal failure). This is a give-up:
-    /// resolve each discarded message in the cursor tracker so its held watermark is released
-    /// (we will never persist it; matches the pre-existing drop-and-advance behaviour).
-    func removePendingMessages(for userId: String) {
-        let discarded = pendingQueue.drain(for: userId)
-        for msg in discarded {
-            StreamCursorTracker.shared.resolve(messageId: msg.id)
-        }
+    /// The devices of `peerId` that envelopes waiting in the core were sent from, as their sender
+    /// certificates named them — at first contact the only place those devices are known.
+    func claimedDevicesAwaitingCore(ofPeer peerId: String) -> [String] {
+        coreQueuedEnvelopes.values
+            .filter { $0.otherUserId == peerId && !$0.message.senderDeviceId.isEmpty }
+            .map(\.message.senderDeviceId)
     }
 
     // MARK: - Tie-break confirm hold
@@ -228,6 +227,13 @@ final class MessageRouter {
                 }
                 Log.info("SESSION_STATE[confirm_replay]: re-routing \(messageId.prefix(8))… from \(held.otherUserId.prefix(8))…", category: "MessageRouter")
                 routeIncomingMessage(held.message, in: context)
+            case .pendingDropped(let contactId, let messageIds):
+                // The core dropped what waited for a session that is gone or superseded.
+                Log.info(
+                    "SESSION_STATE[pending_dropped]: \(messageIds.count) message(s) that waited for \(contactId.prefix(8))… — released",
+                    category: "MessageRouter"
+                )
+                releaseCoreQueued(messageIds)
             case .heldSuperseded(let messageId):
                 // Acknowledge: it will never decrypt, and unacked the server redelivers it
                 // forever — the amplifier behind the receipt storm. The one branch of the hold
@@ -742,7 +748,7 @@ final class MessageRouter {
                 // Guard: don't resurrect a deleted contact for a message we already queued
                 // but couldn't decrypt. This prevents an infinite delete→re-appear loop when
                 // the server keeps re-delivering stuck undecryptable messages.
-                if pendingQueue.contains(messageId: message.id, for: otherUserId) {
+                if coreQueuedEnvelopes[message.id] != nil {
                     Log.debug("Skipping stale pending message \(message.id.prefix(8))… from deleted contact — not resurrecting", category: "MessageRouter")
                     PerformanceMetrics.shared.record(.undeliveredNoReceipt, label: "stale_pending")
                     return
@@ -803,17 +809,20 @@ final class MessageRouter {
             if namedSenderDevice == nil {
                 PerformanceMetrics.shared.record(.firstContactUnattributed, label: sessionOwner == nil ? "none" : "pinned")
             }
-            // First message from this user - need to initialize receiving session.
-            // handleFirstMessage decides whether the message was queued (.deferred → hold the
-            // cursor until drained) or is a give-up (.durable → may advance).
-            streamOutcome = handleFirstMessage(
+            if let outcome = preflightWithoutSession(
                 message,
                 from: otherUserId,
+                claimed: sessionOwner,
                 chat: chat,
                 isNewChat: isNewChat,
                 in: context
-            )
-            return
+            ) {
+                streamOutcome = outcome
+                return
+            }
+            // Otherwise to the core, under the claimed device, like any other message: with no
+            // session it queues it and answers `.fetchPublicKeyBundle` (or
+            // `.messageQueuedPendingInit` behind an open already under way), handled below.
         }
 
         // Removed 2026-09-23 with `SessionConfirmationTracker`: an "unsettled lapse" set, claimed
@@ -866,9 +875,11 @@ final class MessageRouter {
         // ours, because `ServerUserId` does not exist there. The pinned device goes first, so a
         // single-device peer runs this loop exactly once against exactly the session it uses
         // today — this must cost that case nothing, and it is the property the tests pin.
-        let decryptCandidates = receivingDecryptCandidates(
-            for: otherUserId, namedSender: namedSenderDevice, in: context
-        )
+        // With no session there is nothing to walk: the core queues the message under the one
+        // device it is claimed by (`preflightWithoutSession` guarantees there is one).
+        let decryptCandidates = hasSession
+            ? receivingDecryptCandidates(for: otherUserId, namedSender: namedSenderDevice, in: context)
+            : sessionOwner.map { [$0] } ?? []
 
         var actions: [CfeAction] = []
         var decryptedAs: String?
@@ -1072,10 +1083,9 @@ final class MessageRouter {
             // The same hold, from the same place: `.heldPendingAck` below.
             Log.info("SESSION_STATE[rust_end_session]: DR diverged for \(peer) — sending END_SESSION", category: "SessionInit")
             PerformanceMetrics.shared.record(.undeliveredNoReceipt, label: "rust_end_session")
-            // Give-up: resolve each discarded message's watermark as it goes. Bare `remove`
-            // left held messages deferred forever, pinning the device cursor behind messages
-            // nothing would ever revisit — invisible while the queue only ever held inits.
-            removePendingMessages(for: peer.account)
+            // What the core holds from this device for a session is its own: the peer's restart
+            // after this teardown arrives as a SESSION_RESET_INIT, which supersedes it
+            // (`queue_for_open`).
             PersistentACKStore.shared.markProcessed(message.id, senderId: peer.account, in: context)
             // A grant, not an ask: the core's machine produced this action only after it recorded
             // the teardown. See `coreGrantedEndSession` for what asking again did.
@@ -1083,20 +1093,21 @@ final class MessageRouter {
             if isNewChat { context.delete(chat) }
             return
         case .fetchPublicKeyBundle(let lostDevice):
-            // Same split as `.sendEndSession` above. `pendingQueue` is drained by account
-            // (`drainPendingQueue(for:)`, `handleFirstMessage` and `handleEndSession` all file
-            // and count under `otherUserId`), so filing under the core's device id here put the
-            // message somewhere nothing would ever look for it — deferred, holding the cursor,
-            // until the queue's own TTL dropped it.
-            Log.info("SESSION_STATE[rust_session_lost]: re-queuing \(message.id.prefix(8))… for \(PeerAddress(account: otherUserId, device: lostDevice))", category: "SessionInit")
-            pendingQueue.enqueue(message, for: otherUserId)
+            // The core queued this message under `lostDevice` — the device the sender certificate
+            // named, or the pinned one — and granted the open. First contact and a lost session
+            // alike end here: the core holds the message, this side keeps its envelope, and the
+            // open (`SessionCoordinator.openReceiving`) is asked for the account's bundles.
+            Log.info("SESSION_STATE[first_message]: \(message.id.prefix(8))… msgNum=\(message.messageNumber) queued in the core for \(PeerAddress(account: otherUserId, device: lostDevice)) — fetching bundles", category: "SessionInit")
+            SessionActionExecutor.shared.execute(actions)
+            holdEnvelopeForCoreQueue(message, otherUserId: otherUserId)
             delegate?.messageRouter(
                 self,
                 needsPublicKeyBundle: PeerAddress(account: otherUserId, device: lostDevice),
                 for: message
             )
-            // Re-queued for session re-establishment — hold the cursor until drained/cleared.
+            // Held in the core until the open drains it or drops it — hold the cursor.
             streamOutcome = .deferred
+            if isNewChat { context.delete(chat) }
             return
         case .endSessionSuppressed(let contactId, let retryAfterMs):
             // The core hit its END_SESSION cooldown and has taken ownership of sending the
@@ -1454,6 +1465,20 @@ final class MessageRouter {
                 if BlockedContacts.isBlocked(otherUserId, in: context) {
                     PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId, in: context)
                     Log.info("SECURITY[block_drop]: suppressed message \(message.id.prefix(8))… from blocked \(otherUserId.prefix(8))… (ratchet advanced; no store/notify/receipt)", category: "MessageRouter")
+                    continue
+                }
+
+                // A SESSION_RESET_INIT reaches decryption only as the carrier a receiving open was
+                // made from (`open_receiving`, saved through `resolveCoreDrain`): the live route
+                // stops it before any decrypt. Its type rides on the unsealed content type, not in
+                // the plaintext frame, so nothing below would recognise it — and until 2026-09-26
+                // a stand run showed why that matters: its payload landed in the transcript as a
+                // "$<uuid>" bubble. The old init path's `saveMessage` discarded it here instead,
+                // and released the confirm gate, which is what this does.
+                if message.isSessionResetInit {
+                    Log.info("SESSION_RESET_INIT payload discarded (not user-visible, content_type=24) — \(message.id.prefix(8))…", category: "MessageRouter")
+                    PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId, in: context)
+                    releaseConfirmGate(PeerAddress(account: otherUserId, device: message.senderDeviceId), chat: chat, in: context)
                     continue
                 }
 
@@ -1822,61 +1847,45 @@ final class MessageRouter {
     }
     
     // MARK: - First Message Handling
-    
-    /// Handle first message from user (no session yet)
-    /// Returns the stream-cursor disposition for the message: `.deferred` when it is queued
-    /// (or already queued / dropped at the cap) and must hold the resume cursor until drained,
-    /// `.durable` when it is a give-up that the cursor may advance past.
-    @discardableResult
-    private func handleFirstMessage(
+
+    /// What happens to a message with no session **before** it goes to the core — the facts the
+    /// core cannot see. `nil` hands it to the core, which queues it under `claimed` and grants the
+    /// open (`.fetchPublicKeyBundle`), or queues it behind an open already under way
+    /// (`.messageQueuedPendingInit`).
+    ///
+    /// This was `handleFirstMessage` until 2026-09-26, which also queued the message in
+    /// `PendingSessionQueue`, keyed by account, and asked for the bundle itself. The queue is the
+    /// core's now (`decisions/first-contact-queue-keyed-by-claimed-device.md`); what stays here is
+    /// the directory, the transcript and the one refusal the decision adds — no device, no guess.
+    private func preflightWithoutSession(
         _ message: ChatMessage,
         from userId: String,
+        claimed: String?,
         chat: Chat,
         isNewChat: Bool,
-        in context: NSManagedObjectContext,
-        forceReinit: Bool = false
-    ) -> StreamCursorTracker.Outcome {
-        // Dedup redelivered handshakes: a msg0 that already completed session init once
-        // (receipt raced the server's stream cursor on reconnect) must never re-init —
-        // its X3DH OTPK was consumed by the first init, so a re-init can only fail with
-        // "OTPK not found" and spuriously kick off the 3-DH heal cycle. Re-ACK and move on.
-        //
-        // `forceReinit` bypasses this: SESSION_RESET_INIT just archived the live session,
-        // so there is genuinely no session now. Skipping re-init because the reset-init's
-        // id was seen (and marked processed) in an earlier *failed* attempt would leave the
-        // peer permanently sessionless — the deadlock that spams "session out of sync".
-        // A reset-init must always rebuild, even for a previously-seen id.
-        if !forceReinit && PersistentACKStore.shared.isProcessed(message.id, in: context) {
-            Log.info("SESSION_STATE[first_message_dedup]: \(message.id.prefix(8))… from \(userId.prefix(8))… already processed — re-ACKing, skipping re-init", category: "SessionInit")
-            // Truthful: the first init decrypted and saved this msg0. Same reasoning as the
-            // ACK-store dedup above — the re-send is the sender's only remaining checkmark.
+        in context: NSManagedObjectContext
+    ) -> StreamCursorTracker.Outcome? {
+        // Already processed on an earlier pass: re-ACK, and do not open from it again.
+        if PersistentACKStore.shared.isProcessed(message.id, in: context) {
+            Log.info("SESSION_STATE[first_message_dedup]: \(message.id.prefix(8))… from \(userId.prefix(8))… already processed — re-ACKing, no open", category: "SessionInit")
             OutboundSessionService.sendDeliveryReceipt(for: [message.id], to: userId, in: context)
             if isNewChat { context.delete(chat) }
             return .durable
         }
 
-        // Queue disposition comes from the pure SessionReducer, fed by the authoritative facts
-        // we hold here: no Rust session exists (this method is only reached when !hasSession),
-        // and whether init is already underway (something already queued for this peer).
-        // `.startInit` ⇒ this is the first message → fetch the bundle; otherwise just queue.
-        let disposition = SessionReducer.incomingDisposition(
-            hasActiveSession: false,
-            isInitInFlight: pendingQueue.count(for: userId) > 0
-        )
-        let isFirstForUser = disposition.contains(.startInit)
-
-        // Deduplicate: skip if same message ID is already in the queue
-        if pendingQueue.contains(messageId: message.id, for: userId) {
-            Log.debug("Skipping duplicate queued message \(message.id.prefix(8))...", category: "MessageRouter")
-            // Do NOT ACK as delivered yet: session init may still fail, and acknowledging would
-            // cause the server to drop the pending message even though we haven't decrypted it.
-            return .deferred
+        // No device to key the core's queue by: neither a sender certificate nor a pinned device.
+        // Refused rather than guessed — Android's guess (`discoverPeerDevices().first`) is the
+        // defect the decision names. From current clients this is only TUI and a DEBUG build
+        // with sealed sending switched off; the peer is asked to restart.
+        guard let claimed else {
+            Log.info("SESSION_STATE[first_contact_unattributed]: \(message.id.prefix(8))… from \(userId.prefix(8))… names no device and none is pinned — refused, asking the sender to restart", category: "SessionInit")
+            PersistentACKStore.shared.markProcessed(message.id, senderId: userId, in: context)
+            PerformanceMetrics.shared.record(.undeliveredNoReceipt, label: "first_contact_unattributed")
+            delegate?.messageRouter(self, needsEndSession: .account(userId))
+            if isNewChat { context.delete(chat) }
+            return .durable
         }
 
-        // Guard: initReceivingSession requires a handshake carrier (X3DH / PQXDH / 3-DH /
-        // SESSION_RESET_INIT). `messageNumber == 0` is not enough — a DH sending chain also
-        // starts at N=0, and feeding that leftover to the RESPONDER init fails AEAD / PQ-epoch
-        // then clears the queue, including any real handshake behind it (2026-08-19).
         let initKind = SessionReducer.receivingInitKind(
             messageNumber: message.messageNumber,
             oneTimePreKeyId: message.oneTimePreKeyId,
@@ -1884,43 +1893,28 @@ final class MessageRouter {
             pqMessageEpoch: message.pqMessageEpoch,
             isSessionResetInit: message.isSessionResetInit
         )
-        if initKind != .handshake && isFirstForUser {
-            Log.info("No session for \(userId.prefix(8)) but \(initKind) (msgNum=\(message.messageNumber) otpk=\(message.oneTimePreKeyId) kem=\(message.kemCiphertext.count)B epoch=\(message.pqMessageEpoch)) — requesting END_SESSION so sender restarts", category: "MessageRouter")
+        // Mid-ratchet with no session and nothing waiting to open one: no handshake will ever
+        // reach this message, so queueing it only costs a bundle fetch. Only the peer can restart.
+        // With something already queued under the device, it waits behind that open instead.
+        if initKind != .handshake && CryptoManager.shared.pendingMessageCount(forDevice: claimed) == 0 {
+            Log.info("No session for \(userId.prefix(8))…/\(claimed.prefix(8))… but \(initKind) (msgNum=\(message.messageNumber) otpk=\(message.oneTimePreKeyId) kem=\(message.kemCiphertext.count)B epoch=\(message.pqMessageEpoch)) — requesting END_SESSION so sender restarts", category: "MessageRouter")
             PersistentACKStore.shared.markProcessed(message.id, senderId: userId, in: context)
             PerformanceMetrics.shared.record(.undeliveredNoReceipt, label: "mid_ratchet_no_session")
-            pendingQueue.touch(userId)
             // Throttle the user-visible notice + restart request per contact: a burst of
             // mid-ratchet messages would otherwise stack identical "out of sync" bubbles and
-            // re-ask the sender to restart on every one. Cursor/ACK bookkeeping above is
-            // per-message and unaffected; only the notice + END_SESSION are rate-limited.
+            // re-ask the sender to restart on every one.
             if shouldEmitOutOfSyncNotice(for: userId) {
-                // Says what is true, not what we intend. The old text — "Asking contact to
-                // restart…" — promised an action this code cannot confirm: `needsEndSession` is
-                // fire-and-forget into a Task, and `SessionCoordinator` gates it behind its own
-                // cooldown. Observed on device 2026-08-03: the bubble appeared and the very next
-                // line was `END_SESSION cooldown active …, skipping`. Two timers that are supposed
-                // to agree by hand had drifted, and the user was told about a request that was
-                // never made.
-                //
-                // The state is certain, so that is what the bubble states; recovery is still
-                // attempted below, rate-limited, and either this call sends END_SESSION or a very
-                // recent one already did.
+                // Says what is true, not what we intend: `needsEndSession` is gated behind its
+                // own cooldown, so the bubble states the state, and recovery is attempted below.
                 addSystemMessage(
                     NSLocalizedString("system_session_out_of_sync", comment: "Shown in a chat when messages from a contact cannot be read because the encrypted session is out of sync"),
                     toUserId: userId,
                     in: context
                 )
-                // The device the message came from, when the certificate named it: the session
-                // that is out of sync is that device's, and the coordinator tears down the device
-                // it is given. By account this resolved to the pinned device and tore down a
-                // sibling's healthy ratchet for a message it never sent.
-                delegate?.messageRouter(
-                    self, needsEndSession: PeerAddress(account: userId, device: message.senderDeviceId)
-                )
+                // The device the message came from: the session out of sync is that device's.
+                delegate?.messageRouter(self, needsEndSession: PeerAddress(account: userId, device: claimed))
             }
             if isNewChat { context.delete(chat) }
-            // Give-up: message is marked processed + sender asked to restart; nothing to drain,
-            // so the cursor may advance past it.
             return .durable
         }
 
@@ -1934,42 +1928,10 @@ final class MessageRouter {
             PersistentACKStore.shared.markProcessed(message.id, senderId: userId, in: context)
             PerformanceMetrics.shared.record(.undeliveredNoReceipt, label: "peer_vanished")
             if isNewChat { context.delete(chat) }
-            // `.durable` on purpose: nothing will revisit this message, so the watermark must be
-            // allowed past it. This is the release the stall needed — see `VanishedPeerStore`.
+            // `.durable` on purpose: nothing will revisit this message — see `VanishedPeerStore`.
             return .durable
         }
-
-        guard pendingQueue.enqueue(message, for: userId) else {
-            Log.info("Pending queue saturated for \(userId.prefix(8))… — not queueing until session init completes", category: "MessageRouter")
-            // Not enqueued, so nothing owns this message — `.deferred` here is a hold with no
-            // holder, and it is only safe while "the queue drains when init completes" is true.
-            // Against a peer whose init can never complete it is a permanent head-of-FIFO block
-            // on the resume cursor, which is exactly what happened (device A, 2026-08-20: queue
-            // at 70, cursor frozen since 31 July). `VanishedPeerStore` removes the cause above;
-            // this stays `.deferred` for the genuinely transient case it was written for, and
-            // `SessionCoordinator.giveUpInit` resolves the queue whenever init gives up.
-            return .deferred
-        }
-
-        Log.info("Message queued for session init from \(userId) — queue size: \(pendingQueue.count(for: userId))", category: "MessageRouter")
-        Log.info("SESSION_STATE[first_message]: userId=\(userId.prefix(8))..., messageNumber=\(message.messageNumber), action=\(isFirstForUser ? "fetch_bundle" : "queued")", category: "SessionInit")
-
-        if isNewChat {
-            do {
-                try context.saveOrThrow(category: "MessageRouter")
-                Log.debug("Saved new chat for \(userId)", category: "MessageRouter")
-            } catch {
-                Log.error("Failed to save new chat: \(error)", category: "MessageRouter")
-            }
-        }
-
-        if isFirstForUser {
-            delegate?.messageRouter(self, needsPublicKeyBundle: .account(userId), for: message)
-        }
-
-        // Queued for session init — hold the resume cursor until this message is drained
-        // (re-routed → durable) or the queue is cleared (give-up).
-        return .deferred
+        return nil
     }
 
     // MARK: - Session Message Handling
@@ -2026,13 +1988,14 @@ final class MessageRouter {
             // resolves through `pinnedDevice(ofPeer:)` to the peer's *pinned* device, which on a
             // multi-device peer is not necessarily this one — so it put away a healthy session
             // and left the broken one in place.
-            if let diverged = peer.deviceOrPinned() {
-                CryptoManager.shared.archiveSession(for: diverged, reason: .manualReset)
-            }
+            // Nothing is archived here. The core opens the new session from the carrier, sets the
+            // held one aside while it tries, and archives it only once the new one exists; a
+            // heal that fails leaves the session it found (`open_receiving`). Archiving first,
+            // as this did until 2026-09-26, destroyed a session a failed heal could not replace.
             // The carrier is already queued: the core's router enqueued its wire payload under
             // the device when it decided `SessionHealNeeded`. What stood here put a JSON copy of
             // the same message into a second queue keyed by account, and a third into Core Data.
-            pendingQueue.enqueue(message, for: peer.account)
+            holdEnvelopeForCoreQueue(message, otherUserId: peer.account)
             delegate?.messageRouter(self, needsSessionHeal: peer, failedMessage: message)
         }
     }
@@ -2177,8 +2140,10 @@ final class MessageRouter {
     /// Replaces the two-step `END_SESSION` → 200 ms delay → `msgNum=0` sequence used in the
     /// tie-break WIN path. The INITIATOR sends one message with `CONTENT_TYPE_SESSION_RESET_INIT=24`
     /// whose payload is the X3DH init (`msgNum=0`). RESPONDER:
-    /// 1. Archives the old session (same as `handleEndSession`)
-    /// 2. Routes the X3DH payload through `handleFirstMessage` (normal RESPONDER init)
+    /// 1. Archives the old session (same as `handleEndSession`), which drops what this device
+    ///    queued in the core for it (`PendingDropped`)
+    /// 2. Queues the X3DH payload in the core to open from (`queue_for_open`) and asks for the
+    ///    account's bundles — the same open a first message gets
     private func handleSessionResetInit(
         message: ChatMessage,
         from peer: PeerAddress,
@@ -2218,59 +2183,25 @@ final class MessageRouter {
         // 2. Re-queue outgoing messages sent under the old session (cannot be decrypted by peer).
         requeueUndeliveredOutgoing(for: userId, in: context)
 
-        // 3. Remove stale pending messages *from this device* and clear the heal queue. An SRI
-        //    from one device used to drop the sibling's queued handshake here — see
-        //    `PendingSessionQueue.remove(for:device:)`. The heal record is settled by the core on
-        //    the `PeerAcked` this path raises — per device, where the account-keyed clear that
-        //    stood here settled a sibling's episode along with this one's.
-        pendingQueue.remove(for: userId, device: peer.device)
-
-        // 4. Route the X3DH payload as a fresh msgNum=0 — triggers normal RESPONDER init path.
-        //    forceReinit: the session was just archived above, so the isProcessed dedup in
-        //    handleFirstMessage must not short-circuit re-init even if this reset-init id was
-        //    seen (and marked processed) in a prior failed attempt — otherwise the peer stays
-        //    sessionless forever and we spam "session out of sync".
-        do {
-            let (chat, isNewChat) = try findOrCreateChat(for: userId, in: context)
-            handleFirstMessage(message, from: userId, chat: chat, isNewChat: isNewChat, in: context, forceReinit: true)
-
-            Log.info("SESSION_RESET_INIT: old session archived, RESPONDER init triggered for \(userId.prefix(8))…", category: "MessageRouter")
-        } catch {
-            Log.error("SESSION_RESET_INIT: failed to resolve chat for \(userId.prefix(8))…: \(error)", category: "MessageRouter")
+        // 3. Queue the X3DH payload in the core and ask for the open. Not through
+        //    `MessageReceived`: this reset-init was marked processed above, and the core's ACK
+        //    check would read it as its own duplicate. What the same device queued before it went
+        //    with the archive in step 1 — the core drops a torn-down ratchet's queue and says so.
+        guard let device = peer.deviceOrPinned() else {
+            Log.error("SESSION_RESET_INIT from \(userId.prefix(8))… names no device and none is pinned — cannot open from it", category: "MessageRouter")
+            PerformanceMetrics.shared.record(.firstContactUnattributed, label: "reset_init")
+            return
         }
+        CryptoManager.shared.queueForOpen(deviceId: device, message: message)
+        holdEnvelopeForCoreQueue(message, otherUserId: userId)
+        delegate?.messageRouter(
+            self,
+            needsPublicKeyBundle: PeerAddress(account: userId, device: device),
+            for: message
+        )
+        Log.info("SESSION_RESET_INIT: old session archived, RESPONDER open requested for \(userId.prefix(8))…/\(device.prefix(8))…", category: "MessageRouter")
     }
 
-    /// A handshake left in the pending queue after a session opened on a *different* device of
-    /// the same account. It has been through the reset handler once — archived, queued, marked
-    /// processed — so the ordinary route would drop it at the ACK store; this re-enters the
-    /// RESPONDER path the way the reset handler does, with the dedup bypassed.
-    func reopenQueuedHandshake(_ message: ChatMessage, from userId: String, in context: NSManagedObjectContext) {
-        do {
-            let (chat, isNewChat) = try findOrCreateChat(for: userId, in: context)
-            handleFirstMessage(message, from: userId, chat: chat, isNewChat: isNewChat, in: context, forceReinit: true)
-        } catch {
-            Log.error("Reopen: failed to resolve chat for \(userId.prefix(8))…: \(error)", category: "MessageRouter")
-        }
-    }
-
-    /// Handle END_SESSION message.
-    ///
-    /// Primary path: delegate archiving to Rust via `handleEventJson` so the
-    /// archive format is canonical and owned by the Rust orchestrator.
-    /// Fallback: if the Rust path fails (e.g., no active session), use the
-    /// existing Swift `archiveSession` to preserve existing behaviour.
-    /// `peer.device` is the device that sent the teardown, from its sealed certificate, and the
-    /// session archived is that device's. Until 2026-09-21 this took the account alone and
-    /// archived whatever `pinnedDevice(ofPeer:)` named — the pinned device — so a "Reset session"
-    /// tapped on a peer's *second* device tore down our ratchet with its *first*: on the stand,
-    /// B's reset archived C's session with A (`acceptSessionTerminated: archived session for
-    /// c6bfaaef…` at 18:26:04, sent by b814c8ab), A kept sending on a session C no longer had,
-    /// and every one of those messages became `mid_ratchet_no_session` and an END_SESSION back —
-    /// 46 of them before it settled, one message lost to both of the account's devices. The
-    /// third defect in `decisions/a-peer-is-a-set-of-devices.md`, receive half.
-    ///
-    /// No device named (an unsealed teardown, or a certificate without one) falls back to the
-    /// pinned device through `deviceOrPinned()` — the only session such a teardown can be about.
     private func handleEndSession(from peer: PeerAddress, messageTimestamp: UInt64, in context: NSManagedObjectContext) {
         let userId = peer.account
         // Guard against stale END_SESSION messages: if the message's server timestamp
@@ -2338,11 +2269,9 @@ final class MessageRouter {
         //    re-encrypted and re-sent once the new session is established.
         requeueUndeliveredOutgoing(for: userId, in: context)
 
-        // 3. Remove any pending *incoming* messages from the device that tore down, and the
-        //    pending messages. The sibling's queued handshake is not this device's to drop — see
-        //    `PendingSessionQueue.remove(for:device:)`. The heal record is settled by the core on
-        //    `PeerToreDown`, per device, which is what the account-keyed clear here could not be.
-        pendingQueue.remove(for: userId, device: peer.device)
+        // 3. What this device queued for the torn-down ratchet was dropped by the core with the
+        //    archive in step 1 (`PendingDropped`, released by `performHeldReleases`). A sibling's
+        //    queue is its own and stays.
 
         // 4. Notify coordinator so the natural INITIATOR can prewarm immediately.
         delegate?.messageRouter(self, receivedEndSession: peer, timestamp: messageTimestamp)

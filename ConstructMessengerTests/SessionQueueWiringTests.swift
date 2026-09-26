@@ -4,28 +4,24 @@
 //
 //  Phase 1.5 integration coverage for SESSION_COORDINATOR_REFACTOR_SPEC.
 //
-//  Closes the gap left by the pure-reducer unit tests: those prove SessionReducer's
-//  decisions; these prove the *wiring* into the real pipeline. They drive the REAL
-//  `MessageRouter` (no network, no Rust session) so that the production path
-//  `routeIncomingMessage → handleFirstMessage → SessionReducer.incomingDisposition →
-//  PendingSessionQueue + delegate` is exercised end to end, with a recording delegate
-//  standing in for SessionCoordinator.
+//  The wiring of a message that arrives with no session: the REAL `MessageRouter` and the REAL
+//  core, no network, a recording delegate standing in for SessionCoordinator.
+//
+//  Since 2026-09-26 the message waits in the **core's** queue, under the device its sender
+//  certificate named (`decisions/first-contact-queue-keyed-by-claimed-device.md`); the router
+//  keeps only its envelope and asks for the open. So the queue is read back from the core
+//  (`pendingMessageCount(forDevice:)`), and the messages here carry what a sealed delivery
+//  carries — a named device and a real wire payload. Without the payload the core answers
+//  "malformed" and every assertion would read a path that production never takes.
 //
 //  What is covered:
-//   • First message from an unknown peer ⇒ queued once + exactly one bundle request.
-//   • A burst before init ⇒ all queued, bundle requested exactly once (the double-init
-//     guard, now expressed via incomingDisposition).
-//   • A mid-ratchet (msgNum>0) first message ⇒ END_SESSION requested, NOT queued (the
-//     protective guard survived the refactor).
-//   • Same message id twice ⇒ deduplicated, no double enqueue.
-//   • PendingSessionQueue FIFO/cap/remove — the invariants the effector's drain
-//     (`skippingFirst`, which drops the already-decrypted init carrier) and the
-//     disposition's `isInitInFlight` rely on.
-//
-//  Covered-by-construction (not reachable hermetically — needs the networked bundle fetch):
-//  SessionCoordinator.perform → drainPendingQueue/removePendingMessages is a 5-line switch
-//  over the effects asserted in SessionRaceConditionTests; its drain order rests on the
-//  PendingSessionQueue FIFO pinned here.
+//   • First message ⇒ queued once in the core under the named device + one bundle request.
+//   • A burst before the open ⇒ all queued, bundle requested exactly once (the core's machine
+//     answers the rest with `messageQueuedPendingInit`).
+//   • A mid-ratchet or PQ-leftover first message with nothing opening ⇒ END_SESSION to the
+//     named device, never queued.
+//   • Same message id twice ⇒ queued once.
+//   • A first message naming no device from an unknown peer ⇒ refused, not guessed.
 //
 
 import XCTest
@@ -121,65 +117,99 @@ final class SessionQueueWiringTests: XCTestCase {
         super.tearDown()
     }
 
-    private func incoming(id: String = UUID().uuidString, from peer: String, msgNum: UInt32) -> ChatMessage {
-        ChatMessage(
+    /// A device id in the crypto space, as a sender certificate names one.
+    private func deviceId() -> String {
+        UUID().uuidString.replacingOccurrences(of: "-", with: "").lowercased()
+    }
+
+    /// What a sealed delivery hands the router: the sending device named, and the envelope's
+    /// `encrypted_payload` as a real wire payload the core can parse (it will not decrypt — there
+    /// is no session — but its header decides whether it can open one).
+    private func incoming(
+        id: String = UUID().uuidString,
+        from peer: String,
+        device: String?,
+        msgNum: UInt32,
+        pqEpoch: UInt32 = 0
+    ) -> ChatMessage {
+        var message = ChatMessage(
             id: id,
             from: peer,
             to: me,
             ephemeralPublicKey: Data(repeating: 1, count: 32),
             messageNumber: msgNum,
             content: Data(repeating: 2, count: 48),
-            suiteId: 1,
+            suiteId: 3,
             timestamp: UInt64(Date().timeIntervalSince1970)
         )
+        message.pqMessageEpoch = pqEpoch
+        message.senderDeviceId = device ?? ""
+        let wire = WirePayload(
+            dhPublicKey: [UInt8](repeating: 1, count: 32),
+            messageNumber: msgNum,
+            oneTimePrekeyId: 0,
+            kyberOtpkId: 0,
+            previousChainLength: 0,
+            suiteId: 3,
+            kemCiphertext: nil,
+            sealedBox: [UInt8](repeating: 2, count: 48),
+            pqMessageEpoch: pqEpoch,
+            pqRatchetField: []
+        )
+        message.rawPayload = Data((try? wirePayloadPack(payload: wire)) ?? [])
+        XCTAssertFalse(message.rawPayload.isEmpty, "the fixture must carry a wire payload the core can parse")
+        return message
     }
 
-    // MARK: - MessageRouter disposition wiring
+    private func queuedInCore(_ device: String) -> Int {
+        CryptoManager.shared.pendingMessageCount(forDevice: device)
+    }
 
-    func testFirstMessageUnknownPeer_QueuedOnce_BundleRequestedOnce() {
+    // MARK: - MessageRouter → core wiring
+
+    func testFirstMessage_QueuedInTheCore_BundleRequestedOnce() {
         let peer = UUID().uuidString
+        let device = deviceId()
 
-        router.routeIncomingMessage(incoming(from: peer, msgNum: 0), in: context)
+        router.routeIncomingMessage(incoming(from: peer, device: device, msgNum: 0), in: context)
 
-        XCTAssertEqual(router.pendingQueue.count(for: peer), 1, "First message must be queued")
-        XCTAssertEqual(delegate.bundleRequests, [peer], "Bundle must be requested exactly once")
+        XCTAssertEqual(queuedInCore(device), 1, "First message must wait in the core, under the named device")
+        XCTAssertEqual(delegate.bundleAddresses, [PeerAddress(account: peer, device: device)],
+                       "The open is asked for once, naming the account and the claimed device")
         XCTAssertTrue(delegate.endSessionRequests.isEmpty)
     }
 
-    func testBurstBeforeInit_AllQueued_BundleRequestedExactlyOnce() {
+    func testBurstBeforeTheOpen_AllQueued_BundleRequestedExactlyOnce() {
         let peer = UUID().uuidString
+        let device = deviceId()
 
-        router.routeIncomingMessage(incoming(from: peer, msgNum: 0), in: context)
-        router.routeIncomingMessage(incoming(from: peer, msgNum: 1), in: context)
-        router.routeIncomingMessage(incoming(from: peer, msgNum: 2), in: context)
+        router.routeIncomingMessage(incoming(from: peer, device: device, msgNum: 0), in: context)
+        router.routeIncomingMessage(incoming(from: peer, device: device, msgNum: 1), in: context)
+        router.routeIncomingMessage(incoming(from: peer, device: device, msgNum: 2), in: context)
 
-        XCTAssertEqual(router.pendingQueue.count(for: peer), 3, "All three messages must be queued")
+        XCTAssertEqual(queuedInCore(device), 3, "All three wait behind the one open")
         XCTAssertEqual(delegate.bundleRequests.count, 1,
-                       "incomingDisposition must start init exactly once for a burst (double-init guard)")
+                       "The core's machine grants one open; the rest are queued behind it")
     }
 
     func testPqEpochLeftoverFirstMessage_RequestsEndSession_NotQueued() {
         let peer = UUID().uuidString
-        var leftover = incoming(from: peer, msgNum: 0)
-        leftover.pqMessageEpoch = 2
+        let device = deviceId()
 
-        // Same shape as the 2026-08-19 leftover: N=0, no OTPK, no KEM, PQ epoch 2.
-        // Must NOT start a bundle fetch — that path called initReceivingSession, failed,
-        // and cleared the queue, including any real handshake behind it.
-        router.routeIncomingMessage(leftover, in: context)
+        // Same shape as the 2026-08-19 leftover: N=0, no OTPK, no KEM, PQ epoch 2. Opening from
+        // it fails and costs a bundle fetch; only the peer can restart.
+        router.routeIncomingMessage(incoming(from: peer, device: device, msgNum: 0, pqEpoch: 2), in: context)
 
         XCTAssertEqual(delegate.endSessionRequests, [peer], "Leftover first message must trigger END_SESSION")
         XCTAssertTrue(delegate.bundleRequests.isEmpty, "Must not fetch a bundle for a mid-session leftover")
-        XCTAssertEqual(router.pendingQueue.count(for: peer), 0, "Must not queue an un-initialisable leftover")
+        XCTAssertEqual(queuedInCore(device), 0, "Must not queue an un-initialisable leftover")
     }
 
     func testMidRatchetFirstMessage_RequestsEndSession_NotQueued() {
         let peer = UUID().uuidString
+        let device = deviceId()
 
-        // No session AND messageNumber>0 as the first message: cannot init from a mid-ratchet
-        // message → the protective guard asks the sender to restart (END_SESSION). It must NOT
-        // start a bundle fetch and must NOT leave the message queued.
-        router.routeIncomingMessage(incoming(from: peer, msgNum: 5), in: context)
+        router.routeIncomingMessage(incoming(from: peer, device: device, msgNum: 5), in: context)
 
         XCTAssertEqual(delegate.endSessionRequests, [peer], "Mid-ratchet first message must trigger END_SESSION")
         // An ask, not a grant: this guard runs before the core has decided anything, so the
@@ -187,32 +217,48 @@ final class SessionQueueWiringTests: XCTestCase {
         XCTAssertTrue(delegate.grantedEndSessionAddresses.isEmpty,
                       "the app's own guard reached the coordinator as the core's grant")
         XCTAssertTrue(delegate.bundleRequests.isEmpty, "Must not fetch a bundle for a mid-ratchet first message")
-        XCTAssertEqual(router.pendingQueue.count(for: peer), 0, "Must not queue an un-initialisable message")
+        XCTAssertEqual(queuedInCore(device), 0, "Must not queue an un-initialisable message")
     }
 
-    func testDuplicateMessageId_NotEnqueuedTwice() {
+    func testDuplicateMessageId_QueuedOnce() {
         let peer = UUID().uuidString
-        let dup = incoming(from: peer, msgNum: 0)
+        let device = deviceId()
+        let dup = incoming(from: peer, device: device, msgNum: 0)
 
         router.routeIncomingMessage(dup, in: context)
         router.routeIncomingMessage(dup, in: context)
 
-        XCTAssertEqual(router.pendingQueue.count(for: peer), 1, "Same message id must not be queued twice")
+        XCTAssertEqual(queuedInCore(device), 1, "Same message id must not be queued twice")
         XCTAssertEqual(delegate.bundleRequests.count, 1, "Duplicate must not re-request the bundle")
     }
 
     func testTwoPeers_Isolated() {
-        let alice = UUID().uuidString
-        let bob   = UUID().uuidString
+        let alice = UUID().uuidString, aliceDevice = deviceId()
+        let bob = UUID().uuidString, bobDevice = deviceId()
 
-        router.routeIncomingMessage(incoming(from: alice, msgNum: 0), in: context)
-        router.routeIncomingMessage(incoming(from: bob, msgNum: 0), in: context)
-        router.routeIncomingMessage(incoming(from: bob, msgNum: 1), in: context)
+        router.routeIncomingMessage(incoming(from: alice, device: aliceDevice, msgNum: 0), in: context)
+        router.routeIncomingMessage(incoming(from: bob, device: bobDevice, msgNum: 0), in: context)
+        router.routeIncomingMessage(incoming(from: bob, device: bobDevice, msgNum: 1), in: context)
 
-        XCTAssertEqual(router.pendingQueue.count(for: alice), 1)
-        XCTAssertEqual(router.pendingQueue.count(for: bob), 2)
+        XCTAssertEqual(queuedInCore(aliceDevice), 1)
+        XCTAssertEqual(queuedInCore(bobDevice), 2)
         XCTAssertEqual(delegate.bundleRequests.sorted(), [alice, bob].sorted(),
-                       "Each peer starts its own init exactly once")
+                       "Each peer starts its own open exactly once")
+    }
+
+    /// No certificate and no pinned device: the core's queue has no key, and the decision is to
+    /// refuse rather than guess (Android's `discoverPeerDevices().first` is the guess it names).
+    ///
+    /// Mutation: fall through to the core with the account instead — this reddens.
+    func testAFirstMessageNamingNoDeviceIsRefusedNotGuessed() {
+        let peer = UUID().uuidString
+
+        router.routeIncomingMessage(incoming(from: peer, device: nil, msgNum: 0), in: context)
+
+        XCTAssertEqual(delegate.endSessionRequests, [peer], "the sender is asked to restart")
+        XCTAssertTrue(delegate.bundleRequests.isEmpty, "no open is asked for a device nobody named")
+        XCTAssertEqual(delegate.endSessionAddresses.first?.device, nil,
+                       "the restart goes to the account — there is no device to name")
     }
 
     // MARK: - The identity space the delegate is named in
@@ -239,8 +285,8 @@ final class SessionQueueWiringTests: XCTestCase {
         let queued = UUID().uuidString    // msgNum 0, no session → bundle request
         let midRatchet = UUID().uuidString // msgNum 5, no session → END_SESSION, never queued
 
-        router.routeIncomingMessage(incoming(from: queued, msgNum: 0), in: context)
-        router.routeIncomingMessage(incoming(from: midRatchet, msgNum: 5), in: context)
+        router.routeIncomingMessage(incoming(from: queued, device: deviceId(), msgNum: 0), in: context)
+        router.routeIncomingMessage(incoming(from: midRatchet, device: deviceId(), msgNum: 5), in: context)
 
         // Each source proved separately. A union guard cannot tell a driven path from a silent one.
         XCTAssertEqual(delegate.bundleAddresses.map(\.account), [queued],
@@ -257,63 +303,15 @@ final class SessionQueueWiringTests: XCTestCase {
         }
     }
 
-    /// The other half of the same rule: an event that names no device must say so, rather than
-    /// inventing one. Both guards here fire before any session exists, so there is no device to
-    /// name — and `deviceOrPinned()` is where a caller that needs one asks for the pinned fallback
-    /// explicitly, at the point where the fallback is the right answer.
-    func testAGuardThatRunsBeforeAnySessionNamesNoDevice() {
+    /// The other half of the same rule: the device a guard names is the one the sender
+    /// certificate named — the session out of sync is that device's, and the coordinator tears
+    /// down the device it is given. Before the certificate named one, this pinned `nil`.
+    func testAMidRatchetGuardNamesTheCertifiedDevice() {
         let peer = UUID().uuidString
-        router.routeIncomingMessage(incoming(from: peer, msgNum: 5), in: context)
+        let device = deviceId()
+        router.routeIncomingMessage(incoming(from: peer, device: device, msgNum: 5), in: context)
 
         XCTAssertEqual(delegate.endSessionAddresses.count, 1)
-        XCTAssertNil(
-            delegate.endSessionAddresses.first?.device,
-            "a mid-ratchet message arrives with no session — nothing has named which device diverged"
-        )
-    }
-
-    // MARK: - PendingSessionQueue invariants (effector drain/disposition rely on these)
-
-    func testQueue_DrainIsFIFO_SoSkippingFirstDropsTheInitCarrier() {
-        let q = PendingSessionQueue()
-        let peer = UUID().uuidString
-        let m0 = incoming(from: peer, msgNum: 0)   // the X3DH init carrier
-        let m1 = incoming(from: peer, msgNum: 1)
-        let m2 = incoming(from: peer, msgNum: 2)
-
-        XCTAssertTrue(q.enqueue(m0, for: peer))
-        XCTAssertTrue(q.enqueue(m1, for: peer))
-        XCTAssertTrue(q.enqueue(m2, for: peer))
-
-        let drained = q.drain(for: peer)
-        XCTAssertEqual(drained.map(\.id), [m0.id, m1.id, m2.id], "drain must preserve enqueue (FIFO) order")
-        // This is exactly what SessionCoordinator.drainPendingQueue(skippingFirst: true) processes:
-        XCTAssertEqual(Array(drained.dropFirst()).map(\.id), [m1.id, m2.id],
-                       "skippingFirst must drop the oldest message (the already-decrypted init carrier)")
-        XCTAssertEqual(q.count(for: peer), 0, "drain must clear the queue")
-    }
-
-    func testQueue_RemoveClearsWithoutReturning() {
-        let q = PendingSessionQueue()
-        let peer = UUID().uuidString
-        _ = q.enqueue(incoming(from: peer, msgNum: 0), for: peer)
-        _ = q.enqueue(incoming(from: peer, msgNum: 1), for: peer)
-
-        q.remove(for: peer)
-
-        XCTAssertEqual(q.count(for: peer), 0)
-        XCTAssertTrue(q.drain(for: peer).isEmpty)
-    }
-
-    func testQueue_RespectsPerUserCap() {
-        let q = PendingSessionQueue()
-        let peer = UUID().uuidString
-        // Cap is 100; the 101st enqueue is rejected (isInitInFlight stays meaningful).
-        for i in 0..<100 {
-            XCTAssertTrue(q.enqueue(incoming(from: peer, msgNum: UInt32(i)), for: peer))
-        }
-        XCTAssertFalse(q.enqueue(incoming(from: peer, msgNum: 100), for: peer),
-                       "Queue must reject beyond its per-user cap")
-        XCTAssertEqual(q.count(for: peer), 100)
+        XCTAssertEqual(delegate.endSessionAddresses.first?.device, device)
     }
 }

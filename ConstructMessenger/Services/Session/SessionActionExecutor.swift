@@ -11,7 +11,7 @@
 ///
 /// State-bound actions (`.messageDecrypted`, `.sessionHealNeeded`, `.sendEndSession`,
 /// `.fetchPublicKeyBundle`) still execute inline in `MessageRouter` because they
-/// depend on the router's `chunkReassembler`, `pendingQueue`, and `delegate`. The
+/// depend on the router's `chunkReassembler`, core envelopes and `delegate`. The
 /// executor `break`s on these cases so the router can handle them after the
 /// `SessionActionExecutor.shared.execute(actions)` call returns.
 ///
@@ -108,7 +108,7 @@ final class SessionActionExecutor {
             break
         case .markMessageDelivered:
             break
-        case .replayHeld, .heldSuperseded:
+        case .replayHeld, .heldSuperseded, .pendingDropped:
             // Carried out where every answer passes, `CryptoManager.dispatchHeldReleases`.
             break
         case .duplicateDropped:
@@ -166,8 +166,8 @@ final class SessionActionExecutor {
             Task { await MultiDeviceSendCoordinator.shared.broadcastSessionReset(contactId: contactId) }
 
         case .fetchPublicKeyBundle:
-            // Requires MessageRouter.pendingQueue + bundle fetch path
-            break  // scaffold
+            // The router keeps the envelope and asks the coordinator for the open.
+            break
 
         // ── Healing / END_SESSION (need MessageRouter state) ──────
         case .sessionHealNeeded:

@@ -267,7 +267,7 @@ private final class Peer {
     func fireResponderFallback(to peerId: String, now: Date) {
         guard wouldTakeTheRole else { return }
         awaitingInitiator = false
-        if phase == nil { phase = SessionReducer.reduce(phase, on: .initStarted).0 }
+        if phase == nil { phase = SessionReducer.reduce(phase, on: .initStarted) }
         send(.initMsg, to: peerId)
     }
 
@@ -328,8 +328,7 @@ private final class Peer {
         // No session and not buffering → (re)start a dueling init — unless we're a natural
         // RESPONDER deliberately waiting for the INITIATOR (only the responder-fallback breaks that).
         if phase == nil, !awaitingInitiator {
-            let (p, _) = SessionReducer.reduce(phase, on: .initStarted)
-            phase = p
+            phase = SessionReducer.reduce(phase, on: .initStarted)
             send(.initMsg, to: peerId)
         }
     }
@@ -347,7 +346,7 @@ private final class Peer {
                 // genuine peer re-init arrives only after an END_SESSION reset our phase to nil, so
                 // an init-on-active is by construction a duplicate/stale frame — ignore it.
                 if isActive { break }
-                if phase == nil { phase = SessionReducer.reduce(phase, on: .initStarted).0 }
+                if phase == nil { phase = SessionReducer.reduce(phase, on: .initStarted) }
                 confirmPendingSince = now
                 for op in SessionReducer.controlsToEmit(on: .tieBreakWin) { emit(op, to: peerId) }
             } else {
@@ -382,7 +381,7 @@ private final class Peer {
         case .ready, .ping:
             // INITIATOR side: a RESPONDER session exists on the peer. Release the confirm gate.
             if let op = frame.controlOp, SessionReducer.confirmReleases(on: op) {
-                phase = SessionReducer.reduce(phase, on: .markActive(at: UInt64(now.timeIntervalSince1970))).0
+                phase = SessionReducer.reduce(phase, on: .markActive(at: UInt64(now.timeIntervalSince1970)))
                 confirmPendingSince = nil
                 flushOrInit(to: peerId, now: now)
             }
@@ -390,20 +389,18 @@ private final class Peer {
         case .data(let dataId):
             // A peer only sends DATA when active; receiving it means our session is live too.
             if !isActive {
-                phase = SessionReducer.reduce(phase, on: .markActive(at: UInt64(now.timeIntervalSince1970))).0
+                phase = SessionReducer.reduce(phase, on: .markActive(at: UInt64(now.timeIntervalSince1970)))
             }
             delivered.insert(dataId)
 
         case .endSession:
-            let (p, effects) = SessionReducer.reduce(phase, on: .endSessionReceived)
-            phase = p
-            if effects.contains(.clearQueuedMessages) { /* outbox is recoverable plaintext — keep */ }
+            phase = SessionReducer.reduce(phase, on: .endSessionReceived)
             confirmPendingSince = nil
         }
     }
 
     private func becomeResponder(to peerId: String, now: Date, epoch: UInt64 = 0) {
-        phase = SessionReducer.reduce(phase, on: .markActive(at: UInt64(now.timeIntervalSince1970))).0
+        phase = SessionReducer.reduce(phase, on: .markActive(at: UInt64(now.timeIntervalSince1970)))
         establishedFromEpoch = epoch
         confirmPendingSince = nil
         // Emission via the production authority — canonically just session_ready (ping is legacy).
@@ -420,7 +417,7 @@ private final class Peer {
     func reannounceInit(to peerId: String, now: Date) {
         initGeneration += 1
         establishedFromEpoch = initGeneration
-        phase = SessionReducer.reduce(phase, on: .markActive(at: UInt64(now.timeIntervalSince1970))).0
+        phase = SessionReducer.reduce(phase, on: .markActive(at: UInt64(now.timeIntervalSince1970)))
         confirmPendingSince = now
         send(.resetInit, to: peerId, epoch: initGeneration)
     }

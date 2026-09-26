@@ -137,54 +137,52 @@ final class ResponderDeviceWalkTests: XCTestCase {
         )
     }
 
-    /// Both responder paths walk the candidates: the first message and the heal that retries it.
-    /// A heal that asks for one bundle asks about one device and fails exactly as the init did.
+    /// Both responder paths open through one call, and the core makes the walk. Until 2026-09-26
+    /// the walk was this app's (`walkReceivingPlan` over `PendingSessionQueue`), and before C10 the
+    /// heal kept a second copy of it that had already diverged — one carrier held fixed while the
+    /// bundles rotated by hand.
     ///
-    /// Mutation: revert either call site to `fetchPublicKeyWithRetry` — this reddens.
-    func testBothResponderPathsWalkTheDevices() throws {
-        let source = try sourceOf("ConstructMessenger/Services/Session/SessionCoordinator.swift")
-        // Both sites now hand the walk the device the carrier's certificate named, so the call
-        // spans a line break: match the function and the label that follows, not one spelling.
-        let occurrences = source.components(separatedBy: "responderBundleCandidates(").count - 1
-        let named = source.components(separatedBy: "namedDevice: message.senderDeviceId").count - 1
-            + source.components(separatedBy: "namedDevice: failedMessage.senderDeviceId").count - 1
-        XCTAssertEqual(named, 2, "both walks name the certified sender device")
-        XCTAssertEqual(
-            occurrences, 2,
-            "the first-message path and the heal path both open a message whose sending device the "
-            + "delivery does not name"
-        )
-    }
-
-    /// One bundle walk for both responder paths, and one way out of it. The heal kept its own loop
-    /// until 2026-09-26 — the failed message fixed, the bundles rotated by hand — and never told the
-    /// core the session it built existed, so the heal episode stayed open in the core.
-    ///
-    /// Mutation: give the heal its own `for … in candidates` loop, or drop its
-    /// `finishReceivingOpen` — this reddens.
-    func testBothResponderPathsShareOneWalkAndOneFinish() throws {
+    /// Mutation: give either path its own bundle fetch or its own init call — this reddens.
+    func testBothResponderPathsOpenThroughTheCore() throws {
         let source = try sourceOf("ConstructMessenger/Services/Session/SessionCoordinator.swift")
         func count(_ needle: String) -> Int { source.components(separatedBy: needle).count - 1 }
-        XCTAssertEqual(count("handlePublicKeyBundleForIncomingMessage("), 1, "one walk opens receiving sessions")
-        XCTAssertEqual(count("planReceivingInit("), 2, "both paths ask the core for the plan")
-        XCTAssertEqual(count("walkReceivingPlan("), 3, "declared once, walked by both paths")
-        XCTAssertEqual(count("finishReceivingOpen("), 3, "declared once, and both paths tell the core")
-        XCTAssertFalse(source.contains("in candidates.enumerated()"), "no hand-rolled bundle loop")
+        XCTAssertEqual(count("responderBundleCandidates("), 1, "one bundle fetch, in the one open")
+        XCTAssertEqual(count("CryptoManager.shared.openReceiving("), 1, "one call into the core's walk")
+        XCTAssertEqual(count("await openReceiving("), 2, "the first message and the heal both use it")
+        XCTAssertEqual(count("namedDevice: claimed"), 1, "the claimed device goes first in the fetch")
+        for gone in ["planReceivingInit(", "initReceivingSession(", "in candidates.enumerated()"] {
+            XCTAssertFalse(source.contains(gone), "\(gone) is a walk of this app's beside the core's")
+        }
     }
 
-    /// The repair paths a failed init triggers are for a genuine key desync. With devices left to
-    /// try, a failure means only "not this one", and firing them per candidate would call
-    /// `verifyAndRepairKeyConsistency` once per device of every account that messages us.
+    /// A SESSION_RESET_INIT the core opened a session from is saved through the router's decrypt
+    /// path (`resolveCoreDrain` → `executeRustActions`), which the live route never lets it reach.
+    /// Its type is the unsealed content type, not a plaintext frame, so nothing there recognised
+    /// it: stand run 2026-09-26, a "$<uuid>" bubble on both sides after a reset.
     ///
-    /// Mutation: drop the `isLastCandidate` guard — this reddens.
-    func testTheRepairPathsFireOnlyOnTheLastCandidate() throws {
-        let source = try sourceOf("ConstructMessenger/Services/Messaging/PublicKeyBundleHandler.swift")
-        let guarded = source.components(separatedBy: "if isLastCandidate {").count - 1
-        XCTAssertEqual(guarded, 2, "both failure branches must gate the repair")
-        XCTAssertTrue(
-            source.contains("isLastCandidate: Bool = true"),
-            "the default keeps every existing caller reporting failures as before"
-        )
+    /// Mutation: drop the `isSessionResetInit` check from the decrypt branch — this reddens.
+    func testAnOpenedResetInitNeverReachesTheTranscript() throws {
+        let source = try sourceOf("ConstructMessenger/Services/Messaging/MessageRouter.swift")
+        let body = try XCTUnwrap(source.range(of: "private func executeRustActions("))
+        let tail = source[body.lowerBound...]
+        let check = try XCTUnwrap(tail.range(of: "if message.isSessionResetInit {"))
+        let framed = try XCTUnwrap(tail.range(of: "if handleFramedSideChannel("))
+        XCTAssertLessThan(check.lowerBound, framed.lowerBound, "recognised before anything that saves a row")
+    }
+
+    /// The key-repair path is for our own keys being out of step with the server, which only an
+    /// open that failed against every bundle of the account can suggest. Fired per attempt it would
+    /// call `verifyAndRepairKeyConsistency` once per device of every account that messages us.
+    ///
+    /// Mutation: run the repair unconditionally on a failed open — this reddens.
+    func testTheRepairPathFiresOnlyWhenEveryBundleRefused() throws {
+        let source = try sourceOf("ConstructMessenger/Services/Session/SessionCoordinator.swift")
+        let open = try XCTUnwrap(source.range(of: "private func openReceiving("))
+        let body = String(source[open.lowerBound...].prefix(6_000))
+        let repair = try XCTUnwrap(body.range(of: "verifyAndRepairKeyConsistency"))
+        let guardLine = try XCTUnwrap(body.range(of: "if !result.triedMessageIds.isEmpty {"))
+        XCTAssertLessThan(guardLine.lowerBound, repair.lowerBound, "the repair sits under the guard")
+        XCTAssertEqual(body.components(separatedBy: "verifyAndRepairKeyConsistency").count - 1, 1)
     }
 
     /// The INITIATOR side of the same fact. A proactive init opens a session with **each** device

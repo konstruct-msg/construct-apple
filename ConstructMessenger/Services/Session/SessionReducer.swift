@@ -5,20 +5,17 @@
 //  Phase 1 / 1.5 of SESSION_COORDINATOR_REFACTOR_SPEC: the pure, deterministic core of
 //  the per-contact session state machine, extracted out of SessionCoordinator's ad-hoc
 //  `ContactSessionState` dictionary + the queue disposition that lived inline in
-//  MessageRouter.handleFirstMessage.
+//  MessageRouter.handleFirstMessage (removed 2026-09-26 with the queue it decided for).
 //
 //  Mirrors the proven TransportReducer pattern: side-effect-free functions that return
 //  the next state plus a list of effects an effector performs. The reducer NEVER does I/O —
 //  no crypto, no gRPC, no Keychain, no Task scheduling, no Date(). All time is injected.
 //
-//  Two concerns, kept separate on purpose:
-//   • `reduce` — the session *phase* lifecycle (initializing / active). SessionCoordinator
-//     owns the phase and performs the resulting queue effects.
-//   • `incomingDisposition` — the *queue disposition* for an incoming message, a pure
-//     decision fed by the authoritative facts MessageRouter holds (Rust session existence +
-//     whether init is already underway). It is stateless: the `.initializing` transition
-//     stays owned by the init executor (handlePublicKeyBundleNeeded), so it never trips
-//     that executor's reentrancy guard.
+//  `reduce` is the session *phase* lifecycle (initializing / active), owned by
+//  SessionCoordinator. It used to name queue effects too (drain / clear) and a queue
+//  disposition for incoming messages (`incomingDisposition`); both went on 2026-09-26 with the
+//  platform's queue — messages waiting for a session wait in the core's
+//  (`decisions/first-contact-queue-keyed-by-claimed-device.md`).
 //
 //  Because the logic is pure, it is exercised directly by SessionRaceConditionTests —
 //  the tests drive these production functions, not a parallel reimplementation.
@@ -72,49 +69,32 @@ enum SessionReducer {
         case markActive(at: UInt64)
     }
 
-    /// Side effects the effector performs. The reducer only *names* them.
-    enum Effect: Equatable {
-        /// Begin session initialisation (fetch bundle + init) for this peer.
-        case startInit
-        /// Buffer the incoming message until the session is ready.
-        case queueMessage
-        /// Process the incoming message immediately (session already active).
-        case processMessage
-        /// Drain and process every buffered message for this peer.
-        case drainQueuedMessages
-        /// Discard every buffered message for this peer (no orphans).
-        case clearQueuedMessages
-    }
-
-    /// Phase-lifecycle transition. Pure: `(phase, event) -> (phase', effects)`.
+    /// Phase-lifecycle transition. Pure: `(phase, event) -> phase'`.
     ///
     /// - Parameters:
     ///   - phase: current phase for the peer, or `nil` for the implicit `.absent` state.
     ///   - event: the input.
-    /// - Returns: the next phase (`nil` == absent) and the ordered effects to perform.
-    static func reduce(_ phase: Phase?, on event: Event) -> (Phase?, [Effect]) {
+    /// - Returns: the next phase (`nil` == absent).
+    static func reduce(_ phase: Phase?, on event: Event) -> Phase? {
         switch event {
 
         case .initStarted:
-            return (.initializing, [])
+            return .initializing
 
         case .initEnded:
             // Only clear the marker if still initializing; never clobber an .active set
             // by a success path that completed inside the same init scope.
-            if case .initializing = phase { return (nil, []) }
-            return (phase, [])
+            if case .initializing = phase { return nil }
+            return phase
 
         case .initSucceeded(let at):
-            return (.active(establishedAt: at), [.drainQueuedMessages])
+            return .active(establishedAt: at)
 
-        case .initFailed:
-            return (nil, [.clearQueuedMessages])
-
-        case .endSessionReceived:
-            return (nil, [.clearQueuedMessages])
+        case .initFailed, .endSessionReceived:
+            return nil
 
         case .markActive(let at):
-            return (.active(establishedAt: at), [])
+            return .active(establishedAt: at)
         }
     }
 
@@ -206,50 +186,6 @@ enum SessionReducer {
         case .midRatchet:         return .midRatchet
         case .midSessionLeftover: return .midSessionLeftover
         }
-    }
-
-    /// How a drained pending queue splits after a session opens: the entry whose watermark to
-    /// release, and the messages still to route.
-    ///
-    /// **The opener is named, not positional.** Both drain sites used to say "skip the first",
-    /// which was the right message only by coincidence. The heal path opens on the message
-    /// `SessionHealingService` chose, unrelated to queue order; and since the responder walk began
-    /// trying every eligible carrier the first-message path opens on whichever carrier the peer's
-    /// device actually sent — for a multi-device peer, routinely not the first queued. A wrong
-    /// answer here is two failures at once: the real opener is re-routed into a ratchet that has
-    /// already consumed it, and an unrelated queued handshake is dropped with its watermark
-    /// released, never tried.
-    ///
-    /// `resolve` is nil when the opener is not in the queue at all, which is normal rather than a
-    /// loss: the first-message path opens on the message that triggered the fetch, and that one
-    /// reaches init before it is ever enqueued. Distinguishing the two is the point — a missing id
-    /// that *should* have been queued means the queue lost it, and that must not read the same as
-    /// a message which was never in it.
-    static func drainSplit(
-        queuedIds: [String],
-        openedOn: String?
-    ) -> (resolve: String?, toRoute: [String]) {
-        guard let openedOn, let index = queuedIds.firstIndex(of: openedOn) else {
-            return (nil, queuedIds)
-        }
-        var rest = queuedIds
-        rest.remove(at: index)
-        return (openedOn, rest)
-    }
-
-    /// Pure disposition for an incoming message, fed by the authoritative facts MessageRouter
-    /// holds. Stateless on purpose (no phase mutation) so it can never trip the init
-    /// executor's reentrancy guard.
-    ///
-    /// - Parameters:
-    ///   - hasActiveSession: a decryptable DR session exists in the Rust core right now.
-    ///   - isInitInFlight: init for this peer is already underway (a message is already queued).
-    /// - Returns: the effects to perform — exactly one of: process now / queue only /
-    ///   start init + queue.
-    static func incomingDisposition(hasActiveSession: Bool, isInitInFlight: Bool) -> [Effect] {
-        if hasActiveSession { return [.processMessage] }
-        if isInitInFlight  { return [.queueMessage] }
-        return [.startInit, .queueMessage]
     }
 
     /// Decide whether to proactively prewarm a session with a peer.
