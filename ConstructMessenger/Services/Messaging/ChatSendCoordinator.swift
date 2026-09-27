@@ -152,33 +152,9 @@ final class ChatSendCoordinator {
             return
         }
 
-        // Buffer only plain-text sends while awaiting RESPONDER session_ready. The buffer is a
-        // text-only Core Data stub: its sole recoverable payload is `decryptedContent`, and the
-        // confirmation flush (`MessageRetryManager.reencryptAndSend`) explicitly refuses `.media`.
-        // Media/file sends have no content yet at buffer time (the JSON is produced by the upload),
-        // so buffering them here would persist an empty stub — an un-retryable "message unavailable"
-        // bubble with the attachments silently dropped. Let them flow to sendMediaMessage/
-        // sendFileMessage instead: the upload latency naturally covers the confirmation window, and
-        // that path persists correct display content plus a resendable wire payload.
-        if CryptoManager.shared.awaitsAcknowledgementFromAnyDevice(ofPeer: recipientId),
-           attachments.isEmpty, fileURLs.isEmpty {
-            let bufferedId = UUID().uuidString
-            let stub = ChatMessage(
-                id: bufferedId,
-                from: currentUserId,
-                to: recipientId,
-                ephemeralPublicKey: Data(),
-                messageNumber: 0,
-                content: Data(),
-                suiteId: 0,
-                timestamp: UInt64(Date().timeIntervalSince1970)
-            )
-            saveMessage(stub, decryptedContent: text, isSentByMe: true, status: .queued,
-                        replyTo: replyTo, replyToContentOverride: replyToContentOverride, suiteId: 0)
-            Log.info("SESSION_CONFIRM[buffered]: message \(bufferedId.prefix(8))… queued — waiting for RESPONDER session_ready from \(recipientId.prefix(8))…", category: "SessionConfirm")
-            return
-        }
-
+        // Plain-text sends were buffered here while our SESSION_RESET_INIT awaited the peer's
+        // `session_ready`, until 2026-09-27. Nothing waits for an answer now: the message carries
+        // the handshake header itself (`decisions/sessions-renew-by-sending.md`).
         Log.info("Sending to: \(recipientId), from: \(currentUserId)", category: "ChatViewModel")
         Task { @MainActor [weak self] in
             guard let self else { return }

@@ -102,13 +102,14 @@ final class EndSessionWindowIsNotInTheCoordinatorTests: XCTestCase {
         )
     }
 
-    /// And the re-init the peer's teardown raises is asked for, not scheduled.
+    /// And the new session the peer's teardown calls for is opened by sending, not scheduled.
     ///
-    /// The same delegate held the debounce. If the ask goes missing the natural INITIATOR simply
-    /// never rebuilds, and the peer's 60 s responder fallback covers it — so the failure is a
-    /// minute of silence, not an error, which is why it needs a test rather than a log line.
+    /// The same delegate held the debounce, and until 2026-09-27 a ranked `reopenRequested` ask.
+    /// A session now opens with the next message (`decisions/sessions-renew-by-sending.md`), so
+    /// what the delegate must do is send: if the resend goes missing, nothing reopens until the
+    /// user types — a silence, not an error, which is why it needs a test rather than a log line.
     ///
-    /// Mutation: replace the `reopenRequested` call with a `Task.sleep` + re-init — this reddens.
+    /// Mutation: replace the resend with a `Task.sleep` + re-init — this reddens.
     func testTheReInitIsAskedForRatherThanScheduled() {
         let source = coordinatorSource
         guard let handler = source.range(of: "receivedEndSession peer: PeerAddress") else {
@@ -116,8 +117,8 @@ final class EndSessionWindowIsNotInTheCoordinatorTests: XCTestCase {
         }
         let body = source[handler.lowerBound...].prefix(3_000)
         XCTAssertTrue(
-            body.contains("reopenRequested"),
-            "the machine decides when the ratchet reopens; a sleep here is the debounce back"
+            body.contains("resendUnconfirmedOutgoingMessagesIfNeeded(to:"),
+            "the next message opens the new session; without the resend nothing does"
         )
         // A call, not the word: the comment above the ask names the sleep it replaced, and the
         // neighbouring carrier test learned the same lesson — prose explaining where a thing went

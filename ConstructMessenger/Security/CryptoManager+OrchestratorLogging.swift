@@ -21,8 +21,7 @@ extension CryptoManager {
 
         if actions.contains(where: { action in
             switch action {
-            case .sendEndSession, .sessionHealNeeded, .openReceiving, .openSession,
-                 .resendSri, .healExhausted:
+            case .sendEndSession, .openReceiving, .openSession, .pendingDropped:
                 return true
             default:
                 return false
@@ -56,16 +55,6 @@ extension CryptoManager {
             return "teardownRequested contactId=\(contactId.prefix(8))… cause=\(cause)"
         case .peerToreDown(let contactId):
             return "peerToreDown contactId=\(contactId.prefix(8))…"
-        case .healAttempted(let contactId):
-            return "healAttempted contactId=\(contactId.prefix(8))…"
-        case .reopenRequested(let contactId):
-            return "reopenRequested contactId=\(contactId.prefix(8))…"
-        case .sriAnnounced(let contactId):
-            return "sriAnnounced contactId=\(contactId.prefix(8))…"
-        case .peerAcked(let contactId):
-            return "peerAcked contactId=\(contactId.prefix(8))…"
-        case .resetInitArrived(let contactId, let initEphemeral, let sentAtS, let establishedAtS):
-            return "resetInitArrived contactId=\(contactId.prefix(8))… eph=\(initEphemeral.prefix(4).map { String(format: "%02x", $0) }.joined())… ts=\(sentAtS) established=\(establishedAtS.map(String.init) ?? "nil")"
         case .timerFired(let timerId):
             return "timerFired id=\(timerId.prefix(24))…"
         case .ackDbResult(let messageId, let isProcessed):
@@ -84,22 +73,10 @@ extension CryptoManager {
             case .callSignalDecrypted:      labels.insert("call_signal")
             case .sendEncryptedMessage:     labels.insert("send")
             case .saveToSecureStore: labels.insert("save")
-            case .sessionHealNeeded:        labels.insert("heal")
             case .sendEndSession:           labels.insert("end_session")
             case .openReceiving:            labels.insert("open_receiving")
             case .openSession:              labels.insert("open_session")
-            case .openDeferred:             labels.insert("open_deferred")
-            case .openNotNeeded:            labels.insert("open_not_needed")
-            case .resendSri:                labels.insert("resend_sri")
-            case .healAttemptAllowed(_, let attempt): labels.insert("heal_attempt[\(attempt)]")
-            case .healExhausted:            labels.insert("heal_exhausted")
-            case .heldPendingAck:           labels.insert("held_pending_ack")
-            case .replayHeld:               labels.insert("replay_held")
-            case .heldSuperseded:           labels.insert("held_superseded")
-            case .openingGaveUp:            labels.insert("opening_gave_up")
-            case .applyResetInit:           labels.insert("apply_reset_init")
-            case .resetInitSuperseded(_, let redelivery):
-                labels.insert(redelivery ? "reset_init_redelivery" : "reset_init_predates_session")
+            case .pendingDropped:           labels.insert("pending_dropped")
             case .notifyError(let code, let msg) where firstError == nil:
                 firstError = (code, msg)
             default: break

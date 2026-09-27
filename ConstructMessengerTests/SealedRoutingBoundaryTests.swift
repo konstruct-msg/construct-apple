@@ -35,11 +35,11 @@ final class SealedRoutingBoundaryTests: XCTestCase {
 
     // MARK: - Recording delegate
 
-    /// Records the two delegate queries that are unique to the control branches and fire
-    /// *before* any crypto work, so classification can be observed without executing the
-    /// handlers. Both return `true` to short-circuit the heavy path deliberately.
+    /// Records the delegate query that is unique to the END_SESSION branch and fires *before* any
+    /// crypto work, so classification can be observed without executing the handler. It returns
+    /// `true` to short-circuit the heavy path deliberately. The SESSION_RESET_INIT branch it once
+    /// recorded beside it is gone since 2026-09-27 (`decisions/sessions-renew-by-sending.md`).
     private final class RecordingDelegate: MessageRouterDelegate {
-        var resetInitSupersededQueries: [PeerAddress] = []
         var endSessionStaleQueries: [PeerAddress] = []
         var endSessionRequests: [String] = []
 
@@ -55,12 +55,6 @@ final class SealedRoutingBoundaryTests: XCTestCase {
             endSessionStaleQueries.append(peer)
             return true   // short-circuit: classification is what we assert
         }
-        func messageRouter(_ router: MessageRouter, isResetInitSuperseded peer: PeerAddress, timestamp: UInt64, initEphemeral: Data) -> Bool {
-            resetInitSupersededQueries.append(peer)
-            return true   // short-circuit
-        }
-        func messageRouter(_ router: MessageRouter, didWinTieBreak peer: PeerAddress) {}
-        func messageRouter(_ router: MessageRouter, needsSessionHeal peer: PeerAddress, failedMessage: ChatMessage) {}
         func messageRouter(_ router: MessageRouter, didDecryptDeliveryReceipt messageIds: [String]) {}
         func messageRouter(_ router: MessageRouter, needsUsernameUpdate peer: PeerAddress) {}
     }
@@ -99,31 +93,6 @@ final class SealedRoutingBoundaryTests: XCTestCase {
 
     // MARK: - A. Unseal boundary remaps the routing kind
 
-    /// A sealed SESSION_RESET_INIT must reach the SRI branch. Before the fix the outer
-    /// "DIRECT_MESSAGE" stamp survived the rebuild, `isSessionResetInit` stayed false, and the
-    /// message fell through to the generic decrypt path where the orchestrator returned no
-    /// routing decision — the peer's session was never re-established.
-    func testSealedResetInit_ReachesResetInitBranch() {
-        stubUnseal(contentType: 24)
-
-        router.routeIncomingMessage(sealedMessage(), in: context)
-
-        XCTAssertEqual(
-            delegate.resetInitSupersededQueries.map(\.account), [peer],
-            "sealed ct=24 must route as SESSION_RESET_INIT — this is the f39e03b4 regression"
-        )
-    }
-
-    /// The re-init names the device whose ratchet it replaces. Two devices of one account
-    /// re-initialising at once used to archive the pinned session twice and the sibling's never.
-    func testSealedResetInit_NamesTheCertifiedDevice() {
-        stubUnseal(contentType: 24)
-
-        router.routeIncomingMessage(sealedMessage(), in: context)
-
-        XCTAssertEqual(delegate.resetInitSupersededQueries.map(\.device), [senderDevice])
-    }
-
     /// A sealed END_SESSION must reach the END_SESSION branch. Before the fix it was classified
     /// as a regular message, failed to build an incoming event, and was skipped outright.
     func testSealedEndSession_ReachesEndSessionBranch() {
@@ -153,24 +122,23 @@ final class SealedRoutingBoundaryTests: XCTestCase {
     }
 
     /// Control-branch classification must not swallow ordinary sealed traffic: a regular body
-    /// takes neither control branch.
+    /// does not take the END_SESSION branch.
     func testSealedRegularMessage_TakesNeitherControlBranch() {
         stubUnseal(contentType: 1)
 
         router.routeIncomingMessage(sealedMessage(), in: context)
 
-        XCTAssertTrue(delegate.resetInitSupersededQueries.isEmpty, "ct=1 is not a SESSION_RESET_INIT")
         XCTAssertTrue(delegate.endSessionStaleQueries.isEmpty, "ct=1 is not an END_SESSION")
     }
 
     /// The resolved sender must become the routing identity — a sealed message carries an empty
     /// `from`, and everything downstream keys off it.
     func testSealedMessage_RoutesUnderResolvedSender() {
-        stubUnseal(contentType: 24)
+        stubUnseal(contentType: 21)
 
         router.routeIncomingMessage(sealedMessage(), in: context)
 
-        XCTAssertEqual(delegate.resetInitSupersededQueries.first?.account, peer,
+        XCTAssertEqual(delegate.endSessionStaleQueries.first?.account, peer,
                        "routing identity must be the unsealed sender, not the empty outer `from`")
     }
 

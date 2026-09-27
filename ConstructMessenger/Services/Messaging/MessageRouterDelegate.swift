@@ -46,35 +46,16 @@ protocol MessageRouterDelegate: AnyObject {
     /// (pre-dates the currently established session) and should be silently discarded.
     func messageRouter(_ router: MessageRouter, isEndSessionStale peer: PeerAddress, timestamp: UInt64) -> Bool
 
-    /// Return `true` when a SESSION_RESET_INIT from `peer` is *superseded* — either we have
-    /// already applied this exact init (identified by `initEphemeral`, its X3DH ephemeral public
-    /// key), or it pre-dates the current session's establishment (a server backlog replay). Such an
-    /// init is coalesced, ACK-only. A live init returns `false` and MUST be applied, even while a
-    /// session is active, or the RESPONDER strands on a stale ratchet.
-    ///
-    /// `initEphemeral` is what makes a redelivery recognisable at all: two copies of one init carry
-    /// the same key, and they carry the same `timestamp` too — which is why the timestamp alone
-    /// could not tell them apart. The core decides and keeps the ledger — `CryptoManager.judgeResetInit`.
-    func messageRouter(
-        _ router: MessageRouter,
-        isResetInitSuperseded peer: PeerAddress,
-        timestamp: UInt64,
-        initEphemeral: Data
-    ) -> Bool
-
     // MARK: - Session initialisation
 
     /// The core holds a message for `peer.device` that can open a session and granted the open:
     /// ask the core to open it (`open_receiving`). Nothing is fetched.
     func messageRouter(_ router: MessageRouter, canOpenReceiving peer: PeerAddress, for message: ChatMessage)
 
-    /// A tie-break was resolved in our favour — we are the INITIATOR.
-    func messageRouter(_ router: MessageRouter, didWinTieBreak peer: PeerAddress)
-
-    // MARK: - Session healing
-
-    /// Session decrypt failed with `messageNumber == 0` — healing should be attempted.
-    func messageRouter(_ router: MessageRouter, needsSessionHeal peer: PeerAddress, failedMessage: ChatMessage)
+    // `isResetInitSuperseded`, `didWinTieBreak` and `needsSessionHeal` stood here until
+    // 2026-09-27, with the SESSION_RESET_INIT, the tie-break and the heal they reported. A message
+    // carrying the handshake header opens a new state beside the one held — `canOpenReceiving`,
+    // the same as a first message (`decisions/sessions-renew-by-sending.md`).
 
     // MARK: - Delivery
 

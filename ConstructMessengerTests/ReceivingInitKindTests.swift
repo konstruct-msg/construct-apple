@@ -2,15 +2,17 @@
 //  ReceivingInitKindTests.swift
 //  ConstructMessengerTests
 //
-//  `messageNumber == 0` is not "this is an X3DH handshake". After a DH ratchet the new
-//  sending chain starts at N=0, and feeding that leftover to `initReceivingSession`
-//  fails with "PQ epoch N secret unavailable (current epoch 0)" then clears the pending
-//  queue — including any real handshake sitting behind it.
+//  Which message can open a receiving session, as this app asks the core.
 //
-//  Device logs 2026-08-19, both sides, six times:
-//      msgNum: 0 sealedBox: 283B oneTimePrekeyId: 0 kemCiphertext: 0B
-//      → All 1 prekey(s) failed … PQ epoch 2 secret unavailable (current epoch 0)
-//  The ephemeral `95ac454b` was a live sending-chain key, not an X3DH ephemeral.
+//  Since 2026-09-27 the answer is the handshake header — the KEM ciphertext — at any message
+//  number: the initiator repeats it on every message until the peer answers, so a lost first
+//  message costs nothing (`decisions/sessions-renew-by-sending.md`). Until then it was "message
+//  number 0 unless a PQ epoch says otherwise", and a bare message 0 was a handshake — which is
+//  what a DH sending chain restarting at 0 also looks like (device logs 2026-08-19: `msgNum: 0
+//  oneTimePrekeyId: 0 kemCiphertext: 0B` → "PQ epoch 2 secret unavailable").
+//
+//  The rule is the core's (`receiving_init_plan.rs`); these pin the forwarder and that the app's
+//  core is built with PQXDH, which is what makes the KEM ciphertext the whole rule.
 //
 
 import XCTest
@@ -22,25 +24,27 @@ final class ReceivingInitKindTests: XCTestCase {
         msgNum: UInt32 = 0,
         otpk: UInt32 = 0,
         kem: Int = 0,
-        epoch: UInt32 = 0,
-        sri: Bool = false
+        epoch: UInt32 = 0
     ) -> SessionReducer.ReceivingInitKind {
         SessionReducer.receivingInitKind(
             messageNumber: msgNum,
             oneTimePreKeyId: otpk,
             kemCiphertextBytes: kem,
-            pqMessageEpoch: epoch,
-            isSessionResetInit: sri
+            pqMessageEpoch: epoch
         )
     }
 
-    /// The field failure: PQ-tagged, no OTPK, no KEM, N=0.
-    func testPqEpochLeftover_IsNotAHandshake() {
-        XCTAssertEqual(
-            kind(epoch: 2),
-            .midSessionLeftover,
-            "a PQ epoch on a message with no handshake fields is a live sending-chain leftover"
-        )
+    /// The change of 2026-09-27: a header past message 0 opens.
+    func testAHeaderOpensAtAnyMessageNumber() {
+        XCTAssertEqual(kind(msgNum: 0, kem: 1568), .handshake)
+        XCTAssertEqual(kind(msgNum: 5, kem: 1568), .handshake)
+    }
+
+    /// The field failure of 2026-08-19, and a bare message 0 generally: a DH chain restarting,
+    /// not an opener. There is no classical handshake to mistake it for any more.
+    func testABareFirstMessageIsNotAHandshake() {
+        XCTAssertEqual(kind(epoch: 2), .midRatchet)
+        XCTAssertEqual(kind(), .midRatchet)
     }
 
     func testMidRatchet_IsNotAHandshake() {
@@ -48,25 +52,8 @@ final class ReceivingInitKindTests: XCTestCase {
         XCTAssertEqual(kind(msgNum: 1), .midRatchet)
     }
 
-    func testOtpkMakesItAHandshakeEvenWithEpoch() {
-        XCTAssertEqual(kind(otpk: 1_000_282, kem: 1568, epoch: 0), .handshake)
-        XCTAssertEqual(kind(otpk: 1_000_274), .handshake)
+    /// A one-time pre-key id without a KEM ciphertext is not a PQXDH handshake.
+    func testAnOtpkAloneIsNotAHandshake() {
+        XCTAssertEqual(kind(otpk: 1_000_274), .midRatchet)
     }
-
-    func testKemMakesItAHandshake() {
-        XCTAssertEqual(kind(kem: 1568), .handshake)
-    }
-
-    func testSessionResetInitIsAlwaysAHandshake() {
-        XCTAssertEqual(kind(sri: true), .handshake)
-        XCTAssertEqual(kind(epoch: 2, sri: true), .handshake)
-    }
-
-    /// 3-DH classic (no OTPK, no KEM, epoch 0) is the reproducible fallback after
-    /// `otpkUnreproducible`. Classifying it as a leftover would refuse the one init
-    /// that still works when OTPKs are gone.
-    func testClassicThreeDH_StaysAHandshake() {
-        XCTAssertEqual(kind(), .handshake)
-    }
-
 }

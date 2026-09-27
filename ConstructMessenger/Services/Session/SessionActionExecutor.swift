@@ -9,8 +9,8 @@
 /// - `OutboundSessionService.executeRustTimerActions` — fired by Rust timers
 /// - `executeOffRouter` — every other event's answer; logs a router-bound action it cannot run
 ///
-/// State-bound actions (`.messageDecrypted`, `.sessionHealNeeded`, `.sendEndSession`,
-/// `.openReceiving`) still execute inline in `MessageRouter` because they
+/// State-bound actions (`.messageDecrypted`, `.sendEndSession`, `.openReceiving`) still execute
+/// inline in `MessageRouter` because they
 /// depend on the router's `chunkReassembler`, core envelopes and `delegate`. The
 /// executor `break`s on these cases so the router can handle them after the
 /// `SessionActionExecutor.shared.execute(actions)` call returns.
@@ -24,22 +24,12 @@ final class SessionActionExecutor {
     static let shared = SessionActionExecutor()
     private init() {}
 
-    /// Runs `.openSession`: open a session with this **device** as INITIATOR and announce it.
+    /// Runs `.openSession`: open a new session with this **device** as INITIATOR over the one held.
     ///
-    /// Supplied by `SessionCoordinator`, which owns the announce (the SRI is its transport) and
-    /// is the only place that can read the device id back to an account. One hook for both
-    /// arrival paths — the immediate answer to `reopenRequested`, and the core's own
-    /// `reopen_quiet:` alarm, which reaches this executor through
-    /// `OutboundSessionService.executeRustTimerActions`.
+    /// Supplied by `SessionCoordinator`, the only place that can read the device id back to the
+    /// account a bundle is fetched for. Nothing is announced: the handshake header rides on the
+    /// next message to the device (`decisions/sessions-renew-by-sending.md`).
     var onOpenSession: ((String) -> Void)?
-
-    /// Runs `.resendSri`: announce to this **device** again, because the last SESSION_RESET_INIT
-    /// has gone unanswered for a retry interval.
-    var onResendSri: ((String) -> Void)?
-
-    /// Runs `.openingGaveUp`: the confirm window ran out, so release what was held behind the
-    /// opening — the buffered sends and the held incoming carriers, both, in one call.
-    var onOpeningGaveUp: ((String) -> Void)?
 
     /// Execute a batch of actions returned by `CryptoManager.handleOrchestratorEvent`.
     ///
@@ -56,9 +46,8 @@ final class SessionActionExecutor {
     ///
     /// Every answer the core gives has to reach here; an event whose result is dropped with
     /// `_ = try?` is a producer with no consumer. That is how the `open_confirm:` alarm went
-    /// unarmed from 2026-09-23: `SriAnnounced` was written when the core answered it with nothing,
-    /// the core then started answering with the alarm, and the call site kept throwing the answer
-    /// away — so a lost SESSION_RESET_INIT was never re-sent and a confirm window never gave up.
+    /// unarmed from 2026-09-23 until the alarm itself was removed on 2026-09-27: the call site
+    /// kept throwing the core's answer away.
     ///
     /// The router-bound actions still `break` in `execute`, because on the router's own paths the
     /// router carries them out after it returns. Off those paths nobody does, so each one that
@@ -84,7 +73,6 @@ final class SessionActionExecutor {
     private static func routerBoundName(_ action: CfeAction) -> String? {
         switch action {
         case .openReceiving: return "openReceiving"
-        case .sessionHealNeeded: return "sessionHealNeeded"
         case .sendEndSession: return "sendEndSession"
         case .messageDecrypted: return "messageDecrypted"
         default: return nil
@@ -108,8 +96,8 @@ final class SessionActionExecutor {
             break
         case .markMessageDelivered:
             break
-        case .replayHeld, .heldSuperseded, .pendingDropped:
-            // Carried out where every answer passes, `CryptoManager.dispatchHeldReleases`.
+        case .pendingDropped:
+            // Carried out where every answer passes, `CryptoManager.dispatchPendingDropped`.
             break
         case .duplicateDropped:
             // A routing verdict; MessageRouter records the message as processed and moves the
@@ -169,48 +157,10 @@ final class SessionActionExecutor {
             // The router keeps the envelope and asks the coordinator for the open.
             break
 
-        // ── Healing / END_SESSION (need MessageRouter state) ──────
-        case .sessionHealNeeded:
-            // Requires MessageRouter.handleRustHealDecision
-            break  // scaffold
-
+        // ── END_SESSION (needs MessageRouter state) ───────────────
         case .sendEndSession:
             // Requires MessageRouter delegate callbacks
             break  // scaffold
-
-        case .applyResetInit, .resetInitSuperseded:
-            // Answers to `handleOrchestratorEvent(.resetInitArrived:)`, read synchronously by
-            // `CryptoManager.judgeResetInit` — the router decides before it touches the message,
-            // so the verdict cannot wait for an executor hook. Here only because the switch is
-            // exhaustive.
-            break
-
-        case .healAttemptAllowed, .healExhausted:
-            // Answers to `handleOrchestratorEvent(.healAttempted:)`, read synchronously by
-            // `CryptoManager.recordHealAttempt(forDevice:)` — the caller needs the verdict before
-            // it walks the peer's bundles, so it cannot wait for an executor hook. They appear
-            // here only because the switch is exhaustive, which is what stops a new action from
-            // arriving with no reader anywhere.
-            break
-
-        case .heldPendingAck(let contactId):
-            // A verdict `MessageRouter` acts on, because acting on it needs the message: it goes
-            // into the per-peer buffer and is replayed when the wait ends. Nothing to do here
-            // but say so — the switch is exhaustive so that a new verdict cannot arrive with no
-            // reader anywhere, which is the failure this arm exists to make impossible.
-            Log.info(
-                "Held behind our unacked SESSION_RESET_INIT to \(contactId.prefix(8))… — buffered, not torn down",
-                category: "SessionActionExecutor"
-            )
-
-        case .healSuppressed(let contactId, let retryAfterMs):
-            // Verdict, not a chore: MessageRouter holds the cursor and this executor runs
-            // `scheduleTimer` from the same list. The log is informational so a future
-            // fallthrough cannot hide behind DEBUG.
-            Log.info(
-                "Heal suppressed for \(contactId.prefix(8))… — core will retry after \(retryAfterMs)ms",
-                category: "SessionActionExecutor"
-            )
 
         case .endSessionSuppressed(let contactId, let retryAfterMs):
             // The core owes this teardown and will send it when the cooldown clears; nothing to do
@@ -233,8 +183,8 @@ final class SessionActionExecutor {
             )
 
         case .openSession(let contactId):
-            // The machine granted the open. Nothing here decides *whether* — a guard at this
-            // point would be the second decider the 1.5 s debounce was.
+            // The core asked for the open (the PQXDH v2 upgrade sweep). Nothing here decides
+            // *whether* — a guard at this point would be a second decider.
             guard let onOpenSession else {
                 Log.error(
                     "OpenSession for \(contactId.prefix(8))… with no consumer wired — the re-init is lost",
@@ -243,50 +193,6 @@ final class SessionActionExecutor {
                 return
             }
             onOpenSession(contactId)
-
-        case .openDeferred(let contactId, let retryAfterMs):
-            // The peer tore this ratchet down and its rebuild is probably in the same flush.
-            // Informational, like `endSessionSuppressed`: the core armed the alarm and owns the
-            // retry. Arming one here would be the debounce this replaced, rebuilt outside the
-            // machine — and two alarms for one ratchet is how N re-inits per flush happened.
-            Log.info(
-                "Reopen held for \(contactId.prefix(8))… — the peer's teardown flush is still arriving, core retries in \(retryAfterMs)ms",
-                category: "SessionActionExecutor"
-            )
-
-        case .openNotNeeded(let contactId):
-            // The peer's rebuild landed during the quiet, which is what the quiet was for. This
-            // is the line to look for when a re-init "should have" happened and did not — it
-            // used to read `SESSION_STATE[reinit_skipped_fresh_session]`.
-            Log.info(
-                "Reopen not needed for \(contactId.prefix(8))… — a session with this device is back",
-                category: "SessionActionExecutor"
-            )
-
-        case .resendSri(let contactId):
-            // The core owns the cadence and the bound; this only carries out the send. A guard
-            // here deciding *whether* would be `tieBreakWatchdogs` rebuilt outside the machine.
-            guard let onResendSri else {
-                Log.error(
-                    "ResendSri for \(contactId.prefix(8))… with no consumer wired — the handshake stalls until the window lapses",
-                    category: "SessionActionExecutor"
-                )
-                return
-            }
-            onResendSri(contactId)
-
-        case .openingGaveUp(let contactId):
-            // Not an error, a bound. Before 2026-08-04 the watchdog was single-shot and this
-            // moment never came: the gate stayed raised, outgoing buffered forever and held
-            // incoming sat behind a deferred cursor.
-            guard let onOpeningGaveUp else {
-                Log.error(
-                    "OpeningGaveUp for \(contactId.prefix(8))… with no consumer wired — the confirm gate stays up",
-                    category: "SessionActionExecutor"
-                )
-                return
-            }
-            onOpeningGaveUp(contactId)
 
         case .messageQueuedPendingInit(let contactId, let queuedCount):
             // Held inside the core behind an in-flight init and drained on SessionInitCompleted.

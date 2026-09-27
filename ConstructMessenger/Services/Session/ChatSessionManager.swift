@@ -148,7 +148,7 @@ final class ChatSessionManager {
     func initializeSessionProactively(userId: String) async {
         viewModel?.isInitializingSession = true
         var succeeded = false
-        let opened = await sessionInitService.initializeSessionProactively(
+        await sessionInitService.initializeSessionProactively(
             userId: userId,
             // Reached from opening a conversation and from sending into one; both are a person
             // waiting on this session, which is what the flag means.
@@ -175,74 +175,12 @@ final class ChatSessionManager {
             }
         )
         guard succeeded else { return }
-        // The ping is about the ratchets this run built, so it is addressed to them. Empty means
-        // the sessions were already in place and nothing new claimed `msgNum=0`; then the ping
-        // goes to every device we hold a session with, which is what it has always done.
-        await sendSessionInitPing(to: userId, devices: opened)
         onSessionReady?(userId)
     }
 
-    /// Post-init ping (msgNum=0) announcing our fresh ratchets to the peer.
-    ///
-    /// **One per ratchet, through the one sender.** The ping exists to keep `msgNum=0` off user
-    /// content: the first message on a fresh session is the X3DH carrier, and a carrier the peer
-    /// discards costs nothing while a user message lost there is a user message lost. A session is
-    /// a ratchet between two devices, so a peer with two devices has two `msgNum=0` slots and,
-    /// until 2026-09-22, one of them was taken by the ping and the other by whatever the user
-    /// typed — the account-shaped send resolved to the pinned device and the sibling never got
-    /// one.
-    ///
-    /// Sent through `OutboundMessagePipeline` as a control rather than by hand, which is what
-    /// gives each copy the device tag its recipient recognises it by. Two untagged copies of one
-    /// `msgNum=0` message are worse than one: the device that cannot open the other's copy takes
-    /// the recovery path, and for `msgNum == 0` that path fetches a key bundle over the network
-    /// (`DeviceDeliveryPlan`).
-    ///
-    /// Still fail-closed under stealth, and still skippable: the pipeline refuses to downgrade a
-    /// sealed control, and a refused ping only means the peer establishes from the X3DH carrier
-    /// plus the tie-break watchdog, as it did before this existed.
-    ///
-    /// - Parameter devices: the ratchets to announce. Empty means "every device we hold a session
-    ///   with" — the pipeline's own answer.
-    func sendSessionInitPing(to userId: String, devices: [String] = []) async {
-        // A SESSION_RESET_INIT is in flight for this peer and owns msgNum=0 on the (now shared,
-        // post-coalescing) session. The ping exists only to keep msgNum=0 off user content, so
-        // once the SRI has that slot it is redundant — and sending it would put a second X3DH
-        // carrier on the wire that the peer can only discard.
-        //
-        // Asked of the account because the answer is: one message becomes a copy per device, so
-        // one unannounced-and-unanswered ratchet is enough. The fold is over the device set the
-        // machine is keyed by — it was a map on this side until 2026-09-23.
-        guard !CryptoManager.shared.awaitsAcknowledgementFromAnyDevice(ofPeer: userId) else {
-            Log.info("SESSION_STATE[init_ping_skipped]: SESSION_RESET_INIT owns msgNum=0 for \(userId.prefix(8))…", category: "SessionInit")
-            return
-        }
-        guard let myId = AuthSessionManager.shared.currentUserId, !myId.isEmpty else { return }
-        guard let frameType = SessionControlCodec.frameContentType(for: .ping) else { return }
-        let pingId = UUID().uuidString.lowercased()
-        let nonce = UUID().uuidString
-        let payload = SessionControlCodec.encodePayload(op: .ping, nonce: nonce)
+    // `sendSessionInitPing` stood here until 2026-09-27: a control message sent on every fresh
+    // session so that `msgNum=0` — then the only message a session could open from — would not be
+    // user content. Every message of the first flight carries the handshake header now and any of
+    // them opens (`decisions/sessions-renew-by-sending.md`), so the first one may be the user's.
 
-        do {
-            // The ping's type rides in KNST byte 5, inside the ciphertext; the server is told
-            // nothing. Outer envelope only — the sealed path declares `.generic`.
-            let report = try await OutboundMessagePipeline.shared.sendToRecipientDevices(
-                plan: .whole(payload, contentType: frameType, messageId: UUID(uuidString: pingId) ?? UUID()),
-                baseMessageId: pingId,
-                senderId: myId,
-                recipientId: userId,
-                timestamp: UInt64(Date().timeIntervalSince1970),
-                kind: .control,
-                onlyDevices: devices.isEmpty ? nil : devices
-            )
-            Log.info(
-                "SESSION_STATE[init_ping_sent]: msgNum=0 ping sent to \(report.accepted.count) device(s) of \(userId.prefix(8))… — user messages follow as msgNum=1+",
-                category: "SessionInit"
-            )
-        } catch let blocked as StealthDowngradeBlocked {
-            Log.error("SESSION_STATE[init_ping_downgrade_blocked]: \(blocked.reason) — ping skipped (never sent identified under stealth)", category: "SessionInit")
-        } catch {
-            Log.error("SESSION_STATE[init_ping_failed]: \(error.localizedDescription) for \(userId.prefix(8))… — user messages will be sent anyway", category: "SessionInit")
-        }
-    }
 }

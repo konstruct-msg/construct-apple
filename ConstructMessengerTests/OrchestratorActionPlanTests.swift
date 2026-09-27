@@ -79,25 +79,13 @@ final class OrchestratorActionPlanTests: XCTestCase {
         XCTAssertNil(plan.ackCheckMessageId)
     }
 
-    // MARK: - Routing verdict (healSuppressed is a decision, not "unknown")
+    // MARK: - Routing verdict (a suppression is a decision, not "unknown")
 
-    /// Device logs 2026-08-19: the core returned
-    /// `[healSuppressed(..., retryAfterMs: 5068), scheduleTimer(cooldown_expired:…)]`
-    /// and the router logged `unknown(healSuppressed),unknown(scheduleTimer)` then ERROR
-    /// "no routing decision". That pair is a cooldown verdict. Treating it as `.none`
-    /// skipped the timer and advanced the cursor past an un-ACKed message.
-    func testHealSuppressedPlusTimer_IsAHealSuppressedVerdict() {
-        let verdict = OrchestratorActionPlan.routingVerdict(from: [
-            .healSuppressed(contactId: peer, retryAfterMs: 5068),
-            .scheduleTimer(timerId: "cooldown_expired:\(peer)", delayMs: 5068)
-        ])
-        XCTAssertEqual(
-            verdict,
-            .healSuppressed(contactId: peer, retryAfterMs: 5068),
-            "scheduleTimer is a chore riding alongside the verdict, not a missing decision"
-        )
-    }
-
+    /// Device logs 2026-08-19: the core returned a suppression beside
+    /// `scheduleTimer(cooldown_expired:…)` and the router logged both as unknown, then ERROR
+    /// "no routing decision". That pair is a cooldown verdict; treating it as `.none` skipped the
+    /// timer and advanced the cursor past an un-ACKed message. (The heal suppression it was
+    /// first seen with went on 2026-09-27; the teardown one below is the same shape.)
     func testEndSessionSuppressedPlusTimer_IsAnEndSessionSuppressedVerdict() {
         let verdict = OrchestratorActionPlan.routingVerdict(from: [
             .endSessionSuppressed(contactId: peer, retryAfterMs: 5077),
@@ -126,7 +114,7 @@ final class OrchestratorActionPlanTests: XCTestCase {
         let decrypted = OrchestratorActionPlan.routingVerdict(from: [
             .scheduleTimer(timerId: "x", delayMs: 1),
             .messageDecrypted(contactId: peer, messageId: messageId, plaintext: Data("hi".utf8)),
-            .healSuppressed(contactId: peer, retryAfterMs: 1)
+            .endSessionSuppressed(contactId: peer, retryAfterMs: 1)
         ])
         XCTAssertEqual(decrypted, .decrypted)
     }

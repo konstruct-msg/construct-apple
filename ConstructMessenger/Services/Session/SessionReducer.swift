@@ -57,15 +57,14 @@ enum SessionReducer {
         /// `.initializing` marker, but only if still initializing — never clobbers `.active`
         /// set by a success path that ran inside the same init scope.
         case initEnded
-        /// Session init/heal completed successfully at the given Unix-seconds timestamp.
+        /// Session init completed successfully at the given Unix-seconds timestamp.
         case initSucceeded(at: UInt64)
-        /// Session init/heal failed terminally.
+        /// Session init failed terminally.
         case initFailed
         /// END_SESSION was received / the session was torn down.
         case endSessionReceived
         /// Mark the session active at the given timestamp without draining the queue
-        /// (used where establishment is confirmed out-of-band, e.g. RESPONDER `session_ready`,
-        /// or a heal that intentionally does not reset establishment time).
+        /// (used where establishment is known out-of-band, e.g. a session restored at launch).
         case markActive(at: UInt64)
     }
 
@@ -98,20 +97,13 @@ enum SessionReducer {
         }
     }
 
-    /// What a message is, when we have no session and are considering `initReceivingSession`.
-    ///
-    /// `messageNumber == 0` is **not** "this is an X3DH handshake". After a DH ratchet the new
-    /// sending chain starts at N=0 with a fresh ephemeral, and feeding that leftover to
-    /// `initReceivingSession` fails with "PQ epoch N secret unavailable (current epoch 0)"
-    /// or AEAD — then the coordinator clears the pending queue, including any real handshake
-    /// sitting behind it. Device logs 2026-08-19, both sides, six times in one session:
-    /// `eph=95ac454b` (a live sending-chain key) with `oneTimePrekeyId: 0 kemCiphertext: 0B`.
+    /// What a message is, for the purpose of opening a receiving session: whether it carries the
+    /// initiator's handshake header. Since 2026-09-27 that is the KEM ciphertext, at any message
+    /// number — the first flight repeats it (`decisions/sessions-renew-by-sending.md`).
     enum ReceivingInitKind: Equatable {
-        /// X3DH / PQXDH / 3-DH / SESSION_RESET_INIT — the only input `initReceivingSession` accepts.
+        /// Carries the handshake header: this message can open a session.
         case handshake
-        /// First message of a DH sending chain from a session we no longer hold. Cannot init from it.
-        case midSessionLeftover
-        /// Already mid-ratchet (`messageNumber > 0`). Cannot init from it.
+        /// Carries none: it decrypts on a state we hold or not at all.
         case midRatchet
     }
 
@@ -149,42 +141,28 @@ enum SessionReducer {
         return now.timeIntervalSince(markedAt) < vanishedPeerRetryAfter ? .discard : .proceed
     }
 
-    /// Classify an incoming envelope for the RESPONDER init path.
+    /// Classify an incoming envelope for the receiving open.
     ///
-    /// Handshake evidence, any one of which is enough: SESSION_RESET_INIT, a consumed OTPK,
-    /// or a PQXDH KEM ciphertext. A PQ epoch on a message with none of those is the leftover
-    /// — the epoch is what a live PQ ratchet stamps, and a fresh session starts at 0.
-    /// 3-DH classic (no OTPK, no KEM, epoch 0) stays a handshake: that is the reproducible
-    /// fallback after `otpkUnreproducible`.
     /// **The rule itself lives in the core** (`orchestration::receiving_init_plan`). This is a
     /// forwarder plus a type adapter, not a second implementation: two clients that classify a
-    /// carrier differently do not produce an error, they produce a copy dropped as foreign and a
-    /// message that never appears, and there are two clients now. See AGENTS.md, "The core decides,
-    /// this app executes".
-    ///
-    /// The local enum survives only because six call sites read it and converting them is not this
-    /// change. When they are touched, they should take `ReceivingInitKind` from the core directly
-    /// and this adapter should go with them.
+    /// carrier differently do not produce an error, they produce a message that never appears.
     static func receivingInitKind(
         messageNumber: UInt32,
         oneTimePreKeyId: UInt32,
         kemCiphertextBytes: Int,
-        pqMessageEpoch: UInt32,
-        isSessionResetInit: Bool
+        pqMessageEpoch: UInt32
     ) -> ReceivingInitKind {
         let carrier = ReceivingInitCarrier(
             messageNumber: messageNumber,
             oneTimePrekeyId: oneTimePreKeyId,
             // The core takes a byte count, not the bytes: classifying a carrier must never require
-            // holding its body, so a caller can plan before it commits to anything.
+            // holding its body.
             kemCiphertextBytes: UInt32(max(0, kemCiphertextBytes)),
-            pqMessageEpoch: pqMessageEpoch,
-            isSessionResetInit: isSessionResetInit
+            pqMessageEpoch: pqMessageEpoch
         )
         switch coreReceivingInitKind(carrier) {
-        case .handshake:          return .handshake
-        case .midRatchet:         return .midRatchet
-        case .midSessionLeftover: return .midSessionLeftover
+        case .handshake:  return .handshake
+        case .midRatchet: return .midRatchet
         }
     }
 
@@ -195,11 +173,11 @@ enum SessionReducer {
     /// peer reads as "no session" — prewarming in that window sends a destructive
     /// END_SESSION + fresh re-init over a healthy, not-yet-restored session, discarding the
     /// ratchet and breaking the peer's in-flight messages. So: never prewarm unless the core
-    /// is ready; then only where we are the natural INITIATOR and no session exists or can be
-    /// restored from Keychain.
-    static func shouldPrewarm(coreReady: Bool, isNaturalInitiator: Bool, sessionExistsOrRestorable: Bool) -> Bool {
+    /// is ready; then only where no session exists or can be restored from Keychain. It used to
+    /// be the natural INITIATOR only; nothing is ranked since 2026-09-27.
+    static func shouldPrewarm(coreReady: Bool, sessionExistsOrRestorable: Bool) -> Bool {
         guard coreReady else { return false }
-        return isNaturalInitiator && !sessionExistsOrRestorable
+        return !sessionExistsOrRestorable
     }
 
     /// Why a chat is being opened. The two differ in exactly one thing — whether whatever session
@@ -339,16 +317,8 @@ enum SessionReducer {
         otpkUnreproducible ? .sendTypedOtpk : .sendPlain
     }
 
-    // `EndSessionReceiptAction` / `endSessionReceiptAction` lived here until 2026-09-23. The
-    // branch was the tie-break, and the tie-break was never this file's — it came from
-    // `SessionAddressing.isNaturalInitiator`, which asks the core's `tie_break_role`. What was
-    // ours was the *consequence*, and the RESPONDER consequence was a 60 s `[String: Task]`
-    // keyed by account. Both halves are `SessionEvent::WantToReopen { peer_rebuilds }` now:
-    // the core ranks the pair it already knows how to rank, and answers with `OpenSession` or
-    // an `OpenDeferred` carrying the length of the wait. Step 2's third and fifth timers.
-
     /// Receive-side control-message coalesce. Server offline queues re-deliver batches of
-    /// END_SESSION / SESSION_RESET_INIT for the same peer; acting on each one re-archives
+    /// END_SESSION for the same peer; acting on each one re-archives
     /// Keychain + requeues + reopens streams. After the first handled control message in a
     /// window, further ones for that peer should only be ACK'd.
     static func shouldHandleInboundControl(
@@ -360,92 +330,10 @@ enum SessionReducer {
         return now.timeIntervalSince(lastHandledAt) >= cooldown
     }
 
-    // MARK: - Tie-break role
-
-    // The rule lives in the core and is reached through `SessionAddressing.role(mine:theirs:)`.
-    // It used to be reimplemented here, under a comment promising it matched the core byte-for-byte
-    // — see that function for what the promise cost. The reducer stays pure: it takes
-    // `isNaturalInitiator` as an input and never computes it.
-
-    // MARK: - Confirmation gate (INITIATOR awaiting RESPONDER session_ready)
-
-    /// A handshake control op, modelled dependency-free (the proto `SessionControlOp` maps 1:1).
-    /// Kept local so the reducer stays pure — no proto/gRPC imports.
-    enum ControlOp: Equatable {
-        case resetInit  // ct24 — X3DH carrier for a session reset
-        case ping       // ct25 — "I am now a RESPONDER for you"
-        case ready      // ct26 — "my RESPONDER session is confirmed"
-        case endSession // teardown
-        case other
-    }
-
-    // `isConfirmBuffering` lived here until 2026-09-23: a pure predicate over a `pendingSince`
-    // stamp the coordinator kept, beside the core's own `Opening` phase, with nothing holding the
-    // two in step. The window is `OPENING_CONFIRM_WINDOW_MS` in the machine now and the question
-    // is `CryptoManager.awaitsAcknowledgement(fromDevice:)`. Step 3 of
-    // `decisions/session-is-one-state-machine.md`.
-
-
-    // `ConfirmGateAction` / `confirmGateAction` lived here until 2026-09-23, and by then the
-    // gate it read was already the core's phase, reached through
-    // `awaitsAcknowledgementFromAnyDevice`. So the question travelled to the platform and the
-    // answer travelled back for a fact that never left: the core now emits
-    // `Action::HeldPendingAck` in place of the heal or the teardown, and `MessageRouter` buffers.
-    //
-    // Two things the move fixed rather than carried. The question is asked of **one device**,
-    // where this fold made an announcement unanswered by one device hold a genuine teardown for
-    // its sibling. And the carrier exemption travels as `is_handshake` on the routing decision,
-    // read from the post-unseal content type — `messageNumber == 0` never could say it, because
-    // a DH sending chain restarts at 0 on every ratchet turn, which is how the pre-decryption
-    // version of this gate came to hold 16 of the peer's 19 acknowledgements on 2026-08-21.
-    //
-    // What did not move is the reason: inside our own confirm window we are the side that
-    // replaced the session, so a message that cannot be read is a consequence of our own
-    // re-init, not evidence about the peer. Answering it with a teardown cost a user message on
-    // 2026-08-04, and answering it with a heal is worse — `archiveSession(.manualReset)`
-    // destroys the session created two seconds earlier in answer to it.
-
-    /// Whether a handshake-control retry may still speak for the session it was created to
-    /// announce. Sibling of `shouldTearDownAfterEndSession`, and the same defect: a decision made
-    /// before a network round-trip, applied after one, against whatever session exists by then.
-    ///
-    /// Observed 2026-08-04: SESSION_RESET_INIT attempts 1-2 failed on `StealthDowngradeBlocked`,
-    /// the peer's own SRI arrived in the gap and made us the RESPONDER on a new session, and
-    /// attempt 3 announced a session that had been gone for a second. The peer answered by tearing
-    /// down a healthy ratchet.
-    ///
-    /// `hasSession` is kept alongside the epoch rather than folded into it: `current == nil` also
-    /// covers "the core is not ready", and abandoning a retry because the core was mid-restore
-    /// would be a different decision than abandoning it because the session is gone.
-    static func shouldContinueControlRetry(announced: SessionEpoch?, current: SessionEpoch?, hasSession: Bool) -> Bool {
-        guard hasSession else { return false }
-        return announced == current
-    }
-
-    // MARK: - Handshake control emission (the send-side authority)
-
-    /// A handshake transition that emits control message(s) to the peer.
-    enum HandshakeTransition: Equatable {
-        /// We kept the INITIATOR session after a tie-break win → announce it so the loser can
-        /// atomically become RESPONDER.
-        case tieBreakWin
-        /// We just established the RESPONDER session (`initReceivingSession` ok) → acknowledge so
-        /// the INITIATOR cancels its watchdog and flushes.
-        case becameResponder
-    }
-
-    /// Which control op(s) to emit on a handshake transition — the single authority for the
-    /// handshake's *send* side (the *receive* side is `confirmReleases` + the transition table in
-    /// SESSION_COORDINATOR_REFACTOR_SPEC §"Confirm protocol"). INITIATOR announces via
-    /// SESSION_RESET_INIT; RESPONDER acknowledges via session_ready. `.ping` is **not** in the
-    /// canonical set — it survives only as the SRI two-step fallback (a legacy trigger), so it is
-    /// emitted by that fallback directly, not prescribed here.
-    static func controlsToEmit(on transition: HandshakeTransition) -> [ControlOp] {
-        switch transition {
-        case .tieBreakWin:     return [.resetInit]
-        case .becameResponder: return [.ready]
-        }
-    }
+    // The tie-break role, the confirmation gate, the handshake controls (SESSION_RESET_INIT,
+    // ping, session_ready) and the retry that announced them lived here until 2026-09-27. A
+    // session record keeps its previous states and any message with the handshake header opens,
+    // so there is nothing to rank, announce or confirm (`decisions/sessions-renew-by-sending.md`).
 
     // MARK: - OTPK-unreproducible recovery (the 3-DH loop-breaker)
 
@@ -462,28 +350,6 @@ enum SessionReducer {
     /// otpk-session-init-deadlock fix.
     static func nextInitDHMode(forceThreeDHHintPending: Bool) -> DHMode {
         forceThreeDHHintPending ? .threeDH : .fourDH
-    }
-
-    // `WatchdogTick` / `tieBreakWatchdogTick` / `shouldResponderOverride` lived here until
-    // 2026-09-23, and they were the role-split halves of one liveness guarantee: a stalled
-    // handshake gets re-driven by *someone*. The INITIATOR re-announces — the core's
-    // `open_confirm:` alarm, `ResendSri` inside `OPENING_CONFIRM_WINDOW_MS` and `OpeningGaveUp`
-    // past it. The natural RESPONDER, having nothing to announce, waits `RESPONDER_OVERRIDE_MS`
-    // and then takes the role — the core's `reopen:` alarm. Step 2's fourth and fifth timers,
-    // and with them the last of the five.
-    //
-    // The override's own gate went with it rather than moving. `!hasSession && !isInitializing`
-    // was a third reading of what the phase says, asked from inside the timer against two values
-    // this class could see; in the machine an acknowledged or finished opening clears the phase,
-    // so the alarm finds nothing left to pay.
-
-
-    /// Does receiving this control op release the confirm gate (RESPONDER acknowledged)?
-    /// PING and READY both prove a bidirectional session exists (see the transition table in
-    /// SESSION_COORDINATOR_REFACTOR_SPEC §"Confirm protocol"); RESET_INIT only cancels the
-    /// watchdog, it is not itself an acknowledgement.
-    static func confirmReleases(on op: ControlOp) -> Bool {
-        op == .ping || op == .ready
     }
 
     /// Whether a received END_SESSION pre-dates our established session and should be discarded.

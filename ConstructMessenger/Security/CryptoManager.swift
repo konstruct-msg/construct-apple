@@ -481,35 +481,31 @@ class CryptoManager {
 
         let actions = try core.handleEvent(event: event)
         logOrchestratorEvent(event, actions: actions, tag: tag)
-        dispatchHeldReleases(actions)
+        dispatchPendingDropped(actions)
         return actions
     }
 
-    /// Carries out `replayHeld` / `heldSuperseded` / `pendingDropped`. Set by `SessionCoordinator`
-    /// to the router.
-    var onHeldReleased: (([CfeAction]) -> Void)?
+    /// Carries out `pendingDropped`. Set by `SessionCoordinator` to the router.
+    var onPendingDropped: (([CfeAction]) -> Void)?
 
-    /// The core releases what its confirm gate held at the end of **every** event, so the release
-    /// can ride on any answer — an incoming message's, a timer's, a `peerAcked`'s. Carried out
-    /// here, the one place every answer passes, rather than at each call site: several router
-    /// branches never hand their answer to the executor, and a release dropped there is a message
-    /// held until its envelope expires.
+    /// The core drops what waited for a ratchet the peer tore down, and the answer can ride on any
+    /// event — an incoming END_SESSION, a drain. Carried out here, the one place every answer
+    /// passes, rather than at each call site: a drop missed there is an envelope held until it
+    /// expires, and a stream cursor held with it.
     ///
     /// On the next main-queue turn, so it runs outside `coreLock` and after the caller has finished
     /// with the answer it is part of.
-    private func dispatchHeldReleases(_ actions: [CfeAction]) {
-        let releases = actions.filter {
-            switch $0 {
-            case .replayHeld, .heldSuperseded, .pendingDropped: return true
-            default: return false
-            }
+    private func dispatchPendingDropped(_ actions: [CfeAction]) {
+        let drops = actions.filter {
+            if case .pendingDropped = $0 { return true }
+            return false
         }
-        guard !releases.isEmpty else { return }
-        guard let onHeldReleased else {
-            Log.error("\(releases.count) held message(s) released with no router to replay them", category: "CryptoOrchestrator")
+        guard !drops.isEmpty else { return }
+        guard let onPendingDropped else {
+            Log.error("\(drops.count) dropped queue(s) with no router to release them", category: "CryptoOrchestrator")
             return
         }
-        DispatchQueue.main.async { onHeldReleased(releases) }
+        DispatchQueue.main.async { onPendingDropped(drops) }
     }
 
     // MARK: - Locked Core Operation Wrappers
@@ -891,9 +887,6 @@ class CryptoManager {
                     Log.info("Existing session found for \(deviceId) - archiving before reinitialization to prevent desync", category: "CryptoManager")
                     self?.archiveSession(for: deviceId, reason: reason)
                 },
-                archiveReplacedSession: { [weak self] deviceId, sessionData, reason in
-                    self?.storeReplacedSessionArchive(sessionData, for: deviceId, reason: reason)
-                },
                 saveSession: { [weak self] deviceId in
                     self?.saveSessionToKeychain(forDevice: deviceId)
                 }
@@ -1045,27 +1038,6 @@ class CryptoManager {
         SessionAddressing.deviceIds(ofPeer: peerId).contains { hasSession(for: $0) }
     }
 
-    /// Whether the ratchet with this **device** was announced and the peer has not answered.
-    ///
-    /// The confirm gate, read from the machine that owns it. Until 2026-09-23 it was a
-    /// `SessionConfirmationTracker` map on this side, raised and dropped beside the core's own
-    /// `Opening` phase with nothing keeping the two in step — and it carried its own 75 s TTL,
-    /// its own 30 s watchdog task, and its own account key.
-    func awaitsAcknowledgement(fromDevice deviceId: String) -> Bool {
-        guard let contactId = SessionAddressing.asDevice(deviceId) else { return false }
-        return orchestratorCore?.awaitsAcknowledgement(contactId: contactId) ?? false
-    }
-
-    /// Whether **any** ratchet with a person is still unacknowledged.
-    ///
-    /// The account-shaped question the send path actually asks: one message becomes a copy per
-    /// device, so a single unanswered ratchet is enough to hold the send — sending would put user
-    /// content on a ratchet the peer may not hold. Folded with `contains`, like every other
-    /// account-shaped answer here, so nothing downstream inherits a device nobody chose.
-    func awaitsAcknowledgementFromAnyDevice(ofPeer peerId: String) -> Bool {
-        SessionAddressing.deviceIds(ofPeer: peerId).contains { awaitsAcknowledgement(fromDevice: $0) }
-    }
-
     /// Whether session state exists for `userId` **anywhere** — loaded in the core, or on disk.
     ///
     /// `hasSession(for:)` answers only the first, because that is what "can I encrypt right now"
@@ -1129,29 +1101,6 @@ class CryptoManager {
         return SessionEpoch(rawValue: sessionId)
     }
 
-    /// Spend one heal attempt on `deviceId`'s ratchet, and say whether another is allowed.
-    ///
-    /// The count lives with the queued carrier, in the core. This app kept its own until
-    /// 2026-09-23 — a second `RustHealingQueue`, keyed by account and fed a JSON `ChatMessage`,
-    /// plus a Core Data column nothing read — and it was that copy which decided, while the
-    /// core's `attempts` beside the real carrier stayed at zero.
-    ///
-    /// `false` when the budget is spent **and** when the core has nothing queued for this
-    /// device: with no record there is nothing to bound the retries with, and an unbounded heal
-    /// loop is what the budget exists to prevent.
-    func recordHealAttempt(forDevice deviceId: String) -> Bool {
-        guard let contactId = SessionAddressing.asDevice(deviceId) else { return false }
-        guard let actions = try? handleOrchestratorEvent(
-            .healAttempted(contactId: contactId),
-            tag: "heal_attempted"
-        ) else {
-            // The core could not be asked, so nothing counted this attempt. Refusing is the
-            // bounded direction, and the caller's other guards still hold.
-            return false
-        }
-        return !actions.contains { if case .healExhausted = $0 { return true } else { return false } }
-    }
-
     // MARK: - The core's queue of messages waiting for a session
 
     /// Open a receiving session from what the core holds under `device`. Each queued message
@@ -1174,21 +1123,6 @@ class CryptoManager {
         core.setTrustedServerKeys(keys: BundleSigningTrust.trustedKeyBytes())
     }
 
-    /// Queue a SESSION_RESET_INIT to open a session from. It is acknowledged before it is acted on,
-    /// so it cannot go through `MessageReceived`: the ACK check would read it as its own duplicate.
-    func queueForOpen(deviceId: String, message: ChatMessage) {
-        coreLock.lock()
-        let actions = orchestratorCore?.queueForOpen(
-            deviceId: deviceId,
-            messageId: message.id,
-            wirePayload: [UInt8](message.rawPayload),
-            contentType: message.contentType,
-            senderCertificate: message.senderCertificate
-        ) ?? []
-        coreLock.unlock()
-        dispatchHeldReleases(actions)
-    }
-
     /// Whether any of `devices` is opening a session with us right now (a handshake of theirs
     /// queued in the core within the last 20 s).
     func peerHandshakeHeld(devices: [String]) -> Bool {
@@ -1203,54 +1137,6 @@ class CryptoManager {
         coreLock.lock()
         defer { coreLock.unlock() }
         return Int(orchestratorCore?.pendingMessageCount(contactId: deviceId) ?? 0)
-    }
-
-    /// What to do with a SESSION_RESET_INIT that just arrived from `deviceId`.
-    enum ResetInitVerdict: Equatable {
-        /// A live re-init: archive and apply, even over an active session.
-        case apply
-        /// This exact init (same X3DH ephemeral key) was already applied — acknowledge only.
-        case redelivery
-        /// Never applied, but sent before the session we hold was established — acknowledge only.
-        case predatesSession
-    }
-
-    /// Ask the core whether to apply an arriving SESSION_RESET_INIT, and let it record the init
-    /// when the answer is `.apply`.
-    ///
-    /// The ledger of applied inits lives in the core's session machine, per device. This app kept
-    /// it until 2026-09-24 as `appliedResetInits`, an account-keyed map beside the coordinator
-    /// the machine never saw — step 5 of `decisions/session-is-one-state-machine.md`.
-    ///
-    /// `establishedAt` is this app's record of when the session with that device was established
-    /// (Unix seconds); the core has no establishment record yet, and the END_SESSION staleness
-    /// check reads the same one.
-    ///
-    /// `.apply` when the core cannot be asked: a redundant re-init is cheap and self-limiting, a
-    /// dropped live one strands the peer on a dead ratchet.
-    func judgeResetInit(
-        fromDevice deviceId: String,
-        initEphemeral: Data,
-        sentAt: UInt64,
-        establishedAt: UInt64?
-    ) -> ResetInitVerdict {
-        guard let contactId = SessionAddressing.asDevice(deviceId),
-              let actions = try? handleOrchestratorEvent(
-                  .resetInitArrived(
-                      contactId: contactId,
-                      initEphemeral: initEphemeral,
-                      sentAtS: sentAt,
-                      establishedAtS: establishedAt
-                  ),
-                  tag: "reset_init_arrived"
-              )
-        else { return .apply }
-        for action in actions {
-            if case .resetInitSuperseded(_, let redelivery) = action {
-                return redelivery ? .redelivery : .predatesSession
-            }
-        }
-        return .apply
     }
 
     /// Get all user IDs with active sessions

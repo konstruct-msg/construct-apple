@@ -126,7 +126,6 @@ final class PQXDHBundleConversionTests: XCTestCase {
             bundle: data,
             core: alice,
             archiveSession: { _, _ in XCTFail("nothing to archive") },
-            archiveReplacedSession: { _, _, _ in XCTFail("nothing to archive") },
             saveSession: { _ in XCTFail("nothing was opened") }
         )) { error in
             guard case SessionError.peerNotPostQuantum? = error as? SessionError else {

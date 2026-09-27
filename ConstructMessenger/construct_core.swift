@@ -1347,13 +1347,6 @@ public protocol OrchestratorCoreProtocol: AnyObject, Sendable {
     func ackMarkProcessed(messageId: String) 
     
     /**
-     * Whether the ratchet with this **device** was announced (SESSION_RESET_INIT sent) and the
-     * peer has not acknowledged it yet. The confirm gate; fold it over a peer's device set for
-     * the account-shaped question, since one message becomes a copy per device.
-     */
-    func awaitsAcknowledgement(contactId: String)  -> Bool
-    
-    /**
      * Start a Kyber SPK rotation (with the classic SPK): the key to upload. Calling it again
      * before commit/rollback returns the same key, so a retried upload uploads the same key.
      */
@@ -1390,8 +1383,8 @@ public protocol OrchestratorCoreProtocol: AnyObject, Sendable {
     func exportOneTimePrekeys() throws  -> [UInt8]
     
     /**
-     * Export the full orchestrator coordination state (ACK cache, healing queue,
-     * init locks, archive index, prekey tracker) as a CFE binary blob.
+     * Export the full orchestrator coordination state (init locks, archive index,
+     * prekey tracker) as a CFE binary blob.
      * Persist under CfeSecureStoreSlot::OrchestratorState.
      */
     func exportOrchestratorState() throws  -> [UInt8]
@@ -1402,7 +1395,7 @@ public protocol OrchestratorCoreProtocol: AnyObject, Sendable {
     
     /**
      * Drop every piece of local orchestration state this core holds about `contact_id`:
-     * the ratchet, the archive and its timestamp, the prekey counter, the heal record, the PQ
+     * the ratchet and its previous states, the archive and its timestamp, the prekey counter, the PQ
      * contribution, the init lock, the cooldown, the pending END_SESSION, the prewarm mark and
      * the active-chat mark.
      *
@@ -1507,8 +1500,6 @@ public protocol OrchestratorCoreProtocol: AnyObject, Sendable {
     
     func pruneOneTimePrekeysBelow(minKeepId: UInt32)  -> UInt32
     
-    func queueForOpen(deviceId: String, messageId: String, wirePayload: [UInt8], contentType: UInt8, senderCertificate: SenderCertificate?)  -> [CfeAction]
-    
     func removeSession(contactId: String)  -> Bool
     
     func reopenSession(contactId: String, recipientBundle: BinaryKeyBundle) throws  -> String
@@ -1610,20 +1601,6 @@ open func ackMarkProcessed(messageId: String)  {try! rustCall() {
         FfiConverterString.lower(messageId),$0
     )
 }
-}
-    
-    /**
-     * Whether the ratchet with this **device** was announced (SESSION_RESET_INIT sent) and the
-     * peer has not acknowledged it yet. The confirm gate; fold it over a peer's device set for
-     * the account-shaped question, since one message becomes a copy per device.
-     */
-open func awaitsAcknowledgement(contactId: String) -> Bool  {
-    return try!  FfiConverterBool.lift(try! rustCall() {
-    uniffi_construct_core_fn_method_orchestratorcore_awaits_acknowledgement(
-            self.uniffiCloneHandle(),
-        FfiConverterString.lower(contactId),$0
-    )
-})
 }
     
     /**
@@ -1742,8 +1719,8 @@ open func exportOneTimePrekeys()throws  -> [UInt8]  {
 }
     
     /**
-     * Export the full orchestrator coordination state (ACK cache, healing queue,
-     * init locks, archive index, prekey tracker) as a CFE binary blob.
+     * Export the full orchestrator coordination state (init locks, archive index,
+     * prekey tracker) as a CFE binary blob.
      * Persist under CfeSecureStoreSlot::OrchestratorState.
      */
 open func exportOrchestratorState()throws  -> [UInt8]  {
@@ -1773,7 +1750,7 @@ open func exportSession(contactId: String)throws  -> [UInt8]  {
     
     /**
      * Drop every piece of local orchestration state this core holds about `contact_id`:
-     * the ratchet, the archive and its timestamp, the prekey counter, the heal record, the PQ
+     * the ratchet and its previous states, the archive and its timestamp, the prekey counter, the PQ
      * contribution, the init lock, the cooldown, the pending END_SESSION, the prewarm mark and
      * the active-chat mark.
      *
@@ -2077,19 +2054,6 @@ open func pruneOneTimePrekeysBelow(minKeepId: UInt32) -> UInt32  {
     uniffi_construct_core_fn_method_orchestratorcore_prune_one_time_prekeys_below(
             self.uniffiCloneHandle(),
         FfiConverterUInt32.lower(minKeepId),$0
-    )
-})
-}
-    
-open func queueForOpen(deviceId: String, messageId: String, wirePayload: [UInt8], contentType: UInt8, senderCertificate: SenderCertificate?) -> [CfeAction]  {
-    return try!  FfiConverterSequenceTypeCfeAction.lift(try! rustCall() {
-    uniffi_construct_core_fn_method_orchestratorcore_queue_for_open(
-            self.uniffiCloneHandle(),
-        FfiConverterString.lower(deviceId),
-        FfiConverterString.lower(messageId),
-        FfiConverterSequenceUInt8.lower(wirePayload),
-        FfiConverterUInt8.lower(contentType),
-        FfiConverterOptionTypeSenderCertificate.lower(senderCertificate),$0
     )
 })
 }
@@ -3200,13 +3164,12 @@ public func FfiConverterTypeHybridSignatureKeyPair_lower(_ value: HybridSignatur
  */
 public struct InitiationContext: Equatable, Hashable {
     /**
-     * Ours and theirs in the space the session is addressed by. Anything else ranks a
-     * different pair — see tie_break_role.
+     * Ours and theirs in the space the session is addressed by.
      */
     public var myDeviceId: String
     public var peerDeviceId: String
     /**
-     * We sent a SESSION_RESET_INIT to this device; it is neither acknowledged nor expired.
+     * We are opening a session with this device right now (bundle fetch and init).
      */
     public var ourInitInFlight: Bool
     /**
@@ -3222,11 +3185,10 @@ public struct InitiationContext: Equatable, Hashable {
     // declare one manually.
     public init(
         /**
-         * Ours and theirs in the space the session is addressed by. Anything else ranks a
-         * different pair — see tie_break_role.
+         * Ours and theirs in the space the session is addressed by.
          */myDeviceId: String, peerDeviceId: String, 
         /**
-         * We sent a SESSION_RESET_INIT to this device; it is neither acknowledged nor expired.
+         * We are opening a session with this device right now (bundle fetch and init).
          */ourInitInFlight: Bool, 
         /**
          * We hold the peer's init — received, not yet completed.
@@ -4032,16 +3994,14 @@ public struct ReceivingInitCarrier: Equatable, Hashable {
     public var oneTimePrekeyId: UInt32
     public var kemCiphertextBytes: UInt32
     public var pqMessageEpoch: UInt32
-    public var isSessionResetInit: Bool
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(messageNumber: UInt32, oneTimePrekeyId: UInt32, kemCiphertextBytes: UInt32, pqMessageEpoch: UInt32, isSessionResetInit: Bool) {
+    public init(messageNumber: UInt32, oneTimePrekeyId: UInt32, kemCiphertextBytes: UInt32, pqMessageEpoch: UInt32) {
         self.messageNumber = messageNumber
         self.oneTimePrekeyId = oneTimePrekeyId
         self.kemCiphertextBytes = kemCiphertextBytes
         self.pqMessageEpoch = pqMessageEpoch
-        self.isSessionResetInit = isSessionResetInit
     }
 
     
@@ -4061,8 +4021,7 @@ public struct FfiConverterTypeReceivingInitCarrier: FfiConverterRustBuffer {
                 messageNumber: FfiConverterUInt32.read(from: &buf), 
                 oneTimePrekeyId: FfiConverterUInt32.read(from: &buf), 
                 kemCiphertextBytes: FfiConverterUInt32.read(from: &buf), 
-                pqMessageEpoch: FfiConverterUInt32.read(from: &buf), 
-                isSessionResetInit: FfiConverterBool.read(from: &buf)
+                pqMessageEpoch: FfiConverterUInt32.read(from: &buf)
         )
     }
 
@@ -4071,7 +4030,6 @@ public struct FfiConverterTypeReceivingInitCarrier: FfiConverterRustBuffer {
         FfiConverterUInt32.write(value.oneTimePrekeyId, into: &buf)
         FfiConverterUInt32.write(value.kemCiphertextBytes, into: &buf)
         FfiConverterUInt32.write(value.pqMessageEpoch, into: &buf)
-        FfiConverterBool.write(value.isSessionResetInit, into: &buf)
     }
 }
 
@@ -4919,35 +4877,7 @@ public enum CfeAction: Equatable, Hashable {
     )
     case messageDecrypted(contactId: String, messageId: String, plaintext: Data
     )
-    case sessionHealNeeded(contactId: String, role: String
-    )
-    /**
-     * Heal suppressed by cooldown — platform must NOT ACK; server will re-deliver.
-     */
-    case healSuppressed(contactId: String, retryAfterMs: UInt64
-    )
-    /**
-     * Our own SESSION_RESET_INIT to this device is unacknowledged, so neither heal nor tear
-     * down on the message that provoked this: buffer it and replay it when the wait ends.
-     */
-    case heldPendingAck(contactId: String
-    )
     case pendingDropped(contactId: String, messageIds: [String]
-    )
-    case replayHeld(messageId: String
-    )
-    case heldSuperseded(messageId: String
-    )
-    /**
-     * The heal budget allows this attempt; `attempt` is its 1-based index.
-     */
-    case healAttemptAllowed(contactId: String, attempt: UInt32
-    )
-    /**
-     * The heal budget for this device is spent, or nothing is queued to spend it from — give up
-     * on the carrier and tear the ratchet down instead.
-     */
-    case healExhausted(contactId: String
     )
     /**
      * END_SESSION suppressed by cooldown — the core owes it and sends it in retry_after_ms.
@@ -4962,45 +4892,11 @@ public enum CfeAction: Equatable, Hashable {
     case endSessionNotNeeded(contactId: String
     )
     /**
-     * Apply the SESSION_RESET_INIT that just arrived — archive and open the receiving side, even
-     * over an active session: the peer has ratcheted onto it.
-     */
-    case applyResetInit(contactId: String
-    )
-    /**
-     * Acknowledge the SESSION_RESET_INIT that just arrived, and do not apply it. `redelivery`:
-     * this exact init was already applied (true), or it pre-dates the session held (false).
-     */
-    case resetInitSuperseded(contactId: String, redelivery: Bool
-    )
-    /**
-     * Open a session with `contact_id` now, as INITIATOR, and announce it (X3DH +
-     * SESSION_RESET_INIT) — not a bare local init. Build it with `reopen_session`, which also
-     * covers a session still held: the PQXDH v2 upgrade sweep asks this for classical sessions.
+     * Open a new session with `contact_id` as INITIATOR over the one held: build it with
+     * `reopen_session`, which keeps the held state as a previous one. Nothing is sent for it —
+     * the handshake header rides on the next message. Raised by the PQXDH v2 upgrade sweep.
      */
     case openSession(contactId: String
-    )
-    /**
-     * Too soon to open: the peer tore this ratchet down and its rebuild may be in the same
-     * flush. The core arms the retry itself; do NOT schedule one.
-     */
-    case openDeferred(contactId: String, retryAfterMs: UInt64
-    )
-    /**
-     * The quiet passed and the session is already back — nothing to open.
-     */
-    case openNotNeeded(contactId: String
-    )
-    /**
-     * Re-send the SESSION_RESET_INIT — unacknowledged for a retry interval, window not out.
-     * The core arms the next alarm; do NOT schedule one.
-     */
-    case resendSri(contactId: String
-    )
-    /**
-     * The confirm window ran out. Release what was held behind the opening, both directions.
-     */
-    case openingGaveUp(contactId: String
     )
     /**
      * Message queued inside the core behind an in-flight session init. Nothing lost.
@@ -5095,112 +4991,73 @@ public struct FfiConverterTypeCfeAction: FfiConverterRustBuffer {
         case 5: return .messageDecrypted(contactId: try FfiConverterString.read(from: &buf), messageId: try FfiConverterString.read(from: &buf), plaintext: try FfiConverterData.read(from: &buf)
         )
         
-        case 6: return .sessionHealNeeded(contactId: try FfiConverterString.read(from: &buf), role: try FfiConverterString.read(from: &buf)
+        case 6: return .pendingDropped(contactId: try FfiConverterString.read(from: &buf), messageIds: try FfiConverterSequenceString.read(from: &buf)
         )
         
-        case 7: return .healSuppressed(contactId: try FfiConverterString.read(from: &buf), retryAfterMs: try FfiConverterUInt64.read(from: &buf)
+        case 7: return .endSessionSuppressed(contactId: try FfiConverterString.read(from: &buf), retryAfterMs: try FfiConverterUInt64.read(from: &buf)
         )
         
-        case 8: return .heldPendingAck(contactId: try FfiConverterString.read(from: &buf)
+        case 8: return .endSessionNotNeeded(contactId: try FfiConverterString.read(from: &buf)
         )
         
-        case 9: return .pendingDropped(contactId: try FfiConverterString.read(from: &buf), messageIds: try FfiConverterSequenceString.read(from: &buf)
+        case 9: return .openSession(contactId: try FfiConverterString.read(from: &buf)
         )
         
-        case 10: return .replayHeld(messageId: try FfiConverterString.read(from: &buf)
+        case 10: return .messageQueuedPendingInit(contactId: try FfiConverterString.read(from: &buf), queuedCount: try FfiConverterUInt32.read(from: &buf)
         )
         
-        case 11: return .heldSuperseded(messageId: try FfiConverterString.read(from: &buf)
+        case 11: return .saveToSecureStore(slot: try FfiConverterTypeCfeSecureStoreSlot.read(from: &buf), data: try FfiConverterData.read(from: &buf)
         )
         
-        case 12: return .healAttemptAllowed(contactId: try FfiConverterString.read(from: &buf), attempt: try FfiConverterUInt32.read(from: &buf)
+        case 12: return .persistAck(messageId: try FfiConverterString.read(from: &buf), timestamp: try FfiConverterUInt64.read(from: &buf)
         )
         
-        case 13: return .healExhausted(contactId: try FfiConverterString.read(from: &buf)
+        case 13: return .pruneAckStore(cutoffTs: try FfiConverterUInt64.read(from: &buf)
         )
         
-        case 14: return .endSessionSuppressed(contactId: try FfiConverterString.read(from: &buf), retryAfterMs: try FfiConverterUInt64.read(from: &buf)
+        case 14: return .markMessageDelivered(messageId: try FfiConverterString.read(from: &buf)
         )
         
-        case 15: return .endSessionNotNeeded(contactId: try FfiConverterString.read(from: &buf)
+        case 15: return .duplicateDropped(messageId: try FfiConverterString.read(from: &buf)
         )
         
-        case 16: return .applyResetInit(contactId: try FfiConverterString.read(from: &buf)
+        case 16: return .openReceiving(contactId: try FfiConverterString.read(from: &buf)
         )
         
-        case 17: return .resetInitSuperseded(contactId: try FfiConverterString.read(from: &buf), redelivery: try FfiConverterBool.read(from: &buf)
+        case 17: return .sendEncryptedMessage(to: try FfiConverterString.read(from: &buf), payload: try FfiConverterData.read(from: &buf), messageId: try FfiConverterString.read(from: &buf), contentType: try FfiConverterUInt8.read(from: &buf)
         )
         
-        case 18: return .openSession(contactId: try FfiConverterString.read(from: &buf)
+        case 18: return .sendReceipt(messageId: try FfiConverterString.read(from: &buf), status: try FfiConverterString.read(from: &buf)
         )
         
-        case 19: return .openDeferred(contactId: try FfiConverterString.read(from: &buf), retryAfterMs: try FfiConverterUInt64.read(from: &buf)
+        case 19: return .sendEndSession(contactId: try FfiConverterString.read(from: &buf)
         )
         
-        case 20: return .openNotNeeded(contactId: try FfiConverterString.read(from: &buf)
+        case 20: return .notifyNewMessage(chatId: try FfiConverterString.read(from: &buf), preview: try FfiConverterString.read(from: &buf)
         )
         
-        case 21: return .resendSri(contactId: try FfiConverterString.read(from: &buf)
+        case 21: return .notifySessionCreated(contactId: try FfiConverterString.read(from: &buf)
         )
         
-        case 22: return .openingGaveUp(contactId: try FfiConverterString.read(from: &buf)
+        case 22: return .notifyError(code: try FfiConverterString.read(from: &buf), message: try FfiConverterString.read(from: &buf)
         )
         
-        case 23: return .messageQueuedPendingInit(contactId: try FfiConverterString.read(from: &buf), queuedCount: try FfiConverterUInt32.read(from: &buf)
+        case 23: return .scheduleTimer(timerId: try FfiConverterString.read(from: &buf), delayMs: try FfiConverterUInt64.read(from: &buf)
         )
         
-        case 24: return .saveToSecureStore(slot: try FfiConverterTypeCfeSecureStoreSlot.read(from: &buf), data: try FfiConverterData.read(from: &buf)
+        case 24: return .cancelTimer(timerId: try FfiConverterString.read(from: &buf)
         )
         
-        case 25: return .persistAck(messageId: try FfiConverterString.read(from: &buf), timestamp: try FfiConverterUInt64.read(from: &buf)
+        case 25: return .callSignalDecrypted(contactId: try FfiConverterString.read(from: &buf), messageId: try FfiConverterString.read(from: &buf), protoBytes: try FfiConverterData.read(from: &buf)
         )
         
-        case 26: return .pruneAckStore(cutoffTs: try FfiConverterUInt64.read(from: &buf)
+        case 26: return .checkAckInDb(messageId: try FfiConverterString.read(from: &buf)
         )
         
-        case 27: return .markMessageDelivered(messageId: try FfiConverterString.read(from: &buf)
+        case 27: return .notifyLinkedDevicesOfSessionReset(contactId: try FfiConverterString.read(from: &buf)
         )
         
-        case 28: return .duplicateDropped(messageId: try FfiConverterString.read(from: &buf)
-        )
-        
-        case 29: return .openReceiving(contactId: try FfiConverterString.read(from: &buf)
-        )
-        
-        case 30: return .sendEncryptedMessage(to: try FfiConverterString.read(from: &buf), payload: try FfiConverterData.read(from: &buf), messageId: try FfiConverterString.read(from: &buf), contentType: try FfiConverterUInt8.read(from: &buf)
-        )
-        
-        case 31: return .sendReceipt(messageId: try FfiConverterString.read(from: &buf), status: try FfiConverterString.read(from: &buf)
-        )
-        
-        case 32: return .sendEndSession(contactId: try FfiConverterString.read(from: &buf)
-        )
-        
-        case 33: return .notifyNewMessage(chatId: try FfiConverterString.read(from: &buf), preview: try FfiConverterString.read(from: &buf)
-        )
-        
-        case 34: return .notifySessionCreated(contactId: try FfiConverterString.read(from: &buf)
-        )
-        
-        case 35: return .notifyError(code: try FfiConverterString.read(from: &buf), message: try FfiConverterString.read(from: &buf)
-        )
-        
-        case 36: return .scheduleTimer(timerId: try FfiConverterString.read(from: &buf), delayMs: try FfiConverterUInt64.read(from: &buf)
-        )
-        
-        case 37: return .cancelTimer(timerId: try FfiConverterString.read(from: &buf)
-        )
-        
-        case 38: return .callSignalDecrypted(contactId: try FfiConverterString.read(from: &buf), messageId: try FfiConverterString.read(from: &buf), protoBytes: try FfiConverterData.read(from: &buf)
-        )
-        
-        case 39: return .checkAckInDb(messageId: try FfiConverterString.read(from: &buf)
-        )
-        
-        case 40: return .notifyLinkedDevicesOfSessionReset(contactId: try FfiConverterString.read(from: &buf)
-        )
-        
-        case 41: return .sessionTerminated(contactId: try FfiConverterString.read(from: &buf), archiveBytes: try FfiConverterData.read(from: &buf)
+        case 28: return .sessionTerminated(contactId: try FfiConverterString.read(from: &buf), archiveBytes: try FfiConverterData.read(from: &buf)
         )
         
         default: throw UniffiInternalError.unexpectedEnumCase
@@ -5241,138 +5098,68 @@ public struct FfiConverterTypeCfeAction: FfiConverterRustBuffer {
             FfiConverterData.write(plaintext, into: &buf)
             
         
-        case let .sessionHealNeeded(contactId,role):
+        case let .pendingDropped(contactId,messageIds):
             writeInt(&buf, Int32(6))
             FfiConverterString.write(contactId, into: &buf)
-            FfiConverterString.write(role, into: &buf)
+            FfiConverterSequenceString.write(messageIds, into: &buf)
             
         
-        case let .healSuppressed(contactId,retryAfterMs):
+        case let .endSessionSuppressed(contactId,retryAfterMs):
             writeInt(&buf, Int32(7))
             FfiConverterString.write(contactId, into: &buf)
             FfiConverterUInt64.write(retryAfterMs, into: &buf)
             
         
-        case let .heldPendingAck(contactId):
+        case let .endSessionNotNeeded(contactId):
             writeInt(&buf, Int32(8))
             FfiConverterString.write(contactId, into: &buf)
             
         
-        case let .pendingDropped(contactId,messageIds):
-            writeInt(&buf, Int32(9))
-            FfiConverterString.write(contactId, into: &buf)
-            FfiConverterSequenceString.write(messageIds, into: &buf)
-            
-        
-        case let .replayHeld(messageId):
-            writeInt(&buf, Int32(10))
-            FfiConverterString.write(messageId, into: &buf)
-            
-        
-        case let .heldSuperseded(messageId):
-            writeInt(&buf, Int32(11))
-            FfiConverterString.write(messageId, into: &buf)
-            
-        
-        case let .healAttemptAllowed(contactId,attempt):
-            writeInt(&buf, Int32(12))
-            FfiConverterString.write(contactId, into: &buf)
-            FfiConverterUInt32.write(attempt, into: &buf)
-            
-        
-        case let .healExhausted(contactId):
-            writeInt(&buf, Int32(13))
-            FfiConverterString.write(contactId, into: &buf)
-            
-        
-        case let .endSessionSuppressed(contactId,retryAfterMs):
-            writeInt(&buf, Int32(14))
-            FfiConverterString.write(contactId, into: &buf)
-            FfiConverterUInt64.write(retryAfterMs, into: &buf)
-            
-        
-        case let .endSessionNotNeeded(contactId):
-            writeInt(&buf, Int32(15))
-            FfiConverterString.write(contactId, into: &buf)
-            
-        
-        case let .applyResetInit(contactId):
-            writeInt(&buf, Int32(16))
-            FfiConverterString.write(contactId, into: &buf)
-            
-        
-        case let .resetInitSuperseded(contactId,redelivery):
-            writeInt(&buf, Int32(17))
-            FfiConverterString.write(contactId, into: &buf)
-            FfiConverterBool.write(redelivery, into: &buf)
-            
-        
         case let .openSession(contactId):
-            writeInt(&buf, Int32(18))
-            FfiConverterString.write(contactId, into: &buf)
-            
-        
-        case let .openDeferred(contactId,retryAfterMs):
-            writeInt(&buf, Int32(19))
-            FfiConverterString.write(contactId, into: &buf)
-            FfiConverterUInt64.write(retryAfterMs, into: &buf)
-            
-        
-        case let .openNotNeeded(contactId):
-            writeInt(&buf, Int32(20))
-            FfiConverterString.write(contactId, into: &buf)
-            
-        
-        case let .resendSri(contactId):
-            writeInt(&buf, Int32(21))
-            FfiConverterString.write(contactId, into: &buf)
-            
-        
-        case let .openingGaveUp(contactId):
-            writeInt(&buf, Int32(22))
+            writeInt(&buf, Int32(9))
             FfiConverterString.write(contactId, into: &buf)
             
         
         case let .messageQueuedPendingInit(contactId,queuedCount):
-            writeInt(&buf, Int32(23))
+            writeInt(&buf, Int32(10))
             FfiConverterString.write(contactId, into: &buf)
             FfiConverterUInt32.write(queuedCount, into: &buf)
             
         
         case let .saveToSecureStore(slot,data):
-            writeInt(&buf, Int32(24))
+            writeInt(&buf, Int32(11))
             FfiConverterTypeCfeSecureStoreSlot.write(slot, into: &buf)
             FfiConverterData.write(data, into: &buf)
             
         
         case let .persistAck(messageId,timestamp):
-            writeInt(&buf, Int32(25))
+            writeInt(&buf, Int32(12))
             FfiConverterString.write(messageId, into: &buf)
             FfiConverterUInt64.write(timestamp, into: &buf)
             
         
         case let .pruneAckStore(cutoffTs):
-            writeInt(&buf, Int32(26))
+            writeInt(&buf, Int32(13))
             FfiConverterUInt64.write(cutoffTs, into: &buf)
             
         
         case let .markMessageDelivered(messageId):
-            writeInt(&buf, Int32(27))
+            writeInt(&buf, Int32(14))
             FfiConverterString.write(messageId, into: &buf)
             
         
         case let .duplicateDropped(messageId):
-            writeInt(&buf, Int32(28))
+            writeInt(&buf, Int32(15))
             FfiConverterString.write(messageId, into: &buf)
             
         
         case let .openReceiving(contactId):
-            writeInt(&buf, Int32(29))
+            writeInt(&buf, Int32(16))
             FfiConverterString.write(contactId, into: &buf)
             
         
         case let .sendEncryptedMessage(to,payload,messageId,contentType):
-            writeInt(&buf, Int32(30))
+            writeInt(&buf, Int32(17))
             FfiConverterString.write(to, into: &buf)
             FfiConverterData.write(payload, into: &buf)
             FfiConverterString.write(messageId, into: &buf)
@@ -5380,63 +5167,63 @@ public struct FfiConverterTypeCfeAction: FfiConverterRustBuffer {
             
         
         case let .sendReceipt(messageId,status):
-            writeInt(&buf, Int32(31))
+            writeInt(&buf, Int32(18))
             FfiConverterString.write(messageId, into: &buf)
             FfiConverterString.write(status, into: &buf)
             
         
         case let .sendEndSession(contactId):
-            writeInt(&buf, Int32(32))
+            writeInt(&buf, Int32(19))
             FfiConverterString.write(contactId, into: &buf)
             
         
         case let .notifyNewMessage(chatId,preview):
-            writeInt(&buf, Int32(33))
+            writeInt(&buf, Int32(20))
             FfiConverterString.write(chatId, into: &buf)
             FfiConverterString.write(preview, into: &buf)
             
         
         case let .notifySessionCreated(contactId):
-            writeInt(&buf, Int32(34))
+            writeInt(&buf, Int32(21))
             FfiConverterString.write(contactId, into: &buf)
             
         
         case let .notifyError(code,message):
-            writeInt(&buf, Int32(35))
+            writeInt(&buf, Int32(22))
             FfiConverterString.write(code, into: &buf)
             FfiConverterString.write(message, into: &buf)
             
         
         case let .scheduleTimer(timerId,delayMs):
-            writeInt(&buf, Int32(36))
+            writeInt(&buf, Int32(23))
             FfiConverterString.write(timerId, into: &buf)
             FfiConverterUInt64.write(delayMs, into: &buf)
             
         
         case let .cancelTimer(timerId):
-            writeInt(&buf, Int32(37))
+            writeInt(&buf, Int32(24))
             FfiConverterString.write(timerId, into: &buf)
             
         
         case let .callSignalDecrypted(contactId,messageId,protoBytes):
-            writeInt(&buf, Int32(38))
+            writeInt(&buf, Int32(25))
             FfiConverterString.write(contactId, into: &buf)
             FfiConverterString.write(messageId, into: &buf)
             FfiConverterData.write(protoBytes, into: &buf)
             
         
         case let .checkAckInDb(messageId):
-            writeInt(&buf, Int32(39))
+            writeInt(&buf, Int32(26))
             FfiConverterString.write(messageId, into: &buf)
             
         
         case let .notifyLinkedDevicesOfSessionReset(contactId):
-            writeInt(&buf, Int32(40))
+            writeInt(&buf, Int32(27))
             FfiConverterString.write(contactId, into: &buf)
             
         
         case let .sessionTerminated(contactId,archiveBytes):
-            writeInt(&buf, Int32(41))
+            writeInt(&buf, Int32(28))
             FfiConverterString.write(contactId, into: &buf)
             FfiConverterData.write(archiveBytes, into: &buf)
             
@@ -5511,41 +5298,6 @@ public enum CfeIncomingEvent: Equatable, Hashable {
      */
     case peerToreDown(contactId: String
     )
-    /**
-     * The platform needs a session with `contact_id` and there is none — today, the INITIATOR
-     * re-init an inbound teardown raises. Answered with `OpenSession`, or `OpenDeferred` +
-     * `ScheduleTimer` while the peer's own rebuild may still be in the same flush.
-     */
-    case reopenRequested(contactId: String
-    )
-    /**
-     * The platform is about to attempt one heal of `contact_id` and asks whether the budget
-     * allows it. Answered with `HealAttemptAllowed` or `HealExhausted` — never an empty list,
-     * because silence read as permission is an unbounded heal loop.
-     */
-    case healAttempted(contactId: String
-    )
-    /**
-     * A SESSION_RESET_INIT has gone out to `contact_id`. A report, not a request: it starts the
-     * confirm window and arms the retry the core owns.
-     */
-    case sriAnnounced(contactId: String
-    )
-    /**
-     * The peer acknowledged the session we opened with `contact_id` — `session_ready`, a ping,
-     * or its own init carrier on the ratchet we announced. Ends the confirm window.
-     */
-    case peerAcked(contactId: String
-    )
-    /**
-     * A SESSION_RESET_INIT arrived from `contact_id` and the platform asks whether to apply it.
-     * Answered with `ApplyResetInit` or `ResetInitSuperseded`. `init_ephemeral` is the X3DH
-     * ephemeral public key from the envelope — the init's identity; `sent_at_s` the envelope
-     * timestamp; `established_at_s` the platform's record of when the session it holds with this
-     * device was established (Unix seconds, null when there is none).
-     */
-    case resetInitArrived(contactId: String, initEphemeral: Data, sentAtS: UInt64, establishedAtS: UInt64?
-    )
 
 
 
@@ -5600,21 +5352,6 @@ public struct FfiConverterTypeCfeIncomingEvent: FfiConverterRustBuffer {
         )
         
         case 13: return .peerToreDown(contactId: try FfiConverterString.read(from: &buf)
-        )
-        
-        case 14: return .reopenRequested(contactId: try FfiConverterString.read(from: &buf)
-        )
-        
-        case 15: return .healAttempted(contactId: try FfiConverterString.read(from: &buf)
-        )
-        
-        case 16: return .sriAnnounced(contactId: try FfiConverterString.read(from: &buf)
-        )
-        
-        case 17: return .peerAcked(contactId: try FfiConverterString.read(from: &buf)
-        )
-        
-        case 18: return .resetInitArrived(contactId: try FfiConverterString.read(from: &buf), initEphemeral: try FfiConverterData.read(from: &buf), sentAtS: try FfiConverterUInt64.read(from: &buf), establishedAtS: try FfiConverterOptionUInt64.read(from: &buf)
         )
         
         default: throw UniffiInternalError.unexpectedEnumCase
@@ -5706,34 +5443,6 @@ public struct FfiConverterTypeCfeIncomingEvent: FfiConverterRustBuffer {
         case let .peerToreDown(contactId):
             writeInt(&buf, Int32(13))
             FfiConverterString.write(contactId, into: &buf)
-            
-        
-        case let .reopenRequested(contactId):
-            writeInt(&buf, Int32(14))
-            FfiConverterString.write(contactId, into: &buf)
-            
-        
-        case let .healAttempted(contactId):
-            writeInt(&buf, Int32(15))
-            FfiConverterString.write(contactId, into: &buf)
-            
-        
-        case let .sriAnnounced(contactId):
-            writeInt(&buf, Int32(16))
-            FfiConverterString.write(contactId, into: &buf)
-            
-        
-        case let .peerAcked(contactId):
-            writeInt(&buf, Int32(17))
-            FfiConverterString.write(contactId, into: &buf)
-            
-        
-        case let .resetInitArrived(contactId,initEphemeral,sentAtS,establishedAtS):
-            writeInt(&buf, Int32(18))
-            FfiConverterString.write(contactId, into: &buf)
-            FfiConverterData.write(initEphemeral, into: &buf)
-            FfiConverterUInt64.write(sentAtS, into: &buf)
-            FfiConverterOptionUInt64.write(establishedAtS, into: &buf)
             
         }
     }
@@ -6153,9 +5862,7 @@ public func FfiConverterTypeDeliveryAudience_lower(_ value: DeliveryAudience) ->
 // Note that we don't yet support `indirect` for enums.
 // See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
 /**
- * Whether to open a session with a device right now, and as which side.
- * See orchestration::initiation_plan. `tie_break_role` settles a collision that has happened;
- * this settles whether to walk into one, and both peers must answer it compatibly.
+ * Whether to open a session with a device right now. See orchestration::initiation_plan.
  */
 
 public enum InitiationDecision: Equatable, Hashable {
@@ -6165,12 +5872,12 @@ public enum InitiationDecision: Equatable, Hashable {
      */
     case initiate
     /**
-     * One of ours is already in flight — join it. A second init derives a new root key, spends
-     * another one-time prekey, and orphans the first SESSION_RESET_INIT.
+     * One of ours is already in flight — join it. A second init spends another one-time prekey
+     * for a state that will not be used.
      */
     case joinInFlight
     /**
-     * The peer's init is arriving and outranks ours. Take the responder side.
+     * The peer's handshake is in hand: open from it rather than build a second state.
      */
     case yieldToPeer
     /**
@@ -6540,23 +6247,19 @@ public func FfiConverterTypePqHandshake_lower(_ value: PqHandshake) -> RustBuffe
 // Note that we don't yet support `indirect` for enums.
 // See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
 /**
- * What a queued message is, for the purpose of opening a receiving session.
+ * What a message is, for the purpose of opening a receiving session.
  */
 
 public enum ReceivingInitKind: Equatable, Hashable {
     
     /**
-     * Carries an X3DH init: this message can open a session.
+     * Carries the initiator's handshake header: this message can open a session.
      */
     case handshake
     /**
-     * Already inside a ratchet. Initialising from it fails and destroys the queue behind it.
+     * Carries none: it decrypts on a state already held or not at all.
      */
     case midRatchet
-    /**
-     * `message_number == 0` but a PQ epoch has advanced — a re-keyed continuation, not an opener.
-     */
-    case midSessionLeftover
 
 
 
@@ -6580,8 +6283,6 @@ public struct FfiConverterTypeReceivingInitKind: FfiConverterRustBuffer {
         
         case 2: return .midRatchet
         
-        case 3: return .midSessionLeftover
-        
         default: throw UniffiInternalError.unexpectedEnumCase
         }
     }
@@ -6596,10 +6297,6 @@ public struct FfiConverterTypeReceivingInitKind: FfiConverterRustBuffer {
         
         case .midRatchet:
             writeInt(&buf, Int32(2))
-        
-        
-        case .midSessionLeftover:
-            writeInt(&buf, Int32(3))
         
         }
     }
@@ -7912,7 +7609,7 @@ public func openWithDeviceKey(sealedBox: [UInt8], ourIdentityPriv: [UInt8])throw
 })
 }
 /**
- * Whether to open a session with a device now, and as which side.
+ * Whether to open a session with a device now.
  *
  * Called at the moment a client wants a session and has none it can use. Answering this
  * locally is what produced 2026-09-04: both sides opened an INITIATOR session thirty-three
@@ -8032,10 +7729,9 @@ public func randomSendDelayMs(maxDelayMs: UInt64) -> UInt64  {
 })
 }
 /**
- * Classify a queued message: can it open a receiving session?
- * One rule, one implementation — every client asks rather than reimplements. A
- * `message_number == 0` with an advanced PQ epoch is shaped like an opener and is not one,
- * which is why this is a named function and not an inline check.
+ * Classify a message: can it open a receiving session? One rule, one implementation —
+ * every client asks rather than reimplements. A handshake header (the KEM ciphertext) opens
+ * at any message number.
  */
 public func receivingInitKind(carrier: ReceivingInitCarrier) -> ReceivingInitKind  {
     return try!  FfiConverterTypeReceivingInitKind_lift(try! rustCall() {
@@ -8233,22 +7929,6 @@ public func testPlatformBridgeRoundtrip(bridge: PlatformBridge, key: String, dat
         FfiConverterCallbackInterfacePlatformBridge_lower(bridge),
         FfiConverterString.lower(key),
         FfiConverterData.lower(data),$0
-    )
-})
-}
-/**
- * Which side opens the session when both try at once: "Initiator" or "Responder".
- *
- * Higher id wins, by plain byte comparison — no normalisation, no parsing. Both peers
- * compute it over the same pair, so a disagreement is a permanent deadlock rather than a
- * retryable error. Pass the ids the session is addressed by; anything else ranks a
- * different pair.
- */
-public func tieBreakRole(myId: String, peerId: String) -> String  {
-    return try!  FfiConverterString.lift(try! rustCall() {
-    uniffi_construct_core_fn_func_tie_break_role(
-        FfiConverterString.lower(myId),
-        FfiConverterString.lower(peerId),$0
     )
 })
 }
@@ -8499,9 +8179,6 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_func_test_platform_bridge_roundtrip() != 58358) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_func_tie_break_role() != 31131) {
-        return InitializationResult.apiChecksumMismatch
-    }
     if (uniffi_construct_core_checksum_func_validate_mnemonic() != 51524) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -8626,9 +8303,6 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_orchestratorcore_ack_mark_processed() != 13454) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_construct_core_checksum_method_orchestratorcore_awaits_acknowledgement() != 35656) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_orchestratorcore_begin_kyber_spk_rotation() != 57721) {
@@ -8761,9 +8435,6 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_orchestratorcore_prune_one_time_prekeys_below() != 26303) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_construct_core_checksum_method_orchestratorcore_queue_for_open() != 58160) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_orchestratorcore_remove_session() != 15351) {

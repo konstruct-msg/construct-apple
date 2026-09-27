@@ -12,8 +12,9 @@ final class CryptoSessionInitializationService {
     /// Open a session with the device `bundle` names, as INITIATOR.
     ///
     /// A session already held with that device is replaced only once the new one is built
-    /// (`reopenSession`); on any refusal it stays exactly as it was. The replaced ratchet is then
-    /// archived, as before, for messages still in flight on it.
+    /// (`reopenSession`); on any refusal it stays exactly as it was. The core keeps the replaced
+    /// state as a previous one, for messages still in flight on it
+    /// (`decisions/sessions-renew-by-sending.md`).
     ///
     /// The one exception is a degraded (`allowStale`) init over a held session: the core's reopen
     /// has no stale variant, so that path archives first and inits, as every init did before.
@@ -24,7 +25,6 @@ final class CryptoSessionInitializationService {
         allowStale: Bool = false,
         core: OrchestratorCore?,
         archiveSession: (String, ArchiveReason) -> Void,
-        archiveReplacedSession: (String, Data, ArchiveReason) -> Void,
         saveSession: (String) -> Void
     ) throws {
         guard let core = core else {
@@ -54,12 +54,7 @@ final class CryptoSessionInitializationService {
         do {
             let sessionId: String
             if held && !allowStale {
-                // Exported before the reopen: afterwards the core holds only the new session.
-                let replaced = try? Data(core.exportSession(contactId: contactId))
                 sessionId = try core.reopenSession(contactId: contactId, recipientBundle: binary)
-                if let replaced {
-                    archiveReplacedSession(contactId, replaced, .manualReset)
-                }
             } else {
                 if held { archiveSession(contactId, .manualReset) }
                 sessionId = allowStale
@@ -126,8 +121,7 @@ final class CryptoSessionInitializationService {
             messageNumber: message.messageNumber,
             oneTimePreKeyId: message.oneTimePreKeyId,
             kemCiphertextBytes: message.kemCiphertext.count,
-            pqMessageEpoch: message.pqMessageEpoch,
-            isSessionResetInit: message.isSessionResetInit
+            pqMessageEpoch: message.pqMessageEpoch
         )
         guard initKind == .handshake else {
             Log.error(
@@ -142,10 +136,9 @@ final class CryptoSessionInitializationService {
         }
 
         // The device is the one the certificate names; the core refuses the open if its key does
-        // not derive to it. What is held for that device now is archived, not dropped.
-        if core.hasSession(contactId: certificate.deviceId) {
-            archiveSession(certificate.deviceId, .manualReset)
-        }
+        // not derive to it. What is held for that device now becomes a previous state in the
+        // core — archiving it here, as this did until 2026-09-27, threw away what the sibling
+        // still had in flight on it.
 
         do {
             let result = try core.initReceivingSessionFromWirePayload(

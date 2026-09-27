@@ -506,50 +506,10 @@ enum SessionAddressing {
         return from == ourAccountId && to == ourAccountId
     }
 
-    // MARK: - Who goes first
-
-    /// Role in a concurrent-init tie-break.
-    enum Role: Equatable { case initiator, responder }
-
-    /// The tie-break rule, **asked of the core** rather than restated here.
-    ///
-    /// Both peers compute this independently, so any disagreement is not a retryable error: it is
-    /// both-initiator or both-responder, permanently. Until 2026-08-26 the app carried its own copy
-    /// of the comparison under a comment promising it matched the core byte-for-byte — and the flip
-    /// to device addressing broke that promise without touching either line, because the core began
-    /// ranking a pair of device ids while this side went on ranking a pair of account ids. Two
-    /// correct implementations over two different pairs agree about half the time.
-    ///
-    /// A rule two sides must agree on has one implementation and the other side calls it.
-    static func role(mine: String, theirs: String) -> Role {
-        // The core answers with the same spelling it stamps on `SessionHealNeeded`, so the wire
-        // name and the local decision cannot drift apart either.
-        tieBreakRole(myId: mine, peerId: theirs) == "Initiator" ? .initiator : .responder
-    }
-
-    /// Whether we are the natural INITIATOR against `peerId`, or `nil` when the pair cannot be
-    /// ranked because the peer has no name in the crypto space.
-    ///
-    /// This resolves **both** halves through the seam. That is the whole point: the core ranks
-    /// (our device, their device), and a caller that ranks (our account, their account) has
-    /// answered a different question with the same type.
-    ///
-    /// `nil` is not an error. It is the same state as "we have never pinned this contact's key",
-    /// in which no session with them can exist and none can be built until a bundle fetch pins it.
-    /// Callers decide what to do with it explicitly; none of them may substitute an account id.
-    static func isNaturalInitiator(againstPeer peerId: String) -> Bool? {
-        let mine = localIdentity()
-        // Still the pinned device, and still account-keyed at two of its three call sites. That
-        // is the session coordinator's remaining half — the tie-break role belongs to the core
-        // machine (`decisions/session-is-one-state-machine.md`, steps 3–5), which ranks a pair of
-        // devices and has no account to rank. Moving it here would only relocate the fold.
-        guard !mine.isEmpty, let theirs = pinnedDevice(ofPeer: peerId) else { return nil }
-        // Equal ids — self, or an echo of our own copy — need no special case here: the core
-        // answers `Responder` for them and pins that in `test_an_id_does_not_win_against_itself`.
-        // A guard restating it would be the same duplicate this function exists to remove; it was
-        // written, found to have no observable effect, and dropped.
-        return role(mine: mine, theirs: theirs) == .initiator
-    }
+    // `role(mine:theirs:)` and `isNaturalInitiator(againstPeer:)` stood here until 2026-09-27:
+    // the core's tie-break, asked of a device pair. Nothing is ranked any more — a session record
+    // keeps its previous states and two sides opening at once converge by themselves
+    // (`decisions/sessions-renew-by-sending.md`).
 
     // MARK: - Internals
 

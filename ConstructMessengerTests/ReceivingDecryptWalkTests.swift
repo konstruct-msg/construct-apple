@@ -6,8 +6,8 @@ import XCTest
 /// A peer's account is a set of devices and each has its own ratchet. The receive path resolved
 /// exactly one — `SessionAddressing.pinnedDevice(ofPeer:)` — and handed it every message the account
 /// sent, so a message from the second device failed AEAD on keys that were entirely valid. That is
-/// indistinguishable from a broken session and was treated as one: heal, and a teardown of the
-/// healthy session behind it.
+/// indistinguishable from a broken session and was treated as one: a teardown of the healthy
+/// session behind it.
 ///
 /// The order is the core's decision (`plan_receiving_decrypt`, nine tests in Rust). What is pinned
 /// here is the Swift half: which verdicts are worth another device, and that the core's plan keeps
@@ -17,18 +17,17 @@ final class ReceivingDecryptWalkTests: XCTestCase {
 
     // MARK: - Which verdicts justify another attempt
 
-    /// The two failure verdicts describe the **session**, so another device is worth trying.
+    /// The teardown verdict describes the **session**, so another device is worth trying. The heal
+    /// verdict beside it went on 2026-09-27.
     func testAFailedSessionIsWorthAnotherDevice() {
-        XCTAssertTrue(MessageRouter.worthAnotherDevice([
-            .sessionHealNeeded(contactId: "dev-a", role: "responder")
-        ]))
         XCTAssertTrue(MessageRouter.worthAnotherDevice([
             .sendEndSession(contactId: "dev-a")
         ]))
     }
 
-    /// **The property that keeps the walk safe.** Every verdict other than the two above is an
-    /// answer about the *message*, not the session. Re-asking a different session would repeat it,
+    /// **The property that keeps the walk safe.** Every verdict other than the one above is an
+    /// answer about the *message*, not the session — including `.openReceiving`: a message with
+    /// the handshake header that no state opened is queued under the device tried. Re-asking a different session would repeat it,
     /// or act on it twice — a second END_SESSION, a second queue entry, a duplicate row.
     func testAnAnswerAboutTheMessageEndsTheWalk() {
         XCTAssertFalse(MessageRouter.worthAnotherDevice([
@@ -39,9 +38,6 @@ final class ReceivingDecryptWalkTests: XCTestCase {
         ]))
         XCTAssertFalse(MessageRouter.worthAnotherDevice([
             .endSessionSuppressed(contactId: "dev-a", retryAfterMs: 1000)
-        ]))
-        XCTAssertFalse(MessageRouter.worthAnotherDevice([
-            .healSuppressed(contactId: "dev-a", retryAfterMs: 1000)
         ]))
         XCTAssertFalse(MessageRouter.worthAnotherDevice([
             .openReceiving(contactId: "dev-a")
@@ -61,7 +57,7 @@ final class ReceivingDecryptWalkTests: XCTestCase {
     func testAChoreInFrontDoesNotHideTheVerdict() {
         XCTAssertTrue(MessageRouter.worthAnotherDevice([
             .scheduleTimer(timerId: "t", delayMs: 10),
-            .sessionHealNeeded(contactId: "dev-a", role: "responder")
+            .sendEndSession(contactId: "dev-a")
         ]))
     }
 

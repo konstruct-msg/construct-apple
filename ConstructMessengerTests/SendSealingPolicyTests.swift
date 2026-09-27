@@ -170,7 +170,6 @@ final class SealingExemptionSiteTests: XCTestCase {
             "CallManager.swift",                // WebRTC signalling
             "OutboundMessagePipeline.swift",    // every message and control body — see below
             "OutboundSessionService.swift",     // heartbeat and delivery receipt
-            "SessionCoordinator.swift",         // session control
         ],
     ]
 

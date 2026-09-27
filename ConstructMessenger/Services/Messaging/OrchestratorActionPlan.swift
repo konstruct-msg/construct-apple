@@ -45,10 +45,9 @@ struct OrchestratorActionPlan {
     /// alongside it: those are executed, not classified.
     ///
     /// First matching action in list order wins — the same scan `MessageRouter` used to
-    /// do inline. `scheduleTimer` and `healSuppressed` arriving together must yield
-    /// `.healSuppressed`, not `.none`: treating that pair as "no decision" (device logs
-    /// 2026-08-19) skipped the timer, advanced the cursor past an un-ACKed message, and
-    /// let re-init fire without the cooldown the core had just asked for.
+    /// do inline. `scheduleTimer` and a suppression arriving together must yield the
+    /// suppression, not `.none`: treating that pair as "no decision" (device logs
+    /// 2026-08-19) skipped the timer and advanced the cursor past an un-ACKed message.
     static func routingVerdict(from actions: [CfeAction]) -> IncomingRoutingVerdict {
         for action in actions {
             switch action {
@@ -56,18 +55,12 @@ struct OrchestratorActionPlan {
                 return .decrypted
             case .callSignalDecrypted:
                 return .callSignalDecrypted
-            case .sessionHealNeeded(let contactId, let role):
-                return .sessionHealNeeded(contactId: contactId, role: role)
             case .sendEndSession(let contactId):
                 return .sendEndSession(contactId: contactId)
             case .openReceiving(let contactId):
                 return .openReceiving(contactId: contactId)
             case .endSessionSuppressed(let contactId, let retryAfterMs):
                 return .endSessionSuppressed(contactId: contactId, retryAfterMs: retryAfterMs)
-            case .healSuppressed(let contactId, let retryAfterMs):
-                return .healSuppressed(contactId: contactId, retryAfterMs: retryAfterMs)
-            case .heldPendingAck(let contactId):
-                return .heldPendingAck(contactId: contactId)
             case .messageQueuedPendingInit(let contactId, let queuedCount):
                 return .messageQueuedPendingInit(contactId: contactId, queuedCount: queuedCount)
             case .duplicateDropped(let messageId):
@@ -89,15 +82,10 @@ struct OrchestratorActionPlan {
 enum IncomingRoutingVerdict: Equatable {
     case decrypted
     case callSignalDecrypted
-    case sessionHealNeeded(contactId: String, role: String)
     case sendEndSession(contactId: String)
     /// A message waits for a session with `contactId` and can open one — no bundle is fetched.
     case openReceiving(contactId: String)
     case endSessionSuppressed(contactId: String, retryAfterMs: UInt64)
-    case healSuppressed(contactId: String, retryAfterMs: UInt64)
-    /// Neither heal nor tear down: our own SESSION_RESET_INIT to this **device** has not been
-    /// acknowledged, so the failure is our re-init's own consequence. Buffer and replay.
-    case heldPendingAck(contactId: String)
     case messageQueuedPendingInit(contactId: String, queuedCount: UInt32)
     /// Already handled — ACK cache, our DB, or a ratchet position whose key is used. Named by the
     /// core since 2026-09-26 (`DuplicateDropped`); before, it was an empty list that also meant

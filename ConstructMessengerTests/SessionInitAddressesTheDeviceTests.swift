@@ -189,7 +189,6 @@ final class SessionInitAddressesTheDeviceTests: XCTestCase {
             bundle: served(),
             core: core,
             archiveSession: { _, _ in },
-            archiveReplacedSession: { _, _, _ in },
             saveSession: { saved.append($0) }
         )
 
@@ -198,10 +197,10 @@ final class SessionInitAddressesTheDeviceTests: XCTestCase {
                        "the INITIATOR path is the mirror image and had the same defect")
     }
 
-    /// The archive is guarded on `hasSession(contactId:)` — an answer about one device. Handing
-    /// the account to the archive that follows makes the question and the action address different
-    /// peers' devices.
-    func testArchiveBeforeReinitNamesTheDeviceThatWasAskedAbout() throws {
+    /// A sibling's new state opened over one held is not archived here: the core keeps the held
+    /// state as a previous one, and archiving it — as this did until 2026-09-27 — threw away what
+    /// the sibling still had in flight on it (`decisions/sessions-renew-by-sending.md`).
+    func testAReceivingOpenOverAHeldSessionArchivesNothing() throws {
         let core = RecordingCore()
         core.sessionExistsFor = [bundleDevice]
         var archived: [String] = []
@@ -213,19 +212,16 @@ final class SessionInitAddressesTheDeviceTests: XCTestCase {
             saveSession: { _ in }
         )
 
-        XCTAssertEqual(archived, [bundleDevice],
-                       "the archive must put away the session `hasSession` just found, not whichever "
-                       + "device the contact list pins")
+        XCTAssertEqual(archived, [], "the held state is the core's to keep")
     }
 
-    /// A session held with the device is replaced by the core's reopen — built first — and the
-    /// replaced ratchet archived afterwards from the bytes exported before. Nothing is archived
-    /// up front: that is what left a pair with no session when the init was then refused.
-    func testSendingInitOverAHeldSessionReopensAndArchivesAfter() throws {
+    /// A session held with the device is replaced by the core's reopen — built first — and kept
+    /// by the core as a previous state. Nothing is archived: up front that left a pair with no
+    /// session when the init was then refused, and afterwards it duplicated what the core keeps.
+    func testSendingInitOverAHeldSessionReopensAndArchivesNothing() throws {
         let core = RecordingCore()
         core.sessionExistsFor = [bundleDevice]
         var archivedFirst: [String] = []
-        var archivedReplaced: [(String, Data)] = []
         var saved: [String] = []
 
         try CryptoSessionInitializationService().initializeSession(
@@ -233,16 +229,12 @@ final class SessionInitAddressesTheDeviceTests: XCTestCase {
             bundle: served(),
             core: core,
             archiveSession: { peer, _ in archivedFirst.append(peer) },
-            archiveReplacedSession: { peer, bytes, _ in archivedReplaced.append((peer, bytes)) },
             saveSession: { saved.append($0) }
         )
 
         XCTAssertEqual(core.reopenContactIds, [bundleDevice])
         XCTAssertEqual(core.initSendingContactIds, [], "a held session goes through reopen, not init")
-        XCTAssertEqual(archivedFirst, [], "nothing is torn down before the new session exists")
-        XCTAssertEqual(archivedReplaced.map(\.0), [bundleDevice])
-        XCTAssertEqual(archivedReplaced.first?.1, Data("held-\(bundleDevice)".utf8),
-                       "the archive holds the session as it was before the reopen")
+        XCTAssertEqual(archivedFirst, [], "nothing is torn down, before or after")
         XCTAssertEqual(saved, [bundleDevice])
     }
 
@@ -263,7 +255,6 @@ final class SessionInitAddressesTheDeviceTests: XCTestCase {
             bundle: served(),
             core: core,
             archiveSession: { peer, _ in archived.append(peer) },
-            archiveReplacedSession: { peer, _, _ in archived.append(peer) },
             saveSession: { saved.append($0) }
         )) { error in
             guard case SessionError.peerNotPostQuantum(let reason)? = error as? SessionError else {

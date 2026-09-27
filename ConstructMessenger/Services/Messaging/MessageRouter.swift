@@ -161,10 +161,7 @@ final class MessageRouter {
     }
 
     /// Receive-side coalesce for END_SESSION storms (server re-delivers dozens of control msgs for
-    /// one peer per reconnect). First handle wins; rest are ACK-only. SESSION_RESET_INIT is NOT
-    /// coalesced by this time window — it carries a fresh X3DH init and is filtered by content
-    /// freshness instead (`isResetInitSuperseded`); a handled SRI still arms this window so a
-    /// trailing END_SESSION for the same reset is coalesced.
+    /// one peer per reconnect). First handle wins; rest are ACK-only.
     private var lastInboundEndSessionAt: [String: Date] = [:]
     /// Long enough to cover a full pending-queue flush + stream reconnect without re-tearing
     /// a session we just rebuilt; short enough that a real second reset later still lands.
@@ -200,57 +197,21 @@ final class MessageRouter {
             .map(\.message.senderDeviceId)
     }
 
-    // MARK: - Tie-break confirm hold
+    // MARK: - Queues the core dropped
 
-    /// Carry out what the core hands back from its confirm-gate hold — `ReplayHeld` and
-    /// `HeldSuperseded`, from whichever event's answer they rode on.
+    /// Carry out `PendingDropped`: the core dropped what waited for a ratchet the peer tore down.
+    /// Reached from `CryptoManager` on the next main-queue turn, whichever event's answer it rode on.
     ///
-    /// The hold is the core's since 2026-09-26: which messages wait, against which ratchet epoch,
-    /// and when the wait ends. Before that this router kept the buffer (`PendingSessionQueue`,
-    /// account-keyed), a stamp per message (`heldAgainst`), and its own replay rule, beside a gate
-    /// the core decided per device — two halves of one decision in two places, and the release
-    /// ran only from the exits this side knew of. What stays here is the envelope, kept like any
-    /// other the core has not finished with (`coreQueuedEnvelopes`).
-    ///
-    /// Reached from `CryptoManager.handleOrchestratorEvent` on the next main-queue turn, never
-    /// inside the caller's own handling of the answer, so a replay cannot re-enter a routing pass.
-    func performHeldReleases(_ actions: [CfeAction]) {
-        guard let context = viewContext else { return }
+    /// The confirm-gate hold (`ReplayHeld`, `HeldSuperseded`) was released here too until
+    /// 2026-09-27, when the gate went (`decisions/sessions-renew-by-sending.md`).
+    func releaseDroppedQueues(_ actions: [CfeAction]) {
         for action in actions {
-            switch action {
-            case .replayHeld(let messageId):
-                guard let held = coreQueuedEnvelopes.removeValue(forKey: messageId) else {
-                    // Redelivered while it waited: the redelivery's own pass took the envelope
-                    // and is routing it now.
-                    Log.debug("Held \(messageId.prefix(8))… released with no envelope — its redelivery owns it", category: "MessageRouter")
-                    continue
-                }
-                Log.info("SESSION_STATE[confirm_replay]: re-routing \(messageId.prefix(8))… from \(held.otherUserId.prefix(8))…", category: "MessageRouter")
-                routeIncomingMessage(held.message, in: context)
-            case .pendingDropped(let contactId, let messageIds):
-                // The core dropped what waited for a session that is gone or superseded.
-                Log.info(
-                    "SESSION_STATE[pending_dropped]: \(messageIds.count) message(s) that waited for \(contactId.prefix(8))… — released",
-                    category: "MessageRouter"
-                )
-                releaseCoreQueued(messageIds)
-            case .heldSuperseded(let messageId):
-                // Acknowledge: it will never decrypt, and unacked the server redelivers it
-                // forever — the amplifier behind the receipt storm. The one branch of the hold
-                // that ends a message's life, so it is logged by id.
-                let held = coreQueuedEnvelopes.removeValue(forKey: messageId)
-                Log.info(
-                    "SESSION_STATE[confirm_superseded]: dropping \(messageId.prefix(8))… — a handshake for a ratchet that was replaced while it waited",
-                    category: "MessageRouter"
-                )
-                if let held {
-                    PersistentACKStore.shared.markProcessed(messageId, senderId: held.otherUserId, in: context)
-                }
-                StreamCursorTracker.shared.resolve(messageId: messageId)
-                PerformanceMetrics.shared.record(.confirmReplaySuperseded, label: "handshake")
-            default:
-                continue
-            }
+            guard case .pendingDropped(let contactId, let messageIds) = action else { continue }
+            Log.info(
+                "SESSION_STATE[pending_dropped]: \(messageIds.count) message(s) that waited for \(contactId.prefix(8))… — released",
+                category: "MessageRouter"
+            )
+            releaseCoreQueued(messageIds)
         }
     }
 
@@ -564,11 +525,16 @@ final class MessageRouter {
             // messages that have already been through initReceivingSession and failed
             // (OTPK consumed, key mismatch, etc.) — those can never succeed and would
             // loop on every reconnect if we keep re-processing them.
-            // Never re-process control carriers as "orphaned init" — END_SESSION / SRI /
-            // sender-sync already failed or completed; replaying them loops session teardown.
-            let isOrphanedInit = message.messageNumber == 0
+            // Never re-process control carriers as "orphaned init" — END_SESSION / sender-sync
+            // already failed or completed; replaying them loops session teardown. A handshake is
+            // the header, at any message number (`decisions/sessions-renew-by-sending.md`).
+            let isOrphanedInit = SessionReducer.receivingInitKind(
+                    messageNumber: message.messageNumber,
+                    oneTimePreKeyId: message.oneTimePreKeyId,
+                    kemCiphertextBytes: message.kemCiphertext.count,
+                    pqMessageEpoch: message.pqMessageEpoch
+                ) == .handshake
                 && !message.isEndSession
-                && !message.isSessionResetInit
                 && !message.isSenderSync
                 && !CryptoManager.shared.hasSessionWithAnyDevice(ofPeer: otherUserId)
                 && !FailedInitMessageStore.shared.contains(message.id)
@@ -638,39 +604,9 @@ final class MessageRouter {
             return
         }
 
-        // 3a. SESSION_RESET_INIT: atomic archive of old session + RESPONDER init in one step.
-        //     Must be checked BEFORE the END_SESSION path (it carries a real X3DH payload).
-        if message.isSessionResetInit {
-            PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId, in: context)
-            // Coalesce by *content freshness*, not a blanket time window: a SESSION_RESET_INIT
-            // carries a fresh X3DH init, so only one that pre-dates/exactly-matches our current
-            // establishment (a server backlog replay) is a duplicate to ACK-only. A *newer* init
-            // is a live re-init and MUST be applied even while a session is active — dropping it
-            // strands the RESPONDER on a dead ratchet → END_SESSION storm (2026-07-26 desync).
-            // Both halves, like END_SESSION below: the device from the certificate names the
-            // ratchet this init replaces. Two devices of one account re-initialising at once —
-            // the ordinary answer to a teardown sent to both — used to archive the pinned
-            // device's session twice and the sibling's never (stand, 2026-09-21 18:47:43).
-            let sriPeer = PeerAddress(account: otherUserId, device: message.senderDeviceId)
-            if delegate?.messageRouter(
-                self,
-                isResetInitSuperseded: sriPeer,
-                timestamp: message.timestamp,
-                initEphemeral: message.ephemeralPublicKey
-            ) == true {
-                Log.info(
-                    "SESSION_RESET_INIT superseded for \(sriPeer) — ACK only (pre-dates current session)",
-                    category: "MessageRouter"
-                )
-                return
-            }
-            Log.info("SESSION_RESET_INIT from \(sriPeer)", category: "MessageRouter")
-            handleSessionResetInit(message: message, from: sriPeer, in: context)
-            // A handled SRI also counts as "we just reset this peer" for the END_SESSION coalescer
-            // (preserves the cross-arm the removed inbound-control time-window provided).
-            lastInboundEndSessionAt[otherUserId] = Date()
-            return
-        }
+        // A SESSION_RESET_INIT (content type 24) from a build before 2026-09-27 is not special any
+        // more: it is a message carrying the handshake header, and it opens like one below. Its
+        // payload is a control string, discarded in `executeRustActions`.
 
         // 3. Check if this is an END_SESSION control message
         if message.isEndSession {
@@ -741,8 +677,7 @@ final class MessageRouter {
                 messageNumber: message.messageNumber,
                 oneTimePreKeyId: message.oneTimePreKeyId,
                 kemCiphertextBytes: message.kemCiphertext.count,
-                pqMessageEpoch: message.pqMessageEpoch,
-                isSessionResetInit: message.isSessionResetInit
+                pqMessageEpoch: message.pqMessageEpoch
             )
             if kind == .handshake {
                 // Guard: don't resurrect a deleted contact for a message we already queued
@@ -824,28 +759,6 @@ final class MessageRouter {
             // session it queues it and answers `.openReceiving` (or
             // `.messageQueuedPendingInit` behind an open already under way), handled below.
         }
-
-        // Removed 2026-09-23 with `SessionConfirmationTracker`: an "unsettled lapse" set, claimed
-        // once per lapse, because the gate could fall inside a *query* — a lazy TTL running from
-        // whatever call site happened to ask, with no context to replay with, and beating the
-        // watchdog to the entry so the give-up replay never ran (build 575: two peer inits held,
-        // zero replayed, the cursor deferred behind them). The machine's window does not expire
-        // inside a question; it ends on `OpeningGaveUp`, delivered to the one place that can act.
-
-        // Removed 2026-08-21: a second `confirmGateAction` call stood here, holding any incoming
-        // `messageNumber == 0` while our own SESSION_RESET_INIT was unacked. It was asked before
-        // decryption, so `messageNumber == 0` was all it had — and that is not a handshake. A DH
-        // sending chain restarts at 0 on every ratchet turn, so the peer's `session_ready` (its
-        // first send under the session we just created) satisfied it, and since 2026-08-03 the
-        // type of a `session_ready` rides inside the ciphertext where no pre-decryption test can
-        // reach it. The gate held its own key: 16 of the peer's 19 acknowledgements went into the
-        // buffer of the gate waiting for them, and the watchdog's next re-init superseded them.
-        //
-        // Nothing replaces it here. The message goes to the ratchet, which answers the question
-        // exactly — a message it can read is not a peer init — and both refusals it can give are
-        // put to the gate by the core, which holds it: a held message comes back as
-        // `.heldPendingAck` instead of `.sendEndSession` / `.sessionHealNeeded`. The content type
-        // the pre-decryption test could not reach travels with the decision, as `is_handshake`.
 
         // Rust orchestrator is the SINGLE decrypt path — no Swift fallback.
         // Изъян 4: If orchestratorCore is nil (e.g. Keychain locked after reboot),
@@ -1035,39 +948,6 @@ final class MessageRouter {
             // case must be handled here before the loop falls through to "no routing decision".
             _ = executeRustActions(actions, for: message, chat: chat, otherUserId: otherUserId, in: context)
             return
-        case .heldPendingAck(let heldAgainstDevice):
-            // Our own SESSION_RESET_INIT to `heldAgainstDevice` is unanswered, so this failure
-            // is our re-init's own consequence and not evidence about the peer. Acting on it
-            // answers our own reset with another reset and takes the message with it — on
-            // 2026-08-04 a user's first message after a re-init died exactly that way, held at
-            // `sent` on one side and never rendered on the other.
-            //
-            // Per device, decided and held in the core; see `performHeldReleases`.
-            Log.info("SESSION_STATE[held_pending_ack]: msgNum=\(message.messageNumber) from \(otherUserId.prefix(8))… held behind our unacked SESSION_RESET_INIT to \(heldAgainstDevice.prefix(8))…", category: "SessionInit")
-            // The core keeps the hold and hands it back (`performHeldReleases`); the envelope is
-            // ours to keep until then. Never `markProcessed` — a held message must stay
-            // redeliverable, and giving that up is what turned a decrypt failure inside the
-            // confirm window into permanent loss rather than a delay.
-            holdEnvelopeForCoreQueue(message, otherUserId: otherUserId)
-            PerformanceMetrics.shared.record(.confirmHold, label: "pending_confirm")
-            streamOutcome = .deferred
-            if isNewChat { context.delete(chat) }
-            return
-        case .sessionHealNeeded(let divergedDevice, let role):
-            // Named by device by the core; healing, the confirmation tracker and everything else
-            // below are keyed by account, which is what this function was called with. Both
-            // halves travel from here on, so the tie-break and the session suite id — which are
-            // device-keyed and were being asked in the account space — can be asked correctly.
-            let peer = PeerAddress(account: otherUserId, device: divergedDevice)
-            // The hold that stood here until 2026-09-23 is `.heldPendingAck` below. It asked
-            // `SessionReducer.confirmGateAction` against a gate the core keeps and folded the
-            // question over the peer's whole device set, so an announcement unanswered by one
-            // device held a genuine heal for its sibling.
-            handleRustHealDecision(role: role, peer: peer, message: message, in: context)
-            if isNewChat { context.delete(chat) }
-            // Queued for heal — hold the cursor until heal drains (success) or clears (give-up).
-            streamOutcome = .deferred
-            return
         case .sendEndSession(let divergedDevice):
             // Named by device by the core — `divergedDevice` is the session that could not open
             // this message. Everything below is keyed by account (the confirmation tracker, the
@@ -1080,12 +960,10 @@ final class MessageRouter {
             // and the delegate call at the end took the device id all the way to a bundle fetch
             // that asks the server for an account. See `PeerAddress`.
             let peer = PeerAddress(account: otherUserId, device: divergedDevice)
-            // The same hold, from the same place: `.heldPendingAck` below.
             Log.info("SESSION_STATE[rust_end_session]: DR diverged for \(peer) — sending END_SESSION", category: "SessionInit")
             PerformanceMetrics.shared.record(.undeliveredNoReceipt, label: "rust_end_session")
-            // What the core holds from this device for a session is its own: the peer's restart
-            // after this teardown arrives as a SESSION_RESET_INIT, which supersedes it
-            // (`queue_for_open`).
+            // The peer's restart after this teardown is its next message, carrying the handshake
+            // header; it opens a new state here like any first message.
             PersistentACKStore.shared.markProcessed(message.id, senderId: peer.account, in: context)
             // A grant, not an ask: the core's machine produced this action only after it recorded
             // the teardown. See `coreGrantedEndSession` for what asking again did.
@@ -1094,8 +972,8 @@ final class MessageRouter {
             return
         case .openReceiving(let lostDevice):
             // The core queued this message under `lostDevice` — the device the sender certificate
-            // named, or the pinned one — and granted the open. First contact and a lost session
-            // alike end here: the core holds the message and its certificate, this side keeps its
+            // named, or the pinned one — and granted the open. First contact and a new state over
+            // one held alike end here (the held one becomes a previous state): the core holds the message and its certificate, this side keeps its
             // envelope, and the open (`SessionCoordinator.openReceiving`) asks nothing of the
             // server — the key comes from the certificate.
             Log.info("SESSION_STATE[first_message]: \(message.id.prefix(8))… msgNum=\(message.messageNumber) queued in the core for \(PeerAddress(account: otherUserId, device: lostDevice)) — opening", category: "SessionInit")
@@ -1124,21 +1002,6 @@ final class MessageRouter {
             SessionActionExecutor.shared.execute(actions)
             Log.info(
                 "SESSION_STATE[end_session_owed]: teardown for \(contactId.prefix(8))… deferred by cooldown, core sends it in \(retryAfterMs)ms — \(message.id.prefix(8))… awaits the peer's re-send",
-                category: "SessionInit"
-            )
-            streamOutcome = .deferred
-            if isNewChat { context.delete(chat) }
-            return
-        case .healSuppressed(let contactId, let retryAfterMs):
-            // Sibling of `endSessionSuppressed`. The core declined to heal inside its cooldown
-            // and asked us to hold: do not ACK, do not advance the cursor, schedule the timer
-            // so a redelivery after `retryAfterMs` is actually attempted. Device logs 2026-08-19
-            // classified this pair as `unknown(healSuppressed),unknown(scheduleTimer)` and
-            // fell through to ERROR with the default `.durable` cursor — the cooldown never
-            // ran and re-inits fired without delay.
-            SessionActionExecutor.shared.execute(actions)
-            Log.info(
-                "SESSION_STATE[heal_suppressed]: heal for \(contactId.prefix(8))… deferred by cooldown, retry in \(retryAfterMs)ms — \(message.id.prefix(8))… held for redelivery",
                 category: "SessionInit"
             )
             streamOutcome = .deferred
@@ -1185,7 +1048,6 @@ final class MessageRouter {
             switch action {
             case .messageDecrypted:              return "messageDecrypted"
             case .callSignalDecrypted:           return "callSignalDecrypted"
-            case .sessionHealNeeded:             return "sessionHealNeeded"
             case .sendEndSession:                return "sendEndSession"
             case .openReceiving:                 return "openReceiving"
             case .saveToSecureStore:             return "saveToSecureStore"
@@ -1194,11 +1056,8 @@ final class MessageRouter {
             case .pruneAckStore:                 return "pruneAckStore"
             case .checkAckInDb:                  return "checkAckInDb"
             case .endSessionSuppressed:          return "endSessionSuppressed"
-            case .healSuppressed:                return "healSuppressed"
             case .messageQueuedPendingInit:      return "messageQueuedPendingInit"
             case .duplicateDropped:              return "duplicateDropped"
-            case .replayHeld:                    return "replayHeld"
-            case .heldSuperseded:                return "heldSuperseded"
             case .scheduleTimer:                 return "scheduleTimer"
             case .cancelTimer:                   return "cancelTimer"
             default:                             return "unknown(\(action))"
@@ -1219,8 +1078,7 @@ final class MessageRouter {
         } else {
             // Ordinary message body. This was INFO because the overwhelming majority of arrivals
             // here were answered duplicates — handled above since 2026-08-04, so what is left is
-            // the genuinely undecided remainder: QUEUE_FULL / ROUTING_ERROR notifications and
-            // suppressed heals. Those mean a message the peer sent is not in the transcript and
+            // the genuinely undecided remainder: QUEUE_FULL / ROUTING_ERROR notifications. Those mean a message the peer sent is not in the transcript and
             // nothing will put it there, which is precisely what the acceptance criterion
             // ("0 unexplained ERROR") is supposed to catch.
             Log.error(
@@ -1324,10 +1182,13 @@ final class MessageRouter {
     /// Deliberately a small allowlist rather than "anything that is not `.decrypted`". Every other
     /// verdict is an answer about the **message** — a duplicate, a message queued behind an init, a
     /// suppression the core just decided — and re-asking a different session would repeat it or act
-    /// on it twice. Only the two failure verdicts describe the *session*.
+    /// on it twice. Only the teardown verdict describes the *session*. A message carrying the
+    /// handshake header that no state opened is queued under the device tried (`.openReceiving`)
+    /// — an answer about the message, like the heal verdict that stood beside this one until
+    /// 2026-09-27.
     static func worthAnotherDevice(_ actions: [CfeAction]) -> Bool {
         switch OrchestratorActionPlan.routingVerdict(from: actions) {
-        case .sessionHealNeeded, .sendEndSession:
+        case .sendEndSession:
             return true
         default:
             return false
@@ -1471,17 +1332,14 @@ final class MessageRouter {
                     continue
                 }
 
-                // A SESSION_RESET_INIT reaches decryption only as the carrier a receiving open was
-                // made from (`open_receiving`, saved through `resolveCoreDrain`): the live route
-                // stops it before any decrypt. Its type rides on the unsealed content type, not in
-                // the plaintext frame, so nothing below would recognise it — and until 2026-09-26
-                // a stand run showed why that matters: its payload landed in the transcript as a
-                // "$<uuid>" bubble. The old init path's `saveMessage` discarded it here instead,
-                // and released the confirm gate, which is what this does.
+                // A SESSION_RESET_INIT from a build before 2026-09-27 opens like any message with
+                // the handshake header, and its payload is a control string. Its type rides on the
+                // unsealed content type, not in the plaintext frame, so nothing below would
+                // recognise it — a stand run on 2026-09-26 showed it landing in the transcript as a
+                // "$<uuid>" bubble.
                 if message.isSessionResetInit {
                     Log.info("SESSION_RESET_INIT payload discarded (not user-visible, content_type=24) — \(message.id.prefix(8))…", category: "MessageRouter")
                     PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId, in: context)
-                    releaseConfirmGate(PeerAddress(account: otherUserId, device: message.senderDeviceId), chat: chat, in: context)
                     continue
                 }
 
@@ -1501,14 +1359,12 @@ final class MessageRouter {
                 ) {
                     continue
                 }
-                // Session control (25/26) is dispatched here rather than in the shared helper:
-                // on this path a ping/ready only unblocks the outgoing queue, while on the
-                // session-init path it also cancels watchdogs. RESET_INIT (24) is deliberately
-                // absent — it carries a real X3DH first-ratchet payload and is handled earlier.
+                // Session ping / session_ready (25/26) from a build before 2026-09-27: they closed
+                // a confirm window that no longer exists. Discarded — never a transcript row.
                 if let control = ChunkedMessageCodec.controlFrame(plaintext),
-                   control.contentType == 25 || control.contentType == 26,
-                   let op = SessionControlCodec.op(forContentType: Int(control.contentType)) {
-                    handleSessionControlSignal(op, for: message, from: otherUserId, chat: chat, in: context)
+                   control.contentType == 25 || control.contentType == 26 {
+                    Log.info("Session control ct=\(control.contentType) from \(otherUserId.prefix(8))… discarded — nothing waits for it", category: "MessageRouter")
+                    PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId, in: context)
                     continue
                 }
                 // HEARTBEAT: a silent liveness probe for a session that has been quiet. Decrypting
@@ -1645,63 +1501,6 @@ final class MessageRouter {
         return disposition
     }
 
-
-    /// React to a session-handshake control signal (ping/ready) on an established session,
-    /// whether it arrived typed (content_type 25/26) or as a legacy plaintext magic string.
-    /// Never persists a Message row — these are for the protocol, not the transcript.
-    private func handleSessionControlSignal(
-        _ op: Shared_Proto_Messaging_V1_SessionOp,
-        for message: ChatMessage,
-        from otherUserId: String,
-        chat: Chat,
-        in context: NSManagedObjectContext
-    ) {
-        PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId, in: context)
-
-        // The ratchet the confirmation is about — the sending device, which a sealed delivery
-        // names since §D. Empty (an unsealed or older peer) settles the account, which is the
-        // safety valve rather than the shape: see `SessionCoordinator.releaseConfirmGate`.
-        let peer = PeerAddress(account: otherUserId, device: message.senderDeviceId)
-        switch op {
-        case .ready:
-            Log.info("SESSION_STATE[session_ready_received]: RESPONDER \(peer.description) confirmed session — discarding control signal", category: "MessageRouter")
-            releaseConfirmGate(peer, chat: chat, in: context)
-        default: // .ping (and any other non-ready signal routed here)
-            Log.info("SESSION_STATE[session_ping_received]: discarding session ping from \(peer.description)", category: "MessageRouter")
-            // A ping means the peer initiated and a RESPONDER session is established on our side,
-            // so stop buffering outgoing messages that were waiting for a session_ready.
-            releaseConfirmGate(peer, chat: chat, in: context)
-        }
-    }
-
-    /// Drop the tie-break confirm gate and flush **both** directions it was holding. Mirror of
-    /// `SessionCoordinator.releaseConfirmGate` — the two classes both release the gate, and a
-    /// release that flushes only one side is what made an incoming hold impossible before.
-    private func releaseConfirmGate(
-        _ peer: PeerAddress,
-        chat: Chat,
-        in context: NSManagedObjectContext
-    ) {
-        let userId = peer.account
-        // A confirmation naming no device settles the account — the valve; see the twin in
-        // `SessionCoordinator`.
-        let devices = peer.device.map { [$0] } ?? SessionAddressing.deviceIds(ofPeer: userId)
-        for device in devices {
-            // Cancels the `open_confirm:` alarm the announcement armed.
-            if let actions = try? CryptoManager.shared.handleOrchestratorEvent(
-                .peerAcked(contactId: device),
-                tag: "peer_acked"
-            ) {
-                SessionActionExecutor.shared.executeOffRouter(actions, site: "peer_acked")
-            }
-        }
-        if let myId = AuthSessionManager.shared.currentUserId {
-            MessageRetryManager.shared.sendQueuedMessages(
-                for: chat, recipientId: userId, currentUserId: myId, context: context
-            )
-        }
-        // What the gate held comes back from the core with its answer to `peerAcked`.
-    }
 
     /// `MessageContent.reaction` is metadata on the target, never a transcript row.
     /// Apply then ACK. An invalid payload is still ACKed so it cannot redeliver
@@ -1893,8 +1692,7 @@ final class MessageRouter {
             messageNumber: message.messageNumber,
             oneTimePreKeyId: message.oneTimePreKeyId,
             kemCiphertextBytes: message.kemCiphertext.count,
-            pqMessageEpoch: message.pqMessageEpoch,
-            isSessionResetInit: message.isSessionResetInit
+            pqMessageEpoch: message.pqMessageEpoch
         )
         // Mid-ratchet with no session and nothing waiting to open one: no handshake will ever
         // reach this message, so queueing it only costs a bundle fetch. Only the peer can restart.
@@ -1939,70 +1737,6 @@ final class MessageRouter {
 
     // MARK: - Session Message Handling
     
-    // MARK: - Rust Heal Decision
-
-    /// Dispatch a `SessionHealNeeded` action returned by the Rust orchestrator.
-    ///
-    /// - `role == "Initiator"` (WE WIN): our session is intact (Rust DR rollback). ACK peer's
-    ///   X3DH init and send END_SESSION + ping so they become RESPONDER.
-    /// - `role == "Responder"` (WE LOSE): archive our desynchronised session so the peer (INITIATOR)
-    ///   can establish a fresh one, then trigger the RESPONDER heal path.
-    private func handleRustHealDecision(
-        role: String,
-        peer: PeerAddress,
-        message: ChatMessage,
-        in context: NSManagedObjectContext
-    ) {
-        // Device-keyed, because that is the space it is *written* in: every
-        // `saveSessionSuiteId` call site passes the `contactId` it just handed
-        // `core.initSession`. Read by account, it missed every time and reported 0 — which is
-        // why `suiteId=0` stands beside `negotiated=3` in every log this line appears in.
-        let suiteId = Int(peer.deviceOrPinned().flatMap {
-            KeychainManager.shared.loadSessionSuiteId(userId: $0)
-        } ?? 0)
-
-        // The pair the core actually ranked. These lines used to print the signed-in account id
-        // against `contactId`, with a `>` or `<` between them — a restatement of the rule in the
-        // account space that no code here computed. For two devices of one account it reads
-        // `d184760b… > d184760b…` while the decision is Initiator: a log that contradicts the
-        // decision, in the log someone reads precisely when they are chasing a deadlock.
-        // Stand run 2026-08-26 printed it that way on a pair where both spaces happened to agree.
-        let mine = SessionAddressing.localIdentity()
-        let theirs = peer.deviceOrPinned() ?? "unnameable"
-        let ranked = "\(mine.prefix(8))… vs \(theirs.prefix(8))…"
-
-        if role == "Initiator" {
-            // We are INITIATOR (higher device id — see SessionAddressing.role) — WE WIN the tie-break.
-            // The Rust session is already intact thanks to the DR snapshot/rollback.
-            Log.info("SESSION_STATE[tie_break_win]: kept INITIATOR (core ranked \(ranked)), suiteId=\(suiteId)", category: "SessionInit")
-            PersistentACKStore.shared.markProcessed(message.id, senderId: peer.account, in: context)
-            PerformanceMetrics.shared.record(.undeliveredNoReceipt, label: "tie_break_win")
-            delegate?.messageRouter(self, didWinTieBreak: peer)
-        } else {
-            // We are RESPONDER (lower deviceId) — peer WINS. Archive our session and heal.
-            //
-            // A `canHeal` guard stood here until 2026-09-23 whose log line said "too many heal
-            // attempts". It asked no such thing: its body was `msg_number == 0`, and this branch
-            // is only reached from a decision the core makes at msgNum 0, so it was always true
-            // and the branch it guarded was unreachable. The budget is spent in
-            // `handleSessionHealNeeded`, against the core's queue, where the carrier is.
-            Log.info("SESSION_STATE[heal_triggered]: becoming RESPONDER (core ranked \(ranked)), suiteId=\(suiteId)", category: "SessionInit")
-            // The desynchronised session is the one the core just named. Archiving by account
-            // resolves through `pinnedDevice(ofPeer:)` to the peer's *pinned* device, which on a
-            // multi-device peer is not necessarily this one — so it put away a healthy session
-            // and left the broken one in place.
-            // Nothing is archived here. The core opens the new session from the carrier, sets the
-            // held one aside while it tries, and archives it only once the new one exists; a
-            // heal that fails leaves the session it found (`open_receiving`). Archiving first,
-            // as this did until 2026-09-26, destroyed a session a failed heal could not replace.
-            // The carrier is already queued: the core's router enqueued its wire payload under
-            // the device when it decided `SessionHealNeeded`. What stood here put a JSON copy of
-            // the same message into a second queue keyed by account, and a third into Core Data.
-            holdEnvelopeForCoreQueue(message, otherUserId: peer.account)
-            delegate?.messageRouter(self, needsSessionHeal: peer, failedMessage: message)
-        }
-    }
-
     /// Check if username needs updating
     private func checkUsernameUpdate(
         for userId: String,
@@ -2138,74 +1872,6 @@ final class MessageRouter {
 
     // MARK: - END_SESSION Handling
 
-    /// Handle SESSION_RESET_INIT — atomic archive of old session + RESPONDER init in a single pass.
-    ///
-    /// Replaces the two-step `END_SESSION` → 200 ms delay → `msgNum=0` sequence used in the
-    /// tie-break WIN path. The INITIATOR sends one message with `CONTENT_TYPE_SESSION_RESET_INIT=24`
-    /// whose payload is the X3DH init (`msgNum=0`). RESPONDER:
-    /// 1. Archives the old session (same as `handleEndSession`), which drops what this device
-    ///    queued in the core for it (`PendingDropped`)
-    /// 2. Queues the X3DH payload in the core to open from (`queue_for_open`) and asks for the
-    ///    account's bundles — the same open a first message gets
-    private func handleSessionResetInit(
-        message: ChatMessage,
-        from peer: PeerAddress,
-        in context: NSManagedObjectContext
-    ) {
-        let userId = peer.account
-        // 1. Archive old session via Rust orchestrator (canonical path); Swift fallback otherwise.
-        //    The session archived is the sending device's — `peer.device` from the certificate —
-        //    or the pinned device's when none is named. See `handleEndSession`.
-        var rustHandled = false
-        let archiveContactId = peer.deviceOrPinned()
-        if CryptoManager.shared.orchestratorCore != nil,
-           let archiveContactId {
-            let endSessionData = Data("__END_SESSION__".utf8)
-            let event = CfeIncomingEvent.messageReceived(
-                messageId: "sri_archive_\(userId)_\(Int(Date().timeIntervalSince1970))",
-                from: archiveContactId,
-                data: endSessionData,
-                msgNum: 0,
-                kemCt: Data(),
-                otpkId: 0,
-                isControl: true,
-                contentType: 0,
-                senderCertificate: nil
-            )
-            do {
-                let actions = try CryptoManager.shared.handleOrchestratorEvent(event, tag: "sri_archive")
-                OutboundSessionService.shared.executeStorageActions(actions)
-                rustHandled = true
-            } catch {
-                Log.error("SESSION_RESET_INIT: Rust archive failed for \(userId.prefix(8))…: \(error)", category: "MessageRouter")
-            }
-        }
-        if !rustHandled, let archiveContactId {
-            CryptoManager.shared.archiveSession(for: archiveContactId, reason: .endSessionReceived)
-        }
-
-        // 2. Re-queue outgoing messages sent under the old session (cannot be decrypted by peer).
-        requeueUndeliveredOutgoing(for: userId, in: context)
-
-        // 3. Queue the X3DH payload in the core and ask for the open. Not through
-        //    `MessageReceived`: this reset-init was marked processed above, and the core's ACK
-        //    check would read it as its own duplicate. What the same device queued before it went
-        //    with the archive in step 1 — the core drops a torn-down ratchet's queue and says so.
-        guard let device = peer.deviceOrPinned() else {
-            Log.error("SESSION_RESET_INIT from \(userId.prefix(8))… names no device and none is pinned — cannot open from it", category: "MessageRouter")
-            PerformanceMetrics.shared.record(.firstContactUnattributed, label: "reset_init")
-            return
-        }
-        CryptoManager.shared.queueForOpen(deviceId: device, message: message)
-        holdEnvelopeForCoreQueue(message, otherUserId: userId)
-        delegate?.messageRouter(
-            self,
-            canOpenReceiving: PeerAddress(account: userId, device: device),
-            for: message
-        )
-        Log.info("SESSION_RESET_INIT: old session archived, RESPONDER open requested for \(userId.prefix(8))…/\(device.prefix(8))…", category: "MessageRouter")
-    }
-
     private func handleEndSession(from peer: PeerAddress, messageTimestamp: UInt64, in context: NSManagedObjectContext) {
         let userId = peer.account
         // Guard against stale END_SESSION messages: if the message's server timestamp
@@ -2275,10 +1941,11 @@ final class MessageRouter {
         requeueUndeliveredOutgoing(for: userId, in: context)
 
         // 3. What this device queued for the torn-down ratchet was dropped by the core with the
-        //    archive in step 1 (`PendingDropped`, released by `performHeldReleases`). A sibling's
+        //    archive in step 1 (`PendingDropped`, released by `releaseDroppedQueues`). A sibling's
         //    queue is its own and stays.
 
-        // 4. Notify coordinator so the natural INITIATOR can prewarm immediately.
+        // 4. Notify the coordinator: the requeued messages go out again, and the first of them
+        //    opens a new session.
         delegate?.messageRouter(self, receivedEndSession: peer, timestamp: messageTimestamp)
 
         Log.info("END_SESSION handled for \(peer)", category: "MessageRouter")
@@ -2919,16 +2586,22 @@ final class MessageRouter {
         return nil
     }
 
-    /// No candidate session opened it. A first message from a device we have never talked to is
-    /// the one recoverable case: init a receiving session against each candidate until one takes.
+    /// No candidate session opened it. A message carrying the handshake header is the one
+    /// recoverable case: the sibling opened a new state — or its first — and this opens it.
     private func handleUnopenedSenderSync(
         _ message: ChatMessage,
         candidates: [String],
         in context: NSManagedObjectContext
     ) {
-        guard message.messageNumber == 0 else {
+        let kind = SessionReducer.receivingInitKind(
+            messageNumber: message.messageNumber,
+            oneTimePreKeyId: message.oneTimePreKeyId,
+            kemCiphertextBytes: message.kemCiphertext.count,
+            pqMessageEpoch: message.pqMessageEpoch
+        )
+        guard kind == .handshake else {
             Log.error(
-                "SENDER_SYNC: no own-device session opened \(message.id) and messageNumber=\(message.messageNumber) > 0 — dropping",
+                "SENDER_SYNC: no own-device session opened \(message.id) and it carries no handshake header (messageNumber=\(message.messageNumber)) — dropping",
                 category: "MessageRouter"
             )
             // Counted, like the branch below. This is the *more common* way to be unroutable —
@@ -2962,8 +2635,8 @@ final class MessageRouter {
                 }
             }
 
-            // No session opened it, so it is a sibling's first message to us: it opens under the
-            // device its sender certificate names, with the key the certificate names — one
+            // No session opened it and it carries the header, so the sibling opened a new state
+            // (or its first) with us: it opens under the device its sender certificate names, with the key the certificate names — one
             // attempt, nothing fetched (`decisions/first-message-opens-without-the-server.md`).
             // Until 2026-09-27 this walked the own-device candidates and fetched a bundle for
             // each, because the copy said nothing about which sibling had written it.
