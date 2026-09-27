@@ -570,37 +570,23 @@ final class MessagingServiceClient: Sendable {
                 )
             }
             // SENDER_SYNC: copy of own outgoing message — decrypt with per-device session.
-            // Note: PendingMessage proto does not yet carry senderDevice/conversationID;
-            // those fields are only available in the live stream Envelope.
-            // Leave them empty here — handleSenderSync will ACK and skip if unable to route.
+            // PendingMessage carries no senderDevice/conversationID; the copy's certificate names
+            // the sibling, and the partner travels inside the ciphertext (`SenderSyncRouting`).
             if msg.contentType == .senderSync {
-                guard let decoded = try? WirePayloadCoder.decode(msg.encryptedPayload) else {
+                guard let message = OwnDeviceCopy.message(
+                    id: msg.messageID,
+                    from: msg.senderID,
+                    to: "",
+                    timestamp: UInt64(msg.timestamp),
+                    serverOrderKey: serverOrderKey,
+                    conversationId: "",
+                    payload: msg.encryptedPayload
+                ) else {
                     Log.debug("Failed to decode SENDER_SYNC payload \(msg.messageID) — queuing failed ACK", category: "MessagingServiceClient")
                     failed.append(FailedMessage(id: msg.messageID, senderId: msg.senderID))
                     return nil
                 }
-                return ChatMessage(
-                    id: msg.messageID,
-                    from: msg.senderID,
-                    to: "",
-                    ephemeralPublicKey: Data(decoded.ephemeralPublicKey),
-                    messageNumber: decoded.messageNumber,
-                    content: decoded.content,
-                    suiteId: decoded.suiteId,
-                    timestamp: UInt64(msg.timestamp),
-                    serverOrderKey: serverOrderKey,
-                    oneTimePreKeyId: decoded.oneTimePreKeyId,
-                    kemCiphertext: decoded.kemCiphertext ?? Data(),
-                    contentType: 23,
-                    kyberOtpkId: decoded.kyberOtpkId,
-                    pqMessageEpoch: decoded.pqMessageEpoch,
-                    pqRatchetField: decoded.pqRatchetField,
-                    senderDeviceId: "",
-                    conversationId: "",
-                    // The responder init opens a session from the payload as received; a first message on
-                    // a sibling's session can arrive as SENDER_SYNC.
-                    rawPayload: msg.encryptedPayload
-                )
+                return message
             }
             // Unpack wire payload blob into crypto components.
             // For STEALTH messages, `sealedInnerData` is populated and `senderID` is empty.

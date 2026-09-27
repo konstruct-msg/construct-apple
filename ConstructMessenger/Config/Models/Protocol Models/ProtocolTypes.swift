@@ -75,8 +75,9 @@ struct ChatMessage: Codable, Identifiable {
     /// peer's devices, and `senderSyncSessionCandidates` puts it first.
     var senderDeviceId: String = ""
 
-    /// The sender certificate this message was sealed with, as unsealed and unchecked; `nil` for
-    /// a message that was not sealed. Handed to the core with the message: it is the only thing a
+    /// The sender certificate this message was sealed with, as unsealed and unchecked — or, for a
+    /// SENDER_SYNC, the one its `OwnDeviceCopy` carries in the clear; `nil` for any other
+    /// unsealed message. Handed to the core with the message: it is the only thing a
     /// first message can open a session from (`SenderCertificate::identity_for_opening` in the
     /// core). Not persisted — see `CodingKeys`.
     var senderCertificate: SenderCertificate? = nil

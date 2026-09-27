@@ -410,15 +410,7 @@ final class StealthSenderService: SealedSenderResolving {
             senderDeviceId: cert.senderDeviceID,
             contentType: contentType,
             trust: trust,
-            senderCertificate: SenderCertificate(
-                userId: cert.senderUserID,
-                domain: cert.senderDomain,
-                identityKey: cert.senderIdentityKey,
-                deviceId: cert.senderDeviceID,
-                issuedAt: cert.issuedAt,
-                expiresAt: cert.expiresAt,
-                signature: cert.serverSignature
-            )
+            senderCertificate: SenderCertificate(proto: cert)
         )
     }
 

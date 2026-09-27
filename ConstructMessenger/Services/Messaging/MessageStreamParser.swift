@@ -86,33 +86,20 @@ enum MessageStreamParser {
             }
             // SENDER_SYNC: copy of own outgoing message — decrypt with per-device session
             if envelope.contentType == .senderSync {
-                guard let decoded = try? WirePayloadCoder.decode(envelope.encryptedPayload) else {
-                    Log.info("Failed to decode SENDER_SYNC payload for message \(envelope.messageID)", category: "MessageStream")
-                    return nil
-                }
-                Log.info("SENDER_SYNC from device \(envelope.senderDevice.deviceID.prefix(8))… id=\(envelope.messageID.prefix(8))…", category: "MessageStream")
-                return .message(ChatMessage(
+                guard let message = OwnDeviceCopy.message(
                     id: envelope.messageID,
                     from: envelope.sender.userID,
                     to: envelope.recipient.userID,
-                    ephemeralPublicKey: Data(decoded.ephemeralPublicKey),
-                    messageNumber: decoded.messageNumber,
-                    content: decoded.content,
-                    suiteId: decoded.suiteId,
                     timestamp: UInt64(envelope.timestamp),
                     serverOrderKey: serverOrderKey,
-                    oneTimePreKeyId: decoded.oneTimePreKeyId,
-                    kemCiphertext: decoded.kemCiphertext ?? Data(),
-                    contentType: 23,
-                    kyberOtpkId: decoded.kyberOtpkId,
-                    pqMessageEpoch: decoded.pqMessageEpoch,
-                    pqRatchetField: decoded.pqRatchetField,
-                    senderDeviceId: envelope.senderDevice.deviceID,
                     conversationId: envelope.conversationID,
-                    // The responder init opens a session from the payload as received; a first message on
-                    // a sibling's session can arrive as SENDER_SYNC.
-                    rawPayload: envelope.encryptedPayload
-                ), cursor: cursor)
+                    payload: envelope.encryptedPayload
+                ) else {
+                    Log.info("Failed to decode SENDER_SYNC payload for message \(envelope.messageID)", category: "MessageStream")
+                    return nil
+                }
+                Log.info("SENDER_SYNC from device \(message.senderDeviceId.prefix(8))… id=\(envelope.messageID.prefix(8))…", category: "MessageStream")
+                return .message(message, cursor: cursor)
             }
             // Unpack wire payload blob into crypto components.
             // For STEALTH (sealed sender), the wire payload may be in the outer encryptedPayload

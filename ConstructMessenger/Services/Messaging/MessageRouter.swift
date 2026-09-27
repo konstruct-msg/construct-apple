@@ -2782,8 +2782,7 @@ final class MessageRouter {
         // `message.senderDeviceId` was always empty here until the unseal boundary began recovering
         // it from the sender certificate (2026-09-06); before that the old code took the
         // `message.from` branch, looked up a session that is the *primary* session with ourselves,
-        // and got nowhere. `message.from` is still tried, since a single-device account has nothing
-        // else and an older sibling's certificate may not name a device.
+        // and got nowhere. Since 2026-09-27 every copy carries its certificate (`OwnDeviceCopy`).
         let candidates = senderSyncSessionCandidates(myUserId: currentUserId, message: message)
         guard let opened = openSenderSync(message, candidates: candidates) else {
             handleUnopenedSenderSync(message, candidates: candidates, in: context)
@@ -2877,19 +2876,20 @@ final class MessageRouter {
         PerformanceMetrics.shared.record(.senderSyncUnroutable, label: "no_routing_header")
     }
 
-    /// Own-device sessions to try, most likely first.
+    /// Own-device sessions to try, most likely first — device ids only.
     ///
-    /// The plain `message.from` session comes first because a single-device account has nothing
-    /// else, and because it is what every build before this one used.
+    /// `message.from` — our own account — led this list until 2026-09-27, for a sibling whose
+    /// copy named no device. Every copy names one now (`OwnDeviceCopy` carries the certificate),
+    /// and an account id below the seam only ever logged `hasSession(for:) was handed … an
+    /// account id`.
     private func senderSyncSessionCandidates(myUserId: String, message: ChatMessage) -> [String] {
-        var keys: [String] = [message.from]
+        var keys: [String] = []
         if !message.senderDeviceId.isEmpty {
-            // The sibling that wrote this copy, from its sender certificate. Free to try, and it
+            // The sibling that wrote this copy, from its certificate. Free to try, and it
             // short-circuits the loop when present.
-            keys.insert(message.senderDeviceId, at: 0)
+            keys.append(message.senderDeviceId)
         }
-        // Siblings, not every own device: this one cannot have sent us a SENDER_SYNC, and a
-        // candidate with no session costs a bundle fetch and an X3DH before it fails.
+        // Siblings, not every own device: this one cannot have sent us a SENDER_SYNC.
         for deviceId in MultiDeviceSendCoordinator.shared.knownSiblingDeviceIds(myUserId: myUserId) {
             let key = deviceId
             if !keys.contains(key) { keys.append(key) }
@@ -2944,10 +2944,10 @@ final class MessageRouter {
             guard let self else { return }
 
             // A device that linked and has not yet sent anything knows of no siblings: the
-            // own-device cache had one filler and it was the send path. So the candidate list is
-            // `[message.from]` alone, which carries no device id, and the loop below skips it —
-            // silently, which is how this went unnoticed until the two-sim stand showed a freshly
-            // linked device dropping both copies without a line in the log.
+            // own-device cache had one filler and it was the send path. So the candidate list held
+            // no device id, and the loop below skipped it — silently, which is how this went
+            // unnoticed until the two-sim stand showed a freshly linked device dropping both
+            // copies without a line in the log.
             var candidates = candidates
             if SenderSyncRecovery.needsOwnDeviceRefresh(candidates: candidates) {
                 await MultiDeviceSendCoordinator.shared.refreshOwnDevices(myUserId: myUserId)

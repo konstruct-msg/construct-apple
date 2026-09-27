@@ -786,6 +786,17 @@ final class MultiDeviceSendCoordinator {
                 messageId: messageId,
                 toDevice: contactId
             )
+            // The certificate rides with every copy, not only the first: whether the sibling
+            // still holds this session is its knowledge, not ours. Cached for its 24 h, so this
+            // is a network call once a day at most.
+            let certificate = try? await StealthSenderService.shared.getSenderCertificate()
+            if certificate == nil {
+                Log.error(
+                    "MultiDevice[sync]: no sender certificate for the copy to \(contactId.prefix(8))… — a first message will not open",
+                    category: "MultiDevice"
+                )
+            }
+            let copyPayload = OwnDeviceCopy.wrap(certificate: certificate, wirePayload: encPayload)
 
             // conversation_id stays empty on purpose. `direct:<me>:<partner>` names the person on
             // the other side, in the clear, once per extra device per message — for a multi-device
@@ -801,7 +812,7 @@ final class MultiDeviceSendCoordinator {
                 recipientId: networkRecipientUserId,
                 senderId: senderUserId,
                 conversationId: "",
-                encryptedPayload: encPayload,
+                encryptedPayload: copyPayload,
                 timestamp: timestamp,
                 // Written on the unsealed branch by `buildEnvelope`, because the outer field is
                 // visible to the relay — and the relay already knows this pair.
