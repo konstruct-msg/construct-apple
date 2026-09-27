@@ -162,7 +162,7 @@ theme file is **shared, never copied** — the copy is what killed the last atte
 
 **Before writing any session or crypto decision in Swift, open `~/Code/construct-core/src/construct_core.udl`.**
 It is the list of what the core already does, and this app keeps rebuilding entries from it. Already
-exported and already ignored at least once each: `derive_device_id`, `tie_break_role`,
+exported and already ignored at least once each: `derive_device_id`,
 `get_all_session_contact_ids` (the devices we hold sessions with — half of any per-device plan),
 `get_session_health`, both init paths, `remove_session`.
 
@@ -193,7 +193,7 @@ did the translation here is exactly the inversion that produced `MultiDeviceSend
 Current known exceptions, with their destination — do not treat them as settled placements:
 the account-keyed `sessionPhases` and the per-scope init locks are the leftover of a coordinator
 that still decides; they belong in the core machine (`decisions/session-is-one-state-machine.md`).
-The confirm-gate hold and the queue of messages waiting for a session moved there on 2026-09-26
+The queue of messages waiting for a session moved there on 2026-09-26
 — this app keeps envelopes and must not grow a second queue beside the core's
 (`decisions/first-contact-queue-keyed-by-claimed-device.md`). **Receiving opens fetch nothing**
 since 2026-09-27: a first message opens with the key its sender certificate names, once the core
@@ -239,7 +239,11 @@ Before touching `Networking/gRPC/VEIL/` or `Services/Calls/`, read
 `decisions/ice-connection-loop-complexity.md` — it predates the rename below and covers both.
 
 - **INITIATOR and RESPONDER init paths are distinct** (`init_session` vs
-  `init_receiving_session`); tie-break: higher deviceId wins as INITIATOR.
+  `open_receiving`). **A session renews by sending** since 2026-09-27: any message carrying the
+  handshake header (ML-KEM ciphertext) opens a new state beside the one held, and the core keeps
+  previous states and promotes the one that decrypts. There is no SESSION_RESET_INIT,
+  `session_ready`, ping, confirm window, tie-break or heal — do not rebuild any of them here
+  (`decisions/sessions-renew-by-sending.md`).
 - **Keychain**: crypto state that must survive a background/locked push decrypt uses
   `kSecAttrAccessibleAfterFirstUnlock*` (`KeychainManager.cryptoKeyAccessible`), never
   `WhenUnlocked*` — otherwise silent session desync and END_SESSION teardown of healthy sessions.
