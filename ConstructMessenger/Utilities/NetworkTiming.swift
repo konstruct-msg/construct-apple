@@ -137,7 +137,7 @@ enum NetworkTiming {
             // Messaging (interactive)
             static let sendMessage: TimeInterval = 20
             static let editMessage: TimeInterval = 20
-            static let endSession: TimeInterval = 20
+            static let controlSend: TimeInterval = 20
 
             // Messaging (background/service)
             // 5s was too tight for VEIL+obfs4 RU paths — server's XREAD + response

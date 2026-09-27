@@ -467,7 +467,7 @@ struct ChatsSplitView: View {
         if selectedChatId == chat.id {
             selectedChatId = nil
         }
-        Task { await chatsViewModel.deleteChatWithEndSession(chat: chat) }
+        Task { await chatsViewModel.deleteChatForgettingSessions(chat: chat) }
     }
 
     private func deleteChatsAtOffsets(at offsets: IndexSet) {

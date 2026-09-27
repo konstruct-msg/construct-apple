@@ -48,6 +48,9 @@ struct OrchestratorActionPlan {
     /// do inline. `scheduleTimer` and a suppression arriving together must yield the
     /// suppression, not `.none`: treating that pair as "no decision" (device logs
     /// 2026-08-19) skipped the timer and advanced the cursor past an un-ACKed message.
+    /// The core's `DECRYPT_FAILED` code (`orchestrator.rs`), attached to every refused decrypt.
+    static let decryptFailedCode = "decrypt_failed"
+
     static func routingVerdict(from actions: [CfeAction]) -> IncomingRoutingVerdict {
         for action in actions {
             switch action {
@@ -55,12 +58,14 @@ struct OrchestratorActionPlan {
                 return .decrypted
             case .callSignalDecrypted:
                 return .callSignalDecrypted
-            case .sendEndSession(let contactId):
-                return .sendEndSession(contactId: contactId)
+            case .sendDecryptionError:
+                return .unreadable
+            // No error to send — an unsealed message names no writer to seal it to — but the core
+            // still could not read it, and says why. What the device walk tries the next session on.
+            case .notifyError(let code, _) where code == Self.decryptFailedCode:
+                return .unreadable
             case .openReceiving(let contactId):
                 return .openReceiving(contactId: contactId)
-            case .endSessionSuppressed(let contactId, let retryAfterMs):
-                return .endSessionSuppressed(contactId: contactId, retryAfterMs: retryAfterMs)
             case .messageQueuedPendingInit(let contactId, let queuedCount):
                 return .messageQueuedPendingInit(contactId: contactId, queuedCount: queuedCount)
             case .duplicateDropped(let messageId):
@@ -82,10 +87,13 @@ struct OrchestratorActionPlan {
 enum IncomingRoutingVerdict: Equatable {
     case decrypted
     case callSignalDecrypted
-    case sendEndSession(contactId: String)
+    /// Nothing held reads it and it carries no handshake header. The core built a DECRYPTION_ERROR
+    /// to its writer when it could (a sealed message) and recorded the message; the writer resends
+    /// it on the state it opens next. Replaced `sendEndSession` / `endSessionSuppressed` on
+    /// 2026-09-27 (`decisions/sessions-renew-by-sending.md`).
+    case unreadable
     /// A message waits for a session with `contactId` and can open one — no bundle is fetched.
     case openReceiving(contactId: String)
-    case endSessionSuppressed(contactId: String, retryAfterMs: UInt64)
     case messageQueuedPendingInit(contactId: String, queuedCount: UInt32)
     /// Already handled — ACK cache, our DB, or a ratchet position whose key is used. Named by the
     /// core since 2026-09-26 (`DuplicateDropped`); before, it was an empty list that also meant
@@ -103,8 +111,8 @@ enum IncomingRoutingVerdict: Equatable {
 /// `[checkAckInDb]`, and the fallthrough logged it as "no routing decision … NOT acked", naming
 /// the one action it had just answered. 6296 of 6302 such log lines in the 2026-08-04 run.
 ///
-/// Empty is overloaded three ways in `decision_to_actions` (`orchestrator.rs`): duplicate, init
-/// lock held, END_SESSION cooldown. Our own answer disambiguates it exactly, because
+/// Empty was overloaded three ways in `decision_to_actions` (`orchestrator.rs`): duplicate, init
+/// lock held, END_SESSION cooldown (gone 2026-09-27). Our own answer disambiguates it exactly, because
 /// `resume_after_ack_check` returns `Duplicate` on `is_processed = true` before either other
 /// branch is reachable (`message_router.rs:271`) — no core change needed to tell them apart.
 enum AckCheckOutcome: Equatable {
@@ -113,8 +121,9 @@ enum AckCheckOutcome: Equatable {
     /// we were able to answer "processed" in the first place.
     case duplicate
 
-    /// Empty verdict although we answered *not* processed — init lock held or END_SESSION
-    /// cooldown. The message is dropped and returns only by redelivery.
+    /// Empty verdict although we answered *not* processed. No current core answers so — its
+    /// causes, the init lock and the END_SESSION cooldown, now have names or are gone — and it is
+    /// kept so a new empty verdict is held for redelivery rather than passing silently.
     case droppedPendingRedelivery
 
     /// A real action list came back; routing continues with it.

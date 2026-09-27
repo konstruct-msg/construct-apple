@@ -75,7 +75,12 @@ public nonisolated enum Shared_Proto_Core_V1_ContentType: SwiftProtobuf.Enum, Sw
   /// Key exchange initiation (X3DH handshake)
   case keyExchange // = 20
 
-  /// Session reset request
+  /// Session reset request (END_SESSION).
+  ///
+  /// RETIRED 2026-09-27, replaced by DECRYPTION_ERROR (28): a teardown command names no state, so
+  /// a stale one could not be told from a live one and had to be rationed by time windows
+  /// (construct-docs decisions/sessions-renew-by-sending.md, variant B). Kept so a copy from a
+  /// build that still sends it is recognised and dropped silently; nothing sends it.
   case sessionReset // = 21
 
   /// KEY_SYNC — server-triggered silent key renegotiation (Matrix-inspired).
@@ -91,6 +96,9 @@ public nonisolated enum Shared_Proto_Core_V1_ContentType: SwiftProtobuf.Enum, Sw
   /// Server is opaque to payload — E2EE is fully preserved.
   case senderSync // = 23
 
+  /// RETIRED 2026-09-27 with 25 and 26: a session opens from any message carrying the handshake
+  /// header (decisions/sessions-renew-by-sending.md, variant A). Kept for recognition only.
+  ///
   /// SESSION_RESET_INIT — atomic END_SESSION + new X3DH session init in a single
   /// delivery. The encrypted_payload carries the full EncryptedRatchetMessage with
   /// msgNum=0 under the new INITIATOR session. Eliminates the ordering race of the
@@ -127,6 +135,19 @@ public nonisolated enum Shared_Proto_Core_V1_ContentType: SwiftProtobuf.Enum, Sw
   ///
   /// Server forwards opaquely (treat identically to E2EE_SIGNAL).
   case intakeKey // = 27
+
+  /// DECRYPTION_ERROR — "I could not read your message", from the device that failed to the
+  /// device that wrote it. Replaces SESSION_RESET (21).
+  ///
+  /// The payload is a box sealed to the recipient's identity key (the core's
+  /// `seal_decryption_error`) around the unread message's ratchet key and id, and an optional
+  /// hint. Not ratchet-encrypted, and cannot be: the ratchet is what failed. The ratchet key is the
+  /// point — the recipient retires its current state only if the key is that state's, so an error
+  /// that is stale (redelivered, reordered, about a state already replaced) is recognised exactly
+  /// and does nothing. Built and opened only in construct-core, so both platforms agree.
+  ///
+  /// Sealed-sender envelope; the server forwards it opaquely.
+  case decryptionError // = 28
   case UNRECOGNIZED(Int)
 
   public init() {
@@ -151,6 +172,7 @@ public nonisolated enum Shared_Proto_Core_V1_ContentType: SwiftProtobuf.Enum, Sw
     case 25: self = .sessionPing
     case 26: self = .sessionReady
     case 27: self = .intakeKey
+    case 28: self = .decryptionError
     default: self = .UNRECOGNIZED(rawValue)
     }
   }
@@ -173,6 +195,7 @@ public nonisolated enum Shared_Proto_Core_V1_ContentType: SwiftProtobuf.Enum, Sw
     case .sessionPing: return 25
     case .sessionReady: return 26
     case .intakeKey: return 27
+    case .decryptionError: return 28
     case .UNRECOGNIZED(let i): return i
     }
   }
@@ -195,6 +218,7 @@ public nonisolated enum Shared_Proto_Core_V1_ContentType: SwiftProtobuf.Enum, Sw
     .sessionPing,
     .sessionReady,
     .intakeKey,
+    .decryptionError,
   ]
 
 }
@@ -876,7 +900,7 @@ public nonisolated struct Shared_Proto_Core_V1_OwnDeviceCopy: Sendable {
 fileprivate nonisolated let _protobuf_package = "shared.proto.core.v1"
 
 nonisolated extension Shared_Proto_Core_V1_ContentType: SwiftProtobuf._ProtoNameProviding {
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0CONTENT_TYPE_UNSPECIFIED\0\u{1}CONTENT_TYPE_E2EE_SIGNAL\0\u{1}CONTENT_TYPE_E2EE_MLS\0\u{2}\u{8}CONTENT_TYPE_WEBRTC_SIGNAL\0\u{1}CONTENT_TYPE_PRESENCE\0\u{1}CONTENT_TYPE_CALL_SIGNAL\0\u{1}CONTENT_TYPE_HEARTBEAT\0\u{1}CONTENT_TYPE_DELIVERY_RECEIPT\0\u{2}\u{6}CONTENT_TYPE_KEY_EXCHANGE\0\u{1}CONTENT_TYPE_SESSION_RESET\0\u{1}CONTENT_TYPE_KEY_SYNC\0\u{1}CONTENT_TYPE_SENDER_SYNC\0\u{1}CONTENT_TYPE_SESSION_RESET_INIT\0\u{1}CONTENT_TYPE_SESSION_PING\0\u{1}CONTENT_TYPE_SESSION_READY\0\u{1}CONTENT_TYPE_INTAKE_KEY\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0CONTENT_TYPE_UNSPECIFIED\0\u{1}CONTENT_TYPE_E2EE_SIGNAL\0\u{1}CONTENT_TYPE_E2EE_MLS\0\u{2}\u{8}CONTENT_TYPE_WEBRTC_SIGNAL\0\u{1}CONTENT_TYPE_PRESENCE\0\u{1}CONTENT_TYPE_CALL_SIGNAL\0\u{1}CONTENT_TYPE_HEARTBEAT\0\u{1}CONTENT_TYPE_DELIVERY_RECEIPT\0\u{2}\u{6}CONTENT_TYPE_KEY_EXCHANGE\0\u{1}CONTENT_TYPE_SESSION_RESET\0\u{1}CONTENT_TYPE_KEY_SYNC\0\u{1}CONTENT_TYPE_SENDER_SYNC\0\u{1}CONTENT_TYPE_SESSION_RESET_INIT\0\u{1}CONTENT_TYPE_SESSION_PING\0\u{1}CONTENT_TYPE_SESSION_READY\0\u{1}CONTENT_TYPE_INTAKE_KEY\0\u{1}CONTENT_TYPE_DECRYPTION_ERROR\0")
 }
 
 nonisolated extension Shared_Proto_Core_V1_MessagePriority: SwiftProtobuf._ProtoNameProviding {

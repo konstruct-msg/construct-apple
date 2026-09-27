@@ -1187,7 +1187,6 @@
 "identity_fingerprint_copy_hint" = "フィンガープリントをクリップボードにコピーします";
 "identity_fingerprint_copied" = "コピーしました";
 "file" = "ファイル";
-"system_session_out_of_sync" = "この相手との暗号化セッションがずれています。再確立するまで新しいメッセージは読めません。";
 "msg_status_sending" = "送信中";
 "msg_status_sent" = "送信済み";
 "msg_status_delivered" = "配信済み";

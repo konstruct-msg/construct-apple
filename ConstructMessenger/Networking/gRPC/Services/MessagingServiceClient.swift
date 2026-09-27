@@ -322,43 +322,26 @@ final class MessagingServiceClient: Sendable {
         }
     }
 
-    // MARK: - Send End Session (replaces MessagingAPI.sendEndSession)
+    // MARK: - Send Decryption Error
 
-    /// - Parameter resetReason: optional machine-readable recovery hint telling the peer HOW to
-    ///   re-initialise — notably `.otpkUnreproducible`, which asks the initiator to re-init WITHOUT
-    ///   a one-time prekey (3-DH) instead of looping 4-DH. It is sealed to the peer's identity key
-    ///   and padded to a fixed size by `EndSessionPayload`; a peer that cannot read it recovers
-    ///   without a hint, which is what every peer did before hints existed.
-    /// Tear down the session with **one device**.
+    /// Tell **one device** we could not read a message it sent: a DECRYPTION_ERROR envelope
+    /// (content type 28) carrying `payload`, which the core built and sealed to that device's
+    /// identity key (`CfeAction.sendDecryptionError`). This app adds nothing to it.
     ///
-    /// `deviceId` is a `CryptoDeviceId`, and that is the whole point. This used to take whatever
-    /// its caller held — an account id from the router paths, a device id from the core's actions —
-    /// and pass `recipientDeviceId: nil` either way. Both halves were wrong, mirror-image:
+    /// It replaced `sendEndSession` on 2026-09-27 (`decisions/sessions-renew-by-sending.md`,
+    /// variant B), and keeps its addressing, for the reasons that function learned the hard way:
     ///
-    /// - An account id reached **every** device's queue, so a divergence with one device tore down
-    ///   the healthy sessions of its siblings.
-    /// - A device id went into `Envelope.recipient`, a field in the account space, where the server
-    ///   parses a UUID, gets none, and writes the envelope to a stream nothing subscribes to.
-    ///   Accepted, acknowledged, delivered nowhere — the same defect §B.4 closed for the heartbeat
-    ///   (`b29ea419`), left standing on the neighbouring path.
-    ///
-    /// Both were measured on 2026-08-30: 12 sends to a device and 10 to an account, one peer, one
-    /// run. Fanning out over a peer's devices is the caller's job now
-    /// (`SessionAddressing.deviceIds` + the core's `planTeardown`), so this function has exactly one
-    /// recipient and no
-    /// opinion about how many there were.
-    func sendEndSession(
-        toDevice deviceId: String,
-        reason: String? = nil,
-        resetReason: Shared_Proto_Messaging_V1_SessionResetReason = .unspecified
-    ) async throws -> EndSessionResponse {
+    /// - `deviceId` is a `CryptoDeviceId`. An account id reached **every** device's queue; a device
+    ///   id in `Envelope.recipient` went to a stream nothing subscribes to (both measured
+    ///   2026-08-30).
+    /// - The account and the key it is sealed to come from one row in one pass, so the envelope
+    ///   cannot be addressed to one person and sealed to another.
+    /// - Sealed like a message body, fail-closed under stealth: the content type rides inside
+    ///   `SealedInner`, and an identified control envelope is never emitted.
+    func sendDecryptionError(toDevice deviceId: String, payload: Data) async throws -> ControlSendResponse {
         let myUserId = await MainActor.run { AuthSessionManager.shared.currentUserId } ?? ""
         let messageId = UUID().uuidString
 
-        // The account to address and the key to seal to, from one row and one pass. Asked
-        // separately they could come from different contacts, and the envelope would then be
-        // addressed to one person and sealed to another — undeliverable, and undetectable from
-        // either side. Same seam the heartbeat takes, for the same reason.
         guard let peer = await MainActor.run(resultType: (accountId: String, identityKey: Data)?.self, body: {
             SessionAddressing.peer(
                 ofDevice: deviceId,
@@ -366,78 +349,46 @@ final class MessagingServiceClient: Sendable {
             )
         }) else {
             throw StealthDowngradeBlocked(
-                reason: "no pinned key for device \(deviceId.prefix(8))… — END_SESSION cannot be addressed"
+                reason: "no pinned key for device \(deviceId.prefix(8))… — DECRYPTION_ERROR cannot be addressed"
             )
         }
         let recipientId = peer.accountId
 
-        // Stealth: seal END_SESSION like a message body — the real content type (.sessionReset)
-        // rides inside SealedInner and is recovered on receive, so the outer envelope leaks no
-        // sender. Sealing is X25519 cert-based, independent of the (possibly broken) DR session, so
-        // it works during teardown. Fail-closed under stealth-on: never emit an identified
-        // END_SESSION (decisions/sealed-sender-session-control-channel.md). If we can't seal, the
-        // peer recovers via its own decrypt-fail path — anonymity over an eager teardown signal.
-        //
-        // The key is the **target device's**, not the account's pin. Sealing to it is also what
-        // routes the envelope: `buildSealedInner` derives `SealedInner.recipient_device` from the
-        // key it seals to, so "who can open this" and "where does it go" stay one value (§A.0).
-        func resolveRecipientIK() async -> Data? { peer.identityKey }
-
-        // Built before the stealth branch, and deliberately: `buildEnvelope` fills
-        // `encrypted_payload` *before* it decides whether the send is sealed, so this payload is on
-        // the wire under stealth exactly as it is without it. Until 2026-08-17 that meant the relay
-        // read a plaintext reset reason on a 4- or 16-byte envelope — a length no padded body has —
-        // while `SealedInner` was busy hiding the content type. See EndSessionPayload.
-        let controlPayload = EndSessionPayload.build(
-            reason: resetReason,
-            recipientIdentityKey: await resolveRecipientIK()
-        )
-
-        // Named `endSessionSealing`, not `sealing`: `SealingExemptionSiteTests` reads this file
-        // as text to prove the chokepoint's parameter has no default, and a local of the same
+        // Named `decryptionErrorSealing`, not `sealing`: `SealingExemptionSiteTests` reads this
+        // file as text to prove the chokepoint's parameter has no default, and a local of the same
         // type and name reads as one.
-        var endSessionSealing: SendSealing = .identified(.stealthDisabled)
+        var decryptionErrorSealing: SendSealing = .identified(.stealthDisabled)
         if await StealthPolicy.shared.shouldUseSealedSender() {
-            guard let recipientIK = await resolveRecipientIK() else {
-                throw StealthDowngradeBlocked(reason: "no recipient identity key for END_SESSION → \(recipientId.prefix(8))…")
-            }
-            endSessionSealing = .sealed(try await StealthSenderService.buildSealedInner(
+            decryptionErrorSealing = .sealed(try await StealthSenderService.buildSealedInner(
                 recipientUserId: recipientId,
-                recipientIdentityKey: recipientIK,
-                encryptedPayload: controlPayload,
-                contentType: .sessionReset
+                recipientIdentityKey: peer.identityKey,
+                encryptedPayload: payload,
+                contentType: .decryptionError
             ))
         }
-        // END_SESSION does not go through `sendMessage` — it has its own RPC — so it asks the
-        // same question here rather than inheriting the chokepoint's answer. Two send functions,
-        // one policy.
-        if let reason = endSessionSealing.violation(stealthEnabled: await StealthPolicy.shared.isEnabled) {
+        // Not sent through `sendMessage`, so it asks the chokepoint's question itself. Two send
+        // functions, one policy.
+        if let reason = decryptionErrorSealing.violation(stealthEnabled: await StealthPolicy.shared.isEnabled) {
             throw StealthDowngradeBlocked(reason: "\(reason) → \(recipientId.prefix(8))…")
         }
-        let sealedInner: Data? = endSessionSealing.sealedInnerBytes
+        let sealedInner: Data? = decryptionErrorSealing.sealedInnerBytes
 
-        let sendOnce: (Data?) async throws -> EndSessionResponse = { inner in
-            try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.endSession) { grpcClient in
+        let sendOnce: (Data?) async throws -> ControlSendResponse = { inner in
+            try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.controlSend) { grpcClient in
                 let msgClient = Shared_Proto_Services_V1_MessagingService.Client(wrapping: grpcClient)
 
                 let envelope = Self.buildEnvelope(
                     messageId: messageId,
                     recipientId: recipientId,
                     senderId: myUserId,
-                    // Empty on purpose. `direct:<me>:<them>` names the person on the other side in
-                    // the clear, on an envelope whose whole point is that the relay learns nothing
-                    // about the pair — and it used to carry `direct:<account>:<device>` besides,
-                    // both id spaces in one string. It has no reader on the server and is blanked
-                    // on delivery. Same emptying as the fan-out and the heartbeat.
+                    // Empty on purpose: a conversation id names the pair in the clear.
                     conversationId: "",
-                    encryptedPayload: controlPayload,
+                    encryptedPayload: payload,
                     timestamp: UInt64(Date().timeIntervalSince1970),
-                    // `buildEnvelope` writes this only on the unsealed branch: on the sealed one the
-                    // device rides inside `SealedInner`, because the outer field is visible to the
-                    // relay (`8e390f48`). Passing it here is what makes the DEBUG stealth-off path
-                    // route to one device instead of all of them.
+                    // Written only on the unsealed (DEBUG) branch; sealed, the device rides inside
+                    // `SealedInner`, because the outer field is visible to the relay (`8e390f48`).
                     recipientDeviceId: deviceId,
-                    contentType: .sessionReset,
+                    contentType: .decryptionError,
                     sealedInnerBytes: inner
                 )
 
@@ -449,24 +400,21 @@ final class MessagingServiceClient: Sendable {
                     request: .init(message: request)
                 )
 
-                return EndSessionResponse(
+                return ControlSendResponse(
                     status: response.success ? "ok" : "failed",
-                    messageId: response.messageID,
-                    type: "END_SESSION"
+                    messageId: response.messageID
                 )
             }
         }
 
-        // Sealed path gets the same one-shot Privacy-Pass enforce recovery as message bodies
-        // (rebuild = fresh token + delivery tag around the same control payload).
+        // Sealed path gets the same one-shot Privacy-Pass enforce recovery as message bodies.
         if let sealedInner {
             return try await StealthSendRecovery.sendSealed(sealedInner, rebuild: { afterCredentialRejection in
-                guard let ik = await resolveRecipientIK() else { return nil }
-                return try await StealthSenderService.buildSealedInner(
+                try await StealthSenderService.buildSealedInner(
                     recipientUserId: recipientId,
-                    recipientIdentityKey: ik,
-                    encryptedPayload: controlPayload,
-                    contentType: .sessionReset,
+                    recipientIdentityKey: peer.identityKey,
+                    encryptedPayload: payload,
+                    contentType: .decryptionError,
                     afterCredentialRejection: afterCredentialRejection
                 )
             }, send: sendOnce)

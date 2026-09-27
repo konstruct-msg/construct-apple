@@ -1106,7 +1106,6 @@
 "net_status_protected" = "Protégé";
 "net_status_connecting" = "Connexion…";
 "file" = "Fichier";
-"system_session_out_of_sync" = "La session chiffrée avec ce contact est désynchronisée — les nouveaux messages ne peuvent pas être lus tant qu’elle n’est pas rétablie.";
 "msg_status_sending" = "Envoi";
 "msg_status_sent" = "Envoyé";
 "msg_status_delivered" = "Remis";

@@ -481,31 +481,7 @@ class CryptoManager {
 
         let actions = try core.handleEvent(event: event)
         logOrchestratorEvent(event, actions: actions, tag: tag)
-        dispatchPendingDropped(actions)
         return actions
-    }
-
-    /// Carries out `pendingDropped`. Set by `SessionCoordinator` to the router.
-    var onPendingDropped: (([CfeAction]) -> Void)?
-
-    /// The core drops what waited for a ratchet the peer tore down, and the answer can ride on any
-    /// event — an incoming END_SESSION, a drain. Carried out here, the one place every answer
-    /// passes, rather than at each call site: a drop missed there is an envelope held until it
-    /// expires, and a stream cursor held with it.
-    ///
-    /// On the next main-queue turn, so it runs outside `coreLock` and after the caller has finished
-    /// with the answer it is part of.
-    private func dispatchPendingDropped(_ actions: [CfeAction]) {
-        let drops = actions.filter {
-            if case .pendingDropped = $0 { return true }
-            return false
-        }
-        guard !drops.isEmpty else { return }
-        guard let onPendingDropped else {
-            Log.error("\(drops.count) dropped queue(s) with no router to release them", category: "CryptoOrchestrator")
-            return
-        }
-        DispatchQueue.main.async { onPendingDropped(drops) }
     }
 
     // MARK: - Locked Core Operation Wrappers
@@ -1139,8 +1115,7 @@ class CryptoManager {
         return Int(orchestratorCore?.pendingMessageCount(contactId: deviceId) ?? 0)
     }
 
-    /// Get all user IDs with active sessions
-    /// Used for sending END_SESSION to all contacts on logout
+    /// Every session we hold, by device.
     /// Every **device** we hold a ratchet with — the core's contact ids, which are
     /// `CryptoDeviceId`, never account UUIDs.
     ///

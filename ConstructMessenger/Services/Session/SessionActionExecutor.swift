@@ -9,7 +9,7 @@
 /// - `OutboundSessionService.executeRustTimerActions` — fired by Rust timers
 /// - `executeOffRouter` — every other event's answer; logs a router-bound action it cannot run
 ///
-/// State-bound actions (`.messageDecrypted`, `.sendEndSession`, `.openReceiving`) still execute
+/// State-bound actions (`.messageDecrypted`, `.openReceiving`) still execute
 /// inline in `MessageRouter` because they
 /// depend on the router's `chunkReassembler`, core envelopes and `delegate`. The
 /// executor `break`s on these cases so the router can handle them after the
@@ -30,6 +30,15 @@ final class SessionActionExecutor {
     /// account a bundle is fetched for. Nothing is announced: the handshake header rides on the
     /// next message to the device (`decisions/sessions-renew-by-sending.md`).
     var onOpenSession: ((String) -> Void)?
+
+    /// Runs `.sessionRetired`: the peer could not read our current state with this **device**, the
+    /// core retired it, and the next send opens a new one — without a one-time prekey when the
+    /// flag says so. Supplied by `SessionCoordinator`, which owns how the next open is made.
+    var onSessionRetired: ((_ device: String, _ withoutOneTimePrekey: Bool) -> Void)?
+
+    /// Runs `.resendMessage`: send the named message to this **device** again. Supplied by
+    /// `SessionCoordinator`, which owns the outgoing messages and their resend path.
+    var onResendMessage: ((_ device: String, _ messageId: String) -> Void)?
 
     /// Execute a batch of actions returned by `CryptoManager.handleOrchestratorEvent`.
     ///
@@ -73,7 +82,6 @@ final class SessionActionExecutor {
     private static func routerBoundName(_ action: CfeAction) -> String? {
         switch action {
         case .openReceiving: return "openReceiving"
-        case .sendEndSession: return "sendEndSession"
         case .messageDecrypted: return "messageDecrypted"
         default: return nil
         }
@@ -96,9 +104,6 @@ final class SessionActionExecutor {
             break
         case .markMessageDelivered:
             break
-        case .pendingDropped:
-            // Carried out where every answer passes, `CryptoManager.dispatchPendingDropped`.
-            break
         case .duplicateDropped:
             // A routing verdict; MessageRouter records the message as processed and moves the
             // cursor past it. Off the router (a drain) it concerns a message already handled.
@@ -113,10 +118,6 @@ final class SessionActionExecutor {
         // ── Storage (currently in OutboundSessionService) ─────────
         case .saveToSecureStore:
             OutboundSessionService.shared.executeStorageActions([action])
-
-        case .sessionTerminated(let contactId, let archiveBytes):
-            CryptoManager.shared.acceptSessionTerminated(contactId: contactId, archiveBytes: archiveBytes)
-            CryptoManager.shared.saveOrchestratorStateCFE()
 
         // ── ACK ───────────────────────────────────────────────────
         case .persistAck(let messageId, _):
@@ -150,37 +151,44 @@ final class SessionActionExecutor {
             OutboundSessionService.shared.cancelRustTimer(timerId: timerId)
 
         // ── Network / transport ───────────────────────────────────
-        case .notifyLinkedDevicesOfSessionReset(let contactId):
-            Task { await MultiDeviceSendCoordinator.shared.broadcastSessionReset(contactId: contactId) }
-
         case .openReceiving:
             // The router keeps the envelope and asks the coordinator for the open.
             break
 
-        // ── END_SESSION (needs MessageRouter state) ───────────────
-        case .sendEndSession:
-            // Requires MessageRouter delegate callbacks
-            break  // scaffold
+        // ── Decryption errors (decisions/sessions-renew-by-sending.md, variant B) ──
+        case .sendDecryptionError(let contactId, let messageId, let payload):
+            // We could not read `messageId`; the core built the error and sealed it to the writer.
+            // Sent from here because it is the answer to a routed message *and* to a failed open,
+            // and both answers pass through this executor. The message itself is recorded by the
+            // router (or was given up by the open); nothing here decides anything.
+            Task {
+                do {
+                    _ = try await MessagingServiceClient.shared.sendDecryptionError(toDevice: contactId, payload: payload)
+                    Log.info(
+                        "SESSION_STATE[decryption_error_sent]: \(contactId.prefix(8))… could not be read (\(messageId.prefix(8))…)",
+                        category: "SessionInit"
+                    )
+                } catch {
+                    Log.error(
+                        "DECRYPTION_ERROR to \(contactId.prefix(8))… not sent: \(error.localizedDescription)",
+                        category: "SessionInit"
+                    )
+                }
+            }
 
-        case .endSessionSuppressed(let contactId, let retryAfterMs):
-            // The core owes this teardown and will send it when the cooldown clears; nothing to do
-            // here but say so. Until 2026-08-07 this arrived as an empty action list and the
-            // teardown was never sent at all — build 585 lost three media messages that way,
-            // because the peer only re-sends after receiving END_SESSION.
-            Log.info(
-                "END_SESSION suppressed for \(contactId.prefix(8))… — core owes it, sending in \(retryAfterMs)ms",
-                category: "SessionActionExecutor"
-            )
+        case .sessionRetired(let contactId, let withoutOneTimePrekey):
+            guard let onSessionRetired else {
+                Log.error("SessionRetired for \(contactId.prefix(8))… with no consumer wired", category: "SessionActionExecutor")
+                return
+            }
+            onSessionRetired(contactId, withoutOneTimePrekey)
 
-        case .endSessionNotNeeded(let contactId):
-            // The peer tore this ratchet down itself, so there is nothing to tell it. Unlike
-            // `endSessionSuppressed` this owes nothing and arms no timer — the list carries no
-            // `scheduleTimer`, and adding one here would rebuild the thing the 20 s inbound grace
-            // prevented: a guaranteed teardown back at a peer that has already reset.
-            Log.info(
-                "END_SESSION not needed for \(contactId.prefix(8))… — the peer tore this session down itself",
-                category: "SessionActionExecutor"
-            )
+        case .resendMessage(let contactId, let messageId):
+            guard let onResendMessage else {
+                Log.error("ResendMessage \(messageId.prefix(8))… with no consumer wired — it is not resent", category: "SessionActionExecutor")
+                return
+            }
+            onResendMessage(contactId, messageId)
 
         case .openSession(let contactId):
             // The core asked for the open (the PQXDH v2 upgrade sweep). Nothing here decides

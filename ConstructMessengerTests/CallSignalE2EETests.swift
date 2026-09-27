@@ -96,7 +96,6 @@ private final class OrchestratorPeer {
             msgNum: decoded.messageNumber,
             kemCt: decoded.kemCiphertext ?? Data(),
             otpkId: decoded.oneTimePreKeyId,
-            isControl: false,
             contentType: contentType,
             senderCertificate: nil
         ))

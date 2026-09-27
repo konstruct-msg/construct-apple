@@ -15,7 +15,7 @@
 //
 
 import Foundation
-// Explicit, not transitive — see EndSessionPayload.swift.
+// Explicit, not transitive: a file that uses a module imports it.
 import SwiftProtobuf
 
 enum ReactionWire {

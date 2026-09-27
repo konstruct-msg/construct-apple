@@ -17,18 +17,26 @@ final class ReceivingDecryptWalkTests: XCTestCase {
 
     // MARK: - Which verdicts justify another attempt
 
-    /// The teardown verdict describes the **session**, so another device is worth trying. The heal
-    /// verdict beside it went on 2026-09-27.
+    /// "Nothing held reads it" describes the **session**, so another device is worth trying — in
+    /// both forms the core gives it: with the decryption error it built (a sealed message), and
+    /// with only its reason when there was nobody to seal one to (an unsealed message, the only
+    /// kind the walk runs on).
+    ///
+    /// Mutation: drop the `decrypt_failed` arm from `routingVerdict` — the unsealed walk stops at
+    /// the first device, and this reddens.
     func testAFailedSessionIsWorthAnotherDevice() {
         XCTAssertTrue(MessageRouter.worthAnotherDevice([
-            .sendEndSession(contactId: "dev-a")
+            .sendDecryptionError(contactId: "dev-a", messageId: "m1", payload: Data([1]))
+        ]))
+        XCTAssertTrue(MessageRouter.worthAnotherDevice([
+            .notifyError(code: OrchestratorActionPlan.decryptFailedCode, message: "AEAD decryption failed")
         ]))
     }
 
     /// **The property that keeps the walk safe.** Every verdict other than the one above is an
     /// answer about the *message*, not the session — including `.openReceiving`: a message with
     /// the handshake header that no state opened is queued under the device tried. Re-asking a different session would repeat it,
-    /// or act on it twice — a second END_SESSION, a second queue entry, a duplicate row.
+    /// or act on it twice — a second queue entry, a duplicate row.
     func testAnAnswerAboutTheMessageEndsTheWalk() {
         XCTAssertFalse(MessageRouter.worthAnotherDevice([
             .messageDecrypted(contactId: "dev-a", messageId: "m1", plaintext: Data())
@@ -37,8 +45,8 @@ final class ReceivingDecryptWalkTests: XCTestCase {
             .messageQueuedPendingInit(contactId: "dev-a", queuedCount: 1)
         ]))
         XCTAssertFalse(MessageRouter.worthAnotherDevice([
-            .endSessionSuppressed(contactId: "dev-a", retryAfterMs: 1000)
-        ]))
+            .notifyError(code: "MALFORMED_WIRE_PAYLOAD", message: "x")
+        ]), "an error that is not a refused decrypt says nothing about the session")
         XCTAssertFalse(MessageRouter.worthAnotherDevice([
             .openReceiving(contactId: "dev-a")
         ]))
@@ -57,7 +65,7 @@ final class ReceivingDecryptWalkTests: XCTestCase {
     func testAChoreInFrontDoesNotHideTheVerdict() {
         XCTAssertTrue(MessageRouter.worthAnotherDevice([
             .scheduleTimer(timerId: "t", delayMs: 10),
-            .sendEndSession(contactId: "dev-a")
+            .sendDecryptionError(contactId: "dev-a", messageId: "m1", payload: Data([1]))
         ]))
     }
 

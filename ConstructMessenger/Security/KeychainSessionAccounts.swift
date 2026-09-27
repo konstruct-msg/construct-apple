@@ -64,15 +64,18 @@ enum KeychainSessionAccounts {
     /// says only *what* the bytes are; where they live is decided here and nowhere else.
     ///
     /// Android maps the same slots onto Keystore without inheriting any of these names.
+    /// The account this app's own archive *list* for `contactId` lives under — a JSON list of
+    /// `SessionArchive` kept by `SessionArchiveManager`. It was the core's `SessionArchive` slot
+    /// until 2026-09-27, when the core stopped archiving (its archive was END_SESSION's); the
+    /// namespace is unchanged, so what older builds stored is still found and still wiped.
+    static func archiveAccount(for contactId: String) -> String {
+        prefix + archiveInfix + contactId
+    }
+
     static func account(for slot: CfeSecureStoreSlot) -> String {
         switch slot {
         case .session(let contactId):
             return account(for: contactId)
-        case .sessionArchive(let contactId):
-            // The account the archive *list* lives under. Archives are a JSON list of
-            // `SessionArchive`, not a single blob, so the write goes through
-            // `SessionArchiveManager` — which builds its key from this same function.
-            return prefix + archiveInfix + contactId
         case .orchestratorState:
             return orchestratorState
         }

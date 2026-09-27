@@ -767,8 +767,9 @@ class AuthViewModel {
         Task { [weak self] in
             guard let self else { return }
             if AuthSessionManager.shared.sessionToken != nil {
-                await SessionLifecycleController.shared.sendEndSessionToAllContacts(reason: "logout")
-                Log.info("END_SESSION sent to all contacts on logout", category: "Auth")
+                // Nothing is announced to contacts: the device leaves the account's directory,
+                // and a peer's next message to it is answered by nobody. Until 2026-09-27 an
+                // END_SESSION went to every contact here.
                 do {
                     try await AuthServiceClient.shared.logout()
                 } catch {

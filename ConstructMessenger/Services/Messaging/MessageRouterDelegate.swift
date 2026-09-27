@@ -3,8 +3,7 @@
 //  Construct Messenger
 //
 //  Typed event protocol replacing the 10 anonymous closure properties that
-//  MessageRouter previously exposed (onEndSessionNeeded, onPublicKeyBundleNeeded,
-//  isEndSessionStale, etc.). SessionCoordinator is the canonical conformer.
+//  MessageRouter previously exposed. SessionCoordinator is the canonical conformer.
 //
 
 import Foundation
@@ -16,35 +15,25 @@ import CoreData
 /// Every peer is named by `PeerAddress`, never by a bare id. The events on this protocol come
 /// from two sources in two identity spaces — the envelope names an account, a Rust orchestrator
 /// action names a device — and while both were `String` under the label `userId` the conformer
-/// had no way to tell which it had been handed. It did not: `needsEndSession` reached a bundle
-/// fetch that asks the server for an *account*, with a device id in it, on every path the core
-/// originated. See `PeerAddress` for the log of that failure.
+/// had no way to tell which it had been handed. It did not: the teardown request of the time
+/// reached a bundle fetch that asks the server for an *account*, with a device id in it, on
+/// every path the core originated. See `PeerAddress` for the log of that failure.
 @MainActor
 protocol MessageRouterDelegate: AnyObject {
 
     // MARK: - Session control
 
-    /// This app wants END_SESSION sent to `peer` — a guard that runs before or around the core
-    /// (no session for a mid-ratchet message, a core that did not load or threw). The conformer
-    /// asks the core's teardown window before sending.
-    func messageRouter(_ router: MessageRouter, needsEndSession peer: PeerAddress)
+    // `needsEndSession`, `coreGrantedEndSession`, `receivedEndSession` and `isEndSessionStale`
+    // stood here until 2026-09-27, with END_SESSION. A message nothing reads is answered by the
+    // core with a decryption error to its writer, and one arriving is answered by the core too
+    // (`receivedDecryptionError`) — there is no teardown to ask about, grant, date or suppress
+    // (`decisions/sessions-renew-by-sending.md`, variant B).
 
-    /// The core already decided: it ran the teardown through its machine, got the grant, and
-    /// opened the window with it. The conformer sends without asking again.
-    ///
-    /// Separate from `needsEndSession` because the two differ in exactly the thing that matters.
-    /// Asking the window on behalf of a grant lands inside the window the grant just opened and
-    /// is refused — build 690, 2026-09-24: every divergence answered with "END_SESSION cooldown
-    /// active, skipping", no teardown ever left either device, and both sides stayed on a
-    /// ratchet neither could read, messages and calls alike.
-    func messageRouter(_ router: MessageRouter, coreGrantedEndSession peer: PeerAddress)
-
-    /// An END_SESSION message was successfully received and the session archived.
-    func messageRouter(_ router: MessageRouter, receivedEndSession peer: PeerAddress, timestamp: UInt64)
-
-    /// Return `true` when an END_SESSION from `peer` carrying `timestamp` is stale
-    /// (pre-dates the currently established session) and should be silently discarded.
-    func messageRouter(_ router: MessageRouter, isEndSessionStale peer: PeerAddress, timestamp: UInt64) -> Bool
+    /// The peer could not read something we sent it: a DECRYPTION_ERROR (content type 28).
+    /// `peer.device` is the device its sender certificate names — the one whose record the error
+    /// is about — and `payload` the box the peer's core sealed to our identity key. The conformer
+    /// hands both to the core, which decides everything.
+    func messageRouter(_ router: MessageRouter, receivedDecryptionError peer: PeerAddress, payload: Data)
 
     // MARK: - Session initialisation
 

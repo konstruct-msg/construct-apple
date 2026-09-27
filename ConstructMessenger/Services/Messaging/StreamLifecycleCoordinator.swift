@@ -253,8 +253,6 @@ final class StreamLifecycleCoordinator {
                 }
             }
             self.lastReconnectSubscriptionSet = idSet
-            // Stamp establishedAt for CFE-restored sessions before any prewarm END_SESSION.
-            self.sessionCoordinator.hydrateEstablishedTimestampsForRestoredSessions()
             self.wireStreamCallbacks()
             self.streamManager.forceReconnect(contactUserIds: ids) { [weak self] message in
                 self?.handleIncomingMessage(message)

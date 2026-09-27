@@ -80,7 +80,7 @@ final class SessionArchiveManager {
     }
 
     private func keychainKey(for userId: String) -> String {
-        KeychainSessionAccounts.account(for: .sessionArchive(contactId: userId))
+        KeychainSessionAccounts.archiveAccount(for: userId)
     }
 
     private func saveToKeychain(_ list: [SessionArchive], for userId: String) {

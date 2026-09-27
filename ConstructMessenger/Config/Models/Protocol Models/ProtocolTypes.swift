@@ -93,16 +93,23 @@ struct ChatMessage: Codable, Identifiable {
 
     /// Raw binary WirePayload from `Envelope.encrypted_payload`.
     /// Passed directly to Rust for decryption, bypassing JSON conversion.
-    /// For END_SESSION may carry a typed SessionControl reason hint (or a 16-byte sentinel).
+    /// For a DECRYPTION_ERROR, the box the core sealed to our identity key.
     var rawPayload: Data = Data()
 
     /// Sealed inner bytes for STEALTH (ConstructSEALED) messages.
     /// When non-empty, `from` is empty — the real sender is recovered by decrypting this.
     var sealedInnerData: Data = Data()
 
-    /// END_SESSION — routes off post-unseal / identified `contentType`, not the legacy string.
+    /// END_SESSION (21) — retired 2026-09-27. One from an older build is acknowledged and
+    /// nothing else; routes off the post-unseal / identified `contentType`.
     var isEndSession: Bool {
-        ContentTypeRouting.kind(for: contentType) == .endSession
+        contentType == 21
+    }
+
+    /// DECRYPTION_ERROR (28) — the peer could not read something we sent it. For the core to
+    /// answer (`CfeIncomingEvent.decryptionErrorReceived`).
+    var isDecryptionError: Bool {
+        contentType == 28
     }
 
     /// SENDER_SYNC — copy of own outgoing message for other devices.

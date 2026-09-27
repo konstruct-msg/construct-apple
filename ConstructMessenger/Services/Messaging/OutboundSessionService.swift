@@ -34,11 +34,6 @@ final class OutboundSessionService {
     private var rustTimers: [String: Task<Void, Never>] = [:]
     private let rustTimersLock = NSLock()
 
-    /// Timer-fired `sendEndSession` — the incoming-message path handles this action in
-    /// `MessageRouter`, but a cooldown timer fires off that path. SessionCoordinator
-    /// registers the same `needsEndSession` consumer so the owed teardown actually goes out.
-    var onTimerSendEndSession: ((String) -> Void)?
-
     /// Schedules (or reschedules) a Rust-requested timer. Fires `timerFired` after `delayMs`.
     func scheduleRustTimer(timerId: String, delayMs: UInt64) {
         cancelRustTimer(timerId: timerId)
@@ -69,22 +64,9 @@ final class OutboundSessionService {
 
     private func executeRustTimerActions(_ actions: [CfeAction]) {
         // Delegate to the centralised executor — it handles scheduleTimer/cancelTimer,
-        // notifyError, saveToSecureStore, sessionTerminated, and the rest of the
+        // notifyError, saveToSecureStore, and the rest of the
         // CfeAction surface exhaustively. See SessionActionExecutor.
-        SessionActionExecutor.shared.executeOffRouter(actions, site: "rust_timer") { action in
-            if case .sendEndSession = action { return true }  // `onTimerSendEndSession`, below
-            return false
-        }
-
-        // Router-owned actions the executor deliberately no-ops: on the incoming-message
-        // path MessageRouter consumes them after `execute` returns. A timer fire never
-        // reaches that loop, so without this the cooldown-expired `sendEndSession` the
-        // core emits (`orchestrator.rs` handle_timer_fired) has no consumer.
-        for action in actions {
-            if case .sendEndSession(let contactId) = action {
-                onTimerSendEndSession?(contactId)
-            }
-        }
+        SessionActionExecutor.shared.executeOffRouter(actions, site: "rust_timer")
     }
 
     // MARK: - Outgoing Encryption
@@ -501,9 +483,6 @@ final class OutboundSessionService {
             case .saveToSecureStore(let slot, let data):
                 let ok = handleStorageAction(slot: slot, data: [UInt8](data))
                 sendStateDurable = sendStateDurable && ok
-            case .sessionTerminated(let contactId, let archiveBytes):
-                CryptoManager.shared.acceptSessionTerminated(contactId: contactId, archiveBytes: archiveBytes)
-                CryptoManager.shared.saveOrchestratorStateCFE()
             default:
                 break
             }
@@ -543,11 +522,6 @@ final class OutboundSessionService {
             }
             let orchOk = CryptoManager.shared.saveOrchestratorStateCFE()
             return ok && orchOk
-
-        case .sessionArchive(let contactId):
-            CryptoManager.shared.acceptSessionTerminated(contactId: contactId, archiveBytes: Data(rawBytes))
-            CryptoManager.shared.saveOrchestratorStateCFE()
-            return true // a terminated session — not the active sending chain
 
         case .orchestratorState:
             guard !rawBytes.isEmpty else {

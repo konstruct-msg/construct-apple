@@ -386,12 +386,6 @@ enum MetricEvent: String {
     /// consume the core's buffered message and throw its routing decision away. `label` = handler.
     case ackCheckOutsideRouter = "ack_check_outside_router"
 
-    /// Rust asked us to tell the user's other devices that a session was reset, and we did not —
-    /// the feature has no consumer (see `MultiDeviceSendCoordinator.broadcastSessionReset`).
-    /// Counted so the gap is a number rather than a silent no-op: this is how often a working
-    /// implementation would have fired, which is what decides whether it is worth building.
-    case linkedDeviceResetNotifyUnimplemented = "linked_device_reset_notify_unimplemented"
-
     /// A terminal disposition that did NOT put the message in front of the user: dropped,
     /// undecryptable, superseded, or given up on. No receipt is sent — the stream cursor
     /// advances on its own (`StreamCursorTracker`, default `.durable`), and a `.delivered`

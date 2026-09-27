@@ -127,13 +127,7 @@ struct UserProfileView: View {
             titleVisibility: .visible
         ) {
             Button(LocalizedStringKey("reset_session"), role: .destructive) {
-                Task {
-                    do {
-                        try await SessionLifecycleController.shared.sendEndSession(to: user.id, reason: "user_requested")
-                    } catch {
-                        Log.error("Failed to send user-requested END_SESSION for \(user.id.prefix(8))…: \(error)", category: "UserProfileView")
-                    }
-                }
+                SessionLifecycleController.shared.resetSession(with: user.id, reason: "user_requested")
             }
             Button(LocalizedStringKey("cancel"), role: .cancel) {}
         } message: {

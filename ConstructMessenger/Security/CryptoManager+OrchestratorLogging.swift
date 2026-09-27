@@ -21,7 +21,7 @@ extension CryptoManager {
 
         if actions.contains(where: { action in
             switch action {
-            case .sendEndSession, .openReceiving, .openSession, .pendingDropped:
+            case .sendDecryptionError, .sessionRetired, .resendMessage, .openReceiving, .openSession:
                 return true
             default:
                 return false
@@ -35,8 +35,8 @@ extension CryptoManager {
 
     func orchestratorEventSummary(_ event: CfeIncomingEvent) -> String {
         switch event {
-        case .messageReceived(let messageId, let from, let data, let msgNum, _, let otpkId, let isControl, let contentType, let certificate):
-            return "messageReceived from=\(from.prefix(8))… msgId=\(messageId.prefix(8))… msgNum=\(msgNum) ct=\(contentType) control=\(isControl) data=\(data.count)B otpkId=\(otpkId) sealed=\(certificate != nil)"
+        case .messageReceived(let messageId, let from, let data, let msgNum, _, let otpkId, let contentType, let certificate):
+            return "messageReceived from=\(from.prefix(8))… msgId=\(messageId.prefix(8))… msgNum=\(msgNum) ct=\(contentType) data=\(data.count)B otpkId=\(otpkId) sealed=\(certificate != nil)"
         case .outgoingMessage(let contactId, let messageId, let plaintextUtf8, let contentType):
             return "outgoingMessage to=\(contactId.prefix(8))… msgId=\(messageId.prefix(8))… ct=\(contentType) plaintext=\(plaintextUtf8.count)ch"
         case .outgoingCallSignal(let contactId, let messageId, let protoBytes):
@@ -51,10 +51,8 @@ extension CryptoManager {
             return "networkReconnected"
         case .appLaunched:
             return "appLaunched"
-        case .teardownRequested(let contactId, let cause):
-            return "teardownRequested contactId=\(contactId.prefix(8))… cause=\(cause)"
-        case .peerToreDown(let contactId):
-            return "peerToreDown contactId=\(contactId.prefix(8))…"
+        case .decryptionErrorReceived(let contactId, let payload):
+            return "decryptionErrorReceived from=\(contactId.prefix(8))… payload=\(payload.count)B"
         case .timerFired(let timerId):
             return "timerFired id=\(timerId.prefix(24))…"
         case .ackDbResult(let messageId, let isProcessed):
@@ -73,10 +71,11 @@ extension CryptoManager {
             case .callSignalDecrypted:      labels.insert("call_signal")
             case .sendEncryptedMessage:     labels.insert("send")
             case .saveToSecureStore: labels.insert("save")
-            case .sendEndSession:           labels.insert("end_session")
+            case .sendDecryptionError:      labels.insert("decryption_error")
+            case .sessionRetired:           labels.insert("retired")
+            case .resendMessage:            labels.insert("resend")
             case .openReceiving:            labels.insert("open_receiving")
             case .openSession:              labels.insert("open_session")
-            case .pendingDropped:           labels.insert("pending_dropped")
             case .notifyError(let code, let msg) where firstError == nil:
                 firstError = (code, msg)
             default: break

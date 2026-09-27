@@ -23,18 +23,6 @@ final class SessionLifecycleController {
         coordinator.setContext(context)
     }
 
-    /// Callback needed when the stream layer requires an ephemeral subscription
-    /// for a user (e.g., after a tie-break loss).
-    ///
-    /// **Set once during composition** (by `ChatsViewModel.init`). Do not reassign —
-    /// the setter overwrites the previous value, which would silently break routing
-    /// if called a second time.
-    var onEphemeralSubscriptionNeeded: ((String) -> Void)? {
-        didSet {
-            coordinator.onEphemeralSubscriptionNeeded = onEphemeralSubscriptionNeeded
-        }
-    }
-
     var onE2EDeliveryReceiptDecrypted: (([String]) -> Void)? {
         didSet {
             coordinator.onE2EDeliveryReceiptDecrypted = onE2EDeliveryReceiptDecrypted
@@ -53,8 +41,8 @@ final class SessionLifecycleController {
 
     /// Proactively initialize an E2E session as INITIATOR.
     /// Used when opening a chat, creating a new contact, etc.
-    func prewarmSessions(for contactIds: [String], skipEndSessionNotification: Bool = false) {
-        coordinator.prewarmSessions(for: contactIds, skipEndSessionNotification: skipEndSessionNotification)
+    func prewarmSessions(for contactIds: [String]) {
+        coordinator.prewarmSessions(for: contactIds)
     }
 
     /// Re-establish a session for a purely-outbound peer that has queued messages but no live
@@ -65,14 +53,17 @@ final class SessionLifecycleController {
         coordinator.reestablishSessionForQueuedOutbound(to: userId)
     }
 
-    /// Send END_SESSION to a specific contact and archive local state.
-    func sendEndSession(to userId: String, devices: [String]? = nil, reason: String = "manual_reset") async throws {
-        try await coordinator.sendEndSession(to: userId, devices: devices, reason: reason)
-    }
-
-    /// Broadcast END_SESSION to all active sessions (used on logout).
-    func sendEndSessionToAllContacts(reason: String = "logout") async {
-        await coordinator.sendEndSessionToAllContacts(reason: reason)
+    /// The person reset the session with `userId`, or the server refused a ciphertext we wrote
+    /// for some of its devices: retire our current state with each of `devices` (every device of
+    /// the peer when `nil`). Local only — the next send opens a new state and the peer opens it
+    /// from the header beside its own. Until 2026-09-27 this sent END_SESSION.
+    func resetSession(with userId: String, devices: [String]? = nil, reason: String) {
+        let targets = devices ?? SessionAddressing.deviceIds(ofPeer: userId)
+        var retired = 0
+        for device in targets {
+            if CryptoManager.shared.retireSession(device: device) { retired += 1 }
+        }
+        Log.info("SESSION_STATE[reset]: \(userId.prefix(8))… — retired \(retired)/\(targets.count) device session(s) (\(reason))", category: "SessionInit")
     }
 
     // MARK: - Key sync

@@ -155,11 +155,11 @@ final class KeychainSessionAccountsTests: XCTestCase {
     func testEverySlotLandsInItsOwnAccount() {
         let slots: [CfeSecureStoreSlot] = [
             .session(contactId: contactId),
-            .sessionArchive(contactId: contactId),
             .orchestratorState
         ]
         let accounts = slots.map(KeychainSessionAccounts.account(for:))
-        XCTAssertEqual(Set(accounts).count, slots.count, "slots collide: \(accounts)")
+            + [KeychainSessionAccounts.archiveAccount(for: contactId)]
+        XCTAssertEqual(Set(accounts).count, slots.count + 1, "slots collide: \(accounts)")
         XCTAssertFalse(accounts.contains(""), "a slot with no account would silently drop its bytes")
     }
 
@@ -168,10 +168,11 @@ final class KeychainSessionAccountsTests: XCTestCase {
     ///
     /// Mutation: name the archive account anything outside the `session_` namespace — this reddens.
     func testSessionSlotsAreRecognisedByTheWipe() {
-        for slot in [CfeSecureStoreSlot.session(contactId: contactId),
-                     .sessionArchive(contactId: contactId),
-                     .session(contactId: "\(perDeviceUser):\(perDeviceDevice)")] {
-            let account = KeychainSessionAccounts.account(for: slot)
+        let accounts = [CfeSecureStoreSlot.session(contactId: contactId),
+                        .session(contactId: "\(perDeviceUser):\(perDeviceDevice)")]
+            .map(KeychainSessionAccounts.account(for:))
+            + [KeychainSessionAccounts.archiveAccount(for: contactId)]
+        for account in accounts {
             XCTAssertTrue(
                 KeychainSessionAccounts.isSessionState(account),
                 "\(account) holds ratchet state but the wipe would leave it behind"
@@ -193,11 +194,11 @@ final class KeychainSessionAccountsTests: XCTestCase {
         }
     }
 
-    /// `SessionArchiveManager` builds its Keychain key from the same function, so the archive a
-    /// `SessionTerminated` action produces and the archive the manager reads are one account.
+    /// The archive account kept the namespace older builds wrote under, so their archives are
+    /// still found and still wiped.
     func testTheArchiveAccountIsTheOneTheManagerUses() {
         XCTAssertEqual(
-            KeychainSessionAccounts.account(for: .sessionArchive(contactId: contactId)),
+            KeychainSessionAccounts.archiveAccount(for: contactId),
             "session_archives_\(contactId)"
         )
     }

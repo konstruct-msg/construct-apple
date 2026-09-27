@@ -599,19 +599,18 @@ final class ChatSendCoordinator {
                             deliveryStatus = .failed
                             OutgoingWirePayloadStore.shared.remove(baseMessageId: messageId)
                             // The refusal was of a ciphertext, so it names the ratchet that
-                            // produced it — one device's — and the teardown goes to that device,
-                            // not to whichever device the account resolves to.
+                            // produced it — one device's. That ratchet is ours to retire, and the
+                            // next send opens a new one; the peer is told nothing, because nothing
+                            // it holds is wrong. Until 2026-09-27 it was sent an END_SESSION.
                             let refused = report.copies
                                 .filter { $0.response?.errorCode == "encryptionFailed" }
                                 .map(\.deviceId)
-                            Log.error("encryptionFailed from server — triggering END_SESSION for \(recipientId.prefix(8))… devices=\(refused.map { $0.prefix(8) })\(traceTag)", category: "ChatViewModel")
-                            Task {
-                                try? await SessionLifecycleController.shared.sendEndSession(
-                                    to: recipientId,
-                                    devices: refused.isEmpty ? nil : refused,
-                                    reason: "server_encryption_rejected"
-                                )
-                            }
+                            Log.error("encryptionFailed from server — retiring our state with \(recipientId.prefix(8))… devices=\(refused.map { $0.prefix(8) })\(traceTag)", category: "ChatViewModel")
+                            SessionLifecycleController.shared.resetSession(
+                                with: recipientId,
+                                devices: refused.isEmpty ? nil : refused,
+                                reason: "server_encryption_rejected"
+                            )
                         } else if aggregated.retryable {
                             deliveryStatus = .queued
                             Log.error("Server rejected message \(messageId): retryable=true\(ecStr)\(raStr)\(traceTag) — queued for retry", category: "ChatViewModel")

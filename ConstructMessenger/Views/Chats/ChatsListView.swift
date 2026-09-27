@@ -110,7 +110,7 @@ struct ChatsListView: View {
             .onReceive(NotificationCenter.default.publisher(for: .deleteChat)) { note in
                     guard let chatId = note.object as? String,
                           let chat = chats.first(where: { $0.id == chatId }) else { return }
-                    Task { await chatsViewModel.deleteChatWithEndSession(chat: chat) }
+                    Task { await chatsViewModel.deleteChatForgettingSessions(chat: chat) }
             }
             // Total-unread badge only. Do NOT force-invalidate the List here (no
             // `.id(revision)`): the `@FetchRequest(animation: .default)` already drives
@@ -209,7 +209,7 @@ struct ChatsListView: View {
                     .listRowSeparatorTint(Color.CT.noise)
                     .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                         Button(role: .destructive) {
-                            Task { await chatsViewModel.deleteChatWithEndSession(chat: chat) }
+                            Task { await chatsViewModel.deleteChatForgettingSessions(chat: chat) }
                         } label: {
                             Label(LocalizedStringKey("delete"), systemImage: "trash")
                         }

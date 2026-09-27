@@ -7,48 +7,25 @@
 
 import Foundation
 
-/// Cross-path signal that carries the OTPK-unreproducible recovery hint between the
-/// components that detect it, transmit it, and act on it. Two hops:
+/// The "open the next session without a one-time prekey" hint, between the place it arrives and
+/// the init that acts on it.
 ///
-///  1. **RESPONDER side (outgoing hint).** When `initReceivingSession` fails because we
-///     cannot reproduce the peer's 4-DH one-time-prekey (the Rust core returns "…cannot
-///     reproduce it; session healing required"), `PublicKeyBundleHandler` records it here.
-///     The `SessionCoordinator` init-failure path then sends END_SESSION carrying
-///     `SessionResetReason.otpkUnreproducible` instead of a bare reset.
+/// The peer's core tells ours, in a decryption error, that it does not hold the one-time prekey
+/// our handshake named; the core answers with `SessionRetired(withoutOneTimePrekey: true)`, and
+/// `SessionCoordinator` marks the peer here. The next `SessionInitializationService` init for that
+/// peer skips the one-time prekey and does 3-DH, which the responder can always reproduce
+/// (identity + signed prekey only) — breaking the loop where every re-fetched OTPK hits the same
+/// unbackable state. Until 2026-09-27 the hint rode on a typed END_SESSION, and this store also
+/// carried the responder's half of it; the core owns that half now.
 ///
-///  2. **INITIATOR side (force 3-DH).** On receiving that typed END_SESSION,
-///     `MessageRouter` marks the peer here. The next `SessionInitializationService` init
-///     for that peer skips the one-time-prekey and does 3-DH, which the responder can
-///     always reproduce (identity + signed prekey only) — breaking the 4-DH retry loop
-///     where every re-fetched OTPK hits the same unbackable state.
-///
-/// In-memory + process-lifetime is deliberate: recovery completes within a session, and
-/// if the app is killed the server re-delivers END_SESSION and the hint is re-established.
-/// Thread-safe (touched from the RESPONDER decrypt path and the MainActor session paths).
+/// In-memory + process-lifetime is deliberate: recovery completes within a session.
+/// Thread-safe (touched from the MainActor session paths and the init path).
 final class SessionReinitHintStore {
     static let shared = SessionReinitHintStore()
     private init() {}
 
     private let lock = NSLock()
-    private var responderOtpkUnreproducible: Set<String> = []
     private var forceThreeDHInit: Set<String> = []
-
-    // MARK: - RESPONDER side (outgoing END_SESSION hint)
-
-    /// Mark that our last RESPONDER init for `userId` failed because we could not reproduce
-    /// the peer's one-time-prekey.
-    func recordResponderOtpkUnreproducible(for userId: String) {
-        lock.lock(); defer { lock.unlock() }
-        responderOtpkUnreproducible.insert(userId)
-    }
-
-    /// Consume the responder-side hint. Returns `true` iff the last responder init for this
-    /// peer failed on an unreproducible OTPK — i.e. the END_SESSION we are about to send
-    /// should ask the peer to re-init without an OTPK.
-    func consumeResponderOtpkUnreproducible(for userId: String) -> Bool {
-        lock.lock(); defer { lock.unlock() }
-        return responderOtpkUnreproducible.remove(userId) != nil
-    }
 
     // MARK: - INITIATOR side (force 3-DH on next init)
 

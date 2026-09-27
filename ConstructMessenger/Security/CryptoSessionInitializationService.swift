@@ -162,9 +162,6 @@ final class CryptoSessionInitializationService {
         } catch {
             let reason = "\(error)"
             Log.error("SESSION_STATE[open_receiving_single_failed]: \(message.id.prefix(8))… — \(reason)", category: "SessionInit")
-            if reason.contains("cannot reproduce") {
-                SessionReinitHintStore.shared.recordResponderOtpkUnreproducible(for: message.from)
-            }
             throw CryptoManagerError.sessionInitializationFailed
         }
     }

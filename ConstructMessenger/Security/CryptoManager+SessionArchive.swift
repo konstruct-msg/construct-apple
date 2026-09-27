@@ -129,7 +129,23 @@ extension CryptoManager {
         KeychainManager.shared.deleteSession(for: deviceId)
         KeychainManager.shared.deleteSessionSuiteId(userId: deviceId)
         KeychainManager.shared.deleteSessionAtRiskFlag(for: deviceId)
-        KeychainManager.shared.deleteSessionEstablishedAt(for: deviceId)
+    }
+
+    /// Retire the current state with `deviceId` — the person reset the session, or the server
+    /// refused a ciphertext we wrote on it. The core keeps it as a previous state (what the peer
+    /// still sends on it decrypts) and the next send opens a new one; nothing is sent now. True
+    /// when there was a current state to retire.
+    @MainActor @discardableResult
+    func retireSession(device deviceId: String) -> Bool {
+        let actions: [CfeAction] = {
+            coreLock.lock()
+            defer { coreLock.unlock() }
+            guard !deviceId.isEmpty, let core = orchestratorCore else { return [] }
+            return core.retireSession(contactId: deviceId)
+        }()
+        guard !actions.isEmpty else { return false }
+        OutboundSessionService.shared.executeStorageActions(actions)
+        return true
     }
 
     func restoreRecentSessions(limit: Int = 10) {
@@ -303,28 +319,6 @@ extension CryptoManager {
 
         KeychainManager.shared.deleteSession(for: contactId)
         Log.info("Removed session from Keychain: \(contactId)", category: "CryptoManager")
-    }
-
-    /// Store a session archive produced by Rust's `lifecycle.archive_session` and clear the
-    /// Keychain hot entry so `restoreSession()` cannot reimport stale state.
-    ///
-    /// Rust has already removed the session from memory — do NOT call `exportSession` here.
-    func acceptSessionTerminated(contactId peerId: String, archiveBytes: Data) {
-        // `peerId` arrives from the core's `SessionTerminated`, so it already names a device.
-        guard let contactId = SessionAddressing.asDevice(peerId) else {
-            Log.error("acceptSessionTerminated: \(peerId.prefix(8))… is not a device — archive dropped", category: "CryptoManager")
-            return
-        }
-        guard !archiveBytes.isEmpty else {
-            Log.error("acceptSessionTerminated: empty archive for \(contactId.prefix(8))…", category: "CryptoManager")
-            return
-        }
-        let archive = SessionArchive(sessionData: archiveBytes, archivedAt: Date(), reason: .endSessionReceived)
-        archiveManager.storeArchive(archive, for: contactId)
-        let count = archiveManager.loadArchives(for: contactId)?.count ?? 0
-        Log.info("acceptSessionTerminated: archived session for \(contactId.prefix(8))… (\(count) total)", category: "CryptoManager")
-        KeychainManager.shared.deleteSession(for: contactId)
-        KeychainManager.shared.deleteSessionSuiteId(userId: contactId)
     }
 
     // MARK: - Archive Restore

@@ -28,7 +28,7 @@ enum GRPCTimeouts {
     // Messaging (interactive)
     static let sendMessage: TimeInterval = NetworkTiming.GRPC.Timeouts.sendMessage
     static let editMessage: TimeInterval = NetworkTiming.GRPC.Timeouts.editMessage
-    static let endSession: TimeInterval = NetworkTiming.GRPC.Timeouts.endSession
+    static let controlSend: TimeInterval = NetworkTiming.GRPC.Timeouts.controlSend
 
     // Messaging (background/service)
     static let getPendingMessages: TimeInterval = NetworkTiming.GRPC.Timeouts.getPendingMessages

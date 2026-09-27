@@ -837,35 +837,5 @@ final class MultiDeviceSendCoordinator {
             return false
         }
     }
-
-    // MARK: - Session Reset Broadcast (Изъян 8)
-
-    /// Изъян 8: tell the user's other devices that the DR session with `contactId` was reset, so
-    /// each can heal independently.
-    ///
-    /// **Not implemented — the send was removed on 2026-08-03 because it had no reader.**
-    ///
-    /// It used to encrypt `"__session_reset_notify__<contactId>__"` to every linked device with
-    /// `content_type = SENDER_SYNC`. A repository-wide search finds zero consumers of that string:
-    /// no device ever healed because of it. What it did do was arrive in `saveSenderSyncMessage`,
-    /// fail every control-format check, fall through to the plain-text branch and get **saved as a
-    /// visible message bubble containing that literal string** — so the feature's only observable
-    /// effect was littering the transcript of multi-device accounts.
-    ///
-    /// Deleting the send loses nothing (no behaviour depended on it) and stops the litter. The
-    /// metric below counts how often the notification *would* have gone out, which is the number
-    /// worth having before deciding whether to build the real thing: a working version needs a
-    /// routable content type plus a heal-trigger policy (when to heal, how not to loop two devices
-    /// into healing each other), and that is a design decision, not a wiring fix. See TODO 32.
-    func broadcastSessionReset(contactId: String) async {
-        PerformanceMetrics.shared.record(
-            .linkedDeviceResetNotifyUnimplemented,
-            label: String(contactId.prefix(8))
-        )
-        Log.info(
-            "Session reset with \(contactId.prefix(8))… — linked devices NOT notified (Изъян 8 unimplemented; they heal on their own next failed decrypt)",
-            category: "MultiDevice"
-        )
-    }
 }
 

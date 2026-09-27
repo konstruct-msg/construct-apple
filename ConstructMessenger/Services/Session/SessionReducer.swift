@@ -61,8 +61,6 @@ enum SessionReducer {
         case initSucceeded(at: UInt64)
         /// Session init failed terminally.
         case initFailed
-        /// END_SESSION was received / the session was torn down.
-        case endSessionReceived
         /// Mark the session active at the given timestamp without draining the queue
         /// (used where establishment is known out-of-band, e.g. a session restored at launch).
         case markActive(at: UInt64)
@@ -89,7 +87,7 @@ enum SessionReducer {
         case .initSucceeded(let at):
             return .active(establishedAt: at)
 
-        case .initFailed, .endSessionReceived:
+        case .initFailed:
             return nil
 
         case .markActive(let at):
@@ -216,120 +214,6 @@ enum SessionReducer {
         origin == .inviteRedeem
     }
 
-    /// Whether the local teardown that follows a sent END_SESSION still applies to the session we
-    /// condemned, identified by its `SessionEpoch`.
-    ///
-    /// The teardown runs *after* a network round-trip, and `archiveSession` destroys whatever
-    /// session exists at that moment — not necessarily the one the caller decided to end. If a
-    /// heal or an incoming carrier established a new session inside that window, tearing it down
-    /// throws away a healthy ratchet and, because `clearArchivedSessions` follows, leaves no
-    /// archive to recover from. Observed 2026-08-02: a RESPONDER init completed with the PQ
-    /// contribution applied and 462 B persisted, and was destroyed under a second later by an
-    /// END_SESSION issued before it existed; flights of 3 s were seen on the mobile path.
-    ///
-    /// A differing epoch on either side means "not the same session", including the
-    /// already-torn-down case (`current == nil`) — there the archive belongs to whoever tore it
-    /// down, and this call has no claim on it.
-    ///
-    /// Until 2026-08-05 the identity here was `establishedAt`, whole seconds, so a condemned
-    /// session and its replacement established inside the same second read as identical and the
-    /// teardown proceeded anyway. `SessionEpoch` closes that residual: it descends from the
-    /// handshake, not from the clock, so a replacement is a different epoch however fast it arrives.
-    static func shouldTearDownAfterEndSession(condemned: SessionEpoch?, current: SessionEpoch?) -> Bool {
-        condemned == current
-    }
-
-    /// What to do about END_SESSION after a RESPONDER `initReceivingSession` failure — the single
-    /// authority for the otpk/plain branch that used to be nested inline `if`s in
-    /// `SessionCoordinator`. Whether the teardown may actually go out is asked separately, per
-    /// device, at the send site — and it is the core's (`orchestration::session_machine`); this
-    /// only chooses the *branch*, and with it the cause the send declares.
-    ///
-    /// There was a third case, `suppressWithinGrace`, for a plain AEAD failure right after the
-    /// peer tore down — a stale-wire race that must not be answered with a teardown. It did not
-    /// disappear: `.sendPlain` declares itself `Blind` at the send site, and the machine answers
-    /// it with `EndSessionNotNeeded` for exactly that window. The difference is that the typed
-    /// branch is no longer folded in with it.
-    enum InitFailureAction: Equatable {
-        /// Peer used a 4-DH OTPK we cannot reproduce → send a typed END_SESSION carrying
-        /// `.otpkUnreproducible` so they re-init WITHOUT one (3-DH is always reproducible,
-        /// breaking the 4-DH retry loop). Bypasses the inbound grace — the hint must reach them.
-        case sendTypedOtpk
-        /// Plain init failure outside the inbound-END_SESSION grace → ordinary rate-limited
-        /// END_SESSION so the peer re-inits.
-        case sendPlain
-
-        /// Whether this branch has **evidence** that the peer is talking on a session we cannot
-        /// read, which is what `plan_teardown` needs to turn a device we hold no session with
-        /// from `.skip` into `.sendOnly`.
-        ///
-        /// Both sending branches have it, and for the same reason: they are only reached because
-        /// a message arrived and no session could be built for it. Dropping the flag is not a
-        /// smaller signal, it is silence — after a failed RESPONDER init we hold no session with
-        /// *any* of the peer's devices, so every one of them plans as `.skip` and nothing is sent.
-        /// Measured 2026-09-06: six rounds of `otpk_unreproducible` in four minutes, each ending
-        /// `2 device(s) all skipped`, no END_SESSION on the wire, and the peer re-sending the same
-        /// unreadable message throughout. The recovery request was suppressed by the very
-        /// condition that made it necessary.
-        ///
-        /// It lives here rather than as a literal at the three send sites because this enum is
-        /// already the branch authority, and a policy repeated at call sites is the shape that
-        /// drifts — the otpk site and the heal-exhausted site are in different functions 300 lines
-        /// apart and were already inconsistent with `session_out_of_sync`, which passes it.
-        var peerOnDeadSession: Bool {
-            switch self {
-            case .sendTypedOtpk, .sendPlain: return true
-            }
-        }
-
-        /// What this teardown **knows**, which is what the machine holds it to.
-        ///
-        /// Beside `peerOnDeadSession` and deliberately not derived from it: that one answers
-        /// `plan_teardown` ("is there a device we hold no session with that must still be told"),
-        /// this one answers the window ("may an envelope go out now"). Both are true of both
-        /// branches for the first question and differ on the second, which is how one `Bool`
-        /// standing for both made a blind teardown and an explained one indistinguishable.
-        ///
-        /// Here rather than at the send sites for the reason the neighbour gives: a policy
-        /// repeated at call sites is the shape that drifts. Getting this wrong is not visible —
-        /// `.blind` on the typed branch would be silently swallowed inside the peer's quiet, and
-        /// the 4-DH retry loop it exists to break would simply continue.
-        var cause: CfeTearDownCause {
-            switch self {
-            // The peer cannot work out for itself that the one-time pre-key it chose is
-            // unreproducible. Silence is the loop continuing, so this is never silenced.
-            case .sendTypedOtpk: return .explained
-            // A plain AEAD failure right after the peer tore down is a stale-wire race, and a
-            // teardown back at them repeats what they just said. This is the branch the 20 s
-            // inbound grace existed for.
-            case .sendPlain: return .blind
-            }
-        }
-    }
-
-    /// The inbound grace used to be the second line of this function, as a `Bool` the caller
-    /// computed from its own 20 s map. It is the machine's now — asked per device, inside the
-    /// send, as `CfeTearDownCause` — because the answer differs between the two branches left
-    /// here and a `Bool` checked before the branch could not tell them apart: a plain teardown
-    /// after the peer tore down repeats what they said, while the typed one carries the reason
-    /// their next attempt needs. See `decisions/session-is-one-state-machine.md`, step 2.
-    static func initFailureAction(otpkUnreproducible: Bool) -> InitFailureAction {
-        otpkUnreproducible ? .sendTypedOtpk : .sendPlain
-    }
-
-    /// Receive-side control-message coalesce. Server offline queues re-deliver batches of
-    /// END_SESSION for the same peer; acting on each one re-archives
-    /// Keychain + requeues + reopens streams. After the first handled control message in a
-    /// window, further ones for that peer should only be ACK'd.
-    static func shouldHandleInboundControl(
-        lastHandledAt: Date?,
-        now: Date,
-        cooldown: TimeInterval
-    ) -> Bool {
-        guard let lastHandledAt else { return true }
-        return now.timeIntervalSince(lastHandledAt) >= cooldown
-    }
-
     // The tie-break role, the confirmation gate, the handshake controls (SESSION_RESET_INIT,
     // ping, session_ready) and the retry that announced them lived here until 2026-09-27. A
     // session record keeps its previous states and any message with the handshake header opens,
@@ -341,8 +225,9 @@ enum SessionReducer {
     enum DHMode: Equatable { case fourDH, threeDH }
 
     /// The DH mode for the *next* INITIATOR init. Normally 4-DH; but when a force-3-DH hint is
-    /// pending — the peer, as our RESPONDER, told us via END_SESSION(`.otpkUnreproducible`) that it
-    /// could not reproduce the 4-DH one-time-prekey our last X3DH used — the recovery init MUST drop
+    /// pending — the peer, as our RESPONDER, told us in a decryption error (`SessionRetired`
+    /// `withoutOneTimePrekey`; an END_SESSION reason before 2026-09-27) that it could not reproduce
+    /// the one-time prekey our last X3DH used — the recovery init MUST drop
     /// the OTPK and use 3-DH. **This is the loop-breaker:** re-fetching another OTPK (4-DH) would
     /// hand the responder yet another key it also cannot back, looping forever; 3-DH derives from
     /// identity + signed prekey only, which the responder can always reproduce. The hint is consumed
@@ -352,24 +237,4 @@ enum SessionReducer {
         forceThreeDHHintPending ? .threeDH : .fourDH
     }
 
-    /// Whether a received END_SESSION pre-dates our established session and should be discarded.
-    ///
-    /// `establishedAt` is persisted per-peer (see `SessionEstablishment`) and restored on launch,
-    /// so this can filter a re-delivered old END_SESSION even right after a cold start — the case
-    /// that used to tear down a healthy restored session and trigger SESSION_RESET_INIT churn.
-    ///
-    /// The claim that `nil` "only remains for sessions established by a build predating that
-    /// persistence" was wrong, and build 585 disproved it: an INITIATOR recorded nothing until the
-    /// peer's `session_ready` came back, so every freshly built session was undatable for as long
-    /// as confirmation took. Fixed by recording at creation; `nil` now means no session on record.
-    ///
-    /// **This predicate cannot settle a crossing teardown.** `timestamp` is the *peer's* clock,
-    /// which is why the fudge exists, and any teardown sent within the fudge of our establishment
-    /// reads as current. Build 585 lost a session built at 10:54:07 to an END_SESSION stamped
-    /// 10:54:03 — four seconds, inside the five-second tolerance. Widening the fudge is not the
-    /// answer (it eats genuine teardowns); naming the condemned session on the wire is.
-    static func isEndSessionStale(establishedAt: UInt64?, timestamp: UInt64, fudgeSeconds: UInt64) -> Bool {
-        guard let establishedAt else { return false }
-        return timestamp + fudgeSeconds < establishedAt
-    }
 }

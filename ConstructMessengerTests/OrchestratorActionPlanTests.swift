@@ -79,22 +79,21 @@ final class OrchestratorActionPlanTests: XCTestCase {
         XCTAssertNil(plan.ackCheckMessageId)
     }
 
-    // MARK: - Routing verdict (a suppression is a decision, not "unknown")
+    // MARK: - Routing verdict
 
-    /// Device logs 2026-08-19: the core returned a suppression beside
-    /// `scheduleTimer(cooldown_expired:…)` and the router logged both as unknown, then ERROR
-    /// "no routing decision". That pair is a cooldown verdict; treating it as `.none` skipped the
-    /// timer and advanced the cursor past an un-ACKed message. (The heal suppression it was
-    /// first seen with went on 2026-09-27; the teardown one below is the same shape.)
-    func testEndSessionSuppressedPlusTimer_IsAnEndSessionSuppressedVerdict() {
-        let verdict = OrchestratorActionPlan.routingVerdict(from: [
-            .endSessionSuppressed(contactId: peer, retryAfterMs: 5077),
-            .scheduleTimer(timerId: "cooldown_expired:\(peer)", delayMs: 5077)
-        ])
-        XCTAssertEqual(
-            verdict,
-            .endSessionSuppressed(contactId: peer, retryAfterMs: 5077)
-        )
+    /// An unread message is a verdict whichever way the core states it, with the error it built
+    /// beside the persist chore, or with only its reason. Read as `.none` it would be logged as
+    /// "no routing decision" and the error would not be sent. (Device logs 2026-08-19 show the
+    /// shape: a named decision beside a chore read as unknown.)
+    func testAnUnreadMessage_IsAnUnreadableVerdict() {
+        XCTAssertEqual(OrchestratorActionPlan.routingVerdict(from: [
+            .persistAck(messageId: messageId, timestamp: 1),
+            .sendDecryptionError(contactId: peer, messageId: messageId, payload: Data([1])),
+            .notifyError(code: OrchestratorActionPlan.decryptFailedCode, message: "AEAD decryption failed")
+        ]), .unreadable)
+        XCTAssertEqual(OrchestratorActionPlan.routingVerdict(from: [
+            .notifyError(code: OrchestratorActionPlan.decryptFailedCode, message: "AEAD decryption failed")
+        ]), .unreadable)
     }
 
     func testTimerAlone_IsNotARoutingVerdict() {
@@ -114,7 +113,7 @@ final class OrchestratorActionPlanTests: XCTestCase {
         let decrypted = OrchestratorActionPlan.routingVerdict(from: [
             .scheduleTimer(timerId: "x", delayMs: 1),
             .messageDecrypted(contactId: peer, messageId: messageId, plaintext: Data("hi".utf8)),
-            .endSessionSuppressed(contactId: peer, retryAfterMs: 1)
+            .sendDecryptionError(contactId: peer, messageId: messageId, payload: Data([1]))
         ])
         XCTAssertEqual(decrypted, .decrypted)
     }

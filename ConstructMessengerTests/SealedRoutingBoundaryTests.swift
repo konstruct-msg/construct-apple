@@ -35,25 +35,16 @@ final class SealedRoutingBoundaryTests: XCTestCase {
 
     // MARK: - Recording delegate
 
-    /// Records the delegate query that is unique to the END_SESSION branch and fires *before* any
-    /// crypto work, so classification can be observed without executing the handler. It returns
-    /// `true` to short-circuit the heavy path deliberately. The SESSION_RESET_INIT branch it once
-    /// recorded beside it is gone since 2026-09-27 (`decisions/sessions-renew-by-sending.md`).
+    /// Records the delegate call unique to the DECRYPTION_ERROR branch, which fires before any
+    /// crypto work, so classification can be observed without the core. The END_SESSION and
+    /// SESSION_RESET_INIT branches it once recorded beside it went on 2026-09-27
+    /// (`decisions/sessions-renew-by-sending.md`).
     private final class RecordingDelegate: MessageRouterDelegate {
-        var endSessionStaleQueries: [PeerAddress] = []
-        var endSessionRequests: [String] = []
+        var decryptionErrors: [(peer: PeerAddress, payload: Data)] = []
 
         func messageRouter(_ router: MessageRouter, canOpenReceiving peer: PeerAddress, for message: ChatMessage) {}
-        func messageRouter(_ router: MessageRouter, needsEndSession peer: PeerAddress) {
-            endSessionRequests.append(peer.account)
-        }
-        func messageRouter(_ router: MessageRouter, coreGrantedEndSession peer: PeerAddress) {
-            endSessionRequests.append(peer.account)
-        }
-        func messageRouter(_ router: MessageRouter, receivedEndSession peer: PeerAddress, timestamp: UInt64) {}
-        func messageRouter(_ router: MessageRouter, isEndSessionStale peer: PeerAddress, timestamp: UInt64) -> Bool {
-            endSessionStaleQueries.append(peer)
-            return true   // short-circuit: classification is what we assert
+        func messageRouter(_ router: MessageRouter, receivedDecryptionError peer: PeerAddress, payload: Data) {
+            decryptionErrors.append((peer, payload))
         }
         func messageRouter(_ router: MessageRouter, didDecryptDeliveryReceipt messageIds: [String]) {}
         func messageRouter(_ router: MessageRouter, needsUsernameUpdate peer: PeerAddress) {}
@@ -93,61 +84,61 @@ final class SealedRoutingBoundaryTests: XCTestCase {
 
     // MARK: - A. Unseal boundary remaps the routing kind
 
-    /// A sealed END_SESSION must reach the END_SESSION branch. Before the fix it was classified
-    /// as a regular message, failed to build an incoming event, and was skipped outright.
-    func testSealedEndSession_ReachesEndSessionBranch() {
-        stubUnseal(contentType: 21)
+    /// A sealed DECRYPTION_ERROR must reach its branch. The real content type rides only in
+    /// `SealedInner`; read from the outer stamp it would be a regular message, fail to decrypt, and
+    /// be answered with a decryption error of our own — the f39e03b4 class of regression.
+    ///
+    /// Mutation: drop the `isDecryptionError` early exit — this reddens.
+    func testSealedDecryptionError_ReachesItsBranch() {
+        stubUnseal(contentType: 28)
+
+        let message = sealedMessage()
+        router.routeIncomingMessage(message, in: context)
+
+        XCTAssertEqual(delegate.decryptionErrors.map(\.peer.account), [peer],
+                       "sealed ct=28 must route as a DECRYPTION_ERROR under the resolved sender")
+        XCTAssertEqual(delegate.decryptionErrors.first?.payload, message.rawPayload,
+                       "the core opens the box the peer sealed; nothing here may change it")
+    }
+
+    /// The error is about one device's record, and only the certificate names the device.
+    func testSealedDecryptionError_NamesTheCertifiedDevice() {
+        stubUnseal(contentType: 28)
 
         router.routeIncomingMessage(sealedMessage(), in: context)
 
-        XCTAssertEqual(
-            delegate.endSessionStaleQueries.map(\.account), [peer],
-            "sealed ct=21 must route as END_SESSION — this is the f39e03b4 regression"
-        )
+        XCTAssertEqual(delegate.decryptionErrors.map(\.peer.device), [senderDevice])
     }
 
-    /// A sealed END_SESSION names the device that sent it — the certificate's — to the
-    /// coordinator, so the stale check and the archive are about that ratchet and not the
-    /// pinned one. Until 2026-09-21 the router passed `.account(peer)` here and a reset from a
-    /// peer's second device tore down the session with its first.
-    func testSealedEndSession_NamesTheCertifiedDevice() {
+    /// END_SESSION (21) from an older build is acknowledged and nothing else: it named no state,
+    /// so nothing could tell whether it was about the one we hold.
+    ///
+    /// Mutation: route 21 into the decryption-error branch — this reddens.
+    func testSealedEndSession_IsAcknowledgedAndIgnored() {
         stubUnseal(contentType: 21)
 
-        router.routeIncomingMessage(sealedMessage(), in: context)
+        let message = sealedMessage()
+        router.routeIncomingMessage(message, in: context)
 
-        XCTAssertEqual(
-            delegate.endSessionStaleQueries.map(\.device), [senderDevice],
-            "the teardown is about the sending device's session, and only the certificate can name it"
-        )
+        XCTAssertTrue(delegate.decryptionErrors.isEmpty)
+        XCTAssertTrue(PersistentACKStore.shared.isProcessed(message.id, in: context))
     }
 
-    /// Control-branch classification must not swallow ordinary sealed traffic: a regular body
-    /// does not take the END_SESSION branch.
-    func testSealedRegularMessage_TakesNeitherControlBranch() {
+    /// Control-branch classification must not swallow ordinary sealed traffic.
+    func testSealedRegularMessage_TakesNoControlBranch() {
         stubUnseal(contentType: 1)
 
         router.routeIncomingMessage(sealedMessage(), in: context)
 
-        XCTAssertTrue(delegate.endSessionStaleQueries.isEmpty, "ct=1 is not an END_SESSION")
-    }
-
-    /// The resolved sender must become the routing identity — a sealed message carries an empty
-    /// `from`, and everything downstream keys off it.
-    func testSealedMessage_RoutesUnderResolvedSender() {
-        stubUnseal(contentType: 21)
-
-        router.routeIncomingMessage(sealedMessage(), in: context)
-
-        XCTAssertEqual(delegate.endSessionStaleQueries.first?.account, peer,
-                       "routing identity must be the unsealed sender, not the empty outer `from`")
+        XCTAssertTrue(delegate.decryptionErrors.isEmpty, "ct=1 is not a DECRYPTION_ERROR")
     }
 
     // MARK: - B. Parser preserves the sealed control payload
 
-    /// A sealed END_SESSION carries a 16-byte SessionControl sentinel inside SealedInner — far
-    /// shorter than a WirePayload, so `WirePayloadCoder.decode` fails and the parser takes its
-    /// sealed fallback. That fallback used to drop the payload, which is what made the typed
-    /// `SessionControl.reason` hint (e.g. `.otpkUnreproducible` → 3-DH re-init) unreadable.
+    /// A sealed DECRYPTION_ERROR carries the core's sealed box inside SealedInner, not a
+    /// WirePayload, so `WirePayloadCoder.decode` fails and the parser takes its sealed fallback.
+    /// That fallback used to drop the payload (END_SESSION's reason hint went unreadable that way);
+    /// dropped now, the error would reach the core empty and be refused.
     func testParser_SealedShortControlInner_PreservesRawPayload() throws {
         let sentinel = Data(repeating: 0xAB, count: 16)
         let response = sealedStreamResponse(innerPayload: sentinel)
@@ -158,7 +149,7 @@ final class SealedRoutingBoundaryTests: XCTestCase {
             return XCTFail("sealed envelope must parse into a .message event, got \(String(describing: event))")
         }
         XCTAssertEqual(parsed.rawPayload, sentinel,
-                       "sealed fallback must carry the inner payload through — dropping it loses SessionControl.reason")
+                       "sealed fallback must carry the inner payload through — dropping it loses the decryption error")
         XCTAssertTrue(parsed.from.isEmpty, "sender stays unresolved until MessageRouter unseals")
         XCTAssertFalse(parsed.sealedInnerData.isEmpty, "sealed bytes must survive for resolveSender")
     }
@@ -219,7 +210,7 @@ final class SealedRoutingBoundaryTests: XCTestCase {
         var inner = Shared_Proto_Core_V1_SealedInner()
         inner.recipientUserID = me
         inner.encryptedPayload = innerPayload
-        inner.contentType = .sessionReset
+        inner.contentType = .decryptionError
 
         var sealedEnvelope = Shared_Proto_Core_V1_SealedSenderEnvelope()
         sealedEnvelope.sealedInner = (try? inner.serializedData()) ?? Data()

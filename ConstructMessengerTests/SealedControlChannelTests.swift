@@ -32,7 +32,8 @@ final class SealedControlChannelTests: XCTestCase {
 
     func testContentTypeRouting_ControlBytes_MapToExpectedKinds() {
         let cases: [(UInt8, WireMessageKind)] = [
-            (21, .endSession),
+            (21, .control), // END_SESSION from an older build — recognised, never sent
+            (28, .control), // DECRYPTION_ERROR
             (23, .senderSync),
             (24, .sessionResetInit),
             (1,  .direct),
@@ -76,6 +77,7 @@ final class SealedControlChannelTests: XCTestCase {
             )
 
             XCTAssertEqual(identified.isEndSession, postUnseal.isEndSession, "\(kind) isEndSession")
+            XCTAssertEqual(identified.isDecryptionError, postUnseal.isDecryptionError, "\(kind) isDecryptionError")
             XCTAssertEqual(identified.isSessionResetInit, postUnseal.isSessionResetInit, "\(kind) isSRI")
             XCTAssertEqual(identified.isSenderSync, postUnseal.isSenderSync, "\(kind) isSenderSync")
             XCTAssertEqual(
@@ -86,10 +88,10 @@ final class SealedControlChannelTests: XCTestCase {
 
             // Without the remap, pre-unseal would mis-route — pin the regression class.
             switch kind {
-            case .endSession:
-                XCTAssertTrue(postUnseal.isEndSession)
-                XCTAssertFalse(preUnseal.isEndSession,
-                               "pre-unseal outer must NOT look like END_SESSION — f39e03b4 class")
+            case .control:
+                XCTAssertTrue(postUnseal.isDecryptionError)
+                XCTAssertFalse(preUnseal.isDecryptionError,
+                               "pre-unseal outer must NOT look like a DECRYPTION_ERROR — f39e03b4 class")
             case .sessionResetInit:
                 XCTAssertTrue(postUnseal.isSessionResetInit)
                 XCTAssertFalse(preUnseal.isSessionResetInit,
@@ -125,7 +127,7 @@ final class SealedControlChannelTests: XCTestCase {
     func testSealedEnvelopeType_DeclaresExactlyTheThreeAllowedValues() {
         XCTAssertEqual(
             SealedEnvelopeType.allCases.map { $0.proto },
-            [.unspecified, .sessionReset, .sessionResetInit]
+            [.unspecified, .decryptionError, .sessionResetInit]
         )
     }
 
@@ -133,11 +135,13 @@ final class SealedControlChannelTests: XCTestCase {
     /// A content type added later therefore stays off the sealed wire by default.
     func testSealedEnvelopeType_CollapsesEverythingButTheTwoExceptions() {
         for ct in [Shared_Proto_Core_V1_ContentType.unspecified, .e2EeSignal, .callSignal,
-                   .deliveryReceipt, .senderSync, .sessionPing, .sessionReady] {
+                   .deliveryReceipt, .senderSync, .sessionPing, .sessionReady, .sessionReset] {
             XCTAssertEqual(SealedEnvelopeType(declaring: ct), .generic,
                            "ct=\(ct) must not reach SealedInner.content_type")
         }
-        XCTAssertEqual(SealedEnvelopeType(declaring: .sessionReset), .sessionReset)
+        // END_SESSION (21) is no longer sent, so nothing may declare it: it collapses like any
+        // other type. Its place is DECRYPTION_ERROR's.
+        XCTAssertEqual(SealedEnvelopeType(declaring: .decryptionError), .decryptionError)
         XCTAssertEqual(SealedEnvelopeType(declaring: .sessionResetInit), .sessionResetInit)
     }
 
@@ -159,7 +163,7 @@ final class SealedControlChannelTests: XCTestCase {
 
         let generic = try serialise(SealedEnvelopeType.generic.proto)
         let e2ee = try serialise(.e2EeSignal)
-        let reset = try serialise(SealedEnvelopeType.sessionReset.proto)
+        let reset = try serialise(SealedEnvelopeType.decryptionError.proto)
 
         XCTAssertLessThan(generic.count, e2ee.count,
                           "a generic sealed envelope must be shorter — the field is not on the wire")
@@ -180,8 +184,14 @@ final class SealedControlChannelTests: XCTestCase {
     func testPredicates_RouteOffContentType() {
         let endSession = makeMessage(contentType: 21)
         XCTAssertTrue(endSession.isEndSession)
+        XCTAssertFalse(endSession.isDecryptionError)
         XCTAssertFalse(endSession.isSessionResetInit)
         XCTAssertFalse(endSession.isRegularMessage)
+
+        let decryptionError = makeMessage(contentType: 28)
+        XCTAssertTrue(decryptionError.isDecryptionError)
+        XCTAssertFalse(decryptionError.isEndSession)
+        XCTAssertFalse(decryptionError.isRegularMessage)
 
         let sri = makeMessage(contentType: 24)
         XCTAssertTrue(sri.isSessionResetInit)
@@ -192,6 +202,7 @@ final class SealedControlChannelTests: XCTestCase {
         let unset = makeMessage(contentType: 0)
         XCTAssertFalse(unset.isEndSession,
                        "contentType=0 must not route as END_SESSION — there is no second field to fall back on")
+        XCTAssertFalse(unset.isDecryptionError)
         XCTAssertFalse(unset.isSessionResetInit)
         XCTAssertFalse(unset.isSenderSync)
     }
