@@ -11,6 +11,7 @@
 //  Everything is produced by the core under test; nothing here signs or encapsulates by itself.
 //
 
+import CryptoKit
 import Foundation
 @testable import Construct_Messenger
 
@@ -61,16 +62,82 @@ extension OrchestratorCore {
     }
 
     /// The responder side from what the initiator's `encryptMessage` returned, packed the way
-    /// the wire carries it — the handshake header included.
+    /// the wire carries it — the handshake header included — opened with `sender`'s certificate
+    /// as `TestCertificateServer.shared` issues it. Nothing else names the key a first message
+    /// opens with (`decisions/first-message-opens-without-the-server.md`).
     func pqxdhTestReceive(
-        from contactId: String,
-        senderBundle: BinaryKeyBundle,
+        from sender: OrchestratorCore,
         first: EncryptedMessageComponents
     ) throws -> SessionInitResult {
-        try initReceivingSessionFromWirePayload(
-            contactId: contactId,
-            recipientBundle: senderBundle,
-            wirePayload: try first.pqxdhTestWirePayload()
+        try pqxdhTestReceive(from: sender, wirePayload: try first.pqxdhTestWirePayload())
+    }
+
+    /// The same, from a wire payload as received.
+    func pqxdhTestReceive(from sender: OrchestratorCore, wirePayload: [UInt8]) throws -> SessionInitResult {
+        TestCertificateServer.shared.trust(in: self)
+        return try initReceivingSessionFromWirePayload(
+            senderCertificate: try TestCertificateServer.shared.certificate(for: sender),
+            wirePayload: wirePayload
+        )
+    }
+}
+
+/// A fresh device, named — as every real device is — by the id its identity key derives to. A
+/// session opened from a sender certificate is filed under that id, so a test peer called
+/// `"alice-…"` could never be found again by that name.
+func makeTestDevice() throws -> (core: OrchestratorCore, deviceId: String) {
+    let bootstrap = try createCryptoCore()
+    let deviceId = deriveDeviceId(
+        identityPublicKey: try bootstrap.getRegistrationBundleFields().identityPublic
+    )
+    let core = try createOrchestratorCoreFromKeys(
+        keysData: try bootstrap.exportPrivateKeys(),
+        myUserId: deviceId
+    )
+    return (core, deviceId)
+}
+
+/// Signs sender certificates the way `identity-service` does (Ed25519 over the variant-0 payload,
+/// `StealthSenderService.buildCertPayload`), for tests that open sessions from them.
+final class TestCertificateServer {
+    static let shared = TestCertificateServer()
+
+    let key = Curve25519.Signing.PrivateKey()
+
+    var verifyingKey: Data { key.publicKey.rawRepresentation }
+
+    /// Make `core` accept certificates from this server.
+    func trust(in core: OrchestratorCore) {
+        core.setTrustedServerKeys(keys: [verifyingKey])
+    }
+
+    /// `device`'s certificate, issued now for a day.
+    func certificate(for device: OrchestratorCore, account: String = "test-account") throws -> SenderCertificate {
+        let identityKey = Data(try device.getRegistrationBundleFields().identityPublic)
+        return try certificate(identityKey: identityKey, account: account)
+    }
+
+    func certificate(
+        identityKey: Data,
+        account: String = "test-account",
+        deviceId: String? = nil,
+        issuedAt: Date = Date()
+    ) throws -> SenderCertificate {
+        let device = deviceId ?? deriveDeviceId(identityPublicKey: [UInt8](identityKey))
+        let issued = Int64(issuedAt.timeIntervalSince1970)
+        let expires = issued + 86_400
+        let payload = StealthSenderService.buildCertPayload(
+            userID: account, domain: "test.example", ik: identityKey,
+            deviceID: device, issued: issued, expires: expires
+        )
+        return SenderCertificate(
+            userId: account,
+            domain: "test.example",
+            identityKey: identityKey,
+            deviceId: device,
+            issuedAt: issued,
+            expiresAt: expires,
+            signature: try key.signature(for: payload)
         )
     }
 }

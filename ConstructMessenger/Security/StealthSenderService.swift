@@ -267,7 +267,7 @@ final class StealthSenderService: SealedSenderResolving {
         return attestSignature(cert)
     }
 
-    static func buildCertPayload(userID: String, domain: String, ik: Data, deviceID: String, issued: Int64, expires: Int64) -> Data {
+    nonisolated static func buildCertPayload(userID: String, domain: String, ik: Data, deviceID: String, issued: Int64, expires: Int64) -> Data {
         var p = Data()
         p.append(contentsOf: userID.utf8)
         p.append(contentsOf: domain.utf8)
@@ -278,7 +278,7 @@ final class StealthSenderService: SealedSenderResolving {
         return p
     }
 
-    private static func bigEndian64(_ value: Int64) -> Data {
+    nonisolated private static func bigEndian64(_ value: Int64) -> Data {
         var v = value.bigEndian
         return Data(bytes: &v, count: 8)
     }
@@ -409,7 +409,16 @@ final class StealthSenderService: SealedSenderResolving {
             senderId: cert.senderUserID,
             senderDeviceId: cert.senderDeviceID,
             contentType: contentType,
-            trust: trust
+            trust: trust,
+            senderCertificate: SenderCertificate(
+                userId: cert.senderUserID,
+                domain: cert.senderDomain,
+                identityKey: cert.senderIdentityKey,
+                deviceId: cert.senderDeviceID,
+                issuedAt: cert.issuedAt,
+                expiresAt: cert.expiresAt,
+                signature: cert.serverSignature
+            )
         )
     }
 
@@ -738,4 +747,9 @@ struct ResolvedSender: Equatable {
     let senderDeviceId: String
     let contentType: UInt8
     let trust: SenderTrust
+    /// The certificate as unsealed, for the core. It is what a first message opens a session
+    /// from: the key it names is the key the session opens with, once the core has checked the
+    /// server's signature (`decisions/first-message-opens-without-the-server.md`). `trust` above is
+    /// this app's label for the transcript; it does not decide whether a session opens.
+    let senderCertificate: SenderCertificate
 }

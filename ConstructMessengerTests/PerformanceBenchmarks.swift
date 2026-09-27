@@ -25,11 +25,11 @@ final class PerformanceBenchmarks: XCTestCase {
         let core: OrchestratorCore
         let userId: String
 
-        init(userId: String) throws {
-            self.userId = userId
-            let bootstrap = try createCryptoCore()
-            let keys = try bootstrap.exportPrivateKeys()
-            self.core = try createOrchestratorCoreFromKeys(keysData: keys, myUserId: userId)
+        /// Named by the id its identity key derives to, as a real device is.
+        init() throws {
+            let device = try makeTestDevice()
+            self.core = device.core
+            self.userId = device.deviceId
         }
 
         /// The bundle as the server serves it after PQXDH v2 — see `PQXDHTestBundles`.
@@ -100,8 +100,8 @@ final class PerformanceBenchmarks: XCTestCase {
     // MARK: - Encrypt + Wire Encode
 
     func testEncryptAndEncodePerformance() throws {
-        let alice = try CryptoPeer(userId: "bench-alice-\(UUID().uuidString)")
-        let bob   = try CryptoPeer(userId: "bench-bob-\(UUID().uuidString)")
+        let alice = try CryptoPeer()
+        let bob   = try CryptoPeer()
         let bobBundle = try bob.bundle()
         try alice.initSenderSession(to: bob.userId, bundle: bobBundle)
 
@@ -122,16 +122,15 @@ final class PerformanceBenchmarks: XCTestCase {
     // MARK: - Full Round-Trip (Encrypt → Wire → Decrypt)
 
     func testFullRoundTripPerformance() throws {
-        let alice = try CryptoPeer(userId: "bench-alice-\(UUID().uuidString)")
-        let bob   = try CryptoPeer(userId: "bench-bob-\(UUID().uuidString)")
+        let alice = try CryptoPeer()
+        let bob   = try CryptoPeer()
 
-        let aliceBundle = try alice.bundle()
         let bobBundle   = try bob.bundle()
         try alice.initSenderSession(to: bob.userId, bundle: bobBundle)
 
         // Establish Bob's session via msgNum=0
         let init0 = try alice.core.encryptMessage(contactId: bob.userId, plaintext: Data("__init__".utf8))
-        _ = try bob.core.pqxdhTestReceive(from: alice.userId, senderBundle: aliceBundle, first: init0)
+        _ = try bob.core.pqxdhTestReceive(from: alice.core, first: init0)
 
         let plaintext = Data("Benchmark round-trip message".utf8)
 

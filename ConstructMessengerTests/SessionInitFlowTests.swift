@@ -25,11 +25,11 @@ private final class SessionPeer {
     let core: OrchestratorCore
     let userId: String
 
-    init(userId: String) throws {
-        self.userId = userId
-        let bootstrap = try createCryptoCore()
-        let keys = try bootstrap.exportPrivateKeys()
-        self.core = try createOrchestratorCoreFromKeys(keysData: keys, myUserId: userId)
+    /// Named by the id its identity key derives to, as a real device is.
+    init() throws {
+        let device = try makeTestDevice()
+        self.core = device.core
+        self.userId = device.deviceId
     }
 
     // MARK: Bundle
@@ -57,6 +57,7 @@ private final class SessionPeer {
     func encrypt(_ data: Data, to contactId: String) throws -> EncryptedComponents {
         let result = try core.encryptMessage(contactId: contactId, plaintext: data)
         return EncryptedComponents(
+            wirePayload: try result.pqxdhTestWirePayload(),
             ephemeralPublicKey: result.ephemeralPublicKey,
             messageNumber: result.messageNumber,
             content: result.content,
@@ -76,13 +77,10 @@ private final class SessionPeer {
 
     // MARK: initReceivingSession (RESPONDER)
 
-    func initReceivingSession(contactId: String, senderBundle: Bundle, firstMsg: EncryptedComponents) throws -> String {
-        let msg = firstMsg.toBinaryFirstMessage()
-        let bytes = try core.initReceivingSession(
-            contactId: contactId,
-            recipientBundle: bundleBytes(from: senderBundle),
-            firstMessage: msg
-        ).decryptedMessage
+    /// The responder init from `firstMsg` as the wire carries it, with `sender`'s certificate.
+    func initReceivingSession(from sender: SessionPeer, firstMsg: EncryptedComponents) throws -> String {
+        let bytes = try core.pqxdhTestReceive(from: sender.core, wirePayload: firstMsg.wirePayload)
+            .decryptedMessage
         return String(bytes: bytes, encoding: .utf8) ?? "__binary_init__"
     }
 
@@ -105,6 +103,8 @@ private final class SessionPeer {
 // MARK: - EncryptedComponents value type
 
 private struct EncryptedComponents {
+    /// The same message packed as the envelope carries it — what a first message opens from.
+    let wirePayload: [UInt8]
     let ephemeralPublicKey: [UInt8]
     let messageNumber: UInt32
     let content: [UInt8]
@@ -115,21 +115,6 @@ private struct EncryptedComponents {
     /// The PQXDH v2 header the initiator's first flight carries (empty / 0 otherwise).
     var kemCiphertext: [UInt8] = []
     var kyberPrekeyId: UInt32 = 0
-
-    func toBinaryFirstMessage() -> BinaryFirstMessage {
-        return BinaryFirstMessage(
-            ephemeralPublicKey: ephemeralPublicKey,
-            messageNumber: messageNumber,
-            content: content,
-            oneTimePrekeyId: oneTimePrekeyId,
-            suiteId: suiteId,
-            pqMessageEpoch: pqMessageEpoch,
-            pqRatchetField: pqRatchetField,
-            pqxdhV2: !kemCiphertext.isEmpty,
-            kyberPrekeyId: kyberPrekeyId,
-            kemCiphertext: kemCiphertext
-        )
-    }
 }
 
 private enum TestError: Error {
@@ -147,8 +132,8 @@ final class SessionInitFlowTests: XCTestCase {
     /// RESPONDER calls initReceivingSession → decrypted content is the ping string.
     /// This must succeed because Rust does String::from_utf8(plaintext).
     func testInitReceivingSession_PingAsMsg0_Succeeds() throws {
-        let alice = try SessionPeer(userId: "alice-\(UUID().uuidString)")
-        let bob   = try SessionPeer(userId: "bob-\(UUID().uuidString)")
+        let alice = try SessionPeer()
+        let bob   = try SessionPeer()
 
         let aliceBundle = try alice.exportBundle()
         let bobBundle   = try bob.exportBundle()
@@ -162,11 +147,7 @@ final class SessionInitFlowTests: XCTestCase {
         XCTAssertEqual(msg0.messageNumber, 0, "Ping must be msgNum=0")
 
         // RESPONDER: initReceivingSession with the ping
-        let decrypted = try bob.initReceivingSession(
-            contactId: alice.userId,
-            senderBundle: aliceBundle,
-            firstMsg: msg0
-        )
+        let decrypted = try bob.initReceivingSession(from: alice, firstMsg: msg0)
 
         XCTAssertEqual(decrypted, pingContent)
         XCTAssertTrue(decrypted.hasPrefix("__session_ping") && decrypted.hasSuffix("__"),
@@ -182,8 +163,8 @@ final class SessionInitFlowTests: XCTestCase {
     /// session establishment. X3DH succeeds; only the content encoding is non-UTF-8.
     /// The returned plaintext falls back to the `"__binary_init_*__"` sentinel.
     func testInitReceivingSession_BinaryMsg0_SessionEstablishedWithBinarySentinel() throws {
-        let alice = try SessionPeer(userId: "alice-\(UUID().uuidString)")
-        let bob   = try SessionPeer(userId: "bob-\(UUID().uuidString)")
+        let alice = try SessionPeer()
+        let bob   = try SessionPeer()
 
         let aliceBundle = try alice.exportBundle()
         let bobBundle   = try bob.exportBundle()
@@ -199,11 +180,7 @@ final class SessionInitFlowTests: XCTestCase {
         XCTAssertEqual(msg0.messageNumber, 0)
 
         // Session must be established — no throw
-        let decrypted = try bob.initReceivingSession(
-            contactId: alice.userId,
-            senderBundle: aliceBundle,
-            firstMsg: msg0
-        )
+        let decrypted = try bob.initReceivingSession(from: alice, firstMsg: msg0)
         // Non-UTF-8 content falls back to sentinel; session is fully functional
         XCTAssertTrue(decrypted.hasPrefix("__binary_init_"),
                       "Binary msgNum=0 must yield sentinel, got: \(decrypted.prefix(60))")
@@ -220,8 +197,8 @@ final class SessionInitFlowTests: XCTestCase {
     /// Full fixed flow: ping (msgNum=0) → initReceivingSession → then user message (msgNum=1)
     /// via normal decryptMessage. Content must round-trip exactly.
     func testSessionFlow_PingMsg0_TextMsg1_ContentPreserved() throws {
-        let alice = try SessionPeer(userId: "alice-\(UUID().uuidString)")
-        let bob   = try SessionPeer(userId: "bob-\(UUID().uuidString)")
+        let alice = try SessionPeer()
+        let bob   = try SessionPeer()
 
         let aliceBundle = try alice.exportBundle()
         let bobBundle   = try bob.exportBundle()
@@ -231,7 +208,7 @@ final class SessionInitFlowTests: XCTestCase {
         // msg0: ping
         let ping = "__session_ping_\(UUID().uuidString)__"
         let msg0 = try alice.encryptString(ping, to: bob.userId)
-        _ = try bob.initReceivingSession(contactId: alice.userId, senderBundle: aliceBundle, firstMsg: msg0)
+        _ = try bob.initReceivingSession(from: alice, firstMsg: msg0)
 
         // msg1: real user text
         let userText = "Привет, это первое реальное сообщение!"
@@ -247,8 +224,8 @@ final class SessionInitFlowTests: XCTestCase {
     /// Binary content (protobuf-like) at msgNum=1 round-trips through normal decryptMessage
     /// — proves that msgNum=1+ is safe for binary payloads (only msgNum=0 is constrained by Rust FFI).
     func testSessionFlow_PingMsg0_BinaryMsg1_ContentPreserved() throws {
-        let alice = try SessionPeer(userId: "alice-\(UUID().uuidString)")
-        let bob   = try SessionPeer(userId: "bob-\(UUID().uuidString)")
+        let alice = try SessionPeer()
+        let bob   = try SessionPeer()
 
         let aliceBundle = try alice.exportBundle()
         let bobBundle   = try bob.exportBundle()
@@ -257,7 +234,7 @@ final class SessionInitFlowTests: XCTestCase {
 
         // msg0: ping
         let msg0 = try alice.encryptString("__session_ping_\(UUID().uuidString)__", to: bob.userId)
-        _ = try bob.initReceivingSession(contactId: alice.userId, senderBundle: aliceBundle, firstMsg: msg0)
+        _ = try bob.initReceivingSession(from: alice, firstMsg: msg0)
 
         // msg1: binary (protobuf-like) payload
         let protobufLike = Data([0x0A, 0x12] + (0..<200).map { UInt8($0 & 0xFF) } + [0xFF, 0xFE, 0xFD])
@@ -271,8 +248,8 @@ final class SessionInitFlowTests: XCTestCase {
     // MARK: 5. Multiple sequential messages after ping
 
     func testSessionFlow_MultipleMessagesAfterPing() throws {
-        let alice = try SessionPeer(userId: "alice-\(UUID().uuidString)")
-        let bob   = try SessionPeer(userId: "bob-\(UUID().uuidString)")
+        let alice = try SessionPeer()
+        let bob   = try SessionPeer()
 
         let aliceBundle = try alice.exportBundle()
         let bobBundle   = try bob.exportBundle()
@@ -280,7 +257,7 @@ final class SessionInitFlowTests: XCTestCase {
         try alice.initSenderSession(to: bob.userId, bundle: bobBundle)
 
         let msg0 = try alice.encryptString("__session_ping_\(UUID().uuidString)__", to: bob.userId)
-        _ = try bob.initReceivingSession(contactId: alice.userId, senderBundle: aliceBundle, firstMsg: msg0)
+        _ = try bob.initReceivingSession(from: alice, firstMsg: msg0)
 
         let messages = [
             "First user message",
@@ -299,8 +276,8 @@ final class SessionInitFlowTests: XCTestCase {
     // MARK: 6. Bidirectional exchange after ping-first init
 
     func testBidirectionalExchange_AfterPingInit() throws {
-        let alice = try SessionPeer(userId: "alice-\(UUID().uuidString)")
-        let bob   = try SessionPeer(userId: "bob-\(UUID().uuidString)")
+        let alice = try SessionPeer()
+        let bob   = try SessionPeer()
 
         let aliceBundle = try alice.exportBundle()
         let bobBundle   = try bob.exportBundle()
@@ -309,7 +286,7 @@ final class SessionInitFlowTests: XCTestCase {
 
         // Session init
         let msg0 = try alice.encryptString("__session_ping_\(UUID().uuidString)__", to: bob.userId)
-        _ = try bob.initReceivingSession(contactId: alice.userId, senderBundle: aliceBundle, firstMsg: msg0)
+        _ = try bob.initReceivingSession(from: alice, firstMsg: msg0)
 
         // Alice → Bob
         let aliceMsg = "Hello from Alice"
@@ -329,8 +306,8 @@ final class SessionInitFlowTests: XCTestCase {
     /// Validates the self-recovery path: END_SESSION causes session wipe on both sides,
     /// then a fresh initSession + initReceivingSession re-establishes E2EE and messages flow.
     func testEndSessionCycle_FreshSessionWorks() throws {
-        let alice = try SessionPeer(userId: "alice-\(UUID().uuidString)")
-        let bob   = try SessionPeer(userId: "bob-\(UUID().uuidString)")
+        let alice = try SessionPeer()
+        let bob   = try SessionPeer()
 
         let aliceBundle = try alice.exportBundle()
         let bobBundle   = try bob.exportBundle()
@@ -338,7 +315,7 @@ final class SessionInitFlowTests: XCTestCase {
         // -- First session --
         try alice.initSenderSession(to: bob.userId, bundle: bobBundle)
         let ping1 = try alice.encryptString("__session_ping_\(UUID().uuidString)__", to: bob.userId)
-        _ = try bob.initReceivingSession(contactId: alice.userId, senderBundle: aliceBundle, firstMsg: ping1)
+        _ = try bob.initReceivingSession(from: alice, firstMsg: ping1)
 
         let firstMsg = "Message before END_SESSION"
         let enc1 = try alice.encryptString(firstMsg, to: bob.userId)
@@ -356,11 +333,7 @@ final class SessionInitFlowTests: XCTestCase {
 
         // Bob's initReceivingSession must succeed on the fresh session even though
         // the first session was already torn down
-        let pingDecrypted = try bob.initReceivingSession(
-            contactId: alice.userId,
-            senderBundle: aliceBundle,
-            firstMsg: ping2
-        )
+        let pingDecrypted = try bob.initReceivingSession(from: alice, firstMsg: ping2)
         XCTAssertTrue(pingDecrypted.hasPrefix("__session_ping"))
 
         let afterResetMsg = "Message after END_SESSION — session fully recovered"
@@ -375,8 +348,8 @@ final class SessionInitFlowTests: XCTestCase {
     /// (session already exists). This guards against race conditions where two concurrent
     /// msgNum=0 messages trigger duplicate session inits.
     func testInitReceivingSession_DoubleInit_IsRejectedOrIdempotent() throws {
-        let alice = try SessionPeer(userId: "alice-\(UUID().uuidString)")
-        let bob   = try SessionPeer(userId: "bob-\(UUID().uuidString)")
+        let alice = try SessionPeer()
+        let bob   = try SessionPeer()
 
         let aliceBundle = try alice.exportBundle()
         let bobBundle   = try bob.exportBundle()
@@ -385,13 +358,13 @@ final class SessionInitFlowTests: XCTestCase {
 
         // First init — must succeed
         let ping1 = try alice.encryptString("__session_ping_\(UUID().uuidString)__", to: bob.userId)
-        _ = try bob.initReceivingSession(contactId: alice.userId, senderBundle: aliceBundle, firstMsg: ping1)
+        _ = try bob.initReceivingSession(from: alice, firstMsg: ping1)
 
         // Second init with the SAME msgNum=0 message — Rust must reject or handle gracefully.
         // We accept either (a) throw or (b) return without corrupting the established session.
         let sessionIntact: Bool
         do {
-            _ = try bob.initReceivingSession(contactId: alice.userId, senderBundle: aliceBundle, firstMsg: ping1)
+            _ = try bob.initReceivingSession(from: alice, firstMsg: ping1)
             // If it didn't throw, verify the session is still functional
             sessionIntact = true
         } catch {
@@ -471,16 +444,14 @@ final class SessionEpochCharacterizationTests: XCTestCase {
         let responderBundle = try responder.exportBundle()
         try initiator.initSenderSession(to: responder.userId, bundle: responderBundle)
         let ping = try initiator.encryptString("__session_ping_\(UUID().uuidString)__", to: responder.userId)
-        _ = try responder.initReceivingSession(
-            contactId: initiator.userId, senderBundle: initiatorBundle, firstMsg: ping
-        )
+        _ = try responder.initReceivingSession(from: initiator, firstMsg: ping)
     }
 
     /// `sessionId` is stable for the lifetime of a session and changes on re-establishment.
     /// This is the Rust-owned generation token Phase 3 will persist + compare.
     func testSessionId_IsStableWithinSession_AndChangesAfterReinit() throws {
-        let alice = try SessionPeer(userId: "alice-\(UUID().uuidString)")
-        let bob   = try SessionPeer(userId: "bob-\(UUID().uuidString)")
+        let alice = try SessionPeer()
+        let bob   = try SessionPeer()
         let aliceBundle = try alice.exportBundle()
 
         try establish(alice, bob)
@@ -494,7 +465,7 @@ final class SessionEpochCharacterizationTests: XCTestCase {
         _ = bob.core.removeSession(contactId: alice.userId)
         try alice.initSenderSession(to: bob.userId, bundle: try bob.exportBundle())
         let ping2 = try alice.encryptString("__session_ping_\(UUID().uuidString)__", to: bob.userId)
-        _ = try bob.initReceivingSession(contactId: alice.userId, senderBundle: aliceBundle, firstMsg: ping2)
+        _ = try bob.initReceivingSession(from: alice, firstMsg: ping2)
 
         let id2 = try XCTUnwrap(bob.core.getSessionHealth(contactId: alice.userId)?.sessionId)
         XCTAssertNotEqual(id1, id2, "A re-established session must present a new sessionId (generation token)")
@@ -505,8 +476,8 @@ final class SessionEpochCharacterizationTests: XCTestCase {
     /// session therefore drops the peer's already-sent messages. If a future refactor ever
     /// makes this decrypt succeed, the assumption underpinning the fix has changed — fail loud.
     func testInFlightOldRatchetMessage_CannotDecryptUnderFreshSession() throws {
-        let alice = try SessionPeer(userId: "alice-\(UUID().uuidString)")
-        let bob   = try SessionPeer(userId: "bob-\(UUID().uuidString)")
+        let alice = try SessionPeer()
+        let bob   = try SessionPeer()
         let aliceBundle = try alice.exportBundle()
 
         try establish(alice, bob)
@@ -519,7 +490,7 @@ final class SessionEpochCharacterizationTests: XCTestCase {
         _ = bob.core.removeSession(contactId: alice.userId)
         try alice.initSenderSession(to: bob.userId, bundle: try bob.exportBundle())
         let ping2 = try alice.encryptString("__session_ping_\(UUID().uuidString)__", to: bob.userId)
-        _ = try bob.initReceivingSession(contactId: alice.userId, senderBundle: aliceBundle, firstMsg: ping2)
+        _ = try bob.initReceivingSession(from: alice, firstMsg: ping2)
 
         // The old-ratchet ciphertext is undecryptable under the fresh session.
         XCTAssertThrowsError(try bob.decrypt(inFlight, from: alice.userId),
@@ -529,8 +500,8 @@ final class SessionEpochCharacterizationTests: XCTestCase {
     /// Fresh session starts with zeroed message counters — pins current health semantics
     /// (Phase 5 may surface these for adaptive timing; lock the baseline now).
     func testFreshSession_HealthCountersStartLow() throws {
-        let alice = try SessionPeer(userId: "alice-\(UUID().uuidString)")
-        let bob   = try SessionPeer(userId: "bob-\(UUID().uuidString)")
+        let alice = try SessionPeer()
+        let bob   = try SessionPeer()
 
         try establish(alice, bob)
         let health = try XCTUnwrap(bob.core.getSessionHealth(contactId: alice.userId))

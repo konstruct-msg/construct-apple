@@ -34,20 +34,20 @@ final class SessionQueueWiringTests: XCTestCase {
     // MARK: - Recording delegate (stands in for SessionCoordinator)
 
     private final class RecordingDelegate: MessageRouterDelegate {
-        var bundleRequests: [String] = []
+        var openRequests: [String] = []
         var endSessionRequests: [String] = []
         var healRequests: [String] = []
         /// The full addresses, kept alongside the account-only arrays above so a test can assert
         /// *which space* the router named a peer in — the property whose absence let a device id
         /// ride a parameter called `userId` all the way into a key-service account lookup.
-        var bundleAddresses: [PeerAddress] = []
+        var openAddresses: [PeerAddress] = []
         var endSessionAddresses: [PeerAddress] = []
         var grantedEndSessionAddresses: [PeerAddress] = []
         var healAddresses: [PeerAddress] = []
 
-        func messageRouter(_ router: MessageRouter, needsPublicKeyBundle peer: PeerAddress, for message: ChatMessage) {
-            bundleRequests.append(peer.account)
-            bundleAddresses.append(peer)
+        func messageRouter(_ router: MessageRouter, canOpenReceiving peer: PeerAddress, for message: ChatMessage) {
+            openRequests.append(peer.account)
+            openAddresses.append(peer)
         }
         func messageRouter(_ router: MessageRouter, needsEndSession peer: PeerAddress) {
             endSessionRequests.append(peer.account)
@@ -174,7 +174,7 @@ final class SessionQueueWiringTests: XCTestCase {
         router.routeIncomingMessage(incoming(from: peer, device: device, msgNum: 0), in: context)
 
         XCTAssertEqual(queuedInCore(device), 1, "First message must wait in the core, under the named device")
-        XCTAssertEqual(delegate.bundleAddresses, [PeerAddress(account: peer, device: device)],
+        XCTAssertEqual(delegate.openAddresses, [PeerAddress(account: peer, device: device)],
                        "The open is asked for once, naming the account and the claimed device")
         XCTAssertTrue(delegate.endSessionRequests.isEmpty)
     }
@@ -188,7 +188,7 @@ final class SessionQueueWiringTests: XCTestCase {
         router.routeIncomingMessage(incoming(from: peer, device: device, msgNum: 2), in: context)
 
         XCTAssertEqual(queuedInCore(device), 3, "All three wait behind the one open")
-        XCTAssertEqual(delegate.bundleRequests.count, 1,
+        XCTAssertEqual(delegate.openRequests.count, 1,
                        "The core's machine grants one open; the rest are queued behind it")
     }
 
@@ -201,7 +201,7 @@ final class SessionQueueWiringTests: XCTestCase {
         router.routeIncomingMessage(incoming(from: peer, device: device, msgNum: 0, pqEpoch: 2), in: context)
 
         XCTAssertEqual(delegate.endSessionRequests, [peer], "Leftover first message must trigger END_SESSION")
-        XCTAssertTrue(delegate.bundleRequests.isEmpty, "Must not fetch a bundle for a mid-session leftover")
+        XCTAssertTrue(delegate.openRequests.isEmpty, "Must not fetch a bundle for a mid-session leftover")
         XCTAssertEqual(queuedInCore(device), 0, "Must not queue an un-initialisable leftover")
     }
 
@@ -216,7 +216,7 @@ final class SessionQueueWiringTests: XCTestCase {
         // coordinator must put it to the teardown window. Arriving as a grant would bypass it.
         XCTAssertTrue(delegate.grantedEndSessionAddresses.isEmpty,
                       "the app's own guard reached the coordinator as the core's grant")
-        XCTAssertTrue(delegate.bundleRequests.isEmpty, "Must not fetch a bundle for a mid-ratchet first message")
+        XCTAssertTrue(delegate.openRequests.isEmpty, "Must not fetch a bundle for a mid-ratchet first message")
         XCTAssertEqual(queuedInCore(device), 0, "Must not queue an un-initialisable message")
     }
 
@@ -229,7 +229,7 @@ final class SessionQueueWiringTests: XCTestCase {
         router.routeIncomingMessage(dup, in: context)
 
         XCTAssertEqual(queuedInCore(device), 1, "Same message id must not be queued twice")
-        XCTAssertEqual(delegate.bundleRequests.count, 1, "Duplicate must not re-request the bundle")
+        XCTAssertEqual(delegate.openRequests.count, 1, "Duplicate must not re-request the bundle")
     }
 
     func testTwoPeers_Isolated() {
@@ -242,7 +242,7 @@ final class SessionQueueWiringTests: XCTestCase {
 
         XCTAssertEqual(queuedInCore(aliceDevice), 1)
         XCTAssertEqual(queuedInCore(bobDevice), 2)
-        XCTAssertEqual(delegate.bundleRequests.sorted(), [alice, bob].sorted(),
+        XCTAssertEqual(delegate.openRequests.sorted(), [alice, bob].sorted(),
                        "Each peer starts its own open exactly once")
     }
 
@@ -256,7 +256,7 @@ final class SessionQueueWiringTests: XCTestCase {
         router.routeIncomingMessage(incoming(from: peer, device: nil, msgNum: 0), in: context)
 
         XCTAssertEqual(delegate.endSessionRequests, [peer], "the sender is asked to restart")
-        XCTAssertTrue(delegate.bundleRequests.isEmpty, "no open is asked for a device nobody named")
+        XCTAssertTrue(delegate.openRequests.isEmpty, "no open is asked for a device nobody named")
         XCTAssertEqual(delegate.endSessionAddresses.first?.device, nil,
                        "the restart goes to the account — there is no device to name")
     }
@@ -289,12 +289,12 @@ final class SessionQueueWiringTests: XCTestCase {
         router.routeIncomingMessage(incoming(from: midRatchet, device: deviceId(), msgNum: 5), in: context)
 
         // Each source proved separately. A union guard cannot tell a driven path from a silent one.
-        XCTAssertEqual(delegate.bundleAddresses.map(\.account), [queued],
+        XCTAssertEqual(delegate.openAddresses.map(\.account), [queued],
                        "the bundle path did not run — everything below would read an empty list")
         XCTAssertEqual(delegate.endSessionAddresses.map(\.account), [midRatchet],
                        "the END_SESSION path did not run — everything below would read an empty list")
 
-        for address in delegate.bundleAddresses + delegate.endSessionAddresses
+        for address in delegate.openAddresses + delegate.endSessionAddresses
             + delegate.grantedEndSessionAddresses + delegate.healAddresses {
             XCTAssertFalse(
                 SessionAddressing.isCryptoIdentity(address.account),

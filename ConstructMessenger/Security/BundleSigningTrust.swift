@@ -28,6 +28,12 @@ enum BundleSigningTrust {
         return raw.compactMap { try? Curve25519.Signing.PublicKey(rawRepresentation: $0) }
     }
 
+    /// The same keys as raw 32-byte Ed25519 public keys, for the core, which checks a sender
+    /// certificate before it opens a session from it.
+    static func trustedKeyBytes() -> [Data] {
+        trustedKeys().map(\.rawRepresentation)
+    }
+
     /// True when any trusted key verifies `signature` over `message`.
     static func verify(signature: Data, over message: Data, keys: [Curve25519.Signing.PublicKey]) -> Bool {
         keys.contains { $0.isValidSignature(signature, for: message) }

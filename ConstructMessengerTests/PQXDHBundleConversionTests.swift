@@ -75,12 +75,10 @@ final class PQXDHBundleConversionTests: XCTestCase {
     /// The same bundle opens a PQXDH v2 session end to end: the initiator through both
     /// conversions, the responder from the packed first message.
     func testAConvertedBundleOpensAV2Session() throws {
-        // Each side names the other by the id that side's core was created with: the AD binds
-        // both local ids, so a session opened under any other name cannot decrypt.
-        let aliceId = "alice-\(UUID().uuidString)"
-        let bobId = "bob-\(UUID().uuidString)"
-        let alice = try freshCore(aliceId)
-        let bob = try freshCore(bobId)
+        // Each side is named by the id its identity key derives to: the AD binds both, and the
+        // responder files the session under the device the sender certificate names.
+        let (alice, aliceId) = try makeTestDevice()
+        let (bob, bobId) = try makeTestDevice()
         let vk = Data(try bob.getRegistrationBundleFields().verifyingKey)
         let bundle = KeyServiceClient.bundleData(try served(by: bob), userId: bobId, verifyingKey: vk)
 
@@ -89,7 +87,7 @@ final class PQXDHBundleConversionTests: XCTestCase {
         XCTAssertEqual(first.kemCiphertext.count, 1568, "the first message carries the ML-KEM-1024 ciphertext")
         XCTAssertEqual(first.kyberPrekeyId, bundle.kyberOneTimePreKeyId, "the one-time key is preferred")
 
-        let result = try bob.pqxdhTestReceive(from: aliceId, senderBundle: try alice.pqxdhTestBundle(), first: first)
+        let result = try bob.pqxdhTestReceive(from: alice, first: first)
         XCTAssertEqual(result.decryptedMessage, Array("hello".utf8))
         XCTAssertNotNil(result.kyberPrekeys, "the used one-time key was burned: the blob to persist comes back")
         XCTAssertEqual(alice.getSessionHealth(contactId: bobId)?.pqHandshake, .initialV2)

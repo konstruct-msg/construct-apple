@@ -44,7 +44,7 @@ final class ReceivingDecryptWalkTests: XCTestCase {
             .healSuppressed(contactId: "dev-a", retryAfterMs: 1000)
         ]))
         XCTAssertFalse(MessageRouter.worthAnotherDevice([
-            .fetchPublicKeyBundle(userId: "acct")
+            .openReceiving(contactId: "dev-a")
         ]))
     }
 

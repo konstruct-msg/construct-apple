@@ -64,9 +64,9 @@ protocol MessageRouterDelegate: AnyObject {
 
     // MARK: - Session initialisation
 
-    /// No DR session exists yet — the caller must fetch the sender's public-key bundle
-    /// and call `initReceivingSession`, then replay `message`.
-    func messageRouter(_ router: MessageRouter, needsPublicKeyBundle peer: PeerAddress, for message: ChatMessage)
+    /// The core holds a message for `peer.device` that can open a session and granted the open:
+    /// ask the core to open it (`open_receiving`). Nothing is fetched.
+    func messageRouter(_ router: MessageRouter, canOpenReceiving peer: PeerAddress, for message: ChatMessage)
 
     /// A tie-break was resolved in our favour — we are the INITIATOR.
     func messageRouter(_ router: MessageRouter, didWinTieBreak peer: PeerAddress)

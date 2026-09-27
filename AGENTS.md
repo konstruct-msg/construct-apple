@@ -193,9 +193,14 @@ did the translation here is exactly the inversion that produced `MultiDeviceSend
 Current known exceptions, with their destination — do not treat them as settled placements:
 the account-keyed `sessionPhases` and the per-scope init locks are the leftover of a coordinator
 that still decides; they belong in the core machine (`decisions/session-is-one-state-machine.md`).
-The confirm-gate hold, the queue of messages waiting for a session and the receiving walk moved
-there on 2026-09-26 — this app keeps envelopes and fetches bundles, and must not grow a second
-queue beside the core's (`decisions/first-contact-queue-keyed-by-claimed-device.md`).
+The confirm-gate hold and the queue of messages waiting for a session moved there on 2026-09-26
+— this app keeps envelopes and must not grow a second queue beside the core's
+(`decisions/first-contact-queue-keyed-by-claimed-device.md`). **Receiving opens fetch nothing**
+since 2026-09-27: a first message opens with the key its sender certificate names, once the core
+has checked the server's signature. This app hands the certificate over with the message
+(`ChatMessage.senderCertificate`) and the server keys before each open; it never fetches the
+sender's bundle to receive, and never walks the sender's devices
+(`decisions/first-message-opens-without-the-server.md`).
 `PeerDevice` is a legitimate local store but is not the authority on a peer's device set. See
 `decisions/a-peer-is-a-set-of-devices.md`.
 

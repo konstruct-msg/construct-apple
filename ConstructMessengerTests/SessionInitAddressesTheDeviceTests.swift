@@ -51,13 +51,13 @@ private final class RecordingCore: OrchestratorCore, @unchecked Sendable {
     override func getSessionSuiteId(contactId: String) -> UInt16 { 3 }
 
     override func initReceivingSessionFromWirePayload(
-        contactId: String,
-        recipientBundle: BinaryKeyBundle,
+        senderCertificate: SenderCertificate,
         wirePayload: [UInt8]
     ) throws -> SessionInitResult {
-        initReceivingContactIds.append(contactId)
+        // The core files the session under the device the certificate names and answers with it.
+        initReceivingContactIds.append(senderCertificate.deviceId)
         return SessionInitResult(
-            sessionId: "session-\(contactId)",
+            sessionId: senderCertificate.deviceId,
             decryptedMessage: Array("hello".utf8),
             storageKey: [],
             kyberPrekeys: nil
@@ -138,6 +138,11 @@ final class SessionInitAddressesTheDeviceTests: XCTestCase {
             kemCiphertext: Data(repeating: 0x77, count: 1568),
             contentType: 0,
             kyberOtpkId: 1_000_004,
+            // Names the bundle's device; the fake core does not check the signature.
+            senderCertificate: SenderCertificate(
+                userId: account, domain: "test.example", identityKey: bundleIdentityKey,
+                deviceId: bundleDevice, issuedAt: 1, expiresAt: 2, signature: Data(repeating: 0x09, count: 64)
+            ),
             // The responder init reads the payload as received; the fake core never parses it.
             rawPayload: Data(repeating: 0x88, count: 64)
         )
@@ -161,17 +166,15 @@ final class SessionInitAddressesTheDeviceTests: XCTestCase {
         let core = RecordingCore()
         var saved: [String] = []
 
-        _ = try CryptoSessionInitializationService().initReceivingSession(
-            for: account,
-            recipientBundle: bundle(),
-            firstMessage: firstMessage(),
+        _ = try CryptoSessionInitializationService().openReceiving(
+            firstMessage(),
             core: core,
             archiveSession: { _, _ in },
             saveSession: { saved.append($0) }
         )
 
         XCTAssertEqual(core.initReceivingContactIds, [bundleDevice],
-                       "premise: the session opens under the bundle's device")
+                       "premise: the session opens under the certificate's device")
         XCTAssertEqual(saved, [bundleDevice],
                        "the persist must name the device the session was opened under — given the "
                        + "account it resolves to the pinned device and exports a session that is not there")
@@ -203,10 +206,8 @@ final class SessionInitAddressesTheDeviceTests: XCTestCase {
         core.sessionExistsFor = [bundleDevice]
         var archived: [String] = []
 
-        _ = try CryptoSessionInitializationService().initReceivingSession(
-            for: account,
-            recipientBundle: bundle(),
-            firstMessage: firstMessage(),
+        _ = try CryptoSessionInitializationService().openReceiving(
+            firstMessage(),
             core: core,
             archiveSession: { peer, _ in archived.append(peer) },
             saveSession: { _ in }

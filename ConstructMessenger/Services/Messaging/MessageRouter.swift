@@ -821,7 +821,7 @@ final class MessageRouter {
                 return
             }
             // Otherwise to the core, under the claimed device, like any other message: with no
-            // session it queues it and answers `.fetchPublicKeyBundle` (or
+            // session it queues it and answers `.openReceiving` (or
             // `.messageQueuedPendingInit` behind an open already under way), handled below.
         }
 
@@ -1092,17 +1092,18 @@ final class MessageRouter {
             delegate?.messageRouter(self, coreGrantedEndSession: peer)
             if isNewChat { context.delete(chat) }
             return
-        case .fetchPublicKeyBundle(let lostDevice):
+        case .openReceiving(let lostDevice):
             // The core queued this message under `lostDevice` — the device the sender certificate
             // named, or the pinned one — and granted the open. First contact and a lost session
-            // alike end here: the core holds the message, this side keeps its envelope, and the
-            // open (`SessionCoordinator.openReceiving`) is asked for the account's bundles.
-            Log.info("SESSION_STATE[first_message]: \(message.id.prefix(8))… msgNum=\(message.messageNumber) queued in the core for \(PeerAddress(account: otherUserId, device: lostDevice)) — fetching bundles", category: "SessionInit")
+            // alike end here: the core holds the message and its certificate, this side keeps its
+            // envelope, and the open (`SessionCoordinator.openReceiving`) asks nothing of the
+            // server — the key comes from the certificate.
+            Log.info("SESSION_STATE[first_message]: \(message.id.prefix(8))… msgNum=\(message.messageNumber) queued in the core for \(PeerAddress(account: otherUserId, device: lostDevice)) — opening", category: "SessionInit")
             SessionActionExecutor.shared.execute(actions)
             holdEnvelopeForCoreQueue(message, otherUserId: otherUserId)
             delegate?.messageRouter(
                 self,
-                needsPublicKeyBundle: PeerAddress(account: otherUserId, device: lostDevice),
+                canOpenReceiving: PeerAddress(account: otherUserId, device: lostDevice),
                 for: message
             )
             // Held in the core until the open drains it or drops it — hold the cursor.
@@ -1186,7 +1187,7 @@ final class MessageRouter {
             case .callSignalDecrypted:           return "callSignalDecrypted"
             case .sessionHealNeeded:             return "sessionHealNeeded"
             case .sendEndSession:                return "sendEndSession"
-            case .fetchPublicKeyBundle:          return "fetchPublicKeyBundle"
+            case .openReceiving:                 return "openReceiving"
             case .saveToSecureStore:             return "saveToSecureStore"
             case .notifyNewMessage:              return "notifyNewMessage"
             case .persistAck:                    return "persistAck"
@@ -1364,7 +1365,8 @@ final class MessageRouter {
             kemCt: message.kemCiphertext,
             otpkId: message.kyberOtpkId,
             isControl: false,
-            contentType: message.contentType
+            contentType: message.contentType,
+            senderCertificate: message.senderCertificate
         )
     }
 
@@ -1414,7 +1416,8 @@ final class MessageRouter {
             kemCt: message.kemCiphertext,
             otpkId: message.kyberOtpkId,
             isControl: false,
-            contentType: message.contentType
+            contentType: message.contentType,
+            senderCertificate: message.senderCertificate
         )
     }
 
@@ -1850,7 +1853,7 @@ final class MessageRouter {
 
     /// What happens to a message with no session **before** it goes to the core — the facts the
     /// core cannot see. `nil` hands it to the core, which queues it under `claimed` and grants the
-    /// open (`.fetchPublicKeyBundle`), or queues it behind an open already under way
+    /// open (`.openReceiving`), or queues it behind an open already under way
     /// (`.messageQueuedPendingInit`).
     ///
     /// This was `handleFirstMessage` until 2026-09-26, which also queued the message in
@@ -2166,7 +2169,8 @@ final class MessageRouter {
                 kemCt: Data(),
                 otpkId: 0,
                 isControl: true,
-                contentType: 0
+                contentType: 0,
+                senderCertificate: nil
             )
             do {
                 let actions = try CryptoManager.shared.handleOrchestratorEvent(event, tag: "sri_archive")
@@ -2196,7 +2200,7 @@ final class MessageRouter {
         holdEnvelopeForCoreQueue(message, otherUserId: userId)
         delegate?.messageRouter(
             self,
-            needsPublicKeyBundle: PeerAddress(account: userId, device: device),
+            canOpenReceiving: PeerAddress(account: userId, device: device),
             for: message
         )
         Log.info("SESSION_RESET_INIT: old session archived, RESPONDER open requested for \(userId.prefix(8))…/\(device.prefix(8))…", category: "MessageRouter")
@@ -2229,7 +2233,8 @@ final class MessageRouter {
                 kemCt: Data(),
                 otpkId: 0,
                 isControl: true,
-                contentType: 0
+                contentType: 0,
+                senderCertificate: nil
             )
             do {
                 let actions = try CryptoManager.shared.handleOrchestratorEvent(event, tag: "end_session_archive")
@@ -2957,25 +2962,14 @@ final class MessageRouter {
                 }
             }
 
-            for contactId in candidates where !CryptoManager.shared.hasSession(for: contactId) {
-                // A candidate that names a device is one a bundle can be fetched for; the plain
-                // `message.from` candidate is an account id and is skipped.
-                //
-                // This used to split the candidate on a colon and require two halves, because a
-                // per-device session key was `<userId>:<deviceId>`. After the addressing flip
-                // there is no colon in any candidate, so that guard skipped every one of them and
-                // the loop established nothing at all — the copy was dropped with the same log
-                // line as a genuinely unrecoverable one. Seen on the three-simulator stand
-                // 2026-08-26, on the first run after the flip.
-                guard SessionAddressing.isCryptoIdentity(contactId) else { continue }
-                await self.initAndDecryptSenderSync(
-                    message: message,
-                    contactId: contactId,
-                    senderDeviceId: contactId,
-                    myUserId: myUserId,
-                    in: context
-                )
-                if CryptoManager.shared.hasSession(for: contactId) { return }
+            // No session opened it, so it is a sibling's first message to us: it opens under the
+            // device its sender certificate names, with the key the certificate names — one
+            // attempt, nothing fetched (`decisions/first-message-opens-without-the-server.md`).
+            // Until 2026-09-27 this walked the own-device candidates and fetched a bundle for
+            // each, because the copy said nothing about which sibling had written it.
+            if let certificate = message.senderCertificate, certificate.userId == myUserId {
+                self.openSenderSync(firstMessage: message, myUserId: myUserId, in: context)
+                if CryptoManager.shared.hasSession(for: certificate.deviceId) { return }
             }
 
             // Reaching here means the copy is unrecoverable. Say so: the previous version ended
@@ -3143,43 +3137,15 @@ final class MessageRouter {
         return id
     }
 
-    /// Async helper: fetch sender device bundle, init receiving session, then save.
-    private func initAndDecryptSenderSync(
-        message: ChatMessage,
-        contactId: String,
-        senderDeviceId: String,
+    /// Open the session a sibling's SENDER_SYNC arrived on, from the copy itself, then route it.
+    private func openSenderSync(
+        firstMessage message: ChatMessage,
         myUserId: String,
         in context: NSManagedObjectContext
-    ) async {
+    ) {
         do {
-            // SENDER_SYNC from one of our own devices. initReceivingSession below uses only
-            // identity / SPK / verifying key — no one-time pre-key — so don't burn one.
-            //
-            // `senderDeviceId` comes from the candidate session key, not from the envelope: the
-            // server does not deliver `sender_device`, so `message.senderDeviceId` is empty here
-            // and this fetch used to ask for a bundle with no device at all.
-            let bundle = try await KeyServiceClient.shared.getPreKeyBundle(
-                userId: message.from,
-                deviceId: senderDeviceId,
-                consumeOneTimePrekey: false
-            )
-            let bundleWithSuite = (
-                identityPublic: bundle.identityPublic,
-                signedPrekeyPublic: bundle.signedPrekeyPublic,
-                signature: bundle.signature,
-                verifyingKey: bundle.verifyingKey,
-                suiteId: String(bundle.suiteId)
-            )
-            let decrypted = try CryptoManager.shared.initReceivingSession(
-                for: contactId,
-                recipientBundle: bundleWithSuite,
-                firstMessage: message,
-                spkUploadedAt: bundle.spkUploadedAt,
-                spkRotationEpoch: bundle.spkRotationEpoch,
-                kyberSpkUploadedAt: bundle.kyberSpkUploadedAt,
-                kyberSpkRotationEpoch: bundle.kyberSpkRotationEpoch
-            )
-            routeOpenedSenderSync(decrypted, original: message, myUserId: myUserId, in: context)
+            let opened = try CryptoManager.shared.openReceiving(singleMessage: message)
+            routeOpenedSenderSync(opened.plaintext, original: message, myUserId: myUserId, in: context)
 
             // Replenish any OTPKs consumed during this session init
             Task {
@@ -3187,7 +3153,7 @@ final class MessageRouter {
                 await OtpkReplenishmentService.replenishIfNeeded(deviceId: deviceId)
             }
         } catch {
-            Log.error("SENDER_SYNC: initReceivingSession failed for \(contactId.prefix(20))…: \(error)", category: "MessageRouter")
+            Log.error("SENDER_SYNC: opening \(message.id.prefix(8))… failed: \(error)", category: "MessageRouter")
         }
     }
 }

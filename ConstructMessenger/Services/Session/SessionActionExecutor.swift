@@ -10,7 +10,7 @@
 /// - `executeOffRouter` — every other event's answer; logs a router-bound action it cannot run
 ///
 /// State-bound actions (`.messageDecrypted`, `.sessionHealNeeded`, `.sendEndSession`,
-/// `.fetchPublicKeyBundle`) still execute inline in `MessageRouter` because they
+/// `.openReceiving`) still execute inline in `MessageRouter` because they
 /// depend on the router's `chunkReassembler`, core envelopes and `delegate`. The
 /// executor `break`s on these cases so the router can handle them after the
 /// `SessionActionExecutor.shared.execute(actions)` call returns.
@@ -83,7 +83,7 @@ final class SessionActionExecutor {
     /// decrypted message is plaintext.
     private static func routerBoundName(_ action: CfeAction) -> String? {
         switch action {
-        case .fetchPublicKeyBundle: return "fetchPublicKeyBundle"
+        case .openReceiving: return "openReceiving"
         case .sessionHealNeeded: return "sessionHealNeeded"
         case .sendEndSession: return "sendEndSession"
         case .messageDecrypted: return "messageDecrypted"
@@ -165,7 +165,7 @@ final class SessionActionExecutor {
         case .notifyLinkedDevicesOfSessionReset(let contactId):
             Task { await MultiDeviceSendCoordinator.shared.broadcastSessionReset(contactId: contactId) }
 
-        case .fetchPublicKeyBundle:
+        case .openReceiving:
             // The router keeps the envelope and asks the coordinator for the open.
             break
 

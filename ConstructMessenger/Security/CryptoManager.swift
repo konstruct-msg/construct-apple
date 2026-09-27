@@ -1154,20 +1154,24 @@ class CryptoManager {
 
     // MARK: - The core's queue of messages waiting for a session
 
-    /// Open a receiving session from what the core holds under `claimedDevice` — the device the
-    /// sender certificate named — against `bundles`, every device of that account. The core plans
-    /// and makes the attempts (`open_receiving`); `nil` only when the core could not be asked.
-    func openReceiving(claimedDevice: String, bundles: [BinaryKeyBundle]) -> ReceivingOpenResult? {
+    /// Open a receiving session from what the core holds under `device`. Each queued message
+    /// opens with the key its own sender certificate names, once the core has checked it — nothing
+    /// is fetched (`decisions/first-message-opens-without-the-server.md`). `nil` only when there is
+    /// no core to ask.
+    func openReceiving(device: String) -> ReceivingOpenResult? {
         coreLock.lock()
-        let result: ReceivingOpenResult?
-        do {
-            result = try orchestratorCore?.openReceiving(claimedDevice: claimedDevice, bundles: bundles)
-        } catch {
-            Log.error("open_receiving refused its bundles for \(claimedDevice.prefix(8))…: \(error)", category: "CryptoOrchestrator")
-            result = nil
-        }
-        coreLock.unlock()
-        return result
+        defer { coreLock.unlock() }
+        guard let core = orchestratorCore else { return nil }
+        handOverTrustedServerKeys(to: core)
+        return core.openReceiving(device: device)
+    }
+
+    /// The server keys a sender certificate is checked against, as this app resolves them (the
+    /// well-known key and the build pins, `BundleSigningTrust`). Handed over before every open
+    /// rather than once: the fetched key can arrive or rotate while the app runs, and a stale copy
+    /// in the core would refuse certificates the app itself accepts. Caller holds `coreLock`.
+    private func handOverTrustedServerKeys(to core: OrchestratorCore) {
+        core.setTrustedServerKeys(keys: BundleSigningTrust.trustedKeyBytes())
     }
 
     /// Queue a SESSION_RESET_INIT to open a session from. It is acknowledged before it is acted on,
@@ -1178,7 +1182,8 @@ class CryptoManager {
             deviceId: deviceId,
             messageId: message.id,
             wirePayload: [UInt8](message.rawPayload),
-            contentType: message.contentType
+            contentType: message.contentType,
+            senderCertificate: message.senderCertificate
         ) ?? []
         coreLock.unlock()
         dispatchHeldReleases(actions)
@@ -1261,49 +1266,30 @@ class CryptoManager {
         return orchestratorCore?.getAllSessionContactIds() ?? []
     }
 
-    /// Initialize a receiving session (for responder/Bob) using sender's bundle + first message.
-    /// Returns the raw decrypted bytes of the first message (KNST frame, protobuf, or UTF-8 control string).
-    /// Callers must decode via `ChunkedMessageReassembler.process(data:)` — do NOT convert to String here.
-    func initReceivingSession(
-        for userId: String,
-        recipientBundle: (identityPublic: Data, signedPrekeyPublic: Data, signature: Data, verifyingKey: Data, suiteId: String),
-        firstMessage: ChatMessage,
-        spkUploadedAt: UInt64 = 0,
-        spkRotationEpoch: UInt32 = 0,
-        kyberSpkUploadedAt: UInt64 = 0,
-        kyberSpkRotationEpoch: UInt32 = 0
-    ) throws -> Data {
+    /// Open a receiving session from one message that does not wait in the core's queue — a
+    /// sibling's SENDER_SYNC — with the key its sender certificate names. Returns the device the
+    /// session opened with and the first message's raw bytes (KNST frame, protobuf or control
+    /// string; callers decode via `ChunkedMessageReassembler.process(data:)`).
+    func openReceiving(singleMessage message: ChatMessage) throws -> (device: String, plaintext: Data) {
+        coreLock.lock()
+        let core = orchestratorCore
+        if let core { handOverTrustedServerKeys(to: core) }
+        coreLock.unlock()
         do {
-            let plaintext = try sessionInitService.initReceivingSession(
-                for: userId,
-                recipientBundle: recipientBundle,
-                firstMessage: firstMessage,
-                spkUploadedAt: spkUploadedAt,
-                spkRotationEpoch: spkRotationEpoch,
-                kyberSpkUploadedAt: kyberSpkUploadedAt,
-                kyberSpkRotationEpoch: kyberSpkRotationEpoch,
-                core: orchestratorCore,
-                archiveSession: { [weak self] userId, reason in
-                    Log.info("Existing session found for \(userId) - archiving before receiving session init to prevent desync", category: "CryptoManager")
-                    self?.archiveSession(for: userId, reason: reason)
+            return try sessionInitService.openReceiving(
+                message,
+                core: core,
+                archiveSession: { [weak self] deviceId, reason in
+                    self?.archiveSession(for: deviceId, reason: reason)
                 },
                 saveSession: { [weak self] deviceId in
                     self?.saveSessionToKeychain(forDevice: deviceId)
                 }
             )
-            Log.info("Receiving session initialized for user: \(userId), decrypted message length: \(plaintext.count)", category: "CryptoManager")
-            return plaintext
-        } catch CryptoManagerError.invalidKeyData {
-            Log.error("Failed to decode base64-encoded keys from bundle", category: "CryptoManager")
-            throw CryptoManagerError.invalidKeyData
-        } catch CryptoManagerError.sessionInitializationFailed {
-            Log.error("Failed to initialize receiving session", category: "CryptoManager")
-            logLocalKeyDiagnostics()
-            throw CryptoManagerError.sessionInitializationFailed
         } catch SessionError.notAHandshakeCarrier {
             throw SessionError.notAHandshakeCarrier
         } catch {
-            Log.error("Unexpected error initializing receiving session: \(error)", category: "CryptoManager")
+            Log.error("Receiving open of \(message.id.prefix(8))… failed: \(error)", category: "CryptoManager")
             logLocalKeyDiagnostics()
             throw CryptoManagerError.sessionInitializationFailed
         }

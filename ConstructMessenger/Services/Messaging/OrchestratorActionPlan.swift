@@ -60,8 +60,8 @@ struct OrchestratorActionPlan {
                 return .sessionHealNeeded(contactId: contactId, role: role)
             case .sendEndSession(let contactId):
                 return .sendEndSession(contactId: contactId)
-            case .fetchPublicKeyBundle(let userId):
-                return .fetchPublicKeyBundle(userId: userId)
+            case .openReceiving(let contactId):
+                return .openReceiving(contactId: contactId)
             case .endSessionSuppressed(let contactId, let retryAfterMs):
                 return .endSessionSuppressed(contactId: contactId, retryAfterMs: retryAfterMs)
             case .healSuppressed(let contactId, let retryAfterMs):
@@ -91,7 +91,8 @@ enum IncomingRoutingVerdict: Equatable {
     case callSignalDecrypted
     case sessionHealNeeded(contactId: String, role: String)
     case sendEndSession(contactId: String)
-    case fetchPublicKeyBundle(userId: String)
+    /// A message waits for a session with `contactId` and can open one — no bundle is fetched.
+    case openReceiving(contactId: String)
     case endSessionSuppressed(contactId: String, retryAfterMs: UInt64)
     case healSuppressed(contactId: String, retryAfterMs: UInt64)
     /// Neither heal nor tear down: our own SESSION_RESET_INIT to this **device** has not been

@@ -21,7 +21,7 @@ extension CryptoManager {
 
         if actions.contains(where: { action in
             switch action {
-            case .sendEndSession, .sessionHealNeeded, .fetchPublicKeyBundle, .openSession,
+            case .sendEndSession, .sessionHealNeeded, .openReceiving, .openSession,
                  .resendSri, .healExhausted:
                 return true
             default:
@@ -36,8 +36,8 @@ extension CryptoManager {
 
     func orchestratorEventSummary(_ event: CfeIncomingEvent) -> String {
         switch event {
-        case .messageReceived(let messageId, let from, let data, let msgNum, _, let otpkId, let isControl, let contentType):
-            return "messageReceived from=\(from.prefix(8))… msgId=\(messageId.prefix(8))… msgNum=\(msgNum) ct=\(contentType) control=\(isControl) data=\(data.count)B otpkId=\(otpkId)"
+        case .messageReceived(let messageId, let from, let data, let msgNum, _, let otpkId, let isControl, let contentType, let certificate):
+            return "messageReceived from=\(from.prefix(8))… msgId=\(messageId.prefix(8))… msgNum=\(msgNum) ct=\(contentType) control=\(isControl) data=\(data.count)B otpkId=\(otpkId) sealed=\(certificate != nil)"
         case .outgoingMessage(let contactId, let messageId, let plaintextUtf8, let contentType):
             return "outgoingMessage to=\(contactId.prefix(8))… msgId=\(messageId.prefix(8))… ct=\(contentType) plaintext=\(plaintextUtf8.count)ch"
         case .outgoingCallSignal(let contactId, let messageId, let protoBytes):
@@ -86,7 +86,7 @@ extension CryptoManager {
             case .saveToSecureStore: labels.insert("save")
             case .sessionHealNeeded:        labels.insert("heal")
             case .sendEndSession:           labels.insert("end_session")
-            case .fetchPublicKeyBundle:     labels.insert("fetch_bundle")
+            case .openReceiving:            labels.insert("open_receiving")
             case .openSession:              labels.insert("open_session")
             case .openDeferred:             labels.insert("open_deferred")
             case .openNotNeeded:            labels.insert("open_not_needed")

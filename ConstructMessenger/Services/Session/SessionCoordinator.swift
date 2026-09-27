@@ -680,15 +680,12 @@ final class SessionCoordinator: MessageRouterDelegate {
 
     // MARK: - MessageRouterDelegate
 
-    /// `peer.device` is deliberately dropped: a bundle fetch and the RESPONDER init that follows
-    /// it are account-shaped — the fetch returns the account's whole device set and
-    /// `plan_receiving_init` decides which of them the carrier binds. Before the seam this method
-    /// took whatever the core had named, and on the `.fetchPublicKeyBundle` path that was a device
-    /// id, which the key service answers `notFound: "User or device not found"` for.
-    func messageRouter(_ router: MessageRouter, needsPublicKeyBundle peer: PeerAddress, for message: ChatMessage) {
+    /// `peer.device` is the device the core queued the message under — the one its sender
+    /// certificate names — and the open is that device's alone.
+    func messageRouter(_ router: MessageRouter, canOpenReceiving peer: PeerAddress, for message: ChatMessage) {
         Task { @MainActor [weak self] in
             guard let self else { return }
-            await self.handlePublicKeyBundleNeeded(peer: peer, message: message)
+            await self.handleReceivingOpen(peer: peer, message: message)
         }
     }
 
@@ -814,9 +811,8 @@ final class SessionCoordinator: MessageRouterDelegate {
         }
     }
 
-    /// Account-shaped for the same reason as `needsPublicKeyBundle`: healing re-runs the
-    /// RESPONDER init, which fetches the account's bundle. The device the core named is on
-    /// `peer.device`, and it is `handleRustHealDecision` — not this — that archives its session.
+    /// The device the core named is on `peer.device`; the heal opens from the carrier the core
+    /// queued for it, with the key its sender certificate names.
     func messageRouter(_ router: MessageRouter, needsSessionHeal peer: PeerAddress, failedMessage: ChatMessage) {
         Task { @MainActor [weak self] in
             guard let self else { return }
@@ -1197,58 +1193,26 @@ final class SessionCoordinator: MessageRouterDelegate {
     private enum ReceivingOpenOutcome {
         /// A session exists with `device`, opened from `openerId`.
         case opened(device: String, openerId: String)
-        /// Nothing opened. `tried` were proven unopenable against every bundle of the account; the
-        /// rest of the core's queue was dropped and is already released.
+        /// Nothing opened. `tried` were refused or proven unopenable; the rest of the core's queue
+        /// was dropped and is already released.
         case failed(tried: [String], lastError: String?)
-        /// The server has no such account.
-        case peerGone
-        /// The bundles could not be fetched, or the core not asked. Nothing was spent; what waits,
-        /// waits for the redelivery.
+        /// The core could not be asked, or could not check a certificate yet (no server key).
+        /// Nothing was spent; what waits, waits for the redelivery.
         case unreachable
     }
 
-    /// Open a receiving session from what the core holds under `peer.device` — the device the
-    /// sender certificate named — against every device of `peer.account`.
+    /// Ask the core to open a receiving session from what it holds for `peer.device`.
     ///
-    /// The one walk for first contact and heal alike, and the core makes it (`open_receiving`):
-    /// the carriers are its own queue, the plan is `plan_receiving_init`, the attempts are its
-    /// own, and the session is filed under the device the opening bundle derives to. What this
-    /// side still owns is the account → bundles lookup, the SPK replay guard, and saving what the
-    /// open decrypted — through `resolveCoreDrain`, the same path a drain takes, against the
-    /// envelope the router kept. Until 2026-09-26 this was `walkReceivingPlan` over
-    /// `PendingSessionQueue`: the platform held the carriers and made the attempts.
+    /// First contact and heal alike, and nothing is fetched: each queued message opens with the
+    /// key its sender certificate names (`decisions/first-message-opens-without-the-server.md`).
+    /// Until 2026-09-27 this fetched the account's bundles and the core walked every carrier
+    /// against every device; the bundle fetch also told the server whom the sealed message was from.
     private func openReceiving(_ peer: PeerAddress, site: String) async -> ReceivingOpenOutcome {
         let userId = peer.account
-        guard let claimed = peer.device, !claimed.isEmpty else {
+        guard let device = peer.device, !device.isEmpty else {
             return .failed(tried: [], lastError: nil)
         }
-        let candidates: [PublicKeyBundleData]
-        do {
-            let fetchStart = Date()
-            // The claimed device goes first; the plan still crosses every carrier with every
-            // bundle, so a wrong claim costs one attempt.
-            candidates = try await publicKeyBundleHandler.responderBundleCandidates(
-                userId: userId, namedDevice: claimed
-            )
-            Log.info("SESSION_STATE[bundle_fetched]: userId=\(userId.prefix(8))..., devices=\(candidates.count), duration=\(String(format: "%.2f", Date().timeIntervalSince(fetchStart)))s", category: "SessionInit")
-        } catch SessionError.peerNotFound {
-            return .peerGone
-        } catch {
-            Log.error("SESSION_STATE[bundle_fetch_failed]: userId=\(userId.prefix(8))..., error=\(error.localizedDescription)", category: "SessionInit")
-            return .unreachable
-        }
-
-        // A bundle whose SPK epoch is older than one already seen for this account is a replay.
-        let knownEpoch = KeychainManager.shared.loadSpkEpoch(for: userId)
-        let bundles = candidates.filter { $0.spkRotationEpoch == 0 || $0.spkRotationEpoch >= knownEpoch }
-        if bundles.count < candidates.count {
-            Log.error("SESSION_STATE[spk_replay_rejected_responder]: \(candidates.count - bundles.count) bundle(s) below known epoch \(knownEpoch) for \(userId.prefix(8))… — possible SPK replay attack", category: "SessionInit")
-        }
-
-        guard let result = CryptoManager.shared.openReceiving(
-            claimedDevice: claimed,
-            bundles: bundles.map { $0.binaryKeyBundle() }
-        ) else {
+        guard let result = CryptoManager.shared.openReceiving(device: device) else {
             return .unreachable
         }
         if let kyberPrekeys = result.kyberPrekeys {
@@ -1257,52 +1221,52 @@ final class SessionCoordinator: MessageRouterDelegate {
         // The archive of a replaced session, the save, the opener and what drained behind it.
         messageRouter.resolveCoreDrain(result.actions, site: site)
 
-        guard let device = result.openedDevice, let openerId = result.openerMessageId else {
+        guard let opened = result.openedDevice, let openerId = result.openerMessageId else {
+            if result.awaitingServerKey {
+                Log.error("SESSION_STATE[open_receiving_awaiting_server_key]: \(peer) — no server key to check the sender certificate with; the redelivery retries", category: "SessionInit")
+                return .unreachable
+            }
             let reason = result.lastError ?? ""
             Log.info(
-                "SESSION_STATE[open_receiving_failed]: \(peer) — \(result.triedMessageIds.count) carrier(s) × \(bundles.count) device(s), \(result.droppedMessageIds.count) dropped; last: \(reason)",
+                "SESSION_STATE[open_receiving_failed]: \(peer) — \(result.triedMessageIds.count) carrier(s) tried, \(result.droppedMessageIds.count) dropped; last: \(reason)",
                 category: "SessionInit"
             )
             if reason.contains("PQXDH_REQUIRED") {
                 Log.error("SESSION_STATE[pqxdh_required]: \(userId.prefix(8))… — sender is not on PQXDH v2", category: "SessionInit")
             } else if reason.contains("PQXDH_KEY_UNAVAILABLE") {
                 Log.error("SESSION_STATE[pqxdh_key_unavailable]: \(userId.prefix(8))… — \(reason)", category: "SessionInit")
+            } else if reason.hasPrefix("SENDER_") {
+                Log.error("SESSION_STATE[sender_certificate_refused]: \(peer) — \(reason)", category: "SessionInit")
             }
             if reason.contains("cannot reproduce") {
                 Log.info("SESSION_STATE[otpk_unreproducible]: \(userId.prefix(8))… — will request 3-DH re-init via END_SESSION", category: "SessionInit")
                 SessionReinitHintStore.shared.recordResponderOtpkUnreproducible(for: userId)
             }
-            // Every bundle the account has refused a carrier: the repair is for our own keys
-            // being out of step with what the server serves.
-            if !result.triedMessageIds.isEmpty {
+            // A carrier whose sender the core vouched for still refused: our own keys are out of
+            // step with what the server serves. A refused certificate says nothing about ours.
+            if !result.triedMessageIds.isEmpty, !reason.hasPrefix("SENDER_") {
                 Task { await PreKeyRotationService.shared.verifyAndRepairKeyConsistency() }
             }
             messageRouter.releaseCoreQueued(result.droppedMessageIds)
             return .failed(tried: result.triedMessageIds, lastError: result.lastError)
         }
 
-        if let opened = bundles.first(where: {
-            SessionAddressing.cryptoIdentity(ofIdentityKey: $0.identityPublic) == device
-        }), opened.spkRotationEpoch > 0 {
-            KeychainManager.shared.saveSpkEpoch(opened.spkRotationEpoch, for: userId)
-        }
-        let suite = CryptoManager.shared.sessionSuiteId(forDevice: device)
+        let suite = CryptoManager.shared.sessionSuiteId(forDevice: opened)
         if suite > 0 {
-            KeychainManager.shared.saveSessionSuiteId(userId: device, suiteId: suite)
+            KeychainManager.shared.saveSessionSuiteId(userId: opened, suiteId: suite)
         }
         Log.info(
-            "SESSION_STATE[open_receiving]: \(userId.prefix(8))…/\(device.prefix(8))… opened from \(openerId.prefix(8))…" + (device == claimed ? "" : " (certificate named \(claimed.prefix(8))…)"),
+            "SESSION_STATE[open_receiving]: \(userId.prefix(8))…/\(opened.prefix(8))… opened from \(openerId.prefix(8))…",
             category: "SessionInit"
         )
-        return .opened(device: device, openerId: openerId)
+        return .opened(device: opened, openerId: openerId)
     }
 
-    private func handlePublicKeyBundleNeeded(peer: PeerAddress, message: ChatMessage) async {
+    private func handleReceivingOpen(peer: PeerAddress, message: ChatMessage) async {
         let userId = peer.account
-        // Peer-wide, and that is not the seam being dropped: the open tries every device bundle of
-        // the account and files the session under the one that opens, so until it answers this
-        // operation can open a ratchet with any of them.
-        let scope = SessionScope.wholePeer(userId)
+        // The one device the open touches. It was the whole peer while the open walked every
+        // device bundle of the account and could file the session under any of them.
+        let scope = SessionScope(peer)
         if isInitializing(scope) {
             Log.info("Session init already in progress for \(scope), skipping duplicate attempt", category: "SessionInit")
             return
@@ -1337,19 +1301,14 @@ final class SessionCoordinator: MessageRouterDelegate {
                 await self?.emitHandshakeControls(.becameResponder, to: readyTo)
             }
         case .failed(let tried, _):
-            // Nothing to open from is the same give-up as a carrier that would not open, minus
-            // the bundle fetch it did not need; both owe the peer a restart.
+            // Nothing to open from is the same give-up as a carrier that would not open; both owe
+            // the peer a restart.
             Log.info("initReceivingSession failed — giving up for \(userId.prefix(8))…", category: "SessionInit")
             giveUpInit(
                 for: userId,
                 blamedMessageIds: tried.isEmpty ? [message.id] : tried,
                 metricLabel: tried.isEmpty ? "no_handshake_carrier" : "init_fail"
             )
-        case .peerGone:
-            // Terminal. Retrying is what turned one deleted account into a three-week cursor
-            // stall; the give-up releases the queue and the watermark with it.
-            Log.info("SESSION_STATE[init_abandoned_peer_gone]: \(userId.prefix(8))… — server has no such user", category: "SessionInit")
-            giveUpInit(for: userId, blamedMessageIds: [message.id], metricLabel: "peer_not_found")
         case .unreachable:
             break
         }
@@ -1368,7 +1327,7 @@ final class SessionCoordinator: MessageRouterDelegate {
             return
         }
         let endInit = beginInit(scope)
-        Log.info("SESSION_STATE[heal_start]: fetching fresh bundle for \(scope)", category: "SessionInit")
+        Log.info("SESSION_STATE[heal_start]: opening from the queued carrier for \(scope)", category: "SessionInit")
         defer {
             endInit()
             Log.debug("Heal lock released for \(scope)", category: "SessionInit")
@@ -1406,13 +1365,13 @@ final class SessionCoordinator: MessageRouterDelegate {
         }
         let unreachable: Bool
         switch outcome {
-        case .unreachable, .peerGone: unreachable = true
+        case .unreachable: unreachable = true
         default: unreachable = false
         }
         let otpkUnreproducible = SessionReinitHintStore.shared.consumeResponderOtpkUnreproducible(for: userId)
         do {
             if unreachable {
-                try await sendEndSession(to: userId, reason: "heal_bundle_unreachable")
+                try await sendEndSession(to: userId, reason: "heal_open_unreachable")
             } else {
                 try await sendEndSession(
                     to: userId,

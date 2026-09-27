@@ -21,12 +21,18 @@ final class CryptoWireIntegrationTests: XCTestCase {
         let core: OrchestratorCore
         let userId: String
 
-        init(userId: String) throws {
-            self.userId = userId
+        /// Named by the id its identity key derives to, as a real device is. `localUserId` names it
+        /// anything else — only for the test of an initiator that signs its AD with the wrong id.
+        init(localUserId: String? = nil) throws {
             // Bootstrap: generate fresh device keys via ClassicCryptoCore, then
             // migrate to OrchestratorCore (matches the production init path).
             let bootstrap = try createCryptoCore()
             let keys = try bootstrap.exportPrivateKeys()
+            let derived = deriveDeviceId(
+                identityPublicKey: try bootstrap.getRegistrationBundleFields().identityPublic
+            )
+            let userId = localUserId ?? derived
+            self.userId = userId
             self.core = try createOrchestratorCoreFromKeys(keysData: keys, myUserId: userId)
         }
 
@@ -67,15 +73,11 @@ final class CryptoWireIntegrationTests: XCTestCase {
             return String(data: Data(plaintextData.plaintext), encoding: .utf8) ?? ""
         }
 
-        /// Initialize receiving session from first wire-encoded message, the payload as received.
-        func initReceiverSession(from contactId: String,
-                                  senderBundle: BinaryKeyBundle,
-                                  wirePayload: Data) throws -> String {
-            let result = try core.initReceivingSessionFromWirePayload(
-                contactId: contactId,
-                recipientBundle: senderBundle,
-                wirePayload: [UInt8](wirePayload)
-            )
+        /// Initialize the receiving session from the first wire-encoded message, the payload as
+        /// received, with `sender`'s certificate — the key it names is the key the session opens
+        /// with, under the device it names.
+        func initReceiverSession(from sender: CryptoPeer, wirePayload: Data) throws -> String {
+            let result = try core.pqxdhTestReceive(from: sender.core, wirePayload: [UInt8](wirePayload))
             return String(bytes: result.decryptedMessage, encoding: .utf8) ?? "__binary_init__"
         }
 
@@ -102,10 +104,9 @@ final class CryptoWireIntegrationTests: XCTestCase {
     // MARK: - Full Wire Pipeline: Alice → Bob
 
     func testFullWirePipelineAliceToBob() throws {
-        let alice = try CryptoPeer(userId: "alice-uuid-001")
-        let bob   = try CryptoPeer(userId: "bob-uuid-002")
+        let alice = try CryptoPeer()
+        let bob   = try CryptoPeer()
 
-        let aliceBundle = try alice.bundle()
         let bobBundle   = try bob.bundle()
 
         // Alice initiates session
@@ -120,11 +121,7 @@ final class CryptoWireIntegrationTests: XCTestCase {
         XCTAssertGreaterThan(wirePayload.count, WirePayloadCoder.headerSize)
 
         // Bob receives and decrypts from wire
-        let decrypted1 = try bob.initReceiverSession(
-            from: alice.userId,
-            senderBundle: aliceBundle,
-            wirePayload: wirePayload
-        )
+        let decrypted1 = try bob.initReceiverSession(from: alice, wirePayload: wirePayload)
         XCTAssertEqual(decrypted1, plaintext1, "First message through full wire pipeline")
     }
 
@@ -132,8 +129,8 @@ final class CryptoWireIntegrationTests: XCTestCase {
 
     /// The strict initiator path must reject a peer whose SPK is past the 30-day staleness limit.
     func testStrictInitRejectsStaleSPK() throws {
-        let alice = try CryptoPeer(userId: "alice-uuid-stale-1")
-        let bob   = try CryptoPeer(userId: "bob-uuid-stale-1")
+        let alice = try CryptoPeer()
+        let bob   = try CryptoPeer()
         let bobBundle = try bob.bundle()
 
         XCTAssertThrowsError(
@@ -148,8 +145,8 @@ final class CryptoWireIntegrationTests: XCTestCase {
 
     /// The degraded initiator path must accept the same stale bundle the strict path rejects.
     func testDegradedInitAcceptsStaleSPK() throws {
-        let alice = try CryptoPeer(userId: "alice-uuid-stale-2")
-        let bob   = try CryptoPeer(userId: "bob-uuid-stale-2")
+        let alice = try CryptoPeer()
+        let bob   = try CryptoPeer()
         let bobBundle = try bob.bundle()
 
         XCTAssertNoThrow(
@@ -161,9 +158,8 @@ final class CryptoWireIntegrationTests: XCTestCase {
     /// A degraded session must be fully functional end-to-end through the wire pipeline when the
     /// peer still holds its SPK private key (the lost-SPK case falls through to session healing).
     func testDegradedSessionFullWirePipeline() throws {
-        let alice = try CryptoPeer(userId: "alice-uuid-stale-3")
-        let bob   = try CryptoPeer(userId: "bob-uuid-stale-3")
-        let aliceBundle = try alice.bundle()
+        let alice = try CryptoPeer()
+        let bob   = try CryptoPeer()
         let bobBundle   = try bob.bundle()
 
         // Bob has been offline 35 days → only the degraded path can reach him.
@@ -173,19 +169,14 @@ final class CryptoWireIntegrationTests: XCTestCase {
         let components = try alice.encryptRaw(plaintext, to: bob.userId)
         let wirePayload = try alice.encodeWire(components)
 
-        let decrypted = try bob.initReceiverSession(
-            from: alice.userId,
-            senderBundle: aliceBundle,
-            wirePayload: wirePayload
-        )
+        let decrypted = try bob.initReceiverSession(from: alice, wirePayload: wirePayload)
         XCTAssertEqual(decrypted, plaintext, "degraded-init first message must decrypt over the wire")
     }
 
     func testFullWirePipelineBidirectional() throws {
-        let alice = try CryptoPeer(userId: "alice-uuid-001")
-        let bob   = try CryptoPeer(userId: "bob-uuid-002")
+        let alice = try CryptoPeer()
+        let bob   = try CryptoPeer()
 
-        let aliceBundle = try alice.bundle()
         let bobBundle   = try bob.bundle()
 
         // Setup: Alice → Bob first message
@@ -193,7 +184,7 @@ final class CryptoWireIntegrationTests: XCTestCase {
         let firstComponents = try alice.encryptRaw("Message 1 from Alice", to: bob.userId)
         let firstWire = try alice.encodeWire(firstComponents)
 
-        _ = try bob.initReceiverSession(from: alice.userId, senderBundle: aliceBundle, wirePayload: firstWire)
+        _ = try bob.initReceiverSession(from: alice, wirePayload: firstWire)
 
         // Bob → Alice: reply using the existing session (initReceiverSession already set it up)
         // initSenderSession here would overwrite Bob's session with wrong key material
@@ -213,8 +204,8 @@ final class CryptoWireIntegrationTests: XCTestCase {
 
     func testWirePayloadIsOpaqueToServer() throws {
         // The server sees only the wire payload bytes — verify no plaintext leaks
-        let alice = try CryptoPeer(userId: "alice-uuid-001")
-        let bob   = try CryptoPeer(userId: "bob-uuid-002")
+        let alice = try CryptoPeer()
+        let bob   = try CryptoPeer()
         let bobBundle = try bob.bundle()
 
         try alice.initSenderSession(to: bob.userId, recipientBundle: bobBundle)
@@ -238,10 +229,9 @@ final class CryptoWireIntegrationTests: XCTestCase {
     // MARK: - Multiple Messages via Wire
 
     func testMultipleMessagesViaWire() throws {
-        let alice = try CryptoPeer(userId: "alice-uuid-001")
-        let bob   = try CryptoPeer(userId: "bob-uuid-002")
+        let alice = try CryptoPeer()
+        let bob   = try CryptoPeer()
 
-        let aliceBundle = try alice.bundle()
         let bobBundle   = try bob.bundle()
 
         try alice.initSenderSession(to: bob.userId, recipientBundle: bobBundle)
@@ -249,7 +239,7 @@ final class CryptoWireIntegrationTests: XCTestCase {
         // First message establishes Bob's session
         let firstComp = try alice.encryptRaw("First", to: bob.userId)
         let firstWire = try alice.encodeWire(firstComp)
-        let first = try bob.initReceiverSession(from: alice.userId, senderBundle: aliceBundle, wirePayload: firstWire)
+        let first = try bob.initReceiverSession(from: alice, wirePayload: firstWire)
         XCTAssertEqual(first, "First")
 
         // Subsequent messages
@@ -265,8 +255,8 @@ final class CryptoWireIntegrationTests: XCTestCase {
     // MARK: - Wire Format Integrity
 
     func testWirePayloadHeaderSize() throws {
-        let alice = try CryptoPeer(userId: "alice-uuid-001")
-        let bob   = try CryptoPeer(userId: "bob-uuid-002")
+        let alice = try CryptoPeer()
+        let bob   = try CryptoPeer()
         let bobBundle = try bob.bundle()
 
         try alice.initSenderSession(to: bob.userId, recipientBundle: bobBundle)
@@ -283,8 +273,8 @@ final class CryptoWireIntegrationTests: XCTestCase {
     }
 
     func testWirePayloadMessageNumberIncrements() throws {
-        let alice = try CryptoPeer(userId: "alice-uuid-001")
-        let bob   = try CryptoPeer(userId: "bob-uuid-002")
+        let alice = try CryptoPeer()
+        let bob   = try CryptoPeer()
         let bobBundle = try bob.bundle()
         try alice.initSenderSession(to: bob.userId, recipientBundle: bobBundle)
 
@@ -305,10 +295,9 @@ final class CryptoWireIntegrationTests: XCTestCase {
     // MARK: - Tamper Resistance
 
     func testTamperedWirePayloadFailsDecryption() throws {
-        let alice = try CryptoPeer(userId: "alice-uuid-001")
-        let bob   = try CryptoPeer(userId: "bob-uuid-002")
+        let alice = try CryptoPeer()
+        let bob   = try CryptoPeer()
 
-        let aliceBundle = try alice.bundle()
         let bobBundle   = try bob.bundle()
 
         try alice.initSenderSession(to: bob.userId, recipientBundle: bobBundle)
@@ -316,7 +305,7 @@ final class CryptoWireIntegrationTests: XCTestCase {
         let comp = try alice.encryptRaw("Hello", to: bob.userId)
         let wirePayload = try alice.encodeWire(comp)
 
-        _ = try bob.initReceiverSession(from: alice.userId, senderBundle: aliceBundle, wirePayload: wirePayload)
+        _ = try bob.initReceiverSession(from: alice, wirePayload: wirePayload)
 
         // Send second message, then tamper with the sealed box itself. Not by a wire offset: until
         // Bob answers, Alice's messages still carry the PQXDH v2 header, and a fixed offset past
@@ -343,17 +332,16 @@ final class CryptoWireIntegrationTests: XCTestCase {
     }
 
     func testTamperedMessageNumberFailsDecryption() throws {
-        let alice = try CryptoPeer(userId: "alice-uuid-001")
-        let bob   = try CryptoPeer(userId: "bob-uuid-002")
+        let alice = try CryptoPeer()
+        let bob   = try CryptoPeer()
 
-        let aliceBundle = try alice.bundle()
         let bobBundle   = try bob.bundle()
 
         try alice.initSenderSession(to: bob.userId, recipientBundle: bobBundle)
 
         let comp = try alice.encryptRaw("Hello", to: bob.userId)
         let firstWire = try alice.encodeWire(comp)
-        _ = try bob.initReceiverSession(from: alice.userId, senderBundle: aliceBundle, wirePayload: firstWire)
+        _ = try bob.initReceiverSession(from: alice, wirePayload: firstWire)
 
         // Second message — tamper with message_number in wire payload
         let comp2 = try alice.encryptRaw("Second", to: bob.userId)
@@ -396,160 +384,67 @@ final class ADIdentityTests: XCTestCase {
         XCTAssertNotEqual(serverUUID.rawValue, deviceHash.rawValue)
     }
 
-    // MARK: - Regression: full session with production-format UUIDs (the fixed path)
+    // MARK: - A session is between two device ids
 
-    /// Full two-party exchange using production-format server UUIDs (36-char with dashes).
-    /// This is the FIXED behaviour — the exact scenario that was always broken before the fix.
-    func testFullSessionSucceedsWithProductionUUIDs() throws {
-        // Real-looking server UUIDs (same format as production IDs).
-        let aliceId = "14f28d31-2dab-44aa-a123-456789abcdef"
-        let bobId   = "81f02199-8374-48f8-8a5f-549434ccc53f"
+    /// A full exchange between two devices, each named by the id its identity key derives to — the
+    /// ids the AD binds on both sides. The responder does not choose the name: the sender
+    /// certificate names the device, and the core checks the key derives to it.
+    func testFullSessionSucceedsWithDerivedDeviceIds() throws {
+        let alice = try Peer()
+        let bob   = try Peer()
 
-        let alice = try Peer(userId: aliceId)
-        let bob   = try Peer(userId: bobId)
+        try alice.initSenderSession(to: bob.userId, recipientBundle: try bob.bundle())
+        let firstWire = try alice.encodeWire(try alice.encryptRaw("Hello Bob", to: bob.userId))
+        XCTAssertEqual(try bob.initReceiverSession(from: alice, wirePayload: firstWire), "Hello Bob")
+        XCTAssertTrue(bob.core.hasSession(contactId: alice.userId), "filed under the certified device")
 
-        let aliceBundle = try alice.bundle()
-        let bobBundle   = try bob.bundle()
+        let replyWire = try bob.encodeWire(try bob.encryptRaw("Hi Alice", to: alice.userId))
+        XCTAssertEqual(try alice.decodeAndDecrypt(replyWire, from: bob.userId), "Hi Alice")
 
-        // Alice initiates
-        try alice.initSenderSession(to: bobId, recipientBundle: bobBundle)
-        let firstComponents = try alice.encryptRaw("Hello Bob - UUID session!", to: bobId)
-        let firstWire = try alice.encodeWire(firstComponents)
-
-        // Bob receives first message
-        let decrypted1 = try bob.initReceiverSession(
-            from: aliceId, senderBundle: aliceBundle, wirePayload: firstWire)
-        XCTAssertEqual(decrypted1, "Hello Bob - UUID session!", "First message must decrypt")
-
-        // Bob replies
-        let replyComponents = try bob.encryptRaw("Hi Alice - UUID reply!", to: aliceId)
-        let replyWire = try bob.encodeWire(replyComponents)
-        let decrypted2 = try alice.decodeAndDecrypt(replyWire, from: bobId)
-        XCTAssertEqual(decrypted2, "Hi Alice - UUID reply!", "Reply must decrypt")
-
-        // Continue the conversation (several ratchet steps)
-        for i in 0..<5 {
-            let msg = try alice.encryptRaw("Alice msg \(i)", to: bobId)
-            let wire = try alice.encodeWire(msg)
-            let dec = try bob.decodeAndDecrypt(wire, from: aliceId)
-            XCTAssertEqual(dec, "Alice msg \(i)")
-        }
-    }
-
-    // MARK: - Bug reproduction: device-hash local_user_id vs UUID contact_id
-
-    /// Reproduces the original production bug.
-    /// Alice's OrchestratorCore was initialised with a 32-char device-hash (old broken path).
-    /// Bob knows Alice by her 36-char server UUID.
-    /// AD bytes mismatch → `initReceivingSession` MUST throw.
-    func testSessionFailsWhenInitiatorUsesDeviceHashAsUserId() throws {
-        // Alice (buggy): userId = 32-char hex device-hash (old `cryptoLocalUserId` behaviour)
-        let aliceDeviceHash = "6f5e37ac88bd2cc53348f01f78cdf5db" // 32 hex chars, no dashes
-        // Bob's contact-list entry for Alice: server UUID (what the server hands out)
-        let aliceServerUUID = "14f28d31-2dab-44aa-a123-456789abcdef"
-        let bobId           = "81f02199-8374-48f8-8a5f-549434ccc53f"
-
-        XCTAssertEqual(aliceDeviceHash.count, 32, "Precondition: device hash is 32 chars")
-        XCTAssertEqual(aliceServerUUID.count, 36, "Precondition: server UUID is 36 chars")
-
-        // Alice Peer initialised with device hash — this is the broken state.
-        let aliceBuggy = try Peer(userId: aliceDeviceHash)
-        let bob        = try Peer(userId: bobId)
-
-        let aliceBundle = try aliceBuggy.bundle()
-        let bobBundle   = try bob.bundle()
-
-        try aliceBuggy.initSenderSession(to: bobId, recipientBundle: bobBundle)
-        let firstComponents = try aliceBuggy.encryptRaw("This AEAD tag will not verify", to: bobId)
-        let firstWire = try aliceBuggy.encodeWire(firstComponents)
-
-        // Bob tries to init session, but knows Alice by server UUID — AD MUST mismatch.
-        XCTAssertThrowsError(
-            try bob.initReceiverSession(
-                from: aliceServerUUID, // Bob's contact_id for Alice = UUID
-                senderBundle: aliceBundle,
-                wirePayload: firstWire),
-            "AEAD must fail: initiator used device-hash (32 hex) but responder expects UUID (36 chars)"
-        )
-    }
-
-    /// Complementary: when Bob's contact_id for Alice matches what Alice used as local_user_id,
-    /// even with a non-UUID format, the session succeeds.
-    /// This confirms the invariant is FORMAT CONSISTENCY, not UUID enforcement.
-    func testSessionSucceedsWhenBothSidesUseConsistentNonUUIDIds() throws {
-        let aliceId = "alice-node-id-in-mesh"
-        let bobId   = "bob-node-id-in-mesh"
-
-        let alice = try Peer(userId: aliceId)
-        let bob   = try Peer(userId: bobId)
-
-        let aliceBundle = try alice.bundle()
-        let bobBundle   = try bob.bundle()
-
-        try alice.initSenderSession(to: bobId, recipientBundle: bobBundle)
-        let firstComponents = try alice.encryptRaw("consistent IDs work", to: bobId)
-        let firstWire = try alice.encodeWire(firstComponents)
-
-        // Bob uses the same aliceId that Alice used as her local_user_id → formats match.
-        let decrypted = try bob.initReceiverSession(
-            from: aliceId, senderBundle: aliceBundle, wirePayload: firstWire)
-        XCTAssertEqual(decrypted, "consistent IDs work")
-    }
-
-    // MARK: - Edge cases
-
-    /// AD binds sender identity: Bob must reject a message he receives but attributes to Carol.
-    func testSessionFailsWhenContactIdAttributedToWrongUser() throws {
-        let aliceId = "14f28d31-2dab-44aa-a123-456789abcdef"
-        let carolId = "99999999-0000-0000-0000-111111111111"
-        let bobId   = "81f02199-8374-48f8-8a5f-549434ccc53f"
-
-        let alice = try Peer(userId: aliceId)
-        let bob   = try Peer(userId: bobId)
-
-        let aliceBundle = try alice.bundle()
-        let bobBundle   = try bob.bundle()
-
-        try alice.initSenderSession(to: bobId, recipientBundle: bobBundle)
-        let firstComponents = try alice.encryptRaw("only for bob", to: bobId)
-        let firstWire = try alice.encodeWire(firstComponents)
-
-        // Bob processes the message as if it came from Carol — AD mismatch.
-        XCTAssertThrowsError(
-            try bob.initReceiverSession(
-                from: carolId, // WRONG — should be aliceId
-                senderBundle: aliceBundle,
-                wirePayload: firstWire),
-            "AD must bind sender identity: wrong contact_id attribution must fail"
-        )
-    }
-
-    /// Multi-message conversation must stay in sync across DH ratchet steps.
-    /// Verifies that the UUID-based AD doesn't break ratchet advancement.
-    func testLongConversationWithUUIDIdsStaysInSync() throws {
-        let aliceId = "14f28d31-2dab-44aa-a123-456789abcdef"
-        let bobId   = "81f02199-8374-48f8-8a5f-549434ccc53f"
-
-        let alice = try Peer(userId: aliceId)
-        let bob   = try Peer(userId: bobId)
-
-        let aliceBundle = try alice.bundle()
-        let bobBundle   = try bob.bundle()
-
-        try alice.initSenderSession(to: bobId, recipientBundle: bobBundle)
-        let firstWire = try alice.encodeWire(try alice.encryptRaw("msg0", to: bobId))
-        _ = try bob.initReceiverSession(from: aliceId, senderBundle: aliceBundle, wirePayload: firstWire)
-
-        // 10 rounds of alternating messages (triggers multiple DH ratchet steps)
+        // Alternating messages: several DH ratchet steps.
         for i in 1...10 {
-            let aMsg = "alice-\(i)"
-            let aWire = try alice.encodeWire(try alice.encryptRaw(aMsg, to: bobId))
-            XCTAssertEqual(try bob.decodeAndDecrypt(aWire, from: aliceId), aMsg)
-
-            let bMsg = "bob-\(i)"
-            let bWire = try bob.encodeWire(try bob.encryptRaw(bMsg, to: aliceId))
-            XCTAssertEqual(try alice.decodeAndDecrypt(bWire, from: bobId), bMsg)
+            let aWire = try alice.encodeWire(try alice.encryptRaw("alice-\(i)", to: bob.userId))
+            XCTAssertEqual(try bob.decodeAndDecrypt(aWire, from: alice.userId), "alice-\(i)")
+            let bWire = try bob.encodeWire(try bob.encryptRaw("bob-\(i)", to: alice.userId))
+            XCTAssertEqual(try alice.decodeAndDecrypt(bWire, from: bob.userId), "bob-\(i)")
         }
+    }
+
+    // MARK: - Bug reproduction: an initiator that signs its AD with another id
+
+    /// The original production bug, in its current form. Alice's core was created with her
+    /// account's server UUID as its local id; the responder files the session under the device her
+    /// certificate names. The AD bytes differ and the first message MUST NOT open.
+    func testSessionFailsWhenInitiatorUsesAnAccountIdAsItsLocalId() throws {
+        let aliceBuggy = try Peer(localUserId: "14f28d31-2dab-44aa-a123-456789abcdef")
+        let bob        = try Peer()
+
+        try aliceBuggy.initSenderSession(to: bob.userId, recipientBundle: try bob.bundle())
+        let firstWire = try aliceBuggy.encodeWire(
+            try aliceBuggy.encryptRaw("This AEAD tag will not verify", to: bob.userId)
+        )
+
+        XCTAssertThrowsError(
+            try bob.initReceiverSession(from: aliceBuggy, wirePayload: firstWire),
+            "AEAD must fail: the initiator bound an account id, the responder the certified device"
+        )
+    }
+
+    /// A certificate for another device does not open Alice's message: the session would be keyed
+    /// to Carol's identity, and the handshake Alice ran does not derive with it.
+    func testACertificateForAnotherDeviceDoesNotOpenTheMessage() throws {
+        let alice = try Peer()
+        let carol = try Peer()
+        let bob   = try Peer()
+
+        try alice.initSenderSession(to: bob.userId, recipientBundle: try bob.bundle())
+        let firstWire = try alice.encodeWire(try alice.encryptRaw("only for bob", to: bob.userId))
+
+        XCTAssertThrowsError(
+            try bob.initReceiverSession(from: carol, wirePayload: firstWire),
+            "the key the certificate names is the key the session opens with"
+        )
+        XCTAssertFalse(bob.core.hasSession(contactId: carol.userId), "nothing left behind")
     }
 
     // MARK: - Migration guard

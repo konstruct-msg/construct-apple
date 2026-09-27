@@ -106,183 +106,73 @@ final class CryptoSessionInitializationService {
         }
     }
 
-    func initReceivingSession(
-        for userId: String,
-        recipientBundle: (identityPublic: Data, signedPrekeyPublic: Data, signature: Data, verifyingKey: Data, suiteId: String),
-        firstMessage: ChatMessage,
-        spkUploadedAt: UInt64 = 0,
-        spkRotationEpoch: UInt32 = 0,
-        kyberSpkUploadedAt: UInt64 = 0,
-        kyberSpkRotationEpoch: UInt32 = 0,
+    /// Open a receiving session from `message` alone, with the key its sender certificate names —
+    /// the core checks the certificate; nothing is fetched. For a message that does not wait in the
+    /// core's queue (a sibling's SENDER_SYNC); everything else opens through `open_receiving`.
+    func openReceiving(
+        _ message: ChatMessage,
         core: OrchestratorCore?,
         archiveSession: (String, ArchiveReason) -> Void,
         saveSession: (String) -> Void
-    ) throws -> Data {
-        guard let core = core else {
+    ) throws -> (device: String, plaintext: Data) {
+        guard let core else {
             throw CryptoManagerError.coreNotInitialized
         }
-
-        // The peer's device is named by the key in this bundle, not by what the contact list
-        // knows: at first contact there is no pinned key yet, and first contact is when X3DH runs.
-        // A bundle with no usable identity key names nobody, and a session cannot be opened with
-        // nobody — better to fail here than to open one under an account id.
-        guard let contactId = SessionAddressing.cryptoIdentity(ofIdentityKey: recipientBundle.identityPublic)
-            ?? SessionAddressing.pinnedDevice(ofPeer: userId) else {
-            Log.error("Session init: cannot name a device for \(userId.prefix(8))… — bundle carries no usable identity key", category: "CryptoManager")
+        guard let certificate = message.senderCertificate else {
+            Log.error("SESSION_STATE[init_refused_unsealed]: \(message.id.prefix(8))… — no sender certificate to open from", category: "SessionInit")
             throw CryptoManagerError.invalidKeyData
         }
-
-        if core.hasSession(contactId: contactId) {
-            // `contactId`, not `userId`: the line above asked about **this** device and this is
-            // what puts its answer away. Passed the account instead, the archive resolves through
-            // the pinned key and reaches a different device of the same peer — or, right after a
-            // prune, none at all (`archiveSession: … has no pinned key — nothing addressed to
-            // archive`, measured 2026-09-06 12:29:37 while the core held the session it was
-            // being asked about).
-            archiveSession(contactId, .manualReset)
-        }
-
-        guard let suiteID = UInt16(recipientBundle.suiteId) else {
-            Log.error("Invalid suiteId: \(recipientBundle.suiteId)", category: "CryptoManager")
-            throw CryptoManagerError.invalidKeyData
-        }
-
-        let sealedBox = firstMessage.content
-        guard sealedBox.count >= 12 else {
-            Log.error("First message sealed box too short (\(sealedBox.count) bytes)", category: "CryptoManager")
-            throw CryptoManagerError.invalidKeyData
-        }
-
         let initKind = SessionReducer.receivingInitKind(
-            messageNumber: firstMessage.messageNumber,
-            oneTimePreKeyId: firstMessage.oneTimePreKeyId,
-            kemCiphertextBytes: firstMessage.kemCiphertext.count,
-            pqMessageEpoch: firstMessage.pqMessageEpoch,
-            isSessionResetInit: firstMessage.isSessionResetInit
+            messageNumber: message.messageNumber,
+            oneTimePreKeyId: message.oneTimePreKeyId,
+            kemCiphertextBytes: message.kemCiphertext.count,
+            pqMessageEpoch: message.pqMessageEpoch,
+            isSessionResetInit: message.isSessionResetInit
         )
         guard initKind == .handshake else {
             Log.error(
-                "SESSION_STATE[init_refused_not_handshake]: \(userId.prefix(8))… kind=\(initKind) msgNum=\(firstMessage.messageNumber) otpk=\(firstMessage.oneTimePreKeyId) kem=\(firstMessage.kemCiphertext.count)B epoch=\(firstMessage.pqMessageEpoch)",
-                category: "CryptoManager"
+                "SESSION_STATE[init_refused_not_handshake]: \(message.id.prefix(8))… kind=\(initKind) msgNum=\(message.messageNumber)",
+                category: "SessionInit"
             )
             throw SessionError.notAHandshakeCarrier
         }
-
-        #if DEBUG
-        Log.debug("RESPONDER bundle: ik=\(recipientBundle.identityPublic.count)B spk=\(recipientBundle.signedPrekeyPublic.count)B suite=\(suiteID)", category: "CryptoManager")
-        Log.debug("ik_prefix: \(recipientBundle.identityPublic.prefix(8).hexString)", category: "CryptoManager")
-        Log.debug("eph_prefix: \(firstMessage.ephemeralPublicKey.prefix(8).hexString)", category: "CryptoManager")
-        Log.debug("msgNum: \(firstMessage.messageNumber) sealedBox: \(sealedBox.count)B oneTimePrekeyId: \(firstMessage.oneTimePreKeyId) kemCiphertext: \(firstMessage.kemCiphertext.count)B kyberOtpkId: \(firstMessage.kyberOtpkId)", category: "CryptoManager")
-        #endif
-
-        // Epoch replay-attack check for RESPONDER: same logic as INITIATOR path.
-        // We are fetching the SENDER's bundle — reject it if epoch has not advanced.
-        if spkRotationEpoch > 0 {
-            let knownEpoch = KeychainManager.shared.loadSpkEpoch(for: userId)
-            if spkRotationEpoch < knownEpoch {
-                Log.error("SESSION_STATE[spk_replay_rejected_responder]: epoch=\(spkRotationEpoch) < known=\(knownEpoch) for \(userId.prefix(8))… — possible SPK replay attack", category: "SessionInit")
-                throw SessionError.staleSPKBundle(epoch: spkRotationEpoch, knownEpoch: knownEpoch)
-            }
-            KeychainManager.shared.saveSpkEpoch(spkRotationEpoch, for: userId)
+        guard !message.rawPayload.isEmpty else {
+            Log.error("SESSION_STATE[init_refused_no_payload]: \(message.id.prefix(8))… — first message without its wire payload", category: "SessionInit")
+            throw CryptoManagerError.invalidKeyData
         }
 
-        let bundle = BinaryKeyBundle(
-            identityPublic: [UInt8](recipientBundle.identityPublic),
-            signedPrekeyPublic: [UInt8](recipientBundle.signedPrekeyPublic),
-            signature: [UInt8](recipientBundle.signature),
-            verifyingKey: [UInt8](recipientBundle.verifyingKey),
-            suiteId: suiteID,
-            oneTimePrekeyPublic: nil,
-            oneTimePrekeyId: nil,
-            spkUploadedAt: spkUploadedAt,
-            spkRotationEpoch: spkRotationEpoch,
-            kyberSpkUploadedAt: kyberSpkUploadedAt,
-            kyberSpkRotationEpoch: kyberSpkRotationEpoch,
-            // The sender's Kyber keys play no part in a responder init: the KEM ran against
-            // *our* Kyber prekey, which the message names by id.
-            kyberPreKeyPublic: nil,
-            kyberOneTimePrekeyPublic: nil,
-            kyberOneTimePrekeyId: nil
-        )
-
-        // The first message as the envelope carried it. The core unpacks it, so the PQXDH v2
-        // flag, the Kyber prekey id, the KEM ciphertext and the suite-3 tags all reach the
-        // responder init; none of them is copied here. (Dropping two of those in a copy was the
-        // suite-3 outage, and v2 would have added three more to the copy.)
-        guard !firstMessage.rawPayload.isEmpty else {
-            Log.error("SESSION_STATE[init_refused_no_payload]: \(userId.prefix(8))… — first message without its wire payload", category: "CryptoManager")
-            throw CryptoManagerError.invalidKeyData
+        // The device is the one the certificate names; the core refuses the open if its key does
+        // not derive to it. What is held for that device now is archived, not dropped.
+        if core.hasSession(contactId: certificate.deviceId) {
+            archiveSession(certificate.deviceId, .manualReset)
         }
 
         do {
             let result = try core.initReceivingSessionFromWirePayload(
-                contactId: contactId,
-                recipientBundle: bundle,
-                wirePayload: [UInt8](firstMessage.rawPayload)
+                senderCertificate: certificate,
+                wirePayload: [UInt8](message.rawPayload)
             )
             // The init burned a one-time Kyber key: persist the store now, or the key comes back
             // on the next launch and a replayed first message could open a second session on it.
             if let kyberPrekeys = result.kyberPrekeys {
                 KyberPrekeyService.persist(blob: kyberPrekeys)
             }
-
-            let plaintext = result.decryptedMessage
-            // Never log the decrypted body itself. Release is protected by os_log's private-by-
-            // default `%@` and by LogCollector being off, but INTERNAL_TOOLS builds persist this
-            // line to a rotating file the user can export via DiagnosticLogShare — message
-            // plaintext must not be in it. Length alone is enough to diagnose an init.
-            Log.info("Session initialized successfully, decrypted \(plaintext.count)B", category: "CryptoManager")
-
-            // The negotiated suite (3), which the core took from the message header.
-            let negotiatedSuite = core.getSessionSuiteId(contactId: contactId)
-            KeychainManager.shared.saveSessionSuiteId(userId: contactId, suiteId: negotiatedSuite > 0 ? negotiatedSuite : suiteID)
-
-            // `contactId`, for the reason this whole function names a device rather than an
-            // account: the session was opened under the key in the bundle, and `saveSession`
-            // exports by the name it is given. Handed `userId` it resolves through the pinned
-            // key, asks the core for a session that device does not have, and writes nothing —
-            // `Session export failed: SessionNotFound` — while every log line around it says the
-            // init succeeded. Measured 2026-09-06 on three of three inits that opened against a
-            // device other than the pinned one, and on none of the inits that did not.
-            //
-            // The suite id above was already written under `contactId`. That is how far apart
-            // the two halves of one fact had drifted.
-            saveSession(contactId)
-
-            return Data(plaintext)
-        } catch {
-            Log.error("Rust core initReceivingSession failed: \(error)", category: "CryptoManager")
-            Log.error("Error type: \(type(of: error))", category: "CryptoManager")
-            Log.error("userId: \(userId)", category: "CryptoManager")
-            // Preserve the OTPK-unreproducible signal BEFORE the specific Rust message is dropped by
-            // the generic rethrow below. The SessionCoordinator init-failure path only sees
-            // `CryptoManagerError.sessionInitializationFailed` (message lost), so without this it
-            // sends a plain END_SESSION and the sender loops 4-DH forever. Recording the hint here
-            // (mirroring PublicKeyBundleHandler) lets SessionCoordinator ask the peer to re-init via
-            // 3-DH instead. See device-link crypto storm postmortem.
-            let reason = "\(error)"
-            if reason.contains("PQXDH_REQUIRED") {
-                // A first message without the v2 handshake: the sender's build predates the
-                // cutover. Nothing to repair on our side.
-                Log.error("SESSION_STATE[pqxdh_required]: \(userId.prefix(8))… — sender is not on PQXDH v2", category: "SessionInit")
-            } else if reason.contains("PQXDH_KEY_UNAVAILABLE") {
-                // The Kyber prekey it names is gone (a one-time key already used, a signed prekey
-                // past its 14 days). The sender's next init fetches a fresh bundle, so the plain
-                // teardown the caller sends is the repair; the 3-DH hint below is about the
-                // classic one-time key and does not apply.
-                Log.error("SESSION_STATE[pqxdh_key_unavailable]: \(userId.prefix(8))… — \(reason)", category: "SessionInit")
+            let device = result.sessionId
+            let suite = core.getSessionSuiteId(contactId: device)
+            if suite > 0 {
+                KeychainManager.shared.saveSessionSuiteId(userId: device, suiteId: suite)
             }
+            saveSession(device)
+            // Never log the body: INTERNAL_TOOLS builds persist this line to an exportable file.
+            Log.info("SESSION_STATE[open_receiving_single]: \(device.prefix(8))… opened from \(message.id.prefix(8))…, \(result.decryptedMessage.count)B", category: "SessionInit")
+            return (device, Data(result.decryptedMessage))
+        } catch {
+            let reason = "\(error)"
+            Log.error("SESSION_STATE[open_receiving_single_failed]: \(message.id.prefix(8))… — \(reason)", category: "SessionInit")
             if reason.contains("cannot reproduce") {
-                Log.info("SESSION_STATE[otpk_unreproducible]: \(userId.prefix(8))… — will request 3-DH re-init via END_SESSION", category: "SessionInit")
-                SessionReinitHintStore.shared.recordResponderOtpkUnreproducible(for: userId)
+                SessionReinitHintStore.shared.recordResponderOtpkUnreproducible(for: message.from)
             }
             throw CryptoManagerError.sessionInitializationFailed
         }
-    }
-}
-
-private extension Data {
-    var hexString: String {
-        map { String(format: "%02x", $0) }.joined()
     }
 }

@@ -267,8 +267,8 @@ final class MultiDeviceSendCoordinator {
     /// Separate accessor rather than a filter at each call site, because the set already had two
     /// consumers that filter (`senderSyncPeerIdentityKeys` here, `DeviceDeliveryPlan.targets` via
     /// its explicit `ourDeviceId`) and one that did not — the SENDER_SYNC candidate list. There it
-    /// is not a wasted comparison: a candidate with no session sends the receive path to
-    /// `initAndDecryptSenderSync`, which fetches a bundle over the network and runs X3DH, so this
+    /// is not a wasted comparison: until 2026-09-27 a candidate with no session sent the receive
+    /// path to `initAndDecryptSenderSync`, which fetched a bundle over the network and ran X3DH, so this
     /// device listed as its own sibling costs one key-service request and one guaranteed AEAD
     /// failure per sync copy. 2026-09-03, Desktop's first minute after linking:
     ///

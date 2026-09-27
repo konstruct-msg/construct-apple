@@ -75,6 +75,12 @@ struct ChatMessage: Codable, Identifiable {
     /// peer's devices, and `senderSyncSessionCandidates` puts it first.
     var senderDeviceId: String = ""
 
+    /// The sender certificate this message was sealed with, as unsealed and unchecked; `nil` for
+    /// a message that was not sealed. Handed to the core with the message: it is the only thing a
+    /// first message can open a session from (`SenderCertificate::identity_for_opening` in the
+    /// core). Not persisted — see `CodingKeys`.
+    var senderCertificate: SenderCertificate? = nil
+
     /// Canonical conversation ID from the envelope (e.g. "direct:{a}:{b}").
     /// Required for SENDER_SYNC routing — identifies the original conversation
     /// even when `from` and `to` are both the current user.
@@ -152,6 +158,8 @@ struct ChatMessage: Codable, Identifiable {
             pqRatchetField: pqRatchetField,
             // replaced: the relay blanks `sender_device`, the certificate carries it sealed
             senderDeviceId: resolved.senderDeviceId,
+            // added: the core opens a first message's session from it
+            senderCertificate: resolved.senderCertificate,
             conversationId: conversationId,
             replyToMessageId: replyToMessageId,
             rawPayload: rawPayload
@@ -174,6 +182,9 @@ extension ChatMessage {
         case serverOrderKey
         case pqMessageEpoch, pqRatchetField
         case senderDeviceId, conversationId, replyToMessageId, rawPayload
+        // `senderCertificate` deliberately absent: a decoded message is a stored one, and a stored
+        // message never opens a session — what waits for an open waits in memory, beside the
+        // core's queue, and a redelivery is unsealed again.
     }
 
     init(from decoder: Decoder) throws {

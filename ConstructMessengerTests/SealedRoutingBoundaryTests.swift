@@ -22,6 +22,14 @@ import CoreData
 import SwiftProtobuf
 @testable import Construct_Messenger
 
+/// Stands in for an unsealed certificate: the boundary carries it, the core checks it.
+private func stubCertificate(account: String, device: String) -> SenderCertificate {
+    SenderCertificate(
+        userId: account, domain: "test.example", identityKey: Data(repeating: 0x07, count: 32),
+        deviceId: device, issuedAt: 1, expiresAt: 2, signature: Data(repeating: 0x09, count: 64)
+    )
+}
+
 @MainActor
 final class SealedRoutingBoundaryTests: XCTestCase {
 
@@ -35,7 +43,7 @@ final class SealedRoutingBoundaryTests: XCTestCase {
         var endSessionStaleQueries: [PeerAddress] = []
         var endSessionRequests: [String] = []
 
-        func messageRouter(_ router: MessageRouter, needsPublicKeyBundle peer: PeerAddress, for message: ChatMessage) {}
+        func messageRouter(_ router: MessageRouter, canOpenReceiving peer: PeerAddress, for message: ChatMessage) {}
         func messageRouter(_ router: MessageRouter, needsEndSession peer: PeerAddress) {
             endSessionRequests.append(peer.account)
         }
@@ -208,7 +216,8 @@ final class SealedRoutingBoundaryTests: XCTestCase {
             senderId: peer,
             senderDeviceId: senderDevice,
             contentType: contentType,
-            trust: .vouched(.signature)
+            trust: .vouched(.signature),
+            senderCertificate: stubCertificate(account: peer, device: senderDevice)
         )
         )
     }
@@ -307,9 +316,12 @@ final class SealedRebuildFieldPreservationTests: XCTestCase {
             senderId: peer,
             senderDeviceId: senderDevice,
             contentType: contentType,
-            trust: .vouched(.signature)
+            trust: .vouched(.signature),
+            senderCertificate: certificate
         )
     }
+
+    private var certificate: SenderCertificate { stubCertificate(account: peer, device: senderDevice) }
 
     // MARK: The regression
 
@@ -364,6 +376,13 @@ final class SealedRebuildFieldPreservationTests: XCTestCase {
                        "the sending device must come from the certificate, not the blanked envelope")
         XCTAssertNotEqual(rebuilt.senderDeviceId, carrier.senderDeviceId,
                           "carrying the outer value through would name the wrong session")
+    }
+
+    /// The certificate crosses the boundary: it is the only thing a first message can open a
+    /// session from. Dropped here, every first contact would be refused as unsealed.
+    func testTheCertificateCrossesTheBoundary() {
+        let rebuilt = sealedCarrier().resolvingSealedSender(resolved(), currentUserId: me)
+        XCTAssertEqual(rebuilt.senderCertificate, certificate)
     }
 
     func testContentTypeAndKindComeFromTheSealedInner() {

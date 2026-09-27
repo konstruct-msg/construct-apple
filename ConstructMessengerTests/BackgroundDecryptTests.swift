@@ -21,11 +21,11 @@ final class BackgroundDecryptTests: XCTestCase {
         let core: OrchestratorCore
         let userId: String
 
-        init(userId: String) throws {
-            self.userId = userId
-            let bootstrap = try createCryptoCore()
-            let keys = try bootstrap.exportPrivateKeys()
-            self.core = try createOrchestratorCoreFromKeys(keysData: keys, myUserId: userId)
+        /// Named by the id its identity key derives to, as a real device is.
+        init() throws {
+            let device = try makeTestDevice()
+            self.core = device.core
+            self.userId = device.deviceId
         }
 
         /// This device's bundle as the server serves it after PQXDH v2 (`PQXDHTestBundles`).
@@ -42,15 +42,10 @@ final class BackgroundDecryptTests: XCTestCase {
             return try WirePayloadCoder.encode(swiftComps)
         }
 
-        /// Bob path: establish receiving session from a wire payload + sender's binary bundle.
+        /// Bob path: establish the receiving session from a wire payload and the sender's
+        /// certificate. The payload as received: the core unpacks the PQXDH v2 header itself.
         func initReceiver(from sender: Peer, wirePayload: Data) throws {
-            let bundle = try sender.binaryBundle()
-            // The payload as received: the core unpacks the PQXDH v2 header itself.
-            _ = try core.initReceivingSessionFromWirePayload(
-                contactId: sender.userId,
-                recipientBundle: bundle,
-                wirePayload: [UInt8](wirePayload)
-            )
+            _ = try core.pqxdhTestReceive(from: sender.core, wirePayload: [UInt8](wirePayload))
         }
 
         /// Encrypt a subsequent message (after session established) and return raw components.
@@ -90,8 +85,8 @@ final class BackgroundDecryptTests: XCTestCase {
     /// 4. Verifies: error returned, no plaintext, session still healthy afterwards.
     /// 5. Bob can still decrypt a later valid message — DR state was not corrupted.
     func testBatchDecryptFailurePreservesSession() throws {
-        let alice = try Peer(userId: "alice-\(UUID().uuidString)")
-        let bob   = try Peer(userId: "bob-\(UUID().uuidString)")
+        let alice = try Peer()
+        let bob   = try Peer()
 
         // ── Establish session: Alice → Bob ─────────────────────────────────────
         let firstWire = try alice.initAndEncryptFirst("ping", to: bob)
@@ -138,8 +133,8 @@ final class BackgroundDecryptTests: XCTestCase {
 
     /// Multiple corrupted messages in a single batch — all fail, session survives every one.
     func testBatchDecryptMultipleFailuresPreservesSession() throws {
-        let alice = try Peer(userId: "alice-\(UUID().uuidString)")
-        let bob   = try Peer(userId: "bob-\(UUID().uuidString)")
+        let alice = try Peer()
+        let bob   = try Peer()
 
         let firstWire = try alice.initAndEncryptFirst("ping", to: bob)
         try bob.initReceiver(from: alice, wirePayload: firstWire)

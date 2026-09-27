@@ -31,11 +31,11 @@ private final class OrchestratorPeer {
     let core: OrchestratorCore
     let userId: String
 
-    init(userId: String) throws {
-        self.userId = userId
-        let bootstrap = try createCryptoCore()
-        let keys = try bootstrap.exportPrivateKeys()
-        self.core = try createOrchestratorCoreFromKeys(keysData: keys, myUserId: userId)
+    /// Named by the id its identity key derives to, as a real device is.
+    init() throws {
+        let device = try makeTestDevice()
+        self.core = device.core
+        self.userId = device.deviceId
     }
 
     // MARK: Bundle
@@ -53,10 +53,9 @@ private final class OrchestratorPeer {
         _ = try core.initSession(contactId: contactId, recipientBundle: bundle)
     }
 
-    func initReceiverSession(from contactId: String,
-                             senderBundle: Bundle,
+    func initReceiverSession(from sender: OrchestratorPeer,
                              firstMsg: EncryptedMessageComponents) throws {
-        _ = try core.pqxdhTestReceive(from: contactId, senderBundle: senderBundle, first: firstMsg)
+        _ = try core.pqxdhTestReceive(from: sender.core, first: firstMsg)
     }
 
     // MARK: Low-level encrypt (for session bootstrap)
@@ -98,7 +97,8 @@ private final class OrchestratorPeer {
             kemCt: decoded.kemCiphertext ?? Data(),
             otpkId: decoded.oneTimePreKeyId,
             isControl: false,
-            contentType: contentType
+            contentType: contentType,
+            senderCertificate: nil
         ))
 
         // Rust ACK-cache miss after restart: respond synchronously and use the follow-up actions.
@@ -136,14 +136,13 @@ private enum PeerError: Error, CustomStringConvertible {
 /// After this returns, both peers have an active DR session and can exchange messages via handleEvent.
 private func establishSession(alice: OrchestratorPeer,
                               bob: OrchestratorPeer) throws {
-    let aliceBundle = try alice.exportBundle()
     let bobBundle   = try bob.exportBundle()
 
     try alice.initSenderSession(to: bob.userId, bundle: bobBundle)
 
-    // Alice sends a ping as msgNum=0 so Bob can call initReceivingSession.
+    // Alice sends a ping as msgNum=0; Bob opens the session from it and her certificate.
     let firstMsg = try alice.encryptMessage("ping", to: bob.userId)
-    try bob.initReceiverSession(from: alice.userId, senderBundle: aliceBundle, firstMsg: firstMsg)
+    try bob.initReceiverSession(from: alice, firstMsg: firstMsg)
 }
 
 // MARK: - Tests
@@ -155,8 +154,8 @@ final class CallSignalE2EETests: XCTestCase {
     /// Regression: outgoingCallSignal MUST produce sendEncryptedMessage with contentType=12.
     /// If contentType is wrong, the receiver cannot route the signal to CallManager.
     func testOutgoingCallSignal_ProducesContentType12() throws {
-        let alice = try OrchestratorPeer(userId: "alice-\(UUID().uuidString)")
-        let bob   = try OrchestratorPeer(userId: "bob-\(UUID().uuidString)")
+        let alice = try OrchestratorPeer()
+        let bob   = try OrchestratorPeer()
         try establishSession(alice: alice, bob: bob)
 
         let protoBytes = Data("fake-sdp-offer-proto".utf8)
@@ -190,8 +189,8 @@ final class CallSignalE2EETests: XCTestCase {
     /// This test verifies the Rust side: callSignalDecrypted IS returned and
     /// messageDecrypted is NOT. The Swift side fix is covered by the routing loop change.
     func testReceiverGetsCallSignalDecrypted_NotMessageDecrypted() throws {
-        let alice = try OrchestratorPeer(userId: "alice-\(UUID().uuidString)")
-        let bob   = try OrchestratorPeer(userId: "bob-\(UUID().uuidString)")
+        let alice = try OrchestratorPeer()
+        let bob   = try OrchestratorPeer()
         try establishSession(alice: alice, bob: bob)
 
         let wirePayload = try alice.sendCallSignal(to: bob.userId,
@@ -218,8 +217,8 @@ final class CallSignalE2EETests: XCTestCase {
     /// The proto bytes sent by the caller must arrive unchanged at the callee.
     /// These bytes are the serialised WebRTCSignal proto (SDP offer or ICE candidate).
     func testCallSignalProtoBytesPreservedEndToEnd() throws {
-        let alice = try OrchestratorPeer(userId: "alice-\(UUID().uuidString)")
-        let bob   = try OrchestratorPeer(userId: "bob-\(UUID().uuidString)")
+        let alice = try OrchestratorPeer()
+        let bob   = try OrchestratorPeer()
         try establishSession(alice: alice, bob: bob)
 
         // Simulate a realistic proto payload (binary, not valid UTF-8)
@@ -249,8 +248,8 @@ final class CallSignalE2EETests: XCTestCase {
     /// A real WebRTC call sends: SDP offer → then ~10 ICE candidates in rapid succession.
     /// Each is a separate ct=12 DR message. All must be routed to callSignalDecrypted.
     func testMultipleCallSignalsInSequence() throws {
-        let alice = try OrchestratorPeer(userId: "alice-\(UUID().uuidString)")
-        let bob   = try OrchestratorPeer(userId: "bob-\(UUID().uuidString)")
+        let alice = try OrchestratorPeer()
+        let bob   = try OrchestratorPeer()
         try establishSession(alice: alice, bob: bob)
 
         let signals: [Data] = [
@@ -281,8 +280,8 @@ final class CallSignalE2EETests: XCTestCase {
     /// Verify that a call signal can be sent in the middle of a regular text conversation.
     /// Real scenario: user is chatting, then places a call — both message types must work.
     func testCallSignalMidConversation() throws {
-        let alice = try OrchestratorPeer(userId: "alice-\(UUID().uuidString)")
-        let bob   = try OrchestratorPeer(userId: "bob-\(UUID().uuidString)")
+        let alice = try OrchestratorPeer()
+        let bob   = try OrchestratorPeer()
         try establishSession(alice: alice, bob: bob)
 
         // Exchange a few regular messages first (advances DR ratchet)
@@ -334,16 +333,15 @@ final class CallSignalE2EETests: XCTestCase {
     /// before sending any regular messages in a fresh session.
     func testCallSignalAfterDHRatchet_MsgNum0_RoutedCorrectly() throws {
         // Bob is the initiator so that Alice's first send can be the call signal (msgNum=0).
-        let alice = try OrchestratorPeer(userId: "alice-\(UUID().uuidString)")
-        let bob   = try OrchestratorPeer(userId: "bob-\(UUID().uuidString)")
+        let alice = try OrchestratorPeer()
+        let bob   = try OrchestratorPeer()
 
         let aliceBundle = try alice.exportBundle()
-        let bobBundle   = try bob.exportBundle()
 
         // Bob initialises the session toward Alice.
         try bob.initSenderSession(to: alice.userId, bundle: aliceBundle)
         let firstMsg = try bob.encryptMessage("ping", to: alice.userId)
-        try alice.initReceiverSession(from: bob.userId, senderBundle: bobBundle, firstMsg: firstMsg)
+        try alice.initReceiverSession(from: bob, firstMsg: firstMsg)
 
         // Alice has NOT sent anything yet — her first send will be msgNum=0.
         let callProto = Data([0x0A, 0x24] + Array("call-id-uuid-abc123".utf8))
