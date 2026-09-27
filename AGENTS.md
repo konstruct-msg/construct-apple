@@ -244,6 +244,12 @@ Before touching `Networking/gRPC/VEIL/` or `Services/Calls/`, read
   previous states and promotes the one that decrypts. There is no SESSION_RESET_INIT,
   `session_ready`, ping, confirm window, tie-break or heal — do not rebuild any of them here
   (`decisions/sessions-renew-by-sending.md`).
+- **There is no END_SESSION** since 2026-09-28. A message nothing reads is answered by the core
+  with a DECRYPTION_ERROR (content type 28) naming the state it was written on; the writer's core
+  retires that state only if it is current, and resends the named message once. Manual reset,
+  chat and contact deletion and logout are **local** — nothing is sent. Do not add a teardown
+  message, a cooldown, a stale-by-timestamp check or an "announce the reset" path: a message that
+  names no state is the thing this replaced.
 - **Keychain**: crypto state that must survive a background/locked push decrypt uses
   `kSecAttrAccessibleAfterFirstUnlock*` (`KeychainManager.cryptoKeyAccessible`), never
   `WhenUnlocked*` — otherwise silent session desync and END_SESSION teardown of healthy sessions.
