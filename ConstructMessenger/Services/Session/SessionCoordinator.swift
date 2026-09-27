@@ -1207,7 +1207,17 @@ final class SessionCoordinator: MessageRouterDelegate {
     /// key its sender certificate names (`decisions/first-message-opens-without-the-server.md`).
     /// Until 2026-09-27 this fetched the account's bundles and the core walked every carrier
     /// against every device; the bundle fetch also told the server whom the sealed message was from.
-    private func openReceiving(_ peer: PeerAddress, site: String) async -> ReceivingOpenOutcome {
+    ///
+    /// `certificate` is the trigger message's: on success it records the device and its key, which
+    /// the sealed replies need at once (`session_ready` right after a first contact). The bundle
+    /// fetch used to record them as a side effect; without it the first reply found no key
+    /// (`IK_MISS[no_row]`, stand 2026-09-27). Recording it is sound only after the open: the core
+    /// opened from this certificate's key because the server's signature on it checked out.
+    private func openReceiving(
+        _ peer: PeerAddress,
+        site: String,
+        certificate: SenderCertificate?
+    ) async -> ReceivingOpenOutcome {
         let userId = peer.account
         guard let device = peer.device, !device.isEmpty else {
             return .failed(tried: [], lastError: nil)
@@ -1255,6 +1265,13 @@ final class SessionCoordinator: MessageRouterDelegate {
         if suite > 0 {
             KeychainManager.shared.saveSessionSuiteId(userId: opened, suiteId: suite)
         }
+        if let certificate, certificate.deviceId == opened, let context = viewContext {
+            SessionAddressing.recordDevices(
+                [(deviceId: certificate.deviceId, identityKey: certificate.identityKey)],
+                ofPeer: userId,
+                in: context
+            )
+        }
         Log.info(
             "SESSION_STATE[open_receiving]: \(userId.prefix(8))…/\(opened.prefix(8))… opened from \(openerId.prefix(8))…",
             category: "SessionInit"
@@ -1282,7 +1299,7 @@ final class SessionCoordinator: MessageRouterDelegate {
             return
         }
 
-        switch await openReceiving(peer, site: "open_receiving_first") {
+        switch await openReceiving(peer, site: "open_receiving_first", certificate: message.senderCertificate) {
         case .opened(let device, _):
             // Bob consumed one of his one-time prekeys for this X3DH.
             Task {
@@ -1339,7 +1356,7 @@ final class SessionCoordinator: MessageRouterDelegate {
             CryptoManager.shared.recordHealAttempt(forDevice: $0)
         } ?? false
 
-        let outcome = await openReceiving(peer, site: "open_receiving_heal")
+        let outcome = await openReceiving(peer, site: "open_receiving_heal", certificate: failedMessage.senderCertificate)
         if case .opened(let device, let openerId) = outcome {
             // Heal does not reset establishment time (no `initSucceeded`). The core settled the
             // episode and released the phase when the session opened.
