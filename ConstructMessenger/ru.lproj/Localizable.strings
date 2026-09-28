@@ -87,7 +87,7 @@
 "preferences" = "Настройки";
 "version" = "Версия";
 "build_channel_beta" = "Бета";
-"build_channel_beta_a11y" = "Это бета или внутренняя сборка, не production App Store";
+"build_channel_beta_a11y" = "Это бета-версия или внутренняя сборка, а не выпуск для App Store";
 "about" = "О приложении";
 "account" = "Идентичность";
 "appearance" = "Внешний вид";
@@ -117,7 +117,7 @@
 "wrong_pin_code" = "Неверный ПИН-код";
 "cant_unlock" = "Не можете войти?";
 "pin_reset_title" = "Сбросить это устройство?";
-"pin_reset_explain" = "Все локальные данные будут стёрты с этого устройства. Identity можно восстановить позже по seed-фразе — только если восстановление было настроено.";
+"pin_reset_explain" = "Все локальные данные будут стёрты с этого устройства. Идентичность можно будет восстановить по фразе восстановления, только если вы настроили её заранее.";
 "pin_reset_action" = "Сбросить";
 "pin_reset_countdown" = "Сброс через %d… введите ПИН, чтобы отменить";
 "lock_delay" = "Блокировать через";
@@ -140,9 +140,9 @@
 "disable" = "Выключить";
 
 // MARK: - Settings -> My QR Code
-"failed_to_generate_qr_code" = "Failed to generate QR code";
-"show_this_code_to_someone_nearby" = "Show this code to someone nearby";
-"scan_with_camera_or_screenshot" = "They can scan this with their camera or take a screenshot";
+"failed_to_generate_qr_code" = "Не удалось создать QR-код";
+"show_this_code_to_someone_nearby" = "Покажите этот код человеку рядом";
+"scan_with_camera_or_screenshot" = "Он может отсканировать код камерой или сделать снимок экрана";
 
 // MARK: - Settings -> Appearance
 
@@ -193,12 +193,12 @@
 "construct_app_name" = "Конструкт";
 "construct_new_message" = "Новое сообщение";
 "construct_new_messages" = "Новые сообщения";
-"construct_new_messages_count" = "У вас %d новое(ых) сообщение(ий)";
+"construct_new_messages_count" = "Новых сообщений: %d";
 "construct_new_messages_from_contacts" = "У вас %d новых сообщений от %d контактов";
 "construct_sync_completed" = "Сообщения синхронизированы";
 "construct_sync_completed_count" = "Синхронизировано %d новых сообщений";
 "background_fetch" = "Фоновая загрузка";
-"background_fetch_footer" = "Периодически получает пропущенные сообщения через зашифрованное gRPC-соединение, когда активный стрим не работает (например, приложение свёрнуто или было прервано соединение). Позволяет держать входящие в актуальном состоянии без полной зависимости от push-уведомлений.";
+"background_fetch_footer" = "Периодически загружает пропущенные сообщения, когда постоянное соединение неактивно (например, приложение работает в фоне или связь прервалась). Чаты остаются актуальными и без push-уведомлений.";
 "enable_background_fetch" = "Включить фоновую загрузку";
 "background_fetch_status" = "Статус фоновой загрузки";
 "background_fetch_disabled" = "Отключено";
@@ -206,7 +206,7 @@
 "background_fetch_last_check" = "Последняя проверка: %@";
 "background_fetch_interval" = "Интервал проверки";
 "background_fetch_interval_settings" = "Интервал проверки";
-"background_fetch_interval_footer" = "Как часто получать пропущенные сообщения, когда активный стрим не работает. iOS может корректировать это в зависимости от ваших шаблонов использования.";
+"background_fetch_interval_footer" = "Как часто загружать пропущенные сообщения, когда постоянное соединение неактивно. iOS может менять интервал в зависимости от того, как вы используете приложение.";
 "background_fetch_interval_minutes" = "%d мин.";
 "background_fetch_interval_hours" = "%d час(ов)";
 "background_fetch_low_power_mode_warning" = "Отключено в режиме энергосбережения";
@@ -303,7 +303,7 @@
 "onboarding_network_settings" = "Настройки сети";
 
 // First-run orientation (product education after identity init)
-"orientation_section_label" = "> orientation";
+"orientation_section_label" = "> знакомство";
 "orientation_skip" = "Пропустить";
 "orientation_next" = "Продолжить";
 "orientation_enter" = "Войти в Конструкт";
@@ -320,7 +320,7 @@
 "orientation_page2_path_qr_title" = "QR / ссылка";
 "orientation_page2_path_qr_sub" = "Показать или сканировать. Каждый код срабатывает один раз.";
 "orientation_page2_path_search_title" = "Поиск";
-"orientation_page2_path_search_sub" = "Только если включили в настройсках безопасности.";
+"orientation_page2_path_search_sub" = "Только если включили в настройках безопасности.";
 "orientation_page3_title" = "Три места";
 "orientation_page3_body" = "Чаты — переписка. Synaps — ваши люди и входящие запросы. Настройки — ваш QR-код, восстановление и устройства.";
 "orientation_page3_caption" = "Начните с Synaps — покажите QR или найдите человека.";
@@ -389,9 +389,9 @@
 // Security — Recovery & Duress (from EN)
 "account_recovery" = "Восстановление аккаунта";
 "discovery" = "Обнаруживаемость";
-"account_recovery_seed" = "Восстановление аккаунта (Seed-фраза)";
-"account_recovery_seed_hint" = "Восстановите доступ с помощью резервной seed-фразы.";
-"account_recovery_seed_coming_soon" = "Восстановление по seed-фразе появится в одном из следующих обновлений.";
+"account_recovery_seed" = "Восстановление идентичности по фразе";
+"account_recovery_seed_hint" = "Восстановите доступ с помощью фразы восстановления.";
+"account_recovery_seed_coming_soon" = "Восстановление по фразе появится в одном из следующих обновлений.";
 
 // Duress PIN
 "duress_pin" = "Пин самоуничтожения";
@@ -520,7 +520,7 @@
 /* Bootstrap voucher — приём кода (дверь «не подключается?» в онбординге) */
 "onboarding_cant_connect" = "Не подключается?";
 "veil_bootstrap_title" = "Не подключается";
-"veil_bootstrap_intro" = "Если Konstruct не может выйти в сеть здесь, тот, у кого связь уже есть, может выдать вам одноразовый код доступа. Попросите его и отсканируйте или вставьте ниже.";
+"veil_bootstrap_intro" = "Если Конструкт не может подключиться к сети, человек с работающим подключением может дать вам одноразовый код доступа. Попросите код, затем отсканируйте его или вставьте ниже.";
 "veil_bootstrap_scan_subtitle" = "Наведите камеру на его код";
 "veil_bootstrap_paste_subtitle" = "Если код прислали текстом";
 "veil_bootstrap_ok" = "Подключение настроено";
@@ -869,9 +869,9 @@
 "qr_scan_hint" = "покажи кому-то рядом или сделай скриншот";
 
 // MARK: - Device Link QR
-"device_link_section" = "связать реплику";
+"device_link_section" = "привязать устройство";
 "generating" = "генерация...";
-"device_link_scan_hint" = "отсканируй с другой реплики для связи";
+"device_link_scan_hint" = "отсканируйте другим устройством для привязки";
 
 // MARK: - Settings rows
 "recovery_not_configured_title" = "Резервный ключ не настроен";
@@ -886,9 +886,9 @@
 "keys_recovery_retry_hint" = "Ключи могут быть временно недоступны из-за системной проблемы. Попробуйте перечитать Keychain.";
 "keys_recovery_retry_action" = "перечитать keychain [→]";
 "keys_recovery_retry_failed" = "всё ещё недоступно";
-"keys_recovery_section_seed" = "восстановить из сид-фразы";
-"keys_recovery_seed_hint" = "Если вы сохранили 12-слов seed-фразу, используйте её для восстановления доступа к своей идентичности.";
-"keys_recovery_seed_action" = "ввести seed-фразу [→]";
+"keys_recovery_section_seed" = "восстановить по фразе";
+"keys_recovery_seed_hint" = "Если вы сохранили фразу восстановления из 12 слов, используйте её для восстановления доступа к своей идентичности.";
+"keys_recovery_seed_action" = "ввести фразу восстановления [→]";
 "keys_recovery_section_new" = "создать новый аккаунт";
 "keys_recovery_new_hint" = "Создать полностью новую идентичность. Существующий аккаунт и сообщения будут утеряны безвозвратно.";
 "keys_recovery_new_action" = "создать новый аккаунт [→]";
@@ -897,8 +897,8 @@
 "keys_recovery_wipe_confirm_action" = "удалить и продолжить";
 
 // MARK: - Device Deregistered (Конструкт больше не знает эту реплику)
-"device_deregistered_warning_title" = "⚠ РЕПЛИКА НЕ ЗАРЕГИСТРИРОВАНА";
-"device_deregistered_warning_body" = "Конструкт больше не распознаёт эту реплику. Такое бывает после сбоя на сервере или если реплику отозвали с другого устройства.\n\nКлючи всё ещё на этом устройстве — ничего не удалено. Повторите попытку ниже или восстановите личность по сид-фразе.";
+"device_deregistered_warning_title" = "⚠ УСТРОЙСТВО НЕ ЗАРЕГИСТРИРОВАНО";
+"device_deregistered_warning_body" = "Конструкт больше не распознаёт это устройство. Такое бывает после временного сбоя или если устройство удалили с другого устройства.\n\nКлючи всё ещё на этом телефоне — ничего не удалено. Повторите попытку ниже или восстановите идентичность по фразе восстановления.";
 "device_deregistered_retry_hint" = "Отказ может быть временным сбоем сервера. Попробуйте пройти аутентификацию ещё раз.";
 
 // MARK: - Logout
@@ -1064,7 +1064,7 @@
 "backup_restore_success_message" = "Резервная копия проверена и подготовлена. Закройте и откройте приложение снова, чтобы завершить восстановление.";
 
 "backup_error_invalid_mnemonic" = "Неверная фраза восстановления. Проверьте все 12 слов и попробуйте снова.";
-"backup_error_invalid_file" = "Это не корректная резервная копия Конструкта, или фраза восстановления неверна.";
+"backup_error_invalid_file" = "Это не резервная копия Конструкта или фраза восстановления неверна.";
 
 // Transfer (P2P nearby)
 "transfer_send_nearby" = "отправить на соседнее устройство";
@@ -1264,7 +1264,7 @@
 /* VEIL bootstrap voucher — дать доступ тому, у кого входа ещё нет. */
 "veil_voucher_row" = "Дать кому-то доступ";
 "veil_voucher_title" = "Дать доступ";
-"veil_voucher_instructions" = "Пусть отсканирует этот код в Konstruct. Это настройка подключения, а не приглашение в контакты.";
+"veil_voucher_instructions" = "Пусть отсканирует этот код в Конструкте. Он настроит подключение, но не добавит вас в контакты.";
 "veil_voucher_expires_in" = "Действует ещё %@";
 "veil_voucher_expired" = "Код истёк";
 "veil_voucher_new" = "Создать новый код";
@@ -1273,7 +1273,7 @@
 "veil_voucher_unavailable" = "Выдача доступа сейчас недоступна.";
 "veil_voucher_err_generic" = "Не удалось создать код";
 "veil_voucher_privacy_hint" = "Показывайте код только тому, для кого он предназначен. Не публикуйте его и не отправляйте через открытый канал.";
-"veil_voucher_intro" = "Создаёт одноразовый код, который настроит подключение тому, кто пока не может добраться до Konstruct. Код действует недолго, в сутки можно создать три.";
+"veil_voucher_intro" = "Создаёт одноразовый код для настройки подключения человека, который пока не может связаться с Конструктом. Код действует недолго, в сутки можно создать три.";
 "veil_voucher_create" = "Создать код";
 
 /* Desktop chrome — D2–D7 */

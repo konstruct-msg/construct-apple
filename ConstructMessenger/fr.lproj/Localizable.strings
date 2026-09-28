@@ -14,7 +14,7 @@
 "app_loading_state" = "Initialisation de l'état sécurisé";
 "app_loading_stage_transport" = "réchauffement de l'enveloppe de transport";
 "app_loading_stage_identity" = "restauration de l'enveloppe d'identité";
-"app_loading_stage_streams" = "préparation des flux cryptés";
+"app_loading_stage_streams" = "préparation des discussions sécurisées";
 
 // MARK: - Main Tabs
 "chats" = "Discussions";
@@ -116,7 +116,7 @@
 "pin_code_length" = "Le code PIN doit comporter 6 à 12 chiffres";
 "pin_codes_dont_match" = "Les codes PIN ne correspondent pas";
 "wrong_pin_code" = "Code PIN incorrect";
-"cant_unlock" = "Impossible de se connecter ?";
+"cant_unlock" = "Impossible de déverrouiller ?";
 "pin_reset_title" = "Réinitialiser cet appareil ?";
 "pin_reset_explain" = "Toutes les données locales seront effacées de cet appareil. Votre identité pourra être restaurée ultérieurement avec votre phrase de récupération, uniquement si la récupération a été configurée.";
 "pin_reset_action" = "Réinitialiser";
@@ -204,7 +204,7 @@
 "construct_sync_completed" = "Messages synchronisés";
 "construct_sync_completed_count" = "%d nouveaux messages synchronisés";
 "background_fetch" = "Actualisation en arrière-plan";
-"background_fetch_footer" = "Récupère périodiquement les messages manquants via une connexion gRPC chiffrée lorsque le flux en direct n'est pas actif (par ex. application en arrière-plan ou réseau interrompu). Maintient votre boîte de réception à jour sans dépendre uniquement des notifications push.";
+"background_fetch_footer" = "Récupère régulièrement les messages manquants lorsque la connexion permanente est inactive (par exemple, si l’application est en arrière-plan ou si le réseau a été interrompu). Vos discussions restent à jour sans dépendre uniquement des notifications push.";
 "enable_background_fetch" = "Activer l'actualisation en arrière-plan";
 "background_fetch_status" = "Statut de l'actualisation en arrière-plan";
 "background_fetch_disabled" = "Désactivé";
@@ -212,9 +212,9 @@
 "background_fetch_last_check" = "Dernière vérification : %@";
 "background_fetch_interval" = "Intervalle de vérification";
 "background_fetch_interval_settings" = "Intervalle de vérification";
-"background_fetch_interval_footer" = "Fréquence de récupération des messages manquants lorsque le flux en direct est inactif. iOS peut ajuster cela en fonction de vos habitudes d'utilisation.";
+"background_fetch_interval_footer" = "Fréquence de récupération des messages manquants lorsque la connexion permanente est inactive. iOS peut adapter cet intervalle à votre utilisation.";
 "background_fetch_interval_minutes" = "%d min";
-"background_fetch_interval_hours" = "%d heure";
+"background_fetch_interval_hours" = "%d h";
 "background_fetch_low_power_mode_warning" = "Désactivé en mode basse consommation";
 "background_fetch_low_power_mode_title" = "Mode basse consommation actif";
 "background_fetch_low_power_mode_description" = "L'actualisation en arrière-plan est automatiquement désactivée lorsque le mode basse consommation est activé pour économiser la batterie.";
@@ -303,8 +303,8 @@
 "history_sync_send_offer_message" = "Envoyer votre historique de messages vers le nouvel appareil ? Les deux appareils doivent être sur le même réseau Wi‑Fi — aucun code requis.";
 "history_sync_send_offer_yes" = "Synchroniser l'historique";
 "history_sync_send_offer_skip" = "Ignorer";
-"device_deregistered_warning_title" = "⚠ RÉPLIQUE NON ENREGISTRÉE";
-"device_deregistered_warning_body" = "Konstruct ne reconnaît plus cette réplique. Cela peut se produire après un incident serveur ou si la réplique a été révoquée ailleurs.\n\nVos clés sont toujours sur cet appareil — rien n'a été supprimé. Réessayez ci‑dessous, ou restaurez votre identité à partir de votre phrase de récupération.";
+"device_deregistered_warning_title" = "⚠ APPAREIL NON ENREGISTRÉ";
+"device_deregistered_warning_body" = "Konstruct ne reconnaît plus cet appareil. Cela peut se produire après une panne temporaire ou si l’appareil a été retiré depuis un autre appareil.\n\nVos clés sont toujours sur ce téléphone — rien n’a été supprimé. Réessayez ci-dessous ou restaurez votre identité avec votre phrase de récupération.";
 "device_deregistered_retry_hint" = "Le rejet peut être un problème serveur temporaire. Réessayez de vous authentifier.";
 "transfer_history_row" = "Transférer l'historique vers un appareil à proximité";
 "transfer_history_hint" = "Envoyez votre historique de messages à un appareil sur le même réseau WiFi.";
@@ -313,7 +313,7 @@
 "stop_sharing_profile" = "Arrêter le partage du profil";
 "share_my_profile" = "Partager mon profil";
 "share_profile_explanation" = "Partagez votre nom et votre photo avec ce contact";
-"username_invalid_chars" = "Le nom d'utilisateur ne peut contenir que des lettres, des chiffres et des underscores.";
+"username_invalid_chars" = "Le nom d'utilisateur ne peut contenir que des lettres, des chiffres et des traits de soulignement.";
 "username_too_short" = "Le nom d'utilisateur doit comporter au moins 3 caractères.";
 "username_checking" = "Vérification de la disponibilité...";
 "username_available" = "Le nom d'utilisateur est disponible.";
@@ -395,7 +395,7 @@
 // Reset Session
 "reset_session" = "Réinitialiser la session";
 "reset_session_title" = "Réinitialiser la session ?";
-"reset_session_message" = "Cela réétablira une nouvelle session chiffrée. Les messages en transit peuvent être perdus.";
+"reset_session_message" = "Cela établira une nouvelle session chiffrée. Les messages en transit peuvent être perdus.";
 
 // Account Recovery
 "try_again" = "Réessayer";
@@ -616,7 +616,7 @@
 
 // Synced with en.lproj 2026-08-16.
 "chat_nav_back" = "Retour";
-"orientation_section_label" = "> orientation";
+"orientation_section_label" = "> découverte";
 "orientation_skip" = "Passer";
 "orientation_next" = "Continuer";
 "orientation_enter" = "Entrer dans Konstruct";

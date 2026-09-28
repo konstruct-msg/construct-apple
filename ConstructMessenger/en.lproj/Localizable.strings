@@ -214,7 +214,7 @@
 "background_fetch_interval_settings" = "Check Interval";
 "background_fetch_interval_footer" = "How often to fetch missed messages when the live connection is inactive. iOS may adjust this based on your usage patterns.";
 "background_fetch_interval_minutes" = "%d min";
-"background_fetch_interval_hours" = "%d hour";
+"background_fetch_interval_hours" = "%d hr";
 "background_fetch_low_power_mode_warning" = "Disabled in Low Power Mode";
 "background_fetch_low_power_mode_title" = "Low Power Mode Active";
 "background_fetch_low_power_mode_description" = "Background refresh is automatically disabled when Low Power Mode is enabled to save battery.";

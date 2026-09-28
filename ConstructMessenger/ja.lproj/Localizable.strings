@@ -324,7 +324,7 @@
 "onboarding_network_settings" = "ネットワーク設定";
 
 // First-run orientation (product education after identity init)
-"orientation_section_label" = "> orientation";
+"orientation_section_label" = "> ご案内";
 "orientation_skip" = "スキップ";
 "orientation_next" = "続ける";
 "orientation_enter" = "コンストラクトに入る";
@@ -639,7 +639,7 @@
 "device_link_waiting_approval" = "iPhoneでの承認を待機中...";
 "device_link_scan_on_phone" = "iPhoneのコンストラクトでこのコードをスキャンしてください";
 "device_link_request_timeout" = "連携リクエストがタイムアウトしました。もう一度お試しください。";
-"device_link_feature_unavailable" = "この機能にはコンストラクト側のアップデートが必要です。後でもう一度お試しください。";
+"device_link_feature_unavailable" = "この機能にはサーバーのアップデートが必要です。後でもう一度お試しください。";
 "device_link_invalid_qr" = "無効なQRコードです。コンストラクトのリンク用コードをスキャンしていることを確認してください。";
 "device_link_approve_title" = "\"%@\" をアイデンティティに連携しますか？";
 "device_link_approve_title_fallback" = "新しいデバイスをアイデンティティに連携しますか？";
@@ -1143,7 +1143,7 @@
 /* Bootstrap voucher — 受け取り側（オンボーディングの「接続できない?」入口） */
 "onboarding_cant_connect" = "接続できませんか?";
 "veil_bootstrap_title" = "接続できない";
-"veil_bootstrap_intro" = "ここで Konstruct がネットワークに到達できない場合、すでに接続できている人が一回限りのアクセスコードを発行できます。それをもらって、下でスキャンするか貼り付けてください。";
+"veil_bootstrap_intro" = "ここでコンストラクトがネットワークに接続できない場合、すでに接続できている人が一回限りのアクセスコードを発行できます。それをもらって、下でスキャンするか貼り付けてください。";
 "veil_bootstrap_scan_subtitle" = "相手のコードにカメラを向けます";
 "veil_bootstrap_paste_subtitle" = "コードをテキストで受け取った場合";
 "veil_bootstrap_ok" = "接続を設定しました";
@@ -1254,7 +1254,7 @@
 /* VEIL bootstrap voucher — まだ接続手段のない相手にアクセスを渡す。 */
 "veil_voucher_row" = "アクセスを渡す";
 "veil_voucher_title" = "アクセスを渡す";
-"veil_voucher_instructions" = "相手に Konstruct でこのコードをスキャンしてもらってください。接続の設定であり、連絡先の招待ではありません。";
+"veil_voucher_instructions" = "相手にコンストラクトでこのコードをスキャンしてもらってください。接続の設定であり、連絡先の招待ではありません。";
 "veil_voucher_expires_in" = "残り %@ 有効";
 "veil_voucher_expired" = "このコードは期限切れです";
 "veil_voucher_new" = "新しいコードを作成";
@@ -1263,7 +1263,7 @@
 "veil_voucher_unavailable" = "現在アクセスの発行は利用できません。";
 "veil_voucher_err_generic" = "コードを作成できませんでした";
 "veil_voucher_privacy_hint" = "このコードは渡す相手にだけ見せてください。公開したり、オープンな経路で送らないでください。";
-"veil_voucher_intro" = "まだ Konstruct に接続できない相手のために、接続を設定する使い捨てコードを作ります。有効時間は短く、1日に3つまで作成できます。";
+"veil_voucher_intro" = "まだコンストラクトに接続できない相手のために、接続を設定する使い捨てコードを作ります。有効時間は短く、1日に3つまで作成できます。";
 "veil_voucher_create" = "コードを作成";
 
 /* Desktop chrome — D2–D7 */
