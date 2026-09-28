@@ -45,8 +45,10 @@ extension CryptoManager {
             return "sessionInitCompleted contactId=\(contactId.prefix(8))… session=\(sessionData.count)B"
         case .ackReceived(let messageId):
             return "ackReceived msgId=\(messageId.prefix(8))…"
-        case .keyBundleFetched(let userId, _):
-            return "keyBundleFetched userId=\(userId.prefix(8))…"
+        case .sessionBundleFetched(let contactId, _):
+            return "sessionBundleFetched contactId=\(contactId.prefix(8))…"
+        case .sessionBundleUnavailable(let contactId):
+            return "sessionBundleUnavailable contactId=\(contactId.prefix(8))…"
         case .networkReconnected:
             return "networkReconnected"
         case .appLaunched:

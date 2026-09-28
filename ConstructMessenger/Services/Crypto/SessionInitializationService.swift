@@ -37,6 +37,10 @@ enum SessionError: Error, LocalizedError, ApplicationLayerError {
     /// already held was kept.
     case peerNotPostQuantum(reason: String)
 
+    /// Asked for one device's bundle, the server returned a bundle whose identity key names
+    /// another device. Answering the core's `OpenSession` with it would open the wrong ratchet.
+    case bundleForAnotherDevice
+
     var errorDescription: String? {
         switch self {
         case .staleSPKBundle(let epoch, let knownEpoch):
@@ -53,6 +57,8 @@ enum SessionError: Error, LocalizedError, ApplicationLayerError {
             return "Session init deferred by the core: \(decision)"
         case .peerNotPostQuantum:
             return "Contact's app does not support post-quantum encryption yet — ask them to update the app"
+        case .bundleForAnotherDevice:
+            return "The key server returned keys for a different device"
         }
     }
 }
@@ -156,6 +162,78 @@ class SessionInitializationService {
     /// decision back rather than keep holding.
     static let maxThrottledWaits = 2
     
+    /// The checks a bundle passes before any init opens from it, whoever asked for the init:
+    /// the SPK epoch must not go backwards (a replayed bundle), and a PQ_HYBRID bundle must name
+    /// a Kyber SPK epoch. Shared by `initializeSession` and `answerOpenSession`, so a bundle the
+    /// one refuses the other refuses too.
+    private func admit(_ bundle: PublicKeyBundleData, for userId: String) throws {
+    // Epoch replay-attack check: reject bundles where the server's monotonic
+    // rotation counter has not advanced beyond what we last saw for this contact.
+    // (Skip when epoch == 0, which means the server hasn't migrated yet.)
+    if bundle.spkRotationEpoch > 0 {
+        let knownEpoch = KeychainManager.shared.loadSpkEpoch(for: userId)
+        if bundle.spkRotationEpoch < knownEpoch {
+            Log.error("SESSION_STATE[spk_replay_rejected]: epoch=\(bundle.spkRotationEpoch) < known=\(knownEpoch) for \(userId.prefix(8))… — possible SPK replay attack", category: "SessionInit")
+            throw SessionError.staleSPKBundle(epoch: bundle.spkRotationEpoch, knownEpoch: knownEpoch)
+        }
+        KeychainManager.shared.saveSpkEpoch(bundle.spkRotationEpoch, for: userId)
+    }
+
+    // PQ_HYBRID bundles (suiteId == 2) must have a non-zero Kyber SPK epoch.
+    // epoch == 0 means the peer never uploaded a Kyber SPK; refuse to proceed
+    // rather than silently falling back to classical-only key agreement.
+    if bundle.suiteId == 2 && bundle.kyberSpkRotationEpoch == 0 {
+        Log.error("SESSION_STATE[kyber_epoch_missing]: suiteId=2 but kyberSpkRotationEpoch==0 for \(userId.prefix(8))… — refusing PQ session init", category: "SessionInit")
+        throw SessionError.kyberEpochRequired
+    }
+    }
+
+    /// The answer to the core's `OpenSession` for one device (the PQXDH v2 upgrade sweep).
+    ///
+    /// Fetches that device's bundle, runs the same admission checks an init runs, and hands it to
+    /// the core as `sessionBundleFetched` — or `sessionBundleUnavailable` when there is nothing to
+    /// hand. Returns the core's answer for the caller to carry out (`resolveCoreDrain`): the save
+    /// of the record, what waited behind the open, the end of it. Until 2026-09-28 this was an
+    /// init that called `reopenSession` and saved the record itself; the core's answer carries
+    /// all of that now, so nothing here decides whether the open succeeded or what to persist.
+    func answerOpenSession(device: String, account: String) async -> [CfeAction] {
+        let event: CfeIncomingEvent
+        do {
+            let bundle = try await fetchPublicKeyWithRetry(
+                userId: account, deviceId: device, consumeOneTimePrekey: true
+            )
+            // The core asked about one ratchet; a bundle for any other device answers nothing.
+            guard SessionAddressing.cryptoIdentity(ofIdentityKey: bundle.identityPublic) == device else {
+                throw SessionError.bundleForAnotherDevice
+            }
+            try admit(bundle, for: account)
+            let hintPending = SessionReinitHintStore.shared.consumeThreeDHReinit(for: account)
+            let threeDH = SessionReducer.nextInitDHMode(forceThreeDHHintPending: hintPending) == .threeDH
+            event = .sessionBundleFetched(
+                contactId: device,
+                bundle: bundle.binaryKeyBundle(withoutOneTimePrekey: threeDH)
+            )
+        } catch {
+            Log.info("SESSION_STATE[open_session_unavailable]: device \(device.prefix(8))… — \(error)", category: "SessionInit")
+            event = .sessionBundleUnavailable(contactId: device)
+        }
+        do {
+            let actions = try CryptoManager.shared.handleOrchestratorEvent(event, tag: "open_session")
+            let refused = actions.contains {
+                if case .notifyError(let code, _) = $0 { return code == "OPEN_SESSION_REFUSED" }
+                return false
+            }
+            if case .sessionBundleFetched = event, !refused {
+                KeychainManager.shared.deleteSessionAtRiskFlag(for: account)
+                Log.info("SESSION_STATE[open_session_done]: new session with device \(device.prefix(8))…, the held one kept as previous", category: "SessionInit")
+            }
+            return actions
+        } catch {
+            Log.error("OpenSession answer not delivered to the core for \(device.prefix(8))…: \(error)", category: "SessionInit")
+            return []
+        }
+    }
+
     /// Initialize a session with a recipient using their public key bundle
     func initializeSession(
         userId: String,
@@ -169,25 +247,7 @@ class SessionInitializationService {
         // refused. (That was `deleteExisting`, gone with it: a `false` there did not keep the
         // session either — the layer below archived whatever it found.)
 
-        // Epoch replay-attack check: reject bundles where the server's monotonic
-        // rotation counter has not advanced beyond what we last saw for this contact.
-        // (Skip when epoch == 0, which means the server hasn't migrated yet.)
-        if bundle.spkRotationEpoch > 0 {
-            let knownEpoch = KeychainManager.shared.loadSpkEpoch(for: userId)
-            if bundle.spkRotationEpoch < knownEpoch {
-                Log.error("SESSION_STATE[spk_replay_rejected]: epoch=\(bundle.spkRotationEpoch) < known=\(knownEpoch) for \(userId.prefix(8))… — possible SPK replay attack", category: "SessionInit")
-                throw SessionError.staleSPKBundle(epoch: bundle.spkRotationEpoch, knownEpoch: knownEpoch)
-            }
-            KeychainManager.shared.saveSpkEpoch(bundle.spkRotationEpoch, for: userId)
-        }
-
-        // PQ_HYBRID bundles (suiteId == 2) must have a non-zero Kyber SPK epoch.
-        // epoch == 0 means the peer never uploaded a Kyber SPK; refuse to proceed
-        // rather than silently falling back to classical-only key agreement.
-        if bundle.suiteId == 2 && bundle.kyberSpkRotationEpoch == 0 {
-            Log.error("SESSION_STATE[kyber_epoch_missing]: suiteId=2 but kyberSpkRotationEpoch==0 for \(userId.prefix(8))… — refusing PQ session init", category: "SessionInit")
-            throw SessionError.kyberEpochRequired
-        }
+        try admit(bundle, for: userId)
 
         // 3-DH re-init: a prior END_SESSION from this peer signalled it could not reproduce our
         // 4-DH one-time-prekey (otpk-session-init-deadlock lever L2). Drop the classic OTPK and

@@ -98,8 +98,6 @@ final class SessionActionExecutor {
             break
         case .encryptMessage:
             break
-        case .initSession:
-            break
         case .archiveSession:
             break
         case .markMessageDelivered:

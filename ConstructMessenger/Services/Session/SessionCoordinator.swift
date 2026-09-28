@@ -32,13 +32,6 @@ final class SessionCoordinator: MessageRouterDelegate {
     /// Forwarded to ChatsViewModel — fires when an E2E-encrypted delivery receipt is decrypted.
     var onE2EDeliveryReceiptDecrypted: (([String]) -> Void)?
 
-    /// Peers with an INITIATOR reopen currently executing (`OpenSession`).
-    ///
-    /// A second reopen starting while the first fetches its bundle spends another one-time prekey
-    /// for a state that will not be used; overlaps are dropped.
-    ///
-    /// Account-keyed on purpose: the init runs for a whole account's device set.
-    private var initiatorReinitInFlight: Set<String> = []
 
     /// Formal session state machine for each peer **device**, backed by the pure `SessionReducer`.
     /// Phase entries: `.initializing` / `.active(establishedAt:)`; absence (`nil`) == no session.
@@ -129,13 +122,25 @@ final class SessionCoordinator: MessageRouterDelegate {
             let ctx = self.viewContext ?? PersistenceController.shared.container.viewContext
             guard let peer = PeerAddress.resolving(device: deviceId, in: ctx) else {
                 Log.info(
-                    "Requested reopen dropped: device \(deviceId.prefix(8))… belongs to no known contact",
+                    "Requested reopen unanswerable: device \(deviceId.prefix(8))… belongs to no known contact",
                     category: "SessionCoordinator"
                 )
+                // Said, so the core stops waiting for the open now rather than at its time-out.
+                if let answer = try? CryptoManager.shared.handleOrchestratorEvent(
+                    .sessionBundleUnavailable(contactId: deviceId), tag: "open_session"
+                ) {
+                    SessionActionExecutor.shared.executeOffRouter(answer, site: "open_session_unknown_device")
+                }
                 return
             }
             Log.info("SESSION_STATE[reopen_requested]: opening a new session with \(peer)", category: "SessionInit")
-            self.reopenAsInitiator(to: peer.account, reason: "open_session")
+            Task { @MainActor [weak self] in
+                let answer = await self?.sessionInitService.answerOpenSession(device: deviceId, account: peer.account) ?? []
+                guard let self else { return }
+                // The save, what waited behind the open, or the refusal — the core's, not ours.
+                self.messageRouter.resolveCoreDrain(answer, site: "open_session")
+                self.sendSessionQueuedMessages(for: peer.account)
+            }
         }
         // The peer could not read our current state with a device and the core retired it. The
         // next send opens a new one; this only carries the core's advice about how.
@@ -290,41 +295,6 @@ final class SessionCoordinator: MessageRouterDelegate {
             } catch {
                 Log.error("Failed to fetch public key for username update: \(error.localizedDescription)", category: "SessionCoordinator")
             }
-        }
-    }
-
-    /// Open a new session with `userId` as INITIATOR over the one held — the answer to the core's
-    /// `OpenSession` (the PQXDH v2 upgrade sweep). Nothing is announced: the handshake header
-    /// rides on the next message, and anything already queued for the peer goes now. The core
-    /// keeps the replaced state as a previous one, so what the peer sends on it meanwhile still
-    /// decrypts.
-    ///
-    /// Until 2026-09-27 this was `reinitAndAnnounceAsInitiator`: the same init, then a
-    /// SESSION_RESET_INIT, a confirm window raised over it and every outgoing message held until
-    /// the peer's `session_ready`.
-    private func reopenAsInitiator(to userId: String, reason: String) {
-        assertMainThread()
-        guard !initiatorReinitInFlight.contains(userId) else {
-            Log.info("SESSION_STATE[reopen_coalesced]: reopen already in flight for \(userId.prefix(8))… (\(reason))", category: "SessionInit")
-            return
-        }
-        initiatorReinitInFlight.insert(userId)
-        Log.info("SESSION_STATE[reopen]: new session for \(userId.prefix(8))… (\(reason))", category: "SessionInit")
-        Task { [weak self] in
-            guard let self else { return }
-            defer { self.initiatorReinitInFlight.remove(userId) }
-            await self.sessionInitService.initializeSessionProactively(
-                userId: userId,
-                // The core asked for this state; the next message is what carries it.
-                hasOutboundWork: true,
-                onSuccess: { },
-                onFailure: { err in
-                    // A refusal (`PQ_REQUIRED` from a peer on an old build) keeps the held session
-                    // exactly as it was, so there is nothing to undo.
-                    Log.error("SESSION_STATE[reopen_fail]: \(err.localizedDescription) for \(userId.prefix(8))…", category: "SessionInit")
-                }
-            )
-            self.sendSessionQueuedMessages(for: userId)
         }
     }
 
