@@ -119,9 +119,9 @@ final class ContactLinkService {
             identityPublicKey: info.identityPublicKey,
             context: context
         )
-        // Same rule as `ChatManagementService.startChat`: the signed invite is the source.
-        if let address = info.accountAddress, address.count == AccountAddress.length {
-            user.accountAddress = address
+        // Same rule as `ChatManagementService.startChat`: the signed invite outranks a card.
+        if let address = info.accountAddress,
+           AccountAddress.pin(address, on: user, source: .invite) != .unchanged {
             try context.save()
         }
         return user

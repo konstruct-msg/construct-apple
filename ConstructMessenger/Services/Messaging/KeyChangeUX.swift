@@ -47,6 +47,25 @@ enum KeyChangeUX {
         }
     }
 
+    /// A contact named a different account address than the one pinned for them. Addresses do not
+    /// change, so this is either the contact naming someone else or someone naming the contact —
+    /// the same weight as a key change, and the same way to look at it.
+    static func notifyAddressConflict(userId: String, displayName: String?) {
+        guard !userId.isEmpty else { return }
+        let name = resolvedName(userId: userId, displayName: displayName)
+        ErrorRouter.shared.presentNotice(
+            String(format: NSLocalizedString("address_change_toast_fmt", comment: ""), name),
+            actionTitle: NSLocalizedString("key_change_toast_open", comment: ""),
+            autoDismissAfter: 10
+        ) {
+            NotificationCenter.default.post(
+                name: .openChatForKeyChange,
+                object: nil,
+                userInfo: ["userId": userId]
+            )
+        }
+    }
+
     // MARK: - Acknowledge
 
     /// User accepts the new identity key after re-verification (or risk acceptance).

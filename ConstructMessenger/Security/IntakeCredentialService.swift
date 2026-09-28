@@ -136,8 +136,12 @@ final class IntakeCredentialService {
     /// every envelope to us "pays a token" (`no_key_for_peer`) while the account read as served.
     /// The v1 set is dropped rather than migrated — its entries could only ever have meant the
     /// pinned device, and re-sending once per contact, lazily, is one envelope each.
-    private static let sentToKey = "construct.intake.sentTo.v2"
-    private static let legacySentToKey = "construct.intake.sentTo.v1"
+    ///
+    /// `v3` since 2026-09-28: what goes out is the contact card (key + account address), and a
+    /// device that got only the bare key under v2 has not got our address. Every contact gets the
+    /// card once, lazily, the next time the two devices talk.
+    private static let sentToKey = "construct.intake.sentTo.v3"
+    private static let legacySentToKeys = ["construct.intake.sentTo.v2", "construct.intake.sentTo.v1"]
     private static let lastPublishedEpochKey = "construct.intake.lastPublishedEpoch.v1"
     /// Peers whose credential the server refused, keyed by account, valued by the epoch it was
     /// refused in. Not persisted beyond UserDefaults and not secret — same reasoning as `sentToKey`.
@@ -313,11 +317,11 @@ final class IntakeCredentialService {
     /// Rotation *is* revocation — there is no server-side deny entry for one contact, by design.
     func forgetWhoHasOurKey() {
         defaults.removeObject(forKey: Self.sentToKey)
-        defaults.removeObject(forKey: Self.legacySentToKey)
+        Self.legacySentToKeys.forEach(defaults.removeObject(forKey:))
     }
 
     private func sentTo() -> Set<String> {
-        defaults.removeObject(forKey: Self.legacySentToKey)
+        Self.legacySentToKeys.forEach(defaults.removeObject(forKey:))
         return Set(defaults.stringArray(forKey: Self.sentToKey) ?? [])
     }
 

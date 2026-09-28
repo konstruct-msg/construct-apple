@@ -1,0 +1,1321 @@
+// MARK: - General
+"error" = "Սխալ";
+"ok" = "Լավ";
+"cancel" = "Չեղարկել";
+"done" = "Պատրաստ է";
+"edit" = "Խմբագրել";
+"editor_rotate" = "Պտտել";
+"editor_mirror" = "Շրջել";
+"unknown" = "Անհայտ";
+"construct_title" = "KONSTRUCT";
+"search_prompt" = "Որոնել";
+
+// MARK: - Loading Screen
+"app_loading_state" = "Անվտանգ վիճակի սկզբնավորում";
+"app_loading_stage_transport" = "տրանսպորտային ծրարի տաքացում";
+"app_loading_stage_identity" = "ինքնության ծրարի վերականգնում";
+"app_loading_stage_streams" = "անվտանգ զրույցների պատրաստում";
+
+// MARK: - Main Tabs
+"chats" = "Զրույցներ";
+"people" = "Մարդիկ";
+"settings" = "Կարգավորումներ";
+
+// MARK: - Auth
+"register" = "Գրանցվել";
+"username" = "Օգտանուն";
+"password" = "Գաղտնաբառ";
+"login" = "Մուտք";
+"logout" = "Ելք";
+"logout_confirmation" = "Վստա՞հ եք, որ ցանկանում եք դուրս գալ։";
+"password_strength_very_weak" = "Շատ թույլ";
+"password_strength_weak" = "Թույլ";
+"password_strength_medium" = "Միջին";
+"password_strength_strong" = "Ուժեղ";
+"password_strength_very_strong" = "Շատ ուժեղ";
+
+// MARK: - Chats List
+"scan_qr_code_or_share_link" = "Սկանավորեք QR կոդը կամ կիսվեք ձեր կոնտակտի հղումով՝ ստուգված կոնտակտներ ավելացնելու համար";
+"scan_qr_code" = "Սկանավորել QR կոդը";
+"add_contact_menu" = "Ավելացնել կոնտակտ…";
+"new_contact" = "Նոր կոնտակտ";
+
+// MARK: - Chat
+"sending" = "Ուղարկվում է...";
+"status_connecting" = "Միացում...";
+"status_paused" = "Ֆոնային ռեժիմ";
+"status_no_connection" = "Կապ չկա";
+"status_encrypting" = "Գաղտնագրվում է...";
+"chat" = "Զրույց";
+"encrypted" = "Գաղտնագրված";
+"message_unavailable" = "Հաղորդագրությունը հասանելի չէ";
+"reply" = "Պատասխանել";
+"copy" = "Պատճենել";
+"info" = "Տեղեկություն";
+"delete" = "Ջնջել";
+"retry" = "Կրկնել";
+"message" = "Հաղորդագրություն";
+"reply_to_colon" = "Պատասխան՝";
+"jump_to_replied_message" = "Անցնել պատասխանված հաղորդագրությանը";
+"message_placeholder" = "Հաղորդագրություն...";
+
+// MARK: - Message Info
+"status" = "Կարգավիճակ";
+"sent" = "Ուղարկված";
+"direction" = "Ուղղություն";
+"outgoing" = "Ելքային";
+"incoming" = "Մուտքային";
+"delivery_information" = "Առաքման տեղեկություն";
+"message_id" = "Հաղորդագրության ID";
+"from" = "Ումից";
+"to" = "Ում";
+"reply_to" = "Պատասխան";
+"encryption" = "Գաղտնագրում";
+"end_to_end" = "Ծայրից ծայր";
+"protocol" = "Արձանագրություն";
+"security" = "Անվտանգություն";
+"message_info" = "Հաղորդագրության մասին";
+
+// MARK: - QR Code Scanner
+"position_qr_code_within_frame" = "Տեղադրեք QR կոդը շրջանակի մեջ";
+"camera_access_required" = "Անհրաժեշտ է տեսախցիկի հասանելիություն";
+"open_settings" = "Բացել կարգավորումները";
+"allow_camera_access_for_qr" = "Թույլատրեք տեսախցիկի հասանելիությունը Կարգավորումներում՝ QR կոդեր սկանավորելու համար";
+"invalid_qr_code_construct" = "Անվավեր QR կոդ։ Սկանավորեք Konstruct կոնտակտի կոդ։";
+
+// MARK: - Settings Main
+"user" = "Օգտատեր";
+"preferences" = "Նախապատվություններ";
+"version" = "Տարբերակ";
+"build_channel_beta" = "Բետա";
+"build_channel_beta_a11y" = "Սա բետա կամ ներքին կառուցում է, ոչ App Store-ի արտադրական տարբերակ";
+"about" = "Մասին";
+"account" = "Ինքնություն";
+"appearance" = "Տեսք";
+"network" = "Ցանց";
+"notifications" = "Ծանուցումներ";
+
+// MARK: - Settings -> Account
+"display_name" = "Ցուցադրվող անուն";
+"local_name" = "Տեղական անուն";
+"local_name_unset" = "Սահմանված չէ";
+"local_name_placeholder" = "Մուտքագրեք անուն";
+"local_name_clear" = "Մաքրել";
+"local_name_footer" = "Տեսանելի է միայն ձեզ։ Կոնտակտը երբեք չի տեսնի այն։";
+"show_my_qr_code" = "Ցույց տալ իմ QR կոդը";
+"share_contact" = "Կիսվել կոնտակտով";
+"share_contact_footer" = "Կիսվեք ձեր QR կոդով կամ հղումով, որպեսզի մյուսները ձեզ ավելացնեն որպես կոնտակտ";
+
+"pin_code" = "PIN կոդ";
+"enable_pin_code" = "Միացնել PIN կոդը";
+"disable_pin_code" = "Անջատել PIN կոդը";
+"change_pin_code" = "Փոխել PIN կոդը";
+"enter_pin_code" = "Մուտքագրեք PIN կոդը";
+"create_pin_code" = "Ստեղծել PIN կոդ";
+"confirm_pin_code" = "Հաստատել PIN կոդը";
+"pin_code_length" = "PIN-ը պետք է լինի 6–12 թվանշան";
+"pin_codes_dont_match" = "PIN կոդերը չեն համընկնում";
+"wrong_pin_code" = "Սխալ PIN կոդ";
+"cant_unlock" = "Չե՞ք կարող մուտք գործել։";
+"pin_reset_title" = "Վերակայե՞լ այս սարքը։";
+"pin_reset_explain" = "Այս սարքից կջնջվեն բոլոր տեղական տվյալները։ Ձեր ինքնությունը հետագայում կարող է վերականգնվել սերմնաբառով, միայն եթե վերականգնումը կարգավորված է եղել։";
+"pin_reset_action" = "Վերակայել";
+"pin_reset_countdown" = "Վերակայում %d վայրկյանում… մուտքագրեք PIN-ը՝ չեղարկելու համար";
+"lock_delay" = "Կողպել հետո";
+"lock_now" = "Կողպել հիմա";
+"lock_delay_immediate" = "Անմիջապես";
+"lock_delay_30s" = "30 վայրկյան";
+"lock_delay_1m" = "1 րոպե";
+"lock_delay_5m" = "5 րոպե";
+"lock_delay_10m" = "10 րոպե";
+"face_id" = "Face ID";
+"touch_id" = "Touch ID";
+"biometric" = "Կենսաչափություն";
+"use_biometric" = "Բացել %@-ով";
+"use_pin_code" = "Օգտագործել PIN կոդ";
+"unlock" = "Բացել";
+"save" = "Պահպանել";
+"continue" = "Շարունակել";
+"enable_biometric" = "Միացնե՞լ %@-ը։";
+"biometric_unavailable" = "Կենսաչափությունը հասանելի չէ այս սարքում։";
+"disable" = "Անջատել";
+
+// MARK: - Settings -> My QR Code
+"failed_to_generate_qr_code" = "Չհաջողվեց ստեղծել QR կոդ";
+"show_this_code_to_someone_nearby" = "Ցույց տվեք այս կոդը մոտակա մարդուն";
+"scan_with_camera_or_screenshot" = "Նրանք կարող են սկանավորել այն տեսախցիկով կամ նկարել էկրանը";
+
+// MARK: - Settings -> Appearance
+"theme" = "Թեմա";
+"theme_footer" = "Ընտրեք, թե ինչպես է երևում Konstruct-ը։ Ավտոմատը հարմարվում է համակարգի կարգավորումներին։";
+"automatic" = "Ավտոմատ";
+"light" = "Բաց";
+"dark" = "Մուգ";
+
+// MARK: - Settings -> Network
+"connected" = "Միացված";
+"disconnected" = "Անջատված";
+"connection" = "Կապ";
+"subscriptions" = "Բաժանորդագրություններ";
+"last_heartbeat" = "Վերջին զարկ";
+"custom_server_debug" = "Սեփական սերվեր (վրիպազերծում)";
+"apply_changes" = "Կիրառել փոփոխությունները";
+"environment" = "Միջավայր";
+"debug" = "Վրիպազերծում";
+"release" = "Թողարկում";
+"server_settings_footer" = "Այս կարգավորումները ավտոմատ կերպով սահմանվում են կառուցման կոնֆիգուրացիայով։";
+"network_settings" = "Ցանցի կարգավորումներ";
+"default_server" = "Լռելյայն սերվեր";
+"reset_to_default" = "Վերադարձնել լռելյայնին";
+"custom_server" = "Սեփական սերվեր";
+
+// MARK: - Notifications Settings
+"enable_notifications" = "Միացնել ծանուցումները";
+"notifications_footer" = "Կառավարեք, թե ինչպես և երբ եք ստանում ծանուցումներ";
+"message_notifications" = "Հաղորդագրությունների ծանուցումներ";
+"show_message_notifications" = "Ցույց տալ հաղորդագրությունների ծանուցումները";
+"preview_name_and_message" = "Անուն և հաղորդագրություն";
+"preview_name_only" = "Միայն անուն";
+"preview_none" = "Առանց նախադիտման";
+"sound_and_haptics" = "Ձայն և թրթռում";
+"notification_sound" = "Ծանուցման ձայն";
+"vibration" = "Թրթռում";
+"sound_haptics_footer" = "Կարգավորեք ծանուցման ձայնն ու թրթռումը";
+"push_notifications" = "Push ծանուցումներ";
+"enable_push_notifications" = "Միացնել push ծանուցումները";
+"push_notifications_footer" = "Ստացեք ծանուցումներ, երբ հավելվածը ֆոնում է։ Ձեր հաղորդագրությունները մնում են ծայրից ծայր գաղտնագրված։";
+"push_privacy_notice" = "Գաղտնիության ծանուցում";
+"push_privacy_notice_text" = "Push ծանուցումները առաքվում են գաղտնագրված, անանուն նշաններով։ Սերվերը չի կարող կարդալ ձեր հաղորդագրությունները կամ իմանալ, թե ում հետ եք խոսում։";
+"system_notification_settings" = "Համակարգի ծանուցումների կարգավորումներ";
+"open_system_settings" = "Բացել համակարգի կարգավորումները";
+"system_settings_footer" = "Կառավարեք ծանուցումների թույլտվությունները iOS-ի Կարգավորումներում";
+"notification_permissions_required" = "Ծանուցումներ ստանալու համար անհրաժեշտ են թույլտվություններ";
+"grant_permission" = "Տալ թույլտվություն";
+"not_determined" = "Սահմանված չէ";
+"authorized" = "Թույլատրված";
+"denied" = "Մերժված";
+
+// MARK: - Background Fetch & Local Notifications
+"construct_app_name" = "Konstruct";
+"construct_new_message" = "Նոր հաղորդագրություն";
+"construct_new_messages" = "Նոր հաղորդագրություններ";
+"construct_new_messages_count" = "Դուք ունեք %d նոր հաղորդագրություն";
+"construct_new_messages_from_contacts" = "Դուք ունեք %d նոր հաղորդագրություն %d կոնտակտից";
+"construct_sync_completed" = "Հաղորդագրությունները համաժամեցված են";
+"construct_sync_completed_count" = "Համաժամեցվեց %d նոր հաղորդագրություն";
+"background_fetch" = "Ֆոնային թարմացում";
+"background_fetch_footer" = "Պարբերաբար բեռնում է բաց թողնված հաղորդագրությունները, երբ կենդանի կապը ակտիվ չէ (օրինակ՝ հավելվածը ֆոնում է կամ ցանցը ընդհատվել է)։ Զրույցները թարմ են պահում՝ առանց միայն push-ի վրա հույս դնելու։";
+"enable_background_fetch" = "Միացնել ֆոնային թարմացումը";
+"background_fetch_status" = "Ֆոնային թարմացման կարգավիճակ";
+"background_fetch_disabled" = "Անջատված";
+"background_fetch_enabled" = "Միացված";
+"background_fetch_last_check" = "Վերջին ստուգում՝ %@";
+"background_fetch_interval" = "Ստուգման միջակայք";
+"background_fetch_interval_settings" = "Ստուգման միջակայք";
+"background_fetch_interval_footer" = "Որքան հաճախ բեռնել բաց թողնված հաղորդագրությունները, երբ կենդանի կապը անգործ է։ iOS-ը կարող է սա կարգավորել ձեր օգտագործման հիման վրա։";
+"background_fetch_interval_minutes" = "%d րոպե";
+"background_fetch_interval_hours" = "%d ժամ";
+"background_fetch_low_power_mode_warning" = "Անջատված է Էներգախնայման ռեժիմում";
+"background_fetch_low_power_mode_title" = "Էներգախնայման ռեժիմը միացված է";
+"background_fetch_low_power_mode_description" = "Ֆոնային թարմացումը ավտոմատ անջատվում է Էներգախնայման ռեժիմում՝ մարտկոց խնայելու համար։";
+"background_fetch_low_power_mode_alert_title" = "Հայտնաբերվել է Էներգախնայման ռեժիմ";
+"background_fetch_low_power_mode_alert_message" = "Ֆոնային թարմացումը անջատվել է, քանի որ միացված է Էներգախնայման ռեժիմը։ Այն կվերամիացվի ավտոմատ, երբ ռեժիմն անջատվի։";
+"background_fetch_disabled_low_power" = "Անջատված (Էներգախնայում)";
+"background_fetch_energy_saving" = "Էներգախնայում";
+
+// MARK: - Profile Sharing
+"profile" = "Պրոֆիլ";
+"profile_sharing_status" = "Պրոֆիլի կիսման կարգավիճակ";
+"sharing_with_you" = "Կիսվում է ձեզ հետ";
+"not_sharing_with_you" = "Չի կիսվում ձեզ հետ";
+"profile_sharing_info" = "Պրոֆիլի կիսման տեղեկություն";
+"profile_sharing_info_footer" = "Այս օգտատերը կարող է ընտրել կիսել իր պրոֆիլի տվյալները (ցուցադրվող անուն և ավատար) ձեզ հետ գաղտնագրված հաղորդագրություններով։ Պրոֆիլի տվյալները սերվերում չեն պահվում։";
+"share_my_data" = "Կիսվել իմ տվյալներով";
+"block_user" = "Արգելափակել օգտատիրոջը";
+"unblock_user" = "Ապարգելափակել օգտատիրոջը";
+"report_spam" = "Հաղորդել սպամի մասին";
+"report_spam_confirmation" = "Հաղորդե՞լ սպամի մասին։";
+"report_spam_confirmation_message" = "Այս անձը կհաղորդվի և կարգելափակվի։ Հաղորդումները օգնում են կանգնեցնել չարաշահումը — մենք երբեք չենք տեսնում ձեր հաղորդագրությունները։";
+"report_spam_success" = "Հաղորդումը ուղարկված է։ Այս անձն այժմ արգելափակված է։";
+"report_spam_failed" = "Չհաջողվեց ուղարկել հաղորդումը, բայց այս անձն արդեն արգելափակված է։";
+"actions" = "Գործողություններ";
+"user_is_blocked_footer" = "Այս օգտատերը արգելափակված է։ Նա չի կարող ձեզ հաղորդագրություն ուղարկել։";
+"profile_blocked_badge" = "Արգելափակված";
+"composer_split_count" = "%d հաղորդագրություն";
+"block_user_confirmation" = "Արգելափակել օգտատիրոջը";
+"block_user_confirmation_message" = "Վստա՞հ եք, որ ցանկանում եք արգելափակել այս օգտատիրոջը։ Նա չի կարողանա ձեզ հաղորդագրություն ուղարկել։";
+"unblock_user_confirmation_message" = "Վստա՞հ եք, որ ցանկանում եք ապարգելափակել այս օգտատիրոջը։ Նա կրկին կկարողանա ձեզ հաղորդագրություն ուղարկել։";
+"share_my_data_alert" = "Կիսվել իմ տվյալներով";
+"profile_shared_successfully" = "Պրոֆիլը հաջողությամբ կիսվեց";
+"failed_to_share_profile" = "Չհաջողվեց կիսվել պրոֆիլով";
+"profile_sharing_stopped" = "Պրոֆիլի կիսումը դադարեցված է";
+"not_authenticated" = "Նույնականացված չէ";
+"user_not_found" = "Օգտատերը չի գտնվել";
+"failed_to_encode_profile" = "Չհաջողվեց կոդավորել պրոֆիլը";
+"search_messages" = "Որոնել հաղորդագրություններում";
+"select" = "Ընտրել";
+"select_messages" = "Ընտրել հաղորդագրություններ";
+"delete_selected" = "Ջնջել ընտրվածները";
+"message_selected" = "հաղորդագրություն ընտրված է";
+"messages_selected" = "հաղորդագրություն ընտրված է";
+"reachable" = "Հասանելի է";
+"unreachable" = "Անհասանելի է";
+"delete_my_account" = "Ջնջել ինքնությունը";
+"delete_account_warning" = "Մշտապես ջնջում է ձեր ինքնությունը սերվերից։ Հաջող ջնջումից հետո այս սարքից ավտոմատ կմաքրվեն բոլոր տեղական գաղտնագրման բանալիներն ու հավելվածի տվյալները։";
+"delete_account_warning_title" = "Ջնջե՞լ ինքնությունը։";
+"delete_account_warning_message" = "Սա մշտապես կջնջի ձեր ինքնությունը սերվերից։ Սերվերի հաստատումից հետո այս սարքից ավտոմատ կմաքրվեն բոլոր տեղական բանալիներն ու տվյալները։ Այս գործողությունը հնարավոր չէ հետարկել։";
+"delete_account_confirmation_message" = "Վերջնական հաստատում. ձեր ինքնությունը կջնջվի սերվերից, իսկ բոլոր տեղական գաղտնագրման բանալիները կմաքրվեն սերվերի հաստատումից հետո։ Այս գործողությունը անշրջելի է։";
+"delete_account_irreversible_warning" = "Այս գործողությունը անշրջելի է։ Ձեր բոլոր տվյալները մշտապես կջնջվեն սերվերից և չեն կարող վերականգնվել։";
+"delete_account" = "Ջնջել ինքնությունը";
+"delete_account_countdown" = "Ջնջում %d վայրկյանում";
+"delete_account_local_only" = "Ջնջել միայն տեղական տվյալները";
+"delete_account_local_only_title" = "Ջնջե՞լ միայն տեղական տվյալները։";
+"delete_account_local_only_warning" = "Ձեր հաշիվը կարող է դեռ գոյություն ունենալ սերվերում։ Այս սարքից մշտապես կջնջվեն բոլոր տեղական գաղտնագրման բանալիներն ու հավելվածի տվյալները։ Այստեղից այլևս չեք կարողանա օգտագործել այս հաշիվը։";
+"delete_account_local_only_confirm" = "Ջնջել տեղում";
+"warning" = "Զգուշացում";"DANGER_ZONE" = "Վտանգի գոտի";
+"account_recovery" = "Հաշվի վերականգնում";
+"discovery" = "Հայտնաբերում";
+"account_recovery_seed" = "Ինքնության վերականգնում (սերմնաբառ)";
+"account_recovery_seed_hint" = "Վերականգնեք հասանելիությունը ձեր վերականգնման սերմնաբառով։";
+"account_recovery_seed_coming_soon" = "Սերմնաբառով վերականգնումը հասանելի կլինի ապագա թարմացման մեջ։";
+
+// Duress PIN
+"duress_pin" = "Ոչնչացման PIN";
+"duress_pin_hint" = "Առանձին PIN, որը կողպման էկրանին մուտքագրելիս լուռ ջնջում է բոլոր տվյալները։";
+"duress_pin_coming_soon" = "Ոչնչացման PIN-ը հասանելի կլինի ապագա թարմացման մեջ։";
+"enable_duress_pin" = "Միացնել ոչնչացման PIN-ը";
+"disable_duress_pin" = "Անջատել ոչնչացման PIN-ը";
+"duress_pin_change" = "Փոխել ոչնչացման PIN-ը";
+"create_duress_pin" = "Ստեղծել ոչնչացման PIN";
+"confirm_duress_pin" = "Հաստատել ոչնչացման PIN-ը";
+"duress_pin_setup_warning" = "Կողպման էկրանին մուտքագրելիս այս PIN-ը լուռ ջնջում է բոլոր տեղական տվյալները և փորձում է ջնջել ձեր հաշիվը սերվերից։ Այս գործողությունը անշրջելի է։";
+"duress_pin_matches_main" = "Ոչնչացման PIN-ը չի կարող համընկնել հիմնական PIN-ի հետ։ Ընտրեք այլ կոդ։";
+"duress_pin_disable_warning" = "Ձեր ոչնչացման PIN-ը կհեռացվի։ Կողպման էկրանը այլևս չի գործարկի լուռ ջնջում։";
+"duress_pin_requires_main_pin" = "Ոչնչացման PIN օգտագործելու համար նախ միացրեք հիմնական PIN-ը։";
+
+// Linked Devices
+"linked_devices" = "Կապված սարքեր";
+"linked_devices_hint" = "Օգտագործեք նույն ինքնությունը միաժամանակ մի քանի սարքում։";
+"linked_devices_coming_soon" = "Լրացուցիչ սարքերի կապումը հասանելի կլինի ապագա թարմացման մեջ։";
+"link_new_device" = "Կապել նոր սարք";
+"device_link_show_qr" = "Ցույց տալ QR կոդը";
+"transfer_history_row" = "Փոխանցել պատմությունը մոտակա սարքին";
+"transfer_history_hint" = "Ուղարկեք հաղորդագրությունների պատմությունը նույն Wi‑Fi ցանցում գտնվող սարքին։";
+"this_device" = "Այս սարքը";
+"profile_currently_shared" = "Պրոֆիլը այժմ կիսված է";
+"stop_sharing_profile" = "Դադարեցնել պրոֆիլի կիսումը";
+"share_my_profile" = "Կիսվել իմ պրոֆիլով";
+"share_profile_explanation" = "Կիսվեք ձեր անունով և լուսանկարով այս կոնտակտի հետ";
+"username_invalid_chars" = "Օգտանունը կարող է պարունակել միայն տառեր, թվեր և ընդգծումներ։";
+"username_too_short" = "Օգտանունը պետք է լինի առնվազն 3 նիշ։";
+"username_checking" = "Հասանելիության ստուգում...";
+"username_available" = "Օգտանունը հասանելի է։";
+"username_unavailable" = "Օգտանունն արդեն զբաղված է։";
+"username_check_failed" = "Այժմ չհաջողվեց ստուգել օգտանունը։ Փորձեք նորից։";
+"username_hint" = "ձեր եզակի հանրային նույնացուցիչը։ հպեք փոխելու համար։";
+"username_length_error" = "օգտանունը պետք է լինի 3–20 նիշ";
+"display_name_hint" = "երևում է կոնտակտներին։ օգտանունը մնում է մշտական։";
+"new_messages" = "Նոր հաղորդագրություններ";
+"scroll_to_bottom" = "Վերադառնալ վերջիններին";
+
+// Network Settings
+"server" = "Սերվեր";
+"port" = "Պորտ";
+"server_applied_title" = "Սերվերը թարմացված է";
+"server_applied_message" = "Նոր gRPC սերվերը կօգտագործվի բոլոր հետագա միացումների համար։";
+"close" = "Փակել";
+"chat_nav_back" = "Հետ";
+"change_avatar" = "Փոխել լուսանկարը";
+
+// Onboarding (identity gate — create / restore / link)
+"onboarding_tagline" = "ինտերնետը ազատ մտքի տարածք է։";
+"onboarding_username_placeholder" = "ընտրեք հանրային կեղծանուն (ոչ պարտադիր)";
+"onboarding_create_identity" = "Ստեղծել ինքնություն";
+"onboarding_already_have" = "Արդեն ունե՞ք ինքնություն։";
+"onboarding_existing_title" = "Օգտագործել առկա ինքնությունը";
+"onboarding_existing_intro" = "Ընտրեք, թե ինչպես բերել այն այս սարք։";
+"onboarding_restore_title" = "Վերականգնել վերականգնման արտահայտությունից";
+"onboarding_restore_subtitle" = "Չունեք այլ սարք Konstruct-ով։ Օգտագործեք ձեր 12 բառանոց արտահայտությունը։";
+"onboarding_link_title" = "Կապել այս սարքը";
+"onboarding_link_subtitle" = "Դեռ ունեք Konstruct մեկ այլ հեռախոսում կամ համակարգչում։";
+"onboarding_restore" = "Վերականգնել վերականգնման բանալուց";
+"onboarding_recovery_coming_soon" = "Վերականգնումը շուտով";
+"onboarding_network_settings" = "Ցանցի կարգավորումներ";
+
+// First-run orientation (product education after identity init)
+"orientation_section_label" = "> կողմնորոշում";
+"orientation_skip" = "Բաց թողնել";
+"orientation_next" = "Շարունակել";
+"orientation_enter" = "Մտնել Konstruct";
+"orientation_or" = "կամ";
+"orientation_page_a11y" = "Էջ %d՝ %d-ից";
+"orientation_settings_replay" = "Ինչպես է աշխատում Konstruct-ը";
+"orientation_page1_title" = "Ինքնություն";
+"orientation_page1_body" = "Ոչ հեռախոսահամար, ոչ էլ․ փոստ, ոչ իրական անուն։ Ձեր ինքնությունը ստեղծվում է զրոյից այս հեռախոսում և ոչնչի չի հղվում դրսում։ Այստեղ դուք այն եք, ինչ ինքներդ եք դարձնում։";
+"orientation_page1_caption" = "Հանրային @կեղծանունը ոչ պարտադիր է։ Ձեր բանալիները երբեք չեն լքում այս հեռախոսը։";
+"orientation_page1_visual_label" = "այս սարքում";
+"orientation_page2_title" = "Մարդիկ";
+"orientation_page2_body" = "Որևէ մեկին ավելացնելու համար ցույց տվեք QR կոդ կամ կիսվեք հղումով։ @կեղծանունով որոնումը աշխատում է միայն եթե նա միացրել է այն Անվտանգությունում — լռելյայն անջատված է։";
+"orientation_page2_caption" = "Ոչ ոք չի կարող ձեզ գրել առանց ձեր համաձայնության։";
+"orientation_page2_path_qr_title" = "QR / հղում";
+"orientation_page2_path_qr_sub" = "Ցույց տվեք կամ սկանավորեք։ Յուրաքանչյուր կոդ աշխատում է մեկ անգամ։";
+"orientation_page2_path_search_title" = "Որոնում";
+"orientation_page2_path_search_sub" = "Միայն եթե նա միացրել է այն Անվտանգությունում։";
+"orientation_page3_title" = "Երեք տեղ";
+"orientation_page3_body" = "Զրույցները այն են, որտեղ խոսում եք։ Synaps-ը ձեր մարդկանց ցանցն է և մուտքային հարցումները։ Կարգավորումներում են ձեր QR կոդը, վերականգնումն ու սարքերը։";
+"orientation_page3_caption" = "Սկսեք Synaps-ից — ցույց տվեք QR կամ գտեք ինչ-որ մեկին։";
+"orientation_map_streams" = "Զրույցներ";
+"orientation_map_streams_sub" = "Մեկ-մեկ զրույցներ";
+"orientation_map_synaps" = "Synaps";
+"orientation_map_synaps_sub" = "Մարդիկ, որոնում, հարցումներ";
+"orientation_map_settings" = "Կարգավորումներ";
+"orientation_map_settings_sub" = "QR, վերականգնում, սարքեր";
+
+// Registration flow
+"reg_establishing_trust" = "Ձեր բանալիների ստեղծում";
+"reg_joining_network" = "Ձեր սարքը միանում է ցանցին";
+"reg_welcome" = "Բարի գալուստ";
+"reg_label_username" = "Օգտանուն";
+"reg_label_mode" = "Ռեժիմ";
+"reg_label_device_id" = "Սարքի ID";
+"reg_mode_anonymous" = "Անանուն";
+"reg_error_title" = "Ինչ-որ բան սխալ գնաց";
+"reg_continue" = "Շարունակել";
+"reg_try_again" = "Փորձել նորից";
+"reg_cancel" = "Չեղարկել";
+"reg_phase_entropy" = "պատահականություն հավաքված է";
+"reg_phase_nonce" = "հակասպամ ապացույցը ընթացքի մեջ է";
+"reg_phase_solution" = "պատրաստ է";
+
+// Delete Account
+"delete_account_footer" = "Մշտապես ջնջում է ձեր ինքնությունն ու բոլոր կապված տվյալները։";
+"delete_account_not_available" = "Ինքնության ջնջումը դեռ հասանելի չէ։ Փորձեք ավելի ուշ։";
+"delete_account_failed" = "Ջնջումը ձախողվեց՝ %@";
+
+// Account Settings — new sections
+"privacy" = "Գաղտնիություն";
+"privacy_who_can_find_me" = "Ով կարող է գտնել ինձ օգտանունով";
+"privacy_read_receipts" = "Կարդալու հաստատումներ";
+"privacy_coming_soon_footer" = "Գաղտնիության կառավարումը շուտով։";
+"data_and_privacy" = "Տվյալներ և գաղտնիություն";
+"export_my_data" = "Արտահանել իմ տվյալները";
+"export_my_data_footer" = "Ներբեռնեք ձեր հաղորդագրությունների, կոնտակտների և հաշվի տվյալների պատճենը։ Պահանջվում է GDPR-ով և համապատասխան գաղտնիության օրենքներով։";
+"export_coming_soon_message" = "Տվյալների արտահանումը դեռ հասանելի չէ։ Այս հնարավորությունը պահանջվում է օրենքով և կավելացվի հանրային թողարկումից առաջ։";
+"danger_zone" = "Վտանգի գոտի";
+
+// QR Scanner
+"paste_invite_link" = "Տեղադրել հրավերի հղումը";
+"clipboard_no_valid_invite" = "Սեղմատախտակում վավեր հրավերի հղում չի գտնվել։";
+
+// Invite / contact links
+"invite_error_invalid_url" = "Նշված URL-ն անվավեր է։";
+"invite_error_unsupported_link" = "Սա աջակցվող Konstruct հրավերի հղում չէ։";
+"invite_error_expired" = "Այս հրավերը ժամկետանց է։ Խնդրեք նորը։";
+"invite_error_invalid_fmt" = "Անվավեր հրավեր՝ %@";
+"invite_error_already_used" = "Այս հրավերն արդեն օգտագործվել է։ Խնդրեք նորը։";
+"invite_error_verification_failed_fmt" = "Չհաջողվեց ստուգել հրավերը՝ %@";
+"invite_error_legacy_unsupported" = "Այս հղման ձևաչափն այլևս չի աջակցվում։ Խնդրեք նոր QR կամ հղում։";
+"invite_error_malformed" = "Անսարք հրավերի տվյալներ";
+"invite_redeem_safety_message" = "Կոնտակտն ավելացվել է հրավերից։ Նրանց անունը կերևա, երբ նրանք կիսվեն դրանով։";
+"invite_redeem_safety_block" = "Արգելափակել";
+"invite_accepted_inviter_message" = "Ինչ-որ մեկը միացավ ձեր հրավերով։";
+
+// iPad Split View
+"select_chat" = "Ընտրեք զրույց";
+"select_chat_description" = "Ընտրեք զրույց կողային վահանակից՝ նամակագրություն սկսելու համար։";
+"show_chat_list" = "Ցույց տալ զրույցների ցանկը";
+"hide_chat_list" = "Թաքցնել զրույցների ցանկը";
+
+// QR Code
+
+// Account Settings
+
+// Reset Session
+"reset_session" = "Վերակայել նիստը";
+"reset_session_title" = "Վերակայե՞լ նիստը։";
+"reset_session_message" = "Սա կվերահաստատի նոր գաղտնագրված նիստ։ Ճանապարհին գտնվող հաղորդագրությունները կարող են կորչել։";
+
+// Account Recovery
+"try_again" = "Փորձել նորից";
+"recovery_not_configured" = "Կարգավորված չէ";
+"recovery_intro_title" = "Կարգավորել հաշվի վերականգնումը";
+"recovery_intro_body" = "Ստեղծեք 12 բառանոց արտահայտություն։ Կոնտակտները ձեզ հասնում են այն հասցեով, որ այն տալիս է ձեզ, և այն վերադարձնում է ձեր հաշիվը, եթե կորցնեք բոլոր սարքերը։";
+"recovery_gate_nav_title" = "Վերականգնման արտահայտություն";
+"recovery_gate_title" = "Կոնտակտները սկսվում են ձեր վերականգնման արտահայտությունից";
+"recovery_gate_why" = "Ձեր կոնտակտները ձեզ հասնում են ձեզ պատկանող հասցեով, ոչ թե մեր սերվերին։ Այդ հասցեն գալիս է ձեր վերականգնման արտահայտությունից, և յուրաքանչյուր հրավեր կրում է այն։ Նույն 12 բառերը վերադարձնում են ձեր հաշիվը, եթե կորցնեք բոլոր սարքերը։ Ոչ ոք չի կարող վերականգնել դրանք ձեզ համար, այդ թվում՝ մենք։";
+"recovery_gate_setup_note" = "Մոտ մեկ րոպե է տևում. գրում եք 12 բառ և հաստատում դրանցից երեքը։";
+"recovery_gate_setup_action" = "Կարգավորել վերականգնման արտահայտությունը";
+"recovery_gate_confirm_note" = "Ձեր հաշիվն արդեն ունի վերականգնման արտահայտություն, բայց այս սարքը չի տեսել այն։ Մուտքագրեք մեկ անգամ։ Արտահայտությունը մնում է այս սարքում և երբեք չի ուղարկվում։";
+"recovery_gate_later" = "Ավելի ուշ";
+"recovery_confirm_placeholder" = "12 բառ՝ բացատներով առանձնացված";
+"recovery_confirm_action" = "Հաստատել";
+"recovery_confirm_invalid_phrase" = "Դա վավեր 12 բառանոց արտահայտություն չէ։ Ստուգեք յուրաքանչյուր բառի ուղղագրությունը։";
+"recovery_confirm_other_account" = "Այս արտահայտությունը պատկանում է այլ հաշվի։";
+"invite_error_recovery_key_required" = "Նախ կարգավորեք վերականգնման արտահայտությունը՝ կոնտակտներ ավելացնելուց առաջ։";
+"recovery_generate" = "Ստեղծել վերականգնման արտահայտություն";
+"recovery_write_down" = "Գրեք այս 12 բառերը հերթականությամբ։ Պահեք ապահով տեղում — երբեք մի կիսվեք դրանցով։";
+"recovery_never_share" = "Երբեք մի կիսվեք ձեր վերականգնման արտահայտությամբ որևէ մեկի հետ։";
+"recovery_wrote_it_down" = "Ես գրել եմ այն";
+"recovery_quiz_title" = "Ստուգեք ձեր վերականգնման արտահայտությունը";
+"recovery_quiz_word_n" = "Բառ #%d";
+"recovery_quiz_placeholder" = "Մուտքագրեք բառը";
+"recovery_confirm" = "Հաստատել և ակտիվացնել";
+"recovery_quiz_failed" = "Որոշ բառեր սխալ են։ Ստուգեք ձեր վերականգնման արտահայտությունը։";
+"recovery_uploading" = "Վերականգնման բանալու ակտիվացում…";
+"recovery_done_title" = "Վերականգնման արտահայտությունն ակտիվացված է";
+"recovery_done_body" = "Ձեր հաշիվն այժմ պաշտպանված է։ Պահեք վերականգնման արտահայտությունը ապահով։";
+"recovery_fingerprint" = "Բանալու մատնահետք";
+"recovery_error_title" = "Ինչ-որ բան սխալ գնաց";
+"recovery_error_not_found" = "Հաշիվը չի գտնվել կամ վերականգնումը միացված չէ։";
+"recovery_error_not_configured" = "Այս ինքնության համար վերականգնման արտահայտություն երբեք չի կարգավորվել։";
+"recovery_error_wrong_phrase" = "Սխալ վերականգնման արտահայտություն։";
+"recovery_error_cooldown" = "Վերականգնումը վերջերս է օգտագործվել։ Փորձեք ավելի ուշ։";
+"recovery_error_already_set" = "Վերականգնման բանալին արդեն սահմանված է (անփոփոխ)։";
+"recovery_entry_instructions" = "Մուտքագրեք ձեր 12 բառանոց վերականգնման արտահայտությունը՝ այս սարքում ինքնությունը վերականգնելու համար։";
+"recovery_identifier_label" = "Հաշվի ID կամ օգտանուն";
+"recovery_identifier_placeholder" = "օգտանուն կամ UUID";
+"recovery_enter_phrase" = "Վերականգնման արտահայտություն (12 բառ)";
+"recovery_invalid_phrase" = "Անվավեր վերականգնման արտահայտություն։ Ստուգեք բառերը և փորձեք նորից։";
+"recovery_restore_account" = "Վերականգնել հաշիվը";
+"recovery_in_progress" = "Հաշվի վերականգնում…";
+"recovery_restored_title" = "Հաշիվը վերականգնված է";
+"recovery_restored_body" = "Ձեր հաշիվը վերականգնվել է այս սարքում։ Նախորդ նիստերը չեղարկվել են։";
+"recovery_banner_title" = "Պաշտպանեք ձեր հաշիվը";
+"recovery_banner_subtitle" = "Կարգավորեք վերականգնման արտահայտությունը՝ հասանելիությունը չկորցնելու համար։";
+"recovery_setup_action" = "ԿԱՐԳԱՎՈՐԵԼ";
+
+// macOS Catalyst — push notifications
+"push_not_available_mac" = "Push ծանուցումները հասանելի չեն աշխատասեղանին";
+"push_not_available_mac_hint" = "Աշխատասեղանի հավելվածն օգտագործում է մշտական կապ իրական ժամանակի առաքման համար։ Push ծանուցումները հասանելի են iOS հավելվածում։";
+
+// Profile sharing
+"failed_to_establish_session" = "Չհաջողվեց հաստատել անվտանգ կապ։ Փորձեք նորից։";
+"saved" = "Պահպանված է";
+
+// Swipe actions
+"pin" = "Ամրացնել";
+"unpin" = "Ապամրացնել";
+"mark_unread" = "Նշել որպես չկարդացված";
+"mark_read" = "Նշել որպես կարդացված";
+
+// VEIL — traffic obfuscation
+"veil_title" = "VEIL";
+"veil_footer" = "VEIL-ը քողարկում է ձեր երթևեկությունը, որպեսզի այն անտարբերելի լինի սովորական HTTPS-ից։ Կոնֆիգուրացիան ավտոմատ տրամադրվում է սերվերի կողմից։";
+"veil_unavailable" = "Այս սերվերում հասանելի չէ";
+"veil_establishing" = "VEIL թունելի հաստատում…";
+"veil_retry" = "Կրկնել VEIL կապը";
+"veil_import_err_malformed" = "Անվավեր կոնֆիգուրացիայի կոդ";
+"veil_import_err_signature" = "Կոնֆիգուրացիայի ստորագրությունն անվավեր է";
+"veil_import_err_expired" = "Այս կոնֆիգուրացիան ժամկետանց է — խնդրեք նորը";
+"veil_import_err_unknown_relay" = "Կոնֆիգուրացիան անհայտ ռելեի համար է";
+"veil_config_import_ok" = "VEIL հասանելիությունը կարգավորված է";
+"veil_config_scan" = "Սկանավորել կոնֆիգուրացիայի QR-ը";
+"veil_config_paste" = "Տեղադրել կոնֆիգուրացիայի կոդը";
+"veil_config_import" = "Ներմուծել";
+"veil_config_section" = "VEIL ՀԱՍԱՆԵԼԻՈՒԹՅՈՒՆ";
+"veil_config_active" = "Հասանելիությունը կարգավորված է";
+"veil_config_none" = "Հասանելիություն կարգավորված չէ";
+
+/* Bootstrap voucher — redemption side (onboarding "can't connect?" door) */
+"onboarding_cant_connect" = "Չե՞ք կարող միանալ։";
+"veil_bootstrap_title" = "Չի հաջողվում միանալ";
+"veil_bootstrap_intro" = "Եթե Konstruct-ը այստեղ չի հասնում ցանցին, արդեն միացած մեկը կարող է ձեզ տալ մեկանգամյա հասանելիության կոդ։ Խնդրեք այն, ապա սկանավորեք կամ տեղադրեք ստորև։";
+"veil_bootstrap_scan_subtitle" = "Ուղղեք տեսախցիկը նրանց կոդին";
+"veil_bootstrap_paste_subtitle" = "Եթե նրանք ուղարկել են կոդը որպես տեքստ";
+"veil_bootstrap_ok" = "Կապը կարգավորված է";
+"veil_bootstrap_ok_hint" = "Վերադարձեք և ստեղծեք կամ վերականգնեք ինքնությունը — այժմ այն կանցնի այս կապով։";
+"traffic_protection" = "Երթևեկության պաշտպանություն";
+"veil_footer_short" = "VEIL-ը քողարկում է երթևեկությունը որպես սովորական HTTPS։ Կոնֆիգուրացիան տրամադրվում է ավտոմատ։";
+
+// Censorship protection (production soft control — no VEIL / relay disclosure)
+"censorship_protection" = "Ցենզուրայի պաշտպանություն";
+"censorship_protection_footer_off" = "Անջատված։ Կապը գնում է ուղիղ Konstruct։";
+"censorship_protection_footer_auto" = "Ավտոմատ միանում է, երբ հայտնաբերվում է արգելափակում։ Կարգավորումը տեղի է ունենում ֆոնում։";
+"censorship_protection_footer_on" = "Միշտ շրջանցում է ցանցային արգելափակումները։ Կարգավորումը տեղի է ունենում ֆոնում։";
+
+// VEIL mode (tri-state)
+"veil_mode_off" = "անջատված";
+"veil_mode_auto" = "ավտո";
+"veil_mode_on" = "միացված";
+"veil_footer_off" = "Երթևեկության պաշտպանությունն անջատված է։ Միայն ուղիղ կապ։";
+"veil_footer_off_obf_active" = "VEIL-ն անջատված է — ուղիղ երթևեկությունը քողարկված է QUIC-ով (Salamander)։";
+"veil_footer_off_obf_fallback" = "VEIL-ն անջատված է — QUIC քողարկումը միացված է. այժմ H2 պահուստային ուղի է (քողարկված չէ)։";
+"veil_footer_auto" = "VEIL-ը ավտոմատ ակտիվանում է, երբ հայտնաբերվում է ցանցային արգելափակում։";
+"veil_footer_on" = "Ամբողջ երթևեկությունը անցնում է VEIL ռելեով։";
+"veil_auto_active" = "Ավտոմատ ակտիվացված · ուղիղն արգելափակված է";
+"veil_direct_probe_ok" = "Ուղիղ՝ լավ (%@)";
+"veil_direct_probe_blocked" = "Ուղիղ՝ արգելափակված";
+
+// Data & Storage
+"data_and_storage" = "Տվյալներ և պահեստ";
+"storage_media_cache" = "Մեդիա քեշ";
+"storage_media_cache_footer" = "Քեշավորված մեդիա ֆայլերը թույլ են տալիս անմիջապես դիտել լուսանկարներն ու ֆայլերը՝ առանց կրկին ներբեռնելու։ Պահվում են համակարգի Caches պանակում — iOS-ը կարող է դրանք մաքրել ավտոմատ, երբ պահեստը քիչ է։";
+"media_cache" = "Մեդիա քեշ";
+"storage_of_quota" = "%@՝ %@-ից";
+"storage_clearing" = "Մաքրվում է…";
+"storage_clear_media_cache" = "Մաքրել մեդիա քեշը";
+"storage_clear_confirm_title" = "Մաքրե՞լ մեդիա քեշը։";
+"storage_clear_confirm_message" = "Բոլոր քեշավորված լուսանկարները, տեսանյութերն ու ֆայլերը կհեռացվեն։ Անհրաժեշտության դեպքում դրանք կներբեռնվեն նորից։";
+"storage_limit" = "Պահեստի սահման";
+"storage_limit_footer" = "Ամենահին ֆայլերը ավտոմատ հեռացվում են, երբ քեշը գերազանցում է այս սահմանը։";
+"storage_no_limit" = "Առանց սահմանի";
+"storage_no_limit_footer" = "Մեդիա ֆայլերը կպահվեն, մինչև դրանք ձեռքով մաքրեք կամ iOS-ը վերադարձնի տարածքը։";
+"media_autodownload" = "Մեդիայի ավտոներբեռնում";
+"media_autodownload_never" = "Երբեք";
+"media_autodownload_unmetered" = "Միայն Wi‑Fi";
+"media_autodownload_always" = "Միշտ";
+"media_autodownload_footer" = "Կցորդները բեռնվում են հաղորդագրությունների ժամանումին։ Սերվերը ֆայլերը պահում է 7 օր, ուստի մեդիան այն զրույցում, որը մեկ շաբաթում չեք բացել, հետագայում հնարավոր չէ ներբեռնել։";
+"storage_auto_clear" = "Պահել մեդիան";
+"storage_auto_clear_footer" = "Ընտրված ժամանակահատվածից հին մեդիան հեռացվում է հավելվածի յուրաքանչյուր գործարկման ժամանակ։";
+"storage_keep_forever" = "Հավերժ";
+"storage_keep_7_days" = "7 օր";
+"storage_keep_30_days" = "30 օր";
+"storage_keep_90_days" = "90 օր";
+
+// Message editing
+"edit_message" = "Խմբագրել";
+"edited" = "խմբագրված";
+"editing_message" = "Հաղորդագրության խմբագրում";
+"edit_message_failed" = "Չհաջողվեց խմբագրել հաղորդագրությունը՝ %@";
+"edit_message_limit_reached" = "Խմբագրման սահմանը սպառված է (առավելագույնը 20 խմբագրում)";
+
+// Message reactions
+"reaction_a11y" = "Արձագանք՝ %@";
+"reaction_failed" = "Չհաջողվեց ուղարկել արձագանքը";
+"react" = "Արձագանքել";
+"reaction_pick_more" = "Ավելի շատ արձագանքներ";
+"emoji_group_smileys" = "Ժպիտներ";
+"emoji_group_people" = "Մարդիկ";
+"emoji_group_nature" = "Բնություն";
+"emoji_group_food" = "Սնունդ";
+"emoji_group_activity" = "Գործունեություն";
+"emoji_group_travel" = "Ճանապարհորդություն";
+"emoji_group_objects" = "Առարկաներ";
+"emoji_group_symbols" = "Նշաններ";
+"reaction_remove" = "Հեռացնել արձագանքը";
+
+// MARK: - Network Settings — Connection Route
+"endpoint" = "Ծայրակետ";
+"mode" = "Ռեժիմ";
+
+// MARK: - Quote & Reply
+"quote_reply" = "Մեջբերել և պատասխանել";
+"select_quote" = "Ընտրել մեջբերումը";
+"quote_selection_hint" = "Ընտրեք մեջբերվող տեքստը, ապա հպեք Պատասխանել։";
+"reply_with_selection" = "Պատասխանել ընտրվածին";
+"photo" = "Լուսանկար";
+"video" = "Տեսանյութ";
+"file_attachment" = "Ֆայլ";
+"sticker" = "Կպչուն";
+"media_picker_tab_stickers" = "Կպչուններ";
+"sticker_picker_recent" = "Վերջինները";
+"sticker_catalog_empty" = "Դեռ կպչունների փաթեթներ չկան։";
+"sticker_install_fixture" = "Տեղադրել փորձնական փաթեթ";
+"sticker_picker_more_packs" = "Ավելի շատ փաթեթներ";
+"sticker_get" = "Ստանալ";
+"sticker_pack_count" = "%d կպչուն";
+"sticker_install_failed" = "Չհաջողվեց տեղադրել — փորձեք նորից";
+"sticker_catalog_failed" = "Չհաջողվեց բեռնել փաթեթները։";
+"sticker_catalog_retry" = "Կրկնել";
+"sticker_pack_remove" = "Հեռացնել փաթեթը";
+
+// MARK: - Attachments
+"attach" = "Կցել";
+"camera" = "Տեսախցիկ";
+"files" = "Ֆայլեր";
+"photos" = "Լուսանկարներ";
+"drop_to_attach" = "Գցեք կցելու համար";
+
+// MARK: - Message States
+"uploading" = "Վերբեռնվում է…";
+"loading" = "Բեռնվում է...";
+"send_original_quality" = "Բնօրինակ որակ";
+"quality_label" = "Որակ";
+"quality_compressed" = "Սեղմված";
+"quality_original" = "Բնօրինակ";
+
+/* Custom media picker (P1) */
+"media_picker_recents" = "Վերջինները";
+"media_picker_add" = "Ավելացնել";
+"media_picker_send_n" = "Ուղարկել %d";
+"media_picker_tab_gallery" = "Պատկերասրահ";
+"media_picker_allow_access" = "Թույլատրեք լուսանկարների գրադարանի հասանելիությունը՝ լուսանկարներ և տեսանյութեր կցելու համար։";
+"media_picker_allow_access_action" = "Թույլատրել հասանելիություն";
+"media_picker_access_denied" = "Լուսանկարների գրադարանի հասանելիությունն անջատված է։ Միացրեք այն Կարգավորումներում՝ մեդիա կցելու համար։";
+"media_picker_open_settings" = "Բացել կարգավորումները";
+"media_picker_empty" = "Դեռ լուսանկարներ կամ տեսանյութեր չկան։";
+"media_picker_limit_reached" = "Ընտրության սահմանը սպառված է։";
+"media_picker_item_too_large" = "Մեկ կամ մի քանի տարր գերազանցում է չափի սահմանը։";
+"media_picker_export_failed" = "Չհաջողվեց պատրաստել մեդիան։ Փորձեք նորից։";
+"media_picker_hd" = "HD";
+"media_picker_hd_hint" = "Ուղարկել լուսանկարներ առանց վերասեղմման";
+"media_picker_quality_photo" = "Լուսանկարի որակ";
+"media_picker_quality_video" = "Տեսանյութի որակ";
+"media_picker_estimate_n" = "%d տարր · ~%@";
+"media_picker_video_720" = "720p";
+"media_picker_video_1080" = "1080p";
+"media_picker_confirm" = "Հաստատել ընտրությունը";
+"failed_to_load" = "Չհաջողվեց բեռնել";
+"media_unavailable" = "Մեդիան հասանելի չէ";
+"shared_profile" = "Կիսված պրոֆիլ";
+
+// MARK: - Drafts
+"save_draft" = "Պահպանել սևագիրը";
+"drafts" = "Սևագրեր";
+"drafts_stored_locally" = "Սևագրերը պահվում են տեղում՝ այս սարքում։";
+
+// MARK: - QR Code
+"code_expired" = "Կոդը ժամկետանց է";
+"expires_in" = "Ժամկետը սպառվում է %@-ից";
+
+// MARK: - Settings & Diagnostics
+"diagnostics" = "Ախտորոշում";
+"diagnostics_logs" = "Ախտորոշում և մատյաններ";
+"tls" = "TLS";
+"interval" = "Միջակայք";
+"preview" = "Նախադիտում";
+"settings_coming_soon" = "շուտով";
+"diagnostics_permission" = "Թույլտվություն";
+"diagnostics_apns_token" = "APNs նշան";
+"diagnostics_apns_token_missing" = "բացակայում է";
+"diagnostics_apns_token_received_format" = "ստացված (%@…)";
+"diagnostics_registered_with_server" = "Գրանցված է Konstruct-ում";
+"diagnostics_yes" = "այո";
+"diagnostics_not_registered_with_server" = "ոչ — ծանուցումները չեն գա";
+"diagnostics_server_token_warning" = "Նշանը գրանցված չէ Konstruct-ում։ Վերադարձեք զրույցներ — գրանցումը ավտոմատ կկրկնվի, երբ հավելվածը ակտիվանա։";
+"diagnostics_log_collection" = "Մատյանների հավաքում";
+"diagnostics_status_active" = "Ակտիվ";
+"diagnostics_status_off" = "Անջատված";
+"diagnostics_size" = "Չափ";
+"diagnostics_share_logs" = "Կիսվել մատյաններով";
+"diagnostics_clear_logs" = "Մաքրել մատյանները";
+"diagnostics_stealth_override_title" = "Թաքնված ուղարկող (վրիպազերծման շրջանցում)";
+"diagnostics_stealth_override_hint" = "Թողարկման մեջ միշտ միացված է։ Այստեղ անջատեք՝ մշակման ժամանակ հին նույնականացված ուղու վրա աշխատելու համար։";
+"diagnostics_force_spk_rotation" = "Հարկադրել SPK պտույտ";
+"diagnostics_force_silent_reinit" = "Լուռ վերասկիզբ (զրուցակցին չի ասվում)";
+"diagnostics_replace_otpk_pool" = "Փոխարինել OTPK ավազանը (մեկանգամյա վերականգնում)";
+"diagnostics_silent_reinit_footer" = "Վերակառուցում է մեր նիստը որպես INITIATOR՝ առանց END_SESSION ուղարկելու, որպեսզի զրուցակիցը պահի հինը։ Մեր հաջորդ հաղորդագրությունը հասնում է որպես X3DH կրիչ գոյություն ունեցող նիստում։ Ուղարկեք ԵՐԿՈՒ հաղորդագրություն հետո — երկրորդն է ապացուցում, որ PQ ներդրումը խառնվել է սիմետրիկ։";
+"diagnostics_reset_local_data_keychain" = "Վերակայել տեղական տվյալներն ու Keychain-ը";
+"diagnostics_dev_tools_footer" = "Մաքրում է բոլոր Keychain բանալիները, նիստերը և UserDefaults-ը։ Օգտագործեք թարմ սկզբնավորումը փորձարկելու համար՝ առանց վերատեղադրելու։";
+"diagnostics_recent_logs" = "Վերջին մատյաններ";
+"diagnostics_empty" = "դատարկ";
+"preview_desc_name_and_message" = "Ցույց տալ ուղարկողի անունը և հաղորդագրության բովանդակությունը";
+"preview_desc_name_only" = "Ցույց տալ միայն ուղարկողի անունը";
+"preview_desc_none" = "Ցույց տալ միայն «Նոր հաղորդագրություն»";
+
+// MARK: - Device Linking
+"onboarding_link_device" = "Կապել առկա ինքնությունը";
+"device_link_scan_title" = "Սկանավորել կապելու համար";
+"link_method_title" = "Կապել սարք";
+"link_method_intro" = "Ավելացրեք այս սարքը ձեր առկա Konstruct ինքնությանը։ Օգտագործեք այն սարքը, որով ավելի հեշտ է տեսախցիկ ուղղել։";
+"link_method_scan_title" = "Սկանավորել կոդ";
+"link_method_scan_subtitle" = "Ձեր մյուս սարքը ցույց է տալիս QR կոդ";
+"link_method_show_title" = "Ցույց տալ կոդ";
+"link_method_show_subtitle" = "Ձեր մյուս սարքը սկանավորում է սա";
+"device_link_scan_instructions" = "Բացեք ձեր առկա սարքում → Կարգավորումներ → Կապված սարքեր → Կապել նոր սարք, ապա սկանավորեք QR կոդը։";
+"device_link_linking" = "Սարքի կապում…";
+"device_link_success" = "Սարքը հաջողությամբ կապվեց";
+"device_link_qr_title" = "Կապել նոր սարք";
+"device_link_qr_instructions" = "Նոր սարքում կարգավորման ժամանակ ընտրեք «Կապել առկա ինքնությունը» և սկանավորեք այս կոդը։";
+"device_link_expires_in" = "Ժամկետը սպառվում է %@-ից";
+"device_link_expired" = "Կոդը ժամկետանց է — հպեք թարմացնելու համար";
+"device_link_refresh" = "Ստեղծել նոր կոդ";
+"device_link_confirm" = "Կապել սարքը";
+"device_link_token_placeholder" = "Տեղադրել կապի նշանը…";
+"device_link_macos_instructions" = "Առկա սարքում բացեք Կարգավորումներ → Կապված սարքեր → Կապել նոր սարք, ապա տեղադրեք էկրանին երևացող նշանը։";
+"device_link_confirm_title" = "Կապե՞լ այս սարքը։";
+"device_revoke" = "Հեռացնել սարքը";
+"device_revoke_confirm_title" = "Հեռացնել սարքը";
+"device_revoke_confirm" = "Այս սարքը կհեռացվի ձեր ինքնությունից։";
+"device_added_%@" = "Ավելացված է %@";
+
+// MARK: - Device Join Request (Desktop onboarding)
+"device_link_request_title" = "Կապել առկա ինքնությանը";
+"device_link_request_instruction" = "Սկանավորեք iPhone-ով";
+"device_link_request_steps" = "Բացեք Konstruct-ը iPhone-ում → Կարգավորումներ → Կապված սարքեր → հպեք «Կապել նոր սարք» — կամ պարզապես սկանավորեք այս կոդը, եթե Konstruct-ը բաց է։";
+"device_link_waiting_approval" = "Սպասում ենք հաստատմանը iPhone-ում…";
+"device_link_scan_on_phone" = "Սկանավորեք այս կոդը Konstruct-ով iPhone-ում";
+"device_link_request_timeout" = "Կապի հարցումը ժամանակից դուրս եկավ — փորձեք նորից";
+"device_link_feature_unavailable" = "Այս հնարավորությունը պահանջում է սերվերի թարմացում։ Փորձեք ավելի ուշ։";
+"device_link_invalid_qr" = "Անվավեր QR կոդ — համոզվեք, որ սկանավորում եք Konstruct կապի կոդ։";
+"device_link_approve_title" = "Կապե՞լ «%@»-ը ձեր ինքնությանը։";
+"device_link_approve_title_fallback" = "Կապե՞լ նոր սարքը ձեր ինքնությանը։";
+"device_link_approve" = "Կապել սարքը";
+"device_link_approve_message" = "Այս սարքը լիարժեք հասանելիություն կունենա ձեր Konstruct ինքնությանը։";
+"device_link_approved_title" = "Սարքը կապված է";
+"device_link_approved_message" = "Սարքը կապվել է ձեր ինքնությանը։";
+
+// MARK: - Session Management
+"session_management" = "Նիստերի կառավարում";
+"sign_out_this_device" = "Դուրս գալ այս սարքից";
+"sign_out_this_device_message" = "Դուրս կգաք միայն այս սարքից։ Մյուս կապված սարքերը կմնան ակտիվ։";
+"sign_out_other_devices" = "Դուրս գալ մյուս սարքերից";
+"sign_out_other_devices_message" = "Բոլոր մյուս կապված սարքերը դուրս կգան։ Այս սարքը կմնա ակտիվ։";
+"sign_out_all_devices" = "Դուրս գալ բոլոր սարքերից";
+"sign_out_all_devices_message" = "Դուրս կգաք ԲՈԼՈՐ սարքերից միաժամանակ։ Օգտագործեք սա, եթե սարքը կորել կամ վտանգվել է։";
+"sign_out_all_hint" = "Բոլոր սարքերից դուրս գալը անմիջապես անվավեր է դարձնում բոլոր նիստերը։ Յուրաքանչյուր սարքում պետք է կրկին նույնականանաք։";
+"sign_out" = "Դուրս գալ";
+"device_scan_to_approve" = "Սկանավորել նոր սարքը հաստատելու համար";
+"device_revoke_confirm_message" = "Հեռակա դուրս գա՞լ «%@»-ից։ Այս սարքը կանջատվի ձեր ինքնությունից։";
+"other_devices" = "Այլ սարքեր";
+"other_devices_hint" = "Հպեք −՝ սարքը ինքնությունից հեռացնելու համար։";
+"device_active_now" = "Ակտիվ հիմա";
+
+// MARK: - Flood guard & Lockdown
+"flood_alert_body" = "Ուղարկվել է %d հաղորդագրություն կարճ ժամանակում։ Ծանուցումները ճնշված են։";
+"flood_banner_title" = "Չափից շատ հաղորդագրություն";
+"flood_banner_subtitle" = "Այս կոնտակտի ծանուցումները դադարեցված են։ Դիտեք և որոշեք։";
+"session_at_risk_title" = "Կոնտակտի բանալիները թարմ չեն";
+"session_at_risk_subtitle" = "Նրանք որոշ ժամանակ անցանց են եղել։ Հաղորդագրությունները դեռ անվտանգ են ուղարկվում. բանալիները կթարմացվեն, երբ վերադառնան։";
+"lockdown_mode" = "Արգելափակման ռեժիմ";
+"lockdown_active_since" = "Ակտիվ է %@-ից";
+"lockdown_mode_hint" = "Ծանուցումներ են ստանում միայն ակտիվացումից առաջ ավելացված կոնտակտները։ Նոր ուղարկողները լուռ պահվում են — կարող եք դրանք դիտել ցանկացած պահի։";
+"allow" = "Թույլատրել";
+
+// MARK: - Image Crop
+"crop_use_photo" = "Օգտագործել լուսանկարը";
+
+// MARK: - Synapses
+"synapses" = "Synapses";
+"synapses_search_prompt" = "Որոնել";
+"synapses_empty_title" = "Դեռ մարդիկ չկան";
+"synapses_empty_subtitle" = "Սկանավորեք QR կոդ, կիսվեք ձերով կամ որոնեք @կեղծանունով՝ կապվելու համար։";
+"synapses_empty_scan_qr" = "Սկանավորել QR";
+"synapses_empty_focus_search" = "Որոնել կեղծանունով";
+"chats_empty_title" = "Դեռ զրույցներ չկան";
+"chats_empty_subtitle" = "Կապվեք ինչ-որ մեկի հետ QR-ով կամ Synaps-ով — զրույցները կերևան այստեղ։";
+"chats_empty_scan_qr" = "Սկանավորել QR";
+"chats_empty_show_qr" = "Ցույց տալ իմ QR-ը";
+"chats_empty_open_synaps" = "Բացել Synaps";
+"chat_search_results" = "%d արդյունք";
+"synapses_open_chat" = "Բացել զրույցը";
+"synapses_prune_title" = "Կտրե՞լ այս սինապսը։";
+"synapses_prune_action" = "Կտրել";
+"synapses_prune_message" = "Սա մշտապես կհեռացնի %@-ին ձեր Synapses-ից և կջնջի զրույցը։";
+
+// MARK: - Connection Status Indicator
+
+// MARK: - Contact card crypto section
+"session_crypto_suite" = "Գաղտնագրում";
+"session_crypto_no_session" = "Ակտիվ նիստ չկա";
+
+"voice_message" = "Ձայնային հաղորդագրություն";
+"veil_auto_activated_footer" = "VEIL-ը ակտիվացել է ավտոմատ — ձեր ցանցն արգելափակում է ուղիղ կապերը։ Կարող եք անջատել այն կարգավորումներում։";
+
+// MARK: - Calls
+"call_mute" = "Անջատել ձայնը";
+"call_unmute" = "Միացնել ձայնը";
+"call_speaker" = "Բարձրախոս";
+"call_end" = "Ավարտել զանգը";
+"call_connecting" = "Միացում…";
+"call_incoming_audio" = "Մուտքային աուդիո զանգ";
+"call_answer" = "Պատասխանել";
+"call_decline" = "Մերժել";
+
+// MARK: - Call History
+"calls_recents" = "Վերջինները";
+"calls_clear" = "Մաքրել";
+"calls_clear_confirm" = "Մաքրե՞լ բոլոր վերջին զանգերը։";
+"calls_filter_all" = "Բոլորը";
+"calls_filter_missed" = "Բաց թողնված";
+"calls_empty" = "Վերջին զանգեր չկան";
+"calls_empty_missed" = "Բաց թողնված զանգեր չկան";
+"calls_section_today" = "Այսօր";
+"calls_section_yesterday" = "Երեկ";
+"calls_section_earlier" = "Ավելի վաղ";
+"calls_section_older" = "Ավելի հին";
+"call_outgoing" = "Ելքային";
+"call_incoming" = "Մուտքային";
+"call_missed" = "Բաց թողնված";
+"call_declined" = "Մերժված";
+"call_failed" = "Ձախողված";
+"call_ended" = "Զանգն ավարտված է";
+"call_busy" = "Զբաղված";
+"call_no_relay" = "Կապ չկա (ռելեն հասանելի չէ)";
+"call_dismiss" = "Փակել";
+"call_call_back" = "Հետ զանգել";
+"call_minimize" = "Նվազագույնի հասցնել";
+"call_minibar_in_call" = "զանգի մեջ";
+"call_minibar_connecting" = "միացում";
+"call_reconnecting" = "վերամիացում…";
+"call_e2ee_badge" = "ծայրից ծայր գաղտնագրված";
+"edit_identity" = "խմբագրել ինքնությունը";
+"delete_account_abort_hint" = "հպեք չեղարկելու համար · %d վրկ";
+"share" = "Կիսվել";
+"recovery_not_configured_title" = "Վերականգնումը կարգավորված չէ";
+"developer" = "Մշակող";
+"change_photo" = "փոխել լուսանկարը";
+"identity_section" = "ինքնություն";
+"account_section" = "հաշիվ";
+"bio" = "կենսագրություն";
+"user_id" = "օգտատիրոջ id";
+"joined" = "միացել է";
+"changes_encrypted_footer" = "> փոփոխությունները ծայրից ծայր գաղտնագրված են";
+"delete_account_row" = "ջնջել հաշիվը";
+"delete_action" = "ջնջել";
+"manage_action" = "կառավարել";
+"add_action" = "ավելացնել";
+"call_voice" = "ձայնային զանգ";
+"call_video" = "տեսազանգ";
+"call_audio_route" = "աուդիո";
+"end_to_end_encrypted" = "փոփոխությունները ծայրից ծայր գաղտնագրված են";
+"invite" = "հրավիրել";
+"qr_caption_trust" = "այս կոդը հրավեր է կապվելու։";
+"qr_scan_hint" = "ցույց տվեք մոտակա մարդուն կամ նկարեք էկրանը";
+
+// MARK: - Device Link QR
+"device_link_section" = "կապել սարք";
+"generating" = "ստեղծվում է...";
+"device_link_scan_hint" = "սկանավորեք մեկ այլ սարքով՝ կապելու համար";
+
+// MARK: - Keys Recovery
+"keys_recovery_title" = "սարքի բանալիները հասանելի չեն";
+"keys_recovery_warning_title" = "⚠ ԳԱՂՏՆԱԳՐՄԱՆ ԲԱՆԱԼԻՆԵՐԸ ՉԵՆ ԳՏՆՎԵԼ";
+"keys_recovery_warning_body" = "Ձեր սարքի գաղտնագրման բանալիները չհաջողվեց բեռնել Keychain-ից։ Սա կարող է լինել ժամանակավոր համակարգային խնդիր, կամ բանալիները կարող են մշտապես կորած լինել։\n\nՁեր հաղորդագրություններն ու նիստերը հասանելի չեն լինի, մինչև սա լուծվի։";
+"keys_recovery_section_retry" = "կրկնել";
+"keys_recovery_retry_hint" = "Բանալիները կարող են ժամանակավորապես անհասանելի լինել համակարգային խնդրի պատճառով։ Փորձեք վերաբեռնել։";
+"keys_recovery_retry_action" = "կրկնել keychain ընթերցումը";
+"keys_recovery_retry_failed" = "դեռ անհասանելի է";
+"keys_recovery_section_seed" = "վերականգնել սերմնաբառից";
+"keys_recovery_seed_hint" = "Եթե պահել եք ձեր 12 բառանոց վերականգնման արտահայտությունը, օգտագործեք այն՝ առկա ինքնության հասանելիությունը վերականգնելու համար։";
+"keys_recovery_seed_action" = "մուտքագրել վերականգնման արտահայտությունը";
+"keys_recovery_section_new" = "ստեղծել նոր հաշիվ";
+"keys_recovery_new_hint" = "Ստեղծեք լիովին նոր ինքնություն։ Ձեր առկա հաշիվն ու հաղորդագրությունները մշտապես կկորչեն։";
+"keys_recovery_new_action" = "ստեղծել նոր հաշիվ";
+"keys_recovery_wipe_confirm_title" = "ստեղծե՞լ նոր հաշիվ։";
+"keys_recovery_wipe_confirm_body" = "Սա մշտապես կջնջի ձեր ընթացիկ ինքնությունն ու բոլոր տեղական տվյալները։ Սա հնարավոր չէ հետարկել։";
+"keys_recovery_wipe_confirm_action" = "ջնջել և շարունակել";
+
+// MARK: - Device Deregistered (server no longer recognizes this device)
+"device_deregistered_warning_title" = "⚠ ՍԱՐՔԸ ԳՐԱՆՑՎԱԾ ՉԷ";
+"device_deregistered_warning_body" = "Konstruct-ն այլևս չի ճանաչում այս սարքը։ Սա կարող է պատահել ժամանակավոր խափանումից հետո կամ եթե սարքը հեռացվել է այլ տեղում։\n\nՁեր բանալիները դեռ այս հեռախոսում են — ոչինչ չի ջնջվել։ Կրկնեք ստորև կամ վերականգնեք ինքնությունը վերականգնման արտահայտությունից։";
+"device_deregistered_retry_hint" = "Մերժումը կարող է լինել ժամանակավոր սերվերային խնդիր։ Փորձեք նորից նույնականանալ։";
+
+// MARK: - Logout
+"logout_row" = "դուրս գալ";
+"logout_all_row" = "դուրս գալ բոլոր սարքերից";
+"logout_confirm_title" = "Դուրս գա՞լ։";
+"logout_confirm_message" = "Դուրս կգաք այս սարքից։ Կարող եք կրկին մտնել սերմնաբառով։";
+"logout_confirm_action" = "Դուրս գալ";
+"logout_all_confirm_title" = "Դուրս գա՞լ բոլոր սարքերից։";
+"logout_all_confirm_message" = "Բոլոր սարքերի բոլոր նիստերը անմիջապես կանվավերվեն։ Յուրաքանչյուր սարքում պետք է կրկին նույնականանաք սերմնաբառով։";
+"logout_all_confirm_action" = "Դուրս գալ բոլորից";
+"logout_no_backup_title" = "Վերականգնման արտահայտություն չի պահվել";
+"logout_no_backup_message" = "Դեռ չեք պահել վերականգնման արտահայտությունը։ Եթե դուրս գաք առանց դրա, կարող եք մշտապես կորցնել այս ինքնությունն ու հաղորդագրությունները։";
+"logout_no_backup_setup_action" = "Նախ կարգավորել վերականգնումը";
+"logout_no_backup_proceed_action" = "Դուրս գալ միևնույն է";
+
+// MARK: - Discoverable / User Search
+"searchable_toggle_title" = "որոնելի օգտանունով";
+"searchable_toggle_footer" = "Միացված լինելու դեպքում ձեզ կարող է գտնել յուրաքանչյուրը, ով գիտի ձեր ճշգրիտ օգտանունը։ Սա չի կարող օգտագործվել օգտանուններ գուշակելու կամ թվարկելու համար — աշխատում են միայն 100% ճշգրիտ համընկնումները։ Լռելյայն անջատված է։";
+"searchable_confirm_title" = "միացնե՞լ որոնումը։";
+"searchable_confirm_message" = "Ձեր օգտանունը կգտնվի յուրաքանչյուրի կողմից, ով այն մուտքագրի ճշգրիտ։ Կարող եք անջատել ցանկացած պահի Անվտանգության կարգավորումներում։";
+"searchable_confirm_action" = "միացնել";
+"searchable_no_username_hint" = "նախ սահմանեք օգտանուն՝ որոնումը միացնելու համար";
+"username_not_set" = "օգտանուն չկա";
+"searchable_indicator" = "որոնելի";
+"searchable_indicator_off" = "ոչ որոնելի";
+"synapses_remote_result_header" = "գտնվել է Konstruct-ում";
+"synapses_searching" = "որոնում...";
+"synapses_not_found" = "չի գտնվել";
+
+// Contact Requests
+"contact_requests_section" = "հարցումներ";
+"contact_request_from" = "ումից";
+"contact_request_confirm" = "Ընդունել";
+"contact_request_decline_block" = "Մերժել և արգելափակել";
+"contact_request_spam_block" = "Հաղորդել սպամ և արգելափակել";
+"contact_request_sent" = "Հարցումն ուղարկված է";
+"contact_request_pending" = "Սպասման մեջ";
+"contact_request_send_action" = "Ուղարկել հարցում";
+"contact_request_send_failed" = "Չհաջողվեց ուղարկել հարցումը։ Ստուգեք կապը և փորձեք նորից։";
+"contact_request_received_body" = "Նոր կոնտակտի հարցում է սպասում Synapses-ում";
+"contact_request_received_body_plural" = "%d կոնտակտի հարցում է սպասում Synapses-ում";
+"contact_request_sheet_title" = "Կոնտակտի հարցում";
+"contact_request_from_title" = "ցանկանում է կապվել";
+"contact_request_empty_inbox" = "սպասող հարցումներ չկան";
+
+// Safety Numbers
+"safety_numbers" = "անվտանգության թվեր";
+"safety_numbers_verify_title" = "ստուգել ինքնությունը";
+"safety_numbers_instruction" = "Համեմատեք այս թվերը %@-ի հետ բանավոր կամ անձամբ։ Եթե թվերը համընկնում են, ձեր կապն անվտանգ է և չի գաղտնալսվել։";
+"safety_numbers_copy" = "պատճենել սեղմատախտակ";
+"safety_numbers_copied" = "պատճենված է";
+"safety_numbers_mismatch_header" = "եթե թվերը չեն համընկնում";
+"safety_numbers_mismatch_body" = "Դադարեցրեք շփումը և ստուգեք կապը։ Անհամընկնումը կարող է նշանակել, որ ինչ-որ մեկը գաղտնալսում է ձեր հաղորդագրությունները։";
+"safety_numbers_unavailable" = "անհասանելի է — ինքնությունը սկզբնավորված չէ";
+
+// Stealth mode
+"stealth_section" = "թաքնվածություն";
+"stealth_title" = "ուղարկողի անանունություն";
+"stealth_always_on_hint" = "Konstruct-ը երբեք չի իմանում, թե ով է ուղարկել հաղորդագրությունը։ Միշտ միացված է — անջատիչ չկա և լիցքավորելու բան չկա։";
+"stealth_off_hint" = "Անջատված — ձեր ուղարկումները բացահայտում են, թե ով եք դուք Konstruct-ին։ Միայն վրիպազերծման շրջանցում։";
+
+
+// Key Transparency
+"kt_section" = "բանալիների թափանցիկություն";
+"kt_status" = "merkle մատյան";
+"kt_verified" = "ստուգված";
+"kt_warning" = "զգուշացում";
+
+// Key-change trust event (thread 5.4)
+"key_change_banner_title" = "Անվտանգության բանալին փոխվել է";
+"key_change_banner_title_failed" = "Ինքնության ստուգումը ձախողվեց";
+"key_change_banner_subtitle_fmt" = "%@-ի անվտանգության բանալին տարբերվում է նախկինից։ Համեմատեք անվտանգության թվերը, նախքան այս զրույցին վստահելը։";
+"key_change_banner_subtitle_failed" = "Չհաջողվեց հաստատել այս անձի անվտանգության բանալին թափանցիկության մատյանում։ Ստուգեք անձամբ, եթե կարող եք։";
+"key_change_verify" = "Ստուգել";
+"key_change_accept" = "Ընդունել նոր բանալին";
+"key_change_toast_fmt" = "%@-ի անվտանգության բանալին փոխվել է։ Բացեք զրույցը՝ ստուգելու համար։";
+"address_change_toast_fmt" = "%@-ն այժմ պնդում է այլ հասցե։ Բացեք զրույցը՝ ստուգելու համար։";
+"key_change_toast_open" = "Բացել";
+
+// Identity fingerprint (thread 5.3 — external identity form)
+"identity_fingerprint" = "Մատնահետք";
+"identity_fingerprint_unknown" = "Դեռ ամրացված չէ";
+"identity_fingerprint_copy_hint" = "Պատճենում է մատնահետքը սեղմատախտակ";
+"identity_fingerprint_copied" = "Պատճենված է";
+"kt_no_data" = "տվյալներ չկան";
+"kt_hint" = "Հանրային ինքնության բանալիները գրանցվում են միայն ավելացվող մատյանում, որպեսզի միջամտությունը հայտնաբերվի։";
+"kt_failure_hint" = "բանալիների թափանցիկության ստուգումը ձախողվեց — հնարավոր միջամտություն։";
+"kt_last_failure_at" = "վերջին ձախողում՝ %@";
+
+// Social Recovery (SLIP-39)
+"social_recovery_title" = "ՍՈՑԻԱԼԱԿԱՆ ՎԵՐԱԿԱՆԳՆՈՒՄ";
+"social_recovery_intro_title" = "սոցիալական վերականգնում";
+"social_recovery_intro_body" = "Ձեր ինքնության բանալիները կբաժանվեն վստահելի մարդկանց միջև։ Նրանցից M-ը N-ից կարող են օգնել վերականգնել ինքնությունը, եթե կորցնեք հասանելիությունը։";
+"social_recovery_begin" = "ՍԿՍԵԼ ԿԱՐԳԱՎՈՐՈՒՄԸ [→]";
+"social_recovery_scheme_title" = "ՎԵՐԱԿԱՆԳՆՄԱՆ ՍԽԵՄԱ";
+"social_recovery_2of3" = "2-ը 3-ից";
+"social_recovery_3of5" = "3-ը 5-ից";
+"social_recovery_2of3_hint" = "վերականգնելու համար պետք է 2 կոնտակտ";
+"social_recovery_3of5_hint" = "վերականգնելու համար պետք է 3 կոնտակտ";
+"social_recovery_generate" = "ՍՏԵՂԾԵԼ ԲԱԺԻՆՆԵՐ [→]";
+"social_recovery_share_title" = "ԲԱԺԻՆ %d՝ %d-ից";
+"social_recovery_share_warning" = "ուղարկեք այս բառերը վստահելի կոնտակտի։ միևնույն մարդուն ՄԻ քանի բաժին մի տվեք։";
+"social_recovery_share_label_caption" = "պիտակ";
+"social_recovery_share_label_placeholder" = "պիտակ (օր. ուղարկված Աննային)";
+"social_recovery_share_next" = "ՀԱՋՈՐԴ ԲԱԺԻՆ [→]";
+"social_recovery_share_done" = "ԱՎԱՐՏԵԼ ԿԱՐԳԱՎՈՐՈՒՄԸ [→]";
+"social_recovery_share_unlabeled" = "բաժին %d";
+"social_recovery_uploading" = "փաթեթի գաղտնագրում...";
+"social_recovery_done_title" = "ՎԵՐԱԿԱՆԳՆՈՒՄԸ ԿԱՐԳԱՎՈՐՎԱԾ Է";
+"social_recovery_done_body" = "ձեր ինքնությունն այժմ պաշտպանված է։";
+"social_recovery_enter_title" = "ՍՈՑԻԱԼԱԿԱՆ ՎԵՐԱԿԱՆԳՆՈՒՄ";
+"social_recovery_enter_subtitle" = "կապվեք յուրաքանչյուր հոգաբարձուի հետ և խնդրեք նրանց բաժնի բառերը։";
+"social_recovery_entered_header" = "ՄՈՒՏՔԱԳՐՎԱԾ ԲԱԺԻՆՆԵՐ (%d/%d անհրաժեշտ)";
+"social_recovery_no_shares_yet" = "դեռ բաժիններ մուտքագրված չեն";
+"social_recovery_add_share" = "+ ԱՎԵԼԱՑՆԵԼ ԲԱԺԻՆ";
+"social_recovery_shares_needed" = "վերականգնելու համար պետք է ևս %d բաժին";
+"social_recovery_restore" = "ՎԵՐԱԿԱՆԳՆԵԼ ԻՆՔՆՈՒԹՅՈՒՆԸ [→]";
+"social_recovery_enter_words_title" = "ՄՈՒՏՔԱԳՐԵԼ ԲԱԺՆԻ ԲԱՌԵՐԸ";
+"social_recovery_enter_words_hint" = "տեղադրեք կամ մուտքագրեք 28 բառը՝ բացատներով առանձնացված";
+"social_recovery_add_share_confirm" = "ԱՎԵԼԱՑՆԵԼ ԲԱԺԻՆ [→]";
+"social_recovery_share_n" = "բաժին %d";
+"social_recovery_word_count" = "%d բառ";
+"social_recovery_reconstructing" = "պահոցի բանալու վերակառուցում...";
+"social_recovery_restored_title" = "ԻՆՔՆՈՒԹՅՈՒՆԸ ՎԵՐԱԿԱՆԳՆՎԱԾ Է";
+"social_recovery_restored_body" = "ձեր ինքնության բանալիները հաջողությամբ վերականգնվել են։";
+"social_recovery_row_active" = "■ սոցիալական վերականգնում — ակտիվ";
+"social_recovery_row_inactive" = "○ սոցիալական վերականգնում — կարգավորված չէ";
+
+"social_recovery_identity_header" = "ԻՆՔՆՈՒԹՅՈՒՆ";
+"social_recovery_username_label" = "Օգտանուն";
+
+// MARK: - Local Backup
+"backup_section" = "պահուստ";
+"export_backup" = "արտահանել պահուստը";
+"import_backup" = "ներմուծել պահուստը";
+
+"backup_export_title" = "Արտահանել պահուստը";
+"backup_warning_header" = "ՆԱԽՔԱՆ ՇԱՐՈՒՆԱԿԵԼԸ";
+"backup_export_warning" = "Սա ստեղծում է ձեր բոլոր հաղորդագրությունների և բանալիների գաղտնագրված պահուստ։ Ֆայլը պաշտպանված է 12 բառանոց վերականգնման արտահայտությամբ, որը պետք է գրեք և պահեք ապահով։\n\nՊահուստի ֆայլն ու վերականգնման արտահայտությունը պահեք առանձին։";
+"backup_mnemonic_warning" = "⚠ Եթե կորցնեք վերականգնման արտահայտությունը, պահուստը հնարավոր չէ վերծանել։ Վերականգնման այլ տարբերակ չկա։";
+"backup_generate_button" = "ՍՏԵՂԾԵԼ ՎԵՐԱԿԱՆԳՆՄԱՆ ԱՐՏԱՀԱՅՏՈՒԹՅՈՒՆ [→]";
+"backup_mnemonic_title" = "ՎԵՐԱԿԱՆԳՆՄԱՆ ԱՐՏԱՀԱՅՏՈՒԹՅՈՒՆ";
+"backup_mnemonic_subtitle" = "Գրեք բոլոր 12 բառերը հերթականությամբ։ Էկրանի նկար մի արեք։";
+"backup_copy_words" = "[ ՊԱՏՃԵՆԵԼ ԲՈԼՈՐ ԲԱՌԵՐԸ ]";
+"backup_confirm_saved" = "Ես գրել եմ բոլոր 12 բառերը";
+"backup_next_button" = "ՀԱՋՈՐԴ [→]";
+"backup_export_step_header" = "ՊԱՀՊԱՆԵԼ ՊԱՀՈՒՍՏԻ ՖԱՅԼԸ";
+"backup_export_step_subtitle" = "Պահպանեք .ctbackup ֆայլը ապահով վայրում՝ այս սարքից դուրս (օր. գաղտնագրված USB)։ Մի պահեք այն չգաղտնագրված ամպային ծառայությունում։";
+"backup_create_file" = "ՍՏԵՂԾԵԼ .ctbackup ՖԱՅԼ [→]";
+"backup_share_file" = "ԿԻՍՎԵԼ .ctbackup ՖԱՅԼՈՎ [→]";
+"backup_export_generating" = "պահուստի ստեղծում…";
+
+"backup_import_title" = "Ներմուծել պահուստը";
+"backup_import_words_header" = "ՎԵՐԱԿԱՆԳՆՄԱՆ ԱՐՏԱՀԱՅՏՈՒԹՅՈՒՆ";
+"backup_import_words_subtitle" = "Մուտքագրեք պահուստի 12 բառերը՝ բացատներով առանձնացված։";
+"backup_import_file_header" = "ՊԱՀՈՒՍՏԻ ՖԱՅԼ";
+"backup_import_select_file" = "ընտրել .ctbackup ֆայլ [→]";
+"backup_restore_warning" = "⚠ Սա կփոխարինի ձեր ԲՈԼՈՐ ընթացիկ հաղորդագրություններն ու բանալիները։ Սա հնարավոր չէ հետարկել։";
+"backup_restore_button" = "ՎԵՐԱԿԱՆԳՆԵԼ ՊԱՀՈՒՍՏԸ [→]";
+"backup_restore_success_title" = "Պահուստը պատրաստ է";
+"backup_restore_success_message" = "Ձեր պահուստը ստուգված է և պատրաստված։ Փակեք և նորից բացեք հավելվածը՝ վերականգնումը ավարտելու համար։";
+
+"backup_error_invalid_mnemonic" = "Անվավեր վերականգնման արտահայտություն։ Ստուգեք բոլոր 12 բառերը և փորձեք նորից։";
+"backup_error_invalid_file" = "Սա վավեր Konstruct պահուստ չէ, կամ վերականգնման արտահայտությունը սխալ է։";
+
+// Transfer (P2P nearby)
+"transfer_send_nearby" = "ուղարկել մոտակա սարքին";
+"transfer_receive_nearby" = "ստանալ մոտակա սարքից";
+"transfer_send_title" = "Ուղարկել պահուստը";
+"transfer_receive_title" = "Ստանալ պահուստը";
+"transfer_preparing" = "Պահուստի պատրաստում...";
+"transfer_waiting" = "Սպասում ենք մոտակա սարքին։\nԲացեք Ստանալ մյուս սարքում և մուտքագրեք ստորև PIN-ը։";
+"transfer_searching" = "Մոտակա սարքի որոնում...";
+"transfer_connecting" = "Միացում...";
+"transfer_staging" = "Պահուստի կիրառում...";
+"transfer_your_pin" = "Ձեր PIN-ը";
+"transfer_enter_pin_hint" = "Մուտքագրեք ուղարկող սարքում երևացող 6 թվանշան PIN-ը։";
+"transfer_connect" = "Միանալ";
+"transfer_progress" = "Փոխանցում";
+"transfer_complete" = "Փոխանցումն ավարտված է։";
+"transfer_error_title" = "Փոխանցման սխալ";
+"transfer_error_auth" = "Նույնականացումը ձախողվեց։ Ստուգեք, որ երկու սարքերում էլ նույն PIN-ն է։";
+"transfer_error_connection" = "Կապը կորավ։ Փորձեք նորից։";
+"transfer_error_corrupt" = "Փոխանցման տվյալները վնասված են։ Փորձեք նորից։";
+"transfer_error_cancelled" = "Փոխանցումը չեղարկվել է։";
+"transfer_error_history_v1_refused" = "Այս փոխանցումը չափազանց հին է զրույցների պատմության համար։ Թարմացրեք մյուս սարքը։";
+"history_sync_qr_pin_mismatch" = "Այս կոդը չի համընկնում — սկսեք կապը նորից։";
+"history_sync_kem_key_id_mismatch" = "Այս ֆայլը հնացած է։ Խնդրեք մյուս սարքից նոր ֆայլ։";
+"history_sync_no_hybrid_key" = "Թարմացրեք մյուս սարքը, ապա փորձեք նորից։";
+
+// History Sync (device-to-device after linking)
+"history_sync_send_title" = "Փոխանցել պատմությունը";
+"history_sync_receive_title" = "Ստանալ պատմությունը";
+"history_sync_offer_title" = "Փոխանցե՞լ հաղորդագրությունների պատմությունը։";
+"history_sync_offer_message" = "Ստանա՞ք հաղորդագրությունների պատմությունը այն հեռախոսից, որն այս պահին հաստատեց այս սարքը։ Երկու սարքերն էլ պետք է լինեն նույն Wi‑Fi-ում — կոդ մուտքագրել պետք չէ։";
+"history_sync_offer_yes" = "Ստանալ պատմությունը";
+"history_sync_offer_skip" = "Բաց թողնել";
+"history_sync_send_offer_title" = "Համաժամե՞ցնել հաղորդագրությունների պատմությունը։";
+"history_sync_send_offer_message" = "Ուղարկե՞ք հաղորդագրությունների պատմությունը նոր սարքին։ Երկու սարքերն էլ պետք է լինեն նույն Wi‑Fi-ում — կոդեր պետք չեն։";
+"history_sync_send_offer_yes" = "Համաժամեցնել պատմությունը";
+"history_sync_send_offer_skip" = "Բաց թողնել";
+"history_sync_auto_connecting" = "Միացում ձեր հեռախոսին…";
+"history_sync_auto_sending" = "Պատմության ուղարկում ձեր համակարգչին…";
+"history_sync_skip_title" = "Բաց թողնել պատմությունը";
+"history_sync_skip_sending" = "Ավարտ առանց պատմության…";
+"history_sync_user_mismatch" = "Պատմության փոխանցումը ձախողվեց. այս պատմությունը պատկանում է այլ ինքնության։";
+"history_sync_chats_transferred" = "Զրույցները փոխանցված են։ Լուսանկարների և ֆայլերի ուղարկում…";
+"history_sync_media_incomplete" = "Զրույցները փոխանցված են, մեդիան թերի է — կրկնեք Կարգավորումներից կամ պահպանեք ֆայլ։";
+"history_sync_save_file_instead" = "Փոխարենը պահպանել ֆայլ։";
+"history_sync_offer_message_with_media" = "Ստացեք զրույցներ, լուսանկարներ և ֆայլեր մյուս սարքից Wi‑Fi-ով կամ ներմուծեք ֆայլ։ Կարող եք բաց թողնել և սկսել դատարկ զրույցներով։";
+"history_sync_empty_explanation" = "Նոր զրույցները կերևան այստեղ, երբ մարդիկ ձեզ գրեն։ Մյուս սարքի պատմությունը դեռ այս սարքում չէ։";
+"history_sync_receive_wifi" = "Ստանալ Wi‑Fi-ով";
+"history_sync_import_file" = "Ներմուծել ֆայլ";
+"history_sync_save_file" = "Պահպանել ֆայլ";
+"history_sync_settings_section" = "Փոխանցել զրույցների պատմությունը";
+"history_sync_settings_chats" = "Զրույցներ";
+"history_sync_settings_media" = "Միայն մեդիա";
+"history_sync_settings_hint" = "Ուղարկեք զրույցներ կամ մնացած լուսանկարներ ու ֆայլեր արդեն կապված սարքին։";
+"history_sync_composer_connecting" = "Այս սարքը դեռ միանում է այս մարդուն։";
+"history_sync_importing" = "Պատմության ներմուծում…";
+"history_sync_imported_summary" = "Ներմուծվել է %d գրառում։ Զրույցներն այժմ այս սարքում են։";
+"history_sync_qr_pin_absent" = "Կապի կոդը մատնահետք չէր կրում։ Թարմացրեք մյուս սարքը և կապեք նորից։";
+"history_sync_local_keys_unavailable" = "Այս սարքը դեռ պատրաստ չէ։ Փորձեք մի պահից։";
+"history_sync_peer_not_found" = "Ձեր մյուս սարքն այլևս այս հաշվում չէ։";
+"history_sync_file_ready" = "Ֆայլը պատրաստ է։ Կիսվեք այն մյուս սարքի հետ և ներմուծեք այնտեղ հիմա — ժամկետը սպառվում է մեկ շաբաթում։";
+"history_sync_share_file" = "Կիսվել ֆայլով";
+"history_sync_preparing_file" = "Ֆայլի պատրաստում…";
+"call_error_not_contacts" = "Կարող եք զանգել միայն նրանց, ում հետ կապված եք։";
+"call_error_busy" = "Դուք արդեն զանգի մեջ եք։";
+"call_error_peer_offline" = "Նրանք անցանց են։ Փորձեք ավելի ուշ։";
+"call_error_setup_failed" = "Չհաջողվեց սկսել զանգը։ Փորձեք նորից։";
+
+/* Engine background push notifications */
+"notification.new_message.title" = "Նոր հաղորդագրություն";
+"notification.new_message.body" = "Դուք ունեք նոր գաղտնագրված հաղորդագրություն։";
+
+/* Desktop settings — new keys */
+"remove_avatar" = "հեռացնել ավատարը";
+"general" = "Ընդհանուր";
+"composing" = "Գրում";
+"send_on_enter" = "Ուղարկել ⏎-ով (Shift+⏎՝ նոր տող)";
+"send_on_enter_help" = "Ուղարկել (Return) · Նոր տող (Shift-Return)";
+"send_action" = "Ուղարկել";
+"show_timestamps" = "Ցույց տալ ժամանակը յուրաքանչյուր հաղորդագրության վրա";
+"sign_out_confirm_title" = "Դուրս գա՞լ։";
+"sign_out_confirm_message" = "Դուրս կգաք միայն այս Mac-ից։";
+"sign_out_confirm_action" = "Դուրս գալ";
+"session_section" = "Նիստ";
+"encryption_section" = "Գաղտնագրում";
+"e2e_protocol" = "Արձանագրություն";
+"e2e_forward_secrecy" = "Առաջընթաց գաղտնիություն";
+"e2e_key_agreement" = "Բանալիների համաձայնեցում";
+
+/* Desktop general settings */
+"message_section" = "Հաղորդագրություններ";
+
+/* Voice messages */
+"voice_section_title" = "Ձայնային հաղորդագրություններ";
+"voice_continuous_playback" = "Նվագարկել շարունակաբար";
+"voice_continuous_playback_footer" = "Երբ մի քանի ձայնային հաղորդագրություն գալիս է իրար հետևից, նվագարկել դրանք մեկը մյուսի հետևից ավտոմատ, մինչև վերջինը ավարտվի։";
+
+/* STT / Transcription */
+"stt_section_title" = "Տառադարձում";
+"stt_auto_transcribe" = "Ավտոմատ տառադարձել ձայնային հաղորդագրությունները";
+"stt_translate_toggle" = "Թարգմանել անգլերեն";
+"stt_translate_footer" = "Տառադարձումը կթարգմանվի անգլերեն մոդելով։";
+"stt_language_label" = "Լեզու";
+"stt_language_auto" = "Ավտոմատ հայտնաբերում";
+"stt_models_on_disk" = "Մոդելներ սկավառակի վրա";
+"stt_no_models" = "Չկան";
+"stt_footer" = "Սարքում տառադարձում WhisperKit-ով։ Աուդիոն չի լքում ձեր սարքը։";
+"stt_download" = "Ներբեռնել";
+"stt_delete_model" = "Ջնջել մոդելը";
+"stt_delete_confirm_title" = "Ջնջե՞լ այս մոդելը։";
+"stt_transcribe_button" = "Տառադարձել";
+"stt_transcribing" = "Տառադարձում…";
+"stt_show_transcript" = "Ցույց տալ տառադարձումը";
+"stt_hide_transcript" = "Թաքցնել տառադարձումը";
+"stt_section_header" = "տառադարձում";
+"stt_section_footer" = "Ձայնային հաղորդագրությունները կարող են տառադարձվել սարքում։ Մոդելները ներբեռնվում են մեկ անգամ և երբեք չեն լքում հեռախոսը։";
+"stt_retry_download" = "կրկնել";
+"stt_engine_label" = "Շարժիչ";
+"stt_engine_auto" = "Ավտո";
+"stt_engine_whisper" = "Whisper";
+"stt_engine_apple" = "Apple Speech";
+"account_discard_changes_title" = "Մերժե՞լ փոփոխությունները։";
+"account_discard_changes_message" = "Ունեք չպահպանված պրոֆիլի փոփոխություններ։ Դուրս գա՞լ առանց պահպանելու։";
+"account_discard_changes_discard" = "Մերժել";
+"account_discard_changes_keep_editing" = "Շարունակել խմբագրումը";
+"account_editing_profile" = "> Պրոֆիլի դաշտերի խմբագրում։ Հպեք ✓՝ պահպանելու կամ x՝ չեղարկելու համար։";
+
+"liquid_logo.title" = "LIQUID LOGO";
+"liquid_logo.size" = "ՉԱՓ";
+"liquid_logo.haptics" = "Թրթռում";
+"liquid_logo.replay" = "ԿՐԿՆԵԼ";
+"liquid_logo.hint" = "հպեք ցանկացած տեղ՝ կրկնելու համար";
+
+/* Silent-transport neutral network indicator (silent-transport-ui decision) */
+"net_status_protected" = "Պաշտպանված";
+"net_status_connecting" = "Միացում…";
+"file" = "Ֆայլ";
+
+/* Chat system bubble: the encrypted session broke and incoming messages cannot be read. */
+
+/* Delivery status of an outgoing message. VoiceOver-only: the bubble shows a bare
+   icon, so without these the delivery state is inaudible. */
+"msg_status_sending" = "Ուղարկվում է";
+"msg_status_sent" = "Ուղարկված է";
+"msg_status_delivered" = "Առաքված է";
+"msg_status_queued" = "Հերթում է, ստացողն անցանց է";
+"msg_status_failed" = "Չհաջողվեց ուղարկել";
+
+/* Multi-invite (one one-time link per person) */
+"invite_create_failed" = "Չհաջողվեց ստեղծել հրավեր։ Փորձեք նորից։";
+"share_copied" = "Պատճենված է";
+"qr_new_code" = "Նոր կոդ";
+"invite_copy_link" = "Պատճենել հղումը";
+"invite_copied_nth_fmt" = "Պատճենված է · %d";
+"invite_share_rule_fmt" = "Յուրաքանչյուր հպում ստեղծում է նոր հղում, իսկ կոդը ինքն իրեն թարմացվում է։ Ցանկացած հրավեր աշխատում է մեկ անգամ և սպառվում է %@-ում։";
+"issued_invites" = "Տրված հրավերներ";
+"issued_invites_hint_fmt" = "Տրված այս սարքից վերջին %@-ում։ Մյուս սարքը պահում է իր սեփական ցանկը։";
+"issued_invites_empty_fmt" = "Այս սարքից վերջին %@-ում ոչինչ չի տրվել։";
+"issued_invite_link" = "Հղում";
+"issued_invite_qr_fmt" = "QR կոդ · %d";
+"issued_invite_expires_fmt" = "մնացել է %@";
+"revoke" = "Չեղարկել";
+"invite_revoked" = "Չեղարկված է։ Այդ հղումն այլևս չի աշխատում։";
+"invite_already_used" = "Արդեն օգտագործված է — ինչ-որ մեկը մարել է այս հղումը։";
+"invite_revoke_unconfirmed" = "Չհաջողվեց հաստատել։ Հղումը կարող է դեռ աշխատել. փորձեք նորից։";
+"invite_revoke_confirm_title" = "Չեղարկե՞լ այս հղումը։";
+"invite_revoke_confirm_message" = "Ով ունի այն, կտեսնի, որ այլևս չի աշխատում՝ առանց ծանուցման։ Նորը կարող եք պատճենել ցանկացած պահի։";
+"issued_invites_revoke_scope" = "Հղումը կարելի է չեղարկել։ QR կոդը ինքն իրեն դադարում է աշխատել ժամկետի սպառումից հետո։";
+
+"scroll_to_newest" = "Անցնել նորագույնին";
+
+"diagnostics_owned_inset_title" = "Owned-inset տառադարձում";
+"diagnostics_owned_inset_hint" = "UIKit գլորման կոնտեյներ։ Կիրառվում է հաջորդ բացվող զրույցին։";
+
+"diagnostics_skip_backlog_title" = "Բաց թողնել պահված հերթը";
+"diagnostics_skip_backlog_held" = "Գլուխը կպած է՝ %@… (%@, %d վրկ)։ Բաց թողնելը կարող է կորցնել երբևէ չառաքված հաղորդագրություններ։";
+"diagnostics_skip_backlog_clear" = "Ոչինչ չի պահվում — կուրսորը շարժվում է։";
+"diagnostics_skip_backlog_done" = "Կուրսորը հարկադրված է %@";
+
+"device_unnamed" = "Սարք";
+
+"device_default_name_desktop" = "Mac";
+"device_default_name_ios" = "iPhone";
+
+/* Appearance — message font */
+"chat_font" = "Հաղորդագրության տառատեսակ";
+"chat_font_mono" = "JetBrains Mono";
+"chat_font_system" = "Համակարգային";
+"chat_font_footer" = "Կիրառվում է հաղորդագրության տեքստին և մուտքագրման դաշտին։ Մնացած միջերեսը մնում է միալար։";
+
+"text_size" = "Տեքստի չափ";
+"text_size_compact" = "Կոմպակտ";
+"text_size_standard" = "Ստանդարտ";
+"text_size_large" = "Մեծ";
+"text_size_footer" = "Կիրառվում է հաղորդագրության տեքստին և մուտքագրման դաշտին։ Մնացած միջերեսը պահում է իր չափը։";
+
+/* VEIL bootstrap voucher — give someone with no way in a short-lived signed entry point. */
+"veil_voucher_row" = "Տալ ինչ-որ մեկին հասանելիություն";
+"veil_voucher_title" = "Տալ հասանելիություն";
+"veil_voucher_instructions" = "Թող սկանավորեն այս կոդը Konstruct-ում։ Այն կարգավորում է նրանց կապը — սա կոնտակտի հրավեր չէ։";
+"veil_voucher_expires_in" = "Վավեր է %@";
+"veil_voucher_expired" = "Այս կոդը ժամկետանց է";
+"veil_voucher_new" = "Ստեղծել նոր կոդ";
+"veil_voucher_quota" = "Այսօրվա կոդերը սպառված են։ Փորձեք ավելի ուշ։";
+"veil_voucher_quota_retry" = "Այսօրվա կոդերը սպառված են։ Փորձեք մոտ %d ժամից։";
+"veil_voucher_unavailable" = "Հասանելիություն տալը այժմ հնարավոր չէ։";
+"veil_voucher_err_generic" = "Չհաջողվեց ստեղծել կոդը";
+"veil_voucher_privacy_hint" = "Ցույց տվեք այս կոդը միայն այն մարդուն, ում համար է։ Մի հրապարակեք և մի ուղարկեք հանրային ալիքով։";
+"veil_voucher_intro" = "Ստեղծում է մեկանգամյա կոդ, որը կարգավորում է կապը նրա համար, ով դեռ չի հասնում Konstruct։ Այն կարճ ժամանակով է վավեր, և օրական կարող եք ստեղծել երեքը։";
+"veil_voucher_create" = "Ստեղծել կոդ";
+
+/* Desktop chrome — D2–D7 */
+"find" = "Գտնել";
+"quick_open" = "Արագ բացում";
+"copy_id" = "Պատճենել ID";
+"desktop_close_chat" = "Փակել զրույցը";
+"desktop_new_conversation" = "Նոր զրույց";
+"desktop_sync_messages" = "Համաժամեցնել հաղորդագրությունները";
+"desktop_menu_navigate" = "Նավարկում";
+"desktop_next_chat" = "Հաջորդ զրույց";
+"desktop_previous_chat" = "Նախորդ զրույց";
+"desktop_jump_to_chat_fmt" = "Անցնել զրույց %d";
+"desktop_show_security" = "Ցույց տալ անվտանգության տեղեկությունը";
+"desktop_settings_account" = "Հաշիվ";
+"desktop_settings_devices" = "Սարքեր";
+"desktop_settings_storage" = "Պահեստ";
+"desktop_add_my_qr" = "Իմ QR";
+"desktop_add_from_file" = "Ֆայլից";
+"desktop_add_invite_ok" = "Հրավերն ընդունված է";
+"desktop_add_empty" = "Ավելացնելու բան չկա";
+"desktop_add_expires_fmt" = "Ժամկետը սպառվում է %@-ից";
+"desktop_add_show_qr" = "Ցույց տվեք սա ինչ-որ մեկին, որ սկանավորի";
+"desktop_add_device_unregistered" = "Սարքը գրանցված չէ";
+"desktop_add_qr_failed" = "Չհաջողվեց ստեղծել QR կոդը";
+"desktop_add_point_camera" = "Ուղղեք տեսախցիկը Konstruct QR կոդին";
+"desktop_add_camera_privacy" = "Թույլատրեք տեսախցիկի հասանելիությունը Համակարգի կարգավորումներ → Գաղտնիություն և անվտանգություն → Տեսախցիկ";
+"desktop_add_drop_image" = "Գցեք պատկերը այստեղ";
+"desktop_add_drop_types" = "PNG, JPG, էկրանի նկար";
+"desktop_add_choose_file" = "Ընտրել ֆայլ…";
+"desktop_add_choose_file_panel" = "Ընտրեք էկրանի նկար կամ պատկեր Konstruct QR կոդով";
+"desktop_add_cannot_read_file" = "Չի հաջողվում կարդալ ֆայլը";
+"desktop_add_cannot_decode_image" = "Չի հաջողվում վերծանել պատկերը";
+"desktop_add_cannot_load_image" = "Չի հաջողվում բեռնել պատկերը";
+"desktop_add_no_qr_in_image" = "Այդ պատկերում QR կոդ չի գտնվել";
+"desktop_add_invite_link" = "Հրավերի հղում";
+"desktop_add_invite_placeholder" = "https://konstruct.cc/add?invite=… կամ konstruct://add?…";
+"desktop_add_paste_clipboard" = "Տեղադրել սեղմատախտակից";
+"desktop_add_supported" = "konstruct://add?invite=… կամ https://konstruct.cc/add?invite=…";
+
+"backup_restore_required_title" = "Անհրաժեշտ է վերագործարկում";
+"backup_restore_required_message" = "Փակեք և նորից բացեք Konstruct-ը՝ այս պահուստի վերականգնումը ավարտելու համար։";
+"spam_warning_title" = "Ուղարկվում է…";
+"spam_warning_wait" = "Խնդրում ենք սպասել %d վայրկյան";
+"spam_strong_warning_title" = "Անսովոր ակտիվություն";
+"spam_strong_warning_body" = "Դուք հաղորդագրություններ եք ուղարկում սովորականից արագ։ Սպասեք մի պահ։";
+"spam_seconds" = "վրկ";
+"spam_force_send" = "Հասկանում եմ ռիսկը, ուղարկել միևնույն է";
+"spam_force_banned" = "Չեք կարող բաց թողնել սպասումը %d րոպե";
+"stt_error_no_model" = "Տառադարձման մոդել դեռ ներբեռնված չէ։";
+"stt_error_unavailable" = "Տառադարձումը հասանելի չէ այս սարքում։";
+"call_status_calling" = "Զանգ…";
+"call_status_connected" = "Միացված է";
+"mic_denied_title" = "Խոսափողի հասանելիությունը մերժված է";
+"mic_denied_message_macos" = "Թույլատրեք խոսափողի հասանելիությունը Կարգավորումներում՝ ձայնային հաղորդագրություններ ուղարկելու համար։";
+"voice_ready_to_send" = "Պատրաստ է ուղարկման";

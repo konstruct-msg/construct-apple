@@ -328,20 +328,17 @@ final class OutboundSessionService {
             for messageId in messageIds {
                 DeliveryReceiptBatcher.shared.enqueue(messageId: messageId, to: contactId)
             }
+            // We heard from them: hand them our card if a device of theirs still lacks it. Here
+            // and not on every incoming envelope, because this is the one place that means "a
+            // message of theirs is in our transcript" — a control or a replay is not hearing from
+            // someone. The send path hands it over too (`ChatSendCoordinator`), so whichever side
+            // speaks first, both sides end up with the other's address.
+            if Self.peerNeedsOurContactCard(contactId) {
+                await OutboundSessionService.shared.sendContactCard(to: contactId)
+            }
         }
     }
 
-    /// Hands `contactId` the intake key this account accepts (content_type=27), so their
-    /// envelopes to us carry a tag instead of buying a Privacy Pass token.
-    ///
-    /// Sent lazily — the first time we write to a peer who does not have it — rather than swept
-    /// across the contact graph on upgrade. A sweep would be a hundred sealed control envelopes at
-    /// once, each of which must itself be paid for, and would pay that for contacts the user may
-    /// never write to again.
-    ///
-    /// Fail-closed like every other sealed control message: the key is a secret, so it is sealed
-    /// or it is not sent. There is no identified fallback and there must not be — an unsealed one
-    /// hands any relay a credential it can spend on us.
     /// The devices of `contactId` we hold a session with — the ones a control can reach, and the
     /// ones the intake bookkeeping is asked about. A peer recorded before `PeerDevice` existed
     /// answers with its pinned device.
@@ -354,12 +351,29 @@ final class OutboundSessionService {
         return devices.filter { CryptoManager.shared.hasSession(for: $0) }
     }
 
-    /// Whether any device of `contactId` we can reach is still without our intake key.
-    static func peerNeedsOurIntakeKey(_ contactId: String) -> Bool {
+    /// Whether any device of `contactId` we can reach is still without our contact card.
+    static func peerNeedsOurContactCard(_ contactId: String) -> Bool {
         !IntakeCredentialService.shared.devicesNeedingOurKey(among: sessionDevices(of: contactId)).isEmpty
     }
 
-    func sendIntakeKey(to contactId: String) async {
+    /// Hands `contactId` our contact card (content_type=27): the intake key this account accepts,
+    /// so their envelopes to us carry a tag instead of buying a Privacy Pass token, and this
+    /// account's address, so they name us by key rather than by server id.
+    ///
+    /// Sent to each of their devices once — when we first hear from it and when we first write to
+    /// it, whichever comes first (`decisions/contact-card-carries-the-address-back.md`). Hearing
+    /// counts because an invite carries the inviter's address and nothing back: the redeemer's
+    /// address reaches the inviter here, as soon as the redeemer says anything. Never swept across
+    /// the contact graph: a hundred sealed control envelopes at once, each paid for, for contacts
+    /// the user may never talk to again.
+    ///
+    /// A device that has not seen the recovery phrase sends the key alone; the card is still worth
+    /// its envelope.
+    ///
+    /// Fail-closed like every other sealed control message: the key is a secret, so it is sealed
+    /// or it is not sent. There is no identified fallback and there must not be — an unsealed one
+    /// hands any relay a credential it can spend on us.
+    func sendContactCard(to contactId: String) async {
         guard let myId = AuthSessionManager.shared.currentUserId, !myId.isEmpty else { return }
         guard StealthPolicy.shared.shouldUseSealedSender() else {
             // Stealth off: the key would go out identified, and the mechanism it feeds is the
@@ -369,7 +383,16 @@ final class OutboundSessionService {
         let owed = IntakeCredentialService.shared.devicesNeedingOurKey(among: Self.sessionDevices(of: contactId))
         guard !owed.isEmpty else { return }
 
-        let key = IntakeCredentialService.shared.ownIntakeKey()
+        let card: Data
+        do {
+            card = try ContactCardPayload(
+                intakeKey: IntakeCredentialService.shared.ownIntakeKey(),
+                accountAddress: AccountAddress.own()
+            ).encoded()
+        } catch {
+            Log.error("Contact card did not encode: \(error)", category: "Intake")
+            return
+        }
         let frameId = UUID().uuidString.lowercased()
 
         do {
@@ -379,11 +402,9 @@ final class OutboundSessionService {
             // would read the key itself.
             //
             // One copy per device of theirs that we hold a session with: the key is the account's,
-            // but each of their devices seals to us on its own and needs it in hand. Until
-            // 2026-09-22 only the pinned device got it, and the sibling's envelopes to us went on
-            // buying tokens.
+            // but each of their devices seals to us on its own and needs it in hand.
             let report = try await OutboundMessagePipeline.shared.sendToRecipientDevices(
-                plan: .whole(key, contentType: 27, messageId: UUID(uuidString: frameId) ?? UUID()),
+                plan: .whole(card, contentType: 27, messageId: UUID(uuidString: frameId) ?? UUID()),
                 baseMessageId: frameId,
                 senderId: myId,
                 recipientId: contactId,
@@ -392,12 +413,11 @@ final class OutboundSessionService {
                 onlyDevices: owed
             )
             // Marked per device, and only after that device's send returned. Marking before would
-            // cost the device the mechanism permanently on one failed RPC — and the saving it buys
-            // is per-message forever, far more than the one envelope a retry costs.
+            // cost the device the mechanism permanently on one failed RPC.
             IntakeCredentialService.shared.markOurKeySent(to: report.accepted)
-            Log.info("Intake: handed our key to \(report.accepted.count)/\(owed.count) device(s) of \(contactId.prefix(8))…", category: "Intake")
+            Log.info("Contact card handed to \(report.accepted.count)/\(owed.count) device(s) of \(contactId.prefix(8))…", category: "Intake")
         } catch {
-            Log.info("Intake: could not hand our key to \(contactId.prefix(8))… (\(error.localizedDescription)) — will retry on the next send", category: "Intake")
+            Log.info("Contact card to \(contactId.prefix(8))… not sent (\(error.localizedDescription)) — will retry on the next exchange", category: "Intake")
         }
     }
 

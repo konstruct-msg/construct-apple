@@ -89,9 +89,9 @@ class ChatManagementService {
             ContactLinkService.shared.pinKnownIdentityKey(on: dbUser, identityKey: key)
         }
         // From the signed invite, already checked by the server against the account's recovery
-        // key. An account's address cannot change, so a later invite can only restate it.
-        if let address = accountAddress, address.count == AccountAddress.length {
-            dbUser.accountAddress = address
+        // key — it outranks a card, and a different one is a security event either way.
+        if let address = accountAddress {
+            AccountAddress.pin(address, on: dbUser, source: .invite)
         }
 
         // 1:1 Chat per User — shared finder (also collapses accidental duplicates).

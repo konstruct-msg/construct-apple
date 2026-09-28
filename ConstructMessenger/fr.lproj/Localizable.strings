@@ -925,6 +925,7 @@
 "key_change_verify" = "Vérifier";
 "key_change_accept" = "Accepter la nouvelle clé";
 "key_change_toast_fmt" = "La clé de sécurité de %@ a changé. Ouvrez le chat pour vérifier.";
+"address_change_toast_fmt" = "%@ annonce une adresse différente de la précédente. Ouvrez le chat pour vérifier.";
 "key_change_toast_open" = "Ouvrir";
 "identity_fingerprint" = "Empreinte";
 "identity_fingerprint_unknown" = "Pas encore épinglée";

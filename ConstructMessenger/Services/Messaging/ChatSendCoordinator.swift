@@ -578,9 +578,9 @@ final class ChatSendCoordinator {
                     // including the delivery receipt for this very message, which is 36–38% of the
                     // bill on its own. Off the send path, because a control envelope must not delay
                     // the bubble the user is watching.
-                    if OutboundSessionService.peerNeedsOurIntakeKey(recipientId) {
+                    if OutboundSessionService.peerNeedsOurContactCard(recipientId) {
                         Task {
-                            await OutboundSessionService.shared.sendIntakeKey(to: recipientId)
+                            await OutboundSessionService.shared.sendContactCard(to: recipientId)
                         }
                     }
                     let deliveryStatus: DeliveryStatus

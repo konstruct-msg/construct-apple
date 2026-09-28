@@ -977,6 +977,7 @@
 "key_change_verify" = "Проверить";
 "key_change_accept" = "Принять новый ключ";
 "key_change_toast_fmt" = "У %@ изменился ключ безопасности. Откройте чат, чтобы проверить.";
+"address_change_toast_fmt" = "%@ называет другой адрес, чем раньше. Откройте чат, чтобы проверить.";
 "key_change_toast_open" = "Открыть";
 
 // Identity fingerprint (thread 5.3)

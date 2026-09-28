@@ -966,6 +966,7 @@
 "key_change_verify" = "Verify";
 "key_change_accept" = "Accept new key";
 "key_change_toast_fmt" = "%@'s security key changed. Open the chat to verify.";
+"address_change_toast_fmt" = "%@ is now claiming a different address. Open the chat to verify.";
 "key_change_toast_open" = "Open";
 
 // Identity fingerprint (thread 5.3 — external identity form)

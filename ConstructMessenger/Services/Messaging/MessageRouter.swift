@@ -1810,20 +1810,41 @@ final class MessageRouter {
         case .deliveryReceipt:
             handleIncomingE2EDeliveryReceipt(control.payload, messageId: messageId, from: otherUserId, in: context)
             return true
-        case .intakeKey:
-            // The peer hands us the key their account accepts, so our envelopes to them carry a
-            // tag instead of buying a Privacy Pass token.
+        case .contactCard:
+            // The peer's card: the intake key their account accepts, so our envelopes to them
+            // carry a tag instead of buying a Privacy Pass token, and their account address.
             //
             // Filed by ACCOUNT, and that is the whole requirement: `sealedTag(forRecipient:)`
-            // looks it up by account, and the tag itself is derived over the recipient's account
-            // id. A key filed under a device id would be one we never find, never use, and —
-            // because a missing credential is a token spent rather than an error — never notice
-            // not using.
-            IntakeCredentialService.shared.recordPeerIntakeKey(control.payload, from: otherUserId)
+            // looks the key up by account, and the tag itself is derived over the recipient's
+            // account id. A key filed under a device id would be one we never find, never use,
+            // and — because a missing credential is a token spent rather than an error — never
+            // notice not using. The address is the account's by definition.
+            if let card = ContactCardPayload.read(control.payload) {
+                if let key = card.intakeKey {
+                    IntakeCredentialService.shared.recordPeerIntakeKey(key, from: otherUserId)
+                }
+                if let address = card.accountAddress {
+                    Self.pinCardAddress(address, of: otherUserId, in: context)
+                }
+            } else {
+                Log.error("Contact card from \(otherUserId.prefix(8))… did not decode", category: "MessageRouter")
+            }
             PersistentACKStore.shared.markProcessed(messageId, senderId: otherUserId, in: context)
             return true
         case nil:
             return false
+        }
+    }
+
+    /// A contact's address from their card, pinned by `AccountAddressPin`. Only onto a row that
+    /// exists: a sender must not be able to put a contact in our store by sending to us.
+    private static func pinCardAddress(_ address: Data, of accountId: String, in context: NSManagedObjectContext) {
+        let request = User.fetchRequest()
+        request.predicate = NSPredicate(format: "id == %@", accountId)
+        request.fetchLimit = 1
+        guard let user = try? context.fetch(request).first else { return }
+        if AccountAddress.pin(address, on: user, source: .card) != .unchanged {
+            try? context.save()
         }
     }
 

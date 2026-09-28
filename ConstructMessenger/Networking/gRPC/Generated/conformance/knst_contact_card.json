@@ -1,0 +1,33 @@
+{
+  "_doc": "CONTENT_TYPE_CONTACT_CARD (27) payloads. 32 bytes exactly = a bare intake key from a build before the card; anything else is a ContactCard proto. A field of the wrong length is ignored, not an error. Checked by check_contact_card.py. Decision: construct-docs decisions/contact-card-carries-the-address-back.md.",
+  "cases": [
+    {
+      "name": "key_and_address",
+      "payload": "0a20101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f1220a0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebf",
+      "reads_as": "card",
+      "intake_key": "101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f",
+      "account_address": "a0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebf"
+    },
+    {
+      "name": "address_only",
+      "payload": "1220a0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebf",
+      "reads_as": "card",
+      "intake_key": null,
+      "account_address": "a0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebf"
+    },
+    {
+      "name": "key_only",
+      "payload": "0a20101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f",
+      "reads_as": "card",
+      "intake_key": "101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f",
+      "account_address": null
+    },
+    {
+      "name": "legacy_bare_key",
+      "payload": "101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f",
+      "reads_as": "legacy_intake_key",
+      "intake_key": "101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f",
+      "account_address": null
+    }
+  ]
+}

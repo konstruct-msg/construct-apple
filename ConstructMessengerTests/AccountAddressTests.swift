@@ -9,6 +9,7 @@
 import XCTest
 import CryptoKit
 import SwiftProtobuf
+import CoreData
 @testable import Construct_Messenger
 
 final class AccountAddressTests: XCTestCase {
@@ -128,5 +129,107 @@ final class SealedInnerRecipientAddressTests: XCTestCase {
     func testAnUnknownAddressKeepsTheAccountId() async throws {
         let named = try await inner(address: nil).recipientUserID
         XCTAssertEqual(named, accountId)
+    }
+}
+
+/// Type 27 against `knst_contact_card.json`, the file Android reads the same way.
+final class ContactCardPayloadTests: XCTestCase {
+
+    private struct Vectors: Decodable {
+        struct Case: Decodable {
+            let name: String
+            let payload: String
+            let reads_as: String
+            let intake_key: String?
+            let account_address: String?
+        }
+        let cases: [Case]
+    }
+
+    private func vectors() throws -> [Vectors.Case] {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("ConstructMessenger/Networking/gRPC/Generated/conformance/knst_contact_card.json")
+        return try JSONDecoder().decode(Vectors.self, from: Data(contentsOf: url)).cases
+    }
+
+    private func hex(_ s: String?) -> Data? { s.flatMap { InviteBinaryCodec.data(hex: $0) } }
+
+    /// Mutation: drop the 32-byte legacy branch in `read` — `legacy_bare_key` reddens.
+    func testEveryPayloadReadsAsTheVectorSays() throws {
+        for c in try vectors() {
+            let card = try XCTUnwrap(ContactCardPayload.read(try XCTUnwrap(hex(c.payload))), c.name)
+            XCTAssertEqual(card.intakeKey, hex(c.intake_key), c.name)
+            XCTAssertEqual(card.accountAddress, hex(c.account_address), c.name)
+        }
+    }
+
+    /// What we send is what the vector says a card with both fields is.
+    func testACardWithBothFieldsEncodesAsTheVector() throws {
+        let both = try XCTUnwrap(try vectors().first { $0.name == "key_and_address" })
+        let card = ContactCardPayload(intakeKey: hex(both.intake_key), accountAddress: hex(both.account_address))
+        XCTAssertEqual(try card.encoded(), hex(both.payload))
+    }
+}
+
+/// The pin rule: an address never changes, so a different one is never an update.
+final class AccountAddressPinTests: XCTestCase {
+
+    private let a = Data(repeating: 0xA1, count: 32)
+    private let b = Data(repeating: 0xB2, count: 32)
+
+    func testTheFirstAddressIsPinnedFromEitherSource() {
+        XCTAssertEqual(AccountAddressPin.decide(existing: nil, incoming: a, source: .card), .pinned)
+        XCTAssertEqual(AccountAddressPin.decide(existing: nil, incoming: a, source: .invite), .pinned)
+    }
+
+    func testTheSameAddressChangesNothing() {
+        XCTAssertEqual(AccountAddressPin.decide(existing: a, incoming: a, source: .card), .unchanged)
+    }
+
+    /// Mutation: let a card replace the pinned address — this reddens.
+    func testACardNeverReplacesAPinnedAddress() {
+        let outcome = AccountAddressPin.decide(existing: a, incoming: b, source: .card)
+        XCTAssertEqual(outcome, .conflictKept)
+        XCTAssertTrue(outcome.isSecurityEvent)
+    }
+
+    /// The invite outranks: the server checked it against the account's recovery key.
+    func testAnInviteReplacesButStillRaisesTheEvent() {
+        let outcome = AccountAddressPin.decide(existing: a, incoming: b, source: .invite)
+        XCTAssertEqual(outcome, .conflictReplaced)
+        XCTAssertTrue(outcome.isSecurityEvent)
+    }
+}
+
+/// The rule applied to a contact row.
+@MainActor
+final class AccountAddressPinRowTests: XCTestCase {
+
+    /// Held for the test's life: a managed object outliving its context reads as nil.
+    private let container = PersistenceController(inMemory: true).container
+
+    private func user() -> User {
+        let ctx = container.viewContext
+        let user = User(context: ctx)
+        user.id = "14f28d31-0000-0000-0000-000000000009"
+        user.username = ""
+        user.displayName = "T"
+        return user
+    }
+
+    func testACardConflictLeavesTheRowAlone() {
+        let row = user()
+        let pinned = Data(repeating: 0xA1, count: 32)
+        AccountAddress.pin(pinned, on: row, source: .invite)
+        AccountAddress.pin(Data(repeating: 0xB2, count: 32), on: row, source: .card)
+        XCTAssertEqual(row.accountAddress, pinned)
+    }
+
+    func testAnAddressThatIsNotAKeyIsIgnored() {
+        let row = user()
+        AccountAddress.pin(Data(repeating: 1, count: 31), on: row, source: .card)
+        XCTAssertNil(row.accountAddress)
     }
 }

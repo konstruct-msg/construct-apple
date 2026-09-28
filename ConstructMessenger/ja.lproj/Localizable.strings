@@ -1193,6 +1193,7 @@
 "key_change_verify" = "照合";
 "key_change_accept" = "新しいキーを承認";
 "key_change_toast_fmt" = "%@のセキュリティキーが変わりました。チャットを開いて照合してください。";
+"address_change_toast_fmt" = "%@が以前とは異なるアドレスを名乗っています。チャットを開いて照合してください。";
 "key_change_toast_open" = "開く";
 "identity_fingerprint" = "フィンガープリント";
 "identity_fingerprint_unknown" = "まだ固定されていません";

@@ -17,6 +17,7 @@
 //
 
 import CoreData
+import SwiftProtobuf
 import Foundation
 
 enum AccountAddress {
@@ -83,5 +84,97 @@ enum AccountAddress {
         guard let address = (try? context.fetch(request))?.first?.accountAddress,
               address.count == length else { return nil }
         return address
+    }
+}
+
+// MARK: - Contact card
+
+/// The payload of content type 27: what an account hands each contact about itself.
+///
+/// A `ContactCard` proto, or — at exactly 32 bytes — a bare intake key from a build before the
+/// card; any card with a field is longer, so the two cannot be confused. A field of the wrong
+/// length is dropped rather than failing the card. Fixed for both clients by
+/// `knst_contact_card.json`. decisions/contact-card-carries-the-address-back.md
+struct ContactCardPayload: Equatable {
+    var intakeKey: Data?
+    var accountAddress: Data?
+
+    static let legacyIntakeKeyLength = 32
+
+    static func read(_ payload: Data) -> ContactCardPayload? {
+        if payload.count == legacyIntakeKeyLength {
+            return ContactCardPayload(intakeKey: payload, accountAddress: nil)
+        }
+        guard let card = try? Shared_Proto_Core_V1_ContactCard(serializedBytes: payload) else {
+            return nil
+        }
+        return ContactCardPayload(
+            intakeKey: card.intakeKey.count == legacyIntakeKeyLength ? card.intakeKey : nil,
+            accountAddress: card.accountAddress.count == AccountAddress.length ? card.accountAddress : nil
+        )
+    }
+
+    func encoded() throws -> Data {
+        var card = Shared_Proto_Core_V1_ContactCard()
+        if let intakeKey { card.intakeKey = intakeKey }
+        if let accountAddress { card.accountAddress = accountAddress }
+        return try card.serializedData()
+    }
+}
+
+// MARK: - Pinning a contact's address
+
+/// Where a contact's address came from. An invite is signed by their device and checked by the
+/// server against the account's recovery key; a card is their device's word over our session.
+enum AccountAddressSource {
+    case invite
+    case card
+}
+
+enum AccountAddressPin: Equatable {
+    /// Nothing was pinned; this is now.
+    case pinned
+    /// Same as pinned.
+    case unchanged
+    /// Different from pinned, and the pinned one stands. A security event.
+    case conflictKept
+    /// Different from pinned, and the invite replaces it. A security event.
+    case conflictReplaced
+
+    /// An account's address never changes, so a different one is never an update: it is a peer
+    /// naming someone else, or someone naming the peer. The invite outranks the card because the
+    /// server checked it against the account's recovery key.
+    static func decide(existing: Data?, incoming: Data, source: AccountAddressSource) -> AccountAddressPin {
+        guard let existing else { return .pinned }
+        if existing == incoming { return .unchanged }
+        return source == .invite ? .conflictReplaced : .conflictKept
+    }
+
+    var isSecurityEvent: Bool { self == .conflictKept || self == .conflictReplaced }
+}
+
+extension AccountAddress {
+
+    /// Apply `address` to a contact row by the rule in `AccountAddressPin.decide`, and raise the
+    /// security event on a conflict. The caller saves the context.
+    @MainActor
+    @discardableResult
+    static func pin(_ address: Data, on user: User, source: AccountAddressSource) -> AccountAddressPin {
+        guard address.count == length else { return .unchanged }
+        let outcome = AccountAddressPin.decide(existing: user.accountAddress, incoming: address, source: source)
+        switch outcome {
+        case .pinned, .conflictReplaced:
+            user.accountAddress = address
+        case .unchanged, .conflictKept:
+            break
+        }
+        if outcome.isSecurityEvent {
+            Log.error(
+                "ADDRESS: \(user.id.prefix(8))… named a different account address (\(source)) — \(outcome == .conflictKept ? "kept the pinned one" : "replaced by the invite's")",
+                category: "ContactLink"
+            )
+            KeyChangeUX.notifyAddressConflict(userId: user.id, displayName: user.resolvedDisplayName)
+        }
+        return outcome
     }
 }

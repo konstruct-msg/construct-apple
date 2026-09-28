@@ -119,22 +119,25 @@ public nonisolated enum Shared_Proto_Core_V1_ContentType: SwiftProtobuf.Enum, Sw
   /// Server forwards opaquely (treat identically to E2EE_SIGNAL).
   case sessionReady // = 26
 
-  /// INTAKE_KEY — the recipient hands a contact the 32-byte `intake_key` its account
-  /// accepts, so that contact's envelopes can carry an intake tag instead of buying a
-  /// Privacy Pass token (see SealedInner.intake_tag_sealed).
+  /// CONTACT_CARD (was INTAKE_KEY until 2026-09-28) — what an account hands each contact about
+  /// itself: a `ContactCard` (below) with the `intake_key` its account accepts, so that contact's
+  /// envelopes can carry an intake tag instead of buying a Privacy Pass token (see
+  /// SealedInner.intake_tag_sealed), and its `account_address`, so that contact can name it by
+  /// key rather than by server id.
   ///
-  /// Payload is a framed side channel inside the ciphertext, and it has to be: the key is
-  /// a secret, and a credential readable by the relay is a credential the relay can use.
+  /// Payload is a framed side channel inside the ciphertext, and it has to be: the key is a
+  /// secret, and a credential readable by the relay is a credential the relay can use.
   /// knst_byte5 = true for that reason, sealed_inner_content_type = false for the same one.
   ///
-  /// Sent on contact establishment, on rotation (which is how a contact is revoked), and
-  /// lazily to contacts that predate the mechanism — the first send to a peer that has no
-  /// key of ours carries one. Existing contacts are not backfilled in a sweep: a hundred
-  /// contacts would mean a hundred control messages at once, each of which would itself
-  /// need paying for, so the graph migrates as it is used and pays nothing extra.
+  /// Sent to each device of a contact once: when we first hear from it, and when we first write
+  /// to it — whichever comes first — and again on rotation (which is how a contact is revoked).
+  /// Existing contacts are not backfilled in a sweep; each gets its card the next time the two
+  /// devices talk. A payload of exactly 32 bytes is a bare intake key from a build before the
+  /// card: any card with a field is longer.
   ///
   /// Server forwards opaquely (treat identically to E2EE_SIGNAL).
-  case intakeKey // = 27
+  /// decisions/contact-card-carries-the-address-back.md
+  case contactCard // = 27
 
   /// DECRYPTION_ERROR — "I could not read your message", from the device that failed to the
   /// device that wrote it. Replaces SESSION_RESET (21).
@@ -171,7 +174,7 @@ public nonisolated enum Shared_Proto_Core_V1_ContentType: SwiftProtobuf.Enum, Sw
     case 24: self = .sessionResetInit
     case 25: self = .sessionPing
     case 26: self = .sessionReady
-    case 27: self = .intakeKey
+    case 27: self = .contactCard
     case 28: self = .decryptionError
     default: self = .UNRECOGNIZED(rawValue)
     }
@@ -194,7 +197,7 @@ public nonisolated enum Shared_Proto_Core_V1_ContentType: SwiftProtobuf.Enum, Sw
     case .sessionResetInit: return 24
     case .sessionPing: return 25
     case .sessionReady: return 26
-    case .intakeKey: return 27
+    case .contactCard: return 27
     case .decryptionError: return 28
     case .UNRECOGNIZED(let i): return i
     }
@@ -217,7 +220,7 @@ public nonisolated enum Shared_Proto_Core_V1_ContentType: SwiftProtobuf.Enum, Sw
     .sessionResetInit,
     .sessionPing,
     .sessionReady,
-    .intakeKey,
+    .contactCard,
     .decryptionError,
   ]
 
@@ -895,12 +898,36 @@ public nonisolated struct Shared_Proto_Core_V1_OwnDeviceCopy: Sendable {
   fileprivate var _senderCertificate: Shared_Proto_Core_V1_SenderCertificate? = nil
 }
 
+/// The payload of CONTENT_TYPE_CONTACT_CARD (27): what an account hands a contact about itself,
+/// inside the ciphertext. Either field may be absent — a client that mints no intake key sends
+/// the address alone, a device that does not know its account's address sends the key alone.
+///
+/// The two fields live differently: `intake_key` rotates (that is how a contact is revoked),
+/// `account_address` never changes for the life of the account. A receiver pins the first address
+/// it hears for an account and treats a different one as a security event, never as an update;
+/// an address from a signed invite outranks one from a card.
+public nonisolated struct Shared_Proto_Core_V1_ContactCard: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// 32 bytes. See SealedInner.intake_tag_sealed.
+  public var intakeKey: Data = Data()
+
+  /// 32 bytes: the account's Ed25519 recovery public key (route_id = SHA-256(0x0001 || key)).
+  public var accountAddress: Data = Data()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
 
 fileprivate nonisolated let _protobuf_package = "shared.proto.core.v1"
 
 nonisolated extension Shared_Proto_Core_V1_ContentType: SwiftProtobuf._ProtoNameProviding {
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0CONTENT_TYPE_UNSPECIFIED\0\u{1}CONTENT_TYPE_E2EE_SIGNAL\0\u{1}CONTENT_TYPE_E2EE_MLS\0\u{2}\u{8}CONTENT_TYPE_WEBRTC_SIGNAL\0\u{1}CONTENT_TYPE_PRESENCE\0\u{1}CONTENT_TYPE_CALL_SIGNAL\0\u{1}CONTENT_TYPE_HEARTBEAT\0\u{1}CONTENT_TYPE_DELIVERY_RECEIPT\0\u{2}\u{6}CONTENT_TYPE_KEY_EXCHANGE\0\u{1}CONTENT_TYPE_SESSION_RESET\0\u{1}CONTENT_TYPE_KEY_SYNC\0\u{1}CONTENT_TYPE_SENDER_SYNC\0\u{1}CONTENT_TYPE_SESSION_RESET_INIT\0\u{1}CONTENT_TYPE_SESSION_PING\0\u{1}CONTENT_TYPE_SESSION_READY\0\u{1}CONTENT_TYPE_INTAKE_KEY\0\u{1}CONTENT_TYPE_DECRYPTION_ERROR\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0CONTENT_TYPE_UNSPECIFIED\0\u{1}CONTENT_TYPE_E2EE_SIGNAL\0\u{1}CONTENT_TYPE_E2EE_MLS\0\u{2}\u{8}CONTENT_TYPE_WEBRTC_SIGNAL\0\u{1}CONTENT_TYPE_PRESENCE\0\u{1}CONTENT_TYPE_CALL_SIGNAL\0\u{1}CONTENT_TYPE_HEARTBEAT\0\u{1}CONTENT_TYPE_DELIVERY_RECEIPT\0\u{2}\u{6}CONTENT_TYPE_KEY_EXCHANGE\0\u{1}CONTENT_TYPE_SESSION_RESET\0\u{1}CONTENT_TYPE_KEY_SYNC\0\u{1}CONTENT_TYPE_SENDER_SYNC\0\u{1}CONTENT_TYPE_SESSION_RESET_INIT\0\u{1}CONTENT_TYPE_SESSION_PING\0\u{1}CONTENT_TYPE_SESSION_READY\0\u{1}CONTENT_TYPE_CONTACT_CARD\0\u{1}CONTENT_TYPE_DECRYPTION_ERROR\0")
 }
 
 nonisolated extension Shared_Proto_Core_V1_MessagePriority: SwiftProtobuf._ProtoNameProviding {
@@ -1566,6 +1593,41 @@ nonisolated extension Shared_Proto_Core_V1_OwnDeviceCopy: SwiftProtobuf.Message,
   public static func ==(lhs: Shared_Proto_Core_V1_OwnDeviceCopy, rhs: Shared_Proto_Core_V1_OwnDeviceCopy) -> Bool {
     if lhs._senderCertificate != rhs._senderCertificate {return false}
     if lhs.wirePayload != rhs.wirePayload {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Shared_Proto_Core_V1_ContactCard: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ContactCard"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}intake_key\0\u{3}account_address\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularBytesField(value: &self.intakeKey) }()
+      case 2: try { try decoder.decodeSingularBytesField(value: &self.accountAddress) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.intakeKey.isEmpty {
+      try visitor.visitSingularBytesField(value: self.intakeKey, fieldNumber: 1)
+    }
+    if !self.accountAddress.isEmpty {
+      try visitor.visitSingularBytesField(value: self.accountAddress, fieldNumber: 2)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Shared_Proto_Core_V1_ContactCard, rhs: Shared_Proto_Core_V1_ContactCard) -> Bool {
+    if lhs.intakeKey != rhs.intakeKey {return false}
+    if lhs.accountAddress != rhs.accountAddress {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
