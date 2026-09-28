@@ -6,6 +6,11 @@
 //    1. Setup  — generate mnemonic, quiz confirmation, call SetRecoveryKey
 //    2. Status — check if recovery is set up (banner / fingerprint display)
 //    3. Recover — enter mnemonic on new device, call RecoverAccount
+//    4. Confirm — enter mnemonic on a device that does not know the account's address
+//
+//  Every flow that has the phrase in hand leaves this device knowing the account's address
+//  (`AccountAddress.rememberOwn`): the address is the recovery public key, and the phrase is the
+//  only source of it this app trusts.
 //
 
 import Foundation
@@ -54,6 +59,19 @@ final class AccountRecoveryViewModel {
     var recoverStep: RecoverStep = .idle
     var enteredWords: [String] = Array(repeating: "", count: 12)
     var recoverIdentifier: String = ""    // username or UUID to identify account
+
+    // MARK: - Confirm flow state
+
+    enum ConfirmStep: Equatable {
+        case idle
+        case checking
+        case done
+        case failed(String)
+    }
+
+    var confirmStep: ConfirmStep = .idle
+    /// The phrase as typed or pasted: twelve words, any whitespace between them.
+    var confirmPhrase: String = ""
 
     // MARK: - Setup Flow
 
@@ -107,6 +125,7 @@ final class AccountRecoveryViewModel {
 
             isSetup = true
             fingerprint = result.fingerprint
+            AccountAddress.rememberOwn(Data(keypair.publicKey))
             UserDefaults.standard.set(true, forKey: Self.udKeyIsSetup)
             setupStep = .done(fingerprint: result.fingerprint)
             mnemonic = []   // clear sensitive data after switching away from display view
@@ -241,6 +260,9 @@ final class AccountRecoveryViewModel {
                 userId: response.userId
             )
             VeilProxyManager.shared.configureFromServer(cert: response.veilBridgeCert ?? "")
+            // The server just accepted a signature by this key as the account's, so it is the
+            // account's recovery key — and therefore its address.
+            AccountAddress.rememberOwn(Data(keypair.publicKey))
 
             Task {
                 _ = try? await OtpkReplenishmentService.generateAndUpload(
@@ -265,6 +287,48 @@ final class AccountRecoveryViewModel {
         } catch {
             recoverStep = .failed(errorMessage(from: error))
         }
+    }
+
+    // MARK: - Confirm Flow
+
+    /// Teach this device the account's address from the phrase.
+    ///
+    /// The key is derived here and compared with the fingerprint the server reports for the
+    /// account. The phrase never leaves the device, and the server can only make the comparison
+    /// fail — it cannot make this device adopt a key the phrase did not produce.
+    func submitConfirm() async {
+        let phrase = confirmPhrase
+            .split(whereSeparator: { $0.isWhitespace })
+            .map { $0.lowercased() }
+            .joined(separator: " ")
+        guard validateMnemonic(mnemonic: phrase) else {
+            confirmStep = .failed(NSLocalizedString("recovery_confirm_invalid_phrase", comment: ""))
+            return
+        }
+        confirmStep = .checking
+        do {
+            let keypair = try deriveRecoveryKeypair(seed: try mnemonicToSeed(mnemonic: phrase))
+            let status = try await AuthServiceClient.shared.getRecoveryStatus()
+            guard status.isSetup, let fingerprint = status.fingerprint else {
+                confirmStep = .failed(NSLocalizedString("recovery_error_not_configured", comment: ""))
+                return
+            }
+            let key = Data(keypair.publicKey)
+            guard AccountAddress.matchesServerFingerprint(key, fingerprint: fingerprint) else {
+                confirmStep = .failed(NSLocalizedString("recovery_confirm_other_account", comment: ""))
+                return
+            }
+            AccountAddress.rememberOwn(key)
+            confirmPhrase = ""
+            confirmStep = .done
+        } catch {
+            confirmStep = .failed(errorMessage(from: error))
+        }
+    }
+
+    func resetConfirm() {
+        confirmStep = .idle
+        confirmPhrase = ""
     }
 
     func resetRecover() {

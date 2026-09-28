@@ -118,12 +118,43 @@ class ChatsViewModel {
 
     // MARK: - Chat operations
 
+    /// Open the chat for a verified invite: the contact, their pinned identity key and their
+    /// account address in one step.
+    ///
+    /// Every redeem surface calls this rather than building a `PublicUserInfo` itself. Seven of
+    /// them used to, each listing the same fields and passing the identity key on — an eighth
+    /// field added to seven copies is seven chances to drop it, and a dropped address does not
+    /// fail: the contact is simply written to by the server-assigned id forever.
+    func startChat(
+        redeeming info: ContactInfo,
+        origin: SessionReducer.ChatStartOrigin = .existingContact
+    ) -> Chat? {
+        let user = PublicUserInfo(
+            id: info.userId,
+            username: info.username,
+            avatarUrl: nil,
+            bio: nil,
+            deviceId: info.deviceId
+        )
+        return startChat(
+            with: user,
+            identityPublicKey: info.identityPublicKey,
+            accountAddress: info.accountAddress,
+            origin: origin
+        )
+    }
+
     func startChat(
         with user: PublicUserInfo,
         identityPublicKey: Data? = nil,
+        accountAddress: Data? = nil,
         origin: SessionReducer.ChatStartOrigin = .existingContact
     ) -> Chat? {
-        let chat = chatManagementService.startChat(with: user, identityPublicKey: identityPublicKey)
+        let chat = chatManagementService.startChat(
+            with: user,
+            identityPublicKey: identityPublicKey,
+            accountAddress: accountAddress
+        )
         streamLifecycle.reconnectIfSubscriptionsChanged()
 
         if SessionReducer.chatStartRetiresExistingSession(origin: origin) {

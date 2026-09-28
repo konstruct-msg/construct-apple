@@ -8,6 +8,11 @@
 // For information on using the generated types, please see the documentation:
 //   https://github.com/apple/swift-protobuf/
 
+#if canImport(FoundationEssentials)
+import FoundationEssentials
+#else
+import Foundation
+#endif
 import SwiftProtobuf
 
 // If the compiler emits an error on this type, it is because this file
@@ -20,14 +25,12 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
-/// Запрос на принятие invite token
+/// Accept a device-minted invite.
 public nonisolated struct Shared_Proto_Services_V1_AcceptInviteRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  /// Полный invite token (закодированный MessagePack/Base64 с QR-кода)
-  /// Содержит: jti, uuid, device_id, server, ts, eph_pub, sig
   public var invite: Shared_Proto_Services_V1_InviteToken {
     get {_invite ?? Shared_Proto_Services_V1_InviteToken()}
     set {_invite = newValue}
@@ -44,13 +47,18 @@ public nonisolated struct Shared_Proto_Services_V1_AcceptInviteRequest: Sendable
   fileprivate var _invite: Shared_Proto_Services_V1_InviteToken? = nil
 }
 
-/// Структура invite token (MessagePack encoded)
+/// A device-minted invite, as the redeemer forwards it. The on-device transport is
+/// the compact binary "CIv1" layout; this message carries the same fields.
+///
+/// Signed canonical string (v5, the only version accepted):
+///   v|jti|uuid|device_id|server|ts|un|ttl|hex(addr)
+/// Vectors: conformance/knst_invite.json.
 public nonisolated struct Shared_Proto_Services_V1_InviteToken: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  /// Версия протокола (1 = legacy user_id only, 2 = device_id)
+  /// Protocol version. Only 5 is accepted.
   public var v: Int32 = 0
 
   /// JWT ID для one-time use tracking
@@ -75,7 +83,7 @@ public nonisolated struct Shared_Proto_Services_V1_InviteToken: Sendable {
   /// Unix timestamp создания
   public var ts: Int64 = 0
 
-  /// Ephemeral X25519 public key (32 bytes, base64)
+  /// v1–v3 only (an unused ephemeral key). Always empty on v5.
   public var ephPub: String = String()
 
   /// Ed25519 signature (64 bytes, base64)
@@ -103,6 +111,16 @@ public nonisolated struct Shared_Proto_Services_V1_InviteToken: Sendable {
   public var hasTtl: Bool {self._ttl != nil}
   /// Clears the value of `ttl`. Subsequent reads from it will return its default value.
   public mutating func clearTtl() {self._ttl = nil}
+
+  /// v5: the issuing account's address — its 32-byte Ed25519 recovery public key
+  /// (route_id = SHA-256(0x0001 || addr)). Required. Covered by the signature
+  /// (canonical ends with |hex(addr)), so the redeemer learns the address from the
+  /// issuer's device and not from the server. The server refuses an invite whose
+  /// addr is not the account's recovery key: a wrong address would otherwise
+  /// swallow every message sent to it without a word, since an unknown address is
+  /// accepted and dropped by design.
+  /// See construct-docs decisions/invite-carries-the-account-address.md.
+  public var addr: Data = Data()
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -216,7 +234,7 @@ nonisolated extension Shared_Proto_Services_V1_AcceptInviteRequest: SwiftProtobu
 
 nonisolated extension Shared_Proto_Services_V1_InviteToken: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".InviteToken"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}v\0\u{1}jti\0\u{1}uuid\0\u{3}device_id\0\u{1}server\0\u{1}ts\0\u{3}eph_pub\0\u{1}sig\0\u{1}un\0\u{1}ttl\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}v\0\u{1}jti\0\u{1}uuid\0\u{3}device_id\0\u{1}server\0\u{1}ts\0\u{3}eph_pub\0\u{1}sig\0\u{1}un\0\u{1}ttl\0\u{1}addr\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -234,6 +252,7 @@ nonisolated extension Shared_Proto_Services_V1_InviteToken: SwiftProtobuf.Messag
       case 8: try { try decoder.decodeSingularStringField(value: &self.sig) }()
       case 9: try { try decoder.decodeSingularStringField(value: &self._un) }()
       case 10: try { try decoder.decodeSingularUInt32Field(value: &self._ttl) }()
+      case 11: try { try decoder.decodeSingularBytesField(value: &self.addr) }()
       default: break
       }
     }
@@ -274,6 +293,9 @@ nonisolated extension Shared_Proto_Services_V1_InviteToken: SwiftProtobuf.Messag
     try { if let v = self._ttl {
       try visitor.visitSingularUInt32Field(value: v, fieldNumber: 10)
     } }()
+    if !self.addr.isEmpty {
+      try visitor.visitSingularBytesField(value: self.addr, fieldNumber: 11)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -288,6 +310,7 @@ nonisolated extension Shared_Proto_Services_V1_InviteToken: SwiftProtobuf.Messag
     if lhs.sig != rhs.sig {return false}
     if lhs._un != rhs._un {return false}
     if lhs._ttl != rhs._ttl {return false}
+    if lhs.addr != rhs.addr {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

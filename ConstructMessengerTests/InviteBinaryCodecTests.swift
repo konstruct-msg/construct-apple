@@ -2,7 +2,9 @@
 //  InviteBinaryCodecTests.swift
 //  ConstructMessengerTests
 //
-//  Compact binary invite encoding (F1) + v4 without ephKey (F2).
+//  The v5 invite against `knst_invite.json` — the file construct-protos, construct-server and
+//  Android are held to as well. Three implementations build the canonical string and the CIv1
+//  bytes independently, and a disagreement surfaces only at redeem, as "invalid signature".
 //
 
 import XCTest
@@ -10,131 +12,119 @@ import XCTest
 
 final class InviteBinaryCodecTests: XCTestCase {
 
-    private func sampleInviteV3(un: String? = "alice") -> InviteObject {
-        let eph = Data(repeating: 0xAB, count: 32).base64EncodedString()
-        let sig = Data(repeating: 0xCD, count: 64).base64EncodedString()
-        return InviteObject(
-            v: 3,
-            jti: "550e8400-e29b-41d4-a716-446655440000",
-            uuid: "14f28d31-1234-4abc-8def-0123456789ab",
-            deviceId: "4e1f9dbe209c1bedb33ee32dda5a28f0",
-            server: "konstruct.cc",
-            ephKey: eph,
-            ts: 1_738_156_800,
-            sig: sig,
-            un: un,
-            ttl: nil
+    private struct Vectors: Decodable {
+        struct Fields: Decodable {
+            let v: Int
+            let jti: String
+            let uuid: String
+            let device_id: String
+            let server: String
+            let ts: Int
+            let ttl: UInt32
+            let addr: String
+            let un: String?
+        }
+        struct Valid: Decodable {
+            let name: String
+            let fields: Fields
+            let verifying_key: String
+            let canonical: String
+            let signature: String
+            let binary: String
+        }
+        struct Refused: Decodable {
+            let name: String
+            let why: String
+            let binary: String
+        }
+        let valid: [Valid]
+        let refused: [Refused]
+    }
+
+    private func vectors() throws -> Vectors {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("ConstructMessenger/Networking/gRPC/Generated/conformance/knst_invite.json")
+        return try JSONDecoder().decode(Vectors.self, from: Data(contentsOf: url))
+    }
+
+    private func hex(_ string: String) throws -> Data {
+        try XCTUnwrap(InviteBinaryCodec.data(hex: string), "not hex: \(string)")
+    }
+
+    private func invite(_ v: Vectors.Valid) throws -> InviteObject {
+        InviteObject(
+            v: v.fields.v,
+            jti: v.fields.jti,
+            uuid: v.fields.uuid,
+            deviceId: v.fields.device_id,
+            server: v.fields.server,
+            ts: v.fields.ts,
+            sig: try hex(v.signature).base64EncodedString(),
+            un: v.fields.un,
+            ttl: v.fields.ttl,
+            addr: try hex(v.fields.addr)
         )
     }
 
-    private func sampleInviteV4(un: String? = "alice") -> InviteObject {
-        let sig = Data(repeating: 0xCD, count: 64).base64EncodedString()
-        return InviteObject(
-            v: 4,
-            jti: "550e8400-e29b-41d4-a716-446655440000",
-            uuid: "14f28d31-1234-4abc-8def-0123456789ab",
-            deviceId: "4e1f9dbe209c1bedb33ee32dda5a28f0",
-            server: "konstruct.cc",
-            ephKey: "",
-            ts: 1_738_156_800,
-            sig: sig,
-            un: un,
-            ttl: nil
-        )
+    /// The vector's `ts` is fixed in the past, and `validate()` refuses nothing for age — expiry
+    /// is a separate check — so the fixtures stay valid forever.
+    func testTheCanonicalStringMatchesTheVector() throws {
+        for v in try vectors().valid {
+            XCTAssertEqual(try invite(v).canonicalString(), v.canonical, v.name)
+        }
     }
 
-    func testV4BinaryRoundTrip() throws {
-        let original = sampleInviteV4()
-        let binary = try original.encodeBinary()
-        XCTAssertTrue(InviteObject.isCompactBinary(binary))
-        let decoded = try InviteObject.decodeBinary(binary)
-        XCTAssertEqual(decoded.v, 4)
-        XCTAssertEqual(decoded.ephKey, "")
-        XCTAssertEqual(decoded.un, "alice")
-        XCTAssertEqual(try decoded.canonicalString(), try original.canonicalString())
-        XCTAssertEqual(
-            try decoded.canonicalString(),
-            "4|550e8400-e29b-41d4-a716-446655440000|14f28d31-1234-4abc-8def-0123456789ab|4e1f9dbe209c1bedb33ee32dda5a28f0|konstruct.cc|1738156800|alice"
-        )
+    func testTheBinaryMatchesTheVector() throws {
+        for v in try vectors().valid {
+            XCTAssertEqual(try invite(v).encodeBinary(), try hex(v.binary), v.name)
+            XCTAssertEqual(try InviteObject.decodeBinary(try hex(v.binary)), try invite(v), v.name)
+        }
     }
 
-    func testV4SmallerThanV3() throws {
-        let v3 = try sampleInviteV3().encodeBinary()
-        let v4 = try sampleInviteV4().encodeBinary()
-        XCTAssertLessThan(v4.count, v3.count)
-        XCTAssertEqual(v3.count - v4.count, 32, "v4 should drop exactly 32-byte ephKey")
+    /// The core's verifier accepts the vector's signature over the canonical string — the same
+    /// call `InviteVerifier` makes on redeem.
+    func testTheVectorSignatureVerifies() throws {
+        for v in try vectors().valid {
+            XCTAssertTrue(
+                try verifyInviteSignature(
+                    data: v.canonical,
+                    signature: [UInt8](try hex(v.signature)),
+                    verifyingKey: [UInt8](try hex(v.verifying_key))
+                ),
+                v.name
+            )
+        }
     }
 
-    func testV3BinaryRoundTripWithUsername() throws {
-        let original = sampleInviteV3(un: "alice")
-        let binary = try original.encodeBinary()
-        let decoded = try InviteObject.decodeBinary(binary)
-        XCTAssertEqual(decoded.v, 3)
-        XCTAssertEqual(decoded.ephKey, original.ephKey)
-        XCTAssertEqual(decoded.un, original.un)
-    }
-
-    func testV3BinaryRoundTripWithoutUsername() throws {
-        let original = sampleInviteV3(un: nil)
-        let decoded = try InviteObject.decodeBinary(try original.encodeBinary())
-        XCTAssertNil(decoded.un)
+    func testRefusedBlobsDoNotDecode() throws {
+        let refused = try vectors().refused
+        XCTAssertFalse(refused.isEmpty)
+        for r in refused {
+            XCTAssertThrowsError(try InviteObject.decodeBinary(try hex(r.binary)), "\(r.name): \(r.why)")
+        }
     }
 
     func testBase64URLRoundTrip() throws {
-        let original = sampleInviteV4()
+        let original = try invite(try vectors().valid[0])
         let encoded = try original.toBase64URL()
         XCTAssertNil(encoded.rangeOfCharacter(from: CharacterSet(charactersIn: "+/=")))
-        let decoded = try InviteObject.fromBase64(encoded)
-        XCTAssertEqual(decoded.v, 4)
-        XCTAssertEqual(decoded.uuid, original.uuid.lowercased())
+        XCTAssertEqual(try InviteObject.fromBase64(encoded), original)
     }
 
-    func testLegacyJSONDualRead() throws {
-        let original = sampleInviteV3()
-        let jsonData = try JSONEncoder().encode(original)
-        let decoded = try InviteObject.decodePayload(jsonData)
-        XCTAssertEqual(decoded.jti.lowercased(), original.jti.lowercased())
-    }
-
-    func testLegacyStandardBase64JSONDualRead() throws {
-        let original = sampleInviteV3()
-        let jsonData = try JSONEncoder().encode(original)
-        let legacy = jsonData.base64EncodedString()
-        let decoded = try InviteObject.fromBase64(legacy)
-        XCTAssertEqual(decoded.server, "konstruct.cc")
-    }
-
-    func testBinaryMuchSmallerThanJSON() throws {
-        let original = sampleInviteV4()
-        let binary = try original.encodeBinary()
-        let json = try JSONEncoder().encode(original)
-        XCTAssertLessThan(binary.count, json.count)
-        XCTAssertLessThan(binary.count, 190, "Expected ~145–160B compact v4 invite, got \(binary.count)")
+    /// A QR's capacity is what this layout is fitted to. v5 with an address is 32 bytes over the
+    /// old v4 — still well inside the byte-mode budget the scanner reads reliably.
+    func testTheBinaryStaysSmall() throws {
+        let binary = try invite(try vectors().valid[0]).encodeBinary()
+        XCTAssertLessThan(binary.count, 230, "got \(binary.count) bytes")
     }
 
     func testLatin1QRStringRecovery() throws {
-        let original = sampleInviteV4()
-        let binary = try original.encodeBinary()
+        let binary = try invite(try vectors().valid[0]).encodeBinary()
         let latin1 = String(binary.map { Character(UnicodeScalar($0)) })
         let recovered = InviteBinaryCodec.dataFromLatin1QRString(latin1)
         XCTAssertEqual(recovered, binary)
-        XCTAssertTrue(InviteObject.isCompactBinary(recovered!))
-    }
-
-    func testV4RejectsNonEmptyEphKey() {
-        let sig = Data(repeating: 0xCD, count: 64).base64EncodedString()
-        let bad = InviteObject(
-            v: 4,
-            jti: "550e8400-e29b-41d4-a716-446655440000",
-            uuid: "14f28d31-1234-4abc-8def-0123456789ab",
-            deviceId: "4e1f9dbe209c1bedb33ee32dda5a28f0",
-            server: "konstruct.cc",
-            ephKey: Data(repeating: 1, count: 32).base64EncodedString(),
-            ts: 1_738_156_800,
-            sig: sig,
-            un: nil,
-            ttl: nil
-        )
-        XCTAssertThrowsError(try bad.validate())
+        XCTAssertTrue(InviteObject.isCompactBinary(try XCTUnwrap(recovered)))
     }
 }

@@ -112,13 +112,19 @@ final class ContactLinkService {
             return trimmed
         }()
 
-        return try createOrUpdateContact(
+        let user = try createOrUpdateContact(
             userId: info.userId,
             username: usernameForStore,
             displayName: nil,
             identityPublicKey: info.identityPublicKey,
             context: context
         )
+        // Same rule as `ChatManagementService.startChat`: the signed invite is the source.
+        if let address = info.accountAddress, address.count == AccountAddress.length {
+            user.accountAddress = address
+            try context.save()
+        }
+        return user
     }
 
     /// Pin inviter identity key from an OOB-verified invite (TOFU).

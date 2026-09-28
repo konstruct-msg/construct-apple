@@ -32,7 +32,7 @@ class InviteVerifier {
 
     // MARK: - Decoding
 
-    /// Decode invite from a text transport payload (base64url / base64 of compact binary, or legacy JSON).
+    /// Decode invite from a text transport payload (base64url / base64 of compact binary).
     func decode(_ encoded: String) throws -> InviteObject {
         let invite: InviteObject
         do {
@@ -118,8 +118,8 @@ class InviteVerifier {
     /// 1. Structure + TTL
     /// 2. Local JTI de-dupe (best-effort, in-memory)
     /// 3. Fetch inviter verifying key + identity key
-    /// 4. `deviceId == deriveDeviceId(identityPublic)` when deviceId present (v2+)
-    /// 5. Ed25519 signature over canonical string
+    /// 4. `deviceId == deriveDeviceId(identityPublic)`
+    /// 5. Ed25519 signature over canonical string — which covers `addr`
     @discardableResult
     func verify(
         _ invite: InviteObject,
@@ -146,7 +146,7 @@ class InviteVerifier {
 
         let publicKeyBundle = try await fetchPublicKey(
             userId: invite.uuid,
-            deviceId: invite.deviceId.isEmpty ? nil : invite.deviceId,
+            deviceId: invite.deviceId,
             server: invite.server
         )
 
@@ -164,15 +164,13 @@ class InviteVerifier {
 
         // TOFU pin: signed deviceId must match SHA256(identity_public)[0..16].
         // Server key substitution for a different device/identity fails this check.
-        if !invite.deviceId.isEmpty {
-            let expectedDeviceId = deriveDeviceId(identityPublicKey: [UInt8](identityPublic))
-            guard invite.deviceId.lowercased() == expectedDeviceId.lowercased() else {
-                Log.info(
-                    "Invite deviceId mismatch: invite=\(invite.deviceId.prefix(8))… expected=\(expectedDeviceId.prefix(8))…",
-                    category: "InviteVerifier"
-                )
-                throw InviteVerificationError.deviceIdMismatch
-            }
+        let expectedDeviceId = deriveDeviceId(identityPublicKey: [UInt8](identityPublic))
+        guard invite.deviceId.lowercased() == expectedDeviceId.lowercased() else {
+            Log.info(
+                "Invite deviceId mismatch: invite=\(invite.deviceId.prefix(8))… expected=\(expectedDeviceId.prefix(8))…",
+                category: "InviteVerifier"
+            )
+            throw InviteVerificationError.deviceIdMismatch
         }
 
         guard let signatureData = Data(base64Encoded: invite.sig) else {
@@ -180,42 +178,11 @@ class InviteVerifier {
         }
 
         let dataToVerify = try invite.canonicalString()
-        var isValid = try verifyInviteSignature(
+        let isValid = try verifyInviteSignature(
             data: dataToVerify,
             signature: [UInt8](signatureData),
             verifyingKey: [UInt8](verifyingKeyData)
         )
-
-        if !isValid, invite.server.contains("http") {
-            // Compatibility: some older invites stored server with scheme.
-            let normalizedServer = normalizeServer(invite.server)
-            let normalizedInvite = InviteObject(
-                v: invite.v,
-                jti: invite.jti,
-                uuid: invite.uuid,
-                deviceId: invite.deviceId,
-                server: normalizedServer,
-                ephKey: invite.ephKey,
-                ts: invite.ts,
-                sig: invite.sig,
-                un: invite.un,
-                // Carried, not dropped: on v5 the canonical string ends with `ttl`, so a
-                // rebuild that omitted it would hash a different string and report the
-                // signature invalid — with the server as the last place anyone would look.
-                ttl: invite.ttl
-            )
-            isValid = try verifyInviteSignature(
-                data: try normalizedInvite.canonicalString(),
-                signature: [UInt8](signatureData),
-                verifyingKey: [UInt8](verifyingKeyData)
-            )
-            if isValid {
-                Log.info(
-                    "Invite signature valid after server normalization: jti=\(invite.jti.prefix(8))..., server=\(normalizedServer)",
-                    category: "InviteVerifier"
-                )
-            }
-        }
 
         guard isValid else {
             Log.info("Invalid invite signature: jti=\(invite.jti.prefix(8))...", category: "InviteVerifier")
@@ -241,7 +208,7 @@ class InviteVerifier {
 
     private func fetchPublicKey(
         userId: String,
-        deviceId: String?,
+        deviceId: String,
         server: String
     ) async throws -> PublicKeyBundleData {
         do {
@@ -254,7 +221,7 @@ class InviteVerifier {
                 consumeOneTimePrekey: false
             )
             Log.debug(
-                "Fetched key bundle for \(userId.prefix(8))… device=\(deviceId?.prefix(8) ?? "default")",
+                "Fetched key bundle for \(userId.prefix(8))… device=\(deviceId.prefix(8))",
                 category: "InviteVerifier"
             )
             return bundle
@@ -262,19 +229,6 @@ class InviteVerifier {
             Log.error("Failed to fetch key bundle for \(userId): \(error)", category: "InviteVerifier")
             throw InviteVerificationError.publicKeyFetchFailed(error)
         }
-    }
-
-    private func normalizeServer(_ server: String) -> String {
-        var value = server.trimmingCharacters(in: .whitespacesAndNewlines)
-        if value.hasPrefix("http://") {
-            value = String(value.dropFirst("http://".count))
-        } else if value.hasPrefix("https://") {
-            value = String(value.dropFirst("https://".count))
-        }
-        if value.hasSuffix("/") {
-            value = String(value.dropLast())
-        }
-        return value
     }
 }
 

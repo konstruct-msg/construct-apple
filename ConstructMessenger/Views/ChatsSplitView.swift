@@ -92,8 +92,10 @@ struct ChatsSplitView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .ctBackground()
         .sheet(isPresented: $showingQRScanner) {
-            QRScannerView { contactURL in
-                handleScannedContact(contactURL)
+            RecoveryGated {
+                QRScannerView { contactURL in
+                    handleScannedContact(contactURL)
+                }
             }
         }
         .sheet(isPresented: $showingDrafts) {
@@ -561,16 +563,8 @@ struct ChatsSplitView: View {
             showingDrafts = true
             return
         }
-        let publicUserInfo = PublicUserInfo(
-            id: contactInfo.userId,
-            username: contactInfo.username,
-            avatarUrl: nil,
-            bio: nil,
-            deviceId: contactInfo.deviceId
-        )
         if let chat = chatsViewModel.startChat(
-            with: publicUserInfo,
-            identityPublicKey: contactInfo.identityPublicKey
+            redeeming: contactInfo
         ) {
             selectedChatId = chat.id
             selectTab(.chats, clearChatSelection: false)

@@ -52,6 +52,9 @@ extension User {
     /// The raw identity key bytes from the last successfully KT-verified bundle.
     /// `nil` until the first successful verification.
     @NSManaged public var knownIdentityKey: Data?
+    /// Their account address (Ed25519 recovery public key), from their signed invite. Sealed
+    /// sends name the recipient by it; nil for a contact added before invites carried it.
+    @NSManaged public var accountAddress: Data?
 
     /// Raw `KTStatus` value stored in Core Data. Use `ktStatus` accessor.
     @NSManaged public var ktStatusRaw: Int16

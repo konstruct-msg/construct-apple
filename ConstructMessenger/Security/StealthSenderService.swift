@@ -228,6 +228,15 @@ final class StealthSenderService: SealedSenderResolving {
     /// Test seam: overrides the KT-verified-identity lookup so unit tests exercise the KT
     /// cross-check without a Core Data stack. `nil` (default) uses the real `User` store.
     var ktLookupOverrideForTesting: ((String) -> (key: Data, status: KTStatus)?)?
+
+    /// The account address a sealed envelope names its recipient by. Injected so a test can build
+    /// an envelope without a store.
+    var accountAddressLookup: (String) -> Data? = { accountId in
+        AccountAddress.of(
+            accountId: accountId,
+            context: PersistenceController.shared.container.viewContext
+        )
+    }
     #endif
 
     /// The recipient's locally stored, previously-KT-verified identity key for `userId`
@@ -479,7 +488,13 @@ final class StealthSenderService: SealedSenderResolving {
     ) async throws -> Data {
         let sealedCert = try sealSenderCert(certBytes, recipientIdentityKey: recipientIdentityKey)
         var inner = Shared_Proto_Core_V1_SealedInner()
-        inner.recipientUserID = recipientUserId
+        // The recipient by their address when this device knows it, by the server's id otherwise.
+        // Only this field: the intake credential and the token below stay keyed by the account
+        // id, because the server resolves the address to that id before it checks either.
+        inner.recipientUserID = AccountAddress.recipientField(
+            accountId: recipientUserId,
+            address: accountAddressLookup(recipientUserId)
+        )
         // The one device this envelope is for. Derived from the very key the certificate was
         // just sealed to, and not passed in or looked up, because those are the two ways it
         // could disagree with the ciphertext: a parameter can be handed the wrong device by a

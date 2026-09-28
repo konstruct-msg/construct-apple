@@ -52,7 +52,13 @@ struct ContactQRCodeView: View {
         username.isEmpty ? DisplayNameGenerator.generate(from: userId) : "@\(username)"
     }
 
+    /// Nothing is minted until this device knows the account's address: an invite without one
+    /// cannot be made, and the gate says why rather than showing a failed code.
     var body: some View {
+        RecoveryGated { invitePage }
+    }
+
+    private var invitePage: some View {
         VStack(spacing: ContactQRCodeLayout.contentSpacing) {
             CTNavBar(
                 title: NSLocalizedString("invite", comment: ""),

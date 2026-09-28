@@ -3,7 +3,7 @@
 //  ConstructMessengerTests
 //
 //  Closing coverage for INVITE_SYSTEM_IMPROVEMENT_PLAN implementable surface:
-//  v4 codec, canonical strings, fingerprint, TOFU pin, call gate, config.
+//  v5 codec, fingerprint, TOFU pin, call gate, config.
 //
 
 import XCTest
@@ -32,48 +32,22 @@ final class InviteSystemCompletionTests: XCTestCase {
         Data(repeating: 0xCD, count: 64).base64EncodedString()
     }
 
-    private func validEph() -> String {
-        Data(repeating: 0xAB, count: 32).base64EncodedString()
-    }
-
-    private func sampleV4(un: String? = nil, ts: Int = 1_738_156_800) -> InviteObject {
+    private func sampleV5(un: String? = nil, ts: Int = 1_738_156_800) -> InviteObject {
         InviteObject(
-            v: 4,
+            v: 5,
             jti: "550e8400-e29b-41d4-a716-446655440000",
             uuid: "14f28d31-1234-4abc-8def-0123456789ab",
             deviceId: "4e1f9dbe209c1bedb33ee32dda5a28f0",
             server: "konstruct.cc",
-            ephKey: "",
             ts: ts,
             sig: validSig(),
             un: un,
-            ttl: nil
-        )
-    }
-
-    private func sampleV3() -> InviteObject {
-        InviteObject(
-            v: 3,
-            jti: "550e8400-e29b-41d4-a716-446655440000",
-            uuid: "14f28d31-1234-4abc-8def-0123456789ab",
-            deviceId: "4e1f9dbe209c1bedb33ee32dda5a28f0",
-            server: "konstruct.cc",
-            ephKey: validEph(),
-            ts: 1_738_156_800,
-            sig: validSig(),
-            un: "alice",
-            ttl: nil
+            ttl: UInt32(InviteConfig.ttlSeconds),
+            addr: Data(repeating: 0x5A, count: AccountAddress.length)
         )
     }
 
     // MARK: - Config / version
-
-    func testCurrentVersionIsV4() {
-        XCTAssertEqual(InviteConfig.currentVersion, 4)
-        XCTAssertTrue(InviteConfig.supportedVersions.contains(4))
-        XCTAssertFalse(InviteConfig.carriesEphKey(version: 4))
-        XCTAssertTrue(InviteConfig.carriesEphKey(version: 3))
-    }
 
     /// `ttlDescription` is interpolated straight into user-facing copy ("Одноразовая
     /// ссылка, действует %@"). `DateComponentsFormatter.string(from:)` returns an
@@ -145,87 +119,40 @@ final class InviteSystemCompletionTests: XCTestCase {
     func testInviteIsLiveJustInsideTTLAndDeadJustOutside() {
         let now = Date().timeIntervalSince1970
 
-        let almostExpired = sampleV4(ts: Int(now - InviteConfig.ttlSeconds + 60))
+        let almostExpired = sampleV5(ts: Int(now - InviteConfig.ttlSeconds + 60))
         XCTAssertFalse(
             almostExpired.isExpired(),
             "An invite one minute short of the TTL is still live — rejecting it strands a "
                 + "sender whose code is visibly counting down."
         )
 
-        let justExpired = sampleV4(ts: Int(now - InviteConfig.ttlSeconds - 60))
+        let justExpired = sampleV5(ts: Int(now - InviteConfig.ttlSeconds - 60))
         XCTAssertTrue(justExpired.isExpired())
-    }
-
-    // MARK: - Canonical string (signing surface)
-
-    func testCanonicalV4HasNoEphKey() throws {
-        let c = try sampleV4(un: "bob").canonicalString()
-        XCTAssertEqual(
-            c,
-            "4|550e8400-e29b-41d4-a716-446655440000|14f28d31-1234-4abc-8def-0123456789ab|4e1f9dbe209c1bedb33ee32dda5a28f0|konstruct.cc|1738156800|bob"
-        )
-        XCTAssertFalse(c.contains(validEph().prefix(8)))
-    }
-
-    func testCanonicalV3StillHasEphKey() throws {
-        let c = try sampleV3().canonicalString()
-        XCTAssertTrue(c.contains(validEph()))
-        XCTAssertTrue(c.hasPrefix("3|"))
-        XCTAssertTrue(c.hasSuffix("|alice"))
-    }
-
-    func testCanonicalV4EmptyUn() throws {
-        let c = try sampleV4(un: nil).canonicalString()
-        XCTAssertTrue(c.hasSuffix("|"))
     }
 
     // MARK: - Validate
 
-    func testV4RejectsNonEmptyEph() {
-        let base = sampleV4()
+    func testRejectsBadDeviceId() {
+        let base = sampleV5()
         let invite = InviteObject(
-            v: 4,
-            jti: base.jti,
-            uuid: base.uuid,
-            deviceId: base.deviceId,
-            server: base.server,
-            ephKey: validEph(),
-            ts: base.ts,
-            sig: validSig(),
-            un: nil,
-            ttl: nil
-        )
-        XCTAssertThrowsError(try invite.validate())
-    }
-
-    func testV4RejectsBadDeviceId() {
-        let invite = InviteObject(
-            v: 4,
-            jti: sampleV4().jti,
-            uuid: sampleV4().uuid,
-            deviceId: "not-hex",
-            server: "konstruct.cc",
-            ephKey: "",
-            ts: 1_738_156_800,
-            sig: validSig(),
-            un: nil,
-            ttl: nil
+            v: base.v, jti: base.jti, uuid: base.uuid, deviceId: "not-hex", server: base.server,
+            ts: base.ts, sig: base.sig, un: nil, ttl: base.ttl, addr: base.addr
         )
         XCTAssertThrowsError(try invite.validate())
     }
 
     func testExpiry() {
-        let past = sampleV4(ts: 1_000_000_000) // 2001
+        let past = sampleV5(ts: 1_000_000_000) // 2001
         XCTAssertTrue(past.isExpired(ttl: 300))
         let now = Int(Date().timeIntervalSince1970)
-        let fresh = sampleV4(ts: now)
+        let fresh = sampleV5(ts: now)
         XCTAssertFalse(fresh.isExpired(ttl: 300))
     }
 
-    // MARK: - Binary dual-read
+    // MARK: - Binary
 
     func testBase64URLRoundTripStableCanonical() throws {
-        let original = sampleV4(un: "carol")
+        let original = sampleV5(un: "carol")
         let wire = try original.toBase64URL()
         XCTAssertFalse(wire.contains("+"))
         XCTAssertFalse(wire.contains("/"))
@@ -234,16 +161,14 @@ final class InviteSystemCompletionTests: XCTestCase {
         XCTAssertEqual(try decoded.canonicalString(), try original.canonicalString())
     }
 
-    func testLegacyJSONStillDecodable() throws {
-        let v3 = sampleV3()
-        let json = try JSONEncoder().encode(v3)
-        let decoded = try InviteObject.decodePayload(json)
-        XCTAssertEqual(decoded.v, 3)
-        XCTAssertEqual(decoded.un, "alice")
+    /// The base64(JSON) form belonged to v1–v3 and is gone; only the compact binary decodes.
+    func testJSONIsNotAnInvite() {
+        let json = Data(#"{"v":5,"jti":"550e8400-e29b-41d4-a716-446655440000"}"#.utf8)
+        XCTAssertThrowsError(try InviteObject.decodePayload(json))
     }
 
     func testTruncatedBinaryFails() {
-        var bytes = try! sampleV4().encodeBinary()
+        var bytes = try! sampleV5().encodeBinary()
         bytes = bytes.prefix(10)
         XCTAssertThrowsError(try InviteObject.decodeBinary(Data(bytes)))
     }
@@ -334,13 +259,14 @@ final class InviteSystemCompletionTests: XCTestCase {
             userId: id,
             deviceId: "4e1f9dbe209c1bedb33ee32dda5a28f0",
             username: id, // placeholder → should not store as username
-            ephemeralKey: nil,
             isDynamic: true,
-            identityPublicKey: key
+            identityPublicKey: key,
+            accountAddress: Data(repeating: 0x5A, count: AccountAddress.length)
         )
         let user = try ContactLinkService.shared.applyInviteRedeem(info, context: ctx)
         XCTAssertTrue(user.isContact)
         XCTAssertEqual(user.knownIdentityKey, key)
+        XCTAssertEqual(user.accountAddress, Data(repeating: 0x5A, count: AccountAddress.length))
         // Username placeholder stripped
         XCTAssertTrue(user.username.isEmpty || user.username != id)
     }
@@ -352,9 +278,9 @@ final class InviteSystemCompletionTests: XCTestCase {
             userId: id,
             deviceId: nil,
             username: "dave",
-            ephemeralKey: nil,
             isDynamic: true,
-            identityPublicKey: Data(repeating: 0x44, count: 32)
+            identityPublicKey: Data(repeating: 0x44, count: 32),
+            accountAddress: nil
         )
         _ = try ContactLinkService.shared.applyInviteRedeem(info, context: ctx)
         XCTAssertTrue(ContactPolicy.isCallableContact(id, in: ctx))
@@ -363,13 +289,13 @@ final class InviteSystemCompletionTests: XCTestCase {
     // MARK: - Latin-1 QR recovery + magic
 
     func testCompactBinaryMagicIsCIv1() throws {
-        let data = try sampleV4().encodeBinary()
+        let data = try sampleV5().encodeBinary()
         XCTAssertTrue(InviteObject.isCompactBinary(data))
         XCTAssertEqual(Data(data.prefix(4)), InviteObject.binaryMagic)
     }
 
     func testLatin1RoundTripPreservesMagic() throws {
-        let binary = try sampleV4().encodeBinary()
+        let binary = try sampleV5().encodeBinary()
         let latin1 = String(binary.map { Character(UnicodeScalar($0)) })
         let recovered = InviteBinaryCodec.dataFromLatin1QRString(latin1)
         XCTAssertEqual(recovered, binary)

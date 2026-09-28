@@ -24,19 +24,30 @@ class InviteGenerator {
     /// Default server FQDN
     /// Can be overridden per invite
     private let defaultServer: String
-    
-    init(defaultServer: String = "konstruct.cc") {
+
+    /// This account's address, read at mint time. Injected so a test can mint without a Keychain.
+    private let accountAddress: () -> Data?
+
+    init(
+        defaultServer: String = "konstruct.cc",
+        accountAddress: @escaping () -> Data? = AccountAddress.own
+    ) {
         self.defaultServer = defaultServer
+        self.accountAddress = accountAddress
     }
     
     // MARK: - Generation
     
-    /// Generate a new invite object (protocol v4: signed capability, no dead ephKey).
+    /// Generate a new invite object (v5).
     ///
     /// Process:
     /// 1. Create JTI (UUIDv4)
-    /// 2. Build invite data structure (no ephemeral keypair)
-    /// 3. Sign with user's Ed25519 identity key
+    /// 2. Build the invite, naming this account's address
+    /// 3. Sign with this device's Ed25519 key
+    ///
+    /// Refuses without an address (`noAccountAddress`): an invite that named none would leave the
+    /// redeemer writing to a server-assigned id, and one that named a wrong one would lose every
+    /// message sent to it. The UI gates on `RecoveryGate` before it gets here.
     ///
     /// - Parameters:
     ///   - userId: Sender's user UUID (for chat creation)
@@ -44,8 +55,7 @@ class InviteGenerator {
     ///   - username: Optional plaintext @alias in the signed payload. **Default nil**
     ///     (metadata minimization). Never pass for HTTPS deep links.
     ///   - serverFQDN: Server FQDN (optional, uses default if nil)
-    ///   - ttlSeconds: how long this invite should stay redeemable. Ignored below v5, which
-    ///     has no wire field for it and takes the server maximum. Pass the artifact's own
+    ///   - ttlSeconds: how long this invite should stay redeemable. Pass the artifact's own
     ///     life — a QR is scanned in seconds, a link waits in an inbox for hours.
     /// - Returns: Signed InviteObject
     /// - Throws: InviteGenerationError
@@ -64,14 +74,14 @@ class InviteGenerator {
             throw InviteGenerationError.invalidDeviceId
         }
 
+        guard let addr = accountAddress() else {
+            throw InviteGenerationError.noAccountAddress
+        }
+
         let server = normalizeServer(serverFQDN ?? defaultServer)
         let jti = UUID().uuidString.lowercased()
         let timestamp = Int(Date().timeIntervalSince1970)
-        let version = InviteConfig.currentVersion
-        // Below v5 the field does not exist on the wire, and validate() refuses an invite
-        // that carries one. Dropping it here is what keeps `currentVersion` the single
-        // switch for the rollout instead of something callers have to know about.
-        let statedTTL: UInt32? = InviteConfig.carriesTTL(version: version) ? ttlSeconds : nil
+        let version = InviteConfig.version
 
         guard let signingSecretKey = try? getSigningSecretKey() else {
             throw InviteGenerationError.missingIdentityKey
@@ -81,18 +91,17 @@ class InviteGenerator {
             .flatMap { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .flatMap { $0.isEmpty ? nil : $0 }
 
-        // v4: empty ephKey — pure signed capability (F2).
         let unsignedInvite = InviteObject(
             v: version,
             jti: jti,
             uuid: userId.lowercased(),
             deviceId: deviceId,
             server: server,
-            ephKey: "",
             ts: timestamp,
             sig: "",
             un: normalizedUsername,
-            ttl: statedTTL
+            ttl: ttlSeconds,
+            addr: addr
         )
 
         let dataToSign = try unsignedInvite.canonicalString()
@@ -114,19 +123,7 @@ class InviteGenerator {
             throw InviteGenerationError.signingFailed
         }
 
-        let signatureBase64 = Data(signature.signature).base64EncodedString()
-        let signedInvite = InviteObject(
-            v: version,
-            jti: jti,
-            uuid: userId.lowercased(),
-            deviceId: deviceId,
-            server: server,
-            ephKey: "",
-            ts: timestamp,
-            sig: signatureBase64,
-            un: normalizedUsername,
-            ttl: statedTTL
-        )
+        let signedInvite = unsignedInvite.signed(Data(signature.signature).base64EncodedString())
 
         try signedInvite.validate()
 
@@ -150,10 +147,10 @@ class InviteGenerator {
     struct MintedInvite<Artifact> {
         let jti: String
         let issuedAt: Date
-        /// The stated life, or nil below v5. Travels with the jti for the same reason the
-        /// jti travels at all: the journal has to know when what it recorded stops working,
-        /// and asking the global constant would be wrong the moment two artifacts differ.
-        let ttl: UInt32?
+        /// The stated life. Travels with the jti for the same reason the jti travels at all:
+        /// the journal has to know when what it recorded stops working, and asking the global
+        /// constant would be wrong the moment two artifacts differ.
+        let ttl: UInt32
         let artifact: Artifact
     }
 
@@ -292,9 +289,9 @@ enum InviteGenerationError: LocalizedError {
     case invalidDeviceId
     case missingIdentityKey
     case keyDecodingFailed
-    case ephemeralKeyGenerationFailed
     case signingFailed
-    
+    case noAccountAddress
+
     var errorDescription: String? {
         switch self {
         case .invalidUserId:
@@ -305,10 +302,10 @@ enum InviteGenerationError: LocalizedError {
             return "Identity key not available. User may not be logged in."
         case .keyDecodingFailed:
             return "Failed to decode cryptographic keys"
-        case .ephemeralKeyGenerationFailed:
-            return "Failed to generate ephemeral keypair"
         case .signingFailed:
             return "Failed to sign invite data"
+        case .noAccountAddress:
+            return "This device does not know the account's address — confirm the recovery phrase"
         }
     }
 }

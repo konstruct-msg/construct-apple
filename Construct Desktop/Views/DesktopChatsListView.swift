@@ -38,7 +38,7 @@ struct DesktopChatsListView: View {
         }
         .ctBackground()
         .sheet(isPresented: $showingQRScanner) {
-            QRScannerView { contactURL in handleScannedContact(contactURL) }
+            RecoveryGated { QRScannerView { contactURL in handleScannedContact(contactURL) } }
         }
         .onAppear {
             chatsViewModel.setContext(viewContext)
@@ -212,16 +212,8 @@ struct DesktopChatsListView: View {
         if userId == AuthSessionManager.shared.currentUserId {
             return
         }
-        let publicUserInfo = PublicUserInfo(
-            id: userId,
-            username: username,
-            avatarUrl: nil,
-            bio: nil,
-            deviceId: contactInfo.deviceId
-        )
         if chatsViewModel.startChat(
-            with: publicUserInfo,
-            identityPublicKey: contactInfo.identityPublicKey
+            redeeming: contactInfo
         ) != nil {
             InviteRedeemUX.presentPostRedeemSafety(for: contactInfo)
         }

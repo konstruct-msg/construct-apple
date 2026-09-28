@@ -35,9 +35,9 @@ struct InviteIssuance: Codable, Identifiable, Equatable {
     struct Mint: Codable, Equatable {
         let jti: String
         let at: Date
-        /// The life this capability was minted with — v5 states its own, below that the
-        /// global maximum applies. Optional so journals written before v5 decode unchanged;
-        /// absent means "whatever the global TTL is", which is what those entries had.
+        /// The life this capability was minted with. Optional only so journals written
+        /// before every invite stated one decode unchanged; absent means the global TTL, which
+        /// is what those entries had.
         var ttl: UInt32?
 
         init(jti: String, at: Date, ttl: UInt32? = nil) {
@@ -48,7 +48,9 @@ struct InviteIssuance: Codable, Identifiable, Equatable {
 
         /// Clamped the same way the server clamps it, so this list and the redeem result
         /// cannot disagree about whether an invite is still good.
-        var livesFor: TimeInterval { InviteConfig.effectiveTTL(stated: ttl) }
+        var livesFor: TimeInterval {
+            ttl.map { InviteConfig.effectiveTTL(stated: $0) } ?? InviteConfig.ttlSeconds
+        }
 
         func isLive(at now: Date) -> Bool {
             now.timeIntervalSince(at) < livesFor

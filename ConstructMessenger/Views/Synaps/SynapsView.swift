@@ -230,7 +230,7 @@ struct SynapsView: View {
             .hideSystemNavBar()
             #endif
             .sheet(isPresented: $showingQRScanner) {
-                QRScannerView { contactURL in handleScannedQR(contactURL) }
+                RecoveryGated { QRScannerView { contactURL in handleScannedQR(contactURL) } }
             }
             .sheet(item: $selectedContact) { user in
                 UserProfileView(
@@ -725,16 +725,8 @@ struct SynapsView: View {
                 await MainActor.run {
                     showingQRScanner = false
                     if contactInfo.userId == AuthSessionManager.shared.currentUserId { return }
-                    let publicUserInfo = PublicUserInfo(
-                        id: contactInfo.userId,
-                        username: contactInfo.username,
-                        avatarUrl: nil,
-                        bio: nil,
-                        deviceId: contactInfo.deviceId
-                    )
                     if let chat = chatsViewModel.startChat(
-                        with: publicUserInfo,
-                        identityPublicKey: contactInfo.identityPublicKey
+                        redeeming: contactInfo
                     ) {
                         chatsViewModel.selectedTab = 0
                         chatsViewModel.chatToOpen = chat.id

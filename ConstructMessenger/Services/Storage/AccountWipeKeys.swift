@@ -39,6 +39,10 @@ enum AccountWipeKeys {
         // for a day with nothing on this device saying why.
         "construct.intake.own",
         "construct.intake.lastPublishedEpoch.v1",
+        // This account's address (its recovery public key). The next identity has another, and a
+        // stale one here would go into every invite it mints — contacts would write to an
+        // address that is not theirs, and the server would drop it silently.
+        "construct.accountAddress",
         // Who already holds our key. Wiped because the new account's key is a different secret —
         // a stale list would suppress the lazy hand-off to every contact it names. Both versions:
         // v2 is keyed by device (2026-09-22) and v1 by account, and a wipe that left the older one

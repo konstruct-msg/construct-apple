@@ -17,6 +17,10 @@ struct ContentView: View {
     @AppStorage(OrientationStore.completedUserIdsKey) private var orientationCompletedUserIds = ""
 
     @State private var chatsViewModel = ChatsViewModel()
+    /// The recovery key, offered once right after the first orientation. Registration itself
+    /// stays one step; contacts wait on the key (`RecoveryGated`), so this is where it is asked
+    /// for before anyone reaches for an invite.
+    @State private var showingRecoveryPrompt = false
 
     /// Orientation is product education for **this** ServerUserId — not a global device flag.
     private var orientationCompletedForCurrentUser: Bool {
@@ -68,6 +72,14 @@ struct ContentView: View {
         }
         .errorToast()
         .preferredColorScheme(appTheme.colorScheme)
+        .onChange(of: orientationCompletedForCurrentUser) { _, completed in
+            if completed, AccountAddress.own() == nil {
+                showingRecoveryPrompt = true
+            }
+        }
+        .sheet(isPresented: $showingRecoveryPrompt) {
+            RecoveryGateView(reason: .afterRegistration)
+        }
         .onAppear {
             authViewModel.refreshDeviceKeyState()
             chatsViewModel.setContext(viewContext)
@@ -134,17 +146,8 @@ struct ContentView: View {
             Log.info("ContentView: Creating chat directly for userId: \(contactInfo.userId), username: \(contactInfo.username)", category: "DeepLink")
 
             // Create chat directly instead of opening modal
-            let publicUserInfo = PublicUserInfo(
-                id: contactInfo.userId,
-                username: contactInfo.username,
-                avatarUrl: nil,
-                bio: nil,
-                deviceId: contactInfo.deviceId
-            )
-
             if let chat = chatsViewModel.startChat(
-                with: publicUserInfo,
-                identityPublicKey: contactInfo.identityPublicKey,
+                redeeming: contactInfo,
                 // The only redeem entry point: a scanned QR or an opened invite link lands here as
                 // a `.contact` deep link. Every other `startChat` caller is opening a chat with a
                 // contact that already exists, where an existing session is the one to keep.

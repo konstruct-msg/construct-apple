@@ -108,16 +108,16 @@ final class BinaryParserOriginTests: XCTestCase {
 
     private func sampleInvite() -> InviteObject {
         InviteObject(
-            v: 4,
+            v: 5,
             jti: "550e8400-e29b-41d4-a716-446655440000",
             uuid: "14f28d31-1234-4abc-8def-0123456789ab",
             deviceId: "4e1f9dbe209c1bedb33ee32dda5a28f0",
             server: "konstruct.cc",
-            ephKey: "",
             ts: 1_738_156_800,
             sig: Data(repeating: 0xCD, count: 64).base64EncodedString(),
             un: "alice",
-            ttl: nil
+            ttl: 300,
+            addr: Data(repeating: 0x5A, count: 32)
         )
     }
 }

@@ -47,8 +47,10 @@ struct NewChatView: View {
                 }
             }
             .sheet(isPresented: $showingQRScanner) {
-                QRScannerView { contactURL in
-                    handleScannedContact(contactURL)
+                RecoveryGated {
+                    QRScannerView { contactURL in
+                        handleScannedContact(contactURL)
+                    }
                 }
             }
             .onAppear {
@@ -100,16 +102,8 @@ struct NewChatView: View {
         let username = contactInfo.username
         Log.info("NewChatView: Adding contact userId=\(userId), username=\(username)", category: "NewChatView")
 
-        let publicUserInfo = PublicUserInfo(
-            id: userId,
-            username: username,
-            avatarUrl: nil,
-            bio: nil,
-            deviceId: contactInfo.deviceId
-        )
         if let chat = chatsViewModel.startChat(
-            with: publicUserInfo,
-            identityPublicKey: contactInfo.identityPublicKey
+            redeeming: contactInfo
         ) {
             Log.info("NewChatView: Chat created with @\(username), chat.id=\(chat.id)", category: "NewChatView")
             chatsViewModel.chatToOpen = chat.id

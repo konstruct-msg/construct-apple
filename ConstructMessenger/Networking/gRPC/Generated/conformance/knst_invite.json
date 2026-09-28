@@ -1,0 +1,58 @@
+{
+  "_doc": "v5 invite vectors. canonical = v|jti|uuid|device_id|server|ts|un|ttl|hex(addr); signature = Ed25519(signing_seed, canonical); binary = CIv1 compact layout. Checked by check_invite.py. Decision: construct-docs decisions/invite-carries-the-account-address.md.",
+  "signing_seed": "9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60",
+  "valid": [
+    {
+      "name": "with_username",
+      "fields": {
+        "v": 5,
+        "jti": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+        "uuid": "14f28d31-5b2a-4c1e-9a3d-6f0e2b7c8d90",
+        "device_id": "6f5e37ac1b2c3d4e5f60718293a4b5c6",
+        "server": "konstruct.cc",
+        "ts": 1790000000,
+        "ttl": 300,
+        "addr": "3d4017c3e843895a92b70aa74d1b7ebc9c982ccf2ec4968cc0cd55f12af4660c",
+        "un": "alice"
+      },
+      "verifying_key": "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a",
+      "canonical": "5|7c9e6679-7425-40de-944b-e07fc1f90ae7|14f28d31-5b2a-4c1e-9a3d-6f0e2b7c8d90|6f5e37ac1b2c3d4e5f60718293a4b5c6|konstruct.cc|1790000000|alice|300|3d4017c3e843895a92b70aa74d1b7ebc9c982ccf2ec4968cc0cd55f12af4660c",
+      "signature": "d243215959c9c7bdc3f4f089e678972299f8f1e3f95194217d3c3c197ff39eb967a60043e18f523103717b16cccfeb0ec2ddeea0d91fdee2f81412a781bb9f04",
+      "binary": "4349763101057c9e6679742540de944be07fc1f90ae714f28d315b2a4c1e9a3d6f0e2b7c8d906f5e37ac1b2c3d4e5f60718293a4b5c6000000006ab13b80d243215959c9c7bdc3f4f089e678972299f8f1e3f95194217d3c3c197ff39eb967a60043e18f523103717b16cccfeb0ec2ddeea0d91fdee2f81412a781bb9f040c6b6f6e7374727563742e636305616c6963650000012c3d4017c3e843895a92b70aa74d1b7ebc9c982ccf2ec4968cc0cd55f12af4660c"
+    },
+    {
+      "name": "without_username",
+      "fields": {
+        "v": 5,
+        "jti": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+        "uuid": "14f28d31-5b2a-4c1e-9a3d-6f0e2b7c8d90",
+        "device_id": "6f5e37ac1b2c3d4e5f60718293a4b5c6",
+        "server": "konstruct.cc",
+        "ts": 1790000000,
+        "ttl": 300,
+        "addr": "3d4017c3e843895a92b70aa74d1b7ebc9c982ccf2ec4968cc0cd55f12af4660c"
+      },
+      "verifying_key": "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a",
+      "canonical": "5|7c9e6679-7425-40de-944b-e07fc1f90ae7|14f28d31-5b2a-4c1e-9a3d-6f0e2b7c8d90|6f5e37ac1b2c3d4e5f60718293a4b5c6|konstruct.cc|1790000000||300|3d4017c3e843895a92b70aa74d1b7ebc9c982ccf2ec4968cc0cd55f12af4660c",
+      "signature": "750bf8ba43ff6a284509efaa6df1b0420da3bfe007b193f8a87ed357f92c96eb168d19ff33eba7b6bef6d2405c7cfe05d002ed854961045c967ad17563a0ac0a",
+      "binary": "4349763100057c9e6679742540de944be07fc1f90ae714f28d315b2a4c1e9a3d6f0e2b7c8d906f5e37ac1b2c3d4e5f60718293a4b5c6000000006ab13b80750bf8ba43ff6a284509efaa6df1b0420da3bfe007b193f8a87ed357f92c96eb168d19ff33eba7b6bef6d2405c7cfe05d002ed854961045c967ad17563a0ac0a0c6b6f6e7374727563742e63630000012c3d4017c3e843895a92b70aa74d1b7ebc9c982ccf2ec4968cc0cd55f12af4660c"
+    }
+  ],
+  "refused": [
+    {
+      "name": "version_4",
+      "why": "v5 is the only version accepted",
+      "binary": "4349763101047c9e6679742540de944be07fc1f90ae714f28d315b2a4c1e9a3d6f0e2b7c8d906f5e37ac1b2c3d4e5f60718293a4b5c6000000006ab13b80d243215959c9c7bdc3f4f089e678972299f8f1e3f95194217d3c3c197ff39eb967a60043e18f523103717b16cccfeb0ec2ddeea0d91fdee2f81412a781bb9f040c6b6f6e7374727563742e636305616c6963650000012c3d4017c3e843895a92b70aa74d1b7ebc9c982ccf2ec4968cc0cd55f12af4660c"
+    },
+    {
+      "name": "addr_truncated",
+      "why": "addr is exactly 32 bytes; a short one reads as truncated",
+      "binary": "4349763101057c9e6679742540de944be07fc1f90ae714f28d315b2a4c1e9a3d6f0e2b7c8d906f5e37ac1b2c3d4e5f60718293a4b5c6000000006ab13b80d243215959c9c7bdc3f4f089e678972299f8f1e3f95194217d3c3c197ff39eb967a60043e18f523103717b16cccfeb0ec2ddeea0d91fdee2f81412a781bb9f040c6b6f6e7374727563742e636305616c6963650000012c3d4017c3e843895a92b70aa74d1b7ebc9c982ccf2ec4968cc0cd55f12af466"
+    },
+    {
+      "name": "trailing_byte",
+      "why": "nothing follows addr",
+      "binary": "4349763101057c9e6679742540de944be07fc1f90ae714f28d315b2a4c1e9a3d6f0e2b7c8d906f5e37ac1b2c3d4e5f60718293a4b5c6000000006ab13b80d243215959c9c7bdc3f4f089e678972299f8f1e3f95194217d3c3c197ff39eb967a60043e18f523103717b16cccfeb0ec2ddeea0d91fdee2f81412a781bb9f040c6b6f6e7374727563742e636305616c6963650000012c3d4017c3e843895a92b70aa74d1b7ebc9c982ccf2ec4968cc0cd55f12af4660c00"
+    }
+  ]
+}

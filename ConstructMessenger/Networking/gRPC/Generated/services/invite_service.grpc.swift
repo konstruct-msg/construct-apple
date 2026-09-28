@@ -73,8 +73,9 @@ extension Shared_Proto_Services_V1_InviteService {
     /// >
     /// > InviteService — one-time contact invites (device-minted v4/v5).
     /// > 
-    /// > Product path: the client mints and signs the invite. Links use the server
-    /// > max TTL (INVITE_TTL_SECONDS = 43200); QR codes use v5 with ttl=300. The
+    /// > Product path: the client mints and signs the invite. v5 is the only version
+    /// > (since 2026-09-28): links use the server max TTL (INVITE_TTL_SECONDS = 43200),
+    /// > QR codes ttl=300, and every invite names the account's address (`addr`). The
     /// > server first learns a jti when it is redeemed (AcceptInvite → burn) or
     /// > revoked (RevokeInvite → pre-burn). No server-side issuance ledger / ListInvites
     /// > (INVITE_LIST_REVOKE_SERVER_SPEC, server-influence-minimization).
@@ -145,8 +146,9 @@ extension Shared_Proto_Services_V1_InviteService {
     /// >
     /// > InviteService — one-time contact invites (device-minted v4/v5).
     /// > 
-    /// > Product path: the client mints and signs the invite. Links use the server
-    /// > max TTL (INVITE_TTL_SECONDS = 43200); QR codes use v5 with ttl=300. The
+    /// > Product path: the client mints and signs the invite. v5 is the only version
+    /// > (since 2026-09-28): links use the server max TTL (INVITE_TTL_SECONDS = 43200),
+    /// > QR codes ttl=300, and every invite names the account's address (`addr`). The
     /// > server first learns a jti when it is redeemed (AcceptInvite → burn) or
     /// > revoked (RevokeInvite → pre-burn). No server-side issuance ledger / ListInvites
     /// > (INVITE_LIST_REVOKE_SERVER_SPEC, server-influence-minimization).

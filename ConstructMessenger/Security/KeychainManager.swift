@@ -34,7 +34,9 @@ class KeychainManager {
         "construct.reassembly_store_key",
         // v4: this account's intake key — a sealed send built during a background push decrypt
         // attaches the peer's tag, so an unreadable key there would silently charge a token.
-        "construct.intake.own"
+        "construct.intake.own",
+        // v5: this account's address, read by the same background sends.
+        "construct.accountAddress"
     ]
 
     /// Account prefixes whose items are created dynamically (per key id / contact / user) and
@@ -205,6 +207,20 @@ class KeychainManager {
 
     private static func peerIntakeKeyAccount(_ accountId: String) -> String {
         "construct.intake.peer.\(accountId.trimmingCharacters(in: .whitespacesAndNewlines).lowercased())"
+    }
+
+    // MARK: - Account address
+
+    /// This account's address — its recovery public key, derived from the phrase on this device
+    /// (`AccountAddress`). Public, but `cryptoKeyAccessible` all the same: a send built during a
+    /// background push decrypt addresses our own account by it, and an unreadable item there would
+    /// quietly fall back to the server-assigned id.
+    func saveOwnAccountAddress(_ key: Data) {
+        _ = save(key, forKey: "construct.accountAddress", accessible: Self.cryptoKeyAccessible)
+    }
+
+    func loadOwnAccountAddress() -> Data? {
+        return load(forKey: "construct.accountAddress")
     }
 
     /// Check if device is registered (has device ID and keys)

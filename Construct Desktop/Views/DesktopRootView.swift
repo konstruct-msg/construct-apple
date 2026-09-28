@@ -386,16 +386,8 @@ struct DesktopRootView: View {
         Log.debug("DesktopRootView: Deep link changed: \(String(describing: deepLink))", category: "DeepLink")
         if case .contact(let contactInfo) = deepLink {
             Log.info("DesktopRootView: Creating chat for userId: \(contactInfo.userId)", category: "DeepLink")
-            let publicUserInfo = PublicUserInfo(
-                id: contactInfo.userId,
-                username: contactInfo.username,
-                avatarUrl: nil,
-                bio: nil,
-                deviceId: contactInfo.deviceId
-            )
             if let chat = chatsViewModel.startChat(
-                with: publicUserInfo,
-                identityPublicKey: contactInfo.identityPublicKey
+                redeeming: contactInfo
             ) {
                 chatsViewModel.chatToOpen = chat.id
                 InviteRedeemUX.presentPostRedeemSafety(for: contactInfo)

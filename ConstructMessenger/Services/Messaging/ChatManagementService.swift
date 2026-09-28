@@ -36,7 +36,11 @@ class ChatManagementService {
     ///   - user: Public user information from invite
     ///   - identityPublicKey: Optional TOFU pin from a verified invite (thread 5.1)
     /// - Returns: Created or existing chat, nil if context is unavailable
-    func startChat(with user: PublicUserInfo, identityPublicKey: Data? = nil) -> Chat? {
+    func startChat(
+        with user: PublicUserInfo,
+        identityPublicKey: Data? = nil,
+        accountAddress: Data? = nil
+    ) -> Chat? {
         guard let context = viewContext else { 
             Log.error("ChatManagementService: No viewContext available", category: "ChatManagementService")
             return nil 
@@ -83,6 +87,11 @@ class ChatManagementService {
 
         if let key = identityPublicKey, !key.isEmpty {
             ContactLinkService.shared.pinKnownIdentityKey(on: dbUser, identityKey: key)
+        }
+        // From the signed invite, already checked by the server against the account's recovery
+        // key. An account's address cannot change, so a later invite can only restate it.
+        if let address = accountAddress, address.count == AccountAddress.length {
+            dbUser.accountAddress = address
         }
 
         // 1:1 Chat per User — shared finder (also collapses accidental duplicates).

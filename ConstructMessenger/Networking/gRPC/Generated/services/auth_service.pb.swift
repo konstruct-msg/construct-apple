@@ -340,29 +340,6 @@ public nonisolated struct Shared_Proto_Services_V1_RegisterDeviceRequest: Sendab
   /// Clears the value of `powSolution`. Subsequent reads from it will return its default value.
   public mutating func clearPowSolution() {self._powSolution = nil}
 
-  /// Identity public key for global user identity (Epic E).
-  /// Used to derive route_id = SHA-256(identity_key_type || identity_public_key)
-  /// for DHT-based routing. Optional for backward compatibility.
-  public var identityPublicKey: Data {
-    get {_identityPublicKey ?? Data()}
-    set {_identityPublicKey = newValue}
-  }
-  /// Returns true if `identityPublicKey` has been explicitly set.
-  public var hasIdentityPublicKey: Bool {self._identityPublicKey != nil}
-  /// Clears the value of `identityPublicKey`. Subsequent reads from it will return its default value.
-  public mutating func clearIdentityPublicKey() {self._identityPublicKey = nil}
-
-  /// Key algorithm type: 1=Ed25519 (32 bytes), 2=ML-DSA-65 (1952 bytes),
-  /// 3=Hybrid Ed25519+ML-DSA (1984 bytes). Defaults to 1 (Ed25519).
-  public var identityKeyType: UInt32 {
-    get {_identityKeyType ?? 0}
-    set {_identityKeyType = newValue}
-  }
-  /// Returns true if `identityKeyType` has been explicitly set.
-  public var hasIdentityKeyType: Bool {self._identityKeyType != nil}
-  /// Clears the value of `identityKeyType`. Subsequent reads from it will return its default value.
-  public mutating func clearIdentityKeyType() {self._identityKeyType = nil}
-
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -370,8 +347,6 @@ public nonisolated struct Shared_Proto_Services_V1_RegisterDeviceRequest: Sendab
   fileprivate var _username: String? = nil
   fileprivate var _publicKeys: Shared_Proto_Services_V1_DevicePublicKeys? = nil
   fileprivate var _powSolution: Shared_Proto_Services_V1_PowSolution? = nil
-  fileprivate var _identityPublicKey: Data? = nil
-  fileprivate var _identityKeyType: UInt32? = nil
 }
 
 public nonisolated struct Shared_Proto_Services_V1_AuthenticateDeviceRequest: Sendable {
@@ -1884,7 +1859,7 @@ nonisolated extension Shared_Proto_Services_V1_PowSolution: SwiftProtobuf.Messag
 
 nonisolated extension Shared_Proto_Services_V1_RegisterDeviceRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".RegisterDeviceRequest"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}username\0\u{3}device_id\0\u{3}public_keys\0\u{3}pow_solution\0\u{3}identity_public_key\0\u{3}identity_key_type\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}username\0\u{3}device_id\0\u{3}public_keys\0\u{3}pow_solution\0\u{b}identity_public_key\0\u{b}identity_key_type\0\u{c}\u{5}\u{1}\u{c}\u{6}\u{1}")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -1896,8 +1871,6 @@ nonisolated extension Shared_Proto_Services_V1_RegisterDeviceRequest: SwiftProto
       case 2: try { try decoder.decodeSingularStringField(value: &self.deviceID) }()
       case 3: try { try decoder.decodeSingularMessageField(value: &self._publicKeys) }()
       case 4: try { try decoder.decodeSingularMessageField(value: &self._powSolution) }()
-      case 5: try { try decoder.decodeSingularBytesField(value: &self._identityPublicKey) }()
-      case 6: try { try decoder.decodeSingularUInt32Field(value: &self._identityKeyType) }()
       default: break
       }
     }
@@ -1920,12 +1893,6 @@ nonisolated extension Shared_Proto_Services_V1_RegisterDeviceRequest: SwiftProto
     try { if let v = self._powSolution {
       try visitor.visitSingularMessageField(value: v, fieldNumber: 4)
     } }()
-    try { if let v = self._identityPublicKey {
-      try visitor.visitSingularBytesField(value: v, fieldNumber: 5)
-    } }()
-    try { if let v = self._identityKeyType {
-      try visitor.visitSingularUInt32Field(value: v, fieldNumber: 6)
-    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -1934,8 +1901,6 @@ nonisolated extension Shared_Proto_Services_V1_RegisterDeviceRequest: SwiftProto
     if lhs.deviceID != rhs.deviceID {return false}
     if lhs._publicKeys != rhs._publicKeys {return false}
     if lhs._powSolution != rhs._powSolution {return false}
-    if lhs._identityPublicKey != rhs._identityPublicKey {return false}
-    if lhs._identityKeyType != rhs._identityKeyType {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
