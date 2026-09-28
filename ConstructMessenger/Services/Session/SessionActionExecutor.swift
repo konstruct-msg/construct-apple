@@ -1,3 +1,5 @@
+import Foundation
+
 /// Executes `CfeAction` results returned by the Rust orchestrator.
 ///
 /// **Design principle**: the orchestrator decides *what* should happen; this

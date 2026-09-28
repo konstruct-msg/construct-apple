@@ -1873,7 +1873,8 @@ final class CallManager: CallUIManaging {
             active.iceFlushTask = nil
 
             // Split the flush into size-bounded signals: each candidate field is an
-            // v3 `CallSignalFrame` that can carry a PQ-ratchet blob on suite-3 sessions, so one
+            // `CallSignalFrame` carrying a whole wire payload (a PQ-ratchet blob on suite-3
+            // sessions, a KEM identity answer until the peer proves itself), so one
             // burst can exceed the Rust E2EE padding cap of 65536 bytes (observed on
             // device: a 134KB batch → CALL_SIGNAL_ENCRYPT_FAILED → the whole batch
             // silently lost). Chunks stay well under the cap, leaving headroom for the

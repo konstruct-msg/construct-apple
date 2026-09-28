@@ -25,8 +25,7 @@ final class OwnDeviceCopyTests: XCTestCase {
         let (sender, senderId) = try makeTestDevice()
         let (sibling, siblingId) = try makeTestDevice()
         _ = try sender.initSession(contactId: siblingId, recipientBundle: try sibling.pqxdhTestBundle())
-        let first = try sender.encryptMessage(contactId: siblingId, plaintext: Data("copy".utf8))
-        let wire = Data(try first.pqxdhTestWirePayload())
+        let wire = try sender.encryptToWire(contactId: siblingId, plaintext: Data("copy".utf8))
 
         let certificate = try TestCertificateServer.shared.certificate(for: sender, account: account)
         let payload = OwnDeviceCopy.wrap(certificate: try serialized(certificate), wirePayload: wire)
@@ -65,21 +64,15 @@ final class OwnDeviceCopyTests: XCTestCase {
 
     // MARK: - Helpers
 
-    /// A well-formed wire payload of a message inside a ratchet — decodes, opens nothing.
+    /// A well-formed wire payload of a message inside a ratchet — a responder's reply: it carries
+    /// no handshake header, so it decodes and opens nothing.
     private func midRatchetWire() throws -> Data {
-        Data(try wirePayloadPack(payload: WirePayload(
-            dhPublicKey: [UInt8](repeating: 1, count: 32),
-            messageNumber: 3,
-            oneTimePrekeyId: 0,
-            kyberOtpkId: 0,
-            previousChainLength: 0,
-            suiteId: 1,
-            kemCiphertext: nil,
-            sealedBox: [UInt8](repeating: 7, count: 40),
-            pqMessageEpoch: 0,
-            pqRatchetField: [],
-            pqxdhV2: false
-        )))
+        let (alice, aliceId) = try makeTestDevice()
+        let (bob, bobId) = try makeTestDevice()
+        _ = try alice.initSession(contactId: bobId, recipientBundle: try bob.pqxdhTestBundle())
+        let first = try alice.encryptToWire(contactId: bobId, plaintext: Data("first".utf8))
+        _ = try bob.pqxdhTestReceive(from: alice, first: first)
+        return try bob.encryptToWire(contactId: aliceId, plaintext: Data("reply".utf8))
     }
 
     private func serialized(_ certificate: SenderCertificate) throws -> Data {

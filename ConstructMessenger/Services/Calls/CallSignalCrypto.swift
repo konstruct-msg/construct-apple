@@ -11,8 +11,15 @@
 //
 //  ## The frame
 //
-//      [1B version 0x03][2B suiteId LE][4B msgNum LE][4B pqEpoch LE][4B pqFieldLen LE]
-//      [pqRatchetField][32B epk][ciphertext]
+//      [1B version 0x04][wire payload, exactly as the core packed it]
+//
+//  v4 (2026-09-28) stopped laying out fields at all. v3 listed them — suiteId, msgNum, pqEpoch,
+//  pqRatchetField, epk, ciphertext — and a list is what goes stale: it had no PN field, so a
+//  candidate after a ratchet step could not store its skipped keys, and it would have had no room
+//  for the responder's answer to the initiator's KEM identity key, without which the initiator
+//  cannot read the responder's first reply
+//  (`decisions/responder-authenticates-initiator-by-kem.md`). The core owns the payload format;
+//  this frame carries it.
 //
 //  It goes into `IceCandidate.candidate`, which is `bytes` since 2026-08-21. It was `string`, so
 //  this frame was base64'd and given an "ENC:v3:" ASCII prefix — 33 % more bytes for a field that
@@ -25,7 +32,7 @@
 //
 //  ## What is deliberately gone
 //
-//  **v1 and v2.** v2 dropped suiteId/pqMessageEpoch/pqRatchetField, so every field encrypted over
+//  **v1, v2 and v3.** v3 is the field list above. v2 dropped suiteId/pqMessageEpoch/pqRatchetField, so every field encrypted over
 //  a suite-3 session decrypted as suite 1 and failed — 100 % of candidates, both directions, no
 //  media path, silent calls. v1 was base64'd JSON. Both were kept as read paths for peers that no
 //  longer exist; alpha force-updates, and a reader for a format nothing writes is a second
@@ -64,80 +71,31 @@ enum CallSignalCryptoError: Error, LocalizedError {
 
 // MARK: - The frame
 
-/// The binary layout of an encrypted ICE candidate, separated from the crypto that fills it.
+/// The binary layout of an encrypted ICE candidate: a version byte and the core's wire payload.
 ///
-/// Pure on purpose. The v2 format failed because it **dropped fields** — no suiteId, no
-/// pqMessageEpoch, no pqRatchetField — so every candidate encrypted over a suite-3 session was
-/// decrypted as suite 1 and failed, 100 % in both directions, and a call had no media path. That
-/// is a property of the layout alone, and it was unreachable by a test while the layout only
-/// existed inside a method that needed a Keychain-backed singleton to reach.
+/// Pure on purpose, so a test reaches it without a Keychain-backed singleton. The layouts before
+/// this one failed by **dropping fields** — v2 lost the suite and the PQ tags (every suite-3
+/// candidate failed), v3 lost the PN field — which is why this one lists none.
 enum CallSignalFrame {
 
-    /// Everything the receiver's ratchet needs. A field missing here is the v2 defect.
-    struct Fields: Equatable {
-        var suiteId: UInt16
-        var messageNumber: UInt32
-        var pqMessageEpoch: UInt32
-        var pqRatchetField: Data
-        var ephemeralPublicKey: Data
-        var ciphertext: Data
-    }
-
     /// Frame version. Bump when the layout changes; a reader that does not know a version refuses
-    /// rather than guessing. It replaces the "ENC:v3:" ASCII prefix the `string` field needed —
-    /// `bytes` has no shape of its own, so without this a malformed value would be parsed as a
-    /// frame instead of refused.
-    static let version: UInt8 = 0x03
-    /// version + suiteId + msgNum + pqEpoch + pqFieldLen.
-    static let headerLength = 1 + 2 + 4 + 4 + 4
-    static let epkLength = 32
+    /// rather than guessing. `bytes` has no shape of its own, so without this a malformed value
+    /// would be handed to the core as a payload instead of refused here.
+    static let version: UInt8 = 0x04
 
-    static func encode(_ f: Fields) -> Data {
-        var frame = Data(capacity: headerLength + f.pqRatchetField.count + epkLength + f.ciphertext.count)
+    static func encode(wirePayload: Data) -> Data {
+        var frame = Data(capacity: 1 + wirePayload.count)
         frame.append(version)
-        appendLE(&frame, f.suiteId)
-        appendLE(&frame, f.messageNumber)
-        appendLE(&frame, f.pqMessageEpoch)
-        appendLE(&frame, UInt32(f.pqRatchetField.count))
-        frame.append(f.pqRatchetField)
-        frame.append(f.ephemeralPublicKey)
-        frame.append(f.ciphertext)
+        frame.append(wirePayload)
         return frame
     }
 
-    static func decode(_ frame: Data) throws -> Fields {
-        // Anchor to startIndex: a `Data` slice carries a non-zero origin and absolute-index reads
-        // trap on it.
-        let start = frame.startIndex
-        guard frame.count >= headerLength + epkLength + 1, frame[start] == version else {
+    /// The wire payload the frame carries. Refuses anything that is not a v4 frame with a payload.
+    static func decode(_ frame: Data) throws -> Data {
+        guard frame.count > 1, frame[frame.startIndex] == version else {
             throw CallSignalCryptoError.invalidEnvelope
         }
-        let pqLen = Int(loadLE(frame, at: start + 11) as UInt32)
-        let pqEnd = start + headerLength + pqLen
-        // `pqEnd` can overflow past the end on a hostile length; compare against the real end and
-        // leave at least one ciphertext byte.
-        guard pqLen >= 0, pqEnd >= start + headerLength, frame.endIndex > pqEnd + epkLength else {
-            throw CallSignalCryptoError.invalidEnvelope
-        }
-        return Fields(
-            suiteId: loadLE(frame, at: start + 1),
-            messageNumber: loadLE(frame, at: start + 3),
-            pqMessageEpoch: loadLE(frame, at: start + 7),
-            pqRatchetField: Data(frame[(start + headerLength)..<pqEnd]),
-            ephemeralPublicKey: Data(frame[pqEnd..<(pqEnd + epkLength)]),
-            ciphertext: Data(frame[(pqEnd + epkLength)...])
-        )
-    }
-
-    private static func appendLE<T: FixedWidthInteger>(_ data: inout Data, _ value: T) {
-        var le = value.littleEndian
-        withUnsafeBytes(of: &le) { data.append(contentsOf: $0) }
-    }
-
-    private static func loadLE<T: FixedWidthInteger>(_ data: Data, at index: Data.Index) -> T {
-        data.withUnsafeBytes {
-            T(littleEndian: $0.loadUnaligned(fromByteOffset: index - data.startIndex, as: T.self))
-        }
+        return Data(frame.dropFirst())
     }
 }
 
@@ -165,17 +123,8 @@ final class CallSignalCrypto {
             throw CallSignalCryptoError.missingSession(peerUserId: peerUserId)
         }
         do {
-            let c = try CryptoManager.shared.encryptMessage(plaintext, forDevice: peerDevice)
-            return CallSignalFrame.encode(
-                CallSignalFrame.Fields(
-                    suiteId: c.suiteId,
-                    messageNumber: c.messageNumber,
-                    pqMessageEpoch: c.pqMessageEpoch,
-                    pqRatchetField: c.pqRatchetField,
-                    ephemeralPublicKey: c.ephemeralPublicKey,
-                    ciphertext: c.content
-                )
-            )
+            let wire = try CryptoManager.shared.encryptMessage(plaintext, forDevice: peerDevice)
+            return CallSignalFrame.encode(wirePayload: wire)
         } catch CryptoManagerError.sessionNotFound {
             throw CallSignalCryptoError.missingSession(peerUserId: peerUserId)
         }
@@ -188,16 +137,8 @@ final class CallSignalCrypto {
         guard let peerDevice = SessionAddressing.pinnedDevice(ofPeer: peerUserId) else {
             throw CallSignalCryptoError.missingSession(peerUserId: peerUserId)
         }
-        let f = try CallSignalFrame.decode(frame)
-        return try CryptoManager.shared.decryptRawComponents(
-            contactId: peerDevice,
-            ephemeralPublicKey: f.ephemeralPublicKey,
-            messageNumber: f.messageNumber,
-            content: f.ciphertext,
-            suiteId: f.suiteId,
-            pqMessageEpoch: f.pqMessageEpoch,
-            pqRatchetField: f.pqRatchetField
-        )
+        let wire = try CallSignalFrame.decode(frame)
+        return try CryptoManager.shared.decryptCallSignal(contactId: peerDevice, wirePayload: wire)
     }
 
 }

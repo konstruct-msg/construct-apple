@@ -606,10 +606,6 @@ fileprivate struct FfiConverterData: FfiConverterRustBuffer {
 
 public protocol ClassicCryptoCoreProtocol: AnyObject, Sendable {
     
-    func decryptMessage(sessionId: String, ephemeralPublicKey: [UInt8], messageNumber: UInt32, content: [UInt8], suiteId: UInt16, pqMessageEpoch: UInt32, pqRatchetField: [UInt8]) throws  -> DecryptedMessageResult
-    
-    func encryptMessage(sessionId: String, plaintext: String) throws  -> EncryptedMessageComponents
-    
     func exportOneTimePrekeys() throws  -> [UInt8]
     
     func exportPrivateKeys() throws  -> [UInt8]
@@ -713,31 +709,6 @@ open class ClassicCryptoCore: ClassicCryptoCoreProtocol, @unchecked Sendable {
 
     
 
-    
-open func decryptMessage(sessionId: String, ephemeralPublicKey: [UInt8], messageNumber: UInt32, content: [UInt8], suiteId: UInt16, pqMessageEpoch: UInt32, pqRatchetField: [UInt8])throws  -> DecryptedMessageResult  {
-    return try  FfiConverterTypeDecryptedMessageResult_lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
-    uniffi_construct_core_fn_method_classiccryptocore_decrypt_message(
-            self.uniffiCloneHandle(),
-        FfiConverterString.lower(sessionId),
-        FfiConverterSequenceUInt8.lower(ephemeralPublicKey),
-        FfiConverterUInt32.lower(messageNumber),
-        FfiConverterSequenceUInt8.lower(content),
-        FfiConverterUInt16.lower(suiteId),
-        FfiConverterUInt32.lower(pqMessageEpoch),
-        FfiConverterSequenceUInt8.lower(pqRatchetField),$0
-    )
-})
-}
-    
-open func encryptMessage(sessionId: String, plaintext: String)throws  -> EncryptedMessageComponents  {
-    return try  FfiConverterTypeEncryptedMessageComponents_lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
-    uniffi_construct_core_fn_method_classiccryptocore_encrypt_message(
-            self.uniffiCloneHandle(),
-        FfiConverterString.lower(sessionId),
-        FfiConverterString.lower(plaintext),$0
-    )
-})
-}
     
 open func exportOneTimePrekeys()throws  -> [UInt8]  {
     return try  FfiConverterSequenceUInt8.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
@@ -1366,15 +1337,16 @@ public protocol OrchestratorCoreProtocol: AnyObject, Sendable {
      */
     func currentKyberSpkUpload() throws  -> KyberPrekeyUpload?
     
-    func decryptMessage(contactId: String, ephemeralPublicKey: [UInt8], messageNumber: UInt32, content: [UInt8], suiteId: UInt16, pqMessageEpoch: UInt32, pqRatchetField: [UInt8]) throws  -> DecryptedMessageResult
+    /**
+     * Decrypt a whole wire payload on the states held with a device.
+     */
+    func decryptWirePayload(contactId: String, wirePayload: Data) throws  -> DecryptedMessageResult
     
     /**
-     * Batch offline decrypt — single mutex acquisition for the whole batch.
-     * Session is never archived on per-message failure.
+     * Encrypt for a device and return the whole wire payload. Sent as it is: a payload rebuilt
+     * from components dropped fields (decisions/responder-authenticates-initiator-by-kem.md).
      */
-    func decryptOfflineBatch(messages: [OfflineBatchMessage])  -> [OfflineBatchResult]
-    
-    func encryptMessage(contactId: String, plaintext: Data) throws  -> EncryptedMessageComponents
+    func encryptToWire(contactId: String, plaintext: Data) throws  -> Data
     
     func ensureHybridSignatureKey() throws  -> [UInt8]
     
@@ -1652,37 +1624,26 @@ open func currentKyberSpkUpload()throws  -> KyberPrekeyUpload?  {
 })
 }
     
-open func decryptMessage(contactId: String, ephemeralPublicKey: [UInt8], messageNumber: UInt32, content: [UInt8], suiteId: UInt16, pqMessageEpoch: UInt32, pqRatchetField: [UInt8])throws  -> DecryptedMessageResult  {
+    /**
+     * Decrypt a whole wire payload on the states held with a device.
+     */
+open func decryptWirePayload(contactId: String, wirePayload: Data)throws  -> DecryptedMessageResult  {
     return try  FfiConverterTypeDecryptedMessageResult_lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
-    uniffi_construct_core_fn_method_orchestratorcore_decrypt_message(
+    uniffi_construct_core_fn_method_orchestratorcore_decrypt_wire_payload(
             self.uniffiCloneHandle(),
         FfiConverterString.lower(contactId),
-        FfiConverterSequenceUInt8.lower(ephemeralPublicKey),
-        FfiConverterUInt32.lower(messageNumber),
-        FfiConverterSequenceUInt8.lower(content),
-        FfiConverterUInt16.lower(suiteId),
-        FfiConverterUInt32.lower(pqMessageEpoch),
-        FfiConverterSequenceUInt8.lower(pqRatchetField),$0
+        FfiConverterData.lower(wirePayload),$0
     )
 })
 }
     
     /**
-     * Batch offline decrypt — single mutex acquisition for the whole batch.
-     * Session is never archived on per-message failure.
+     * Encrypt for a device and return the whole wire payload. Sent as it is: a payload rebuilt
+     * from components dropped fields (decisions/responder-authenticates-initiator-by-kem.md).
      */
-open func decryptOfflineBatch(messages: [OfflineBatchMessage]) -> [OfflineBatchResult]  {
-    return try!  FfiConverterSequenceTypeOfflineBatchResult.lift(try! rustCall() {
-    uniffi_construct_core_fn_method_orchestratorcore_decrypt_offline_batch(
-            self.uniffiCloneHandle(),
-        FfiConverterSequenceTypeOfflineBatchMessage.lower(messages),$0
-    )
-})
-}
-    
-open func encryptMessage(contactId: String, plaintext: Data)throws  -> EncryptedMessageComponents  {
-    return try  FfiConverterTypeEncryptedMessageComponents_lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
-    uniffi_construct_core_fn_method_orchestratorcore_encrypt_message(
+open func encryptToWire(contactId: String, plaintext: Data)throws  -> Data  {
+    return try  FfiConverterData.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_method_orchestratorcore_encrypt_to_wire(
             self.uniffiCloneHandle(),
         FfiConverterString.lower(contactId),
         FfiConverterData.lower(plaintext),$0
@@ -2885,90 +2846,6 @@ public func FfiConverterTypeDeliveryTarget_lower(_ value: DeliveryTarget) -> Rus
 }
 
 
-public struct EncryptedMessageComponents: Equatable, Hashable {
-    public var ephemeralPublicKey: [UInt8]
-    public var messageNumber: UInt32
-    public var content: [UInt8]
-    public var oneTimePrekeyId: UInt32
-    public var storageKey: [UInt8]
-    public var suiteId: UInt16
-    public var pqMessageEpoch: UInt32
-    public var pqRatchetField: [UInt8]
-    public var kemCiphertext: [UInt8]
-    public var kyberPrekeyId: UInt32
-
-    // Default memberwise initializers are never public by default, so we
-    // declare one manually.
-    public init(ephemeralPublicKey: [UInt8], messageNumber: UInt32, content: [UInt8], oneTimePrekeyId: UInt32, storageKey: [UInt8], suiteId: UInt16, pqMessageEpoch: UInt32, pqRatchetField: [UInt8], kemCiphertext: [UInt8], kyberPrekeyId: UInt32) {
-        self.ephemeralPublicKey = ephemeralPublicKey
-        self.messageNumber = messageNumber
-        self.content = content
-        self.oneTimePrekeyId = oneTimePrekeyId
-        self.storageKey = storageKey
-        self.suiteId = suiteId
-        self.pqMessageEpoch = pqMessageEpoch
-        self.pqRatchetField = pqRatchetField
-        self.kemCiphertext = kemCiphertext
-        self.kyberPrekeyId = kyberPrekeyId
-    }
-
-    
-}
-
-#if compiler(>=6)
-extension EncryptedMessageComponents: Sendable {}
-#endif
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public struct FfiConverterTypeEncryptedMessageComponents: FfiConverterRustBuffer {
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> EncryptedMessageComponents {
-        return
-            try EncryptedMessageComponents(
-                ephemeralPublicKey: FfiConverterSequenceUInt8.read(from: &buf), 
-                messageNumber: FfiConverterUInt32.read(from: &buf), 
-                content: FfiConverterSequenceUInt8.read(from: &buf), 
-                oneTimePrekeyId: FfiConverterUInt32.read(from: &buf), 
-                storageKey: FfiConverterSequenceUInt8.read(from: &buf), 
-                suiteId: FfiConverterUInt16.read(from: &buf), 
-                pqMessageEpoch: FfiConverterUInt32.read(from: &buf), 
-                pqRatchetField: FfiConverterSequenceUInt8.read(from: &buf), 
-                kemCiphertext: FfiConverterSequenceUInt8.read(from: &buf), 
-                kyberPrekeyId: FfiConverterUInt32.read(from: &buf)
-        )
-    }
-
-    public static func write(_ value: EncryptedMessageComponents, into buf: inout [UInt8]) {
-        FfiConverterSequenceUInt8.write(value.ephemeralPublicKey, into: &buf)
-        FfiConverterUInt32.write(value.messageNumber, into: &buf)
-        FfiConverterSequenceUInt8.write(value.content, into: &buf)
-        FfiConverterUInt32.write(value.oneTimePrekeyId, into: &buf)
-        FfiConverterSequenceUInt8.write(value.storageKey, into: &buf)
-        FfiConverterUInt16.write(value.suiteId, into: &buf)
-        FfiConverterUInt32.write(value.pqMessageEpoch, into: &buf)
-        FfiConverterSequenceUInt8.write(value.pqRatchetField, into: &buf)
-        FfiConverterSequenceUInt8.write(value.kemCiphertext, into: &buf)
-        FfiConverterUInt32.write(value.kyberPrekeyId, into: &buf)
-    }
-}
-
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypeEncryptedMessageComponents_lift(_ buf: RustBuffer) throws -> EncryptedMessageComponents {
-    return try FfiConverterTypeEncryptedMessageComponents.lift(buf)
-}
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypeEncryptedMessageComponents_lower(_ value: EncryptedMessageComponents) -> RustBuffer {
-    return FfiConverterTypeEncryptedMessageComponents.lower(value)
-}
-
-
 public struct EnergyMetrics: Equatable, Hashable {
     public var dummiesSent: UInt64
     public var coalescedCount: UInt64
@@ -3538,149 +3415,6 @@ public func FfiConverterTypeMemberAddition_lift(_ buf: RustBuffer) throws -> Mem
 #endif
 public func FfiConverterTypeMemberAddition_lower(_ value: MemberAddition) -> RustBuffer {
     return FfiConverterTypeMemberAddition.lower(value)
-}
-
-
-/**
- * Input slot for decrypt_offline_batch.
- */
-public struct OfflineBatchMessage: Equatable, Hashable {
-    public var id: String
-    public var contactId: String
-    public var ephemeralPublicKey: [UInt8]
-    public var messageNumber: UInt32
-    public var content: [UInt8]
-    public var suiteId: UInt16
-    public var pqMessageEpoch: UInt32
-    public var pqRatchetField: [UInt8]
-
-    // Default memberwise initializers are never public by default, so we
-    // declare one manually.
-    public init(id: String, contactId: String, ephemeralPublicKey: [UInt8], messageNumber: UInt32, content: [UInt8], suiteId: UInt16, pqMessageEpoch: UInt32, pqRatchetField: [UInt8]) {
-        self.id = id
-        self.contactId = contactId
-        self.ephemeralPublicKey = ephemeralPublicKey
-        self.messageNumber = messageNumber
-        self.content = content
-        self.suiteId = suiteId
-        self.pqMessageEpoch = pqMessageEpoch
-        self.pqRatchetField = pqRatchetField
-    }
-
-    
-}
-
-#if compiler(>=6)
-extension OfflineBatchMessage: Sendable {}
-#endif
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public struct FfiConverterTypeOfflineBatchMessage: FfiConverterRustBuffer {
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> OfflineBatchMessage {
-        return
-            try OfflineBatchMessage(
-                id: FfiConverterString.read(from: &buf), 
-                contactId: FfiConverterString.read(from: &buf), 
-                ephemeralPublicKey: FfiConverterSequenceUInt8.read(from: &buf), 
-                messageNumber: FfiConverterUInt32.read(from: &buf), 
-                content: FfiConverterSequenceUInt8.read(from: &buf), 
-                suiteId: FfiConverterUInt16.read(from: &buf), 
-                pqMessageEpoch: FfiConverterUInt32.read(from: &buf), 
-                pqRatchetField: FfiConverterSequenceUInt8.read(from: &buf)
-        )
-    }
-
-    public static func write(_ value: OfflineBatchMessage, into buf: inout [UInt8]) {
-        FfiConverterString.write(value.id, into: &buf)
-        FfiConverterString.write(value.contactId, into: &buf)
-        FfiConverterSequenceUInt8.write(value.ephemeralPublicKey, into: &buf)
-        FfiConverterUInt32.write(value.messageNumber, into: &buf)
-        FfiConverterSequenceUInt8.write(value.content, into: &buf)
-        FfiConverterUInt16.write(value.suiteId, into: &buf)
-        FfiConverterUInt32.write(value.pqMessageEpoch, into: &buf)
-        FfiConverterSequenceUInt8.write(value.pqRatchetField, into: &buf)
-    }
-}
-
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypeOfflineBatchMessage_lift(_ buf: RustBuffer) throws -> OfflineBatchMessage {
-    return try FfiConverterTypeOfflineBatchMessage.lift(buf)
-}
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypeOfflineBatchMessage_lower(_ value: OfflineBatchMessage) -> RustBuffer {
-    return FfiConverterTypeOfflineBatchMessage.lower(value)
-}
-
-
-/**
- * Per-message result from decrypt_offline_batch.
- * Exactly one of plaintext / error is populated.
- */
-public struct OfflineBatchResult: Equatable, Hashable {
-    public var id: String
-    public var plaintext: [UInt8]?
-    public var error: String?
-    public var storageKey: [UInt8]
-
-    // Default memberwise initializers are never public by default, so we
-    // declare one manually.
-    public init(id: String, plaintext: [UInt8]?, error: String?, storageKey: [UInt8]) {
-        self.id = id
-        self.plaintext = plaintext
-        self.error = error
-        self.storageKey = storageKey
-    }
-
-    
-}
-
-#if compiler(>=6)
-extension OfflineBatchResult: Sendable {}
-#endif
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public struct FfiConverterTypeOfflineBatchResult: FfiConverterRustBuffer {
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> OfflineBatchResult {
-        return
-            try OfflineBatchResult(
-                id: FfiConverterString.read(from: &buf), 
-                plaintext: FfiConverterOptionSequenceUInt8.read(from: &buf), 
-                error: FfiConverterOptionString.read(from: &buf), 
-                storageKey: FfiConverterSequenceUInt8.read(from: &buf)
-        )
-    }
-
-    public static func write(_ value: OfflineBatchResult, into buf: inout [UInt8]) {
-        FfiConverterString.write(value.id, into: &buf)
-        FfiConverterOptionSequenceUInt8.write(value.plaintext, into: &buf)
-        FfiConverterOptionString.write(value.error, into: &buf)
-        FfiConverterSequenceUInt8.write(value.storageKey, into: &buf)
-    }
-}
-
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypeOfflineBatchResult_lift(_ buf: RustBuffer) throws -> OfflineBatchResult {
-    return try FfiConverterTypeOfflineBatchResult.lift(buf)
-}
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypeOfflineBatchResult_lower(_ value: OfflineBatchResult) -> RustBuffer {
-    return FfiConverterTypeOfflineBatchResult.lower(value)
 }
 
 
@@ -4641,10 +4375,12 @@ public struct WirePayload: Equatable, Hashable {
     public var pqMessageEpoch: UInt32
     public var pqRatchetField: [UInt8]
     public var pqxdhV2: Bool
+    public var kemIdentity: [UInt8]?
+    public var identityProofCiphertext: [UInt8]?
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(dhPublicKey: [UInt8], messageNumber: UInt32, oneTimePrekeyId: UInt32, kyberOtpkId: UInt32, previousChainLength: UInt32, suiteId: UInt16, kemCiphertext: [UInt8]?, sealedBox: [UInt8], pqMessageEpoch: UInt32, pqRatchetField: [UInt8], pqxdhV2: Bool = false) {
+    public init(dhPublicKey: [UInt8], messageNumber: UInt32, oneTimePrekeyId: UInt32, kyberOtpkId: UInt32, previousChainLength: UInt32, suiteId: UInt16, kemCiphertext: [UInt8]?, sealedBox: [UInt8], pqMessageEpoch: UInt32, pqRatchetField: [UInt8], pqxdhV2: Bool = false, kemIdentity: [UInt8]? = nil, identityProofCiphertext: [UInt8]? = nil) {
         self.dhPublicKey = dhPublicKey
         self.messageNumber = messageNumber
         self.oneTimePrekeyId = oneTimePrekeyId
@@ -4656,6 +4392,8 @@ public struct WirePayload: Equatable, Hashable {
         self.pqMessageEpoch = pqMessageEpoch
         self.pqRatchetField = pqRatchetField
         self.pqxdhV2 = pqxdhV2
+        self.kemIdentity = kemIdentity
+        self.identityProofCiphertext = identityProofCiphertext
     }
 
     
@@ -4682,7 +4420,9 @@ public struct FfiConverterTypeWirePayload: FfiConverterRustBuffer {
                 sealedBox: FfiConverterSequenceUInt8.read(from: &buf), 
                 pqMessageEpoch: FfiConverterUInt32.read(from: &buf), 
                 pqRatchetField: FfiConverterSequenceUInt8.read(from: &buf), 
-                pqxdhV2: FfiConverterBool.read(from: &buf)
+                pqxdhV2: FfiConverterBool.read(from: &buf), 
+                kemIdentity: FfiConverterOptionSequenceUInt8.read(from: &buf), 
+                identityProofCiphertext: FfiConverterOptionSequenceUInt8.read(from: &buf)
         )
     }
 
@@ -4698,6 +4438,8 @@ public struct FfiConverterTypeWirePayload: FfiConverterRustBuffer {
         FfiConverterUInt32.write(value.pqMessageEpoch, into: &buf)
         FfiConverterSequenceUInt8.write(value.pqRatchetField, into: &buf)
         FfiConverterBool.write(value.pqxdhV2, into: &buf)
+        FfiConverterOptionSequenceUInt8.write(value.kemIdentity, into: &buf)
+        FfiConverterOptionSequenceUInt8.write(value.identityProofCiphertext, into: &buf)
     }
 }
 
@@ -5890,6 +5632,7 @@ public enum PqAuthentication: Equatable, Hashable {
     case authenticated
     case unauthenticated
     case received
+    case receivedProven
 
 
 
@@ -5919,6 +5662,8 @@ public struct FfiConverterTypePqAuthentication: FfiConverterRustBuffer {
         
         case 5: return .received
         
+        case 6: return .receivedProven
+        
         default: throw UniffiInternalError.unexpectedEnumCase
         }
     }
@@ -5945,6 +5690,10 @@ public struct FfiConverterTypePqAuthentication: FfiConverterRustBuffer {
         
         case .received:
             writeInt(&buf, Int32(5))
+        
+        
+        case .receivedProven:
+            writeInt(&buf, Int32(6))
         
         }
     }
@@ -6849,56 +6598,6 @@ fileprivate struct FfiConverterSequenceTypeKyberPrekeyUpload: FfiConverterRustBu
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-fileprivate struct FfiConverterSequenceTypeOfflineBatchMessage: FfiConverterRustBuffer {
-    typealias SwiftType = [OfflineBatchMessage]
-
-    public static func write(_ value: [OfflineBatchMessage], into buf: inout [UInt8]) {
-        let len = Int32(value.count)
-        writeInt(&buf, len)
-        for item in value {
-            FfiConverterTypeOfflineBatchMessage.write(item, into: &buf)
-        }
-    }
-
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [OfflineBatchMessage] {
-        let len: Int32 = try readInt(&buf)
-        var seq = [OfflineBatchMessage]()
-        seq.reserveCapacity(Int(len))
-        for _ in 0 ..< len {
-            seq.append(try FfiConverterTypeOfflineBatchMessage.read(from: &buf))
-        }
-        return seq
-    }
-}
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-fileprivate struct FfiConverterSequenceTypeOfflineBatchResult: FfiConverterRustBuffer {
-    typealias SwiftType = [OfflineBatchResult]
-
-    public static func write(_ value: [OfflineBatchResult], into buf: inout [UInt8]) {
-        let len = Int32(value.count)
-        writeInt(&buf, len)
-        for item in value {
-            FfiConverterTypeOfflineBatchResult.write(item, into: &buf)
-        }
-    }
-
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [OfflineBatchResult] {
-        let len: Int32 = try readInt(&buf)
-        var seq = [OfflineBatchResult]()
-        seq.reserveCapacity(Int(len))
-        for _ in 0 ..< len {
-            seq.append(try FfiConverterTypeOfflineBatchResult.read(from: &buf))
-        }
-        return seq
-    }
-}
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
 fileprivate struct FfiConverterSequenceTypeOtpkPair: FfiConverterRustBuffer {
     typealias SwiftType = [OtpkPair]
 
@@ -7652,13 +7351,6 @@ public func verifyRecoverySignature(publicKey: [UInt8], message: String, signatu
     )
 })
 }
-public func wirePayloadPack(payload: WirePayload)throws  -> [UInt8]  {
-    return try  FfiConverterSequenceUInt8.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
-    uniffi_construct_core_fn_func_wire_payload_pack(
-        FfiConverterTypeWirePayload_lower(payload),$0
-    )
-})
-}
 public func wirePayloadUnpack(data: [UInt8])throws  -> WirePayload  {
     return try  FfiConverterTypeWirePayload_lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
     uniffi_construct_core_fn_func_wire_payload_unpack(
@@ -7877,16 +7569,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_func_verify_recovery_signature() != 1269) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_func_wire_payload_pack() != 2511) {
-        return InitializationResult.apiChecksumMismatch
-    }
     if (uniffi_construct_core_checksum_func_wire_payload_unpack() != 35590) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_construct_core_checksum_method_classiccryptocore_decrypt_message() != 12341) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_construct_core_checksum_method_classiccryptocore_encrypt_message() != 45977) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_classiccryptocore_export_one_time_prekeys() != 45190) {
@@ -8006,13 +7689,10 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_method_orchestratorcore_current_kyber_spk_upload() != 38528) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_method_orchestratorcore_decrypt_message() != 9863) {
+    if (uniffi_construct_core_checksum_method_orchestratorcore_decrypt_wire_payload() != 22393) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_method_orchestratorcore_decrypt_offline_batch() != 51852) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_construct_core_checksum_method_orchestratorcore_encrypt_message() != 55888) {
+    if (uniffi_construct_core_checksum_method_orchestratorcore_encrypt_to_wire() != 5089) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_orchestratorcore_ensure_hybrid_signature_key() != 6511) {

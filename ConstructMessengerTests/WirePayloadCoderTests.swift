@@ -2,12 +2,12 @@
 //  WirePayloadCoderTests.swift
 //  ConstructMessengerTests
 //
-//  Tests for WirePayloadCoder — the Swift adapter over the Rust core's canonical wire
-//  framing (`wirePayloadPack`/`wirePayloadUnpack`, backed by construct-core/wire_payload.rs).
+//  Tests for WirePayloadCoder — the Swift adapter over the Rust core's wire reader
+//  (`wirePayloadUnpack`, backed by construct-core/wire_payload.rs).
 //
-//  The byte layout is owned and unit-tested in the Rust core (52-byte header + optional
-//  KEM/PQ sections). These tests exercise the Swift adapter: that it round-trips
-//  `EncryptedMessageComponents` field-for-field and honours the core's reject contract.
+//  The byte layout is owned and unit-tested in the Rust core. This app no longer packs payloads
+//  (`encryptToWire` returns them whole since 2026-09-28), so what is left to test here is the
+//  reader: that it reads a payload the core packed, and honours the core's reject contract.
 //
 
 import XCTest
@@ -15,164 +15,19 @@ import XCTest
 
 final class WirePayloadCoderTests: XCTestCase {
 
-    // MARK: - Fixtures
+    /// A first flight as the core packs it: the header fields come back as the core wrote them,
+    /// and the sealed box is the tail of the payload.
+    func testDecodeReadsWhatTheCorePacked() throws {
+        let (alice, _) = try makeTestDevice()
+        let (bob, bobId) = try makeTestDevice()
+        _ = try alice.initSession(contactId: bobId, recipientBundle: try bob.pqxdhTestBundle())
+        let wire = try alice.encryptToWire(contactId: bobId, plaintext: Data("hello".utf8))
 
-    /// Minimal valid sealed box: 12-byte nonce + 16-byte auth tag (no plaintext)
-    private static let minSealedBox = Data(repeating: 0xAB, count: 28)
-
-    /// Standard sealed box: 12 nonce + 32 ciphertext + 16 tag
-    private static let sealedBox = Data(repeating: 0x42, count: 60)
-
-    private static let dhPubKey = Data((0..<32).map { UInt8($0) })
-
-    private func makeComponents(
-        dhPub: Data = dhPubKey,
-        msgNum: UInt32 = 7,
-        sealedBox: Data = sealedBox
-    ) -> MessageCryptoService.EncryptedMessageComponents {
-        return MessageCryptoService.EncryptedMessageComponents(
-            ephemeralPublicKey: dhPub,
-            messageNumber: msgNum,
-            content: sealedBox,
-            suiteId: 1,
-            oneTimePreKeyId: 0,
-            storageKey: Data(),
-            pqMessageEpoch: 0,
-            pqRatchetField: Data()
-        )
-    }
-
-    // MARK: - Encode → Decode Roundtrip
-
-    func testRoundtripPreservesMessageNumber() throws {
-        let components = makeComponents(msgNum: 42)
-        let payload = try WirePayloadCoder.encode(components)
-        let decoded = try WirePayloadCoder.decode(payload)
-        XCTAssertEqual(decoded.messageNumber, 42)
-    }
-
-    func testRoundtripPreservesDHPublicKey() throws {
-        let components = makeComponents()
-        let payload = try WirePayloadCoder.encode(components)
-        let decoded = try WirePayloadCoder.decode(payload)
-        XCTAssertEqual(decoded.ephemeralPublicKey, [UInt8](Self.dhPubKey))
-    }
-
-    func testRoundtripPreservesContent() throws {
-        let components = makeComponents()
-        let payload = try WirePayloadCoder.encode(components)
-        let decoded = try WirePayloadCoder.decode(payload)
-        XCTAssertEqual(decoded.content, Self.sealedBox)
-    }
-
-    func testRoundtripPreservesPQFieldsForNonPQSuite() throws {
-        // Suite-1 components carry no PQ section; the adapter must surface the defaults
-        // (epoch 0, empty field) after a round-trip. Suite-3 PQ serialization itself is
-        // owned and tested in the Rust core.
-        let components = makeComponents()
-        let decoded = try WirePayloadCoder.decode(try WirePayloadCoder.encode(components))
-        XCTAssertEqual(decoded.pqMessageEpoch, 0)
-        XCTAssertTrue(decoded.pqRatchetField.isEmpty)
-    }
-
-    func testRoundtripWithMessageNumberZero() throws {
-        let components = makeComponents(msgNum: 0)
-        let payload = try WirePayloadCoder.encode(components)
-        let decoded = try WirePayloadCoder.decode(payload)
+        let decoded = try WirePayloadCoder.decode(wire)
         XCTAssertEqual(decoded.messageNumber, 0)
-    }
-
-    func testRoundtripWithMaxMessageNumber() throws {
-        let components = makeComponents(msgNum: UInt32.max)
-        let payload = try WirePayloadCoder.encode(components)
-        let decoded = try WirePayloadCoder.decode(payload)
-        XCTAssertEqual(decoded.messageNumber, UInt32.max)
-    }
-
-    func testRoundtripWithMinSealedBox() throws {
-        let components = makeComponents(sealedBox: Self.minSealedBox)
-        let payload = try WirePayloadCoder.encode(components)
-        let decoded = try WirePayloadCoder.decode(payload)
-        XCTAssertEqual(decoded.content, Self.minSealedBox)
-    }
-
-    // MARK: - Payload Structure
-
-    func testPayloadSize() throws {
-        let components = makeComponents()
-        let payload = try WirePayloadCoder.encode(components)
-        // Header (36) + sealed box bytes
-        XCTAssertEqual(payload.count, WirePayloadCoder.headerSize + Self.sealedBox.count)
-    }
-
-    func testMessageNumberIsLittleEndian() throws {
-        // Encode message_number = 1 and verify the raw bytes
-        let components = makeComponents(msgNum: 1)
-        let payload = try WirePayloadCoder.encode(components)
-        let bytes = [UInt8](payload)
-        XCTAssertEqual(bytes[0], 0x01)  // LE: least significant byte first
-        XCTAssertEqual(bytes[1], 0x00)
-        XCTAssertEqual(bytes[2], 0x00)
-        XCTAssertEqual(bytes[3], 0x00)
-    }
-
-    func testMessageNumberLittleEndian256() throws {
-        let components = makeComponents(msgNum: 256)
-        let payload = try WirePayloadCoder.encode(components)
-        let bytes = [UInt8](payload)
-        XCTAssertEqual(bytes[0], 0x00)
-        XCTAssertEqual(bytes[1], 0x01)  // 256 = 0x0100 in LE
-        XCTAssertEqual(bytes[2], 0x00)
-        XCTAssertEqual(bytes[3], 0x00)
-    }
-
-    func testDHPublicKeyAtOffset4() throws {
-        let components = makeComponents()
-        let payload = try WirePayloadCoder.encode(components)
-        let dhBytes = [UInt8](payload[4..<36])
-        XCTAssertEqual(dhBytes, [UInt8](Self.dhPubKey))
-    }
-
-    func testSealedBoxStartsAtHeaderSize() throws {
-        let components = makeComponents()
-        let payload = try WirePayloadCoder.encode(components)
-        let sealedBytes = Data(payload[WirePayloadCoder.headerSize...])
-        XCTAssertEqual(sealedBytes, Self.sealedBox)
-    }
-
-    // MARK: - Encode Errors
-
-    // The specific error taxonomy (InvalidDhPublicKey / TooShort / …) is owned and
-    // unit-tested in the Rust core (`construct-core/src/wire_payload.rs`). Across the FFI
-    // boundary these surface as a thrown `CryptoError`, so the Swift adapter tests assert
-    // the reject *contract* (it throws), not the Rust-internal variant.
-
-    func testEncodeRejectsShortDHPublicKey() {
-        let components = MessageCryptoService.EncryptedMessageComponents(
-            ephemeralPublicKey: Data(repeating: 0, count: 16),  // too short (core requires 32)
-            messageNumber: 0,
-            content: Self.sealedBox,
-            suiteId: 1,
-            oneTimePreKeyId: 0,
-            storageKey: Data(),
-            pqMessageEpoch: 0,
-            pqRatchetField: Data()
-        )
-        XCTAssertThrowsError(try WirePayloadCoder.encode(components))
-    }
-
-    func testEncodeRejectsLongDHPublicKey() {
-        let components = MessageCryptoService.EncryptedMessageComponents(
-            ephemeralPublicKey: Data(repeating: 0, count: 64),  // too long (core requires 32)
-            messageNumber: 0,
-            content: Self.sealedBox,
-            suiteId: 1,
-            oneTimePreKeyId: 0,
-            storageKey: Data(),
-            pqMessageEpoch: 0,
-            pqRatchetField: Data()
-        )
-        XCTAssertThrowsError(try WirePayloadCoder.encode(components))
+        XCTAssertEqual(decoded.ephemeralPublicKey.count, 32)
+        XCTAssertEqual(decoded.kemCiphertext?.count, 1568, "the first flight carries the handshake")
+        XCTAssertEqual(decoded.content, wire.suffix(decoded.content.count), "the sealed box ends the payload")
     }
 
     // MARK: - Decode Errors
@@ -184,29 +39,15 @@ final class WirePayloadCoderTests: XCTestCase {
     }
 
     func testDecodeRejectsExactlyHeaderSizePayload() {
-        // Exactly 36 bytes — no content at all
         let payload = Data(repeating: 0, count: WirePayloadCoder.headerSize)
         XCTAssertThrowsError(try WirePayloadCoder.decode(payload))
     }
 
     func testDecodeAcceptsMinimalValidPayload() throws {
-        // 36 bytes header + 1 byte content = 37 bytes minimum
         var payload = Data(repeating: 0, count: WirePayloadCoder.headerSize + 1)
-        // Set dh_public_key bytes (offset 4..36)
         for i in 4..<36 { payload[i] = UInt8(i) }
         let decoded = try WirePayloadCoder.decode(payload)
         XCTAssertEqual(decoded.messageNumber, 0)
         XCTAssertEqual(decoded.ephemeralPublicKey.count, 32)
-    }
-
-    // MARK: - Multiple Roundtrips (different message numbers)
-
-    func testMultipleRoundtrips() throws {
-        for msgNum: UInt32 in [0, 1, 100, 1000, 65535, UInt32.max / 2] {
-            let components = makeComponents(msgNum: msgNum)
-            let payload = try WirePayloadCoder.encode(components)
-            let decoded = try WirePayloadCoder.decode(payload)
-            XCTAssertEqual(decoded.messageNumber, msgNum, "Roundtrip failed for msgNum=\(msgNum)")
-        }
     }
 }

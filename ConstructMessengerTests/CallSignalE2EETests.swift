@@ -53,15 +53,15 @@ private final class OrchestratorPeer {
         _ = try core.initSession(contactId: contactId, recipientBundle: bundle)
     }
 
-    func initReceiverSession(from sender: OrchestratorPeer,
-                             firstMsg: EncryptedMessageComponents) throws {
+    func initReceiverSession(from sender: OrchestratorPeer, firstMsg: Data) throws {
         _ = try core.pqxdhTestReceive(from: sender.core, first: firstMsg)
     }
 
     // MARK: Low-level encrypt (for session bootstrap)
 
-    func encryptMessage(_ text: String, to contactId: String) throws -> EncryptedMessageComponents {
-        try core.encryptMessage(contactId: contactId, plaintext: Data(text.utf8))
+    /// The wire payload, as the core packed it.
+    func encryptMessage(_ text: String, to contactId: String) throws -> Data {
+        try core.encryptToWire(contactId: contactId, plaintext: Data(text.utf8))
     }
 
     // MARK: handleEvent wrappers
@@ -290,15 +290,11 @@ final class CallSignalE2EETests: XCTestCase {
 
         // Bob → Alice: reply after session init (Bob has been the receiver so far)
         let msg1 = try bob.encryptMessage("hello alice", to: alice.userId)
-        let wireMsg1 = try WirePayloadCoder.encode(
-            MessageCryptoService.EncryptedMessageComponents(from: msg1))
-        _ = try alice.receiveWirePayload(wireMsg1, from: bob.userId, contentType: 1)
+        _ = try alice.receiveWirePayload(msg1, from: bob.userId, contentType: 1)
 
         // Alice → Bob: normal message
         let aliceMsg = try alice.encryptMessage("hi bob, going to call you", to: bob.userId)
-        let wireAliceMsg = try WirePayloadCoder.encode(
-            MessageCryptoService.EncryptedMessageComponents(from: aliceMsg))
-        _ = try bob.receiveWirePayload(wireAliceMsg, from: alice.userId, contentType: 1)
+        _ = try bob.receiveWirePayload(aliceMsg, from: alice.userId, contentType: 1)
 
         // Now Alice sends a call signal — should still work after text exchange
         let callProto = Data("sdp-offer-after-chat".utf8)

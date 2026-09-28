@@ -42,42 +42,14 @@ final class PerformanceBenchmarks: XCTestCase {
         }
     }
 
-    // MARK: - Wire Payload Encode/Decode
-
-    func testWirePayloadEncodePerformance() throws {
-        let sealedBox = Data(repeating: 0x42, count: 60)
-        let epk = Data((0..<32).map { UInt8($0) })
-        let components = MessageCryptoService.EncryptedMessageComponents(
-            ephemeralPublicKey: epk,
-            messageNumber: 0,
-            content: sealedBox,
-            suiteId: 1,
-            oneTimePreKeyId: 0,
-            storageKey: Data(),
-            pqMessageEpoch: 0,
-            pqRatchetField: Data()
-        )
-        measure {
-            for _ in 0..<1000 {
-                _ = try? WirePayloadCoder.encode(components)
-            }
-        }
-    }
+    // MARK: - Wire Payload Decode
 
     func testWirePayloadDecodePerformance() throws {
-        let sealedBox = Data(repeating: 0x42, count: 60)
-        let epk = Data((0..<32).map { UInt8($0) })
-        let components = MessageCryptoService.EncryptedMessageComponents(
-            ephemeralPublicKey: epk,
-            messageNumber: 7,
-            content: sealedBox,
-            suiteId: 1,
-            oneTimePreKeyId: 0,
-            storageKey: Data(),
-            pqMessageEpoch: 0,
-            pqRatchetField: Data()
-        )
-        let payload = try WirePayloadCoder.encode(components)
+        // A first flight as the core packs it — the header, the KEM identity key and all.
+        let alice = try CryptoPeer()
+        let bob = try CryptoPeer()
+        try alice.initSenderSession(to: bob.userId, bundle: try bob.bundle())
+        let payload = try alice.core.encryptToWire(contactId: bob.userId, plaintext: Data("x".utf8))
         measure {
             for _ in 0..<1000 {
                 _ = try? WirePayloadCoder.decode(payload)
@@ -109,12 +81,7 @@ final class PerformanceBenchmarks: XCTestCase {
 
         measure {
             for _ in 0..<100 {
-                guard let rustComponents = try? alice.core.encryptMessage(
-                    contactId: bob.userId,
-                    plaintext: plaintext
-                ) else { return }
-                let components = MessageCryptoService.EncryptedMessageComponents(from: rustComponents)
-                _ = try? WirePayloadCoder.encode(components)
+                _ = try? alice.core.encryptToWire(contactId: bob.userId, plaintext: plaintext)
             }
         }
     }
@@ -129,30 +96,16 @@ final class PerformanceBenchmarks: XCTestCase {
         try alice.initSenderSession(to: bob.userId, bundle: bobBundle)
 
         // Establish Bob's session via msgNum=0
-        let init0 = try alice.core.encryptMessage(contactId: bob.userId, plaintext: Data("__init__".utf8))
+        let init0 = try alice.core.encryptToWire(contactId: bob.userId, plaintext: Data("__init__".utf8))
         _ = try bob.core.pqxdhTestReceive(from: alice.core, first: init0)
 
         let plaintext = Data("Benchmark round-trip message".utf8)
 
         measure {
             for _ in 0..<50 {
-                guard let rustComponents = try? alice.core.encryptMessage(
-                    contactId: bob.userId,
-                    plaintext: plaintext
-                ) else { return }
-                let components = MessageCryptoService.EncryptedMessageComponents(from: rustComponents)
-                guard let wire = try? WirePayloadCoder.encode(components) else { return }
-                guard let decoded = try? WirePayloadCoder.decode(wire) else { return }
-                let unpadded = decoded.content
-                _ = try? bob.core.decryptMessage(
-                    contactId: alice.userId,
-                    ephemeralPublicKey: decoded.ephemeralPublicKey,
-                    messageNumber: decoded.messageNumber,
-                    content: [UInt8](unpadded),
-                    suiteId: decoded.suiteId,
-                    pqMessageEpoch: decoded.pqMessageEpoch,
-                    pqRatchetField: [UInt8](decoded.pqRatchetField)
-                )
+                guard let wire = try? alice.core.encryptToWire(contactId: bob.userId, plaintext: plaintext)
+                else { return }
+                _ = try? bob.core.decryptWirePayload(contactId: alice.userId, wirePayload: wire)
             }
         }
     }

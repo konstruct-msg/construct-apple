@@ -57,12 +57,3 @@ struct MessageDecryptResult {
     /// a fresh storage key was NOT generated (no DR message key consumed).
     var isArchivedSessionDecrypt: Bool { storageKey.isEmpty }
 }
-
-/// Per-message result from `CryptoManager.decryptOfflineBatch`.
-struct OfflineBatchDecryptResult {
-    let message: ChatMessage
-    let plaintext: Data?   // non-nil on success
-    let error: Error?      // non-nil on failure; session is NOT archived
-    let storageKey: Data   // 32-byte key; empty when error is non-nil
-    var succeeded: Bool { plaintext != nil }
-}

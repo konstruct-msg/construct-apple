@@ -1178,20 +1178,17 @@ class CryptoManager {
 
     // MARK: - Encryption / Decryption
 
-    /// Result of message encryption with separate fields per server ChatMessage spec
-    typealias EncryptedMessageComponents = MessageCryptoService.EncryptedMessageComponents
-
-    /// Encrypts a plaintext message for **one device** of the recipient.
-    /// Returns separate components per server ChatMessage format.
+    /// Encrypts a plaintext message for **one device** of the recipient and returns the wire
+    /// payload, sent as it is.
     ///
     /// One call, one copy, one ratchet — `OutboundMessagePipeline` loops the recipient's device
     /// set and calls this once per device. See `decisions/a-peer-is-a-set-of-devices.md`.
-    func encryptMessage(_ message: String, forDevice deviceId: String) throws -> EncryptedMessageComponents {
+    func encryptMessage(_ message: String, forDevice deviceId: String) throws -> Data {
         // coreLock serializes Rust FFI calls so that a background task and the main
         // actor cannot advance the DR ratchet concurrently (would corrupt chain state).
         coreLock.lock()
         defer { coreLock.unlock() }
-        let components = try messageCrypto.encryptMessage(
+        let wire = try messageCrypto.encryptMessage(
             message,
             forDevice: deviceId,
             core: orchestratorCore,
@@ -1208,13 +1205,8 @@ class CryptoManager {
             }
         )
 
-        // Hex preview only materializes when Log.debug evaluates (DEBUG builds).
-        Log.debug(
-            "ENCRYPT: msgNum=\(components.messageNumber), otpkId=\(components.oneTimePreKeyId), ephemKey=\(components.ephemeralPublicKey.prefix(8).map { String(format: "%02x", $0) }.joined()), content=\(components.content.count) bytes",
-            category: "CryptoManager"
-        )
-
-        return components
+        Log.debug("ENCRYPT: \(wire.count)-byte wire payload for \(deviceId.prefix(8))…", category: "CryptoManager")
+        return wire
     }
 
     /// Decrypt a ChatMessage directly using clean API
@@ -1308,140 +1300,10 @@ class CryptoManager {
         return MessageDecryptResult(plaintext: decryptResult.plaintext, storageKey: decryptResult.storageKey)
     }
 
-    /// Background-safe DR decrypt — no `archiveSession` callback on failure.
-    ///
-    /// Called exclusively from `BackgroundFetchManager` (private BG queue, hopped to main
-    /// via `DispatchQueue.main.sync`). Unlike the foreground `decryptMessage`, this method
-    /// never archives the session on failure — it simply throws `.decryptionFailedNoArchive`
-    /// so the caller can skip the message.  The foreground stream will handle recovery
-    /// (END_SESSION, re-init, healing) when the app becomes active.
-    ///
-    /// Precondition: the caller must restore the session with `restoreSession(for:)` before
-    /// calling this method.  If no session exists, throws `.sessionNotFound`.
-    func decryptMessageForBackground(_ message: ChatMessage) throws -> MessageDecryptResult {
-        // Fast duplicate guard — no I/O, protects DR state.
-        if PersistentACKStore.shared.isProcessedInMemory(message.id) {
-            throw CryptoManagerError.duplicateMessage
-        }
-
-        coreLock.lock()
-        defer { coreLock.unlock() }
-
-        guard let core = orchestratorCore else {
-            throw CryptoManagerError.coreNotInitialized
-        }
-
-        // `message.from` names the sending device by the time a background decrypt sees it. It
-        // is not resolved here: the locked-device path is exactly where the pinned key was the
-        // only answer available, so a resolution would always have succeeded and always with the
-        // same device, decrypting a sibling device's message against the wrong ratchet.
-        guard let contactId = SessionAddressing.asDevice(message.from),
-              core.hasSession(contactId: contactId) else {
-            throw CryptoManagerError.sessionNotFound
-        }
-
-        let contentForDecrypt = message.content
-
-        do {
-            let result = try core.decryptMessage(
-                contactId: contactId,
-                ephemeralPublicKey: [UInt8](message.ephemeralPublicKey),
-                messageNumber: message.messageNumber,
-                content: [UInt8](contentForDecrypt),
-                suiteId: message.suiteId,
-                pqMessageEpoch: message.pqMessageEpoch,
-                pqRatchetField: [UInt8](message.pqRatchetField)
-            )
-            saveSessionToKeychain(forDevice: contactId)
-            Log.info("BG decrypt OK \(message.id.prefix(8))… msgNum=\(message.messageNumber) (\(result.plaintext.count) bytes)", category: "CryptoManager")
-            return MessageDecryptResult(plaintext: Data(result.plaintext), storageKey: Data(result.storageKey))
-        } catch {
-            // Do NOT call archiveSession here. The session may still be healthy —
-            // failure here is likely a race (duplicate), a skipped key, or a stale
-            // message from before session re-init. The foreground stream owns recovery.
-            Log.info("BG decrypt failed \(message.id.prefix(8))… msgNum=\(message.messageNumber): \(error) — session preserved", category: "CryptoManager")
-            throw CryptoManagerError.decryptionFailedNoArchive(reason: error.localizedDescription)
-        }
-    }
-
-    /// Batch offline decrypt — single Rust mutex acquisition for the entire batch.
-    ///
-    /// Maps each `ChatMessage` to an `OfflineBatchMessage`, calls the Rust
-    /// `decrypt_offline_batch` method, then returns typed `OfflineBatchDecryptResult`
-    /// values.  Per-message failures do NOT abort the batch and do NOT archive any session.
-    ///
-    /// The caller is responsible for:
-    ///   - session restore (call `restoreSession(for:)` per contactId before calling this)
-    ///   - storing returned `storageKey` values in `MessageKeyStore`
-    ///   - calling `PersistentACKStore.markProcessedInCache` for successfully decrypted messages
-    func decryptOfflineBatch(_ messages: [ChatMessage]) -> [OfflineBatchDecryptResult] {
-        // Fast pre-filter: drop anything already in the in-memory ACK cache.
-        let filtered = messages.filter { !PersistentACKStore.shared.isProcessedInMemory($0.id) }
-        guard !filtered.isEmpty else { return [] }
-
-        coreLock.lock()
-        defer { coreLock.unlock() }
-
-        guard let core = orchestratorCore else {
-            return filtered.map { OfflineBatchDecryptResult(message: $0, plaintext: nil,
-                error: CryptoManagerError.coreNotInitialized, storageKey: Data()) }
-        }
-
-        let inputs: [OfflineBatchMessage] = filtered.map { msg in
-            OfflineBatchMessage(
-                id: msg.id,
-                contactId: msg.from,
-                ephemeralPublicKey: [UInt8](msg.ephemeralPublicKey),
-                messageNumber: msg.messageNumber,
-                content: [UInt8](msg.content),
-                suiteId: msg.suiteId,
-                pqMessageEpoch: msg.pqMessageEpoch,
-                pqRatchetField: [UInt8](msg.pqRatchetField)
-            )
-        }
-
-        let results = core.decryptOfflineBatch(messages: inputs)
-
-        // Zip back to ChatMessage for the caller.
-        return zip(filtered, results).map { (chatMsg, batchResult) in
-            if let plaintext = batchResult.plaintext {
-                saveSessionToKeychain(forDevice: chatMsg.from)
-                Log.info("Batch BG decrypt OK \(chatMsg.id.prefix(8))… msgNum=\(chatMsg.messageNumber) (\(plaintext.count) bytes)", category: "CryptoManager")
-                return OfflineBatchDecryptResult(
-                    message: chatMsg,
-                    plaintext: Data(plaintext),
-                    error: nil,
-                    storageKey: Data(batchResult.storageKey)
-                )
-            } else {
-                let reason = batchResult.error ?? "unknown"
-                Log.info("Batch BG decrypt failed \(chatMsg.id.prefix(8))… msgNum=\(chatMsg.messageNumber): \(reason) — session preserved", category: "CryptoManager")
-                return OfflineBatchDecryptResult(
-                    message: chatMsg,
-                    plaintext: nil,
-                    error: CryptoManagerError.decryptionFailedNoArchive(reason: reason),
-                    storageKey: Data()
-                )
-            }
-        }
-    }
-
-    /// Decrypt raw Double Ratchet components — used for call signaling fields, not ChatMessage.
-    /// Returns UTF-8 string (call signals are always valid UTF-8).
-    /// Handles session restore from Keychain if needed. Does not try archived sessions.
-    func decryptRawComponents(
-        contactId: String,
-        ephemeralPublicKey: Data,
-        messageNumber: UInt32,
-        content: Data,
-        // The call-signal V2 frame does not yet carry these — it only supports
-        // classic (suite 1) sessions. TODO: extend the frame to carry suite_id /
-        // pq_message_epoch / pq_ratchet_field so call signals work over suite-3
-        // sessions (same fix as WirePayload; tracked separately).
-        suiteId: UInt16 = 1,
-        pqMessageEpoch: UInt32 = 0,
-        pqRatchetField: Data = Data()
-    ) throws -> String {
+    /// Decrypt a call-signal field — a wire payload the core packed (`encryptMessage(_:forDevice:)`).
+    /// Returns UTF-8 (call signals are always valid UTF-8). Restores the session from Keychain if
+    /// needed; does not try archived sessions.
+    func decryptCallSignal(contactId: String, wirePayload: Data) throws -> String {
         coreLock.lock()
         defer { coreLock.unlock() }
 
@@ -1462,16 +1324,7 @@ class CryptoManager {
             throw CryptoManagerError.sessionNotFound
         }
 
-        let contentForDecrypt = content
-        let result = try core.decryptMessage(
-            contactId: resolved,
-            ephemeralPublicKey: [UInt8](ephemeralPublicKey),
-            messageNumber: messageNumber,
-            content: [UInt8](contentForDecrypt),
-            suiteId: suiteId,
-            pqMessageEpoch: pqMessageEpoch,
-            pqRatchetField: [UInt8](pqRatchetField)
-        )
+        let result = try core.decryptWirePayload(contactId: resolved, wirePayload: wirePayload)
         saveSessionToKeychain(forDevice: resolved)
         return String(data: Data(result.plaintext), encoding: .utf8) ?? ""
     }

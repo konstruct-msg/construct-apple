@@ -134,19 +134,12 @@ final class SessionQueueWiringTests: XCTestCase {
         // The parser fills this from the wire payload; the router classifies by it.
         let kem: [UInt8]? = handshake ? [UInt8](repeating: 7, count: 1088) : nil
         message.kemCiphertext = Data(kem ?? [])
-        let wire = WirePayload(
-            dhPublicKey: [UInt8](repeating: 1, count: 32),
+        message.rawPayload = handBuiltWirePayload(
             messageNumber: msgNum,
-            oneTimePrekeyId: 0,
-            kyberOtpkId: 0,
-            previousChainLength: 0,
             suiteId: 3,
             kemCiphertext: kem,
-            sealedBox: [UInt8](repeating: 2, count: 48),
-            pqMessageEpoch: pqEpoch,
-            pqRatchetField: []
+            pqMessageEpoch: pqEpoch
         )
-        message.rawPayload = Data((try? wirePayloadPack(payload: wire)) ?? [])
         XCTAssertFalse(message.rawPayload.isEmpty, "the fixture must carry a wire payload the core can parse")
         return message
     }

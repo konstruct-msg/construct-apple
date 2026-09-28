@@ -3,7 +3,9 @@
 //  Construct Messenger
 //
 //  Thin adapter over the Rust core's canonical wire framing
-//  (`wirePayloadPack` / `wirePayloadUnpack`, backed by wire_payload.rs).
+//  (`wirePayloadUnpack`, backed by wire_payload.rs). Reading only: this app never packs a
+//  payload and never decrypts one from these components — `encryptToWire` / `decryptWirePayload`
+//  take and give whole payloads.
 //
 //  This type intentionally contains NO byte-layout logic. The encrypted_payload
 //  format lives in exactly one place — the Rust core — so suite_id /
@@ -20,32 +22,6 @@ enum WirePayloadCoder {
     /// Used only as a size threshold to distinguish real payloads from short
     /// control sentinels; the actual layout is owned by the core.
     static let headerSize = 52
-
-    // MARK: - Encode
-
-    /// Pack `EncryptedMessageComponents` into the canonical opaque blob via the core.
-    ///
-    /// The PQXDH v2 header (KEM ciphertext, Kyber prekey id) is taken from the components as the
-    /// core produced them — it was a pair of separate arguments here, for the caller to remember;
-    /// the core sets the v2 flag on the wire from the ciphertext.
-    static func encode(_ components: MessageCryptoService.EncryptedMessageComponents) throws -> Data {
-        let payload = WirePayload(
-            dhPublicKey: [UInt8](components.ephemeralPublicKey),
-            messageNumber: components.messageNumber,
-            oneTimePrekeyId: components.oneTimePreKeyId,
-            kyberOtpkId: components.kyberPrekeyId,
-            // Swift never sets the DR PN field here; the Rust orchestrator send path
-            // packs the authoritative value. This component path (tests / call signals)
-            // only produces PN = 0.
-            previousChainLength: 0,
-            suiteId: components.suiteId,
-            kemCiphertext: components.kemCiphertext.isEmpty ? nil : [UInt8](components.kemCiphertext),
-            sealedBox: [UInt8](components.content),
-            pqMessageEpoch: components.pqMessageEpoch,
-            pqRatchetField: [UInt8](components.pqRatchetField)
-        )
-        return Data(try wirePayloadPack(payload: payload))
-    }
 
     // MARK: - Decode
 

@@ -61,15 +61,12 @@ extension OrchestratorCore {
         )
     }
 
-    /// The responder side from what the initiator's `encryptMessage` returned, packed the way
-    /// the wire carries it — the handshake header included — opened with `sender`'s certificate
-    /// as `TestCertificateServer.shared` issues it. Nothing else names the key a first message
-    /// opens with (`decisions/first-message-opens-without-the-server.md`).
-    func pqxdhTestReceive(
-        from sender: OrchestratorCore,
-        first: EncryptedMessageComponents
-    ) throws -> SessionInitResult {
-        try pqxdhTestReceive(from: sender, wirePayload: try first.pqxdhTestWirePayload())
+    /// The responder side from what the initiator's `encryptToWire` returned — the handshake header
+    /// included — opened with `sender`'s certificate as `TestCertificateServer.shared` issues it.
+    /// Nothing else names the key a first message opens with
+    /// (`decisions/first-message-opens-without-the-server.md`).
+    func pqxdhTestReceive(from sender: OrchestratorCore, first: Data) throws -> SessionInitResult {
+        try pqxdhTestReceive(from: sender, wirePayload: [UInt8](first))
     }
 
     /// The same, from a wire payload as received.
@@ -94,6 +91,9 @@ func makeTestDevice() throws -> (core: OrchestratorCore, deviceId: String) {
         keysData: try bootstrap.exportPrivateKeys(),
         myUserId: deviceId
     )
+    // Every device that publishes a bundle holds one; its KEM identity key derives from it, and an
+    // initiator without one cannot open (`decisions/responder-authenticates-initiator-by-kem.md`).
+    _ = try core.ensureHybridSignatureKey()
     return (core, deviceId)
 }
 
@@ -142,42 +142,25 @@ final class TestCertificateServer {
     }
 }
 
-extension EncryptedMessageComponents {
-    /// The envelope's `encrypted_payload` for these components, packed by the core.
-    func pqxdhTestWirePayload(previousChainLength: UInt32 = 0) throws -> [UInt8] {
-        try wirePayloadPack(payload: WirePayload(
-            dhPublicKey: ephemeralPublicKey,
-            messageNumber: messageNumber,
-            oneTimePrekeyId: oneTimePrekeyId,
-            kyberOtpkId: kyberPrekeyId,
-            previousChainLength: previousChainLength,
-            suiteId: suiteId,
-            kemCiphertext: kemCiphertext.isEmpty ? nil : kemCiphertext,
-            sealedBox: content,
-            pqMessageEpoch: pqMessageEpoch,
-            pqRatchetField: pqRatchetField
-        ))
-    }
-}
-
-extension MessageCryptoService.EncryptedMessageComponents {
-    /// The app's components exactly as the core returned them. Tests used to fill these by hand
-    /// with `suiteId: 1` and empty PQ fields, which stopped being true when suite 3 became the
-    /// only suite — and a hand copy is how fields get dropped.
-    init(from core: EncryptedMessageComponents) {
-        self.init(
-            ephemeralPublicKey: Data(core.ephemeralPublicKey),
-            messageNumber: core.messageNumber,
-            content: Data(core.content),
-            suiteId: core.suiteId,
-            oneTimePreKeyId: core.oneTimePrekeyId,
-            storageKey: Data(core.storageKey),
-            pqMessageEpoch: core.pqMessageEpoch,
-            pqRatchetField: Data(core.pqRatchetField),
-            kemCiphertext: Data(core.kemCiphertext),
-            kyberPrekeyId: core.kyberPrekeyId
-        )
-    }
+/// A wire payload with arbitrary header fields and a noise body, laid out by hand per
+/// `construct-core/src/wire_payload.rs` — for routing fixtures that must name a message number or
+/// a handshake the core never produced. Not a way to send: this app does not pack payloads, and a
+/// message built here never decrypts.
+func handBuiltWirePayload(
+    messageNumber: UInt32,
+    suiteId: UInt16,
+    kemCiphertext: [UInt8]? = nil,
+    pqMessageEpoch: UInt32 = 0,
+    sealedBox: [UInt8] = [UInt8](repeating: 2, count: 48)
+) -> Data {
+    func le<T: FixedWidthInteger>(_ v: T) -> [UInt8] { withUnsafeBytes(of: v.littleEndian) { Array($0) } }
+    let kem = kemCiphertext ?? []
+    var out: [UInt8] = le(messageNumber) + [UInt8](repeating: 1, count: 32) + le(UInt32(0)) + le(UInt32(0))
+    out += le(UInt16(kem.count)) + le(UInt32(0))
+    out += le(kem.isEmpty ? suiteId : suiteId | 0x0100)   // PQXDH_V2_FLAG follows the ciphertext
+    out += kem
+    if suiteId == 3 { out += le(pqMessageEpoch) + [0] }   // suite-3 section: epoch, no field
+    return Data(out + sealedBox)
 }
 
 private struct MissingKyberSPK: Error {}

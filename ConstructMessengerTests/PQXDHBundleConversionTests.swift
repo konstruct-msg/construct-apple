@@ -83,9 +83,11 @@ final class PQXDHBundleConversionTests: XCTestCase {
         let bundle = KeyServiceClient.bundleData(try served(by: bob), userId: bobId, verifyingKey: vk)
 
         _ = try alice.initSession(contactId: bobId, recipientBundle: bundle.binaryKeyBundle())
-        let first = try alice.encryptMessage(contactId: bobId, plaintext: Data("hello".utf8))
-        XCTAssertEqual(first.kemCiphertext.count, 1568, "the first message carries the ML-KEM-1024 ciphertext")
-        XCTAssertEqual(first.kyberPrekeyId, bundle.kyberOneTimePreKeyId, "the one-time key is preferred")
+        let first = try alice.encryptToWire(contactId: bobId, plaintext: Data("hello".utf8))
+        let header = try wirePayloadUnpack(data: [UInt8](first))
+        XCTAssertEqual(header.kemCiphertext?.count, 1568, "the first message carries the ML-KEM-1024 ciphertext")
+        XCTAssertEqual(header.kyberOtpkId, bundle.kyberOneTimePreKeyId, "the one-time key is preferred")
+        XCTAssertEqual(header.kemIdentity?.count, 1568, "and names the initiator's KEM identity key")
 
         let result = try bob.pqxdhTestReceive(from: alice, first: first)
         XCTAssertEqual(result.decryptedMessage, Array("hello".utf8))

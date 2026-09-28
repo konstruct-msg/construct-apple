@@ -51,17 +51,18 @@ private final class ReconnPeer {
     }
 
     func encrypt(_ data: Data, to contactId: String) throws -> ReconnEncMsg {
-        let r = try core.encryptMessage(contactId: contactId, plaintext: data)
-        return ReconnEncMsg(wirePayload: try r.pqxdhTestWirePayload(),
-                            ephemeralPublicKey: r.ephemeralPublicKey,
+        let wire = [UInt8](try core.encryptToWire(contactId: contactId, plaintext: data))
+        let r = try wirePayloadUnpack(data: wire)
+        return ReconnEncMsg(wirePayload: wire,
+                            ephemeralPublicKey: r.dhPublicKey,
                             messageNumber: r.messageNumber,
-                            content: r.content,
+                            content: r.sealedBox,
                             oneTimePrekeyId: r.oneTimePrekeyId,
                             suiteId: r.suiteId,
                             pqMessageEpoch: r.pqMessageEpoch,
                             pqRatchetField: r.pqRatchetField,
-                            kemCiphertext: r.kemCiphertext,
-                            kyberPrekeyId: r.kyberPrekeyId)
+                            kemCiphertext: r.kemCiphertext ?? [],
+                            kyberPrekeyId: r.kyberOtpkId)
     }
 
     func encryptString(_ s: String, to contactId: String) throws -> ReconnEncMsg {
@@ -69,13 +70,7 @@ private final class ReconnPeer {
     }
 
     func decrypt(_ msg: ReconnEncMsg, from contactId: String) throws -> String {
-        let r = try core.decryptMessage(contactId: contactId,
-                                        ephemeralPublicKey: msg.ephemeralPublicKey,
-                                        messageNumber: msg.messageNumber,
-                                        content: msg.content,
-                                        suiteId: msg.suiteId,
-                                        pqMessageEpoch: msg.pqMessageEpoch,
-                                        pqRatchetField: msg.pqRatchetField)
+        let r = try core.decryptWirePayload(contactId: contactId, wirePayload: Data(msg.wirePayload))
         return String(bytes: r.plaintext, encoding: .utf8) ?? "<binary>"
     }
 

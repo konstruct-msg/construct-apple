@@ -55,18 +55,21 @@ private final class SessionPeer {
 
     /// Encrypt Data (arbitrary bytes) — mirrors encryptOutgoing(plaintext: Data).
     func encrypt(_ data: Data, to contactId: String) throws -> EncryptedComponents {
-        let result = try core.encryptMessage(contactId: contactId, plaintext: data)
+        let wire = [UInt8](try core.encryptToWire(contactId: contactId, plaintext: data))
+        // The fields, read back from the payload the core packed — for assertions only; decrypt
+        // takes the payload.
+        let result = try wirePayloadUnpack(data: wire)
         return EncryptedComponents(
-            wirePayload: try result.pqxdhTestWirePayload(),
-            ephemeralPublicKey: result.ephemeralPublicKey,
+            wirePayload: wire,
+            ephemeralPublicKey: result.dhPublicKey,
             messageNumber: result.messageNumber,
-            content: result.content,
+            content: result.sealedBox,
             oneTimePrekeyId: result.oneTimePrekeyId,
             suiteId: result.suiteId,
             pqMessageEpoch: result.pqMessageEpoch,
             pqRatchetField: result.pqRatchetField,
-            kemCiphertext: result.kemCiphertext,
-            kyberPrekeyId: result.kyberPrekeyId
+            kemCiphertext: result.kemCiphertext ?? [],
+            kyberPrekeyId: result.kyberOtpkId
         )
     }
 
@@ -87,14 +90,9 @@ private final class SessionPeer {
     // MARK: Decrypt (after session established)
 
     func decrypt(_ components: EncryptedComponents, from contactId: String) throws -> Data {
-        let result = try core.decryptMessage(
+        let result = try core.decryptWirePayload(
             contactId: contactId,
-            ephemeralPublicKey: components.ephemeralPublicKey,
-            messageNumber: components.messageNumber,
-            content: components.content,
-            suiteId: components.suiteId,
-            pqMessageEpoch: components.pqMessageEpoch,
-            pqRatchetField: components.pqRatchetField
+            wirePayload: Data(components.wirePayload)
         )
         return Data(result.plaintext)
     }

@@ -3,7 +3,8 @@
 //  ConstructMessengerTests
 //
 //  Integration tests for the full message send/receive pipeline:
-//  Rust crypto core → WirePayloadCoder.encode → (wire) → WirePayloadCoder.decode → Rust decrypt
+//  Rust core `encryptToWire` → (wire) → Rust core `decryptWirePayload`. The core packs and reads
+//  the payload; nothing between rebuilds it from components.
 //
 //  This validates that the binary wire format correctly round-trips through the crypto layer,
 //  matching what actually happens in production (ChunkedMessageDelivery → MessageStreamManager).
@@ -34,6 +35,9 @@ final class CryptoWireIntegrationTests: XCTestCase {
             let userId = localUserId ?? derived
             self.userId = userId
             self.core = try createOrchestratorCoreFromKeys(keysData: keys, myUserId: userId)
+            // The KEM identity key an initiator names derives from the hybrid key every device
+            // that publishes a bundle holds.
+            _ = try core.ensureHybridSignatureKey()
         }
 
         /// The bundle as the server serves it after PQXDH v2 — see `PQXDHTestBundles`.
@@ -46,30 +50,20 @@ final class CryptoWireIntegrationTests: XCTestCase {
             _ = try core.initSession(contactId: contactId, recipientBundle: recipientBundle)
         }
 
-        /// Encrypt plaintext → EncryptedMessageComponents (wraps Rust core)
-        func encryptRaw(_ plaintext: String, to contactId: String) throws -> MessageCryptoService.EncryptedMessageComponents {
-            let rustComponents = try core.encryptMessage(contactId: contactId, plaintext: Data(plaintext.utf8))
-            return MessageCryptoService.EncryptedMessageComponents(from: rustComponents)
+        /// Encrypt plaintext → the wire payload the core packed.
+        func encryptRaw(_ plaintext: String, to contactId: String) throws -> Data {
+            try core.encryptToWire(contactId: contactId, plaintext: Data(plaintext.utf8))
         }
 
-        /// Encode components to wire payload (same as ChunkedMessageDelivery does)
-        func encodeWire(_ components: MessageCryptoService.EncryptedMessageComponents) throws -> Data {
-            try WirePayloadCoder.encode(components)
+        /// The payload as it goes on the wire — the core's bytes, unchanged. Kept as a step so
+        /// the tests read as the pipeline they check.
+        func encodeWire(_ wire: Data) throws -> Data {
+            wire
         }
 
-        /// Decode wire payload (same as MessageStreamManager does) and decrypt
+        /// Decrypt a payload as it arrived.
         func decodeAndDecrypt(_ payload: Data, from contactId: String) throws -> String {
-            let decoded = try WirePayloadCoder.decode(payload)
-            let unpadded = decoded.content
-            let plaintextData = try core.decryptMessage(
-                contactId: contactId,
-                ephemeralPublicKey: decoded.ephemeralPublicKey,
-                messageNumber: decoded.messageNumber,
-                content: [UInt8](unpadded),
-                suiteId: decoded.suiteId,
-                pqMessageEpoch: decoded.pqMessageEpoch,
-                pqRatchetField: [UInt8](decoded.pqRatchetField)
-            )
+            let plaintextData = try core.decryptWirePayload(contactId: contactId, wirePayload: payload)
             return String(data: Data(plaintextData.plaintext), encoding: .utf8) ?? ""
         }
 
@@ -310,22 +304,9 @@ final class CryptoWireIntegrationTests: XCTestCase {
         // Send second message, then tamper with the sealed box itself. Not by a wire offset: until
         // Bob answers, Alice's messages still carry the PQXDH v2 header, and a fixed offset past
         // the fixed header lands in the KEM ciphertext, which a held session ignores.
-        let comp2 = try alice.encryptRaw("Second", to: bob.userId)
-        var content = comp2.content
-        content[content.count / 2] ^= 0xFF
-        let tampered = MessageCryptoService.EncryptedMessageComponents(
-            ephemeralPublicKey: comp2.ephemeralPublicKey,
-            messageNumber: comp2.messageNumber,
-            content: content,
-            suiteId: comp2.suiteId,
-            oneTimePreKeyId: comp2.oneTimePreKeyId,
-            storageKey: comp2.storageKey,
-            pqMessageEpoch: comp2.pqMessageEpoch,
-            pqRatchetField: comp2.pqRatchetField,
-            kemCiphertext: comp2.kemCiphertext,
-            kyberPrekeyId: comp2.kyberPrekeyId
-        )
-        let tamperedWire = try alice.encodeWire(tampered)
+        // The sealed box is the payload's last section, so a byte near the end is ciphertext.
+        var tamperedWire = try alice.encryptRaw("Second", to: bob.userId)
+        tamperedWire[tamperedWire.endIndex - 20] ^= 0xFF
 
         XCTAssertThrowsError(try bob.decodeAndDecrypt(tamperedWire, from: alice.userId),
             "Tampered ciphertext must be rejected by AEAD")

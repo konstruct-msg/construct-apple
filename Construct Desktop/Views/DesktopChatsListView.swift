@@ -47,7 +47,7 @@ struct DesktopChatsListView: View {
         .onReceive(NotificationCenter.default.publisher(for: .deleteChat)) { note in
             guard let chatId = note.object as? String,
                   let chat = chats.first(where: { $0.id == chatId }) else { return }
-            Task { await chatsViewModel.deleteChatWithEndSession(chat: chat) }
+            Task { await chatsViewModel.deleteChatForgettingSessions(chat: chat) }
         }
         .onChange(of: chats.reduce(0, { $0 + Int($1.unreadCount) })) { _, total in
             chatsViewModel.totalUnreadCount = total
@@ -141,7 +141,7 @@ struct DesktopChatsListView: View {
                     .listRowSeparatorTint(Color.CT.noise)
                     .contextMenu {
                         Button(role: .destructive) {
-                            Task { await chatsViewModel.deleteChatWithEndSession(chat: chat) }
+                            Task { await chatsViewModel.deleteChatForgettingSessions(chat: chat) }
                         } label: {
                             Label(LocalizedStringKey("delete"), systemImage: "trash")
                         }

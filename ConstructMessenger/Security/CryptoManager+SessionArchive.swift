@@ -392,17 +392,7 @@ extension CryptoManager {
             do {
                 _ = try core.importSession(contactId: contactId, data: [UInt8](archive.sessionData))
 
-                let rawContent = message.content
-                let contentBytes = [UInt8](rawContent)
-                let result = try core.decryptMessage(
-                    contactId: contactId,
-                    ephemeralPublicKey: [UInt8](message.ephemeralPublicKey),
-                    messageNumber: message.messageNumber,
-                    content: contentBytes,
-                    suiteId: message.suiteId,
-                    pqMessageEpoch: message.pqMessageEpoch,
-                    pqRatchetField: [UInt8](message.pqRatchetField)
-                )
+                let result = try core.decryptWirePayload(contactId: contactId, wirePayload: message.rawPayload)
 
                 Log.info("Decrypted with archived session #\(index) (archived at: \(archive.archivedAt))", category: "CryptoManager")
                 saveSessionToKeychain(forDevice: contactId)
