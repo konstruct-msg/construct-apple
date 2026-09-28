@@ -356,12 +356,9 @@ struct FeatureFlags {
     static let enablePushNotifications = false // Пока не реализовано
     static let maxMessageRetryAttempts = 3
 
-    /// Stealth-sealed-sender-v2 Phase 2: route sealed sends over the new unauthenticated
-    /// `SendSealedMessage` RPC / separate gRPC channel instead of the legacy
-    /// sealed-over-`SendMessage` path. **Default off** — flip only once the server RPC
-    /// is deployed fleet-wide and this path has been validated (see
-    /// construct-docs/decisions/stealth-sealed-sender-v2-always-on.md Phase 2).
-    static let sealedSenderUnauthenticatedTransport = false
+    // (sealedSenderUnauthenticatedTransport removed 2026-09-28: a sealed send always leaves
+    // through the unauthenticated `SendSealedMessage` door, decided at the chokepoint in
+    // `MessagingServiceClient.sendMessage`; bundle and sticker fetches use the same channel.)
 
     /// Mint invites as v5, carrying a signed per-invite `ttl` (QR 300 s, links 12 h).
     ///

@@ -213,85 +213,50 @@ final class StealthSenderServiceTests: XCTestCase {
     }
 }
 
-/// Locks the core sealed-sender wire invariant: a sealed send never carries the real `senderId`
-/// (or `conversationID` / `contentType`) on the outer envelope, and an identified send always does.
-/// This is the structural foundation every sealed-eligible sender (bodies, retries, receipts,
-/// call-signals) relies on — if `buildEnvelope` ever leaked the sender under a sealed send, every
-/// upstream fail-closed guard would be moot.
+/// Locks the sealed-sender wire invariant at its two doors. Since 2026-09-28 a sealed envelope
+/// leaves only as a `SendSealedMessageRequest`, which has no field for the sender, the
+/// conversation, the content type or the device; the identified `Envelope` has no field for a
+/// seal. The invariant is structural now, and these tests pin what each door does carry.
 final class SealedSenderEnvelopeTests: XCTestCase {
 
-    func testSealedSend_omitsSenderConversationAndContentType() {
-        let env = MessagingServiceClient.buildEnvelope(
-            messageId: "m1",
-            recipientId: "recipient-abc",
-            senderId: "SECRET-SENDER-must-not-leak",
-            conversationId: "conv-xyz",
-            encryptedPayload: Data([0x01, 0x02, 0x03]),
+    /// The request carries the seal, the timestamp and the attempt id — nothing that names anyone.
+    func testSealedRequest_CarriesOnlyTheSeal() {
+        let request = MessagingServiceClient.buildSealedRequest(
+            sealedInner: Data([0x09, 0x09, 0x09]),
             timestamp: 42,
-            recipientDeviceId: "rdev",
-            contentType: .e2EeSignal,
-            sealedInnerBytes: Data([0x09, 0x09, 0x09])
+            attemptId: "a1"
         )
-        // The whole point of sealed sender: none of the sender-identifying metadata on the wire.
-        XCTAssertFalse(env.hasSender, "sealed send leaked sender on the outer envelope")
-        XCTAssertTrue(env.conversationID.isEmpty, "sealed send leaked conversationId")
-        XCTAssertTrue(env.hasSealedSender, "sealed send must carry the SealedSenderEnvelope")
-        XCTAssertEqual(env.sealedSender.sealedInner, Data([0x09, 0x09, 0x09]))
-        // Routing metadata the server legitimately needs is still present.
-        XCTAssertEqual(env.recipient.userID, "recipient-abc")
+        XCTAssertEqual(request.sealedSender.sealedInner, Data([0x09, 0x09, 0x09]))
+        XCTAssertEqual(request.attemptID, "a1")
+        XCTAssertTrue(request.sealedSender.recipientServer.isEmpty,
+                      "a local send leaves recipient_server empty; the relay routes on SealedInner")
     }
 
-    /// The padded ciphertext went up the wire twice on every sealed send: once on the outer
-    /// envelope and once inside `SealedInner`. The relay drops the outer copy — its sealed branch
-    /// returns before reading `encrypted_payload`, and the envelope it delivers is rebuilt by
-    /// `MessageEnvelope::from_sealed_sender` from `sealed_inner` alone — so the duplicate bought
-    /// nothing and cost 1024, 4096 or 16384 bytes per chunk.
+    /// `SealedSenderEnvelope.timestamp` is read by the federation forward. It was never written
+    /// until 2026-08-17, and the dedicated RPC dropped it again until 2026-09-28, when it became
+    /// the only door — every federated sealed message would have arrived stamped 0.
     ///
-    /// Mutation: set `encryptedPayload` unconditionally again — this reddens, and it is what
-    /// shipped until 2026-08-17.
-    func testSealedSend_DoesNotDuplicateTheCiphertextOnTheOuterEnvelope() {
-        let payload = Data(repeating: 0xAB, count: 1024)
-        let env = MessagingServiceClient.buildEnvelope(
-            messageId: "m1",
-            recipientId: "recipient-abc",
-            senderId: "sender",
-            conversationId: "conv",
-            encryptedPayload: payload,
-            timestamp: 42,
-            recipientDeviceId: nil,
-            contentType: .e2EeSignal,
-            sealedInnerBytes: Data([0x09, 0x09, 0x09])
+    /// Mutation: drop the assignment in `buildSealedRequest` — this reddens.
+    func testSealedRequest_StampsTheEnvelopeFederationForwards() {
+        let request = MessagingServiceClient.buildSealedRequest(
+            sealedInner: Data([0x09]),
+            timestamp: 1786992000,
+            attemptId: "a1"
         )
-        XCTAssertTrue(env.encryptedPayload.isEmpty,
-                      "the ciphertext is inside SealedInner; the relay never reads this copy")
-        XCTAssertEqual(env.sealedSender.sealedInner, Data([0x09, 0x09, 0x09]))
+        XCTAssertEqual(request.sealedSender.timestamp, 1786992000)
     }
 
     /// The unsealed path — multi-device fan-out and SENDER_SYNC — is the only one whose delivery
     /// depends on the outer payload. Removing it there would stop those copies dead.
-    func testIdentifiedSend_StillCarriesTheCiphertext() {
+    func testIdentifiedSend_CarriesTheCiphertext() {
         let payload = Data(repeating: 0xCD, count: 512)
         let env = MessagingServiceClient.buildEnvelope(
             messageId: "m1", recipientId: "r", senderId: "s", conversationId: "c",
             encryptedPayload: payload, timestamp: 42,
             recipientDeviceId: nil,
-            contentType: .e2EeSignal, sealedInnerBytes: nil
+            contentType: .e2EeSignal
         )
         XCTAssertEqual(env.encryptedPayload, payload)
-    }
-
-    /// `SealedSenderEnvelope.timestamp` is read by the federation forward and was never written,
-    /// so every federated sealed message arrived stamped 0.
-    ///
-    /// Mutation: drop the assignment — this reddens.
-    func testSealedSend_StampsTheEnvelopeFederationForwards() {
-        let env = MessagingServiceClient.buildEnvelope(
-            messageId: "m1", recipientId: "r", senderId: "s", conversationId: "c",
-            encryptedPayload: Data([0x01]), timestamp: 1786992000,
-            recipientDeviceId: nil,
-            contentType: .e2EeSignal, sealedInnerBytes: Data([0x09])
-        )
-        XCTAssertEqual(env.sealedSender.timestamp, 1786992000)
     }
 
     /// `Envelope.recipient_device` had no writer between 2026-08-17 and 2026-08-30. The removal
@@ -306,27 +271,10 @@ final class SealedSenderEnvelopeTests: XCTestCase {
             messageId: "m1", recipientId: "r", senderId: "s", conversationId: "c",
             encryptedPayload: Data([0x01]), timestamp: 1,
             recipientDeviceId: "6f5e37ac1b2c3d4e5f60718293a4b5c6",
-            contentType: .e2EeSignal, sealedInnerBytes: nil
+            contentType: .e2EeSignal
         )
         XCTAssertTrue(env.hasRecipientDevice, "the unsealed path is the only one that can name a device")
         XCTAssertEqual(env.recipientDevice.deviceID, "6f5e37ac1b2c3d4e5f60718293a4b5c6")
-    }
-
-    /// The outer field is visible to the relay, so a sealed send must not use it — that is the
-    /// whole reason `SealedInner.recipient_device` (field 19) exists. Naming the device outside
-    /// the seal would hand the relay a device-granular topology of exactly the traffic sealed
-    /// sender exists to hide.
-    ///
-    /// Mutation: move the assignment above the `if`/`else` — this reddens.
-    func testSealedSend_DoesNotNameTheDeviceOnTheOuterEnvelope() {
-        let env = MessagingServiceClient.buildEnvelope(
-            messageId: "m1", recipientId: "r", senderId: "s", conversationId: "c",
-            encryptedPayload: Data([0x01]), timestamp: 1,
-            recipientDeviceId: "6f5e37ac1b2c3d4e5f60718293a4b5c6",
-            contentType: .e2EeSignal, sealedInnerBytes: Data([0x09])
-        )
-        XCTAssertFalse(env.hasRecipientDevice,
-                       "a sealed send names its device inside SealedInner, never on the envelope")
     }
 
     /// An empty device id must leave the field unset rather than set it to "". The server reads
@@ -337,7 +285,7 @@ final class SealedSenderEnvelopeTests: XCTestCase {
             messageId: "m1", recipientId: "r", senderId: "s", conversationId: "c",
             encryptedPayload: Data([0x01]), timestamp: 1,
             recipientDeviceId: "",
-            contentType: .e2EeSignal, sealedInnerBytes: nil
+            contentType: .e2EeSignal
         )
         XCTAssertFalse(env.hasRecipientDevice)
     }
@@ -351,30 +299,11 @@ final class SealedSenderEnvelopeTests: XCTestCase {
             encryptedPayload: Data([0x01]),
             timestamp: 42,
             recipientDeviceId: nil,
-            contentType: .e2EeSignal,
-            sealedInnerBytes: nil
+            contentType: .e2EeSignal
         )
         XCTAssertTrue(env.hasSender)
         XCTAssertEqual(env.sender.userID, "sender-visible")
         XCTAssertEqual(env.conversationID, "conv-xyz")
-        XCTAssertFalse(env.hasSealedSender)
-    }
-
-    func testEmptySealedBytesFallsBackToIdentified_neverSilentlyDropsSender() {
-        // Empty sealed bytes must NOT be treated as a sealed send — otherwise the sender would be
-        // silently dropped, producing an unroutable envelope with no sender AND no seal.
-        let env = MessagingServiceClient.buildEnvelope(
-            messageId: "m1",
-            recipientId: "r",
-            senderId: "sender-visible",
-            conversationId: "c",
-            encryptedPayload: Data(),
-            timestamp: 1,
-            recipientDeviceId: nil,
-            contentType: .e2EeSignal,
-            sealedInnerBytes: Data()
-        )
-        XCTAssertTrue(env.hasSender)
         XCTAssertFalse(env.hasSealedSender)
     }
 }

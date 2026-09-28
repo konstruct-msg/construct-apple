@@ -493,26 +493,19 @@ final class OutboundMessagePipeline {
                 afterCredentialRejection: afterCredentialRejection
             )
         }, send: { inner in
-            if FeatureFlags.sealedSenderUnauthenticatedTransport {
-                // stealth-sealed-sender-v2 Phase 2: dedicated unauthenticated RPC/channel.
-                return try await MessagingServiceClient.shared.sendSealedMessage(sealedInner: inner)
-            } else {
-                // `conversation_id` stays empty: it would name the person on the other side in
-                // the clear, and nothing on the server reads it. The sealed branch of
-                // `buildEnvelope` writes neither it nor `recipient_device` — the device is derived
-                // from the key the seal was built against, so "who can open this" and "where does
-                // it go" stay one value.
-                return try await MessagingServiceClient.shared.sendMessage(
-                    messageId: chunkMessageId,
-                    recipientId: recipientId,
-                    senderId: senderId,
-                    conversationId: "",
-                    encryptedPayload: encryptedPayload,
-                    timestamp: timestamp,
-                    recipientDeviceId: recipientDeviceId,
-                    sealing: .sealed(inner)
-                )
-            }
+            // Sealed, so this leaves through the unauthenticated door and only `inner` and
+            // `timestamp` reach the wire: the device is derived from the key the seal was built
+            // against, so "who can open this" and "where does it go" stay one value.
+            try await MessagingServiceClient.shared.sendMessage(
+                messageId: chunkMessageId,
+                recipientId: recipientId,
+                senderId: senderId,
+                conversationId: "",
+                encryptedPayload: encryptedPayload,
+                timestamp: timestamp,
+                recipientDeviceId: recipientDeviceId,
+                sealing: .sealed(inner)
+            )
         })
     }
 

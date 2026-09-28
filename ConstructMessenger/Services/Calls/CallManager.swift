@@ -1382,21 +1382,16 @@ final class CallManager: CallUIManaging {
                                         afterCredentialRejection: afterCredentialRejection
                                     )
                                 }, send: { inner in
-                                    if FeatureFlags.sealedSenderUnauthenticatedTransport {
-                                        // stealth-sealed-sender-v2 Phase 2: dedicated unauthenticated RPC/channel.
-                                        return try await MessagingServiceClient.shared.sendSealedMessage(sealedInner: inner)
-                                    } else {
-                                        return try await MessagingServiceClient.shared.sendMessage(
-                                            messageId: msgId,
-                                            recipientId: to,
-                                            senderId: currentUserId,
-                                            conversationId: "",
-                                            encryptedPayload: payload,
-                                            timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
-                                            contentType: .unspecified,
-                                            sealing: .sealed(inner)
-                                        )
-                                    }
+                                    try await MessagingServiceClient.shared.sendMessage(
+                                        messageId: msgId,
+                                        recipientId: to,
+                                        senderId: currentUserId,
+                                        conversationId: "",
+                                        encryptedPayload: payload,
+                                        timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+                                        contentType: .unspecified,
+                                        sealing: .sealed(inner)
+                                    )
                                 })
                             } else {
                                 _ = try await MessagingServiceClient.shared.sendMessage(

@@ -29,14 +29,13 @@ protocol StickerPackFetching: Sendable {
     func blob(_ sha256: Data) async throws -> Data
 }
 
-/// gRPC over the same channel prekey bundles use: sealed when the unauthenticated-transport flag
-/// is on, the ordinary one otherwise. A pack fetch carries no account identity either way — the
-/// RPCs read no caller — and under the sealed flag the server does not see one at all.
+/// gRPC over the same channel prekey bundles use: the sealed one, which carries no credentials.
+/// The RPCs read no caller, so a pack fetch never needed an account; on the sealed channel the
+/// server does not see one at all.
 struct StickerPackFetcher: StickerPackFetching {
-    private var sealed: Bool { FeatureFlags.sealedSenderUnauthenticatedTransport }
 
     func manifestBytes(for pack: StickerPackID) async throws -> Data {
-        try await GRPCChannelManager.shared.performRPC(sealed: sealed, timeout: GRPCTimeouts.stickerManifest) { grpc in
+        try await GRPCChannelManager.shared.performSealedRPC(timeout: GRPCTimeouts.stickerManifest) { grpc in
             let client = Shared_Proto_Services_V1_StickerService.Client(wrapping: grpc)
             var request = Shared_Proto_Services_V1_GetStickerPackManifestRequest()
             request.packID = pack.bytes
@@ -52,7 +51,7 @@ struct StickerPackFetcher: StickerPackFetching {
         have: [Data],
         onBlob: @escaping @Sendable (_ sha256: Data, _ data: Data) throws -> Void
     ) async throws {
-        try await GRPCChannelManager.shared.performRPC(sealed: sealed, timeout: GRPCTimeouts.stickerPack) { grpc in
+        try await GRPCChannelManager.shared.performSealedRPC(timeout: GRPCTimeouts.stickerPack) { grpc in
             let client = Shared_Proto_Services_V1_StickerService.Client(wrapping: grpc)
             var request = Shared_Proto_Services_V1_GetStickerPackBlobsRequest()
             request.packID = pack.bytes
@@ -66,7 +65,7 @@ struct StickerPackFetcher: StickerPackFetching {
     }
 
     func blob(_ sha256: Data) async throws -> Data {
-        try await GRPCChannelManager.shared.performRPC(sealed: sealed, timeout: GRPCTimeouts.stickerManifest) { grpc in
+        try await GRPCChannelManager.shared.performSealedRPC(timeout: GRPCTimeouts.stickerManifest) { grpc in
             let client = Shared_Proto_Services_V1_StickerService.Client(wrapping: grpc)
             var request = Shared_Proto_Services_V1_GetStickerBlobRequest()
             request.sha256 = sha256
@@ -75,7 +74,7 @@ struct StickerPackFetcher: StickerPackFetching {
     }
 
     func catalog() async throws -> [Shared_Proto_Services_V1_StickerPackSummary] {
-        try await GRPCChannelManager.shared.performRPC(sealed: sealed, timeout: GRPCTimeouts.stickerManifest) { grpc in
+        try await GRPCChannelManager.shared.performSealedRPC(timeout: GRPCTimeouts.stickerManifest) { grpc in
             let client = Shared_Proto_Services_V1_StickerService.Client(wrapping: grpc)
             var all: [Shared_Proto_Services_V1_StickerPackSummary] = []
             var token = Data()

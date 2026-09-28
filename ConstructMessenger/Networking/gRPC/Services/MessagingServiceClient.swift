@@ -20,18 +20,16 @@ final class MessagingServiceClient: Sendable {
 
     private init() {}
 
-    /// Builds the outgoing message envelope.
+    /// Builds an identified envelope — the authenticated `SendMessage` door, which since
+    /// 2026-09-28 carries only unsealed traffic (own-device copies, and stealth-off DEBUG sends).
     ///
-    /// Extracted from `sendMessage` so the sealed-sender invariant is unit-testable without a live
-    /// gRPC channel. **Invariant:** a sealed send (non-empty `sealedInnerBytes`) MUST NOT populate
-    /// `sender`, `conversationID`, or `contentType` on the outer envelope — those are exactly the
-    /// metadata sealed sender hides (the real content_type travels inside `SealedInner`). The
-    /// identified fields are set ONLY on the non-sealed path. Empty sealed bytes are treated as
-    /// identified (never silently drop the sender).
+    /// There is no sealed branch. Until 2026-09-28 a sealed send also came through here and went
+    /// up the authenticated channel with a Bearer token beside it, so the relay saw the sender of
+    /// every sealed envelope live — the seal hid the pair from the stored envelope and from nobody
+    /// who watched the request. A sealed send is `buildSealedRequest` and nothing else, and the
+    /// absence of a sealed parameter here is what keeps the two doors from meeting again.
     ///
-    /// `recipientDeviceId` is likewise unsealed-only, for the same reason read from the other end:
-    /// the outer field is visible to the relay, so on a sealed send the device travels inside
-    /// `SealedInner.recipient_device` instead (field 19) and this one stays unset.
+    /// Extracted from `sendMessage` so the envelope is unit-testable without a live gRPC channel.
     static func buildEnvelope(
         messageId: String,
         recipientId: String,
@@ -40,8 +38,7 @@ final class MessagingServiceClient: Sendable {
         encryptedPayload: Data,
         timestamp: UInt64,
         recipientDeviceId: String?,
-        contentType: Shared_Proto_Core_V1_ContentType,
-        sealedInnerBytes: Data?
+        contentType: Shared_Proto_Core_V1_ContentType
     ) -> Shared_Proto_Core_V1_Envelope {
         var recipient = Shared_Proto_Core_V1_UserId()
         recipient.userID = recipientId
@@ -50,53 +47,57 @@ final class MessagingServiceClient: Sendable {
         envelope.messageID = messageId
         envelope.recipient = recipient
         envelope.timestamp = Int64(timestamp)
+        envelope.encryptedPayload = encryptedPayload
+        var sender = Shared_Proto_Core_V1_UserId()
+        sender.userID = senderId
+        envelope.sender = sender
+        envelope.conversationID = conversationId
+        envelope.contentType = contentType
 
-        if let sealedInner = sealedInnerBytes, !sealedInner.isEmpty {
-            // STEALTH (stealth-sealed-sender-v2 Phase 3): do not populate sender, conversation_id,
-            // or the real content_type on the outer envelope — the real content_type travels inside
-            // SealedInner (see StealthSenderService.buildSealedInner) and is recovered by the
-            // recipient after unsealing.
-            var sealedEnvelope = Shared_Proto_Core_V1_SealedSenderEnvelope()
-            sealedEnvelope.sealedInner = sealedInner
-            // Read by the federation forward (`send_sealed_message(target, id, inner, timestamp)`)
-            // and never written until 2026-08-17 — every federated sealed message carried 0. A
-            // consumer with no producer, the mirror of the defect class this envelope keeps
-            // producing.
-            sealedEnvelope.timestamp = Int64(timestamp)
-            envelope.sealedSender = sealedEnvelope
-        } else {
-            // Only the unsealed path puts the ciphertext here. A sealed send carries the identical
-            // bytes inside `SealedInner.encrypted_payload`, and the relay drops this copy: the
-            // sealed branch of `send_message` returns before reading it, and the envelope it
-            // delivers is rebuilt by `MessageEnvelope::from_sealed_sender` out of `sealed_inner`
-            // alone. So the padded ciphertext — 1024, 4096 or 16384 bytes, per chunk — used to go
-            // up the wire twice on every message this app sends.
-            envelope.encryptedPayload = encryptedPayload
-            var sender = Shared_Proto_Core_V1_UserId()
-            sender.userID = senderId
-            envelope.sender = sender
-            envelope.conversationID = conversationId
-            envelope.contentType = contentType
-
-            // Restored 2026-08-30. Both device fields were dropped here on 2026-08-17 because
-            // nothing read them — measured, and true at the time. `recipient_device` acquired a
-            // reader on 2026-08-29 (`construct-server@619bad8` routes on it), and the removal
-            // outlived its reason: three fan-out call sites went on passing a device id that this
-            // function discarded, so every unsealed copy addressed to one device was still written
-            // to every device of the account. N copies × N devices.
-            //
-            // `sender_device` stays unset and its parameter is gone. The server blanks it on
-            // delivery on purpose — server metadata must not carry E2E meaning — so it has no
-            // reader by design, not by omission. Telling the recipient which device sent is §D's
-            // job, and §D does it with a MAC under a shared secret (`SenderSyncDeviceTag`).
-            if let device = recipientDeviceId, !device.isEmpty {
-                var recipientDevice = Shared_Proto_Core_V1_DeviceId()
-                recipientDevice.deviceID = device
-                envelope.recipientDevice = recipientDevice
-            }
+        // Restored 2026-08-30. Both device fields were dropped here on 2026-08-17 because
+        // nothing read them — measured, and true at the time. `recipient_device` acquired a
+        // reader on 2026-08-29 (`construct-server@619bad8` routes on it), and the removal
+        // outlived its reason: three fan-out call sites went on passing a device id that this
+        // function discarded, so every unsealed copy addressed to one device was still written
+        // to every device of the account. N copies × N devices.
+        //
+        // `sender_device` stays unset and its parameter is gone. The server blanks it on
+        // delivery on purpose — server metadata must not carry E2E meaning — so it has no
+        // reader by design, not by omission. Telling the recipient which device sent is §D's
+        // job, and §D does it with a MAC under a shared secret (`SenderSyncDeviceTag`).
+        if let device = recipientDeviceId, !device.isEmpty {
+            var recipientDevice = Shared_Proto_Core_V1_DeviceId()
+            recipientDevice.deviceID = device
+            envelope.recipientDevice = recipientDevice
         }
 
         return envelope
+    }
+
+    /// Builds the request for the unauthenticated `SendSealedMessage` door — the only way a
+    /// sealed envelope leaves this app.
+    ///
+    /// Everything that names the pair, the device or the content type is inside `sealedInner`
+    /// (`StealthSenderService.buildSealedInner`); the request has no field that could carry them.
+    /// No message id either: the relay assigns one on dispatch, on both doors alike.
+    ///
+    /// `timestamp` is read by the federation forward (`send_sealed_message(target, id, inner,
+    /// timestamp)`). It was never written until 2026-08-17 — every federated sealed message
+    /// carried 0 — and the dedicated RPC dropped it again until 2026-09-28, when this became the
+    /// only door.
+    static func buildSealedRequest(
+        sealedInner: Data,
+        timestamp: UInt64,
+        attemptId: String
+    ) -> Shared_Proto_Services_V1_SendSealedMessageRequest {
+        var sealedEnvelope = Shared_Proto_Core_V1_SealedSenderEnvelope()
+        sealedEnvelope.sealedInner = sealedInner
+        sealedEnvelope.timestamp = Int64(timestamp)
+
+        var request = Shared_Proto_Services_V1_SendSealedMessageRequest()
+        request.sealedSender = sealedEnvelope
+        request.attemptID = attemptId
+        return request
     }
 
     // MARK: - Send Message (replaces MessagingAPI.sendMessage)
@@ -119,7 +120,17 @@ final class MessagingServiceClient: Sendable {
         if let reason = sealing.violation(stealthEnabled: await StealthPolicy.shared.isEnabled) {
             throw StealthDowngradeBlocked(reason: "\(reason) → \(recipientId.prefix(8))…")
         }
-        let sealedInnerBytes = sealing.sealedInnerBytes
+        // Which door. A sealed envelope goes over the channel that carries no credentials; one
+        // sent beside a Bearer token names its sender to the relay however well it is sealed.
+        // Decided here and not by each caller: until 2026-09-28 the choice was a compile-time
+        // flag read at two call sites, and every other sealed send — decryption errors,
+        // heartbeats, receipts — went up the authenticated channel whatever the flag said.
+        switch sealing {
+        case .sealed(let inner):
+            return try await sendSealedMessage(sealedInner: inner, timestamp: timestamp)
+        case .identified:
+            break
+        }
         // Acquire a UIBackgroundTask so iOS cannot tear down the network connection
         // while the RPC is in flight (send_message typically takes ~150ms).
         // Without this, backgrounding immediately after Send kills the connection
@@ -153,8 +164,7 @@ final class MessagingServiceClient: Sendable {
                 encryptedPayload: encryptedPayload,
                 timestamp: timestamp,
                 recipientDeviceId: recipientDeviceId,
-                contentType: contentType,
-                sealedInnerBytes: sealedInnerBytes
+                contentType: contentType
             )
 
             let attemptId = UUID().uuidString.lowercased()
@@ -168,7 +178,7 @@ final class MessagingServiceClient: Sendable {
                    sendMessage RPC →
                    messageId      = \(messageId)
                    attemptId      = \(attemptId)
-                   senderId       = \(sealedInnerBytes != nil ? "[STEALTH]" : senderId)
+                   senderId       = \(senderId)
                    recipientId    = \(recipientId)
                    conversationId = \(conversationId)
                    payloadBytes   = \(encryptedPayload.count)
@@ -255,10 +265,10 @@ final class MessagingServiceClient: Sendable {
     // MARK: - Send Sealed Message (stealth-sealed-sender-v2 Phase 2)
 
     /// Sends a sealed-sender message over the unauthenticated sealed channel via the
-    /// new `SendSealedMessage` RPC — no outer `Envelope`, no sender/conversation_id/
-    /// content_type on the wire. Gated by `FeatureFlags.sealedSenderUnauthenticatedTransport`;
-    /// callers should fall back to `sendMessage(sealedInnerBytes:)` when the flag is off.
-    func sendSealedMessage(sealedInner: Data) async throws -> SendMessageResponse {
+    /// `SendSealedMessage` RPC — no outer `Envelope`, no sender/conversation_id/content_type on
+    /// the wire, and no credentials on the connection. Reached through `sendMessage(sealing:
+    /// .sealed)`; the only direct caller is `sendDecryptionError`.
+    func sendSealedMessage(sealedInner: Data, timestamp: UInt64) async throws -> SendMessageResponse {
         // Sealed by construction, with one way to be wrong: empty bytes. This RPC has no outer
         // envelope at all, so an empty inner is not a downgrade to identified — it is an
         // undeliverable envelope the relay accepts and no one can route.
@@ -272,14 +282,12 @@ final class MessagingServiceClient: Sendable {
         return try await GRPCChannelManager.shared.performSealedRPC(timeout: GRPCTimeouts.sendMessage) { grpcClient in
             let msgClient = Shared_Proto_Services_V1_MessagingService.Client(wrapping: grpcClient)
 
-            var sealedEnvelope = Shared_Proto_Core_V1_SealedSenderEnvelope()
-            sealedEnvelope.sealedInner = sealedInner
-
             let attemptId = UUID().uuidString.lowercased()
-
-            var request = Shared_Proto_Services_V1_SendSealedMessageRequest()
-            request.sealedSender = sealedEnvelope
-            request.attemptID = attemptId
+            let request = Self.buildSealedRequest(
+                sealedInner: sealedInner,
+                timestamp: timestamp,
+                attemptId: attemptId
+            )
 
             Log.debug("sendSealedMessage RPC → attemptId=\(attemptId) payloadBytes=\(sealedInner.count)", category: "MessagingServiceClient")
 
@@ -371,10 +379,31 @@ final class MessagingServiceClient: Sendable {
         if let reason = decryptionErrorSealing.violation(stealthEnabled: await StealthPolicy.shared.isEnabled) {
             throw StealthDowngradeBlocked(reason: "\(reason) → \(recipientId.prefix(8))…")
         }
-        let sealedInner: Data? = decryptionErrorSealing.sealedInnerBytes
+        let timestamp = UInt64(Date().timeIntervalSince1970)
 
-        let sendOnce: (Data?) async throws -> ControlSendResponse = { inner in
-            try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.controlSend) { grpcClient in
+        switch decryptionErrorSealing {
+        case .sealed(let sealedInner):
+            // The unauthenticated door, with the same one-shot Privacy-Pass enforce recovery as
+            // message bodies.
+            let response = try await StealthSendRecovery.sendSealed(sealedInner, rebuild: { afterCredentialRejection in
+                try await StealthSenderService.buildSealedInner(
+                    recipientUserId: recipientId,
+                    recipientIdentityKey: peer.identityKey,
+                    encryptedPayload: payload,
+                    contentType: .decryptionError,
+                    afterCredentialRejection: afterCredentialRejection
+                )
+            }, send: { inner in
+                try await self.sendSealedMessage(sealedInner: inner, timestamp: timestamp)
+            })
+            return ControlSendResponse(
+                status: response.status == "sent" ? "ok" : "failed",
+                messageId: response.messageId
+            )
+
+        case .identified:
+            // Stealth off (DEBUG): the authenticated door, naming the device on the envelope.
+            return try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.controlSend) { grpcClient in
                 let msgClient = Shared_Proto_Services_V1_MessagingService.Client(wrapping: grpcClient)
 
                 let envelope = Self.buildEnvelope(
@@ -384,12 +413,9 @@ final class MessagingServiceClient: Sendable {
                     // Empty on purpose: a conversation id names the pair in the clear.
                     conversationId: "",
                     encryptedPayload: payload,
-                    timestamp: UInt64(Date().timeIntervalSince1970),
-                    // Written only on the unsealed (DEBUG) branch; sealed, the device rides inside
-                    // `SealedInner`, because the outer field is visible to the relay (`8e390f48`).
+                    timestamp: timestamp,
                     recipientDeviceId: deviceId,
-                    contentType: .decryptionError,
-                    sealedInnerBytes: inner
+                    contentType: .decryptionError
                 )
 
                 var request = Shared_Proto_Services_V1_SendMessageRequest()
@@ -406,20 +432,6 @@ final class MessagingServiceClient: Sendable {
                 )
             }
         }
-
-        // Sealed path gets the same one-shot Privacy-Pass enforce recovery as message bodies.
-        if let sealedInner {
-            return try await StealthSendRecovery.sendSealed(sealedInner, rebuild: { afterCredentialRejection in
-                try await StealthSenderService.buildSealedInner(
-                    recipientUserId: recipientId,
-                    recipientIdentityKey: peer.identityKey,
-                    encryptedPayload: payload,
-                    contentType: .decryptionError,
-                    afterCredentialRejection: afterCredentialRejection
-                )
-            }, send: sendOnce)
-        }
-        return try await sendOnce(nil)
     }
 
     // MARK: - Get Pending Messages (for background fetch)

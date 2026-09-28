@@ -117,7 +117,7 @@ final class SealingChokepointTests: XCTestCase {
     /// Mutation: delete the guard from `sendSealedMessage` — this reddens.
     func testSendSealedMessageRefusesAnEmptyInner() async {
         do {
-            _ = try await MessagingServiceClient.shared.sendSealedMessage(sealedInner: Data())
+            _ = try await MessagingServiceClient.shared.sendSealedMessage(sealedInner: Data(), timestamp: 1)
             XCTFail("an empty seal went out")
         } catch is StealthDowngradeBlocked {
             // Refused before the RPC.
@@ -166,7 +166,7 @@ final class SealingExemptionSiteTests: XCTestCase {
         // send through `OutboundMessagePipeline` now, and `ChatSessionManager`'s init ping with
         // them. That is the §B send merge showing up here as a shorter list.
         .stealthDisabled: [
-            "MessagingServiceClient.swift",     // END_SESSION, which has its own RPC
+            "MessagingServiceClient.swift",     // DECRYPTION_ERROR, which has its own RPC
             "CallManager.swift",                // WebRTC signalling
             "OutboundMessagePipeline.swift",    // every message and control body — see below
             "OutboundSessionService.swift",     // heartbeat and delivery receipt
@@ -216,6 +216,29 @@ final class SealingExemptionSiteTests: XCTestCase {
                 """
             )
         }
+    }
+
+    /// A sealed envelope is built in one place, and that place is the unauthenticated door.
+    ///
+    /// Until 2026-09-28 `buildEnvelope` had a sealed branch too, and it was how every sealed send
+    /// went out: up the authenticated channel, a Bearer token beside the seal, the sender named to
+    /// the relay by the request that carried it. The dedicated RPC existed behind a flag nobody
+    /// flipped, and three sealed sends had never been behind the flag at all.
+    ///
+    /// Mutation: give `buildEnvelope` a sealed branch again, or build a `SealedSenderEnvelope`
+    /// anywhere else — this reddens.
+    func testASealedEnvelopeIsBuiltOnlyForTheUnauthenticatedDoor() throws {
+        var sites: [String: Int] = [:]
+        let walker = FileManager.default.enumerator(at: sourceRoot, includingPropertiesForKeys: nil)
+        while let url = walker?.nextObject() as? URL {
+            guard url.pathExtension == "swift", !url.path.contains("/Generated/") else { continue }
+            guard let text = try? String(contentsOf: url, encoding: .utf8) else { continue }
+            let count = text.components(separatedBy: "Shared_Proto_Core_V1_SealedSenderEnvelope()").count - 1
+                + text.components(separatedBy: ".sealedSender = ").count - 1
+            if count > 0 { sites[url.lastPathComponent, default: 0] += count }
+        }
+        XCTAssertEqual(sites, ["MessagingServiceClient.swift": 2],
+                       "one SealedSenderEnvelope, built and attached in buildSealedRequest")
     }
 
     /// The chokepoint works by having no default. A `sealing: SendSealing = .identified(…)` would

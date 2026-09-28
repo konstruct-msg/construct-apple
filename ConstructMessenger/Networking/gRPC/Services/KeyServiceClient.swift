@@ -91,11 +91,11 @@ final class KeyServiceClient: Sendable {
         deviceIds: [String] = [],
         consumeOneTimePrekey: Bool
     ) async throws -> [DeviceBundleData] {
-        // Under the Phase-4 unauthenticated-transport flag, fetch over the sealed channel so the
-        // server/gateway does not learn who is fetching whose bundle. Bundles are public keys, and
-        // key-service's GetPreKeyBundles reads no caller identity (IP-only rate limiting), so the
-        // unauthenticated fetch is safe end-to-end. Off → authenticated (current behaviour).
-        let (bundles, activeDevices) = try await GRPCChannelManager.shared.performRPC(sealed: FeatureFlags.sealedSenderUnauthenticatedTransport, timeout: GRPCTimeouts.getPreKeyBundles) { grpcClient in
+        // Over the sealed channel, so the server/gateway does not learn who is fetching whose
+        // bundle — the fetch right before a first sealed send would otherwise name the pair the
+        // send hides. Bundles are public keys, and key-service reads no caller identity here
+        // beyond the rate bucket (per IP when unnamed), so the unauthenticated fetch is safe.
+        let (bundles, activeDevices) = try await GRPCChannelManager.shared.performSealedRPC(timeout: GRPCTimeouts.getPreKeyBundles) { grpcClient in
             let keyClient = Shared_Proto_Services_V1_KeyService.Client(wrapping: grpcClient)
 
             var request = Shared_Proto_Services_V1_GetPreKeyBundlesRequest()
@@ -189,9 +189,9 @@ final class KeyServiceClient: Sendable {
         deviceId: String? = nil,
         consumeOneTimePrekey: Bool
     ) async throws -> PublicKeyBundleData {
-        // See getPreKeyBundles: sealed (unauthenticated) channel under the Phase-4 flag so the
-        // server/gateway can't correlate (caller, target) at session-init time.
-        let fetched = try await GRPCChannelManager.shared.performRPC(sealed: FeatureFlags.sealedSenderUnauthenticatedTransport, timeout: GRPCTimeouts.getPreKeyBundle) { grpcClient -> PreKeyBundleFetchResult in
+        // See getPreKeyBundles: the sealed (unauthenticated) channel, so the server/gateway
+        // can't correlate (caller, target) at session-init time.
+        let fetched = try await GRPCChannelManager.shared.performSealedRPC(timeout: GRPCTimeouts.getPreKeyBundle) { grpcClient -> PreKeyBundleFetchResult in
             let keyClient = Shared_Proto_Services_V1_KeyService.Client(wrapping: grpcClient)
 
             var request = Shared_Proto_Services_V1_GetPreKeyBundleRequest()
