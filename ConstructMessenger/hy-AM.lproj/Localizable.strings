@@ -431,9 +431,6 @@
 // Account Settings
 
 // Reset Session
-"reset_session" = "Վերակայել նիստը";
-"reset_session_title" = "Վերակայե՞լ նիստը։";
-"reset_session_message" = "Սա կվերահաստատի նոր գաղտնագրված նիստ։ Ճանապարհին գտնվող հաղորդագրությունները կարող են կորչել։";
 
 // Account Recovery
 "try_again" = "Փորձել նորից";

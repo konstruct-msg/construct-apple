@@ -397,9 +397,6 @@
 // Account Settings
 
 // Reset Session
-"reset_session" = "セッションをリセット";
-"reset_session_title" = "セッションをリセットしますか？";
-"reset_session_message" = "新しい暗号化セッションを再構築します。転送中のメッセージが失われる可能性があります。";
 
 // Account Recovery
 "try_again" = "再試行";

@@ -49,7 +49,6 @@ struct UserProfileView: View {
     @State private var callManager: (any CallUIManaging)? = CallRuntimeProvider.makeUIManager()
     @State private var showingBlockConfirmation = false
     @State private var showingReportConfirmation = false
-    @State private var showResetSessionConfirm = false
     @State private var showingShareAlert = false
     @State private var shareAlertMessage = ""
     @State private var isSharingInProgress = false
@@ -120,18 +119,6 @@ struct UserProfileView: View {
             Button(LocalizedStringKey("ok")) {}
         } message: {
             Text(shareAlertMessage)
-        }
-        .confirmationDialog(
-            LocalizedStringKey("reset_session_title"),
-            isPresented: $showResetSessionConfirm,
-            titleVisibility: .visible
-        ) {
-            Button(LocalizedStringKey("reset_session"), role: .destructive) {
-                SessionLifecycleController.shared.resetSession(with: user.id, reason: "user_requested")
-            }
-            Button(LocalizedStringKey("cancel"), role: .cancel) {}
-        } message: {
-            Text(LocalizedStringKey("reset_session_message"))
         }
         .sheet(isPresented: $showingSafetyNumbers) {
             if let deviceId = KeyChangeUX.safetyDeviceId(for: user) {
@@ -480,12 +467,6 @@ struct UserProfileView: View {
                 label: NSLocalizedString("report_spam", comment: ""),
                 color: Color.CT.danger
             ) { showingReportConfirmation = true }
-            flatRowDivider()
-
-            actionRow(
-                label: NSLocalizedString("reset_session", comment: ""),
-                color: Color.CT.danger
-            ) { showResetSessionConfirm = true }
 
             if let prune = onPrune {
                 flatRowDivider()

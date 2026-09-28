@@ -393,9 +393,6 @@
 // Account Settings
 
 // Reset Session
-"reset_session" = "Réinitialiser la session";
-"reset_session_title" = "Réinitialiser la session ?";
-"reset_session_message" = "Cela établira une nouvelle session chiffrée. Les messages en transit peuvent être perdus.";
 
 // Account Recovery
 "try_again" = "Réessayer";
