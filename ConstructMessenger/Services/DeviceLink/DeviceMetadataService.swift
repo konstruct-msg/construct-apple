@@ -90,7 +90,7 @@ enum DeviceMetadataService {
         for key in keys {
             guard let copy = try? sealToDeviceKey(
                 plaintext: plaintext,
-                deviceIdentityKey: key
+                deviceIdentityPublic: key
             ) else {
                 // One unusable key must not cost the other devices their copy: a bundle can carry
                 // a key of the wrong length, and dropping the whole blob for it would leave every

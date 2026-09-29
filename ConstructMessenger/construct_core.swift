@@ -617,21 +617,11 @@ public protocol ClassicCryptoCoreProtocol: AnyObject, Sendable {
     func getAllSessionContactIds()  -> [String]
     
     /**
-     * Raw identity secret key bytes (32 bytes, X25519).
-     */
-    func getIdentityKeyBytes() throws  -> Data
-    
-    /**
      * Typed registration bundle fields.
      */
     func getRegistrationBundleFields() throws  -> RegistrationBundleFields
     
     func getSessionHealth(contactId: String)  -> SessionHealthReport?
-    
-    /**
-     * Raw Ed25519 signing secret key bytes (64 bytes).
-     */
-    func getSigningKeyBytes() throws  -> Data
     
     func importOneTimePrekeys(data: Data) throws 
     
@@ -753,17 +743,6 @@ open func getAllSessionContactIds() -> [String]  {
 }
     
     /**
-     * Raw identity secret key bytes (32 bytes, X25519).
-     */
-open func getIdentityKeyBytes()throws  -> Data  {
-    return try  FfiConverterData.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
-    uniffi_construct_core_fn_method_classiccryptocore_get_identity_key_bytes(
-            self.uniffiCloneHandle(),$0
-    )
-})
-}
-    
-    /**
      * Typed registration bundle fields.
      */
 open func getRegistrationBundleFields()throws  -> RegistrationBundleFields  {
@@ -779,17 +758,6 @@ open func getSessionHealth(contactId: String) -> SessionHealthReport?  {
     uniffi_construct_core_fn_method_classiccryptocore_get_session_health(
             self.uniffiCloneHandle(),
         FfiConverterString.lower(contactId),$0
-    )
-})
-}
-    
-    /**
-     * Raw Ed25519 signing secret key bytes (64 bytes).
-     */
-open func getSigningKeyBytes()throws  -> Data  {
-    return try  FfiConverterData.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
-    uniffi_construct_core_fn_method_classiccryptocore_get_signing_key_bytes(
-            self.uniffiCloneHandle(),$0
     )
 })
 }
@@ -1074,19 +1042,7 @@ open class MlsStore: MlsStoreProtocol, @unchecked Sendable {
     public func uniffiCloneHandle() -> UInt64 {
         return try! rustCall { uniffi_construct_core_fn_clone_mlsstore(self.handle, $0) }
     }
-    /**
-     * A fresh store bound to the device's Ed25519 identity keypair.
-     */
-public convenience init(signerPrivateKey: Data, signerPublicKey: Data) {
-    let handle =
-        try! rustCall() {
-    uniffi_construct_core_fn_constructor_mlsstore_new(
-        FfiConverterData.lower(signerPrivateKey),
-        FfiConverterData.lower(signerPublicKey),$0
-    )
-}
-    self.init(unsafeFromHandle: handle)
-}
+    // No primary constructor declared for this class.
 
     deinit {
         try! rustCall { uniffi_construct_core_fn_free_mlsstore(handle, $0) }
@@ -1397,11 +1353,6 @@ public protocol OrchestratorCoreProtocol: AnyObject, Sendable {
     func getAllSessionContactIds()  -> [String]
     
     /**
-     * Raw identity secret key bytes (32 bytes, X25519).
-     */
-    func getIdentityKeyBytes() throws  -> Data
-    
-    /**
      * Typed registration bundle — replaces `export_registration_bundle_json()` parsing.
      */
     func getRegistrationBundleFields() throws  -> RegistrationBundleFields
@@ -1413,11 +1364,6 @@ public protocol OrchestratorCoreProtocol: AnyObject, Sendable {
      * Returns 0 if no session exists.
      */
     func getSessionSuiteId(contactId: String)  -> UInt16
-    
-    /**
-     * Raw Ed25519 signing secret key bytes (64 bytes).
-     */
-    func getSigningKeyBytes() throws  -> Data
     
     /**
      * Typed event handler — accepts a typed `CfeIncomingEvent` and returns typed `CfeAction` list.
@@ -1830,17 +1776,6 @@ open func getAllSessionContactIds() -> [String]  {
 }
     
     /**
-     * Raw identity secret key bytes (32 bytes, X25519).
-     */
-open func getIdentityKeyBytes()throws  -> Data  {
-    return try  FfiConverterData.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
-    uniffi_construct_core_fn_method_orchestratorcore_get_identity_key_bytes(
-            self.uniffiCloneHandle(),$0
-    )
-})
-}
-    
-    /**
      * Typed registration bundle — replaces `export_registration_bundle_json()` parsing.
      */
 open func getRegistrationBundleFields()throws  -> RegistrationBundleFields  {
@@ -1869,17 +1804,6 @@ open func getSessionSuiteId(contactId: String) -> UInt16  {
     uniffi_construct_core_fn_method_orchestratorcore_get_session_suite_id(
             self.uniffiCloneHandle(),
         FfiConverterString.lower(contactId),$0
-    )
-})
-}
-    
-    /**
-     * Raw Ed25519 signing secret key bytes (64 bytes).
-     */
-open func getSigningKeyBytes()throws  -> Data  {
-    return try  FfiConverterData.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
-    uniffi_construct_core_fn_method_orchestratorcore_get_signing_key_bytes(
-            self.uniffiCloneHandle(),$0
     )
 })
 }
@@ -3279,54 +3203,6 @@ public func FfiConverterTypeInitiationContext_lower(_ value: InitiationContext) 
 }
 
 
-public struct InviteSignature: Equatable, Hashable {
-    public var signature: Data
-
-    // Default memberwise initializers are never public by default, so we
-    // declare one manually.
-    public init(signature: Data) {
-        self.signature = signature
-    }
-
-    
-}
-
-#if compiler(>=6)
-extension InviteSignature: Sendable {}
-#endif
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public struct FfiConverterTypeInviteSignature: FfiConverterRustBuffer {
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> InviteSignature {
-        return
-            try InviteSignature(
-                signature: FfiConverterData.read(from: &buf)
-        )
-    }
-
-    public static func write(_ value: InviteSignature, into buf: inout [UInt8]) {
-        FfiConverterData.write(value.signature, into: &buf)
-    }
-}
-
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypeInviteSignature_lift(_ buf: RustBuffer) throws -> InviteSignature {
-    return try FfiConverterTypeInviteSignature.lift(buf)
-}
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypeInviteSignature_lower(_ value: InviteSignature) -> RustBuffer {
-    return FfiConverterTypeInviteSignature.lower(value)
-}
-
-
 /**
  * One ML-KEM-1024 Kyber prekey to upload (PQXDH v2). Both signatures are over
  * `"KonstruktX3DH-v1" || 0x00 0x11 || created_at (u64 BE) || public_key`; upload `created_at`
@@ -4394,69 +4270,6 @@ public func FfiConverterTypeSessionInitResult_lift(_ buf: RustBuffer) throws -> 
 #endif
 public func FfiConverterTypeSessionInitResult_lower(_ value: SessionInitResult) -> RustBuffer {
     return FfiConverterTypeSessionInitResult.lower(value)
-}
-
-
-/**
- * Keys and metadata packed into the encrypted recovery bundle.
- */
-public struct SrRecoveryBundle: Equatable, Hashable {
-    public var deviceSigningKey: Data
-    public var deviceIdentityKey: Data
-    public var deviceId: String
-    public var createdAt: Int64
-
-    // Default memberwise initializers are never public by default, so we
-    // declare one manually.
-    public init(deviceSigningKey: Data, deviceIdentityKey: Data, deviceId: String, createdAt: Int64) {
-        self.deviceSigningKey = deviceSigningKey
-        self.deviceIdentityKey = deviceIdentityKey
-        self.deviceId = deviceId
-        self.createdAt = createdAt
-    }
-
-    
-}
-
-#if compiler(>=6)
-extension SrRecoveryBundle: Sendable {}
-#endif
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public struct FfiConverterTypeSrRecoveryBundle: FfiConverterRustBuffer {
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SrRecoveryBundle {
-        return
-            try SrRecoveryBundle(
-                deviceSigningKey: FfiConverterData.read(from: &buf), 
-                deviceIdentityKey: FfiConverterData.read(from: &buf), 
-                deviceId: FfiConverterString.read(from: &buf), 
-                createdAt: FfiConverterInt64.read(from: &buf)
-        )
-    }
-
-    public static func write(_ value: SrRecoveryBundle, into buf: inout [UInt8]) {
-        FfiConverterData.write(value.deviceSigningKey, into: &buf)
-        FfiConverterData.write(value.deviceIdentityKey, into: &buf)
-        FfiConverterString.write(value.deviceId, into: &buf)
-        FfiConverterInt64.write(value.createdAt, into: &buf)
-    }
-}
-
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypeSrRecoveryBundle_lift(_ buf: RustBuffer) throws -> SrRecoveryBundle {
-    return try FfiConverterTypeSrRecoveryBundle.lift(buf)
-}
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypeSrRecoveryBundle_lower(_ value: SrRecoveryBundle) -> RustBuffer {
-    return FfiConverterTypeSrRecoveryBundle.lower(value)
 }
 
 
@@ -6880,46 +6693,6 @@ public func deriveRecoveryKeypair(seed: Data)throws  -> RecoveryKeypair  {
     )
 })
 }
-public func deriveVerifyingKeyFromSecret(identitySecretKey: Data)throws  -> Data  {
-    return try  FfiConverterData.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
-    uniffi_construct_core_fn_func_derive_verifying_key_from_secret(
-        FfiConverterData.lower(identitySecretKey),$0
-    )
-})
-}
-/**
- * The tag a copy addressed to target_device_id travels under.
- * base_message_id carries no per-device or per-chunk suffix, so every chunk
- * of one message shares a tag.
- */
-public func deviceCopyTag(baseMessageId: String, targetDeviceId: String, ourIdentityPrivate: Data, peerIdentityPublic: Data)throws  -> String  {
-    return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
-    uniffi_construct_core_fn_func_device_copy_tag(
-        FfiConverterString.lower(baseMessageId),
-        FfiConverterString.lower(targetDeviceId),
-        FfiConverterData.lower(ourIdentityPrivate),
-        FfiConverterData.lower(peerIdentityPublic),$0
-    )
-})
-}
-/**
- * Whether tag was written for our_device_id by the device behind
- * peer_identity_public. False for any unusable input: callers ask "is this
- * copy foreign?", and an undecidable answer there must be "not foreign" —
- * wrongly opening a copy costs failed decrypts, wrongly discarding one
- * loses a message from the transcript, silently.
- */
-public func deviceCopyTagMatches(tag: String, baseMessageId: String, ourDeviceId: String, ourIdentityPrivate: Data, peerIdentityPublic: Data) -> Bool  {
-    return try!  FfiConverterBool.lift(try! rustCall() {
-    uniffi_construct_core_fn_func_device_copy_tag_matches(
-        FfiConverterString.lower(tag),
-        FfiConverterString.lower(baseMessageId),
-        FfiConverterString.lower(ourDeviceId),
-        FfiConverterData.lower(ourIdentityPrivate),
-        FfiConverterData.lower(peerIdentityPublic),$0
-    )
-})
-}
 public func formatFederatedId(deviceId: String, serverHostname: String) -> String  {
     return try!  FfiConverterString.lift(try! rustCall() {
     uniffi_construct_core_fn_func_format_federated_id(
@@ -7014,30 +6787,6 @@ public func hybridVerify(publicKey: Data, message: Data, signature: Data)throws 
     )
 })
 }
-/**
- * The X25519 identity secret of a key record.
- */
-public func identityKeyFromKeys(keys: Data)throws  -> Data  {
-    return try  FfiConverterData.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
-    uniffi_construct_core_fn_func_identity_key_from_keys(
-        FfiConverterData.lower(keys),$0
-    )
-})
-}
-/**
- * Restore an MlsStore from a CFE blob previously produced by
- * `export_cfe()`. The device Ed25519 signer keys are passed separately —
- * they are never part of the blob.
- */
-public func importMlsStoreCfe(data: Data, signerPrivateKey: Data, signerPublicKey: Data)throws  -> MlsStore  {
-    return try  FfiConverterTypeMlsStore_lift(try rustCallWithError(FfiConverterTypeMlsError_lift) {
-    uniffi_construct_core_fn_func_import_mls_store_cfe(
-        FfiConverterData.lower(data),
-        FfiConverterData.lower(signerPrivateKey),
-        FfiConverterData.lower(signerPublicKey),$0
-    )
-})
-}
 public func intakeEpoch(unixSeconds: UInt64) -> UInt64  {
     return try!  FfiConverterUInt64.lift(try! rustCall() {
     uniffi_construct_core_fn_func_intake_epoch(
@@ -7115,19 +6864,6 @@ public func mnemonicToSeed(mnemonic: String)throws  -> Data  {
     return try  FfiConverterData.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
     uniffi_construct_core_fn_func_mnemonic_to_seed(
         FfiConverterString.lower(mnemonic),$0
-    )
-})
-}
-/**
- * Open one of those copies with this device's X25519 identity private key.
- * A copy sealed to a sibling fails the AEAD tag, so a caller finds its own by trying
- * each — the intended use, because the stored blob carries no recipient labels.
- */
-public func openWithDeviceKey(sealedBox: Data, ourIdentityPriv: Data)throws  -> Data  {
-    return try  FfiConverterData.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
-    uniffi_construct_core_fn_func_open_with_device_key(
-        FfiConverterData.lower(sealedBox),
-        FfiConverterData.lower(ourIdentityPriv),$0
     )
 })
 }
@@ -7293,11 +7029,11 @@ public func registrationBundleFieldsFromKeys(keys: Data)throws  -> RegistrationB
  * revoked device stops being sealed to on the next re-seal instead of keeping the
  * ability to read until a key is rotated.
  */
-public func sealToDeviceKey(plaintext: Data, deviceIdentityKey: Data)throws  -> Data  {
+public func sealToDeviceKey(plaintext: Data, deviceIdentityPublic: Data)throws  -> Data  {
     return try  FfiConverterData.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
     uniffi_construct_core_fn_func_seal_to_device_key(
         FfiConverterData.lower(plaintext),
-        FfiConverterData.lower(deviceIdentityKey),$0
+        FfiConverterData.lower(deviceIdentityPublic),$0
     )
 })
 }
@@ -7312,19 +7048,6 @@ public func sealedSealSenderCert(certBytes: Data, recipientIdentityKey: Data)thr
     uniffi_construct_core_fn_func_sealed_seal_sender_cert(
         FfiConverterData.lower(certBytes),
         FfiConverterData.lower(recipientIdentityKey),$0
-    )
-})
-}
-/**
- * Open a sealed sender box with our X25519 identity private key
- * (32 bytes). Returns the serialized SenderCertificate bytes — the caller
- * parses the proto and then calls sealed_verify_sender_cert.
- */
-public func sealedUnsealSenderCert(sealedBox: Data, ourIdentityPriv: Data)throws  -> Data  {
-    return try  FfiConverterData.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
-    uniffi_construct_core_fn_func_sealed_unseal_sender_cert(
-        FfiConverterData.lower(sealedBox),
-        FfiConverterData.lower(ourIdentityPriv),$0
     )
 })
 }
@@ -7360,29 +7083,11 @@ public func signBundleDataWithKeys(keys: Data, bundleDataJson: Data)throws  -> D
     )
 })
 }
-public func signInviteData(data: String, identitySecretKey: Data)throws  -> InviteSignature  {
-    return try  FfiConverterTypeInviteSignature_lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
-    uniffi_construct_core_fn_func_sign_invite_data(
-        FfiConverterString.lower(data),
-        FfiConverterData.lower(identitySecretKey),$0
-    )
-})
-}
 public func signRecoveryChallenge(privateKey: Data, message: String)throws  -> Data  {
     return try  FfiConverterData.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
     uniffi_construct_core_fn_func_sign_recovery_challenge(
         FfiConverterData.lower(privateKey),
         FfiConverterString.lower(message),$0
-    )
-})
-}
-/**
- * The Ed25519 signing secret of a key record.
- */
-public func signingKeyFromKeys(keys: Data)throws  -> Data  {
-    return try  FfiConverterData.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
-    uniffi_construct_core_fn_func_signing_key_from_keys(
-        FfiConverterData.lower(keys),$0
     )
 })
 }
@@ -7410,34 +7115,12 @@ public func srGenerateVaultKey()throws  -> Data  {
 })
 }
 /**
- * Decrypt bytes to RecoveryBundle using vault_key.
- */
-public func srOpenRecoveryBundle(vaultKey: Data, ciphertext: Data)throws  -> SrRecoveryBundle  {
-    return try  FfiConverterTypeSrRecoveryBundle_lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
-    uniffi_construct_core_fn_func_sr_open_recovery_bundle(
-        FfiConverterData.lower(vaultKey),
-        FfiConverterData.lower(ciphertext),$0
-    )
-})
-}
-/**
  * Reconstruct vault_key from at least threshold share mnemonics.
  */
 public func srReconstructVaultKey(mnemonics: [String])throws  -> Data  {
     return try  FfiConverterData.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
     uniffi_construct_core_fn_func_sr_reconstruct_vault_key(
         FfiConverterSequenceString.lower(mnemonics),$0
-    )
-})
-}
-/**
- * Encrypt a RecoveryBundle to bytes using vault_key.
- */
-public func srSealRecoveryBundle(vaultKey: Data, bundle: SrRecoveryBundle)throws  -> Data  {
-    return try  FfiConverterData.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
-    uniffi_construct_core_fn_func_sr_seal_recovery_bundle(
-        FfiConverterData.lower(vaultKey),
-        FfiConverterTypeSrRecoveryBundle_lower(bundle),$0
     )
 })
 }
@@ -7552,15 +7235,6 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_func_derive_recovery_keypair() != 51363) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_func_derive_verifying_key_from_secret() != 58526) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_construct_core_checksum_func_device_copy_tag() != 11615) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_construct_core_checksum_func_device_copy_tag_matches() != 2349) {
-        return InitializationResult.apiChecksumMismatch
-    }
     if (uniffi_construct_core_checksum_func_format_federated_id() != 19004) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -7594,12 +7268,6 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_func_hybrid_verify() != 15987) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_func_identity_key_from_keys() != 34967) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_construct_core_checksum_func_import_mls_store_cfe() != 62241) {
-        return InitializationResult.apiChecksumMismatch
-    }
     if (uniffi_construct_core_checksum_func_intake_epoch() != 2449) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -7625,9 +7293,6 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_func_mnemonic_to_seed() != 49697) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_construct_core_checksum_func_open_with_device_key() != 45456) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_func_plan_initiation() != 61324) {
@@ -7666,13 +7331,10 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_func_registration_bundle_fields_from_keys() != 32194) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_func_seal_to_device_key() != 39145) {
+    if (uniffi_construct_core_checksum_func_seal_to_device_key() != 27604) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_func_sealed_seal_sender_cert() != 23474) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_construct_core_checksum_func_sealed_unseal_sender_cert() != 18867) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_func_sealed_verify_sender_cert() != 64198) {
@@ -7681,13 +7343,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_func_sign_bundle_data_with_keys() != 42671) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_func_sign_invite_data() != 3970) {
-        return InitializationResult.apiChecksumMismatch
-    }
     if (uniffi_construct_core_checksum_func_sign_recovery_challenge() != 4321) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_construct_core_checksum_func_signing_key_from_keys() != 58465) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_func_sr_create_recovery_shares() != 18198) {
@@ -7696,13 +7352,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_func_sr_generate_vault_key() != 30491) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_func_sr_open_recovery_bundle() != 41311) {
-        return InitializationResult.apiChecksumMismatch
-    }
     if (uniffi_construct_core_checksum_func_sr_reconstruct_vault_key() != 55657) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_construct_core_checksum_func_sr_seal_recovery_bundle() != 17613) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_func_test_platform_bridge_roundtrip() != 58358) {
@@ -7741,16 +7391,10 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_method_classiccryptocore_get_all_session_contact_ids() != 3313) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_method_classiccryptocore_get_identity_key_bytes() != 8726) {
-        return InitializationResult.apiChecksumMismatch
-    }
     if (uniffi_construct_core_checksum_method_classiccryptocore_get_registration_bundle_fields() != 798) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_classiccryptocore_get_session_health() != 64984) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_construct_core_checksum_method_classiccryptocore_get_signing_key_bytes() != 55710) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_classiccryptocore_import_one_time_prekeys() != 14595) {
@@ -7885,9 +7529,6 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_method_orchestratorcore_get_all_session_contact_ids() != 44779) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_method_orchestratorcore_get_identity_key_bytes() != 23135) {
-        return InitializationResult.apiChecksumMismatch
-    }
     if (uniffi_construct_core_checksum_method_orchestratorcore_get_registration_bundle_fields() != 16675) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -7895,9 +7536,6 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_orchestratorcore_get_session_suite_id() != 15328) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_construct_core_checksum_method_orchestratorcore_get_signing_key_bytes() != 12435) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_orchestratorcore_handle_event() != 2823) {
@@ -8042,9 +7680,6 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_trafficprotectionmanager_update_battery_level() != 31087) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_construct_core_checksum_constructor_mlsstore_new() != 17806) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_constructor_rustackstore_new() != 64675) {
