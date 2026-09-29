@@ -3,11 +3,11 @@
 //  ConstructMessengerTests
 //
 //  CTT1 v2 opening → reply → CTH1 stream, both halves in one process over a memory duplex,
-//  signed and verified by the real core. Bonjour and NWConnection are the only parts left out.
+//  framed, signed, checked and sealed by the real core. Bonjour and NWConnection are the only
+//  parts left out.
 //
 
 import CoreData
-import CryptoKit
 import XCTest
 @testable import Construct_Messenger
 
@@ -16,18 +16,14 @@ final class HistoryNearbyChannelTests: XCTestCase {
 
     private let userId = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee"
 
-    /// One device talking to itself: the offering side's peer keys are the receiving side's
-    /// local keys. That is enough to exercise every check on the path — ids derive, key ids
-    /// match, hybrid signature verifies, KEM decapsulates, chunks open.
-    private func keys() throws -> (local: HistoryLocalKeys, peer: HistoryPeerKeys) {
+    /// One device talking to itself: the offering side's peer is this device, as the directory
+    /// would list it. The core checks the opening names it and decapsulates with its own Kyber
+    /// SPK, so the keys are the core's, not made up here.
+    private func keys() throws -> (local: HistoryLocalKeys, peer: HistoryPeer) {
         try CryptoCoreTestBootstrap.ensureCore(localUserId: userId)
-        let identity = Curve25519.KeyAgreement.PrivateKey()
-        let identityPublic = identity.publicKey.rawRepresentation
+        let identityPublic = try CryptoManager.shared.localBundlePublicKeys().identityPublic
         let deviceHex = deriveDeviceId(identityPublicKey: identityPublic)
-        let deviceRaw = try XCTUnwrap(HistoryChannel.rawDeviceId(deviceHex))
         let hybrid = try CryptoManager.shared.ensureHybridIdentityPublicKey()
-        // The receiving side decapsulates with the core's own Kyber SPK, so the test encapsulates
-        // to that key rather than to one made up here.
         if try CryptoManager.shared.currentKyberSpkUpload() == nil {
             _ = try CryptoManager.shared.beginKyberSpkRotation()
             CryptoManager.shared.commitKyberSpkRotation()
@@ -36,15 +32,11 @@ final class HistoryNearbyChannelTests: XCTestCase {
         let local = HistoryLocalKeys(
             userIdDashed: userId,
             userIdRaw: try XCTUnwrap(HistoryAccountID.raw(userId)),
-            deviceIdHex: deviceHex,
-            deviceIdRaw: deviceRaw,
-            identityPublic: identityPublic,
-            hybridPublic: hybrid,
-            kyberSPKId: kyber.keyId
+            deviceIdHex: deviceHex
         )
-        let peer = HistoryPeerKeys(
+        let peer = HistoryPeer(
             deviceIdHex: deviceHex,
-            deviceIdRaw: deviceRaw,
+            deviceIdRaw: try XCTUnwrap(HistoryChannel.rawDeviceId(deviceHex)),
             identityPublic: identityPublic,
             hybridPublic: hybrid,
             kyberSPKPublic: Data(kyber.publicKey),
@@ -67,7 +59,7 @@ final class HistoryNearbyChannelTests: XCTestCase {
         let outcome = try await HistoryNearbyChannel.runReceive(
             over: duplex.right,
             local: local,
-            pin: .pinned(HistorySnapshotDisposition.qrFingerprint(identityPublic: peer.identityPublic, hybridPublic: peer.hybridPublic)),
+            pin: .pinned(historyQrFingerprint(identityPublic: peer.identityPublic, hybridPublic: peer.hybridPublic)),
             coordinator: receiver,
             context: receivingStore,
             resolvePeer: { hex in
@@ -122,7 +114,7 @@ final class HistoryNearbyChannelTests: XCTestCase {
             )
             XCTFail("absent pin must refuse")
         } catch {
-            XCTAssertEqual(error as? CTT1V2Error, .qrPinAbsent)
+            guard case .QrPinAbsent = error as? HistoryError else { return XCTFail("\(error)") }
         }
         duplex.right.close()
         offerTask.cancel()
@@ -133,10 +125,10 @@ final class HistoryNearbyChannelTests: XCTestCase {
     func testDirectoryKeyThatDoesNotMatchTheFrameIsRefused() async throws {
         let (local, peer) = try keys()
         var other = peer
-        other = HistoryPeerKeys(
+        other = HistoryPeer(
             deviceIdHex: peer.deviceIdHex,
             deviceIdRaw: peer.deviceIdRaw,
-            identityPublic: Curve25519.KeyAgreement.PrivateKey().publicKey.rawRepresentation,
+            identityPublic: Data(repeating: 0x42, count: 32),
             hybridPublic: peer.hybridPublic,
             kyberSPKPublic: peer.kyberSPKPublic,
             kyberSPKId: peer.kyberSPKId
@@ -156,7 +148,7 @@ final class HistoryNearbyChannelTests: XCTestCase {
             )
             XCTFail("a directory key that is not the frame's must refuse")
         } catch {
-            XCTAssertEqual(error as? CTT1V2Error, .identityMismatch)
+            guard case .IdentityMismatch = error as? HistoryError else { return XCTFail("\(error)") }
         }
         duplex.right.close()
         offerTask.cancel()

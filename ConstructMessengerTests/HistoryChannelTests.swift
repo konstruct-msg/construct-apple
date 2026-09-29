@@ -16,7 +16,7 @@ final class HistoryChannelTests: XCTestCase {
 
     private func entry(
         identity: Curve25519.KeyAgreement.PrivateKey = .init(),
-        hybrid: Data = Data(repeating: 0x42, count: CTT1V2Layout.hybridPubCount),
+        hybrid: Data = Data(repeating: 0x42, count: 1984),
         kyber: Data? = Data(repeating: 0x07, count: 1568),
         kyberId: UInt32? = 9,
         deviceIdOverride: String? = nil
@@ -57,13 +57,13 @@ final class HistoryChannelTests: XCTestCase {
 
     func testMissingHybridKeyRefuses() {
         XCTAssertThrowsError(try HistoryChannel.peerKeys(from: entry(hybrid: Data()), pinnedIdentity: nil)) {
-            XCTAssertEqual($0 as? CTT1V2Error, .noHybridKey)
+            XCTAssertEqual($0 as? HistoryError, .NoHybridKey(message: "no_hybrid_key"))
         }
     }
 
     func testMissingKyberSPKRefusesAsNoHybridKey() {
         XCTAssertThrowsError(try HistoryChannel.peerKeys(from: entry(kyber: nil, kyberId: nil), pinnedIdentity: nil)) {
-            XCTAssertEqual($0 as? CTT1V2Error, .noHybridKey)
+            XCTAssertEqual($0 as? HistoryError, .NoHybridKey(message: "no_hybrid_key"))
         }
     }
 
@@ -72,7 +72,7 @@ final class HistoryChannelTests: XCTestCase {
         let other = Curve25519.KeyAgreement.PrivateKey().publicKey.rawRepresentation
         let e = entry(deviceIdOverride: deriveDeviceId(identityPublicKey: other))
         XCTAssertThrowsError(try HistoryChannel.peerKeys(from: e, pinnedIdentity: nil)) {
-            XCTAssertEqual($0 as? CTT1V2Error, .identityMismatch)
+            XCTAssertEqual($0 as? HistoryError, .IdentityMismatch(message: "identity_mismatch"))
         }
     }
 
@@ -82,7 +82,7 @@ final class HistoryChannelTests: XCTestCase {
         XCTAssertNoThrow(try HistoryChannel.peerKeys(from: e, pinnedIdentity: key.publicKey.rawRepresentation))
         let wrong = Curve25519.KeyAgreement.PrivateKey().publicKey.rawRepresentation
         XCTAssertThrowsError(try HistoryChannel.peerKeys(from: e, pinnedIdentity: wrong)) {
-            XCTAssertEqual($0 as? CTT1V2Error, .qrPinMismatch)
+            XCTAssertEqual($0 as? HistoryError, .QrPinMismatch(message: "qr_pin_mismatch"))
         }
     }
 
@@ -133,10 +133,39 @@ final class HistoryChannelTests: XCTestCase {
 
     func testNamedReasonsDoNotCollapseIntoCorrupt() {
         let corrupt = NSLocalizedString("transfer_error_corrupt", comment: "")
-        for reason: CTT1V2Error in [.qrPinMismatch, .qrPinAbsent, .kemKeyIdMismatch, .noHybridKey] {
+        let named: [HistoryError] = [
+            .QrPinMismatch(message: "qr_pin_mismatch"), .QrPinAbsent(message: "qr_pin_absent"),
+            .KemKeyIdMismatch(message: "kem_key_id_mismatch"), .NoHybridKey(message: "no_hybrid_key"),
+            .LocalKeysUnavailable(message: "local_keys_unavailable"), .UserMismatch(message: "user_mismatch"),
+        ]
+        for reason in named {
             XCTAssertNotEqual(HistoryTransferUserMessage.text(for: reason), corrupt, "\(reason)")
         }
         XCTAssertNotEqual(HistoryTransferUserMessage.text(for: HistoryChannelError.peerNotInDirectory), corrupt)
-        XCTAssertEqual(HistoryTransferUserMessage.text(for: CTT1V2Error.signatureInvalid), corrupt)
+        XCTAssertEqual(HistoryTransferUserMessage.text(for: HistoryError.SignatureInvalid(message: "signature_invalid")), corrupt)
+    }
+
+    // MARK: - The protocol stays in the core
+
+    /// History transfer's cryptography — key schedule, chunk cipher, signatures, frames — is the
+    /// core's since 2026-09-29. Swift carried a second implementation of all of it in CryptoKit
+    /// until then; a CryptoKit import on this path is the first line of the next one.
+    func testHistorySourcesDoNotImportCryptoKit() throws {
+        let services = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("ConstructMessenger/Services")
+        let historySync = services.appendingPathComponent("HistorySync")
+        var files = try FileManager.default.contentsOfDirectory(at: historySync, includingPropertiesForKeys: nil)
+            .filter { $0.pathExtension == "swift" }
+        files.append(services.appendingPathComponent("Transfer/HistoryNearbyChannel.swift"))
+        XCTAssertGreaterThan(files.count, 5, "the scan found the sources")
+        for url in files {
+            let lines = try String(contentsOf: url, encoding: .utf8).split(separator: "\n")
+            XCTAssertFalse(
+                lines.contains { $0.trimmingCharacters(in: .whitespaces) == "import CryptoKit" },
+                url.lastPathComponent
+            )
+        }
     }
 }

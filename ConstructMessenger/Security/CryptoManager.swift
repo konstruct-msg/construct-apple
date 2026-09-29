@@ -167,6 +167,15 @@ class CryptoManager {
         return try signBundleDataWithKeys(keys: record, bundleDataJson: message)
     }
 
+    /// The core a history transfer runs on. `HistorySender` / `HistoryReceiver` sign, decapsulate
+    /// and derive keys inside it; nothing here hands them a key.
+    func historyCore() throws -> OrchestratorCore {
+        coreLock.lock()
+        defer { coreLock.unlock() }
+        guard let core = orchestratorCore else { throw CryptoManagerError.coreNotInitialized }
+        return core
+    }
+
     /// This device's social-recovery bundle sealed under `vaultKey`. The bundle is the backup of
     /// the device keys, so the core packs and seals them; only the ciphertext comes out.
     func sealOwnRecoveryBundle(vaultKey: Data, createdAt: Int64) throws -> Data {

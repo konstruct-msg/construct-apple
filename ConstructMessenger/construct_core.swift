@@ -914,6 +914,377 @@ public func FfiConverterTypeClassicCryptoCore_lower(_ value: ClassicCryptoCore) 
 
 
 /**
+ * The new device's end. Read exactly `need()` bytes, `feed` them, act on the status.
+ */
+public protocol HistoryReceiverProtocol: AnyObject, Sendable {
+    
+    /**
+     * After `AwaitKeys`: the directory's keys for that device and the QR pin. Returns the reply
+     * to write back (nearby), or nothing (file, or a verified skip).
+     */
+    func accept(known: HistoryKnownKeys, pin: HistoryPin) throws  -> Data?
+    
+    /**
+     * The socket closed or the file ended: `Truncated` unless the stream finished.
+     */
+    func endOfInput() throws 
+    
+    func feed(data: Data) throws  -> HistoryStep
+    
+    func need()  -> UInt32
+    
+}
+/**
+ * The new device's end. Read exactly `need()` bytes, `feed` them, act on the status.
+ */
+open class HistoryReceiver: HistoryReceiverProtocol, @unchecked Sendable {
+    fileprivate let handle: UInt64
+
+    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoHandle {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromHandle handle: UInt64) {
+        self.handle = handle
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noHandle: NoHandle) {
+        self.handle = 0
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiCloneHandle() -> UInt64 {
+        return try! rustCall { uniffi_construct_core_fn_clone_historyreceiver(self.handle, $0) }
+    }
+    // No primary constructor declared for this class.
+
+    deinit {
+        try! rustCall { uniffi_construct_core_fn_free_historyreceiver(handle, $0) }
+    }
+
+    
+
+    
+    /**
+     * After `AwaitKeys`: the directory's keys for that device and the QR pin. Returns the reply
+     * to write back (nearby), or nothing (file, or a verified skip).
+     */
+open func accept(known: HistoryKnownKeys, pin: HistoryPin)throws  -> Data?  {
+    return try  FfiConverterOptionData.lift(try rustCallWithError(FfiConverterTypeHistoryError_lift) {
+    uniffi_construct_core_fn_method_historyreceiver_accept(
+            self.uniffiCloneHandle(),
+        FfiConverterTypeHistoryKnownKeys_lower(known),
+        FfiConverterTypeHistoryPin_lower(pin),$0
+    )
+})
+}
+    
+    /**
+     * The socket closed or the file ended: `Truncated` unless the stream finished.
+     */
+open func endOfInput()throws   {try rustCallWithError(FfiConverterTypeHistoryError_lift) {
+    uniffi_construct_core_fn_method_historyreceiver_end_of_input(
+            self.uniffiCloneHandle(),$0
+    )
+}
+}
+    
+open func feed(data: Data)throws  -> HistoryStep  {
+    return try  FfiConverterTypeHistoryStep_lift(try rustCallWithError(FfiConverterTypeHistoryError_lift) {
+    uniffi_construct_core_fn_method_historyreceiver_feed(
+            self.uniffiCloneHandle(),
+        FfiConverterData.lower(data),$0
+    )
+})
+}
+    
+open func need() -> UInt32  {
+    return try!  FfiConverterUInt32.lift(try! rustCall() {
+    uniffi_construct_core_fn_method_historyreceiver_need(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+
+    
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeHistoryReceiver: FfiConverter {
+    typealias FfiType = UInt64
+    typealias SwiftType = HistoryReceiver
+
+    public static func lift(_ handle: UInt64) throws -> HistoryReceiver {
+        return HistoryReceiver(unsafeFromHandle: handle)
+    }
+
+    public static func lower(_ value: HistoryReceiver) -> UInt64 {
+        return value.uniffiCloneHandle()
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> HistoryReceiver {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+    public static func write(_ value: HistoryReceiver, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeHistoryReceiver_lift(_ handle: UInt64) throws -> HistoryReceiver {
+    return try FfiConverterTypeHistoryReceiver.lift(handle)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeHistoryReceiver_lower(_ value: HistoryReceiver) -> UInt64 {
+    return FfiConverterTypeHistoryReceiver.lower(value)
+}
+
+
+
+
+
+
+/**
+ * The offering device's end. Every call returns bytes to write verbatim: frames, sealed
+ * chunks, the EOF — the platform never frames.
+ */
+public protocol HistorySenderProtocol: AnyObject, Sendable {
+    
+    func acceptReply(reply: Data) throws 
+    
+    func beginMedia(mediaId: String, mimeType: String, byteLen: UInt64) throws  -> Data
+    
+    /**
+     * End record, last chunk, EOF.
+     */
+    func finish() throws  -> Data
+    
+    func firstFrame()  -> Data
+    
+    /**
+     * The next piece of the blob, in any size; exactly `byte_len` in all.
+     */
+    func pushMedia(piece: Data) throws  -> Data
+    
+    /**
+     * A batch of transcript records; returns every chunk they completed.
+     */
+    func pushRecords(records: [HistoryRecordOut]) throws  -> Data
+    
+    /**
+     * The snapshot id the manifest must carry.
+     */
+    func snapshotId()  -> Data
+    
+}
+/**
+ * The offering device's end. Every call returns bytes to write verbatim: frames, sealed
+ * chunks, the EOF — the platform never frames.
+ */
+open class HistorySender: HistorySenderProtocol, @unchecked Sendable {
+    fileprivate let handle: UInt64
+
+    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoHandle {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromHandle handle: UInt64) {
+        self.handle = handle
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noHandle: NoHandle) {
+        self.handle = 0
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiCloneHandle() -> UInt64 {
+        return try! rustCall { uniffi_construct_core_fn_clone_historysender(self.handle, $0) }
+    }
+    // No primary constructor declared for this class.
+
+    deinit {
+        try! rustCall { uniffi_construct_core_fn_free_historysender(handle, $0) }
+    }
+
+    
+
+    
+open func acceptReply(reply: Data)throws   {try rustCallWithError(FfiConverterTypeHistoryError_lift) {
+    uniffi_construct_core_fn_method_historysender_accept_reply(
+            self.uniffiCloneHandle(),
+        FfiConverterData.lower(reply),$0
+    )
+}
+}
+    
+open func beginMedia(mediaId: String, mimeType: String, byteLen: UInt64)throws  -> Data  {
+    return try  FfiConverterData.lift(try rustCallWithError(FfiConverterTypeHistoryError_lift) {
+    uniffi_construct_core_fn_method_historysender_begin_media(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(mediaId),
+        FfiConverterString.lower(mimeType),
+        FfiConverterUInt64.lower(byteLen),$0
+    )
+})
+}
+    
+    /**
+     * End record, last chunk, EOF.
+     */
+open func finish()throws  -> Data  {
+    return try  FfiConverterData.lift(try rustCallWithError(FfiConverterTypeHistoryError_lift) {
+    uniffi_construct_core_fn_method_historysender_finish(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+open func firstFrame() -> Data  {
+    return try!  FfiConverterData.lift(try! rustCall() {
+    uniffi_construct_core_fn_method_historysender_first_frame(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+    /**
+     * The next piece of the blob, in any size; exactly `byte_len` in all.
+     */
+open func pushMedia(piece: Data)throws  -> Data  {
+    return try  FfiConverterData.lift(try rustCallWithError(FfiConverterTypeHistoryError_lift) {
+    uniffi_construct_core_fn_method_historysender_push_media(
+            self.uniffiCloneHandle(),
+        FfiConverterData.lower(piece),$0
+    )
+})
+}
+    
+    /**
+     * A batch of transcript records; returns every chunk they completed.
+     */
+open func pushRecords(records: [HistoryRecordOut])throws  -> Data  {
+    return try  FfiConverterData.lift(try rustCallWithError(FfiConverterTypeHistoryError_lift) {
+    uniffi_construct_core_fn_method_historysender_push_records(
+            self.uniffiCloneHandle(),
+        FfiConverterSequenceTypeHistoryRecordOut.lower(records),$0
+    )
+})
+}
+    
+    /**
+     * The snapshot id the manifest must carry.
+     */
+open func snapshotId() -> Data  {
+    return try!  FfiConverterData.lift(try! rustCall() {
+    uniffi_construct_core_fn_method_historysender_snapshot_id(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+
+    
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeHistorySender: FfiConverter {
+    typealias FfiType = UInt64
+    typealias SwiftType = HistorySender
+
+    public static func lift(_ handle: UInt64) throws -> HistorySender {
+        return HistorySender(unsafeFromHandle: handle)
+    }
+
+    public static func lower(_ value: HistorySender) -> UInt64 {
+        return value.uniffiCloneHandle()
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> HistorySender {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+    public static func write(_ value: HistorySender, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeHistorySender_lift(_ handle: UInt64) throws -> HistorySender {
+    return try FfiConverterTypeHistorySender.lift(handle)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeHistorySender_lower(_ value: HistorySender) -> UInt64 {
+    return FfiConverterTypeHistorySender.lower(value)
+}
+
+
+
+
+
+
+/**
  * Device-level MLS store (RFC 9420): ONE long-lived OpenMLS storage holding
  * all group states plus key-package private material. A Welcome can only be
  * decrypted by the store that generated the KeyPackage it addresses, so key
@@ -1380,6 +1751,24 @@ public protocol OrchestratorCoreProtocol: AnyObject, Sendable {
      */
     func historyFileChannelKey(senderEphPub: Data, kemKeyId: UInt32, kemCiphertext: Data, snapshotId: Data) throws  -> Data
     
+    /**
+     * Offer history as a CTHF file for `peer`: write `first_frame()`, then stream.
+     */
+    func historyOfferFile(userId: Data, peer: HistoryPeerKeys) throws  -> HistorySender
+    
+    /**
+     * Offer history over the local network to the device `peer` names. Write
+     * `first_frame()`, read `HISTORY_REPLY_LEN` bytes into `accept_reply`, then stream. A skip
+     * is the same signed opening and nothing after it. `pinned_receiver_identity` is the new
+     * device's identity from a Flow B QR, when this side scanned one.
+     */
+    func historyOfferNearby(userId: Data, peer: HistoryPeerKeys, skip: Bool, pinnedReceiverIdentity: Data?) throws  -> HistorySender
+    
+    /**
+     * Receive history, over the local network or from a file.
+     */
+    func historyReceive(userId: Data, fromFile: Bool)  -> HistoryReceiver
+    
     func hybridSignaturePublicKey()  -> Data?
     
     func importHybridSignaturePrivateKey(privBytes: Data) throws 
@@ -1843,6 +2232,50 @@ open func historyFileChannelKey(senderEphPub: Data, kemKeyId: UInt32, kemCiphert
         FfiConverterUInt32.lower(kemKeyId),
         FfiConverterData.lower(kemCiphertext),
         FfiConverterData.lower(snapshotId),$0
+    )
+})
+}
+    
+    /**
+     * Offer history as a CTHF file for `peer`: write `first_frame()`, then stream.
+     */
+open func historyOfferFile(userId: Data, peer: HistoryPeerKeys)throws  -> HistorySender  {
+    return try  FfiConverterTypeHistorySender_lift(try rustCallWithError(FfiConverterTypeHistoryError_lift) {
+    uniffi_construct_core_fn_method_orchestratorcore_history_offer_file(
+            self.uniffiCloneHandle(),
+        FfiConverterData.lower(userId),
+        FfiConverterTypeHistoryPeerKeys_lower(peer),$0
+    )
+})
+}
+    
+    /**
+     * Offer history over the local network to the device `peer` names. Write
+     * `first_frame()`, read `HISTORY_REPLY_LEN` bytes into `accept_reply`, then stream. A skip
+     * is the same signed opening and nothing after it. `pinned_receiver_identity` is the new
+     * device's identity from a Flow B QR, when this side scanned one.
+     */
+open func historyOfferNearby(userId: Data, peer: HistoryPeerKeys, skip: Bool, pinnedReceiverIdentity: Data?)throws  -> HistorySender  {
+    return try  FfiConverterTypeHistorySender_lift(try rustCallWithError(FfiConverterTypeHistoryError_lift) {
+    uniffi_construct_core_fn_method_orchestratorcore_history_offer_nearby(
+            self.uniffiCloneHandle(),
+        FfiConverterData.lower(userId),
+        FfiConverterTypeHistoryPeerKeys_lower(peer),
+        FfiConverterBool.lower(skip),
+        FfiConverterOptionData.lower(pinnedReceiverIdentity),$0
+    )
+})
+}
+    
+    /**
+     * Receive history, over the local network or from a file.
+     */
+open func historyReceive(userId: Data, fromFile: Bool) -> HistoryReceiver  {
+    return try!  FfiConverterTypeHistoryReceiver_lift(try! rustCall() {
+    uniffi_construct_core_fn_method_orchestratorcore_history_receive(
+            self.uniffiCloneHandle(),
+        FfiConverterData.lower(userId),
+        FfiConverterBool.lower(fromFile),$0
     )
 })
 }
@@ -3036,6 +3469,232 @@ public func FfiConverterTypeEphemeralKeyPair_lift(_ buf: RustBuffer) throws -> E
 #endif
 public func FfiConverterTypeEphemeralKeyPair_lower(_ value: EphemeralKeyPair) -> RustBuffer {
     return FfiConverterTypeEphemeralKeyPair.lower(value)
+}
+
+
+/**
+ * The keys the directory holds for the device a frame names. Checked against the frame's own,
+ * and the signature is verified with these.
+ */
+public struct HistoryKnownKeys: Equatable, Hashable {
+    public var identityPublic: Data
+    public var hybridPublic: Data
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(identityPublic: Data, hybridPublic: Data) {
+        self.identityPublic = identityPublic
+        self.hybridPublic = hybridPublic
+    }
+
+    
+}
+
+#if compiler(>=6)
+extension HistoryKnownKeys: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeHistoryKnownKeys: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> HistoryKnownKeys {
+        return
+            try HistoryKnownKeys(
+                identityPublic: FfiConverterData.read(from: &buf), 
+                hybridPublic: FfiConverterData.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: HistoryKnownKeys, into buf: inout [UInt8]) {
+        FfiConverterData.write(value.identityPublic, into: &buf)
+        FfiConverterData.write(value.hybridPublic, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeHistoryKnownKeys_lift(_ buf: RustBuffer) throws -> HistoryKnownKeys {
+    return try FfiConverterTypeHistoryKnownKeys.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeHistoryKnownKeys_lower(_ value: HistoryKnownKeys) -> RustBuffer {
+    return FfiConverterTypeHistoryKnownKeys.lower(value)
+}
+
+
+/**
+ * The other device's keys from our own account's directory entry (`GetPreKeyBundles`).
+ */
+public struct HistoryPeerKeys: Equatable, Hashable {
+    public var identityPublic: Data
+    public var hybridPublic: Data
+    public var kyberPrekeyPublic: Data
+    public var kyberPrekeyId: UInt32
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(identityPublic: Data, hybridPublic: Data, kyberPrekeyPublic: Data, kyberPrekeyId: UInt32) {
+        self.identityPublic = identityPublic
+        self.hybridPublic = hybridPublic
+        self.kyberPrekeyPublic = kyberPrekeyPublic
+        self.kyberPrekeyId = kyberPrekeyId
+    }
+
+    
+}
+
+#if compiler(>=6)
+extension HistoryPeerKeys: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeHistoryPeerKeys: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> HistoryPeerKeys {
+        return
+            try HistoryPeerKeys(
+                identityPublic: FfiConverterData.read(from: &buf), 
+                hybridPublic: FfiConverterData.read(from: &buf), 
+                kyberPrekeyPublic: FfiConverterData.read(from: &buf), 
+                kyberPrekeyId: FfiConverterUInt32.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: HistoryPeerKeys, into buf: inout [UInt8]) {
+        FfiConverterData.write(value.identityPublic, into: &buf)
+        FfiConverterData.write(value.hybridPublic, into: &buf)
+        FfiConverterData.write(value.kyberPrekeyPublic, into: &buf)
+        FfiConverterUInt32.write(value.kyberPrekeyId, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeHistoryPeerKeys_lift(_ buf: RustBuffer) throws -> HistoryPeerKeys {
+    return try FfiConverterTypeHistoryPeerKeys.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeHistoryPeerKeys_lower(_ value: HistoryPeerKeys) -> RustBuffer {
+    return FfiConverterTypeHistoryPeerKeys.lower(value)
+}
+
+
+/**
+ * One transcript record to send: its type (0x01 manifest … 0x07 call) and protobuf bytes.
+ */
+public struct HistoryRecordOut: Equatable, Hashable {
+    public var recordType: UInt8
+    public var proto: Data
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(recordType: UInt8, proto: Data) {
+        self.recordType = recordType
+        self.proto = proto
+    }
+
+    
+}
+
+#if compiler(>=6)
+extension HistoryRecordOut: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeHistoryRecordOut: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> HistoryRecordOut {
+        return
+            try HistoryRecordOut(
+                recordType: FfiConverterUInt8.read(from: &buf), 
+                proto: FfiConverterData.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: HistoryRecordOut, into buf: inout [UInt8]) {
+        FfiConverterUInt8.write(value.recordType, into: &buf)
+        FfiConverterData.write(value.proto, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeHistoryRecordOut_lift(_ buf: RustBuffer) throws -> HistoryRecordOut {
+    return try FfiConverterTypeHistoryRecordOut.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeHistoryRecordOut_lower(_ value: HistoryRecordOut) -> RustBuffer {
+    return FfiConverterTypeHistoryRecordOut.lower(value)
+}
+
+
+public struct HistoryStep: Equatable, Hashable {
+    public var events: [HistoryEvent]
+    public var status: HistoryStatus
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(events: [HistoryEvent], status: HistoryStatus) {
+        self.events = events
+        self.status = status
+    }
+
+    
+}
+
+#if compiler(>=6)
+extension HistoryStep: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeHistoryStep: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> HistoryStep {
+        return
+            try HistoryStep(
+                events: FfiConverterSequenceTypeHistoryEvent.read(from: &buf), 
+                status: FfiConverterTypeHistoryStatus.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: HistoryStep, into buf: inout [UInt8]) {
+        FfiConverterSequenceTypeHistoryEvent.write(value.events, into: &buf)
+        FfiConverterTypeHistoryStatus.write(value.status, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeHistoryStep_lift(_ buf: RustBuffer) throws -> HistoryStep {
+    return try FfiConverterTypeHistoryStep.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeHistoryStep_lower(_ value: HistoryStep) -> RustBuffer {
+    return FfiConverterTypeHistoryStep.lower(value)
 }
 
 
@@ -5423,6 +6082,488 @@ public func FfiConverterTypeDeliveryAudience_lower(_ value: DeliveryAudience) ->
 }
 
 
+
+/**
+ * Why a transfer was refused. Each case's message is the spec's name for it (`record_order`,
+ * `qr_pin_mismatch`, …) — log that, map the case to what a person reads.
+ */
+public enum HistoryError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError {
+
+    
+    
+    case Malformed(message: String)
+    
+    case Truncated(message: String)
+    
+    case UnknownVersion(message: String)
+    
+    case UserMismatch(message: String)
+    
+    case RecordOrder(message: String)
+    
+    case EnvelopeManifestMismatch(message: String)
+    
+    case V1RefusedForHistory(message: String)
+    
+    case IdentityMismatch(message: String)
+    
+    case KemKeyIdMismatch(message: String)
+    
+    case QrPinMismatch(message: String)
+    
+    case QrPinAbsent(message: String)
+    
+    case NoHybridKey(message: String)
+    
+    case SignatureInvalid(message: String)
+    
+    case ChunkOpenFailed(message: String)
+    
+    case LocalKeysUnavailable(message: String)
+    
+
+    
+
+    
+    public var errorDescription: String? {
+        String(reflecting: self)
+    }
+    
+}
+
+#if compiler(>=6)
+extension HistoryError: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeHistoryError: FfiConverterRustBuffer {
+    typealias SwiftType = HistoryError
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> HistoryError {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+
+        
+
+        
+        case 1: return .Malformed(
+            message: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 2: return .Truncated(
+            message: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 3: return .UnknownVersion(
+            message: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 4: return .UserMismatch(
+            message: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 5: return .RecordOrder(
+            message: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 6: return .EnvelopeManifestMismatch(
+            message: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 7: return .V1RefusedForHistory(
+            message: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 8: return .IdentityMismatch(
+            message: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 9: return .KemKeyIdMismatch(
+            message: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 10: return .QrPinMismatch(
+            message: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 11: return .QrPinAbsent(
+            message: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 12: return .NoHybridKey(
+            message: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 13: return .SignatureInvalid(
+            message: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 14: return .ChunkOpenFailed(
+            message: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 15: return .LocalKeysUnavailable(
+            message: try FfiConverterString.read(from: &buf)
+        )
+        
+
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: HistoryError, into buf: inout [UInt8]) {
+        switch value {
+
+        
+
+        
+        case .Malformed(_ /* message is ignored*/):
+            writeInt(&buf, Int32(1))
+        case .Truncated(_ /* message is ignored*/):
+            writeInt(&buf, Int32(2))
+        case .UnknownVersion(_ /* message is ignored*/):
+            writeInt(&buf, Int32(3))
+        case .UserMismatch(_ /* message is ignored*/):
+            writeInt(&buf, Int32(4))
+        case .RecordOrder(_ /* message is ignored*/):
+            writeInt(&buf, Int32(5))
+        case .EnvelopeManifestMismatch(_ /* message is ignored*/):
+            writeInt(&buf, Int32(6))
+        case .V1RefusedForHistory(_ /* message is ignored*/):
+            writeInt(&buf, Int32(7))
+        case .IdentityMismatch(_ /* message is ignored*/):
+            writeInt(&buf, Int32(8))
+        case .KemKeyIdMismatch(_ /* message is ignored*/):
+            writeInt(&buf, Int32(9))
+        case .QrPinMismatch(_ /* message is ignored*/):
+            writeInt(&buf, Int32(10))
+        case .QrPinAbsent(_ /* message is ignored*/):
+            writeInt(&buf, Int32(11))
+        case .NoHybridKey(_ /* message is ignored*/):
+            writeInt(&buf, Int32(12))
+        case .SignatureInvalid(_ /* message is ignored*/):
+            writeInt(&buf, Int32(13))
+        case .ChunkOpenFailed(_ /* message is ignored*/):
+            writeInt(&buf, Int32(14))
+        case .LocalKeysUnavailable(_ /* message is ignored*/):
+            writeInt(&buf, Int32(15))
+
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeHistoryError_lift(_ buf: RustBuffer) throws -> HistoryError {
+    return try FfiConverterTypeHistoryError.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeHistoryError_lower(_ value: HistoryError) -> RustBuffer {
+    return FfiConverterTypeHistoryError.lower(value)
+}
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+/**
+ * What the receiver hands back, in stream order. A transcript record is its protobuf bytes,
+ * already checked against the protocol rules: decode it straight into the store. Media arrives
+ * in pieces — append each to the file.
+ */
+
+public enum HistoryEvent: Equatable, Hashable {
+    
+    case record(recordType: UInt8, proto: Data
+    )
+    case skipped(recordType: UInt8
+    )
+    case mediaStart(mediaId: String, mimeType: String, byteLen: UInt64
+    )
+    case mediaBytes(data: Data
+    )
+    case mediaEnd
+    case end
+
+
+
+}
+
+#if compiler(>=6)
+extension HistoryEvent: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeHistoryEvent: FfiConverterRustBuffer {
+    typealias SwiftType = HistoryEvent
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> HistoryEvent {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .record(recordType: try FfiConverterUInt8.read(from: &buf), proto: try FfiConverterData.read(from: &buf)
+        )
+        
+        case 2: return .skipped(recordType: try FfiConverterUInt8.read(from: &buf)
+        )
+        
+        case 3: return .mediaStart(mediaId: try FfiConverterString.read(from: &buf), mimeType: try FfiConverterString.read(from: &buf), byteLen: try FfiConverterUInt64.read(from: &buf)
+        )
+        
+        case 4: return .mediaBytes(data: try FfiConverterData.read(from: &buf)
+        )
+        
+        case 5: return .mediaEnd
+        
+        case 6: return .end
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: HistoryEvent, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case let .record(recordType,proto):
+            writeInt(&buf, Int32(1))
+            FfiConverterUInt8.write(recordType, into: &buf)
+            FfiConverterData.write(proto, into: &buf)
+            
+        
+        case let .skipped(recordType):
+            writeInt(&buf, Int32(2))
+            FfiConverterUInt8.write(recordType, into: &buf)
+            
+        
+        case let .mediaStart(mediaId,mimeType,byteLen):
+            writeInt(&buf, Int32(3))
+            FfiConverterString.write(mediaId, into: &buf)
+            FfiConverterString.write(mimeType, into: &buf)
+            FfiConverterUInt64.write(byteLen, into: &buf)
+            
+        
+        case let .mediaBytes(data):
+            writeInt(&buf, Int32(4))
+            FfiConverterData.write(data, into: &buf)
+            
+        
+        case .mediaEnd:
+            writeInt(&buf, Int32(5))
+        
+        
+        case .end:
+            writeInt(&buf, Int32(6))
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeHistoryEvent_lift(_ buf: RustBuffer) throws -> HistoryEvent {
+    return try FfiConverterTypeHistoryEvent.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeHistoryEvent_lower(_ value: HistoryEvent) -> RustBuffer {
+    return FfiConverterTypeHistoryEvent.lower(value)
+}
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+/**
+ * What the link QR pinned for the other device.
+ */
+
+public enum HistoryPin: Equatable, Hashable {
+    
+    /**
+     * Flow A: SHA256(identity ‖ hybrid) of the offering device (`history_qr_fingerprint`).
+     */
+    case fingerprint(fingerprint: Data
+    )
+    /**
+     * Flow B, or a file outside the link session: the directory is the only pin.
+     */
+    case bundleOnly
+    /**
+     * Nothing pins the other device: refused.
+     */
+    case absent
+
+
+
+}
+
+#if compiler(>=6)
+extension HistoryPin: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeHistoryPin: FfiConverterRustBuffer {
+    typealias SwiftType = HistoryPin
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> HistoryPin {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .fingerprint(fingerprint: try FfiConverterData.read(from: &buf)
+        )
+        
+        case 2: return .bundleOnly
+        
+        case 3: return .absent
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: HistoryPin, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case let .fingerprint(fingerprint):
+            writeInt(&buf, Int32(1))
+            FfiConverterData.write(fingerprint, into: &buf)
+            
+        
+        case .bundleOnly:
+            writeInt(&buf, Int32(2))
+        
+        
+        case .absent:
+            writeInt(&buf, Int32(3))
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeHistoryPin_lift(_ buf: RustBuffer) throws -> HistoryPin {
+    return try FfiConverterTypeHistoryPin.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeHistoryPin_lower(_ value: HistoryPin) -> RustBuffer {
+    return FfiConverterTypeHistoryPin.lower(value)
+}
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+
+public enum HistoryStatus: Equatable, Hashable {
+    
+    /**
+     * Read `need()` more bytes and feed them.
+     */
+    case needMore
+    /**
+     * Fetch the keys of `sender_device_id` from our own account's directory, then `accept`.
+     */
+    case awaitKeys(senderDeviceId: String
+    )
+    /**
+     * A verified skip: nothing follows.
+     */
+    case skipped
+    /**
+     * Ended with End and EOF. Commit.
+     */
+    case done
+
+
+
+}
+
+#if compiler(>=6)
+extension HistoryStatus: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeHistoryStatus: FfiConverterRustBuffer {
+    typealias SwiftType = HistoryStatus
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> HistoryStatus {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .needMore
+        
+        case 2: return .awaitKeys(senderDeviceId: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 3: return .skipped
+        
+        case 4: return .done
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: HistoryStatus, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case .needMore:
+            writeInt(&buf, Int32(1))
+        
+        
+        case let .awaitKeys(senderDeviceId):
+            writeInt(&buf, Int32(2))
+            FfiConverterString.write(senderDeviceId, into: &buf)
+            
+        
+        case .skipped:
+            writeInt(&buf, Int32(3))
+        
+        
+        case .done:
+            writeInt(&buf, Int32(4))
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeHistoryStatus_lift(_ buf: RustBuffer) throws -> HistoryStatus {
+    return try FfiConverterTypeHistoryStatus.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeHistoryStatus_lower(_ value: HistoryStatus) -> RustBuffer {
+    return FfiConverterTypeHistoryStatus.lower(value)
+}
+
+
 // Note that we don't yet support `indirect` for enums.
 // See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
 /**
@@ -6549,6 +7690,31 @@ fileprivate struct FfiConverterSequenceTypeDeliveryTarget: FfiConverterRustBuffe
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterSequenceTypeHistoryRecordOut: FfiConverterRustBuffer {
+    typealias SwiftType = [HistoryRecordOut]
+
+    public static func write(_ value: [HistoryRecordOut], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeHistoryRecordOut.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [HistoryRecordOut] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [HistoryRecordOut]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeHistoryRecordOut.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterSequenceTypeKyberPrekeyUpload: FfiConverterRustBuffer {
     typealias SwiftType = [KyberPrekeyUpload]
 
@@ -6616,6 +7782,31 @@ fileprivate struct FfiConverterSequenceTypeCfeAction: FfiConverterRustBuffer {
         seq.reserveCapacity(Int(len))
         for _ in 0 ..< len {
             seq.append(try FfiConverterTypeCfeAction.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeHistoryEvent: FfiConverterRustBuffer {
+    typealias SwiftType = [HistoryEvent]
+
+    public static func write(_ value: [HistoryEvent], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeHistoryEvent.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [HistoryEvent] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [HistoryEvent]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeHistoryEvent.read(from: &buf))
         }
         return seq
     }
@@ -6740,6 +7931,48 @@ public func heartbeatIntervalMs(baseIntervalSec: UInt64) -> UInt64  {
     return try!  FfiConverterUInt64.lift(try! rustCall() {
     uniffi_construct_core_fn_func_heartbeat_interval_ms(
         FfiConverterUInt64.lower(baseIntervalSec),$0
+    )
+})
+}
+public func historyDiscoveryInstanceName(tag: String) -> String  {
+    return try!  FfiConverterString.lift(try! rustCall() {
+    uniffi_construct_core_fn_func_history_discovery_instance_name(
+        FfiConverterString.lower(tag),$0
+    )
+})
+}
+public func historyDiscoveryTag(userIdDashed: String, deviceIdHex: String) -> String  {
+    return try!  FfiConverterString.lift(try! rustCall() {
+    uniffi_construct_core_fn_func_history_discovery_tag(
+        FfiConverterString.lower(userIdDashed),
+        FfiConverterString.lower(deviceIdHex),$0
+    )
+})
+}
+/**
+ * The largest media file a snapshot carries. An encoder leaves a file of this size or more
+ * out (and counts it) rather than fail the stream: the core refuses the record.
+ */
+public func historyMaxBlobBytes() -> UInt64  {
+    return try!  FfiConverterUInt64.lift(try! rustCall() {
+    uniffi_construct_core_fn_func_history_max_blob_bytes($0
+    )
+})
+}
+public func historyQrFingerprint(identityPublic: Data, hybridPublic: Data) -> Data  {
+    return try!  FfiConverterData.lift(try! rustCall() {
+    uniffi_construct_core_fn_func_history_qr_fingerprint(
+        FfiConverterData.lower(identityPublic),
+        FfiConverterData.lower(hybridPublic),$0
+    )
+})
+}
+/**
+ * Bytes the receiver's reply takes on the local network.
+ */
+public func historyReplyLen() -> UInt32  {
+    return try!  FfiConverterUInt32.lift(try! rustCall() {
+    uniffi_construct_core_fn_func_history_reply_len($0
     )
 })
 }
@@ -7256,6 +8489,21 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_func_heartbeat_interval_ms() != 51594) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_construct_core_checksum_func_history_discovery_instance_name() != 37477) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_func_history_discovery_tag() != 23862) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_func_history_max_blob_bytes() != 49495) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_func_history_qr_fingerprint() != 57416) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_func_history_reply_len() != 56152) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_construct_core_checksum_func_hybrid_public_key_from_private() != 12004) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -7430,6 +8678,39 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_method_classiccryptocore_sign_bundle_data() != 43516) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_construct_core_checksum_method_historyreceiver_accept() != 5082) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_historyreceiver_end_of_input() != 37985) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_historyreceiver_feed() != 49701) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_historyreceiver_need() != 47648) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_historysender_accept_reply() != 31752) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_historysender_begin_media() != 36878) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_historysender_finish() != 17872) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_historysender_first_frame() != 36364) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_historysender_push_media() != 59892) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_historysender_push_records() != 60933) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_historysender_snapshot_id() != 18376) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_construct_core_checksum_method_mlsstore_add_member() != 60309) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -7545,6 +8826,15 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_orchestratorcore_history_file_channel_key() != 35330) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_orchestratorcore_history_offer_file() != 50870) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_orchestratorcore_history_offer_nearby() != 33978) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_orchestratorcore_history_receive() != 10000) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_orchestratorcore_hybrid_signature_public_key() != 3228) {

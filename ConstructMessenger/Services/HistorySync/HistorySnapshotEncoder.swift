@@ -26,7 +26,6 @@
 
 import CoreData
 import Foundation
-import Security
 
 struct HistoryEncodeCounters: Equatable {
     var messageUndecryptable: Int = 0
@@ -42,11 +41,9 @@ struct HistorySnapshotIdentity {
     var createdAt: Date
     var appVersion: String
 
-    static func make(userId: String, sourceDeviceId: String) -> HistorySnapshotIdentity {
-        var snapshotId = Data(count: 16)
-        snapshotId.withUnsafeMutableBytes { ptr in
-            _ = SecRandomCopyBytes(kSecRandomDefault, 16, ptr.baseAddress!)
-        }
+    /// `snapshotId` is the one the core's sender announced (`HistorySender.snapshotId()`): the
+    /// manifest must carry it, and the core refuses a stream whose manifest names another.
+    static func make(userId: String, sourceDeviceId: String, snapshotId: Data) -> HistorySnapshotIdentity {
         let version = (Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String) ?? ""
         return HistorySnapshotIdentity(
             userId: userId,
@@ -68,25 +65,25 @@ final class HistorySnapshotEncoder {
         self.identity = identity
     }
 
-    func encodeTranscript(context: NSManagedObjectContext) -> AsyncThrowingStream<HistoryRecord, Error> {
+    func encodeTranscript(context: NSManagedObjectContext) -> AsyncThrowingStream<HistoryOutbound, Error> {
         stream(phase: 1, context: context)
     }
 
-    func encodeMedia(context: NSManagedObjectContext) -> AsyncThrowingStream<HistoryRecord, Error> {
+    func encodeMedia(context: NSManagedObjectContext) -> AsyncThrowingStream<HistoryOutbound, Error> {
         stream(phase: 2, context: context)
     }
 
-    /// Phase 3: transcript then media, one End. File / CTHF caller.
-    func encodeAll(context: NSManagedObjectContext) -> AsyncThrowingStream<HistoryRecord, Error> {
+    /// Phase 3: transcript then media. File / CTHF caller.
+    func encodeAll(context: NSManagedObjectContext) -> AsyncThrowingStream<HistoryOutbound, Error> {
         stream(phase: 3, context: context)
     }
 
-    /// Phase 3 as an array, for a caller already inside `context.perform` — the file writer
-    /// collects before sealing. Same records as `encodeAll`.
-    func collectAll(context: NSManagedObjectContext) throws -> [HistoryRecord] {
+    /// A phase as an array, for a caller already inside `context.perform`. Media are references:
+    /// the array is the transcript plus a list of files, not their bytes.
+    func collect(phase: UInt32, context: NSManagedObjectContext) throws -> [HistoryOutbound] {
         counters = HistoryEncodeCounters()
-        var out: [HistoryRecord] = []
-        try emit(phase: 3, context: context, yield: { out.append($0) })
+        var out: [HistoryOutbound] = []
+        try emit(phase: phase, context: context, yield: { out.append($0) })
         return out
     }
 
@@ -95,7 +92,7 @@ final class HistorySnapshotEncoder {
     private func stream(
         phase: UInt32,
         context: NSManagedObjectContext
-    ) -> AsyncThrowingStream<HistoryRecord, Error> {
+    ) -> AsyncThrowingStream<HistoryOutbound, Error> {
         AsyncThrowingStream { continuation in
             do {
                 self.counters = HistoryEncodeCounters()
@@ -110,7 +107,7 @@ final class HistorySnapshotEncoder {
     private func emit(
         phase: UInt32,
         context: NSManagedObjectContext,
-        yield: (HistoryRecord) -> Void
+        yield: (HistoryOutbound) -> Void
     ) throws {
         guard let userRaw = HistoryAccountID.raw(identity.userId) else {
             throw HistorySnapshotError.malformed
@@ -128,7 +125,7 @@ final class HistorySnapshotEncoder {
             let reactions = try fetchReactions(context: context)
                 .filter { emittedIds.contains($0.targetMessageId.lowercased()) }
 
-            yield(.manifest(makeManifest(
+            yield(.record(.manifest(makeManifest(
                 phase: phase,
                 userRaw: userRaw,
                 contacts: contacts.count,
@@ -136,33 +133,29 @@ final class HistorySnapshotEncoder {
                 messages: lifted.count,
                 reactions: reactions.count,
                 media: phase == 3 ? mediaPlan : []
-            )))
-            for contact in contacts { yield(.contact(encodeContact(contact))) }
-            for chat in chats { yield(.chat(encodeChat(chat))) }
-            for hint in hints { yield(.peerDevice(encodeHint(hint))) }
-            for call in calls { yield(.call(encodeCall(call))) }
-            for message in lifted { yield(.message(message)) }
-            for reaction in reactions { yield(.reaction(encodeReaction(reaction))) }
+            ))))
+            for contact in contacts { yield(.record(.contact(encodeContact(contact)))) }
+            for chat in chats { yield(.record(.chat(encodeChat(chat)))) }
+            for hint in hints { yield(.record(.peerDevice(encodeHint(hint)))) }
+            for call in calls { yield(.record(.call(encodeCall(call)))) }
+            for message in lifted { yield(.record(.message(message))) }
+            for reaction in reactions { yield(.record(.reaction(encodeReaction(reaction)))) }
         }
 
         if phase == 2 {
-            yield(.manifest(makeManifest(
+            yield(.record(.manifest(makeManifest(
                 phase: 2,
                 userRaw: userRaw,
                 contacts: 0, chats: 0, messages: 0, reactions: 0,
                 media: mediaPlan
-            )))
+            ))))
         }
 
         if phase == 2 || phase == 3 {
             for planned in mediaPlan {
-                if let blob = loadBlob(planned) {
-                    yield(.mediaBlob(blob))
-                }
+                yield(.media(id: planned.id, mime: planned.mime))
             }
         }
-
-        yield(.end)
     }
 
     // MARK: - Message lift
@@ -256,7 +249,7 @@ final class HistorySnapshotEncoder {
         var planned: [PlannedBlob] = []
         for (id, mime) in refs {
             guard let size = MediaManager.onDiskFileSize(mediaId: id) else { continue }
-            if size >= HistorySnapshotCodec.maxRecordBytes {
+            if size > historyMaxBlobBytes() {
                 counters.mediaTooLarge += 1
                 continue
             }
@@ -267,15 +260,6 @@ final class HistorySnapshotEncoder {
             return lhs.id < rhs.id
         }
         return planned
-    }
-
-    private func loadBlob(_ planned: PlannedBlob) -> Construct_Client_History_V1_HistoryMediaBlob? {
-        guard let data = MediaManager.loadOnDisk(mediaId: planned.id) else { return nil }
-        var blob = Construct_Client_History_V1_HistoryMediaBlob()
-        blob.mediaID = planned.id
-        blob.mimeType = planned.mime
-        blob.blob = data
-        return blob
     }
 
     // MARK: - Fetches

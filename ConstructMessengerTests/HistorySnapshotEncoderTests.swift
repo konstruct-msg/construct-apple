@@ -49,7 +49,7 @@ final class HistorySnapshotEncoderTests: XCTestCase {
     func testFiveFixtureRowsAreClassified() async throws {
         try seedFiveFixtures()
         let encoder = HistorySnapshotEncoder(identity: identity)
-        let records = try await collect(encoder.encodeTranscript(context: context))
+        let records = try await collect(encoder.encodeTranscript(context: context)).records
         let messages = records.compactMap { rec -> Construct_Client_History_V1_HistoryMessage? in
             if case .message(let m) = rec { return m }
             return nil
@@ -71,8 +71,9 @@ final class HistorySnapshotEncoderTests: XCTestCase {
     func testEmittedBytesContainNoCTM1AndNoOmittedSecrets() async throws {
         try seedFiveFixtures()
         let encoder = HistorySnapshotEncoder(identity: identity)
-        let records = try await collect(encoder.encodeTranscript(context: context))
-        let bytes = try HistorySnapshotCodec.encode(records)
+        let records = try await collect(encoder.encodeTranscript(context: context)).records
+        // What reaches the core: each record's protobuf bytes.
+        let bytes = try records.map { try $0.wire().proto }.reduce(Data(), +)
         XCTAssertNil(bytes.range(of: Data("CTM1".utf8)), "wire body is proto, not the iOS envelope")
         XCTAssertNil(bytes.range(of: Data(leakSession.utf8)))
         XCTAssertNil(bytes.range(of: Data(leakPublicKey.utf8)))
@@ -82,10 +83,9 @@ final class HistorySnapshotEncoderTests: XCTestCase {
     func testPhase1StreamHasNoMediaBlob() async throws {
         try seedFiveFixtures()
         let encoder = HistorySnapshotEncoder(identity: identity)
-        let records = try await collect(encoder.encodeTranscript(context: context))
-        XCTAssertTrue(records.contains { if case .manifest = $0 { return true }; return false })
-        XCTAssertTrue(records.contains { if case .end = $0 { return true }; return false })
-        XCTAssertFalse(records.contains { if case .mediaBlob = $0 { return true }; return false })
+        let out = try await collect(encoder.encodeTranscript(context: context))
+        XCTAssertTrue(out.records.contains { if case .manifest = $0 { return true }; return false })
+        XCTAssertEqual(out.media, [])
     }
 
     func testPhase2StreamIsManifestMediaEnd() async throws {
@@ -95,18 +95,13 @@ final class HistorySnapshotEncoderTests: XCTestCase {
         try seedAlbumMessage(mediaId: mediaId)
 
         let encoder = HistorySnapshotEncoder(identity: identity)
-        let records = try await collect(encoder.encodeMedia(context: context))
-        XCTAssertGreaterThanOrEqual(records.count, 2)
-        guard case .manifest(let manifest) = records.first else {
+        let out = try await collect(encoder.encodeMedia(context: context))
+        guard case .manifest(let manifest) = out.records.first else {
             return XCTFail("phase 2 must start with a manifest")
         }
         XCTAssertEqual(manifest.phase, 2)
-        XCTAssertTrue(records.contains { if case .mediaBlob = $0 { return true }; return false })
-        XCTAssertFalse(records.contains { if case .message = $0 { return true }; return false })
-        XCTAssertFalse(records.contains { if case .contact = $0 { return true }; return false })
-        guard case .end = records.last else {
-            return XCTFail("phase 2 must end with End")
-        }
+        XCTAssertEqual(out.records.count, 1, "phase 2 carries no transcript record")
+        XCTAssertEqual(out.media, [mediaId], "the media file, by reference")
     }
 
     func testOversizedMediaIsCountedAndStreamCompletes() async throws {
@@ -115,17 +110,14 @@ final class HistorySnapshotEncoderTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: url) }
         FileManager.default.createFile(atPath: url.path, contents: nil)
         let handle = try FileHandle(forWritingTo: url)
-        try handle.truncate(atOffset: HistorySnapshotCodec.maxRecordBytes)
+        try handle.truncate(atOffset: historyMaxBlobBytes() + 1)
         try handle.close()
 
         try seedAlbumMessage(mediaId: mediaId)
         let encoder = HistorySnapshotEncoder(identity: identity)
-        let records = try await collect(encoder.encodeMedia(context: context))
+        let out = try await collect(encoder.encodeMedia(context: context))
         XCTAssertEqual(encoder.counters.mediaTooLarge, 1)
-        XCTAssertFalse(records.contains { if case .mediaBlob = $0 { return true }; return false })
-        guard case .end = records.last else {
-            return XCTFail("oversized media must not fail the snapshot")
-        }
+        XCTAssertEqual(out.media, [], "left out, not sent to fail the stream")
     }
 
     func testRoundTripEncodeImportEncode() async throws {
@@ -139,12 +131,13 @@ final class HistorySnapshotEncoderTests: XCTestCase {
 
         let storeB = PersistenceController(inMemory: true).container
         let contextB = storeB.viewContext
-        _ = try HistorySnapshotImporter().importRecords(fromA, expectedUserId: local, in: contextB)
+        _ = try HistorySnapshotImporter().importRecords(fromA.records, expectedUserId: local, in: contextB)
 
         let encoderB = HistorySnapshotEncoder(identity: identity)
         let fromB = try await collect(encoderB.encodeAll(context: contextB))
 
-        XCTAssertEqual(try fingerprints(fromA), try fingerprints(fromB))
+        XCTAssertEqual(try fingerprints(fromA.records), try fingerprints(fromB.records))
+        XCTAssertEqual(fromA.media, fromB.media)
     }
 
     // MARK: - Seeds
@@ -313,10 +306,19 @@ final class HistorySnapshotEncoderTests: XCTestCase {
         msg.applyStoredEncryption(plaintextData: stored, contactId: peer)
     }
 
-    private func collect(_ stream: AsyncThrowingStream<HistoryRecord, Error>) async throws -> [HistoryRecord] {
-        var out: [HistoryRecord] = []
-        for try await rec in stream { out.append(rec) }
-        return out
+    /// The encoder's output split: transcript records, and media files by id.
+    private func collect(
+        _ stream: AsyncThrowingStream<HistoryOutbound, Error>
+    ) async throws -> (records: [HistoryRecord], media: [String]) {
+        var records: [HistoryRecord] = []
+        var media: [String] = []
+        for try await item in stream {
+            switch item {
+            case .record(let r): records.append(r)
+            case .media(let id, _): media.append(id)
+            }
+        }
+        return (records, media)
     }
 
     /// Manifest snapshot_id / created_at stay; compare everything else by type+id.
@@ -324,7 +326,7 @@ final class HistorySnapshotEncoderTests: XCTestCase {
         var map: [String: Data] = [:]
         for rec in records {
             switch rec {
-            case .manifest, .end:
+            case .manifest:
                 break
             case .contact(let c):
                 map["c:\(HistoryAccountID.dashed(c.userID) ?? "")"] = try c.serializedData()
@@ -338,10 +340,8 @@ final class HistorySnapshotEncoderTests: XCTestCase {
                 map["p:\(p.deviceID)"] = try p.serializedData()
             case .call(let c):
                 map["k:\(c.id)"] = try c.serializedData()
-            case .mediaBlob(let b):
-                map["b:\(b.mediaID)"] = try b.serializedData()
-            case .skipped(let type, let payload):
-                map["s:\(type)"] = payload
+            case .skipped(let type):
+                map["s:\(type)"] = Data()
             }
         }
         return map

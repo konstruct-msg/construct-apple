@@ -68,9 +68,7 @@ final class DeviceLinkViewModel {
             if let identity = try? CryptoManager.shared.localBundlePublicKeys().identityPublic,
                let hybrid = CryptoManager.shared.hybridIdentityPublicKey(),
                !hybrid.isEmpty {
-                let fp = HistorySnapshotDisposition.qrFingerprint(
-                    identityPublic: identity, hybridPublic: hybrid
-                )
+                let fp = historyQrFingerprint(identityPublic: identity, hybridPublic: hybrid)
                 url += "&fp=" + fp.map { String(format: "%02x", $0) }.joined()
             }
             qrContent = url

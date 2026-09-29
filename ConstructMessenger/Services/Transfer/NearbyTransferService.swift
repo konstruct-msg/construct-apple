@@ -387,20 +387,17 @@ final class NearbyTransferService {
     // MARK: - Receiver Handshake
 
     private func receiverHandshake(conn: NWConnection, pin: String) async throws -> (SymmetricKey, TransferType, Int) {
-        // Two-step read: 46-byte prefix, then 6529 more only if version == 0x02.
-        let raw = try await receiveExact(conn, length: CTT1V2Layout.prefixCount)
-        let prefix = try CTT1V2Prefix.parse(raw)
-        if prefix.version == CTT1V2Layout.versionV2 {
-            // Remainder is consumed so a v2 peer is not left half-read. Full v2
-            // verify + reply is stage 6 (streaming). History must not fall through
-            // to PIN-HMAC.
-            _ = try await receiveExact(conn, length: CTT1V2Layout.openingAfterPrefixCount)
+        // The 46 bytes both CTT1 versions begin with. This listener is the v1 PIN-HMAC backup:
+        // a v2 frame is history, which travels through the core (HistoryNearbyChannel) and never
+        // falls through to PIN-HMAC, and history on v1 is refused before any PIN is compared.
+        let raw = try await receiveExact(conn, length: HandshakeFrame.byteCount)
+        if raw[raw.startIndex + 4] == 0x02 {
             throw NearbyTransferError.malformedFrame
         }
-        if prefix.type != .backup {
+        let frame = try HandshakeFrame.parse(raw)
+        if frame.type != .backup {
             throw NearbyTransferError.v1RefusedForHistory
         }
-        let frame = try HandshakeFrame.parse(raw)
         let senderPub = frame.senderPub
 
         let myKey = Curve25519.KeyAgreement.PrivateKey()

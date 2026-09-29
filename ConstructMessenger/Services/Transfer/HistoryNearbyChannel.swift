@@ -4,14 +4,13 @@
 //
 //  CTT1 v2 over the same Bonjour/TCP pipe the v1 backup uses. One connection per phase (K18):
 //  the offering device advertises, sends the opening, reads the reply, streams CTH1; the new
-//  device browses, verifies, replies, imports as records arrive. Keys are HistoryChannel's;
-//  frames are CTT1V2Frames'; verification is CTT1V2Verify's. This file only moves bytes and
-//  orders the calls. No PIN: the discovery tag is scope, the hybrid signatures and the QR pin
-//  are the authentication.
+//  device browses, verifies, replies, imports as records arrive. The frames, the checks and the
+//  chunk stream are the core's (`HistorySender` / `HistoryReceiver`); the directory lookups are
+//  HistoryChannel's. This file only moves bytes and orders the calls. No PIN: the discovery tag
+//  is scope, the hybrid signatures and the QR pin are the authentication.
 //
 
 import CoreData
-import CryptoKit
 import Foundation
 import Network
 
@@ -103,7 +102,7 @@ final class HistoryNearbyChannel {
         ownUserId: String,
         peerDeviceId: String,
         pinnedIdentity: Data?
-    ) async throws -> HistoryPeerKeys {
+    ) async throws -> HistoryPeer {
         var lastError: Error = HistoryChannelError.peerNotInDirectory
         for attempt in 1...peerKeysAttempts {
             try Task.checkCancellation()
@@ -113,8 +112,8 @@ final class HistoryNearbyChannel {
                     peerDeviceId: peerDeviceId,
                     pinnedIdentity: pinnedIdentity
                 )
-            } catch CTT1V2Error.qrPinMismatch {
-                throw CTT1V2Error.qrPinMismatch // a hard stop, never a retry
+            } catch HistoryError.QrPinMismatch(let message) {
+                throw HistoryError.QrPinMismatch(message: message) // a hard stop, never a retry
             } catch {
                 lastError = error
                 Log.info("history_peer_keys_wait attempt=\(attempt) reason=\(error)", category: "HistorySync")
@@ -128,13 +127,13 @@ final class HistoryNearbyChannel {
     /// `context` is a background context; the encoder is driven on its queue.
     func offer(
         _ kind: OfferKind,
-        peer: HistoryPeerKeys,
+        peer: HistoryPeer,
         local: HistoryLocalKeys,
         coordinator: HistoryTransferCoordinator,
         context: NSManagedObjectContext
     ) async throws {
-        let tag = HistorySnapshotDisposition.discoveryTag(userIdDashed: local.userIdDashed, newDeviceIdHex: peer.deviceIdHex)
-        let instanceName = TransferCrypto.discoveryInstanceName(tag: tag)
+        let tag = historyDiscoveryTag(userIdDashed: local.userIdDashed, deviceIdHex: peer.deviceIdHex)
+        let instanceName = historyDiscoveryInstanceName(tag: tag)
         let conn = try await acceptConnection(instanceName: instanceName)
         let transport = NWConnectionTransport(conn)
         self.transport = transport
@@ -146,84 +145,55 @@ final class HistoryNearbyChannel {
     static func runOffer(
         _ kind: OfferKind,
         over transport: HistoryByteTransport,
-        peer: HistoryPeerKeys,
+        peer: HistoryPeer,
         local: HistoryLocalKeys,
         coordinator: HistoryTransferCoordinator,
         context: NSManagedObjectContext
     ) async throws {
-        let identity = HistorySnapshotIdentity.make(userId: local.userIdDashed, sourceDeviceId: local.deviceIdHex)
-        let eph = Curve25519.KeyAgreement.PrivateKey()
-        let isSkip = kind == .skip
-        let kem: MlkemEncapsulation? = isSkip ? nil : try mlkem1024Encapsulate(publicKey: peer.kyberSPKPublic)
-
-        var opening = CTT1V2Opening(
-            senderEphPub: eph.publicKey.rawRepresentation,
-            type: isSkip ? .historySyncSkipped : .historySync,
-            payloadLength: 0,
-            senderIdentityPub: local.identityPublic,
-            senderHybridPub: local.hybridPublic,
-            snapshotId: isSkip ? Data(count: CTT1V2Layout.snapshotIdCount) : identity.snapshotId,
-            senderDeviceId: local.deviceIdRaw,
-            receiverDeviceId: peer.deviceIdRaw,
-            receiverKyberKeyId: peer.kyberSPKId,
-            kemCt: kem.map { $0.ciphertext } ?? Data(count: CTT1V2Layout.kemCtCount),
-            signature: Data()
+        let sender = try CryptoManager.shared.historyCore().historyOfferNearby(
+            userId: local.userIdRaw,
+            peer: peer.coreKeys,
+            skip: kind == .skip,
+            // The Flow B pin was checked against the directory when `peer` was fetched; the
+            // reply is then checked against `peer`, so it is pinned too.
+            pinnedReceiverIdentity: nil
         )
-        opening.signature = try CryptoManager.shared.signHybrid(opening.taggedMessage)
-        try await transport.send(try opening.serialize())
+        try await transport.send(sender.firstFrame())
         Log.info("history_opening_sent kind=\(kind) to=\(peer.deviceIdHex.prefix(8))…", category: "HistorySync")
-
-        if isSkip {
+        if kind == .skip {
             coordinator.markSkipped()
             return
         }
-        guard let kem else { throw CTT1V2Error.malformed }
 
-        let reply = try CTT1V2Reply.parse(try await transport.receiveExact(CTT1V2Layout.replyCount))
-        if case .failure(let reason) = CTT1V2Verify.reply(
-            reply,
-            opening: opening,
-            knownIdentity: peer.identityPublic,
-            knownHybrid: peer.hybridPublic
-        ) {
-            Log.error("history_reply_refused reason=\(reason)", category: "HistorySync")
-            throw reason
+        let reply = try await transport.receiveExact(Int(historyReplyLen()))
+        do {
+            try sender.acceptReply(reply: reply)
+        } catch {
+            Log.error("history_reply_refused reason=\(error.localizedDescription)", category: "HistorySync")
+            throw error
         }
 
-        let receiverEph = try Curve25519.KeyAgreement.PublicKey(rawRepresentation: reply.receiverEphPub)
-        let ecdh = try eph.sharedSecretFromKeyAgreement(with: receiverEph).withUnsafeBytes { Data($0) }
-        let session = HistoryStreamSession(
-            key: TransferCrypto.deriveChannelKey(
-                ecdh: ecdh,
-                kemSharedSecret: kem.sharedSecret,
-                salt: .nearby,
-                snapshotId: identity.snapshotId
-            ),
-            snapshotId: identity.snapshotId,
-            userId: local.userIdRaw
+        let identity = HistorySnapshotIdentity.make(
+            userId: local.userIdDashed,
+            sourceDeviceId: local.deviceIdHex,
+            snapshotId: sender.snapshotId()
         )
-
-        // The encoder walks Core Data synchronously when the stream is created, so it lives
-        // entirely on the context's queue; only the buffered stream and the final counters
-        // come back out. The records then flow to the sender from the buffer.
-        let counters: HistoryEncodeCounters
+        // The encoder walks Core Data when the stream is created, so it runs on the context's
+        // queue; media are references, read from disk as they are sent.
+        let (items, counters) = await context.perform {
+            let encoder = HistorySnapshotEncoder(identity: identity)
+            let items = kind == .transcript
+                ? encoder.encodeTranscript(context: context)
+                : encoder.encodeMedia(context: context)
+            return (items, encoder.counters)
+        }
         switch kind {
         case .transcript:
-            let (records, c) = await context.perform {
-                let encoder = HistorySnapshotEncoder(identity: identity)
-                return (encoder.encodeTranscript(context: context), encoder.counters)
-            }
-            counters = c
-            try await coordinator.sendTranscript(records: records, over: transport, session: session)
+            try await coordinator.sendTranscript(items: items, through: sender, over: transport)
         case .media:
-            let (records, c) = await context.perform {
-                let encoder = HistorySnapshotEncoder(identity: identity)
-                return (encoder.encodeMedia(context: context), encoder.counters)
-            }
-            counters = c
-            try await coordinator.sendMedia(records: records, over: transport, session: session)
+            try await coordinator.sendMedia(items: items, through: sender, over: transport)
         case .skip:
-            counters = HistoryEncodeCounters()
+            break
         }
         Log.info(
             "history_phase_sent kind=\(kind) undecryptable=\(counters.messageUndecryptable) control=\(counters.messageControlSkipped) unconvertible=\(counters.messageLegacyUnconvertible) media_too_large=\(counters.mediaTooLarge)",
@@ -270,7 +240,7 @@ final class HistoryNearbyChannel {
     // MARK: - New device
 
     /// How the new device learns the offering device's keys: the directory, by default.
-    typealias PeerResolver = @MainActor (_ deviceIdHex: String) async throws -> HistoryPeerKeys
+    typealias PeerResolver = @MainActor (_ deviceIdHex: String) async throws -> HistoryPeer
 
     static func directoryResolver(ownUserId: String) -> PeerResolver {
         { deviceIdHex in
@@ -285,8 +255,8 @@ final class HistoryNearbyChannel {
         coordinator: HistoryTransferCoordinator,
         context: NSManagedObjectContext
     ) async throws -> ReceiveOutcome {
-        let tag = HistorySnapshotDisposition.discoveryTag(userIdDashed: local.userIdDashed, newDeviceIdHex: local.deviceIdHex)
-        let instanceName = TransferCrypto.discoveryInstanceName(tag: tag)
+        let tag = historyDiscoveryTag(userIdDashed: local.userIdDashed, deviceIdHex: local.deviceIdHex)
+        let instanceName = historyDiscoveryInstanceName(tag: tag)
         let conn = try await connect(instanceName: instanceName)
         let transport = NWConnectionTransport(conn)
         self.transport = transport
@@ -310,82 +280,35 @@ final class HistoryNearbyChannel {
         context: NSManagedObjectContext,
         resolvePeer: PeerResolver
     ) async throws -> ReceiveOutcome {
-        // Two-step read: 46, then 6529 only for v2. History on v1 is refused before anything else.
-        let prefixBytes = try await transport.receiveExact(CTT1V2Layout.prefixCount)
-        let prefix = try CTT1V2Prefix.parse(prefixBytes)
-        if case .failure(let reason) = CTT1V2Verify.historyAccepts(prefix: prefix) {
-            throw reason
+        let receiver = try CryptoManager.shared.historyCore().historyReceive(userId: local.userIdRaw, fromFile: false)
+        let outcome: HistoryCoreStream.Outcome
+        do {
+            outcome = try await coordinator.receive(
+                from: HistoryTransportSource(transport),
+                into: receiver,
+                pin: pin,
+                expectedUserId: local.userIdDashed,
+                context: context,
+                // The frame names the offering device; its keys come from our own account's
+                // directory entry, never from the frame.
+                resolve: { deviceIdHex in try await resolvePeer(deviceIdHex).knownKeys },
+                reply: { try await transport.send($0) }
+            )
+        } catch {
+            Log.error("history_receive_refused reason=\(error.localizedDescription)", category: "HistorySync")
+            throw error
         }
-        let rest = try await transport.receiveExact(CTT1V2Layout.openingAfterPrefixCount)
-        let opening = try CTT1V2Opening.parse(prefixBytes + rest)
-
-        // The frame names the offering device; its keys come from our own account's directory
-        // entry, never from the frame.
-        let senderHex = opening.senderDeviceId.map { String(format: "%02x", $0) }.joined()
-        let peer = try await resolvePeer(senderHex)
-        let known = CTT1V2Verify.Known(
-            identityPublic: peer.identityPublic,
-            hybridPublic: peer.hybridPublic,
-            localDeviceId: local.deviceIdRaw,
-            kyberKeyId: local.kyberSPKId,
-            pin: pin
-        )
-        if case .failure(let reason) = CTT1V2Verify.opening(opening, known: known) {
-            Log.error("history_opening_refused reason=\(reason)", category: "HistorySync")
-            throw reason
-        }
-        if case .bundleOnly = pin {
-            Log.info("history_trust root=bundle_only (Flow B residual)", category: "HistorySync")
-        }
-        if opening.type == .historySyncSkipped {
+        switch outcome {
+        case .skipped:
             coordinator.markSkipped()
             return .skipped
+        case .imported(let summary, let manifestPhase):
+            Log.info(
+                "history_snapshot_done source=nearby phase=\(manifestPhase) applied=\(summary.applied) conflicts=\(summary.conflictKeepExisting) skipped=\(summary.skipped.values.reduce(0, +))",
+                category: "HistorySync"
+            )
+            return .imported(summary, manifestPhase: manifestPhase)
         }
-
-        // Verified: reply, then touch the secrets.
-        let eph = Curve25519.KeyAgreement.PrivateKey()
-        var reply = CTT1V2Reply(
-            receiverEphPub: eph.publicKey.rawRepresentation,
-            receiverIdentityPub: local.identityPublic,
-            receiverHybridPub: local.hybridPublic,
-            signature: Data()
-        )
-        reply.signature = try CryptoManager.shared.signHybrid(reply.taggedMessage(
-            senderEphPub: opening.senderEphPub,
-            snapshotId: opening.snapshotId,
-            senderDeviceId: opening.senderDeviceId,
-            receiverDeviceId: opening.receiverDeviceId,
-            kemCt: opening.kemCt
-        ))
-        try await transport.send(try reply.serialize())
-
-        let senderEph = try Curve25519.KeyAgreement.PublicKey(rawRepresentation: opening.senderEphPub)
-        let ecdh = try eph.sharedSecretFromKeyAgreement(with: senderEph).withUnsafeBytes { Data($0) }
-        let kemSS = try CryptoManager.shared.kyberPrekeyDecapsulate(keyId: local.kyberSPKId, ciphertext: opening.kemCt)
-        let session = HistoryStreamSession(
-            key: TransferCrypto.deriveChannelKey(
-                ecdh: ecdh,
-                kemSharedSecret: kemSS,
-                salt: .nearby,
-                snapshotId: opening.snapshotId
-            ),
-            snapshotId: opening.snapshotId,
-            userId: local.userIdRaw
-        )
-
-        var manifestPhase: UInt32 = 0
-        let summary = try await coordinator.importStream(
-            over: transport,
-            session: session,
-            expectedUserId: local.userIdDashed,
-            in: context,
-            onManifest: { manifestPhase = $0.phase }
-        )
-        Log.info(
-            "history_snapshot_done source=nearby phase=\(manifestPhase) applied=\(summary.applied) conflicts=\(summary.conflictKeepExisting) skipped=\(summary.skipped.values.reduce(0, +))",
-            category: "HistorySync"
-        )
-        return .imported(summary, manifestPhase: manifestPhase)
     }
 
     private func connect(instanceName: String) async throws -> NWConnection {

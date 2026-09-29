@@ -153,11 +153,10 @@ final class HistorySnapshotImporterTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: MediaManager.onDiskURL(for: mediaId)) }
         XCTAssertTrue(MediaManager.importHistoryBlob(Data("first".utf8), mediaId: mediaId))
 
-        var blob = Construct_Client_History_V1_HistoryMediaBlob()
-        blob.mediaID = mediaId
-        blob.blob = Data("second".utf8)
-        let result = try importer.apply(.mediaBlob(blob), expectedUserId: local, in: context)
-        XCTAssertEqual(result, .skipped(.mediaAlreadyPresent))
+        let sink = HistoryMediaSink()
+        XCTAssertEqual(try sink.start(mediaId: mediaId), .skipped(.mediaAlreadyPresent))
+        try sink.append(Data("second".utf8))
+        XCTAssertEqual(try sink.end(), .ignored)
         XCTAssertEqual(MediaManager.loadOnDisk(mediaId: mediaId), Data("first".utf8))
     }
 
@@ -177,19 +176,6 @@ final class HistorySnapshotImporterTests: XCTestCase {
         let row = try XCTUnwrap(fetchMessage(messageId))
         XCTAssertEqual(row.deliveryStatus, .sent)
         XCTAssertNotEqual(row.deliveryStatus, .sending)
-    }
-
-    func testWrongAccountManifestIsRejected() throws {
-        var manifest = Construct_Client_History_V1_HistoryManifest()
-        manifest.formatVersion = 1
-        manifest.phase = 1
-        manifest.userID = try XCTUnwrap(HistoryAccountID.raw(peer))
-        manifest.snapshotID = Data(repeating: 0xAA, count: 16)
-        XCTAssertThrowsError(
-            try importer.apply(.manifest(manifest), expectedUserId: local, in: context)
-        ) { error in
-            XCTAssertEqual(error as? HistorySnapshotError, .userMismatch)
-        }
     }
 
     // MARK: - Source / entity list
@@ -234,7 +220,7 @@ final class HistorySnapshotImporterTests: XCTestCase {
         var msg = try textMessage(id: messageId, text: text)
         msg.isSentByMe = true
 
-        return [.manifest(manifest), .contact(contact), .chat(chat), .message(msg), .end]
+        return [.manifest(manifest), .contact(contact), .chat(chat), .message(msg)]
     }
 
     private func textMessage(id: String, text: String) throws -> Construct_Client_History_V1_HistoryMessage {

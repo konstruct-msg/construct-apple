@@ -3,7 +3,9 @@
 //  Construct Messenger
 //
 //  Additive Core Data projection of a CTH1 stream. Never replaces store
-//  files, never writes the stream cursor, never imports a ratchet.
+//  files, never writes the stream cursor, never imports a ratchet. Records arrive already
+//  judged by the core (order, phase, manifest ↔ envelope); media arrives through
+//  `HistoryMediaSink`, not here.
 //
 
 import CoreData
@@ -36,6 +38,14 @@ struct HistoryImportSummary: Equatable {
         case .ignored: break
         }
     }
+
+    mutating func merge(_ other: HistoryImportSummary) {
+        applied += other.applied
+        conflictKeepExisting += other.conflictKeepExisting
+        for (reason, count) in other.skipped {
+            skipped[reason, default: 0] += count
+        }
+    }
 }
 
 struct HistorySnapshotImporter {
@@ -49,16 +59,10 @@ struct HistorySnapshotImporter {
         in context: NSManagedObjectContext
     ) throws -> HistoryApplyResult {
         switch record {
-        case .manifest(let manifest):
-            guard let expectedRaw = HistoryAccountID.raw(expectedUserId) else {
-                throw HistorySnapshotError.malformed
-            }
-            switch HistorySnapshotDisposition.accept(manifest: manifest, expectedUserId: expectedRaw) {
-            case .failure(let err):
-                throw err
-            case .success:
-                return .ignored
-            }
+        case .manifest:
+            // Version, phase, and that it names this snapshot and this account: the core's checks,
+            // made before it released the record.
+            return .ignored
         case .contact(let contact):
             return try applyContact(contact, in: context)
         case .chat(let chat):
@@ -71,14 +75,10 @@ struct HistorySnapshotImporter {
             return try applyPeerHint(hint, in: context)
         case .call(let call):
             return try applyCall(call, in: context)
-        case .mediaBlob(let blob):
-            return applyMedia(blob)
-        case .skipped(let type, _):
+        case .skipped(let type):
             if type == HistoryRecordType.message {
                 return .skipped(.bodyUnknown)
             }
-            return .ignored
-        case .end:
             return .ignored
         }
     }
@@ -392,17 +392,6 @@ struct HistorySnapshotImporter {
             durationSeconds: Int32(clamping: call.durationSeconds),
             in: context
         )
-        return .applied
-    }
-
-    // MARK: - Media
-
-    private func applyMedia(_ blob: Construct_Client_History_V1_HistoryMediaBlob) -> HistoryApplyResult {
-        guard !blob.mediaID.isEmpty else { return .ignored }
-        if MediaManager.hasOnDiskFile(mediaId: blob.mediaID) {
-            return .skipped(.mediaAlreadyPresent)
-        }
-        _ = MediaManager.importHistoryBlob(blob.blob, mediaId: blob.mediaID)
         return .applied
     }
 

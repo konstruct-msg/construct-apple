@@ -264,6 +264,13 @@ Before touching `Networking/gRPC/VEIL/` or `Services/Calls/`, read
   CryptoKit implementation of the sealed box. The Keychain holds the device keys once, in the
   key record (`crypto_private_keys`) the core loads from; the raw copies are deleted at launch.
   The history-file channel key and the social-recovery bundle are made in the core too.
+- **History transfer is the core's protocol; this app moves bytes.** CTH1 framing, record order,
+  the chunk cipher, CTT1 v2 and CTHF frames and every check on them are `construct-core`
+  `src/history/` since 2026-09-29 (`HistorySender` / `HistoryReceiver`). The app reads what
+  `need()` asks, feeds it, fetches the directory keys at `AwaitKeys`, decodes released records
+  into Core Data and writes media pieces to disk (`HistoryCoreStream`). Until then it was ~1 500
+  lines of Swift shared with nothing else, which Android would have had to write a second time.
+  `HistoryChannelTests` fails on a CryptoKit import on this path.
 - Device keys are deleted **only** on gRPC UNAUTHENTICATED (16) / PERMISSION_DENIED (7) — never on
   a network error.
 - **All crypto goes direct via UniFFI** (`ConstructCore.xcframework`) on iOS and macOS alike. The

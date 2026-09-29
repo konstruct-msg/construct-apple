@@ -218,17 +218,14 @@ struct HistoryTransferSendView: View {
                 pinnedIdentity: DeviceLinkPendingPin.peerIdentity(forDeviceId: peerDeviceId)
             )
             let background = PersistenceController.shared.container.newBackgroundContext()
-            let url = try await background.perform {
-                let staging = FileManager.default.temporaryDirectory
-                    .appendingPathComponent("konstruct-history-\(UUID().uuidString).cthf")
-                let result = try HistoryChannel.writeFile(to: staging, peer: peer, local: local, context: background)
-                let named = FileManager.default.temporaryDirectory
-                    .appendingPathComponent(HistoryChannel.suggestedFileName(for: result.identity))
-                try? FileManager.default.removeItem(at: named)
-                try FileManager.default.moveItem(at: staging, to: named)
-                return named
-            }
-            exportedFile = url
+            let staging = FileManager.default.temporaryDirectory
+                .appendingPathComponent("konstruct-history-\(UUID().uuidString).cthf")
+            let result = try await HistoryChannel.writeFile(to: staging, peer: peer, local: local, context: background)
+            let named = FileManager.default.temporaryDirectory
+                .appendingPathComponent(HistoryChannel.suggestedFileName(forSnapshot: result.snapshotId))
+            try? FileManager.default.removeItem(at: named)
+            try FileManager.default.moveItem(at: staging, to: named)
+            exportedFile = named
         } catch {
             errorMessage = HistoryTransferUserMessage.text(for: error)
         }

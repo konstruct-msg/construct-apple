@@ -2,23 +2,20 @@
 //  HistoryChannel.swift
 //  Construct Messenger
 //
-//  The glue between the pure pieces and the device: which keys each side holds, how the
-//  offering device seals a CTHF file to the new device, how the new device opens one.
-//  Nearby (CTT1 v2) uses the same key material with the other salt; only the carrier of
-//  `kem_ct` differs. Crypto decisions are the core's: encapsulate / decapsulate / sign_hybrid /
-//  hybrid_verify are called, never rebuilt (plan §10). The KEM is ML-KEM-1024 to the receiving
-//  device's Kyber SPK since PQXDH v2; the receiving side decapsulates inside the core, which holds
-//  the key's seed and never hands it out.
+//  The glue between the core and the device for a history transfer: which of our devices the
+//  directory says the other side is, and the file path — the offering device writes a CTHF
+//  file for the new device, the new device opens one. The header, the key schedule, the
+//  signatures, the checks and the chunk stream are the core's (`HistorySender` /
+//  `HistoryReceiver`, construct-core `src/history/`); this file reads and writes bytes.
 //
 
 import CoreData
-import CryptoKit
 import Foundation
 
 /// What `GetPreKeyBundles(own account, consumeOtpk: false)` says about one of our devices,
 /// reduced to the four things a history transfer needs. `hybridPublic` and the Kyber SPK are
 /// mandatory: a device without them refuses history (`no_hybrid_key`), it does not downgrade.
-struct HistoryPeerKeys: Equatable {
+struct HistoryPeer: Equatable {
     let deviceIdHex: String
     let deviceIdRaw: Data
     let identityPublic: Data
@@ -27,19 +24,30 @@ struct HistoryPeerKeys: Equatable {
     let kyberSPKId: UInt32
 }
 
-/// This device's half. Read once per transfer, never stored beyond the call.
+extension HistoryPeer {
+    /// The directory entry as the core's sender takes it.
+    var coreKeys: HistoryPeerKeys {
+        HistoryPeerKeys(
+            identityPublic: identityPublic,
+            hybridPublic: hybridPublic,
+            kyberPrekeyPublic: kyberSPKPublic,
+            kyberPrekeyId: kyberSPKId
+        )
+    }
+
+    /// The keys a received frame is checked against.
+    var knownKeys: HistoryKnownKeys {
+        HistoryKnownKeys(identityPublic: identityPublic, hybridPublic: hybridPublic)
+    }
+}
+
+/// This device, as a transfer names it. The keys are the core's and are not read here: a device
+/// without a hybrid identity or a Kyber prekey is refused by the core (`local_keys_unavailable`).
 struct HistoryLocalKeys {
     let userIdDashed: String
+    /// The account's 16 raw UUID bytes: the chunk AAD and the manifest are bound to them.
     let userIdRaw: Data
     let deviceIdHex: String
-    let deviceIdRaw: Data
-    /// Public only. The identity secret stays in the core, which derives the file channel key
-    /// (`CryptoManager.historyFileChannelKey`); this struct carried it until 2026-09-29.
-    let identityPublic: Data
-    let hybridPublic: Data
-    /// Our current Kyber SPK, the key a peer encapsulates to. Its secret stays in the core:
-    /// `CryptoManager.kyberPrekeyDecapsulate`.
-    let kyberSPKId: UInt32
 }
 
 enum HistoryChannelError: Error, Equatable {
@@ -56,24 +64,9 @@ enum HistoryChannel {
     static func localKeys() throws -> HistoryLocalKeys {
         guard let userId = KeychainManager.shared.loadUserID(),
               let userRaw = HistoryAccountID.raw(userId),
-              let deviceHex = KeychainManager.shared.loadDeviceID(),
-              let deviceRaw = Self.rawDeviceId(deviceHex),
-              let identityPublic = try? CryptoManager.shared.localBundlePublicKeys().identityPublic,
-              let hybridPublic = CryptoManager.shared.hybridIdentityPublicKey(),
-              hybridPublic.count == CTT1V2Layout.hybridPubCount
+              let deviceHex = KeychainManager.shared.loadDeviceID()
         else { throw HistoryChannelError.localKeysUnavailable }
-        guard let kyberSPK = try? CryptoManager.shared.currentKyberSpkUpload() else {
-            throw HistoryChannelError.localKeysUnavailable
-        }
-        return HistoryLocalKeys(
-            userIdDashed: userId,
-            userIdRaw: userRaw,
-            deviceIdHex: deviceHex,
-            deviceIdRaw: deviceRaw,
-            identityPublic: identityPublic,
-            hybridPublic: hybridPublic,
-            kyberSPKId: kyberSPK.keyId
-        )
+        return HistoryLocalKeys(userIdDashed: userId, userIdRaw: userRaw, deviceIdHex: deviceHex)
     }
 
     /// The directory's answer for one of our own devices. `pinnedIdentity` is the Flow B
@@ -84,7 +77,7 @@ enum HistoryChannel {
         ownUserId: String,
         peerDeviceId: String,
         pinnedIdentity: Data?
-    ) async throws -> HistoryPeerKeys {
+    ) async throws -> HistoryPeer {
         let bundles = try await KeyServiceClient.shared.getPreKeyBundles(
             userId: ownUserId,
             deviceIds: [peerDeviceId],
@@ -97,29 +90,29 @@ enum HistoryChannel {
     }
 
     /// Pure reduction of a bundle, so the refusal rules are testable without a server.
-    static func peerKeys(from entry: DeviceBundleData, pinnedIdentity: Data?) throws -> HistoryPeerKeys {
+    static func peerKeys(from entry: DeviceBundleData, pinnedIdentity: Data?) throws -> HistoryPeer {
         let b = entry.bundle
-        guard b.identityPublic.count == CTT1V2Layout.identityPubCount,
-              let raw = rawDeviceId(entry.deviceId)
-        else { throw CTT1V2Error.malformed }
-        guard entry.hybridIdentityKey.count == CTT1V2Layout.hybridPubCount,
+        guard let raw = rawDeviceId(entry.deviceId) else {
+            throw HistoryError.Malformed(message: "malformed")
+        }
+        guard !entry.hybridIdentityKey.isEmpty,
               let kyber = b.kyberPreKeyPublic, !kyber.isEmpty,
               let kyberId = b.kyberPreKeyId
-        else { throw CTT1V2Error.noHybridKey }
+        else { throw HistoryError.NoHybridKey(message: "no_hybrid_key") }
         // The device id is derived from the identity key; a bundle whose pair disagrees is not
         // this device's bundle, whatever the directory labelled it.
         guard deriveDeviceId(identityPublicKey: b.identityPublic) == entry.deviceId.lowercased() else {
-            throw CTT1V2Error.identityMismatch
+            throw HistoryError.IdentityMismatch(message: "identity_mismatch")
         }
         if let pinned = pinnedIdentity {
-            guard HistorySnapshotDisposition.equal(pinned, b.identityPublic) else {
-                throw CTT1V2Error.qrPinMismatch
+            guard pinned == b.identityPublic else {
+                throw HistoryError.QrPinMismatch(message: "qr_pin_mismatch")
             }
             Log.info("history_trust device=\(entry.deviceId.prefix(8))… root=qr_pubkey", category: "HistorySync")
         } else {
             Log.info("history_trust device=\(entry.deviceId.prefix(8))… root=bundle_only", category: "HistorySync")
         }
-        return HistoryPeerKeys(
+        return HistoryPeer(
             deviceIdHex: entry.deviceId.lowercased(),
             deviceIdRaw: raw,
             identityPublic: b.identityPublic,
@@ -131,122 +124,97 @@ enum HistoryChannel {
 
     // MARK: - File: offering side
 
-    /// Seal a phase-3 snapshot of `context` for `peer` into `url`. Header per spec §5: ephemeral
-    /// X25519 × the new device's identity, ML-KEM-1024 to its Kyber SPK, HKDF with the file salt,
-    /// hybrid signature from the core over the tagged header.
-    ///
-    /// Collects the records before writing — the CTHF writer is not streaming yet (open question
-    /// in the 2026-09-18 session note). Must be called on `context`'s queue.
+    /// Seal a phase-3 snapshot of `context` for `peer` into `url`, streaming: records and media
+    /// pieces go through the core and its sealed chunks straight to disk, so memory holds one
+    /// chunk, not the snapshot. Written to a sibling temporary and moved into place, so a failure
+    /// leaves no half-sealed file for an importer to find.
     static func writeFile(
         to url: URL,
-        peer: HistoryPeerKeys,
+        peer: HistoryPeer,
         local: HistoryLocalKeys,
         context: NSManagedObjectContext
-    ) throws -> (identity: HistorySnapshotIdentity, counters: HistoryEncodeCounters, records: Int) {
-        let identity = HistorySnapshotIdentity.make(userId: local.userIdDashed, sourceDeviceId: local.deviceIdHex)
-        let encoder = HistorySnapshotEncoder(identity: identity)
-        let records = try encoder.collectAll(context: context)
-
-        let eph = Curve25519.KeyAgreement.PrivateKey()
-        let peerIdentity = try Curve25519.KeyAgreement.PublicKey(rawRepresentation: peer.identityPublic)
-        let ecdh = try eph.sharedSecretFromKeyAgreement(with: peerIdentity)
-            .withUnsafeBytes { Data($0) }
-        let kem = try mlkem1024Encapsulate(publicKey: peer.kyberSPKPublic)
-        let key = TransferCrypto.deriveChannelKey(
-            ecdh: ecdh,
-            kemSharedSecret: kem.sharedSecret,
-            salt: .file,
-            snapshotId: identity.snapshotId
-        )
-
-        var header = CTHFHeader(
+    ) async throws -> (snapshotId: Data, counters: HistoryEncodeCounters) {
+        let sender = try CryptoManager.shared.historyCore().historyOfferFile(
             userId: local.userIdRaw,
-            recipientDeviceId: peer.deviceIdRaw,
-            sourceDeviceId: local.deviceIdRaw,
-            snapshotId: identity.snapshotId,
-            senderEphPub: eph.publicKey.rawRepresentation,
-            senderIdentityPub: local.identityPublic,
-            senderHybridPub: local.hybridPublic,
-            recipientKyberKeyId: peer.kyberSPKId,
-            kemCt: kem.ciphertext,
-            signature: Data()
+            peer: peer.coreKeys
         )
-        header.signature = try CryptoManager.shared.signHybrid(header.taggedMessage)
+        let identity = HistorySnapshotIdentity.make(
+            userId: local.userIdDashed,
+            sourceDeviceId: local.deviceIdHex,
+            snapshotId: sender.snapshotId()
+        )
+        let (items, counters) = try await context.perform {
+            let encoder = HistorySnapshotEncoder(identity: identity)
+            return (try encoder.collect(phase: 3, context: context), encoder.counters)
+        }
 
-        try CTHFEnvelope.write(to: url, header: header, records: records, key: key)
+        let fm = FileManager.default
+        let tmp = url.deletingLastPathComponent().appendingPathComponent(".\(UUID().uuidString).cthf-part")
+        guard fm.createFile(atPath: tmp.path, contents: nil) else {
+            throw HistoryError.Malformed(message: "malformed")
+        }
+        defer { try? fm.removeItem(at: tmp) }   // a no-op once the move below succeeded
+        let handle = try FileHandle(forWritingTo: tmp)
+        do {
+            try handle.write(contentsOf: sender.firstFrame())
+            try await HistoryCoreStream.send(items, through: sender) { try handle.write(contentsOf: $0) }
+            try handle.close()
+        } catch {
+            try? handle.close()
+            throw error
+        }
+        if fm.fileExists(atPath: url.path) { try fm.removeItem(at: url) }
+        try fm.moveItem(at: tmp, to: url)
         Log.info(
-            "history_file_written snapshot=\(identity.snapshotId.prefix(4).map { String(format: "%02x", $0) }.joined()) records=\(records.count) to=\(peer.deviceIdHex.prefix(8))…",
+            "history_file_written snapshot=\(sender.snapshotId().prefix(4).map { String(format: "%02x", $0) }.joined()) records=\(items.count) to=\(peer.deviceIdHex.prefix(8))…",
             category: "HistorySync"
         )
-        return (identity, encoder.counters, records.count)
+        return (sender.snapshotId(), counters)
     }
 
-    static func suggestedFileName(for identity: HistorySnapshotIdentity) -> String {
-        "konstruct-history-" + identity.snapshotId.prefix(4).map { String(format: "%02x", $0) }.joined() + ".cthf"
+    static func suggestedFileName(forSnapshot snapshotId: Data) -> String {
+        "konstruct-history-" + snapshotId.prefix(4).map { String(format: "%02x", $0) }.joined() + ".cthf"
     }
 
     // MARK: - File: new device
 
-    /// Parse, verify against our own keys, the directory's keys for the source device and the
-    /// link QR's pin, then decapsulate and import. The file is deleted only after the importer
-    /// returns; every refusal leaves it in place. The directory fetch happens first; the import
-    /// step runs on `context`'s queue.
-    /// The header alone, so the directory can be asked before the file is opened for real.
-    static func readHeader(at url: URL) throws -> CTHFHeader {
-        try CTHFEnvelope.readHeader(at: url)
-    }
-
+    /// Open a file sealed to this device and import it. The core reads the header, stops for the
+    /// source device's keys — asked of our own account's directory, never taken from the file —
+    /// checks them and the link QR's pin, and only then decapsulates and opens the chunks. The
+    /// file is deleted only after the import returns; every refusal leaves it in place.
     static func importFile(
         at url: URL,
         local: HistoryLocalKeys,
         pin: HistoryQRPin,
         context: NSManagedObjectContext
     ) async throws -> HistoryImportSummary {
-        let header = try readHeader(at: url)
-
-        // Whose file: the source device must be one of ours, and the directory is asked for its
-        // keys — never the header's own copy of them.
-        let sourceHex = header.sourceDeviceId.map { String(format: "%02x", $0) }.joined()
-        let peer = try await fetchPeerKeys(
-            ownUserId: local.userIdDashed,
-            peerDeviceId: sourceHex,
-            pinnedIdentity: nil
-        )
-        let known = CTHFVerify.Known(
-            recipientDeviceId: local.deviceIdRaw,
-            kyberKeyId: local.kyberSPKId,
-            senderIdentityPublic: peer.identityPublic,
-            senderHybridPublic: peer.hybridPublic,
-            pin: pin
-        )
-        if case .failure(let reason) = CTHFVerify.header(header, known: known) {
-            Log.error("history_file_refused reason=\(reason)", category: "HistorySync")
-            throw reason
-        }
-        if case .bundleOnly = pin {
-            Log.info("history_file_trust root=bundle_only (Flow B residual)", category: "HistorySync")
-        }
-
-        // Verified: only now touch the secrets.
-        // The core does the identity X25519 and the decapsulation and returns only the channel
-        // key; the same schedule as `TransferCrypto.deriveChannelKey(salt: .file)` on the sender.
-        let key = SymmetricKey(data: try CryptoManager.shared.historyFileChannelKey(
-            senderEphPub: header.senderEphPub,
-            kemKeyId: local.kyberSPKId,
-            kemCiphertext: header.kemCt,
-            snapshotId: header.snapshotId
-        ))
-
-        let expectedUserId = local.userIdDashed
-        let summary = try await context.perform {
-            try CTHFEnvelope.importFile(
-                at: url,
-                expected: known,
-                key: key,
-                expectedUserId: expectedUserId,
-                in: context
+        let receiver = try CryptoManager.shared.historyCore().historyReceive(userId: local.userIdRaw, fromFile: true)
+        let sink = HistoryImportSink(expectedUserId: local.userIdDashed, context: context)
+        let outcome: HistoryCoreStream.Outcome
+        do {
+            outcome = try await HistoryCoreStream.receive(
+                from: try HistoryFileSource(url: url),
+                into: receiver,
+                sink: sink,
+                pin: pin,
+                resolve: { deviceIdHex in
+                    try await fetchPeerKeys(
+                        ownUserId: local.userIdDashed,
+                        peerDeviceId: deviceIdHex,
+                        pinnedIdentity: nil
+                    ).knownKeys
+                },
+                reply: nil
             )
+        } catch {
+            Log.error("history_file_refused reason=\(error.localizedDescription)", category: "HistorySync")
+            throw error
         }
+        guard case .imported(let summary, _) = outcome else {
+            // A file has no skip; a header that says otherwise was refused above.
+            throw HistoryError.Malformed(message: "malformed")
+        }
+        try FileManager.default.removeItem(at: url)
         Log.info(
             "history_snapshot_done source=file applied=\(summary.applied) conflicts=\(summary.conflictKeepExisting) skipped=\(summary.skipped.values.reduce(0, +))",
             category: "HistorySync"
@@ -277,25 +245,23 @@ enum HistoryChannel {
 enum HistoryTransferUserMessage {
     static func text(for error: Error) -> String {
         switch error {
-        case let e as CTT1V2Error:
+        case let e as HistoryError:
             switch e {
-            case .qrPinMismatch: return NSLocalizedString("history_sync_qr_pin_mismatch", comment: "")
-            case .qrPinAbsent: return NSLocalizedString("history_sync_qr_pin_absent", comment: "")
-            case .kemKeyIdMismatch: return NSLocalizedString("history_sync_kem_key_id_mismatch", comment: "")
-            case .noHybridKey: return NSLocalizedString("history_sync_no_hybrid_key", comment: "")
-            case .v1RefusedForHistory: return NSLocalizedString("transfer_error_history_v1_refused", comment: "")
-            case .malformed, .identityMismatch, .signatureInvalid:
+            case .QrPinMismatch: return NSLocalizedString("history_sync_qr_pin_mismatch", comment: "")
+            case .QrPinAbsent: return NSLocalizedString("history_sync_qr_pin_absent", comment: "")
+            case .KemKeyIdMismatch: return NSLocalizedString("history_sync_kem_key_id_mismatch", comment: "")
+            case .NoHybridKey: return NSLocalizedString("history_sync_no_hybrid_key", comment: "")
+            case .V1RefusedForHistory: return NSLocalizedString("transfer_error_history_v1_refused", comment: "")
+            case .LocalKeysUnavailable: return NSLocalizedString("history_sync_local_keys_unavailable", comment: "")
+            case .UserMismatch: return NSLocalizedString("history_sync_user_mismatch", comment: "")
+            case .Malformed, .Truncated, .UnknownVersion, .RecordOrder, .EnvelopeManifestMismatch,
+                 .IdentityMismatch, .SignatureInvalid, .ChunkOpenFailed:
                 return NSLocalizedString("transfer_error_corrupt", comment: "")
             }
         case let e as HistoryChannelError:
             switch e {
             case .localKeysUnavailable: return NSLocalizedString("history_sync_local_keys_unavailable", comment: "")
             case .peerNotInDirectory: return NSLocalizedString("history_sync_peer_not_found", comment: "")
-            }
-        case let e as HistorySnapshotError:
-            switch e {
-            case .userMismatch: return NSLocalizedString("history_sync_user_mismatch", comment: "")
-            default: return NSLocalizedString("transfer_error_corrupt", comment: "")
             }
         case let e as NearbyTransferError:
             return e.errorDescription ?? NSLocalizedString("transfer_error_connection", comment: "")
