@@ -66,7 +66,7 @@ final class HistorySnapshotDispositionTests: XCTestCase {
     /// Mutation: peer hint is accepted without derive_device_id.
     func testHintIdNotMatchingIdentityKeyIsRejected() {
         let key = Data(repeating: 0x11, count: 32)
-        let derived = deriveDeviceId(identityPublicKey: [UInt8](key))
+        let derived = deriveDeviceId(identityPublicKey: key)
         XCTAssertTrue(HistorySnapshotDisposition.peerDeviceHintAcceptable(deviceId: derived, identityKey: key))
         XCTAssertFalse(
             HistorySnapshotDisposition.peerDeviceHintAcceptable(deviceId: String(repeating: "0", count: 32), identityKey: key)

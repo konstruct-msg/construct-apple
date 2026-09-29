@@ -36,7 +36,7 @@ final class MultiDeviceReceiveRegressionTests: XCTestCase {
         user.id = accountId
         user.knownIdentityKey = key
         try? context.save()
-        return (user, key, deriveDeviceId(identityPublicKey: [UInt8](key)))
+        return (user, key, deriveDeviceId(identityPublicKey: key))
     }
 
     // MARK: - A device id reaching an account-space lookup
@@ -91,7 +91,7 @@ final class MultiDeviceReceiveRegressionTests: XCTestCase {
     func testAnUnknownDeviceResolvesToNothing() {
         let pinned = pinnedUser(accountId: "289b95ca-8260-4b99-a79a-acaba5681b71")
         let stranger = deriveDeviceId(
-            identityPublicKey: [UInt8](Curve25519.KeyAgreement.PrivateKey().publicKey.rawRepresentation)
+            identityPublicKey: Curve25519.KeyAgreement.PrivateKey().publicKey.rawRepresentation
         )
         XCTAssertNil(SessionAddressing.identityKey(ofDevice: stranger, in: context))
         XCTAssertNil(SessionAddressing.identityKey(ofDevice: pinned.user.id, in: context))

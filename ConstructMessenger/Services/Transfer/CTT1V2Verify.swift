@@ -25,7 +25,7 @@ enum CTT1V2Verify {
         known: Known
     ) -> Result<Void, CTT1V2Error> {
         // 1. ids
-        let derived = deriveDeviceId(identityPublicKey: [UInt8](frame.senderIdentityPub))
+        let derived = deriveDeviceId(identityPublicKey: frame.senderIdentityPub)
         let framedHex = frame.senderDeviceId.map { String(format: "%02x", $0) }.joined()
         guard derived == framedHex else { return .failure(.identityMismatch) }
         guard HistorySnapshotDisposition.equal(frame.receiverDeviceId, known.localDeviceId) else {
@@ -63,9 +63,9 @@ enum CTT1V2Verify {
         // 5. signature (tagged). Decapsulate only after this returns success.
         do {
             let ok = try hybridVerify(
-                publicKey: [UInt8](frame.senderHybridPub),
-                message: [UInt8](frame.taggedMessage),
-                signature: [UInt8](frame.signature)
+                publicKey: frame.senderHybridPub,
+                message: frame.taggedMessage,
+                signature: frame.signature
             )
             guard ok else { return .failure(.signatureInvalid) }
         } catch {
@@ -80,7 +80,7 @@ enum CTT1V2Verify {
         knownIdentity: Data,
         knownHybrid: Data
     ) -> Result<Void, CTT1V2Error> {
-        let derived = deriveDeviceId(identityPublicKey: [UInt8](frame.receiverIdentityPub))
+        let derived = deriveDeviceId(identityPublicKey: frame.receiverIdentityPub)
         let framedHex = opening.receiverDeviceId.map { String(format: "%02x", $0) }.joined()
         guard derived == framedHex else { return .failure(.identityMismatch) }
         guard !knownHybrid.isEmpty else { return .failure(.noHybridKey) }
@@ -97,9 +97,9 @@ enum CTT1V2Verify {
         )
         do {
             let ok = try hybridVerify(
-                publicKey: [UInt8](frame.receiverHybridPub),
-                message: [UInt8](message),
-                signature: [UInt8](frame.signature)
+                publicKey: frame.receiverHybridPub,
+                message: message,
+                signature: frame.signature
             )
             guard ok else { return .failure(.signatureInvalid) }
         } catch {

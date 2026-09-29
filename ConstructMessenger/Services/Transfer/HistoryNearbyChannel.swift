@@ -154,7 +154,7 @@ final class HistoryNearbyChannel {
         let identity = HistorySnapshotIdentity.make(userId: local.userIdDashed, sourceDeviceId: local.deviceIdHex)
         let eph = Curve25519.KeyAgreement.PrivateKey()
         let isSkip = kind == .skip
-        let kem: MlkemEncapsulation? = isSkip ? nil : try mlkem1024Encapsulate(publicKey: [UInt8](peer.kyberSPKPublic))
+        let kem: MlkemEncapsulation? = isSkip ? nil : try mlkem1024Encapsulate(publicKey: peer.kyberSPKPublic)
 
         var opening = CTT1V2Opening(
             senderEphPub: eph.publicKey.rawRepresentation,
@@ -166,7 +166,7 @@ final class HistoryNearbyChannel {
             senderDeviceId: local.deviceIdRaw,
             receiverDeviceId: peer.deviceIdRaw,
             receiverKyberKeyId: peer.kyberSPKId,
-            kemCt: kem.map { Data($0.ciphertext) } ?? Data(count: CTT1V2Layout.kemCtCount),
+            kemCt: kem.map { $0.ciphertext } ?? Data(count: CTT1V2Layout.kemCtCount),
             signature: Data()
         )
         opening.signature = try CryptoManager.shared.signHybrid(opening.taggedMessage)
@@ -195,7 +195,7 @@ final class HistoryNearbyChannel {
         let session = HistoryStreamSession(
             key: TransferCrypto.deriveChannelKey(
                 ecdh: ecdh,
-                kemSharedSecret: Data(kem.sharedSecret),
+                kemSharedSecret: kem.sharedSecret,
                 salt: .nearby,
                 snapshotId: identity.snapshotId
             ),

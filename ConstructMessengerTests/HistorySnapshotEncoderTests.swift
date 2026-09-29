@@ -233,7 +233,7 @@ final class HistorySnapshotEncoderTests: XCTestCase {
         let key = Data(repeating: 0x11, count: 32)
         let hint = PeerDevice(context: context)
         hint.accountId = peer
-        hint.deviceId = deriveDeviceId(identityPublicKey: [UInt8](key))
+        hint.deviceId = deriveDeviceId(identityPublicKey: key)
         hint.identityKey = key
         hint.firstSeenAt = Date(timeIntervalSince1970: 1_700_000_000)
 

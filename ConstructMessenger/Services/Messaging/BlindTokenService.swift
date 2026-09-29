@@ -449,8 +449,8 @@ final class BlindTokenService {
         ],
     ]
 
-    static func pinnedIssuerKey(version: UInt32) -> [UInt8]? {
-        issuerKeyPins[version]
+    static func pinnedIssuerKey(version: UInt32) -> Data? {
+        issuerKeyPins[version].map { Data($0) }
     }
 
     // MARK: - Core OPRF flow
@@ -458,13 +458,13 @@ final class BlindTokenService {
     /// Run the full blind → issue → finalize pipeline and return valid tokens.
     private func issueTokens(count: Int) async throws -> [BlindToken] {
         // 1. Generate nonces and blind them.
-        var nonces: [[UInt8]] = []
-        var blindFactors: [[UInt8]] = []
+        var nonces: [Data] = []
+        var blindFactors: [Data] = []
         var blindedPoints: [Data] = []
 
         for _ in 0..<count {
-            var nonce = [UInt8](repeating: 0, count: 32)
-            let rc = SecRandomCopyBytes(kSecRandomDefault, 32, &nonce)
+            var nonce = Data(count: 32)
+            let rc = nonce.withUnsafeMutableBytes { SecRandomCopyBytes(kSecRandomDefault, 32, $0.baseAddress!) }
             guard rc == errSecSuccess else {
                 throw BlindTokenError.entropyFailure
             }
@@ -474,12 +474,9 @@ final class BlindTokenService {
                 throw BlindTokenError.invalidBlindOutput
             }
 
-            let blinded = Array(packed[0..<32])
-            let factor  = Array(packed[32..<64])
-
             nonces.append(nonce)
-            blindFactors.append(factor)
-            blindedPoints.append(Data(blinded))
+            blindFactors.append(packed.subdata(in: packed.startIndex + 32 ..< packed.startIndex + 64))
+            blindedPoints.append(packed.subdata(in: packed.startIndex ..< packed.startIndex + 32))
         }
 
         // 2. Send to server.
@@ -494,7 +491,7 @@ final class BlindTokenService {
             throw BlindTokenError.responseMismatch(expected: count, got: issued)
         }
 
-        let serverPubkey = response.serverPubkey.isEmpty ? [UInt8](repeating: 0, count: 32) : Array(response.serverPubkey)
+        let serverPubkey = response.serverPubkey.isEmpty ? Data(count: 32) : response.serverPubkey
 
         // 2b. Phase C — verifiable issuance. When this issuer key version is pinned, verify the
         // batched DLEQ proof against the PINNED K (never the echoed serverPubkey, which a
@@ -502,7 +499,7 @@ final class BlindTokenService {
         // point used the single committed k. No pin for this version ⇒ skip, so a not-yet-pinned
         // or freshly-rotated key never bricks issuance (the legacy per-point check below still runs).
         if let pinnedK = Self.pinnedIssuerKey(version: response.issuerKeyVersion) {
-            if !response.serverPubkey.isEmpty && Array(response.serverPubkey) != pinnedK {
+            if !response.serverPubkey.isEmpty && response.serverPubkey != pinnedK {
                 Log.error("BlindToken: serverPubkey ≠ pinned issuer key v\(response.issuerKeyVersion) — rejecting batch (key-tag?)", category: "BlindToken")
                 throw BlindTokenError.allPointsRejected
             }
@@ -511,9 +508,9 @@ final class BlindTokenService {
                 throw BlindTokenError.allPointsRejected
             }
             let verified = ppVerifyDleq(
-                blinded: blindedPoints.prefix(issued).map { [UInt8]($0) },
-                evaluated: response.evaluatedPoints.map { [UInt8]($0) },
-                proof: [UInt8](response.dleqProof),
+                blinded: Array(blindedPoints.prefix(issued)),
+                evaluated: response.evaluatedPoints,
+                proof: response.dleqProof,
                 issuerPublic: pinnedK
             )
             guard verified else {
@@ -526,7 +523,7 @@ final class BlindTokenService {
         // 3. Finalize each evaluated point. `issued` may be a prefix of `count`.
         var tokens: [BlindToken] = []
         for i in 0..<issued {
-            let evaluated = Array(response.evaluatedPoints[i])
+            let evaluated = response.evaluatedPoints[i]
 
             // Optionally verify the point is on-curve + matches server pubkey.
             if !ppVerifyClient(evaluatedBytes: evaluated, nonce: nonces[i], serverPubkeyBytes: serverPubkey) {
@@ -540,7 +537,7 @@ final class BlindTokenService {
                 nonce: nonces[i]
             )
 
-            tokens.append(BlindToken(nonce: Data(nonces[i]), token: Data(tokenBytes)))
+            tokens.append(BlindToken(nonce: nonces[i], token: tokenBytes))
         }
 
         // Server returned a full response but every point failed client verification —

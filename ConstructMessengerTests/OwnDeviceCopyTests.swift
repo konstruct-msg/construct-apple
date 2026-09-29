@@ -38,9 +38,9 @@ final class OwnDeviceCopyTests: XCTestCase {
         TestCertificateServer.shared.trust(in: sibling)
         let opened = try sibling.initReceivingSessionFromWirePayload(
             senderCertificate: carried,
-            wirePayload: [UInt8](message.rawPayload)
+            wirePayload: message.rawPayload
         )
-        XCTAssertEqual(opened.decryptedMessage, Array("copy".utf8))
+        XCTAssertEqual(opened.decryptedMessage, Data("copy".utf8))
         XCTAssertTrue(sibling.hasSession(contactId: senderId), "filed under the device the certificate names")
     }
 

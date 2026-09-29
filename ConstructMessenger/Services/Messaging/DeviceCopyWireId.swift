@@ -174,7 +174,7 @@ enum DeviceCopyWireId {
             if let senderKey {
                 return DeviceCopyReading(
                     verdict: .ours,
-                    senderDevice: deriveDeviceId(identityPublicKey: [UInt8](senderKey))
+                    senderDevice: deriveDeviceId(identityPublicKey: senderKey)
                 )
             }
             // Own replicas: we hold every sibling's key, so a tag matching none of them is a

@@ -56,8 +56,8 @@ actor ServerKeyManager {
             // `privacy_pass::open_sealed_token_bytes`" — one comment naming three implementations
             // of one format, none of which was ever checked against another.
             return Data(try ppSealTokenBytes(
-                token: [UInt8](plaintext),
-                serverEncryptionKey: [UInt8](serverKey.rawRepresentation)
+                token: plaintext,
+                serverEncryptionKey: serverKey.rawRepresentation
             ))
         } catch {
             Log.error("ServerKeyManager: token seal failed — sending token-less: \(error)", category: "Stealth")

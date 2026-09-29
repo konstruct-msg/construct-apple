@@ -117,7 +117,7 @@ final class MessageCryptoService {
         do {
             let result = try core.decryptWirePayload(contactId: contactId, wirePayload: message.rawPayload)
             saveSession(contactId)
-            return DecryptResult(plaintext: Data(result.plaintext), storageKey: Data(result.storageKey))
+            return DecryptResult(plaintext: result.plaintext, storageKey: result.storageKey)
         } catch {
             if let plaintext = try? tryDecryptWithArchived(message) {
                 // Archived session decrypt — no storage key available; caller handles appropriately

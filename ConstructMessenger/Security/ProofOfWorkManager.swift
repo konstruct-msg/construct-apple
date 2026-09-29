@@ -118,7 +118,7 @@ class DeviceIDManager {
     ///
     /// - Note: Same key always produces same device_id (deterministic)
     static func deriveDeviceID(from identityPublicKey: Data) -> String {
-        let deviceID = deriveDeviceId(identityPublicKey: [UInt8](identityPublicKey))
+        let deviceID = deriveDeviceId(identityPublicKey: identityPublicKey)
         
         Log.info("[DeviceID] Derived device ID: \(deviceID)")
         

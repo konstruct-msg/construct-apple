@@ -164,7 +164,7 @@ class InviteVerifier {
 
         // TOFU pin: signed deviceId must match SHA256(identity_public)[0..16].
         // Server key substitution for a different device/identity fails this check.
-        let expectedDeviceId = deriveDeviceId(identityPublicKey: [UInt8](identityPublic))
+        let expectedDeviceId = deriveDeviceId(identityPublicKey: identityPublic)
         guard invite.deviceId.lowercased() == expectedDeviceId.lowercased() else {
             Log.info(
                 "Invite deviceId mismatch: invite=\(invite.deviceId.prefix(8))… expected=\(expectedDeviceId.prefix(8))…",
@@ -180,8 +180,8 @@ class InviteVerifier {
         let dataToVerify = try invite.canonicalString()
         let isValid = try verifyInviteSignature(
             data: dataToVerify,
-            signature: [UInt8](signatureData),
-            verifyingKey: [UInt8](verifyingKeyData)
+            signature: signatureData,
+            verifyingKey: verifyingKeyData
         )
 
         guard isValid else {

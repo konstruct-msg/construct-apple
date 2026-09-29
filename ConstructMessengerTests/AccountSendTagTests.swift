@@ -83,7 +83,7 @@ final class AccountSendTagTests: XCTestCase {
         let senderKey = Curve25519.KeyAgreement.PrivateKey()
         let peerKey = Curve25519.KeyAgreement.PrivateKey()
         let peerAccount = "14f28d31-2dab-44aa-a123-456789abcdef"
-        let peerDevice = deriveDeviceId(identityPublicKey: [UInt8](peerKey.publicKey.rawRepresentation))
+        let peerDevice = deriveDeviceId(identityPublicKey: peerKey.publicKey.rawRepresentation)
 
         AccountSendTag.keys = AccountSendTag.Keys(
             ourIdentityPrivate: { senderKey.rawRepresentation },
@@ -109,7 +109,7 @@ final class AccountSendTagTests: XCTestCase {
         XCTAssertEqual(reading.verdict, .ours)
         XCTAssertEqual(
             reading.senderDevice,
-            deriveDeviceId(identityPublicKey: [UInt8](senderKey.publicKey.rawRepresentation)),
+            deriveDeviceId(identityPublicKey: senderKey.publicKey.rawRepresentation),
             "an ordinary send must be as attributable as a fan-out copy"
         )
     }
@@ -120,7 +120,7 @@ final class AccountSendTagTests: XCTestCase {
         let senderKey = Curve25519.KeyAgreement.PrivateKey()
         let peerKey = Curve25519.KeyAgreement.PrivateKey()
         let peerAccount = "14f28d31-2dab-44aa-a123-456789abcdef"
-        let peerDevice = deriveDeviceId(identityPublicKey: [UInt8](peerKey.publicKey.rawRepresentation))
+        let peerDevice = deriveDeviceId(identityPublicKey: peerKey.publicKey.rawRepresentation)
 
         AccountSendTag.keys = AccountSendTag.Keys(
             ourIdentityPrivate: { senderKey.rawRepresentation },
@@ -153,8 +153,8 @@ final class AccountSendTagTests: XCTestCase {
         let pinnedKey = Curve25519.KeyAgreement.PrivateKey()
         let secondKey = Curve25519.KeyAgreement.PrivateKey()
         let peerAccount = "14f28d31-2dab-44aa-a123-456789abcdef"
-        let pinnedDevice = deriveDeviceId(identityPublicKey: [UInt8](pinnedKey.publicKey.rawRepresentation))
-        let secondDevice = deriveDeviceId(identityPublicKey: [UInt8](secondKey.publicKey.rawRepresentation))
+        let pinnedDevice = deriveDeviceId(identityPublicKey: pinnedKey.publicKey.rawRepresentation)
+        let secondDevice = deriveDeviceId(identityPublicKey: secondKey.publicKey.rawRepresentation)
 
         AccountSendTag.keys = AccountSendTag.Keys(
             ourIdentityPrivate: { senderKey.rawRepresentation },

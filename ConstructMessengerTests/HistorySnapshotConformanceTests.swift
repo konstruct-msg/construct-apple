@@ -316,9 +316,9 @@ final class HistorySnapshotConformanceTests: XCTestCase {
             XCTFail("\(v.id): verify failed \(err)")
         }
         let untagged = try hybridVerify(
-            publicKey: [UInt8](opening.senderHybridPub),
-            message: [UInt8](opening.signedTranscript),
-            signature: [UInt8](opening.signature)
+            publicKey: opening.senderHybridPub,
+            message: opening.signedTranscript,
+            signature: opening.signature
         )
         XCTAssertFalse(untagged, "\(v.id): signature must fail without the domain tag")
     }

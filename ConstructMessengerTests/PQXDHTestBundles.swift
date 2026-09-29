@@ -66,11 +66,11 @@ extension OrchestratorCore {
     /// Nothing else names the key a first message opens with
     /// (`decisions/first-message-opens-without-the-server.md`).
     func pqxdhTestReceive(from sender: OrchestratorCore, first: Data) throws -> SessionInitResult {
-        try pqxdhTestReceive(from: sender, wirePayload: [UInt8](first))
+        try pqxdhTestReceive(from: sender, wirePayload: first)
     }
 
     /// The same, from a wire payload as received.
-    func pqxdhTestReceive(from sender: OrchestratorCore, wirePayload: [UInt8]) throws -> SessionInitResult {
+    func pqxdhTestReceive(from sender: OrchestratorCore, wirePayload: Data) throws -> SessionInitResult {
         TestCertificateServer.shared.trust(in: self)
         return try initReceivingSessionFromWirePayload(
             senderCertificate: try TestCertificateServer.shared.certificate(for: sender),
@@ -123,7 +123,7 @@ final class TestCertificateServer {
         deviceId: String? = nil,
         issuedAt: Date = Date()
     ) throws -> SenderCertificate {
-        let device = deviceId ?? deriveDeviceId(identityPublicKey: [UInt8](identityKey))
+        let device = deviceId ?? deriveDeviceId(identityPublicKey: identityKey)
         let issued = Int64(issuedAt.timeIntervalSince1970)
         let expires = issued + 86_400
         let payload = StealthSenderService.buildCertPayload(

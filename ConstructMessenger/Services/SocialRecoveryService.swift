@@ -48,7 +48,7 @@ final class SocialRecoveryService {
     var isConfigured: Bool = false
 
     // Vault key held in memory only during the setup flow; cleared after upload.
-    private var vaultKey: [UInt8] = []
+    private var vaultKey = Data()
 
     // MARK: - Setup
 
@@ -115,7 +115,7 @@ final class SocialRecoveryService {
             )
             let ciphertext = try srSealRecoveryBundle(vaultKey: vaultKey, bundle: bundle)
             try await AuthServiceClient.shared.storeRecoveryBundle(ciphertext: Data(ciphertext))
-            vaultKey = []  // clear from memory after successful upload
+            vaultKey = Data()  // drop after a successful upload
             isConfigured = true
             setupStep = .done
         } catch {
@@ -144,7 +144,7 @@ final class SocialRecoveryService {
                 recoveryStep = .failed("no recovery bundle found for this identity")
                 return
             }
-            let bundle = try srOpenRecoveryBundle(vaultKey: reconstructedKey, ciphertext: [UInt8](ciphertext))
+            let bundle = try srOpenRecoveryBundle(vaultKey: reconstructedKey, ciphertext: ciphertext)
             let km = KeychainManager.shared
             km.saveDeviceSigningKey(bundle.deviceSigningKey)
             km.saveDeviceIdentityKey(bundle.deviceIdentityKey)
@@ -166,6 +166,6 @@ final class SocialRecoveryService {
         enteredShares = []
         threshold = 2
         shareCount = 3
-        vaultKey = []
+        vaultKey = Data()
     }
 }

@@ -19,7 +19,7 @@ final class SessionAddressingTests: XCTestCase {
     override func setUp() {
         super.setUp()
         identityKey = Curve25519.KeyAgreement.PrivateKey().publicKey.rawRepresentation
-        expectedDeviceId = deriveDeviceId(identityPublicKey: [UInt8](identityKey))
+        expectedDeviceId = deriveDeviceId(identityPublicKey: identityKey)
         SessionAddressing.pinnedIdentityKeyOverrideForTesting = { [identityKey, userId] asked in
             asked == userId ? identityKey : nil
         }
@@ -135,7 +135,7 @@ final class SessionAddressingTests: XCTestCase {
     /// three-simulator stand 2026-08-26.
     func testAKeyInHandNamesTheDeviceWithoutAPinnedRow() {
         let stranger = Curve25519.KeyAgreement.PrivateKey().publicKey.rawRepresentation
-        let expected = deriveDeviceId(identityPublicKey: [UInt8](stranger))
+        let expected = deriveDeviceId(identityPublicKey: stranger)
         XCTAssertEqual(SessionAddressing.cryptoIdentity(ofIdentityKey: stranger), expected)
         XCTAssertTrue(SessionAddressing.isCryptoIdentity(expected))
         // The same key resolves the same way whether or not the contact list knows the peer.

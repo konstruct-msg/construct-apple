@@ -33,7 +33,7 @@ final class ResponderFinalizeContactIdTests: XCTestCase {
 
     /// A device id shaped like the real thing: `deriveDeviceId` of an identity key, 32 hex chars.
     private func device(_ byte: UInt8) -> String {
-        deriveDeviceId(identityPublicKey: [UInt8](Data(repeating: byte, count: 32)))
+        deriveDeviceId(identityPublicKey: Data(repeating: byte, count: 32))
     }
 
     // MARK: - The defect, stated

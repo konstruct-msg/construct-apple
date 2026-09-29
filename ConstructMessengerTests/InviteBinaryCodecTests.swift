@@ -90,8 +90,8 @@ final class InviteBinaryCodecTests: XCTestCase {
             XCTAssertTrue(
                 try verifyInviteSignature(
                     data: v.canonical,
-                    signature: [UInt8](try hex(v.signature)),
-                    verifyingKey: [UInt8](try hex(v.verifying_key))
+                    signature: try hex(v.signature),
+                    verifyingKey: try hex(v.verifying_key)
                 ),
                 v.name
             )

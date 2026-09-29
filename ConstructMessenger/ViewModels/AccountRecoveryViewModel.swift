@@ -118,14 +118,14 @@ final class AccountRecoveryViewModel {
             )
 
             let result = try await AuthServiceClient.shared.setRecoveryKey(
-                publicKey: Data(keypair.publicKey),
+                publicKey: keypair.publicKey,
                 signature: Data(sigBytes),
                 timestamp: timestamp
             )
 
             isSetup = true
             fingerprint = result.fingerprint
-            AccountAddress.rememberOwn(Data(keypair.publicKey))
+            AccountAddress.rememberOwn(keypair.publicKey)
             UserDefaults.standard.set(true, forKey: Self.udKeyIsSetup)
             setupStep = .done(fingerprint: result.fingerprint)
             mnemonic = []   // clear sensitive data after switching away from display view
@@ -228,10 +228,10 @@ final class AccountRecoveryViewModel {
                 try CryptoManager.shared.generateRegistrationBundle()
 
             var publicKeys = Shared_Proto_Services_V1_DevicePublicKeys()
-            publicKeys.verifyingKey = Data(bundle.verifyingKey)
-            publicKeys.identityPublic = Data(bundle.identityPublic)
-            publicKeys.signedPrekeyPublic = Data(bundle.signedPrekeyPublic)
-            publicKeys.signedPrekeySignature = Data(bundle.signature)
+            publicKeys.verifyingKey = bundle.verifyingKey
+            publicKeys.identityPublic = bundle.identityPublic
+            publicKeys.signedPrekeyPublic = bundle.signedPrekeyPublic
+            publicKeys.signedPrekeySignature = bundle.signature
             publicKeys.cryptoSuite = "Curve25519+Ed25519"
 
             // 4. Call RecoverAccount (no auth header).
@@ -262,7 +262,7 @@ final class AccountRecoveryViewModel {
             VeilProxyManager.shared.configureFromServer(cert: response.veilBridgeCert ?? "")
             // The server just accepted a signature by this key as the account's, so it is the
             // account's recovery key — and therefore its address.
-            AccountAddress.rememberOwn(Data(keypair.publicKey))
+            AccountAddress.rememberOwn(keypair.publicKey)
 
             Task {
                 _ = try? await OtpkReplenishmentService.generateAndUpload(
@@ -313,7 +313,7 @@ final class AccountRecoveryViewModel {
                 confirmStep = .failed(NSLocalizedString("recovery_error_not_configured", comment: ""))
                 return
             }
-            let key = Data(keypair.publicKey)
+            let key = keypair.publicKey
             guard AccountAddress.matchesServerFingerprint(key, fingerprint: fingerprint) else {
                 confirmStep = .failed(NSLocalizedString("recovery_confirm_other_account", comment: ""))
                 return

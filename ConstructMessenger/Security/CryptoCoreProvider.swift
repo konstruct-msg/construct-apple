@@ -18,14 +18,14 @@ final class CryptoCoreProvider {
         do {
             if let savedKeysData = keychain.loadPrivateKeysData() {
                 Log.info("Found existing keys in Keychain, restoring CryptoCore...", category: "CryptoManager")
-                let core = try createCryptoCoreFromKeys(keys: [UInt8](savedKeysData))
+                let core = try createCryptoCoreFromKeys(keys: savedKeysData)
 
                 // Restore persisted OTPKs so the core knows about the keys already on the server.
                 // Without this, any initiator using a server OTPK would trigger an AEAD failure
                 // because the restored core's OTPK store is empty.
                 if let otpksData = keychain.loadOtpksData() {
                     do {
-                        try core.importOneTimePrekeys(data: [UInt8](otpksData))
+                        try core.importOneTimePrekeys(data: otpksData)
                         let count = core.oneTimePrekeyCount()
                         Log.info("Restored \(count) OTPKs from Keychain (CFE)", category: "CryptoManager")
                     } catch {

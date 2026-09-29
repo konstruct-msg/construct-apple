@@ -51,7 +51,7 @@ private final class ReconnPeer {
     }
 
     func encrypt(_ data: Data, to contactId: String) throws -> ReconnEncMsg {
-        let wire = [UInt8](try core.encryptToWire(contactId: contactId, plaintext: data))
+        let wire = try core.encryptToWire(contactId: contactId, plaintext: data)
         let r = try wirePayloadUnpack(data: wire)
         return ReconnEncMsg(wirePayload: wire,
                             ephemeralPublicKey: r.dhPublicKey,
@@ -61,7 +61,7 @@ private final class ReconnPeer {
                             suiteId: r.suiteId,
                             pqMessageEpoch: r.pqMessageEpoch,
                             pqRatchetField: r.pqRatchetField,
-                            kemCiphertext: r.kemCiphertext ?? [],
+                            kemCiphertext: r.kemCiphertext ?? Data(),
                             kyberPrekeyId: r.kyberOtpkId)
     }
 
@@ -70,7 +70,7 @@ private final class ReconnPeer {
     }
 
     func decrypt(_ msg: ReconnEncMsg, from contactId: String) throws -> String {
-        let r = try core.decryptWirePayload(contactId: contactId, wirePayload: Data(msg.wirePayload))
+        let r = try core.decryptWirePayload(contactId: contactId, wirePayload: msg.wirePayload)
         return String(bytes: r.plaintext, encoding: .utf8) ?? "<binary>"
     }
 
@@ -85,16 +85,16 @@ private final class ReconnPeer {
 
 private struct ReconnEncMsg {
     /// The same message packed as the envelope carries it — what a first message opens from.
-    let wirePayload: [UInt8]
-    let ephemeralPublicKey: [UInt8]
+    let wirePayload: Data
+    let ephemeralPublicKey: Data
     let messageNumber: UInt32
-    let content: [UInt8]
+    let content: Data
     let oneTimePrekeyId: UInt32
     let suiteId: UInt16
     let pqMessageEpoch: UInt32
-    let pqRatchetField: [UInt8]
+    let pqRatchetField: Data
     /// The PQXDH v2 header the initiator's first flight carries (empty / 0 otherwise).
-    var kemCiphertext: [UInt8] = []
+    var kemCiphertext = Data()
     var kyberPrekeyId: UInt32 = 0
 }
 

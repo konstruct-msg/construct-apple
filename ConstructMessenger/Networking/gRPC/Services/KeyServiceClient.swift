@@ -437,10 +437,10 @@ final class KeyServiceClient: Sendable {
                 request.kyberPreKeys = kyberOtpks.map { key in
                     var kotpk = Shared_Proto_Services_V1_KyberOneTimePreKey()
                     kotpk.keyID = key.keyId
-                    kotpk.publicKey = Data(key.publicKey)
-                    kotpk.signature = Data(key.signature)
+                    kotpk.publicKey = key.publicKey
+                    kotpk.signature = key.signature
                     kotpk.createdAt = key.createdAt
-                    kotpk.hybridSignature = Data(key.hybridSignature)
+                    kotpk.hybridSignature = key.hybridSignature
                     return kotpk
                 }
             }
@@ -471,8 +471,8 @@ final class KeyServiceClient: Sendable {
     private static func kyberSignedUpload(_ key: KyberPrekeyUpload) -> Shared_Proto_Services_V1_KyberSignedPreKeyUpload {
         var signed = Shared_Proto_Services_V1_KyberSignedPreKeyUpload()
         signed.keyID = key.keyId
-        signed.publicKey = Data(key.publicKey)
-        signed.signature = Data(key.signature)
+        signed.publicKey = key.publicKey
+        signed.signature = key.signature
         signed.createdAt = key.createdAt
         return signed
     }

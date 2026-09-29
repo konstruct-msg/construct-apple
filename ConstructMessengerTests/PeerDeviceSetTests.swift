@@ -32,7 +32,7 @@ final class PeerDeviceSetTests: XCTestCase {
     /// A key and the device id that is a function of it — the only shape a row may hold.
     private func device(_ byte: UInt8) -> (deviceId: String, identityKey: Data) {
         let key = Data(repeating: byte, count: 32)
-        return (deviceId: deriveDeviceId(identityPublicKey: [UInt8](key)), identityKey: key)
+        return (deviceId: deriveDeviceId(identityPublicKey: key), identityKey: key)
     }
 
     @discardableResult

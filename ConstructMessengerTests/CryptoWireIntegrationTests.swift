@@ -71,7 +71,7 @@ final class CryptoWireIntegrationTests: XCTestCase {
         /// received, with `sender`'s certificate — the key it names is the key the session opens
         /// with, under the device it names.
         func initReceiverSession(from sender: CryptoPeer, wirePayload: Data) throws -> String {
-            let result = try core.pqxdhTestReceive(from: sender.core, wirePayload: [UInt8](wirePayload))
+            let result = try core.pqxdhTestReceive(from: sender.core, wirePayload: wirePayload)
             return String(bytes: result.decryptedMessage, encoding: .utf8) ?? "__binary_init__"
         }
 

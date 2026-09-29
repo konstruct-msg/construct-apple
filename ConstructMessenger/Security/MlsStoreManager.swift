@@ -69,7 +69,7 @@ final class MlsStoreManager {
         if let blob = KeychainManager.shared.loadMlsStoreData() {
             do {
                 let imported = try importMlsStoreCfe(
-                    data: [UInt8](blob),
+                    data: blob,
                     signerPrivateKey: signerPrivate,
                     signerPublicKey: signerPublic
                 )
@@ -89,14 +89,14 @@ final class MlsStoreManager {
 
     /// Device Ed25519 signing keypair from the Rust core. The MLS BasicCredential
     /// is built over the public (verifying) key.
-    private func signerKeys() throws -> (privateKey: [UInt8], publicKey: [UInt8]) {
+    private func signerKeys() throws -> (privateKey: Data, publicKey: Data) {
         let crypto = CryptoManager.shared
         crypto.coreLock.lock()
         defer { crypto.coreLock.unlock() }
         guard let core = crypto.orchestratorCore else {
             throw MlsStoreManagerError.coreNotInitialized
         }
-        let privateKey = [UInt8](try core.getSigningKeyBytes())
+        let privateKey = try core.getSigningKeyBytes()
         let publicKey = try core.getRegistrationBundleFields().verifyingKey
         return (privateKey, publicKey)
     }
@@ -109,7 +109,7 @@ final class MlsStoreManager {
         lock.lock()
         defer { lock.unlock() }
         guard let store else { return }
-        let blob = Data(try store.exportCfe())
+        let blob = try store.exportCfe()
         guard KeychainManager.shared.saveMlsStore(blob) else {
             Log.error("MLS store persist failed (Keychain write)", category: "MLS")
             throw MlsStoreManagerError.persistFailed
@@ -128,7 +128,7 @@ final class MlsStoreManager {
         var packages: [Data] = []
         packages.reserveCapacity(count)
         for _ in 0..<count {
-            packages.append(Data(try store.generateKeyPackage()))
+            packages.append(try store.generateKeyPackage())
         }
         try persist()
         return packages

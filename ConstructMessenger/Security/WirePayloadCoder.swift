@@ -27,7 +27,7 @@ enum WirePayloadCoder {
 
     struct DecodedPayload {
         let messageNumber: UInt32
-        let ephemeralPublicKey: [UInt8]   // 32 bytes
+        let ephemeralPublicKey: Data      // 32 bytes
         let oneTimePreKeyId: UInt32       // 0 = no OTPK
         let kyberOtpkId: UInt32           // the responder's Kyber prekey (with a KEM ciphertext); 0 = none
         let previousChainLength: UInt32   // DR PN field
@@ -40,7 +40,7 @@ enum WirePayloadCoder {
 
     /// Unpack a received encrypted_payload blob into components for decryption.
     static func decode(_ data: Data) throws -> DecodedPayload {
-        let p = try wirePayloadUnpack(data: [UInt8](data))
+        let p = try wirePayloadUnpack(data: data)
         return DecodedPayload(
             messageNumber: p.messageNumber,
             ephemeralPublicKey: p.dhPublicKey,
@@ -48,10 +48,10 @@ enum WirePayloadCoder {
             kyberOtpkId: p.kyberOtpkId,
             previousChainLength: p.previousChainLength,
             suiteId: p.suiteId,
-            kemCiphertext: p.kemCiphertext.map { Data($0) },
-            content: Data(p.sealedBox),
+            kemCiphertext: p.kemCiphertext,
+            content: p.sealedBox,
             pqMessageEpoch: p.pqMessageEpoch,
-            pqRatchetField: Data(p.pqRatchetField)
+            pqRatchetField: p.pqRatchetField
         )
     }
 }

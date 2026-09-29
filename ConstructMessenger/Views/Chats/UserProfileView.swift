@@ -604,7 +604,7 @@ struct UserProfileView: View {
     /// value the server keys sentinel on), so it works even under sealed sender.
     private func handleReportSpam() {
         let userId = user.id
-        let reportedDeviceId: String? = user.knownIdentityKey.map { deriveDeviceId(identityPublicKey: [UInt8]($0)) }
+        let reportedDeviceId: String? = user.knownIdentityKey.map { deriveDeviceId(identityPublicKey: $0) }
 
         // Block immediately (local drop + durable server-side); report best-effort alongside.
         user.isBlocked = true

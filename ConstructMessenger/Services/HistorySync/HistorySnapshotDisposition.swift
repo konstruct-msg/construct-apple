@@ -67,7 +67,7 @@ enum HistorySnapshotDisposition {
 
     /// Core derivation, not a second SHA-256. device_id is 32 lowercase hex.
     static func peerDeviceHintAcceptable(deviceId: String, identityKey: Data) -> Bool {
-        let derived = deriveDeviceId(identityPublicKey: [UInt8](identityKey))
+        let derived = deriveDeviceId(identityPublicKey: identityKey)
         return derived == deviceId.lowercased()
     }
 

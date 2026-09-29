@@ -190,7 +190,7 @@ extension CryptoManager {
             return false
         }
         do {
-            _ = try core.importSession(contactId: contactId, data: [UInt8](sessionData))
+            _ = try core.importSession(contactId: contactId, data: sessionData)
             Log.debug("Restored session (CFE): \(contactId)", category: "CryptoManager")
             return true
         } catch {
@@ -244,7 +244,7 @@ extension CryptoManager {
         if core.hasSession(contactId: contactId) == false,
            let stored = KeychainManager.shared.loadSessionData(for: contactId) {
             do {
-                _ = try core.importSession(contactId: contactId, data: [UInt8](stored))
+                _ = try core.importSession(contactId: contactId, data: stored)
                 Log.info(
                     "archiveSession: imported on-disk session for \(contactId.prefix(8))… before archiving",
                     category: "CryptoManager"
@@ -261,7 +261,7 @@ extension CryptoManager {
         //    IMPORTANT: only proceed with deletion if export succeeded — otherwise the session
         //    would be permanently lost with no archive to restore from.
         do {
-            let sessionData = Data(try core.exportSession(contactId: contactId))
+            let sessionData = try core.exportSession(contactId: contactId)
 
             let archive = SessionArchive(
                 sessionData: sessionData,
@@ -341,7 +341,7 @@ extension CryptoManager {
         let latest = archives[idx]
         do {
             let suiteIdBefore = KeychainManager.shared.loadSessionSuiteId(userId: contactId) ?? 0
-            _ = try core.importSession(contactId: contactId, data: [UInt8](latest.sessionData))
+            _ = try core.importSession(contactId: contactId, data: latest.sessionData)
             // Use typed accessor — no JSON round-trip needed.
             let suiteId = core.getSessionSuiteId(contactId: contactId)
             if suiteId > 0 {
@@ -386,11 +386,11 @@ extension CryptoManager {
         Log.info("Trying \(archives.count) archived sessions for \(contactId)", category: "CryptoManager")
 
         // Snapshot the active session so we can restore it if all archives fail.
-        let activeSessionSnapshot = try? Data(core.exportSession(contactId: contactId))
+        let activeSessionSnapshot = try? core.exportSession(contactId: contactId)
 
         for (index, archive) in archives.enumerated().reversed() {
             do {
-                _ = try core.importSession(contactId: contactId, data: [UInt8](archive.sessionData))
+                _ = try core.importSession(contactId: contactId, data: archive.sessionData)
 
                 let result = try core.decryptWirePayload(contactId: contactId, wirePayload: message.rawPayload)
 
@@ -398,7 +398,7 @@ extension CryptoManager {
                 saveSessionToKeychain(forDevice: contactId)
                 archiveManager.restoreArchiveToCurrent(for: contactId, index: index)
                 Log.info("Restored archived session as current", category: "CryptoManager")
-                return Data(result.plaintext)
+                return result.plaintext
 
             } catch {
                 Log.debug("Archive #\(index) failed: \(error)", category: "CryptoManager")
@@ -407,7 +407,7 @@ extension CryptoManager {
         }
 
         if let snap = activeSessionSnapshot {
-            _ = try? core.importSession(contactId: contactId, data: [UInt8](snap))
+            _ = try? core.importSession(contactId: contactId, data: snap)
         }
 
         Log.info("All \(archives.count) archived sessions failed to decrypt", category: "CryptoManager")

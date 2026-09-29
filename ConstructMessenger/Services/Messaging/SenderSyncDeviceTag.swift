@@ -63,8 +63,8 @@ enum SenderSyncDeviceTag {
         try? deviceCopyTag(
             baseMessageId: baseMessageId,
             targetDeviceId: targetDeviceId,
-            ourIdentityPrivate: [UInt8](ourIdentityPrivateKey),
-            peerIdentityPublic: [UInt8](peerIdentityPublicKey)
+            ourIdentityPrivate: ourIdentityPrivateKey,
+            peerIdentityPublic: peerIdentityPublicKey
         )
     }
 
@@ -84,8 +84,8 @@ enum SenderSyncDeviceTag {
             tag: tag,
             baseMessageId: baseMessageId,
             ourDeviceId: ourDeviceId,
-            ourIdentityPrivate: [UInt8](ourIdentityPrivateKey),
-            peerIdentityPublic: [UInt8](peerIdentityPublicKey)
+            ourIdentityPrivate: ourIdentityPrivateKey,
+            peerIdentityPublic: peerIdentityPublicKey
         )
     }
 }

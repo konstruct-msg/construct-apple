@@ -111,7 +111,7 @@ enum HistoryChannel {
         else { throw CTT1V2Error.noHybridKey }
         // The device id is derived from the identity key; a bundle whose pair disagrees is not
         // this device's bundle, whatever the directory labelled it.
-        guard deriveDeviceId(identityPublicKey: [UInt8](b.identityPublic)) == entry.deviceId.lowercased() else {
+        guard deriveDeviceId(identityPublicKey: b.identityPublic) == entry.deviceId.lowercased() else {
             throw CTT1V2Error.identityMismatch
         }
         if let pinned = pinnedIdentity {
@@ -154,10 +154,10 @@ enum HistoryChannel {
         let peerIdentity = try Curve25519.KeyAgreement.PublicKey(rawRepresentation: peer.identityPublic)
         let ecdh = try eph.sharedSecretFromKeyAgreement(with: peerIdentity)
             .withUnsafeBytes { Data($0) }
-        let kem = try mlkem1024Encapsulate(publicKey: [UInt8](peer.kyberSPKPublic))
+        let kem = try mlkem1024Encapsulate(publicKey: peer.kyberSPKPublic)
         let key = TransferCrypto.deriveChannelKey(
             ecdh: ecdh,
-            kemSharedSecret: Data(kem.sharedSecret),
+            kemSharedSecret: kem.sharedSecret,
             salt: .file,
             snapshotId: identity.snapshotId
         )
@@ -171,7 +171,7 @@ enum HistoryChannel {
             senderIdentityPub: local.identityPublic,
             senderHybridPub: local.hybridPublic,
             recipientKyberKeyId: peer.kyberSPKId,
-            kemCt: Data(kem.ciphertext),
+            kemCt: kem.ciphertext,
             signature: Data()
         )
         header.signature = try CryptoManager.shared.signHybrid(header.taggedMessage)

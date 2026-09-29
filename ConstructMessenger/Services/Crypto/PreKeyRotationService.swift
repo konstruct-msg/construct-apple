@@ -147,8 +147,8 @@ final class PreKeyRotationService {
         // NOTE: rotateSignedPrekey() mutates the Rust core in memory immediately.
         // If Phase 2 (RPC) fails, we MUST reload from Keychain to roll back.
         let rotatedSpk = try CryptoManager.shared.rotateSignedPrekey()
-        let classicPubData = Data(rotatedSpk.publicKey)
-        let classicSigData = Data(rotatedSpk.signature)
+        let classicPubData = rotatedSpk.publicKey
+        let classicSigData = rotatedSpk.signature
         let classicKey = (keyId: rotatedSpk.keyId, publicKey: classicPubData, signature: classicSigData)
 
         // Kyber SPK: the core's pending key, both signatures over its signed `created_at` made
@@ -179,7 +179,7 @@ final class PreKeyRotationService {
         let canSignHybrid = allowHybridSPKSignature && hybridPublished
         // Use the core-routed prekey hybrid signer (message format centralized in core).
         let spkHybridSig = canSignHybrid ? (try? CryptoManager.shared.signHybridPrekey(suiteId: 0x01, publicKey: classicPubData)) : nil
-        let kyberHybridSig = canSignHybrid ? Data(kyberKey.hybridSignature) : nil
+        let kyberHybridSig = canSignHybrid ? kyberKey.hybridSignature : nil
         let atomicHybridSent = spkHybridSig != nil && kyberHybridSig != nil
 
         // ── Phase 2: single atomic RPC ───────────────────────────────────────
@@ -389,7 +389,7 @@ final class PreKeyRotationService {
             // leaves identity/SPK matching yet makes EVERY PQXDH handshake AEAD-fail on the
             // responder (the KEM secret diverges), with no visible desync — the build-497 blocker.
             // Compare it too; "both absent" counts as matching (Ed25519-only / no PQ peer).
-            let localKyber = (try? CryptoManager.shared.currentKyberSpkUpload()).map { Data($0.publicKey) }
+            let localKyber = (try? CryptoManager.shared.currentKyberSpkUpload()).map { $0.publicKey }
             let serverKyber = serverBundle.kyberPreKeyPublic
             let kyberMatch: Bool = {
                 guard let localKyber, !localKyber.isEmpty else { return serverKyber?.isEmpty ?? true }

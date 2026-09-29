@@ -89,8 +89,8 @@ enum DeviceMetadataService {
         var sealed = Shared_Proto_Services_V1_SealedDeviceMetadata()
         for key in keys {
             guard let copy = try? sealToDeviceKey(
-                plaintext: [UInt8](plaintext),
-                deviceIdentityKey: [UInt8](key)
+                plaintext: plaintext,
+                deviceIdentityKey: key
             ) else {
                 // One unusable key must not cost the other devices their copy: a bundle can carry
                 // a key of the wrong length, and dropping the whole blob for it would leave every
@@ -128,8 +128,8 @@ enum DeviceMetadataService {
 
         for copy in sealed.copies {
             guard let plaintext = try? openWithDeviceKey(
-                sealedBox: [UInt8](copy),
-                ourIdentityPriv: [UInt8](ourKey)
+                sealedBox: copy,
+                ourIdentityPriv: ourKey
             ) else { continue }  // sealed to a sibling — the expected way to find our own
             return try? Shared_Proto_Services_V1_DeviceMetadata(serializedBytes: Data(plaintext))
         }
@@ -186,7 +186,7 @@ enum DeviceMetadataService {
             return
         }
 
-        guard let blob = seal(selfDescription(), toIdentityKeys: devices.map { Data($0.bundle.identityPublic) }) else {
+        guard let blob = seal(selfDescription(), toIdentityKeys: devices.map { $0.bundle.identityPublic }) else {
             return
         }
 

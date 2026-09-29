@@ -64,7 +64,7 @@ enum OwnDeviceCopy {
             id: id,
             from: from,
             to: to,
-            ephemeralPublicKey: Data(decoded.ephemeralPublicKey),
+            ephemeralPublicKey: decoded.ephemeralPublicKey,
             messageNumber: decoded.messageNumber,
             content: decoded.content,
             suiteId: decoded.suiteId,

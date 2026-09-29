@@ -37,7 +37,7 @@ final class CallSignalFrameTests: XCTestCase {
     func testThePayloadSurvivesByteForByte() throws {
         let payload = try realPayload()
         XCTAssertNotNil(
-            try wirePayloadUnpack(data: [UInt8](payload)).identityProofCiphertext,
+            try wirePayloadUnpack(data: payload).identityProofCiphertext,
             "the fixture must carry the answer to the KEM identity key"
         )
         XCTAssertEqual(try Frame.decode(Frame.encode(wirePayload: payload)), payload)

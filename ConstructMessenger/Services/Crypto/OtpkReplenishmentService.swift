@@ -45,7 +45,7 @@ enum OtpkReplenishmentService {
         guard !pairs.isEmpty else { return 0 }
 
         let preKeys = pairs.map { pair -> (keyId: UInt32, publicKey: Data) in
-            (keyId: pair.keyId, publicKey: Data(pair.publicKey))
+            (keyId: pair.keyId, publicKey: pair.publicKey)
         }
 
         // Persist private keys to Keychain BEFORE uploading so they survive even if the
@@ -137,7 +137,7 @@ enum OtpkReplenishmentService {
     /// Export all OTPKs from the Rust core and save to Keychain (serialized via coreLock).
     static func persistOtpks() {
         do {
-            let data = Data(try CryptoManager.shared.exportOneTimePrekeys())
+            let data = try CryptoManager.shared.exportOneTimePrekeys()
             KeychainManager.shared.saveOtpks(data)
             Log.debug("Persisted \(CryptoManager.shared.oneTimePrekeyCount()) OTPKs (CFE) to Keychain", category: "OTPK")
         } catch {

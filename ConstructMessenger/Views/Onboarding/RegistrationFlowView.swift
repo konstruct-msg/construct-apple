@@ -281,11 +281,11 @@ struct RegistrationFlowView: View {
                 identityKey = identityKeyData
 
                 Log.info("Generated keys: device_id=\(generatedDeviceId)", category: "Registration")
-                let verifyingKeyB64 = Data(bundle.verifyingKey).base64EncodedString()
+                let verifyingKeyB64 = bundle.verifyingKey.base64EncodedString()
                 Log.info("Registration bundle verifying_key: \(verifyingKeyB64)", category: "Registration")
 
                 do {
-                    let derivedVerifyingKey = try deriveVerifyingKeyFromSecret(identitySecretKey: [UInt8](signingKeyData))
+                    let derivedVerifyingKey = try deriveVerifyingKeyFromSecret(identitySecretKey: signingKeyData)
                     let derivedBase64 = Data(derivedVerifyingKey).base64EncodedString()
                     Log.info("Derived verifying key from signing_secret: \(derivedBase64)", category: "Registration")
                 } catch {
@@ -338,7 +338,7 @@ struct RegistrationFlowView: View {
                 username: username,
                 deviceId: deviceId,
                 registrationBundle: registrationBundle ?? RegistrationBundleFields(
-                    identityPublic: [], signedPrekeyPublic: [], signature: [], verifyingKey: [], suiteId: 0
+                    identityPublic: Data(), signedPrekeyPublic: Data(), signature: Data(), verifyingKey: Data(), suiteId: 0
                 ),
                 challenge: challenge,
                 powSolution: solution
@@ -490,10 +490,10 @@ struct RegistrationFlowView: View {
 private extension RegistrationFlowView {
     static func saveBundle(_ bundle: RegistrationBundleFields) {
         PendingRegistrationStore.save(
-            identityPublic: Data(bundle.identityPublic),
-            signedPrekeyPublic: Data(bundle.signedPrekeyPublic),
-            signature: Data(bundle.signature),
-            verifyingKey: Data(bundle.verifyingKey),
+            identityPublic: bundle.identityPublic,
+            signedPrekeyPublic: bundle.signedPrekeyPublic,
+            signature: bundle.signature,
+            verifyingKey: bundle.verifyingKey,
             suiteId: bundle.suiteId
         )
     }
@@ -501,10 +501,10 @@ private extension RegistrationFlowView {
     static func loadSavedBundle() -> RegistrationBundleFields? {
         guard let t = PendingRegistrationStore.load() else { return nil }
         return RegistrationBundleFields(
-            identityPublic: [UInt8](t.identityPublic),
-            signedPrekeyPublic: [UInt8](t.signedPrekeyPublic),
-            signature: [UInt8](t.signature),
-            verifyingKey: [UInt8](t.verifyingKey),
+            identityPublic: t.identityPublic,
+            signedPrekeyPublic: t.signedPrekeyPublic,
+            signature: t.signature,
+            verifyingKey: t.verifyingKey,
             suiteId: t.suiteId
         )
     }

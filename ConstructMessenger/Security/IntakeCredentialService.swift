@@ -161,7 +161,7 @@ final class IntakeCredentialService {
         if let existing = keychain.loadOwnIntakeKey(), existing.count == intakeKeyLength {
             return existing
         }
-        let fresh = Data(generateIntakeKey())
+        let fresh = generateIntakeKey()
         keychain.saveOwnIntakeKey(fresh)
         Log.info("Intake: minted this account's intake key", category: "Intake")
         return fresh
@@ -186,7 +186,7 @@ final class IntakeCredentialService {
         var entries: [(epoch: UInt64, tag: Data)] = []
         for epoch in IntakePublishing.epochsToPublish(currentEpoch: currentEpoch) {
             guard let tag = try? intakeTag(
-                intakeKey: [UInt8](key), recipientAccountId: accountId, epoch: epoch
+                intakeKey: key, recipientAccountId: accountId, epoch: epoch
             ) else { continue }
             entries.append((epoch, Data(tag)))
         }
@@ -243,7 +243,7 @@ final class IntakeCredentialService {
         guard let key = stored else { return nil }
 
         guard let tag = try? intakeTag(
-            intakeKey: [UInt8](key), recipientAccountId: accountId, epoch: epoch
+            intakeKey: key, recipientAccountId: accountId, epoch: epoch
         ) else {
             IntakeTagAbsence.derivationFailed.log(peer: accountId)
             return nil

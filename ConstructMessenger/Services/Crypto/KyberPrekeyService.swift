@@ -54,7 +54,7 @@ enum KyberPrekeyService {
             return true
         }
         do {
-            try core.importKyberPrekeys(data: [UInt8](data))
+            try core.importKyberPrekeys(data: data)
             Log.info("Kyber prekeys restored (\(core.kyberOneTimePrekeyCount()) one-time)", category: "PQC")
             return true
         } catch {
@@ -68,7 +68,7 @@ enum KyberPrekeyService {
     @discardableResult
     nonisolated static func persist() -> Bool {
         do {
-            let blob = Data(try CryptoManager.shared.exportKyberPrekeys())
+            let blob = try CryptoManager.shared.exportKyberPrekeys()
             guard KeychainManager.shared.saveKyberPrekeys(blob) else {
                 Log.error("PERSIST-FAIL Kyber prekeys (\(blob.count)B)", category: "PQC")
                 return false
@@ -82,8 +82,8 @@ enum KyberPrekeyService {
 
     /// Persist the blob a responder init handed back (`SessionInitResult.kyberPrekeys`, set when
     /// the init burned a one-time key). Same bytes `persist()` would export.
-    nonisolated static func persist(blob: [UInt8]) {
-        if !KeychainManager.shared.saveKyberPrekeys(Data(blob)) {
+    nonisolated static func persist(blob: Data) {
+        if !KeychainManager.shared.saveKyberPrekeys(blob) {
             Log.error("PERSIST-FAIL Kyber prekeys after a responder init (\(blob.count)B) — the burned key comes back on restart", category: "PQC")
         }
     }
@@ -212,7 +212,7 @@ enum KyberPrekeyService {
                         kyberOneTimePreKeys: oneTime.isEmpty ? nil : oneTime,
                         hybridIdentity: (key: hybridPublic, signature: binding),
                         signedPreKeyHybridSignature: classicSpkHybridSignature,
-                        kyberSignedPreKeyHybridSignature: Data(spk.hybridSignature)
+                        kyberSignedPreKeyHybridSignature: spk.hybridSignature
                     )
                 }
             } catch {

@@ -271,31 +271,30 @@ struct PublicKeyBundleData: Codable, Sendable {
     ///   one-time prekey). Only the classic one-time key is dropped; the Kyber one is a separate
     ///   store the responder names by id.
     func binaryKeyBundle(withoutOneTimePrekey: Bool = false) -> BinaryKeyBundle {
-        func bytes(_ d: Data?) -> [UInt8]? { d.map { [UInt8]($0) } }
         return BinaryKeyBundle(
-            identityPublic: [UInt8](identityPublic),
-            signedPrekeyPublic: [UInt8](signedPrekeyPublic),
-            signature: [UInt8](signature),
-            verifyingKey: [UInt8](verifyingKey),
+            identityPublic: identityPublic,
+            signedPrekeyPublic: signedPrekeyPublic,
+            signature: signature,
+            verifyingKey: verifyingKey,
             suiteId: suiteId,
-            oneTimePrekeyPublic: withoutOneTimePrekey ? nil : bytes(oneTimePreKeyPublic),
+            oneTimePrekeyPublic: withoutOneTimePrekey ? nil : oneTimePreKeyPublic,
             oneTimePrekeyId: withoutOneTimePrekey ? nil : oneTimePreKeyId,
             spkUploadedAt: spkUploadedAt,
             spkRotationEpoch: spkRotationEpoch,
             kyberSpkUploadedAt: kyberSpkUploadedAt,
             kyberSpkRotationEpoch: kyberSpkRotationEpoch,
-            kyberPreKeyPublic: bytes(kyberPreKeyPublic),
+            kyberPreKeyPublic: kyberPreKeyPublic,
             kyberPreKeyId: kyberPreKeyId,
             kyberPreKeyCreatedAt: kyberPreKeyCreatedAt,
-            kyberPreKeySignature: bytes(kyberPreKeySignature),
-            kyberPreKeyHybridSignature: bytes(kyberPreKeyHybridSignature),
-            kyberOneTimePrekeyPublic: bytes(kyberOneTimePreKeyPublic),
+            kyberPreKeySignature: kyberPreKeySignature,
+            kyberPreKeyHybridSignature: kyberPreKeyHybridSignature,
+            kyberOneTimePrekeyPublic: kyberOneTimePreKeyPublic,
             kyberOneTimePrekeyId: kyberOneTimePreKeyId,
             kyberOneTimePrekeyCreatedAt: kyberOneTimePreKeyCreatedAt,
-            kyberOneTimePrekeySignature: bytes(kyberOneTimePreKeySignature),
-            kyberOneTimePrekeyHybridSignature: bytes(kyberOneTimePreKeyHybridSignature),
-            hybridIdentityKey: bytes(hybridIdentityKey),
-            hybridIdentitySignature: bytes(hybridIdentitySignature)
+            kyberOneTimePrekeySignature: kyberOneTimePreKeySignature,
+            kyberOneTimePrekeyHybridSignature: kyberOneTimePreKeyHybridSignature,
+            hybridIdentityKey: hybridIdentityKey,
+            hybridIdentitySignature: hybridIdentitySignature
         )
     }
 }

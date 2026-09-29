@@ -292,10 +292,15 @@ either wired up or deleted.
 
 1. **No base64 in application logic** — only at true text-transport boundaries (QR, deep links,
    `mailto:`). Never in message processing, session management or storage.
-2. **No JSON for binary payloads** — keys, ciphertexts and wire payloads are `Data` / `[UInt8]`
-   end to end; use protobuf `bytes` or CFE binary.
-3. **The UniFFI boundary passes `Data` / `[UInt8]`** — never stringify; UDL fields holding binary
-   are `sequence<u8>`, not `String`.
+2. **No JSON for binary payloads** — keys, ciphertexts and wire payloads are `Data` end to end;
+   use protobuf `bytes` or CFE binary.
+3. **The UniFFI boundary passes `Data`** — UDL byte fields and arguments are `bytes`, never
+   `sequence<u8>` and never `String`. Both are `Vec<u8>` in Rust; the bindings are not alike:
+   `bytes` is `Data`, one block copy, while `sequence<u8>` is `[UInt8]` copied one byte per call
+   (and `List<UByte>`, an object per byte, on Android). This rule prescribed `sequence<u8>` until
+   2026-09-29 — it meant "not base64", and 195 fields were the slow kind. The core's
+   `tests/udl_bytes_test.rs` fails on a new one. A value from the core is already `Data`: do not
+   wrap it in `Data(…)`, which copies it again.
 4. **Session state persists as CFE envelopes** — every `Action::SaveSessionToSecureStore` data
    field originates from `export_session_bytes_for`, never `export_session_json_for`.
 5. `Codable` `Data` fields (implicit base64 in JSONEncoder) are fine for UserDefaults persistence;
@@ -303,8 +308,8 @@ either wired up or deleted.
 6. Core Data `encryptedContent` is `Binary Data` (external storage); `ChatMessage.content` is
    `Data` — control messages use `Data()`, never a string literal.
 
-Before adding any crypto or messaging field: is it `Data` source-to-destination, `[UInt8]` across
-FFI, proto `bytes`, zero base64 in the path? If not, fix the design before merging.
+Before adding any crypto or messaging field: is it `Data` source-to-destination, `bytes` in the
+UDL, proto `bytes`, zero base64 in the path? If not, fix the design before merging.
 
 ## Two representations, one authority
 

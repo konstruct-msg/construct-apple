@@ -80,7 +80,7 @@ struct StickerPack: Equatable, Sendable {
                   Int(e.width) == StickerImageRules.canvas, Int(e.height) == StickerImageRules.canvas,
                   e.byteLen > 0, Int(e.byteLen) <= StickerImageRules.maxBytes
             else { throw VerifyError.badEntry(index: i) }
-            entries.append(Entry(sha256: Data(e.sha256), emoji: e.emoji, byteLen: Int(e.byteLen)))
+            entries.append(Entry(sha256: e.sha256, emoji: e.emoji, byteLen: Int(e.byteLen)))
         }
         if manifest.signature.isEmpty {
             guard allowUnsigned else { throw VerifyError.unsigned }

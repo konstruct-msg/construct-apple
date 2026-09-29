@@ -55,7 +55,7 @@ private final class SessionPeer {
 
     /// Encrypt Data (arbitrary bytes) — mirrors encryptOutgoing(plaintext: Data).
     func encrypt(_ data: Data, to contactId: String) throws -> EncryptedComponents {
-        let wire = [UInt8](try core.encryptToWire(contactId: contactId, plaintext: data))
+        let wire = try core.encryptToWire(contactId: contactId, plaintext: data)
         // The fields, read back from the payload the core packed — for assertions only; decrypt
         // takes the payload.
         let result = try wirePayloadUnpack(data: wire)
@@ -68,7 +68,7 @@ private final class SessionPeer {
             suiteId: result.suiteId,
             pqMessageEpoch: result.pqMessageEpoch,
             pqRatchetField: result.pqRatchetField,
-            kemCiphertext: result.kemCiphertext ?? [],
+            kemCiphertext: result.kemCiphertext ?? Data(),
             kyberPrekeyId: result.kyberOtpkId
         )
     }
@@ -92,7 +92,7 @@ private final class SessionPeer {
     func decrypt(_ components: EncryptedComponents, from contactId: String) throws -> Data {
         let result = try core.decryptWirePayload(
             contactId: contactId,
-            wirePayload: Data(components.wirePayload)
+            wirePayload: components.wirePayload
         )
         return Data(result.plaintext)
     }
@@ -102,16 +102,16 @@ private final class SessionPeer {
 
 private struct EncryptedComponents {
     /// The same message packed as the envelope carries it — what a first message opens from.
-    let wirePayload: [UInt8]
-    let ephemeralPublicKey: [UInt8]
+    let wirePayload: Data
+    let ephemeralPublicKey: Data
     let messageNumber: UInt32
-    let content: [UInt8]
+    let content: Data
     let oneTimePrekeyId: UInt32
     let suiteId: UInt16
     let pqMessageEpoch: UInt32
-    let pqRatchetField: [UInt8]
+    let pqRatchetField: Data
     /// The PQXDH v2 header the initiator's first flight carries (empty / 0 otherwise).
-    var kemCiphertext: [UInt8] = []
+    var kemCiphertext = Data()
     var kyberPrekeyId: UInt32 = 0
 }
 

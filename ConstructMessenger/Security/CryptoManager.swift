@@ -137,7 +137,7 @@ class CryptoManager {
     // MARK: - Device Registration
 
     /// Export signing secret key from current core (for device-signed flows).
-    func exportSigningSecretKey() throws -> [UInt8] {
+    func exportSigningSecretKey() throws -> Data {
         let keyBytes: Data
         if let oc = orchestratorCore {
             keyBytes = try oc.getSigningKeyBytes()
@@ -149,7 +149,7 @@ class CryptoManager {
         guard !keyBytes.isEmpty else {
             throw CryptoError.InvalidKeyData(message: "getSigningKeyBytes returned empty")
         }
-        return [UInt8](keyBytes)
+        return keyBytes
     }
     
     /// Expose local public key fields for server consistency checks.
@@ -158,7 +158,7 @@ class CryptoManager {
         defer { coreLock.unlock() }
         guard let core = orchestratorCore else { throw CryptoManagerError.coreNotInitialized }
         let fields = try core.getRegistrationBundleFields()
-        return (Data(fields.identityPublic), Data(fields.signedPrekeyPublic))
+        return (fields.identityPublic, fields.signedPrekeyPublic)
     }
 
     /// Generate a complete registration bundle for device-based authentication
@@ -172,7 +172,7 @@ class CryptoManager {
         self._bootstrapCore = activeCore
 
         // Persist in CFE binary format immediately (no JSON fallback)
-        let cfeData = try Data(activeCore.exportPrivateKeys())
+        let cfeData = try activeCore.exportPrivateKeys()
         let saved = KeychainManager.shared.savePrivateKeys(cfeData)
         if saved {
             Log.info("Saved registration private keys (CFE) to Keychain", category: "CryptoManager")
@@ -214,7 +214,7 @@ class CryptoManager {
         guard let core = orchestratorCore else { return false }
         do {
             guard let contactId = SessionAddressing.asDevice(deviceId) else { return false }
-            let sessionData = Data(try core.exportSession(contactId: contactId))
+            let sessionData = try core.exportSession(contactId: contactId)
             var saved = false
             for attempt in 1...3 {
                 saved = KeychainManager.shared.saveSessionData(sessionData, for: contactId)
@@ -254,7 +254,7 @@ class CryptoManager {
             return false
         }
         do {
-            let data = Data(try core.exportPrivateKeys())
+            let data = try core.exportPrivateKeys()
             let saved = KeychainManager.shared.savePrivateKeys(data)
             if saved {
                 Log.info("Persisted Rust core state (CFE) to Keychain", category: "CryptoManager")
@@ -284,10 +284,10 @@ class CryptoManager {
         }
         let cryptoId = cryptoLocalUserId
         do {
-            let newCore = try createOrchestratorCoreFromKeys(keysData: [UInt8](keysData), myUserId: cryptoId)
+            let newCore = try createOrchestratorCoreFromKeys(keysData: keysData, myUserId: cryptoId)
             if let otpksData = KeychainManager.shared.loadOtpksData() {
                 do {
-                    try newCore.importOneTimePrekeys(data: [UInt8](otpksData))
+                    try newCore.importOneTimePrekeys(data: otpksData)
                     Log.debug("Imported OTPKs on core reload (\(newCore.oneTimePrekeyCount()) keys)", category: "CryptoManager")
                 } catch {
                     // CFE decode of the persisted OTPK blob failed → the core's private OTPK
@@ -376,7 +376,7 @@ class CryptoManager {
             return
         }
         do {
-            try core.importOrchestratorState(data: [UInt8](data))
+            try core.importOrchestratorState(data: data)
             Log.info("Orchestrator state restored (CFE, \(data.count)B)", category: "CryptoManager")
         } catch {
             Log.error("Orchestrator state CFE import failed: \(error) — starting fresh", category: "CryptoManager")
@@ -490,12 +490,11 @@ class CryptoManager {
     // External callers MUST use these instead of accessing orchestratorCore directly.
 
     /// Sign binary data using the device Ed25519 identity key.
-    func signBundleData(_ bundleData: [UInt8]) throws -> Data {
+    func signBundleData(_ bundleData: Data) throws -> Data {
         coreLock.lock()
         defer { coreLock.unlock() }
         guard let core = orchestratorCore else { throw CryptoManagerError.coreNotInitialized }
-        let sigBytes = try core.signBundleData(bundleDataJson: bundleData)
-        return Data(sigBytes)
+        return try core.signBundleData(bundleDataJson: bundleData)
     }
 
     // MARK: - Hybrid PQ Identity Signatures (Ed25519 + ML-DSA-65)
@@ -523,7 +522,7 @@ class CryptoManager {
            let oldPriv = KeychainManager.shared.loadHybridSigPrivateKey(),
            !oldPriv.isEmpty {
             do {
-                try core.importHybridSignaturePrivateKey(privBytes: [UInt8](oldPriv))
+                try core.importHybridSignaturePrivateKey(privBytes: oldPriv)
                 // Fail-closed: until the CFE blob is durably written, the legacy item is the
                 // ONLY copy of this key. Deleting it after an unchecked persist destroyed the
                 // device's hybrid identity outright. Keep it and let the next call retry —
@@ -567,28 +566,23 @@ class CryptoManager {
     }
 
     /// Signs a message with the device hybrid identity key (core-owned).
-    func signHybrid(_ message: [UInt8]) throws -> Data {
+    /// The secret stays in the core — never `getSigningKeyBytes`.
+    func signHybrid(_ message: Data) throws -> Data {
         coreLock.lock()
         defer { coreLock.unlock() }
         guard let core = orchestratorCore else { throw CryptoManagerError.coreNotInitialized }
-        let sig = try core.signHybrid(message: message)
-        return Data(sig)
-    }
-
-    /// Transfer / CTHF path. The secret stays in the core — never `getSigningKeyBytes`.
-    func signHybrid(_ message: Data) throws -> Data {
-        try signHybrid([UInt8](message))
+        return try core.signHybrid(message: message)
     }
 
     /// Verifies a hybrid signature against a peer's hybrid public key. Both the
     /// Ed25519 and ML-DSA-65 components must validate. Stateless.
-    func verifyHybrid(publicKey: [UInt8], message: [UInt8], signature: [UInt8]) throws -> Bool {
+    func verifyHybrid(publicKey: Data, message: Data, signature: Data) throws -> Bool {
         return try hybridVerify(publicKey: publicKey, message: message, signature: signature)
     }
 
     // MARK: - Core-delegated hybrid helpers (fully switched after bindings regen)
 
-    func buildX3dhSignMessage(suiteId: UInt8, publicKey: Data) -> [UInt8] {
+    func buildX3dhSignMessage(suiteId: UInt8, publicKey: Data) -> Data {
         coreLock.lock()
         defer { coreLock.unlock() }
         guard let core = orchestratorCore else {
@@ -597,20 +591,20 @@ class CryptoManager {
             m.append(0x00)
             m.append(suiteId)
             m.append(publicKey)
-            return [UInt8](m)
+            return m
         }
-        return core.buildX3dhSignMessage(suiteId: suiteId, publicKey: [UInt8](publicKey))
+        return core.buildX3dhSignMessage(suiteId: suiteId, publicKey: publicKey)
     }
 
-    func buildHybridIdentityBindMessage(hybridPublic: Data) -> [UInt8] {
+    func buildHybridIdentityBindMessage(hybridPublic: Data) -> Data {
         coreLock.lock()
         defer { coreLock.unlock() }
         guard let core = orchestratorCore else {
             var m = Data("KonstruktHybridId-v1".utf8)
             m.append(hybridPublic)
-            return [UInt8](m)
+            return m
         }
-        return core.buildHybridIdentityBindMessage(hybridPublicKey: [UInt8](hybridPublic))
+        return core.buildHybridIdentityBindMessage(hybridPublicKey: hybridPublic)
     }
 
     /// High-level: ensure hybrid key (if needed) + produce hybrid signature over the
@@ -619,7 +613,7 @@ class CryptoManager {
         coreLock.lock()
         defer { coreLock.unlock() }
         guard let core = orchestratorCore else { throw CryptoManagerError.coreNotInitialized }
-        let sig = try core.signHybridPrekey(suiteId: suiteId, publicKey: [UInt8](publicKey))
+        let sig = try core.signHybridPrekey(suiteId: suiteId, publicKey: publicKey)
         return Data(sig)
     }
 
@@ -649,7 +643,7 @@ class CryptoManager {
         // The Kyber SPK's hybrid signature is the core's, made when the key was: it covers the
         // signed `created_at` as well as the key (PQXDH v2), so it cannot be produced from the
         // public key here.
-        let kyber: Data? = (try? currentKyberSpkUpload()).map { Data($0.hybridSignature) }
+        let kyber: Data? = (try? currentKyberSpkUpload()).map { $0.hybridSignature }
         return (spk, kyber)
     }
 
@@ -670,7 +664,7 @@ class CryptoManager {
     }
 
     /// Export all OTPK private keys as a CFE blob.
-    func exportOneTimePrekeys() throws -> [UInt8] {
+    func exportOneTimePrekeys() throws -> Data {
         coreLock.lock()
         defer { coreLock.unlock() }
         guard let core = orchestratorCore else { throw CryptoManagerError.coreNotInitialized }
@@ -757,10 +751,10 @@ class CryptoManager {
         coreLock.lock()
         defer { coreLock.unlock() }
         guard let core = orchestratorCore else { throw CryptoManagerError.coreNotInitialized }
-        return Data(try core.kyberPrekeyDecapsulate(keyId: keyId, ciphertext: [UInt8](ciphertext)))
+        return try core.kyberPrekeyDecapsulate(keyId: keyId, ciphertext: ciphertext)
     }
 
-    func exportKyberPrekeys() throws -> [UInt8] {
+    func exportKyberPrekeys() throws -> Data {
         coreLock.lock()
         defer { coreLock.unlock() }
         guard let core = orchestratorCore else { throw CryptoManagerError.coreNotInitialized }
@@ -768,7 +762,7 @@ class CryptoManager {
     }
 
     /// Export a session's wire bytes (for session init completed notification).
-    func exportSession(contactId: String) throws -> [UInt8] {
+    func exportSession(contactId: String) throws -> Data {
         coreLock.lock()
         defer { coreLock.unlock() }
         guard let core = orchestratorCore else { throw CryptoManagerError.coreNotInitialized }
@@ -908,9 +902,9 @@ class CryptoManager {
         }
 
         // Build OrchestratorCore from Keychain or bootstrap core keys.
-        let keysData: [UInt8]?
+        let keysData: Data?
         if let d = KeychainManager.shared.loadPrivateKeysData() {
-            keysData = [UInt8](d)
+            keysData = d
         } else if let bootstrapData = try? _bootstrapCore?.exportPrivateKeys() {
             keysData = bootstrapData
         } else {
@@ -925,7 +919,7 @@ class CryptoManager {
             // Import OTPKs if available
             if let otpksData = KeychainManager.shared.loadOtpksData() {
                 do {
-                    try newCore.importOneTimePrekeys(data: [UInt8](otpksData))
+                    try newCore.importOneTimePrekeys(data: otpksData)
                     Log.debug("Imported OTPKs into OrchestratorCore (\(newCore.oneTimePrekeyCount()) keys)", category: "CryptoManager")
                 } catch {
                     // See reloadCoreFromKeychain: a silent empty OTPK store + high next_otpk_id +
@@ -1164,7 +1158,7 @@ class CryptoManager {
         guard let core = orchestratorCore else { return }
         do {
             let fields = try core.getRegistrationBundleFields()
-            func hexPrefix(_ bytes: [UInt8]) -> String {
+            func hexPrefix(_ bytes: Data) -> String {
                 bytes.prefix(8).map { String(format: "%02x", $0) }.joined()
             }
             let ik = hexPrefix(fields.identityPublic)
@@ -1326,7 +1320,7 @@ class CryptoManager {
 
         let result = try core.decryptWirePayload(contactId: resolved, wirePayload: wirePayload)
         saveSessionToKeychain(forDevice: resolved)
-        return String(data: Data(result.plaintext), encoding: .utf8) ?? ""
+        return String(data: result.plaintext, encoding: .utf8) ?? ""
     }
 
 }

@@ -77,8 +77,8 @@ final class DeviceCopyTagConformanceTests: XCTestCase {
         return loaded
     }
 
-    private func bytes(_ hex: String) throws -> [UInt8] {
-        var out: [UInt8] = []
+    private func bytes(_ hex: String) throws -> Data {
+        var out = Data()
         var i = hex.startIndex
         while i < hex.endIndex {
             let j = hex.index(i, offsetBy: 2)

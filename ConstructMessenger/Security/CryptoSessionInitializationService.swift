@@ -143,7 +143,7 @@ final class CryptoSessionInitializationService {
         do {
             let result = try core.initReceivingSessionFromWirePayload(
                 senderCertificate: certificate,
-                wirePayload: [UInt8](message.rawPayload)
+                wirePayload: message.rawPayload
             )
             // The init burned a one-time Kyber key: persist the store now, or the key comes back
             // on the next launch and a replayed first message could open a second session on it.
@@ -158,7 +158,7 @@ final class CryptoSessionInitializationService {
             saveSession(device)
             // Never log the body: INTERNAL_TOOLS builds persist this line to an exportable file.
             Log.info("SESSION_STATE[open_receiving_single]: \(device.prefix(8))… opened from \(message.id.prefix(8))…, \(result.decryptedMessage.count)B", category: "SessionInit")
-            return (device, Data(result.decryptedMessage))
+            return (device, result.decryptedMessage)
         } catch {
             let reason = "\(error)"
             Log.error("SESSION_STATE[open_receiving_single_failed]: \(message.id.prefix(8))… — \(reason)", category: "SessionInit")

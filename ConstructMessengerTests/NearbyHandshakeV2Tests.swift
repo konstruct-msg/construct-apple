@@ -162,9 +162,9 @@ final class NearbyHandshakeV2Tests: XCTestCase {
             kemCt: opening.kemCt
         ).dropFirst(CTT1V2Layout.receiverTag.count)
         let ok = try hybridVerify(
-            publicKey: [UInt8](reply.receiverHybridPub),
-            message: [UInt8](untagged),
-            signature: [UInt8](reply.signature)
+            publicKey: reply.receiverHybridPub,
+            message: untagged,
+            signature: reply.signature
         )
         XCTAssertFalse(ok, "reply signature must fail without the domain tag")
     }

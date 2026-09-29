@@ -38,7 +38,7 @@ final class HistoryChannelTests: XCTestCase {
         bundle.kyberPreKeyPublic = kyber
         bundle.kyberPreKeyId = kyberId
         return DeviceBundleData(
-            deviceId: deviceIdOverride ?? deriveDeviceId(identityPublicKey: [UInt8](identityPublic)),
+            deviceId: deviceIdOverride ?? deriveDeviceId(identityPublicKey: identityPublic),
             bundle: bundle,
             platform: .ios,
             hybridIdentityKey: hybrid
@@ -70,7 +70,7 @@ final class HistoryChannelTests: XCTestCase {
     /// The directory labelled a bundle with a device id its identity key does not derive to.
     func testDeviceIdNotDerivedFromIdentityIsMismatch() {
         let other = Curve25519.KeyAgreement.PrivateKey().publicKey.rawRepresentation
-        let e = entry(deviceIdOverride: deriveDeviceId(identityPublicKey: [UInt8](other)))
+        let e = entry(deviceIdOverride: deriveDeviceId(identityPublicKey: other))
         XCTAssertThrowsError(try HistoryChannel.peerKeys(from: e, pinnedIdentity: nil)) {
             XCTAssertEqual($0 as? CTT1V2Error, .identityMismatch)
         }

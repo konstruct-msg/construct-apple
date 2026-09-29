@@ -36,7 +36,7 @@ final class NewDeviceEventTests: XCTestCase {
 
     private func device(_ byte: UInt8) -> (deviceId: String, identityKey: Data) {
         let key = Data(repeating: byte, count: 32)
-        return (deviceId: deriveDeviceId(identityPublicKey: [UInt8](key)), identityKey: key)
+        return (deviceId: deriveDeviceId(identityPublicKey: key), identityKey: key)
     }
 
     @discardableResult

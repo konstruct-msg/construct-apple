@@ -56,7 +56,7 @@ final class DeviceCopyWireIdTests: XCTestCase {
     /// `Device.id` is an arbitrary literal; §D returns the derived one, because the key that
     /// reproduced the MAC is the only evidence there is.
     private func derivedId(_ d: Device) -> String {
-        deriveDeviceId(identityPublicKey: [UInt8](d.pub))
+        deriveDeviceId(identityPublicKey: d.pub)
     }
 
     // MARK: - §D: the tag names the device that wrote the copy

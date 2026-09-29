@@ -501,7 +501,7 @@ final class OutboundSessionService {
         for action in actions {
             switch action {
             case .saveToSecureStore(let slot, let data):
-                let ok = handleStorageAction(slot: slot, data: [UInt8](data))
+                let ok = handleStorageAction(slot: slot, data: data)
                 sendStateDurable = sendStateDurable && ok
             default:
                 break
@@ -521,7 +521,7 @@ final class OutboundSessionService {
     /// Returns `true` iff the **send-critical** persist for this action succeeded (hot session +
     /// orchestrator state). Non-send-critical saves always return `true`: their failure is logged
     /// and matters, but it cannot cause message-number reuse, so it must not block a send.
-    private func handleStorageAction(slot: CfeSecureStoreSlot, data rawBytes: [UInt8]) -> Bool {
+    private func handleStorageAction(slot: CfeSecureStoreSlot, data rawBytes: Data) -> Bool {
         switch slot {
 
         case .session(let contactId):
@@ -536,7 +536,7 @@ final class OutboundSessionService {
             // is swallowed, the persisted session lags the live ratchet → silent, unhealable
             // desync on the next launch/push. Surface the failure AND report it so
             // `encryptOutgoing` can fail-closed instead of releasing an un-persisted advance.
-            let ok = KeychainManager.shared.saveSessionData(Data(rawBytes), for: contactId)
+            let ok = KeychainManager.shared.saveSessionData(rawBytes, for: contactId)
             if !ok {
                 Log.error("PERSIST-FAIL hot session \(contactId.prefix(8))… (\(rawBytes.count)B) — ratchet may desync on next launch", category: "OutboundSession")
             }
@@ -551,7 +551,7 @@ final class OutboundSessionService {
             // AfterFirstUnlock: this Rust-driven save also fires during background
             // push decrypt while locked; WhenUnlocked would drop it → ratchet desync.
             let ok = KeychainManager.shared.saveData(
-                Data(rawBytes),
+                rawBytes,
                 forKey: KeychainSessionAccounts.orchestratorState,
                 accessible: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
             )

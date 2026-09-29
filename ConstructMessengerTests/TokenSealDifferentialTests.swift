@@ -62,7 +62,7 @@ final class TokenSealDifferentialTests: XCTestCase {
         let token = Data((0..<32).map { UInt8($0) })
 
         let fromCore = try XCTUnwrap(
-            try? ppSealTokenBytes(token: [UInt8](token), serverEncryptionKey: [UInt8](serverPub)),
+            try? ppSealTokenBytes(token: token, serverEncryptionKey: serverPub),
             "the core refused to seal a well-formed token"
         )
         XCTAssertEqual(try open(Data(fromCore), with: serverPriv), token,
@@ -104,8 +104,8 @@ final class TokenSealDifferentialTests: XCTestCase {
         let serverPub = serverPriv.publicKey.rawRepresentation
         for length in [1, 32, 64, 200] {
             let token = Data(repeating: 0xAB, count: length)
-            let core = try XCTUnwrap(try? ppSealTokenBytes(token: [UInt8](token),
-                                                          serverEncryptionKey: [UInt8](serverPub)))
+            let core = try XCTUnwrap(try? ppSealTokenBytes(token: token,
+                                                          serverEncryptionKey: serverPub))
             // Overhead is exactly 60 bytes and the vectors depend on it.
             XCTAssertEqual(core.count, 32 + 12 + length + 16, "overhead changed for a \(length)-byte token")
         }
@@ -115,8 +115,8 @@ final class TokenSealDifferentialTests: XCTestCase {
     ///
     /// Mutation: drop the length check in the core — this reddens.
     func testAMalformedServerKeyIsRefused() {
-        XCTAssertThrowsError(try ppSealTokenBytes(token: [0x01], serverEncryptionKey: [UInt8](repeating: 0, count: 31)))
-        XCTAssertThrowsError(try ppSealTokenBytes(token: [0x01], serverEncryptionKey: []))
+        XCTAssertThrowsError(try ppSealTokenBytes(token: Data([0x01]), serverEncryptionKey: Data(count: 31)))
+        XCTAssertThrowsError(try ppSealTokenBytes(token: Data([0x01]), serverEncryptionKey: Data()))
     }
 
     // MARK: - Vectors

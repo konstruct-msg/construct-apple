@@ -145,9 +145,9 @@ enum CTHFVerify {
         }
         do {
             let ok = try hybridVerify(
-                publicKey: [UInt8](header.senderHybridPub),
-                message: [UInt8](header.taggedMessage),
-                signature: [UInt8](header.signature)
+                publicKey: header.senderHybridPub,
+                message: header.taggedMessage,
+                signature: header.signature
             )
             guard ok else { return .failure(.signatureInvalid) }
         } catch {

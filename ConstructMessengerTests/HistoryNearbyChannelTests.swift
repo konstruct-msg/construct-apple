@@ -23,7 +23,7 @@ final class HistoryNearbyChannelTests: XCTestCase {
         try CryptoCoreTestBootstrap.ensureCore(localUserId: userId)
         let identity = Curve25519.KeyAgreement.PrivateKey()
         let identityPublic = identity.publicKey.rawRepresentation
-        let deviceHex = deriveDeviceId(identityPublicKey: [UInt8](identityPublic))
+        let deviceHex = deriveDeviceId(identityPublicKey: identityPublic)
         let deviceRaw = try XCTUnwrap(HistoryChannel.rawDeviceId(deviceHex))
         let hybrid = try CryptoManager.shared.ensureHybridIdentityPublicKey()
         // The receiving side decapsulates with the core's own Kyber SPK, so the test encapsulates

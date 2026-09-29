@@ -61,7 +61,7 @@ enum SessionAddressing {
         guard let identityKey = pinnedIdentityKey(ofUser: userId), !identityKey.isEmpty else {
             return nil
         }
-        return deriveDeviceId(identityPublicKey: [UInt8](identityKey))
+        return deriveDeviceId(identityPublicKey: identityKey)
     }
 
     /// The id as a device id, or `nil` when it is not one.
@@ -143,7 +143,7 @@ enum SessionAddressing {
     /// with "AEAD decryption failed" on a bundle that is entirely valid.
     static func cryptoIdentity(ofIdentityKey identityPublic: Data) -> String? {
         guard !identityPublic.isEmpty else { return nil }
-        return deriveDeviceId(identityPublicKey: [UInt8](identityPublic))
+        return deriveDeviceId(identityPublicKey: identityPublic)
     }
 
     /// The identity key whose device id is `deviceId` — the seam read **backwards**.
@@ -177,7 +177,7 @@ enum SessionAddressing {
         guard let users = try? context.fetch(req) else { return nil }
         for user in users {
             guard let key = user.knownIdentityKey, !key.isEmpty else { continue }
-            if deriveDeviceId(identityPublicKey: [UInt8](key)) == deviceId { return key }
+            if deriveDeviceId(identityPublicKey: key) == deviceId { return key }
         }
         return nil
     }
@@ -257,7 +257,7 @@ enum SessionAddressing {
         var fresh: [String] = []
         for device in devices {
             guard isCryptoIdentity(device.deviceId), !device.identityKey.isEmpty else { continue }
-            guard deriveDeviceId(identityPublicKey: [UInt8](device.identityKey)) == device.deviceId else {
+            guard deriveDeviceId(identityPublicKey: device.identityKey) == device.deviceId else {
                 Log.error(
                     "PEER_DEVICE_REJECTED: server named \(device.deviceId.prefix(8))… for \(accountId.prefix(8))… "
                     + "but its identity key derives to a different device — not pinning",
@@ -493,7 +493,7 @@ enum SessionAddressing {
         guard let users = try? context.fetch(req) else { return nil }
         for user in users {
             guard let key = user.knownIdentityKey, !key.isEmpty, !user.id.isEmpty else { continue }
-            if deriveDeviceId(identityPublicKey: [UInt8](key)) == deviceId {
+            if deriveDeviceId(identityPublicKey: key) == deviceId {
                 return (user.id, key)
             }
         }

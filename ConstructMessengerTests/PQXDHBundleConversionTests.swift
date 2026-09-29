@@ -69,7 +69,7 @@ final class PQXDHBundleConversionTests: XCTestCase {
         XCTAssertEqual(binary.kyberOneTimePrekeyHybridSignature.map { Data($0) }, proto.kyberOneTimePreKeyHybridSignature)
         XCTAssertEqual(binary.hybridIdentityKey.map { Data($0) }, proto.hybridIdentityKey)
         XCTAssertEqual(binary.hybridIdentitySignature.map { Data($0) }, proto.hybridIdentitySignature)
-        XCTAssertEqual(binary.verifyingKey, [UInt8](vk))
+        XCTAssertEqual(binary.verifyingKey, vk)
     }
 
     /// The same bundle opens a PQXDH v2 session end to end: the initiator through both
@@ -84,13 +84,13 @@ final class PQXDHBundleConversionTests: XCTestCase {
 
         _ = try alice.initSession(contactId: bobId, recipientBundle: bundle.binaryKeyBundle())
         let first = try alice.encryptToWire(contactId: bobId, plaintext: Data("hello".utf8))
-        let header = try wirePayloadUnpack(data: [UInt8](first))
+        let header = try wirePayloadUnpack(data: first)
         XCTAssertEqual(header.kemCiphertext?.count, 1568, "the first message carries the ML-KEM-1024 ciphertext")
         XCTAssertEqual(header.kyberOtpkId, bundle.kyberOneTimePreKeyId, "the one-time key is preferred")
         XCTAssertEqual(header.kemIdentity?.count, 1568, "and names the initiator's KEM identity key")
 
         let result = try bob.pqxdhTestReceive(from: alice, first: first)
-        XCTAssertEqual(result.decryptedMessage, Array("hello".utf8))
+        XCTAssertEqual(result.decryptedMessage, Data("hello".utf8))
         XCTAssertNotNil(result.kyberPrekeys, "the used one-time key was burned: the blob to persist comes back")
         XCTAssertEqual(alice.getSessionHealth(contactId: bobId)?.pqHandshake, .initialV2)
         XCTAssertEqual(bob.getSessionHealth(contactId: aliceId)?.pqHandshake, .initialV2)

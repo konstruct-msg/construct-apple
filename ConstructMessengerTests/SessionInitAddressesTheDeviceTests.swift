@@ -52,14 +52,14 @@ private final class RecordingCore: OrchestratorCore, @unchecked Sendable {
 
     override func initReceivingSessionFromWirePayload(
         senderCertificate: SenderCertificate,
-        wirePayload: [UInt8]
+        wirePayload: Data
     ) throws -> SessionInitResult {
         // The core files the session under the device the certificate names and answers with it.
         initReceivingContactIds.append(senderCertificate.deviceId)
         return SessionInitResult(
             sessionId: senderCertificate.deviceId,
-            decryptedMessage: Array("hello".utf8),
-            storageKey: [],
+            decryptedMessage: Data("hello".utf8),
+            storageKey: Data(),
             kyberPrekeys: nil
         )
     }
@@ -70,8 +70,8 @@ private final class RecordingCore: OrchestratorCore, @unchecked Sendable {
         return "session-\(contactId)"
     }
 
-    override func exportSession(contactId: String) throws -> [UInt8] {
-        Array("held-\(contactId)".utf8)
+    override func exportSession(contactId: String) throws -> Data {
+        Data("held-\(contactId)".utf8)
     }
 
     override func initSession(contactId: String, recipientBundle: BinaryKeyBundle) throws -> String {

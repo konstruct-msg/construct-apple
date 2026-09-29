@@ -93,14 +93,14 @@ actor DeviceAuthCoordinator {
                 return .failed(message: "encodingFailed")
             }
 
-            let signingKeyBytes: [UInt8]
+            let signingKeyBytes: Data
             do {
                 signingKeyBytes = try CryptoManager.shared.exportSigningSecretKey()
             } catch {
                 Log.info("DeviceAuthCoordinator: CryptoCore unavailable — raw Keychain key: \(error)", category: "Auth")
-                signingKeyBytes = [UInt8](rawSigningKey)
+                signingKeyBytes = rawSigningKey
             }
-            let privateKey = try Curve25519.Signing.PrivateKey(rawRepresentation: Data(signingKeyBytes))
+            let privateKey = try Curve25519.Signing.PrivateKey(rawRepresentation: signingKeyBytes)
             let signatureData = try privateKey.signature(for: messageData)
 
             // allowAuthRetry: false on the client — must not recurse into refresh/device-auth.

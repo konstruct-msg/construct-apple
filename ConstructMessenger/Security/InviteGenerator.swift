@@ -115,15 +115,15 @@ class InviteGenerator {
 
         let isSelfValid = try verifyInviteSignature(
             data: dataToSign,
-            signature: [UInt8](signature.signature),
-            verifyingKey: [UInt8](expectedVerifyingKey)
+            signature: signature.signature,
+            verifyingKey: expectedVerifyingKey
         )
         if !isSelfValid {
             Log.error("Invite self-verify failed (signing key mismatch)", category: "InviteGenerator")
             throw InviteGenerationError.signingFailed
         }
 
-        let signedInvite = unsignedInvite.signed(Data(signature.signature).base64EncodedString())
+        let signedInvite = unsignedInvite.signed(signature.signature.base64EncodedString())
 
         try signedInvite.validate()
 
@@ -243,7 +243,7 @@ class InviteGenerator {
     /// Get Ed25519 signing secret key from CryptoManager
     /// - Returns: 32-byte signing secret key
     /// - Throws: InviteGenerationError if key not available
-    private func getSigningSecretKey() throws -> [UInt8] {
+    private func getSigningSecretKey() throws -> Data {
         guard let core = CryptoManager.shared.orchestratorCore else {
             throw InviteGenerationError.missingIdentityKey
         }
@@ -252,14 +252,14 @@ class InviteGenerator {
             throw InviteGenerationError.keyDecodingFailed
         }
         Log.debug("Using signing secret key for invite signing (\(keyBytes.count) bytes)", category: "InviteGenerator")
-        return [UInt8](keyBytes)
+        return keyBytes
     }
 
     /// Derive the expected verifying key (Base64) from local signing secret.
     func expectedVerifyingKeyBase64() throws -> String {
         let signingSecretKey = try getSigningSecretKey()
         let verifyingKey = try deriveVerifyingKeyFromSecret(identitySecretKey: signingSecretKey)
-        return Data(verifyingKey).base64EncodedString()
+        return verifyingKey.base64EncodedString()
     }
 
     // MARK: - Server Normalization

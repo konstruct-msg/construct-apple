@@ -135,10 +135,10 @@ final class DeviceLinkViewModel {
             persistDeviceKeys(deviceId: deviceId, signingKey: signingKey, identityKey: identityKey)
 
             var publicKeys = Shared_Proto_Services_V1_DevicePublicKeys()
-            publicKeys.verifyingKey = Data(bundle.verifyingKey)
-            publicKeys.identityPublic = Data(bundle.identityPublic)
-            publicKeys.signedPrekeyPublic = Data(bundle.signedPrekeyPublic)
-            publicKeys.signedPrekeySignature = Data(bundle.signature)
+            publicKeys.verifyingKey = bundle.verifyingKey
+            publicKeys.identityPublic = bundle.identityPublic
+            publicKeys.signedPrekeyPublic = bundle.signedPrekeyPublic
+            publicKeys.signedPrekeySignature = bundle.signature
             publicKeys.cryptoSuite = "Curve25519+Ed25519"
 
             Log.info("Device B: generated deviceId=\(deviceId) for link confirmation", category: "DeviceLink")
@@ -188,7 +188,7 @@ final class DeviceLinkViewModel {
             let name = DeviceInfo.deviceName
             let platform = platformString()
             let encoded = name.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? name
-            let pubkeyB64 = Data(bundle.identityPublic).base64EncodedString()
+            let pubkeyB64 = bundle.identityPublic.base64EncodedString()
             var queryValueAllowed = CharacterSet.alphanumerics
             queryValueAllowed.insert(charactersIn: "-._~")
             let pubkeyEncoded = pubkeyB64.addingPercentEncoding(withAllowedCharacters: queryValueAllowed) ?? pubkeyB64
