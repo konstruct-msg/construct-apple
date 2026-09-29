@@ -25,7 +25,7 @@ final class StickerService {
     static let shared = StickerService()
 
     /// The catalog is small and published; a ceiling only guards against a runaway pager.
-    static let catalogCeiling = 500
+    nonisolated static let catalogCeiling = 500
 
     /// Advances every time a pack becomes present. Observe it to re-resolve a reference.
     private(set) var installedGeneration = 0

@@ -64,7 +64,7 @@ struct StickerBubbleView: View {
 
     /// Off the main actor: a file read and a WebP decode per visible sticker row.
     private static func load(_ ref: StickerReference) async -> PlatformImage? {
-        let store = await StickerService.shared.store
+        let store = StickerService.shared.store
         return await Task.detached(priority: .userInitiated) {
             guard let data = store.blob(for: ref) else { return nil }
             return PlatformImage(data: data)

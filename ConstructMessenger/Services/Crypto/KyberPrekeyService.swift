@@ -38,7 +38,7 @@ enum KyberPrekeyService {
 
     /// The Kyber SPK (by device and key id) the server last confirmed with its hybrid signature.
     /// Keyed by both so a new identity or a rotated key publishes again.
-    private static let publishedKey = "construct.kyber.v2.published"
+    private nonisolated static let publishedKey = "construct.kyber.v2.published"
 
     private static var publishTask: Task<Void, Never>?
 

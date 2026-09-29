@@ -1500,7 +1500,7 @@ final class MessageRouter {
         // defect the decision names. From current clients this is only TUI and a DEBUG build
         // with sealed sending switched off. Nothing tells the sender: a decryption error is
         // addressed to a device and sealed to its certificate key, and this message has neither.
-        guard let claimed else {
+        guard claimed != nil else {
             Log.info("SESSION_STATE[first_contact_unattributed]: \(message.id.prefix(8))… from \(userId.prefix(8))… names no device and none is pinned — refused", category: "SessionInit")
             PersistentACKStore.shared.markProcessed(message.id, senderId: userId, in: context)
             PerformanceMetrics.shared.record(.undeliveredNoReceipt, label: "first_contact_unattributed")

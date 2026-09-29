@@ -46,7 +46,8 @@ class MessageQueueManager {
         context.perform { [self] in
             // Read inside the block. `viewContext.perform` runs now when called on the main
             // queue, but a send that landed before the block must not be failed with it.
-            let owned = Set(pendingSends.keys)
+            // `viewContext` is the main queue's, so the block runs on the main actor.
+            let owned = MainActor.assumeIsolated { Set(pendingSends.keys) }
             let fetchRequest: NSFetchRequest<Message> = Message.fetchRequest()
             fetchRequest.predicate = NSPredicate(
                 format: "deliveryStatusRaw == %d",
