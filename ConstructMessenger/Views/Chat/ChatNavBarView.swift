@@ -11,6 +11,8 @@ struct ChatNavBarView: View {
     let title: String
     let subtitle: String?
     let contactKTStatus: KTStatus
+    /// A pending security event or a failed proof; outranks the verified check.
+    var contactTrustAlert: ContactTrustAlert? = nil
     let isEditMode: Bool
     let canStartCall: Bool
     let onBack: () -> Void
@@ -141,13 +143,7 @@ struct ChatNavBarView: View {
     }
 
     @ViewBuilder private var ktBadge: some View {
-        switch contactKTStatus {
-        case .verified:
-            Image(systemName: "checkmark.circle.fill")
-                .font(CTFont.caption)
-                .foregroundColor(Color.CT.accent)
-                .accessibilityLabel(Text(LocalizedStringKey("kt_verified")))
-        case .keyChanged, .failed:
+        if contactTrustAlert != nil {
             Button {
                 onKTWarningTap?()
             } label: {
@@ -160,8 +156,11 @@ struct ChatNavBarView: View {
             .buttonStyle(.plain)
             .accessibilityLabel(Text(LocalizedStringKey("kt_warning")))
             .accessibilityHint(Text(LocalizedStringKey("key_change_verify")))
-        case .unverified:
-            EmptyView()
+        } else if contactKTStatus == .verified {
+            Image(systemName: "checkmark.circle.fill")
+                .font(CTFont.caption)
+                .foregroundColor(Color.CT.accent)
+                .accessibilityLabel(Text(LocalizedStringKey("kt_verified")))
         }
     }
 }

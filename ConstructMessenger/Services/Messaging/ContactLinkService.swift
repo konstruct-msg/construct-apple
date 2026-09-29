@@ -129,30 +129,27 @@ final class ContactLinkService {
 
     /// Pin inviter identity key from an OOB-verified invite (TOFU).
     /// Does **not** mark KT `.verified` — that remains for Merkle audit.
-    /// On mismatch with a previously pinned key → `.keyChanged` + notification.
+    ///
+    /// The invite names one device of the account, and that device joins the account's pinned
+    /// set. A different key from the one pinned before is not an event by itself: an invite from
+    /// the contact's other device carries exactly that. A device outside the set the server has
+    /// listed for the account is, and `SessionAddressing.recordDevices` raises it
+    /// (`decisions/a-new-device-is-the-security-event.md`). The account slot takes the invite's
+    /// key — it is the freshest one checked out of band.
     func pinKnownIdentityKey(on user: User, identityKey: Data) {
         guard !identityKey.isEmpty else { return }
-        if let known = user.knownIdentityKey, known != identityKey {
-            user.ktStatus = .keyChanged
-            user.knownIdentityKey = identityKey
-            Log.error(
-                "TOFU: identity key changed for user \(user.id.prefix(8))…",
-                category: "ContactLink"
-            )
-            NotificationCenter.default.post(
-                name: .contactKeyChanged,
-                object: nil,
-                userInfo: ["userId": user.id]
-            )
-            KeyChangeUX.notifyKeyChange(
-                userId: user.id,
-                displayName: user.resolvedDisplayName
-            )
-        } else if user.knownIdentityKey == nil {
-            user.knownIdentityKey = identityKey
+        if user.knownIdentityKey != identityKey {
             Log.info(
                 "TOFU: pinned knownIdentityKey for \(user.id.prefix(8))… from invite",
                 category: "ContactLink"
+            )
+            user.knownIdentityKey = identityKey
+        }
+        if let context = user.managedObjectContext, !user.id.isEmpty {
+            SessionAddressing.recordDevices(
+                [(deviceId: deriveDeviceId(identityPublicKey: [UInt8](identityKey)), identityKey: identityKey)],
+                ofPeer: user.id,
+                in: context
             )
         }
     }
@@ -184,9 +181,9 @@ final class ContactLinkService {
     /// returns nil, and every sealed send to that peer fails closed with `StealthDowngradeBlocked`
     /// — a permanent, silent stall on session control (TODO #45).
     ///
-    /// This never *overrides* an existing pin: a changed key is a security event owned by the KT
-    /// path and the invite path, and two owners raising the same alarm would raise it twice. It
-    /// only fills an absence.
+    /// This never *overrides* an existing pin: which key the account slot holds is the KT path's
+    /// and the invite path's decision. It only fills an absence. (A substituted key is raised from
+    /// the device set, not from this slot — `decisions/a-new-device-is-the-security-event.md`.)
     ///
     /// Pinning here extends no trust we have not already extended: the same `identityPublic` is
     /// what X3DH is about to run against. `ktStatus` continues to carry the verification verdict

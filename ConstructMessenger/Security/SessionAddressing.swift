@@ -242,14 +242,19 @@ enum SessionAddressing {
     ///
     /// An empty `devices` is not recorded, for the reason stated on `devices(ofPeer:in:)`.
     ///
+    /// **A device pinned here that the account's listed set did not name is a security event**
+    /// (`NewDeviceEvent`), raised on the contact once the rows are saved. Returned for the tests.
+    ///
     /// Runs on `context`'s queue, like its caller.
+    @discardableResult
     static func recordDevices(
         _ devices: [(deviceId: String, identityKey: Data)],
         ofPeer accountId: String,
         in context: NSManagedObjectContext
-    ) {
-        guard !accountId.isEmpty, !devices.isEmpty else { return }
-        var touched = 0
+    ) -> [String] {
+        guard !accountId.isEmpty, !devices.isEmpty else { return [] }
+        let pinnedBefore = Set(Self.devices(ofPeer: accountId, in: context).map(\.deviceId))
+        var fresh: [String] = []
         for device in devices {
             guard isCryptoIdentity(device.deviceId), !device.identityKey.isEmpty else { continue }
             guard deriveDeviceId(identityPublicKey: [UInt8](device.identityKey)) == device.deviceId else {
@@ -278,18 +283,42 @@ enum SessionAddressing {
             row.accountId = accountId
             row.identityKey = device.identityKey
             row.firstSeenAt = Date()
-            touched += 1
+            fresh.append(device.deviceId)
         }
-        guard touched > 0 else { return }
+        guard !fresh.isEmpty else { return [] }
         do {
             try context.saveOrThrow(category: "Crypto")
             Log.info(
-                "PEER_DEVICE_PINNED: \(touched) new device(s) for \(accountId.prefix(8))… "
+                "PEER_DEVICE_PINNED: \(fresh.count) new device(s) for \(accountId.prefix(8))… "
                 + "(set is now \(Self.devices(ofPeer: accountId, in: context).count))",
                 category: "Crypto"
             )
         } catch {
             Log.error("PEER_DEVICE_PERSIST_FAIL for \(accountId.prefix(8))…: \(error)", category: "Crypto")
+            return []
+        }
+        let events = NewDeviceEvent.events(
+            incoming: fresh,
+            listed: NewDeviceEvent.listedSet(ofPeer: accountId),
+            pinned: pinnedBefore
+        )
+        if !events.isEmpty { raiseNewDevice(accountId, events) }
+        return events
+    }
+
+    /// Hands the event to the UI side, which owns the contact row the user sees and knows which
+    /// account is ours (`KeyChangeUX.raise` skips it).
+    private static func raiseNewDevice(_ accountId: String, _ deviceIds: [String]) {
+        Log.error(
+            "PEER_DEVICE_NEW: \(accountId.prefix(8))… has \(deviceIds.map { $0.prefix(8) + "…" }.joined(separator: ",")) "
+            + "outside its listed set",
+            category: "Crypto"
+        )
+        #if DEBUG
+        if let sink = newDeviceSinkForTesting { sink(accountId); return }
+        #endif
+        Task { @MainActor in
+            KeyChangeUX.raise(.newDevice, userId: accountId, context: PersistenceController.shared.container.viewContext)
         }
     }
 
@@ -329,6 +358,17 @@ enum SessionAddressing {
         recordDevices(devices, ofPeer: accountId, in: context)
 
         guard !accountId.isEmpty, !activeSet.isEmpty else { return }
+
+        // A device the list names but whose bundle did not come back (narrowed, or its hybrid
+        // check failed) is not pinned, and is as new as one that did.
+        let listedBefore = NewDeviceEvent.listedSet(ofPeer: accountId)
+        let unbundled = NewDeviceEvent.events(
+            incoming: activeSet,
+            listed: listedBefore,
+            pinned: Set(Self.devices(ofPeer: accountId, in: context).map(\.deviceId))
+        )
+        NewDeviceEvent.recordListedSet(activeSet + devices.map(\.deviceId), ofPeer: accountId)
+        if !unbundled.isEmpty { raiseNewDevice(accountId, unbundled) }
 
         let keep = Set(activeSet).union(devices.map(\.deviceId))
         let stale = Self.devices(ofPeer: accountId, in: context)
@@ -522,6 +562,9 @@ enum SessionAddressing {
 
     /// Test seam: lets a unit test answer "which account is this" without an auth session.
     nonisolated(unsafe) static var ownAccountOverrideForTesting: String?
+
+    /// Test seam: receives the account of a new-device event instead of the UI.
+    nonisolated(unsafe) static var newDeviceSinkForTesting: ((String) -> Void)?
     #endif
 
     /// The identity key pinned for `userId`, read from whichever thread is asking.

@@ -2,43 +2,25 @@
 //  ChatKeyChangeBannerView.swift
 //  Construct Messenger
 //
-//  First-class trust event: identity key changed (or KT failed).
+//  First-class trust event: a new device, a different address, or a failed KT proof.
 //  Not a tiny nav badge — requires user attention.
 //
 
 import SwiftUI
 
-/// Prominent banner for `.keyChanged` / `.failed` KT status.
+/// Prominent banner for a contact's `ContactTrustAlert`.
 ///
 /// Actions:
-/// - **Verify** → open Safety Numbers (OOB compare)
-/// - **Accept** → acknowledge the new key (clear warning; TOFU re-pin already stored)
+/// - **Verify** → open Safety Numbers (OOB compare), one per device of the contact
+/// - **I've checked** → acknowledge; the banner goes until the next event
 struct ChatKeyChangeBannerView: View {
-    let status: KTStatus
+    let alert: ContactTrustAlert?
     let contactName: String
     let onVerify: () -> Void
     let onAccept: () -> Void
 
-    private var isVisible: Bool {
-        status == .keyChanged || status == .failed
-    }
-
-    private var titleKey: String {
-        status == .failed ? "key_change_banner_title_failed" : "key_change_banner_title"
-    }
-
-    private var subtitle: String {
-        if status == .failed {
-            return NSLocalizedString("key_change_banner_subtitle_failed", comment: "")
-        }
-        return String(
-            format: NSLocalizedString("key_change_banner_subtitle_fmt", comment: ""),
-            contactName
-        )
-    }
-
     var body: some View {
-        if isVisible {
+        if let alert {
             VStack(alignment: .leading, spacing: CTLayout.chromeGap) {
                 HStack(alignment: .top, spacing: CTLayout.chromeGap) {
                     Image(systemName: "exclamationmark.shield.fill")
@@ -47,10 +29,10 @@ struct ChatKeyChangeBannerView: View {
                         .accessibilityHidden(true)
 
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(NSLocalizedString(titleKey, comment: ""))
+                        Text(NSLocalizedString(alert.titleKey, comment: ""))
                             .font(CTFont.ui(12, weight: .bold))
                             .foregroundStyle(Color.CT.text)
-                        Text(subtitle)
+                        Text(alert.subtitle(contactName: contactName))
                             .font(CTFont.caption)
                             .foregroundStyle(Color.CT.textDim)
                             .fixedSize(horizontal: false, vertical: true)
@@ -73,7 +55,7 @@ struct ChatKeyChangeBannerView: View {
                     .accessibilityLabel(NSLocalizedString("key_change_verify", comment: ""))
 
                     Button(action: onAccept) {
-                        Text(NSLocalizedString("key_change_accept", comment: ""))
+                        Text(NSLocalizedString("security_notice_acknowledge", comment: ""))
                             .font(CTFont.secondary)
                             .foregroundStyle(Color.CT.accent)
                             .padding(.horizontal, 12)
@@ -86,7 +68,7 @@ struct ChatKeyChangeBannerView: View {
                             )
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel(NSLocalizedString("key_change_accept", comment: ""))
+                    .accessibilityLabel(NSLocalizedString("security_notice_acknowledge", comment: ""))
 
                     Spacer(minLength: 0)
                 }

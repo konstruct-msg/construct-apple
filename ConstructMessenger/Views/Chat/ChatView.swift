@@ -54,6 +54,7 @@ struct ChatView: View {
 
     // Key Transparency status for the contact in this chat
     @State private var contactKTStatus: KTStatus = .unverified
+    @State private var contactTrustAlert: ContactTrustAlert?
     /// True when the session with this contact was established via a degraded (stale-SPK) init.
     @State private var isSessionAtRisk = false
     /// Safety Numbers sheet after key-change "Verify".
@@ -294,10 +295,9 @@ struct ChatView: View {
             }
         }
         .sheet(isPresented: $showingSafetyNumbers) {
-            if let user = viewModel.chat.otherUser,
-               let deviceId = KeyChangeUX.safetyDeviceId(for: user) {
+            if let user = viewModel.chat.otherUser {
                 SafetyNumberView(
-                    theirDeviceId: deviceId,
+                    theirDeviceIds: KeyChangeUX.safetyDeviceIds(for: user, context: viewContext),
                     theirDisplayName: user.resolvedDisplayName
                 )
             }
@@ -365,13 +365,13 @@ struct ChatView: View {
     /// First-class trust event: identity key changed or KT verification failed.
     private var keyChangeBanner: some View {
         ChatKeyChangeBannerView(
-            status: contactKTStatus,
+            alert: contactTrustAlert,
             contactName: viewModel.chat.otherUser?.resolvedDisplayName
                 ?? NSLocalizedString("chat", comment: ""),
             onVerify: { showingSafetyNumbers = true },
             onAccept: { acknowledgeContactKeyChange() }
         )
-        .animation(.spring(response: 0.35, dampingFraction: 0.85), value: contactKTStatus)
+        .animation(.spring(response: 0.35, dampingFraction: 0.85), value: contactTrustAlert)
     }
 
     private func acknowledgeContactKeyChange() {
@@ -540,6 +540,7 @@ struct ChatView: View {
             title: viewModel.chat.otherUser?.resolvedDisplayName ?? NSLocalizedString("chat", comment: ""),
             subtitle: navigationStatusSubtitle,
             contactKTStatus: contactKTStatus,
+            contactTrustAlert: contactTrustAlert,
             isEditMode: isEditMode,
             canStartCall: canStartCall,
             onBack: { dismiss() },
@@ -558,7 +559,7 @@ struct ChatView: View {
                 }
             },
             onKTWarningTap: {
-                if contactKTStatus == .keyChanged || contactKTStatus == .failed {
+                if contactTrustAlert != nil {
                     showingSafetyNumbers = true
                 }
             }
@@ -574,6 +575,7 @@ struct ChatView: View {
         req.fetchLimit = 1
         if let user = (try? ctx.fetch(req))?.first {
             contactKTStatus = user.ktStatus
+            contactTrustAlert = user.trustAlert
         }
     }
 

@@ -2,14 +2,14 @@
 //  KeyChangeUX.swift
 //  Construct Messenger
 //
-//  Surfaces identity-key change as a first-class trust event (thread 5.4).
+//  Surfaces a contact's security event as a first-class trust event (thread 5.4).
 //
 
 import Foundation
 import CoreData
 
-/// Coordinates key-change prominence: in-chat banner (ChatView) + global toast when
-/// the affected chat is not open.
+/// Coordinates the prominence of a security event about a contact: in-chat banner (ChatView) +
+/// global toast when the affected chat is not open. The events are `SecurityNotice`s.
 @MainActor
 enum KeyChangeUX {
 
@@ -20,21 +20,52 @@ enum KeyChangeUX {
         activeChatContactId = userId
     }
 
-    // MARK: - Notifications
+    // MARK: - Raise
 
-    /// Call after `ktStatus` is set to `.keyChanged` / `.failed` and Core Data is saved.
-    static func notifyKeyChange(userId: String, displayName: String?) {
-        guard !userId.isEmpty else { return }
-        // In-chat banner handles the open conversation.
+    /// Record `notice` on the contact and tell the user — the banner in their chat until
+    /// acknowledged, and a notice here unless that chat is open.
+    ///
+    /// Our own account is never the subject: a device we added ourselves is not an event, and a
+    /// row for us is residue (`SelfAddressedResidue`). No row means no contact to warn about — the
+    /// event exists to protect a conversation.
+    @discardableResult
+    static func raise(_ notice: SecurityNotice, userId: String, context: NSManagedObjectContext) -> Bool {
+        guard !userId.isEmpty else { return false }
+        let fetch = User.fetchRequest()
+        fetch.predicate = NSPredicate(format: "id == %@", userId)
+        fetch.fetchLimit = 1
+        guard let user = try? context.fetch(fetch).first, raise(notice, on: user) else { return false }
+        do {
+            try context.save()
+        } catch {
+            Log.error("SECURITY_NOTICE[\(notice)]: not saved for \(userId.prefix(8))…: \(error)", category: "KeyChangeUX")
+        }
+        return true
+    }
+
+    /// The same, on a row the caller holds and saves.
+    @discardableResult
+    static func raise(_ notice: SecurityNotice, on user: User) -> Bool {
+        let userId = user.id
+        guard notice != .none, !userId.isEmpty, !SessionAddressing.isOurOwnAccount(userId) else { return false }
+        user.securityNotice = notice
+        Log.error("SECURITY_NOTICE[\(notice)]: \(userId.prefix(8))…", category: "KeyChangeUX")
+        NotificationCenter.default.post(name: .contactKeyChanged, object: nil, userInfo: ["userId": userId])
+        announce(notice, userId: userId, displayName: user.resolvedDisplayName)
+        return true
+    }
+
+    /// The notice outside the chat. The open chat shows its banner instead.
+    private static func announce(_ notice: SecurityNotice, userId: String, displayName: String?) {
         if activeChatContactId == userId { return }
-
-        let name = resolvedName(userId: userId, displayName: displayName)
-        let message = String(
-            format: NSLocalizedString("key_change_toast_fmt", comment: ""),
-            name
-        )
+        let format: String
+        switch notice {
+        case .none: return
+        case .newDevice: format = "new_device_toast_fmt"
+        case .addressChanged: format = "address_change_toast_fmt"
+        }
         ErrorRouter.shared.presentNotice(
-            message,
+            String(format: NSLocalizedString(format, comment: ""), resolvedName(userId: userId, displayName: displayName)),
             actionTitle: NSLocalizedString("key_change_toast_open", comment: ""),
             autoDismissAfter: 10
         ) {
@@ -47,30 +78,10 @@ enum KeyChangeUX {
         }
     }
 
-    /// A contact named a different account address than the one pinned for them. Addresses do not
-    /// change, so this is either the contact naming someone else or someone naming the contact —
-    /// the same weight as a key change, and the same way to look at it.
-    static func notifyAddressConflict(userId: String, displayName: String?) {
-        guard !userId.isEmpty else { return }
-        let name = resolvedName(userId: userId, displayName: displayName)
-        ErrorRouter.shared.presentNotice(
-            String(format: NSLocalizedString("address_change_toast_fmt", comment: ""), name),
-            actionTitle: NSLocalizedString("key_change_toast_open", comment: ""),
-            autoDismissAfter: 10
-        ) {
-            NotificationCenter.default.post(
-                name: .openChatForKeyChange,
-                object: nil,
-                userInfo: ["userId": userId]
-            )
-        }
-    }
-
     // MARK: - Acknowledge
 
-    /// User accepts the new identity key after re-verification (or risk acceptance).
-    /// Clears `.keyChanged` / `.failed` → `.verified`. The key bytes were already updated
-    /// when the change was detected (TOFU re-pin).
+    /// The user has looked: the pending event is cleared, and a failed proof is accepted as a
+    /// risk (`.failed` → `.verified`) — the next fetch that fails raises it again.
     @discardableResult
     static func acknowledgeKeyChange(
         userId: String,
@@ -79,16 +90,13 @@ enum KeyChangeUX {
         let fetch = User.fetchRequest()
         fetch.predicate = NSPredicate(format: "id == %@", userId)
         fetch.fetchLimit = 1
-        guard let user = try? context.fetch(fetch).first else { return false }
-        guard user.ktStatus == .keyChanged || user.ktStatus == .failed else { return false }
+        guard let user = try? context.fetch(fetch).first, user.trustAlert != nil else { return false }
 
-        user.ktStatus = .verified
+        user.securityNotice = .none
+        if user.ktStatus == .failed { user.ktStatus = .verified }
         do {
             try context.save()
-            Log.info(
-                "Key change acknowledged for \(userId.prefix(8))… → verified",
-                category: "KeyChangeUX"
-            )
+            Log.info("Security notice acknowledged for \(userId.prefix(8))…", category: "KeyChangeUX")
             NotificationCenter.default.post(
                 name: .contactKeyChangeAcknowledged,
                 object: nil,
@@ -97,17 +105,17 @@ enum KeyChangeUX {
             return true
         } catch {
             Log.error(
-                "Failed to acknowledge key change for \(userId.prefix(8))…: \(error)",
+                "Failed to acknowledge security notice for \(userId.prefix(8))…: \(error)",
                 category: "KeyChangeUX"
             )
             return false
         }
     }
 
-    /// Crypto device id for Safety Numbers: `SHA256(identity_public)[0..16]` hex.
-    static func safetyDeviceId(for user: User) -> String? {
-        guard let key = user.knownIdentityKey, !key.isEmpty else { return nil }
-        return deriveDeviceId(identityPublicKey: [UInt8](key))
+    /// The contact's devices to compare Safety Numbers with — every one of them, since a
+    /// substituted key is a device of its own (`decisions/a-new-device-is-the-security-event.md`).
+    static func safetyDeviceIds(for user: User, context: NSManagedObjectContext) -> [String] {
+        SessionAddressing.deviceIds(ofPeer: user.id, in: context)
     }
 
     // MARK: - Helpers

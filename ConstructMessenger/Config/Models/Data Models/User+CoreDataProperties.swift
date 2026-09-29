@@ -14,10 +14,64 @@ enum KTStatus: Int16, Sendable {
     case unverified = 0
     /// Last verification succeeded and identity key matches the Merkle log.
     case verified = 1
-    /// Identity key changed since the last verified bundle — requires user acknowledgement.
+    /// No longer written. It meant "the one key we pinned for this account differs from the one
+    /// just fetched", which a second device of the contact always satisfied; the event is now a
+    /// device the account did not have (`SecurityNotice.newDevice`). The value stays readable
+    /// because stored rows may carry it; nothing raises an alert for it.
     case keyChanged = 2
     /// Last verification failed (proof invalid, signature mismatch, etc.).
     case failed = 3
+}
+
+// MARK: - Security events per contact
+
+/// A security event about a contact, kept until the user acknowledges it. Same values as Android's
+/// `SecurityNotice`. `decisions/a-new-device-is-the-security-event.md`
+enum SecurityNotice: Int16, Sendable {
+    case none = 0
+    /// The contact named an account address other than the one pinned for them.
+    case addressChanged = 1
+    /// A device appeared on the contact's account after we had seen its device list. A device id
+    /// is the hash of its identity key, so a substituted key can only show up as such a device.
+    case newDevice = 2
+}
+
+/// The warning shown for a contact, whichever source raised it.
+enum ContactTrustAlert: Equatable, Sendable {
+    case newDevice
+    case addressChanged
+    /// The key server's proof for their bundle did not verify.
+    case verificationFailed
+
+    /// A pending event outranks a failed proof: it is the one the user has to acknowledge.
+    init?(notice: SecurityNotice, ktStatus: KTStatus) {
+        switch notice {
+        case .newDevice: self = .newDevice
+        case .addressChanged: self = .addressChanged
+        case .none:
+            guard ktStatus == .failed else { return nil }
+            self = .verificationFailed
+        }
+    }
+
+    var titleKey: String {
+        switch self {
+        case .newDevice: return "security_notice_new_device_title"
+        case .addressChanged: return "security_notice_address_title"
+        case .verificationFailed: return "key_change_banner_title_failed"
+        }
+    }
+
+    func subtitle(contactName: String) -> String {
+        switch self {
+        case .newDevice:
+            return String(format: NSLocalizedString("security_notice_new_device_body_fmt", comment: ""), contactName)
+        case .addressChanged:
+            return String(format: NSLocalizedString("security_notice_address_body_fmt", comment: ""), contactName)
+        case .verificationFailed:
+            return NSLocalizedString("key_change_banner_subtitle_failed", comment: "")
+        }
+    }
 }
 
 // MARK: - User Core Data properties
@@ -55,6 +109,22 @@ extension User {
     /// Their account address (Ed25519 recovery public key), from their signed invite. Sealed
     /// sends name the recipient by it; nil for a contact added before invites carried it.
     @NSManaged public var accountAddress: Data?
+
+    /// Raw `SecurityNotice` value stored in Core Data. Use `securityNotice`.
+    @NSManaged public var securityNoticeRaw: Int16
+
+    /// A security event about this contact the user has not acknowledged yet. Separate from
+    /// `ktStatus` because that one is rewritten by every bundle fetch, and an event must stay until
+    /// the user has seen it.
+    var securityNotice: SecurityNotice {
+        get { SecurityNotice(rawValue: securityNoticeRaw) ?? .none }
+        set { securityNoticeRaw = newValue.rawValue }
+    }
+
+    /// What, if anything, the chat, the chat list and the profile warn about for this contact.
+    var trustAlert: ContactTrustAlert? {
+        ContactTrustAlert(notice: securityNotice, ktStatus: ktStatus)
+    }
 
     /// Raw `KTStatus` value stored in Core Data. Use `ktStatus` accessor.
     @NSManaged public var ktStatusRaw: Int16

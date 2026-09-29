@@ -122,6 +122,8 @@ enum AccountWipeKeys {
 
         // Per-contact / per-message UI and delivery state
         "construct.contactKeyChangeAcknowledged",
+        // Contacts' device sets as last listed: the new-device event reads them.
+        "construct.peerDeviceSets.listed.v1",
         "construct.openChatForKeyChange",
         "construct.inviteAcceptedContactCreated",
         "construct.adMigration.serverUUID.v1.done",

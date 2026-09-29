@@ -284,6 +284,16 @@ final class KeyServiceClient: Sendable {
             }
         }
 
+        // The device this bundle is for joins the account's pinned set here as it does on the
+        // batch path — and a device the listed set did not name is the security event. Left
+        // unrecorded, a single-bundle fetch was a way for a new device to go unseen.
+        // The server's device id, not one derived here: `recordDevices` checks the two agree.
+        let pin = [(deviceId: fetched.deviceID, identityKey: fetched.data.identityPublic)]
+        let pinContext = PersistenceController.shared.container.newBackgroundContext()
+        await pinContext.perform {
+            SessionAddressing.recordDevices(pin, ofPeer: userId, in: pinContext)
+        }
+
         // Backstop. The KT writer above pins `knownIdentityKey` only on `.verified`, and bails
         // without a word when the `User` row does not exist. Otherwise we have just fetched and
         // are about to run X3DH against an identity key that nothing kept, and every subsequent
@@ -577,11 +587,11 @@ final class KeyServiceClient: Sendable {
     /// **MainActor-only** — User is `@ObservedObject` in chat/list UI; writing from a
     /// background context caused "Publishing changes from background threads".
     ///
-    /// - On first verification (`knownIdentityKey == nil`): stores the key and marks `.verified`.
-    /// - On matching key: updates status to the new value (`.verified` or `.failed`).
-    /// - On key change (was set, now different): marks `.keyChanged` and posts
-    ///   `.contactKeyChanged` — regardless of whether the proof itself was valid,
-    ///   because any unexpected key change must surface to the user.
+    /// The status is the verdict of this proof; on `.verified` the key becomes the pinned one.
+    /// A key different from the pinned one is **not** an event here: the pin is one key per
+    /// account, and a contact with two devices differs from it on every other fetch. What a
+    /// substituted key looks like is a device the account did not have, and `SessionAddressing`
+    /// raises that from the device set (`decisions/a-new-device-is-the-security-event.md`).
     @MainActor
     private static func updateContactKTStatus(
         userId: String,
@@ -594,31 +604,12 @@ final class KeyServiceClient: Sendable {
         fetch.fetchLimit = 1
         guard let user = try? context.fetch(fetch).first else { return }
 
-        if let known = user.knownIdentityKey, known != identityKey {
-            // Identity key has changed since the last verified session.
-            user.ktStatus = .keyChanged
+        user.ktStatus = newStatus
+        if newStatus == .verified {
             user.knownIdentityKey = identityKey
-            Log.error("KT: identity key changed for user \(userId)", category: "KT")
-            if context.hasChanges {
-                try? context.save()
-            }
-            NotificationCenter.default.post(
-                name: .contactKeyChanged,
-                object: nil,
-                userInfo: ["userId": userId]
-            )
-            KeyChangeUX.notifyKeyChange(
-                userId: userId,
-                displayName: user.resolvedDisplayName
-            )
-        } else {
-            user.ktStatus = newStatus
-            if newStatus == .verified {
-                user.knownIdentityKey = identityKey
-            }
-            if context.hasChanges {
-                try? context.save()
-            }
+        }
+        if context.hasChanges {
+            try? context.save()
         }
     }
 }

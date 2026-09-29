@@ -173,7 +173,7 @@ extension AccountAddress {
                 "ADDRESS: \(user.id.prefix(8))… named a different account address (\(source)) — \(outcome == .conflictKept ? "kept the pinned one" : "replaced by the invite's")",
                 category: "ContactLink"
             )
-            KeyChangeUX.notifyAddressConflict(userId: user.id, displayName: user.resolvedDisplayName)
+            KeyChangeUX.raise(.addressChanged, on: user)
         }
         return outcome
     }

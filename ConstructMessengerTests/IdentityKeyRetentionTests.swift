@@ -151,9 +151,9 @@ final class IdentityKeyRetentionTests: XCTestCase {
 
     // MARK: - What it must never do
 
-    /// A changed key is a security event owned by the KT path and the invite path, both of which
-    /// raise `.keyChanged` and notify the user. A backstop that also overwrote would either raise
-    /// the alarm twice or, worse, replace a pinned key without raising it at all.
+    /// The backstop only fills an absence. Which key the account slot holds is decided by the KT
+    /// path and the invite path; a substituted key is raised from the device set, not from this
+    /// slot (`decisions/a-new-device-is-the-security-event.md`).
     ///
     /// Mutation: drop the `guard existing.knownIdentityKey == nil` and this goes red.
     func testAnExistingPinIsNeverOverwritten() {

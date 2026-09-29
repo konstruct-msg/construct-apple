@@ -40,6 +40,7 @@ struct DesktopChatView: View {
 
     @State private var floodGuard = IncomingFloodGuard.shared
     @State private var contactKTStatus: KTStatus = .unverified
+    @State private var contactTrustAlert: ContactTrustAlert?
     @State private var isSessionAtRisk = false
     @State private var containerWidth: CGFloat = 800
 
@@ -403,7 +404,7 @@ struct DesktopChatView: View {
 
     @ToolbarContentBuilder
     private var chatToolbar: some ToolbarContent {
-        if contactKTStatus != .unverified {
+        if contactTrustAlert != nil || contactKTStatus == .verified {
             ToolbarItem(placement: .automatic) {
                 ktBadge
             }
@@ -449,21 +450,14 @@ struct DesktopChatView: View {
     }
 
     @ViewBuilder private var ktBadge: some View {
-        switch contactKTStatus {
-        case .verified:
+        if let alert = contactTrustAlert {
+            CTStatusBadge(status: alert == .verificationFailed ? .error : .warning, size: 12)
+                .help(NSLocalizedString(alert.titleKey, comment: ""))
+                .accessibilityLabel(Text(NSLocalizedString("kt_warning", comment: "")))
+        } else if contactKTStatus == .verified {
             CTStatusBadge(status: .ok, size: 12)
                 .help(NSLocalizedString("kt_verified", comment: ""))
                 .accessibilityLabel(Text(NSLocalizedString("kt_verified", comment: "")))
-        case .keyChanged:
-            CTStatusBadge(status: .warning, size: 12)
-                .help(NSLocalizedString("kt_warning", comment: ""))
-                .accessibilityLabel(Text(NSLocalizedString("kt_warning", comment: "")))
-        case .failed:
-            CTStatusBadge(status: .error, size: 12)
-                .help(NSLocalizedString("kt_warning", comment: ""))
-                .accessibilityLabel(Text(NSLocalizedString("kt_warning", comment: "")))
-        case .unverified:
-            EmptyView()
         }
     }
 
@@ -696,6 +690,7 @@ struct DesktopChatView: View {
         req.fetchLimit = 1
         if let user = (try? viewContext.fetch(req))?.first {
             contactKTStatus = user.ktStatus
+            contactTrustAlert = user.trustAlert
         }
     }
 

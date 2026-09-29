@@ -225,31 +225,8 @@ final class InviteSystemCompletionTests: XCTestCase {
 
     // MARK: - ContactPolicy / TOFU pin
 
-    func testPinThenChangeMarksKeyChanged() {
-        let ctx = container.viewContext
-        let id = "14f28d31-aaaa-4abc-8def-0123456789ab"
-        let k1 = Data(repeating: 0x11, count: 32)
-        let k2 = Data(repeating: 0x22, count: 32)
-
-        let user = User(context: ctx)
-        user.id = id
-        user.username = ""
-        user.displayName = "T"
-        user.isContact = true
-        user.isBlocked = false
-        user.isSharingWithMe = false
-        user.amISharingWith = false
-        user.addedAt = Date()
-        try! ctx.save()
-
-        ContactLinkService.shared.pinKnownIdentityKey(on: user, identityKey: k1)
-        XCTAssertEqual(user.knownIdentityKey, k1)
-        XCTAssertNotEqual(user.ktStatus, .keyChanged)
-
-        ContactLinkService.shared.pinKnownIdentityKey(on: user, identityKey: k2)
-        XCTAssertEqual(user.knownIdentityKey, k2)
-        XCTAssertEqual(user.ktStatus, .keyChanged)
-    }
+    // `testPinThenChangeMarksKeyChanged` stood here until 2026-09-29: a second invite key is a
+    // device of the account, not a key change — `NewDeviceEventTests`.
 
     func testApplyInviteRedeemSetsContactAndPin() throws {
         let ctx = container.viewContext

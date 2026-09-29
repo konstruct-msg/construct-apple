@@ -113,7 +113,7 @@ private struct DesktopPeopleRow: View {
                         .foregroundStyle(Color.CT.text)
                         .lineLimit(1)
 
-                    if user.ktStatus == .keyChanged || user.ktStatus == .failed {
+                    if user.trustAlert != nil {
                         Image(systemName: "exclamationmark.shield.fill")
                             .font(.system(size: 11, weight: .semibold))
                             .foregroundStyle(Color.CT.danger)

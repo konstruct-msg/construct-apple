@@ -121,18 +121,11 @@ struct UserProfileView: View {
             Text(shareAlertMessage)
         }
         .sheet(isPresented: $showingSafetyNumbers) {
-            if let deviceId = KeyChangeUX.safetyDeviceId(for: user) {
-                SafetyNumberView(
-                    theirDeviceId: deviceId,
-                    theirDisplayName: user.resolvedDisplayName
-                )
-            } else {
-                // Fallback: no pinned identity yet — show unavailable state inside SafetyNumberView
-                SafetyNumberView(
-                    theirDeviceId: "",
-                    theirDisplayName: user.resolvedDisplayName
-                )
-            }
+            // Empty when no device is pinned yet: the view says the number is unavailable.
+            SafetyNumberView(
+                theirDeviceIds: KeyChangeUX.safetyDeviceIds(for: user, context: viewContext),
+                theirDisplayName: user.resolvedDisplayName
+            )
         }
         .alert(LocalizedStringKey("local_name"), isPresented: $showingLocalNameEditor) {
             TextField(NSLocalizedString("local_name_placeholder", comment: ""), text: $draftLocalName)
@@ -346,8 +339,8 @@ struct UserProfileView: View {
             sectionHeader(NSLocalizedString("security", comment: ""))
             flatRowDivider()
 
-            if user.ktStatus == .keyChanged || user.ktStatus == .failed {
-                keyChangeWarningBlock
+            if let alert = user.trustAlert {
+                keyChangeWarningBlock(alert)
                 flatRowDivider()
             }
 
@@ -386,27 +379,18 @@ struct UserProfileView: View {
         }
     }
 
-    /// Persistent trust warning until the user verifies or accepts the new key.
-    private var keyChangeWarningBlock: some View {
+    /// Persistent trust warning until the user verifies or acknowledges it.
+    private func keyChangeWarningBlock(_ alert: ContactTrustAlert) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
                 Image(systemName: "exclamationmark.shield.fill")
                     .foregroundStyle(Color.CT.danger)
-                Text(NSLocalizedString(
-                    user.ktStatus == .failed ? "key_change_banner_title_failed" : "key_change_banner_title",
-                    comment: ""
-                ))
+                Text(NSLocalizedString(alert.titleKey, comment: ""))
                 .font(CTFont.ui(12, weight: .bold))
                 .foregroundStyle(Color.CT.danger)
             }
 
-            Text(user.ktStatus == .failed
-                 ? NSLocalizedString("key_change_banner_subtitle_failed", comment: "")
-                 : String(
-                    format: NSLocalizedString("key_change_banner_subtitle_fmt", comment: ""),
-                    user.resolvedDisplayName
-                 )
-            )
+            Text(alert.subtitle(contactName: user.resolvedDisplayName))
             .font(CTFont.caption)
             .foregroundStyle(Color.CT.textDim)
 
@@ -426,10 +410,10 @@ struct UserProfileView: View {
 
                 Button {
                     if KeyChangeUX.acknowledgeKeyChange(userId: user.id, context: viewContext) {
-                        // @ObservedObject user will refresh ktStatus from Core Data object
+                        // @ObservedObject user refreshes from the Core Data object
                     }
                 } label: {
-                    Text(NSLocalizedString("key_change_accept", comment: ""))
+                    Text(NSLocalizedString("security_notice_acknowledge", comment: ""))
                         .font(CTFont.secondary)
                         .foregroundStyle(Color.CT.accent)
                         .padding(.horizontal, 12)

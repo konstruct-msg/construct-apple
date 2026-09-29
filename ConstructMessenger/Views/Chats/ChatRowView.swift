@@ -128,7 +128,7 @@ private struct ChatRowLayout: View {
                     if let user {
                         displayNameView(for: user)
                             .lineLimit(1)
-                        if user.ktStatus == .keyChanged || user.ktStatus == .failed {
+                        if user.trustAlert != nil {
                             Image(systemName: "exclamationmark.shield.fill")
                                 .font(.system(size: 11, weight: .semibold))
                                 .foregroundStyle(Color.CT.danger)
