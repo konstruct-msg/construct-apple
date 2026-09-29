@@ -956,14 +956,17 @@
 "kt_warning" = "զգուշացում";
 
 // Key-change trust event (thread 5.4)
-"key_change_banner_title" = "Անվտանգության բանալին փոխվել է";
 "key_change_banner_title_failed" = "Ինքնության ստուգումը ձախողվեց";
-"key_change_banner_subtitle_fmt" = "%@-ի անվտանգության բանալին տարբերվում է նախկինից։ Համեմատեք անվտանգության թվերը, նախքան այս զրույցին վստահելը։";
 "key_change_banner_subtitle_failed" = "Չհաջողվեց հաստատել այս անձի անվտանգության բանալին թափանցիկության մատյանում։ Ստուգեք անձամբ, եթե կարող եք։";
 "key_change_verify" = "Ստուգել";
-"key_change_accept" = "Ընդունել նոր բանալին";
-"key_change_toast_fmt" = "%@-ի անվտանգության բանալին փոխվել է։ Բացեք զրույցը՝ ստուգելու համար։";
 "address_change_toast_fmt" = "%@-ն այժմ պնդում է այլ հասցե։ Բացեք զրույցը՝ ստուգելու համար։";
+"security_notice_new_device_title" = "Նոր սարք";
+"security_notice_new_device_body_fmt" = "%@-ն ունի սարք, որը նախկինում չէր եղել։ Եթե նա սարք չի ավելացրել, հնարավոր է՝ ինչ-որ մեկը կարդում է նամակագրությունը։ Համեմատեք անվտանգության թվերը, նախքան այս զրույցին վստահելը։";
+"security_notice_address_title" = "Այլ հասցե";
+"security_notice_address_body_fmt" = "%@-ն պնդում է այլ հասցե, քան նախկինում։ Համեմատեք անվտանգության թվերը, նախքան այս զրույցին վստահելը։";
+"security_notice_acknowledge" = "Ստուգված է";
+"new_device_toast_fmt" = "%@-ն ունի նոր սարք։ Բացեք զրույցը՝ ստուգելու համար։";
+"safety_numbers_device_fmt" = "Սարք %@";
 "key_change_toast_open" = "Բացել";
 
 // Identity fingerprint (thread 5.3 — external identity form)

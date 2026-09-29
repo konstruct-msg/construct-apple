@@ -133,8 +133,10 @@ theme file is **shared, never copied** — the copy is what killed the last atte
 ## Localization
 
 - **All** visible strings use `NSLocalizedString("key", comment: "")` — no hardcoded English.
-- New keys go to **all four** locales — `en`, `ru`, `ja`, `fr` — in the same commit.
-  `scripts/check_localization.sh` enforces parity, no duplicate keys, no key that resolves to
+- New keys go to **every** locale — `en`, `ru`, `ja`, `fr`, `hy-AM` — in the same commit.
+  The list is `OTHER_LOCALES` in `scripts/check_localization.sh`; a locale added to the app is
+  added there in the same change, or nothing checks it (`hy-AM` went unchecked for a day and
+  missed the next commit's keys). The script enforces parity, no duplicate keys, no key that resolves to
   nothing, and that a translation carries the same format specifiers as its English source by
   position and conversion type; CI runs it. A key with no entry is displayed to the user
   verbatim — the ones already on real screens are listed in that script's `BASELINE`, and the

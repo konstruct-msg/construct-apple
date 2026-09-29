@@ -3,7 +3,7 @@
 #
 # Four checks, no build required:
 #
-#   1. All four .lproj declare the same key set. AGENTS.md requires a new key to land
+#   1. Every .lproj in OTHER_LOCALES declares the same key set as en. AGENTS.md requires a new key to land
 #      in every locale in the same commit; nothing enforced it until now.
 #   2. No key is declared twice in one file. A duplicate is silently resolved by
 #      whichever line the parser reads last, so the visible string stops matching
@@ -59,6 +59,11 @@ STRINGS="$ROOT/ConstructMessenger"
 # Code scanned by check 3. The `.strings` files live only under `$STRINGS`, but Desktop
 # reads the same catalogue and must be held to it.
 CODE_ROOTS=("$ROOT/ConstructMessenger" "$ROOT/Construct Desktop")
+# Every locale the app ships besides en, held to every check below. A locale absent from
+# this list is not checked at all: hy-AM shipped on 2026-09-28 without being added here,
+# and the next commit's new keys went into the four listed locales only — the script
+# reported parity while Armenian screens fell back to English.
+OTHER_LOCALES=(ru ja fr hy-AM)
 FAIL=0
 
 # Keys used in code that resolve to nothing. Empty since 2026-09-24: the list seeded
@@ -74,7 +79,7 @@ keys_of() { grep -oE '^"[^"]+"' "$1" | sed 's/^"//; s/"$//' | sort; }
 # ── 1. parity across every locale ─────────────────────────────────────────────
 en_keys=$(keys_of "$STRINGS/en.lproj/Localizable.strings" | sort -u)
 parity_ok=1
-for L in ru ja fr; do
+for L in "${OTHER_LOCALES[@]}"; do
     l_keys=$(keys_of "$STRINGS/$L.lproj/Localizable.strings" | sort -u)
     absent=$(comm -23 <(echo "$en_keys") <(echo "$l_keys"))
     extra=$(comm -13 <(echo "$en_keys") <(echo "$l_keys"))
@@ -89,10 +94,10 @@ for L in ru ja fr; do
     fi
 done
 [ "$parity_ok" -eq 1 ] && \
-    echo "✓ en/ru/ja/fr parity — $(echo "$en_keys" | wc -l | tr -d ' ') keys in each"
+    echo "✓ en $(IFS=/; echo "${OTHER_LOCALES[*]}") parity — $(echo "$en_keys" | wc -l | tr -d ' ') keys in each"
 
 # ── 2. duplicates within a file ───────────────────────────────────────────────
-for L in en ru ja fr; do
+for L in en "${OTHER_LOCALES[@]}"; do
     f="$STRINGS/$L.lproj/Localizable.strings"
     [ -f "$f" ] || continue
     dupes=$(keys_of "$f" | uniq -d)
@@ -114,7 +119,7 @@ new_unresolved=$(comm -23 <(echo "$unresolved") <(echo "$BASELINE" | sort))
 if [ -n "$new_unresolved" ]; then
     echo "✗ NSLocalizedString keys with no entry in en.lproj — these show as raw keys:"
     echo "$new_unresolved" | sed 's/^/    /'
-    echo "  Add them to BOTH en.lproj and ru.lproj."
+    echo "  Add them to en.lproj and every locale in OTHER_LOCALES."
     FAIL=1
 else
     n=$(echo "$unresolved" | grep -c . || true)
@@ -139,7 +144,7 @@ plist="$STRINGS/Info.plist"
 info_ok=1
 if [ -f "$info_en" ] && [ -f "$plist" ]; then
     info_en_keys=$(keys_of "$info_en" | sort -u)
-    for L in ru ja fr; do
+    for L in "${OTHER_LOCALES[@]}"; do
         f="$STRINGS/$L.lproj/InfoPlist.strings"
         if [ ! -f "$f" ]; then
             echo "✗ $L.lproj has no InfoPlist.strings — its permission prompts are English"
@@ -168,7 +173,7 @@ fi
 #
 # Compared by position and conversion type, not as raw text: Japanese reorders
 # arguments with %1$d / %2$d on purpose, and that is correct, not a defect.
-python3 - "$STRINGS" <<'PY' || FAIL=1
+python3 - "$STRINGS" "${OTHER_LOCALES[@]}" <<'PY' || FAIL=1
 import re, sys, io, os
 root = sys.argv[1]
 SPEC = re.compile(r'%(?:(\d+)\$)?(l{0,2}[du]|[@fs])')
@@ -182,7 +187,7 @@ def kv(loc):
     p = os.path.join(root, f"{loc}.lproj", "Localizable.strings")
     return dict(re.findall(r'^"([^"]+)"\s*=\s*"(.*)";\s*$', io.open(p, encoding="utf-8").read(), re.M))
 en, bad = kv("en"), 0
-for loc in ("ru", "ja", "fr"):
+for loc in sys.argv[2:]:
     for k, v in kv(loc).items():
         if k in en and types(en[k]) != types(v):
             print(f"\u2717 {loc}.lproj/{k} does not match the English format specifiers")
