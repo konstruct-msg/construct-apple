@@ -83,25 +83,18 @@ actor TransportRouter {
         let now = Date()
         let modeForEvent = resolvedMode(for: event)
         currentMode = modeForEvent
-        let outcome = TransportReducer.reduce(
+        let oldState = state
+        let outcome = TransportReducer.route(
             state: state,
             event: event,
-            config: effectiveConfig(for: modeForEvent),
+            mode: modeForEvent,
+            config: config,
             now: now
         )
-        let oldState = state
-        var nextState = outcome.state
-        var effects = outcome.effects
-
-        // Auto mode: direct-path success while VEIL is active means VEIL was a false
-        // positive (typically H3-only failures on an otherwise healthy network).
-        if case .auto = modeForEvent,
-           case .veilActive = oldState,
-           case .rpcSucceeded(let via, _) = event,
-           !via.isVEIL {
-            nextState = .direct(consecutiveFails: 0)
-            if !effects.contains(.requestProxyStop) { effects.append(.requestProxyStop) }
-            if !effects.contains(.setVeilPort(nil)) { effects.append(.setVeilPort(nil)) }
+        let nextState = outcome.state
+        let effects = outcome.effects
+        if case .auto = modeForEvent, case .veilActive = oldState, nextState == .direct(consecutiveFails: 0),
+           case .rpcSucceeded(let via, _) = event, !via.isVEIL {
             Log.info("Transport: auto de-escalation — direct path confirmed, stopping VEIL", category: "Transport")
         }
 
@@ -287,12 +280,6 @@ actor TransportRouter {
         default:
             return currentMode
         }
-    }
-
-    private func effectiveConfig(for mode: VeilMode) -> TransportConfig {
-        var effective = config
-        effective.allowDirectToVeilEscalation = mode != .off
-        return effective
     }
 }
 

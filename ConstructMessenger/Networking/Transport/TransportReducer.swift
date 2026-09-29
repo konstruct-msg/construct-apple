@@ -18,6 +18,35 @@ enum TransportReducer {
 
     typealias Outcome = (state: TransportState, effects: [TransportEffect])
 
+    /// The whole routing decision under `mode`: `reduce`, plus the two rules that lived inline in
+    /// `TransportRouter.send` until 2026-09-29 — escalation is allowed only when VEIL is not off,
+    /// and Auto leaves VEIL when a direct call succeeds. Pure, so the cross-client vectors
+    /// (construct-protos `conformance/transport_route.json`, `TransportRouteConformanceTests`)
+    /// cover all of it. Android implements the same in `TransportRoute.kt` and runs the same file.
+    static func route(
+        state: TransportState,
+        event: TransportEvent,
+        mode: VeilMode,
+        config: TransportConfig = .default,
+        now: Date
+    ) -> Outcome {
+        var effective = config
+        effective.allowDirectToVeilEscalation = config.allowDirectToVeilEscalation && mode != .off
+        var outcome = reduce(state: state, event: event, config: effective, now: now)
+
+        // Auto: a direct-path success while VEIL is active means VEIL was a false positive
+        // (typically H3-only failures on an otherwise healthy network).
+        if case .auto = mode,
+           case .veilActive = state,
+           case .rpcSucceeded(let via, _) = event,
+           !via.isVEIL {
+            outcome.state = .direct(consecutiveFails: 0)
+            if !outcome.effects.contains(.requestProxyStop) { outcome.effects.append(.requestProxyStop) }
+            if !outcome.effects.contains(.setVeilPort(nil)) { outcome.effects.append(.setVeilPort(nil)) }
+        }
+        return outcome
+    }
+
     /// The single entry point. Returns the next state and the effects to apply.
     static func reduce(
         state: TransportState,
