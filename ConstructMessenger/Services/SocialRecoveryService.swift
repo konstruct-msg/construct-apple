@@ -4,6 +4,12 @@
 //
 //  SLIP-39 social recovery — Variant A (vault key Shamir splitting).
 //
+//  Setup only. The restore half (`reconstructAndRestore`) stood here until 2026-09-29 with no
+//  screen reaching it, and what it did was write the bundle's keys into Keychain copies the core
+//  never loads from — a restore that restored nothing. A real one needs a core call that turns
+//  the bundle into a key record; the uploaded format is unchanged, so bundles made before then
+//  stay openable when it exists.
+//
 
 import Foundation
 
@@ -22,28 +28,15 @@ final class SocialRecoveryService {
         case failed(String)
     }
 
-    // MARK: - Recovery state
-
-    enum RecoveryStep: Equatable {
-        case idle
-        case enterShares
-        case reconstructing
-        case done
-        case failed(String)
-    }
-
     // MARK: - Published state
 
     var setupStep: SetupStep = .idle
-    var recoveryStep: RecoveryStep = .idle
 
     var threshold: Int = 2
     var shareCount: Int = 3
     var shares: [String] = []
     var shareLabels: [String] = []
     var distributedFlags: [Bool] = []
-
-    var enteredShares: [String] = []
 
     var isConfigured: Bool = false
 
@@ -98,23 +91,12 @@ final class SocialRecoveryService {
             return
         }
         do {
-            let km = KeychainManager.shared
-            guard
-                let signingKey  = km.loadDeviceSigningKey(),
-                let identityKey = km.loadDeviceIdentityKey(),
-                let deviceId    = km.loadDeviceID()
-            else {
-                setupStep = .failed("device keys not found in Keychain")
-                return
-            }
-            let bundle = SrRecoveryBundle(
-                deviceSigningKey:  signingKey,
-                deviceIdentityKey: identityKey,
-                deviceId:          deviceId,
-                createdAt:         Int64(Date().timeIntervalSince1970)
+            // The core packs its own keys and seals them; only the ciphertext comes out.
+            let ciphertext = try CryptoManager.shared.sealOwnRecoveryBundle(
+                vaultKey: vaultKey,
+                createdAt: Int64(Date().timeIntervalSince1970)
             )
-            let ciphertext = try srSealRecoveryBundle(vaultKey: vaultKey, bundle: bundle)
-            try await AuthServiceClient.shared.storeRecoveryBundle(ciphertext: Data(ciphertext))
+            try await AuthServiceClient.shared.storeRecoveryBundle(ciphertext: ciphertext)
             vaultKey = Data()  // drop after a successful upload
             isConfigured = true
             setupStep = .done
@@ -123,47 +105,13 @@ final class SocialRecoveryService {
         }
     }
 
-    // MARK: - Recovery
-
-    func addEnteredShare(_ mnemonic: String) {
-        let trimmed = mnemonic.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
-        enteredShares.append(trimmed)
-    }
-
-    func removeEnteredShare(at index: Int) {
-        guard index < enteredShares.count else { return }
-        enteredShares.remove(at: index)
-    }
-
-    func reconstructAndRestore(username: String) async {
-        recoveryStep = .reconstructing
-        do {
-            let reconstructedKey = try srReconstructVaultKey(mnemonics: enteredShares)
-            guard let ciphertext = try await AuthServiceClient.shared.getRecoveryBundle(username: username) else {
-                recoveryStep = .failed("no recovery bundle found for this identity")
-                return
-            }
-            let bundle = try srOpenRecoveryBundle(vaultKey: reconstructedKey, ciphertext: ciphertext)
-            let km = KeychainManager.shared
-            km.saveDeviceSigningKey(bundle.deviceSigningKey)
-            km.saveDeviceIdentityKey(bundle.deviceIdentityKey)
-            // deviceId is restored implicitly via key re-registration flow
-            recoveryStep = .done
-        } catch {
-            recoveryStep = .failed(error.localizedDescription)
-        }
-    }
-
     // MARK: - Reset
 
     func reset() {
         setupStep = .idle
-        recoveryStep = .idle
         shares = []
         shareLabels = []
         distributedFlags = []
-        enteredShares = []
         threshold = 2
         shareCount = 3
         vaultKey = Data()

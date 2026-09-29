@@ -61,10 +61,10 @@ actor DeviceAuthCoordinator {
     @MainActor
     private static func performDeviceAuth() async -> DeviceAuthOutcome {
         let idRead = KeychainManager.shared.readDeviceID()
-        let keyRead = KeychainManager.shared.readDeviceSigningKey()
-        let detail = "deviceId=\(idRead.description) signingKey=\(keyRead.description)"
+        let keyRead = KeychainManager.shared.readPrivateKeys()
+        let detail = "deviceId=\(idRead.description) keyRecord=\(keyRead.description)"
 
-        switch DeviceKeyAvailability.resolve(deviceId: idRead, signingKey: keyRead) {
+        switch DeviceKeyAvailability.resolve(deviceId: idRead, keyRecord: keyRead) {
         case .present:
             break
         case .absent:
@@ -92,8 +92,7 @@ actor DeviceAuthCoordinator {
                 return .failed(message: "encodingFailed")
             }
 
-            // The core signs — with the orchestrator, or the key record before one exists. The
-            // Keychain's raw signing-key copy stays only as the presence check above.
+            // The core signs — with the orchestrator, or the key record before one exists.
             let signatureData = try CryptoManager.shared.signWithDeviceKey(messageData)
 
             // allowAuthRetry: false on the client — must not recurse into refresh/device-auth.

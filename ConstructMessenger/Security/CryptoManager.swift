@@ -98,6 +98,11 @@ class CryptoManager {
         let (loadedCore, restoredFromKeychain) = coreProvider.loadCore()
         self._bootstrapCore = loadedCore
         self.wasRestoredFromKeychain = restoredFromKeychain
+        // The core loaded from the key record, so the raw copies older builds kept beside it
+        // have nothing left to back up: nothing reads them since 2026-09-29.
+        if loadedCore != nil {
+            KeychainManager.shared.deleteLegacyDeviceKeyCopies()
+        }
 
         // Defer GC and timer to avoid accessing Core Data before stores are loaded.
         // Session restore is intentionally NOT done here — orchestratorCore is not yet
@@ -162,6 +167,29 @@ class CryptoManager {
         return try signBundleDataWithKeys(keys: record, bundleDataJson: message)
     }
 
+    /// This device's social-recovery bundle sealed under `vaultKey`. The bundle is the backup of
+    /// the device keys, so the core packs and seals them; only the ciphertext comes out.
+    func sealOwnRecoveryBundle(vaultKey: Data, createdAt: Int64) throws -> Data {
+        coreLock.lock()
+        defer { coreLock.unlock() }
+        guard let core = orchestratorCore else { throw CryptoManagerError.coreNotInitialized }
+        return try core.sealOwnRecoveryBundle(vaultKey: vaultKey, createdAt: createdAt)
+    }
+
+    /// The history-file (CTHF) channel key on the receiving side, derived in the core from the
+    /// identity key and the Kyber prekey — see `OrchestratorCore.historyFileChannelKey`.
+    func historyFileChannelKey(senderEphPub: Data, kemKeyId: UInt32, kemCiphertext: Data, snapshotId: Data) throws -> Data {
+        coreLock.lock()
+        defer { coreLock.unlock() }
+        guard let core = orchestratorCore else { throw CryptoManagerError.coreNotInitialized }
+        return try core.historyFileChannelKey(
+            senderEphPub: senderEphPub,
+            kemKeyId: kemKeyId,
+            kemCiphertext: kemCiphertext,
+            snapshotId: snapshotId
+        )
+    }
+
     /// Open a box sealed to this device's identity key: a sender certificate, a sibling's
     /// device metadata. Throws when the box is sealed to another key.
     func openSealedToDevice(_ sealedBox: Data) throws -> Data {
@@ -181,8 +209,9 @@ class CryptoManager {
     }
 
     /// Generate a complete registration bundle for device-based authentication
-    /// Returns: (deviceId, registrationBundle fields, signing key bytes, identity key bytes)
-    func generateRegistrationBundle() throws -> (deviceId: String, bundle: RegistrationBundleFields, signingKey: Data, identityKey: Data) {
+    /// Returns the device id and the public bundle. The keys stay in the core and in the key
+    /// record saved here; until 2026-09-29 the secrets were returned too, for Keychain copies.
+    func generateRegistrationBundle() throws -> (deviceId: String, bundle: RegistrationBundleFields) {
         Log.info("Generating registration bundle...", category: "CryptoManager")
 
         // Always generate fresh keys for registration — never reuse an existing core
@@ -204,18 +233,11 @@ class CryptoManager {
         let identityHexPreview = bundle.identityPublic.prefix(8).map { String(format: "%02x", $0) }.joined()
         Log.debug("Registration bundle: identity=\(identityHexPreview)… suiteId=\(bundle.suiteId)", category: "CryptoManager")
 
-        // Key bytes — no JSON parsing
-        let signingKeyData = try activeCore.getSigningKeyBytes()
-        let identityKeyData = try activeCore.getIdentityKeyBytes()
-        guard !signingKeyData.isEmpty, !identityKeyData.isEmpty else {
-            throw CryptoError.InvalidKeyData(message: "getSigningKeyBytes or getIdentityKeyBytes returned empty")
-        }
-
         // Derive device_id from identity public key bytes directly.
         let deviceId = deriveDeviceId(identityPublicKey: bundle.identityPublic)
 
         Log.info("Generated registration bundle: device_id=\(deviceId)", category: "CryptoManager")
-        return (deviceId, bundle, signingKeyData, identityKeyData)
+        return (deviceId, bundle)
     }
 
     // MARK: - Session Persistence

@@ -40,6 +40,39 @@ final class TransferCryptoTests: XCTestCase {
         XCTAssertNotEqual(nearby.withUnsafeBytes { Data($0) }, file.withUnsafeBytes { Data($0) })
     }
 
+    /// The receiver's file channel key comes from the core since 2026-09-29; the sender still
+    /// derives it here, from public keys. The two must agree, or every CTHF file — including ones
+    /// written by older builds — stops opening.
+    ///
+    /// Mutation: swap the ECDH and KEM halves of the core's IKM — this reddens.
+    func testTheCoreFileChannelKeyIsTheOneTheSenderDerives() throws {
+        let receiver = try makeTestDevice().core
+        if try receiver.currentKyberSpkUpload() == nil {
+            _ = try receiver.beginKyberSpkRotation()
+            XCTAssertTrue(receiver.commitKyberSpkRotation())
+        }
+        let spk = try XCTUnwrap(try receiver.currentKyberSpkUpload())
+        let identity = try Curve25519.KeyAgreement.PublicKey(
+            rawRepresentation: try receiver.getRegistrationBundleFields().identityPublic
+        )
+
+        let eph = Curve25519.KeyAgreement.PrivateKey()
+        let ecdh = try eph.sharedSecretFromKeyAgreement(with: identity).withUnsafeBytes { Data($0) }
+        let kem = try mlkem1024Encapsulate(publicKey: spk.publicKey)
+        let snapshot = Data(repeating: 0x5A, count: 16)
+        let senderKey = TransferCrypto.deriveChannelKey(
+            ecdh: ecdh, kemSharedSecret: kem.sharedSecret, salt: .file, snapshotId: snapshot
+        )
+
+        let receiverKey = try receiver.historyFileChannelKey(
+            senderEphPub: eph.publicKey.rawRepresentation,
+            kemKeyId: spk.keyId,
+            kemCiphertext: kem.ciphertext,
+            snapshotId: snapshot
+        )
+        XCTAssertEqual(receiverKey, senderKey.withUnsafeBytes { Data($0) })
+    }
+
     func testDiscoveryInstanceNameMatchesDisposition() {
         let tag = HistorySnapshotDisposition.discoveryTag(
             userIdDashed: "00000000-0000-4000-8000-000000000001",

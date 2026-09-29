@@ -1426,6 +1426,14 @@ public protocol OrchestratorCoreProtocol: AnyObject, Sendable {
     
     func hasSession(contactId: String)  -> Bool
     
+    /**
+     * The history-file (CTHF) channel key on the receiving side: HKDF-SHA256 over
+     * X25519(identity, sender_eph) ‖ the ML-KEM decapsulation of `kem_ciphertext` under Kyber
+     * prekey `kem_key_id`, salt "construct_history_file_v1", info `snapshot_id`. The channel key,
+     * not the X25519 output: that would open every box sealed to this device.
+     */
+    func historyFileChannelKey(senderEphPub: Data, kemKeyId: UInt32, kemCiphertext: Data, snapshotId: Data) throws  -> Data
+    
     func hybridSignaturePublicKey()  -> Data?
     
     func importHybridSignaturePrivateKey(privBytes: Data) throws 
@@ -1506,6 +1514,13 @@ public protocol OrchestratorCoreProtocol: AnyObject, Sendable {
     func rollbackKyberSpkRotation() 
     
     func rotateSignedPrekey() throws  -> RotatedSpkBundle
+    
+    /**
+     * This device's social-recovery bundle (device keys, derived device id, `created_at`) sealed
+     * under the 32-byte `vault_key` — the `sr_seal_recovery_bundle` format, packed in the core so
+     * only the ciphertext leaves it.
+     */
+    func sealOwnRecoveryBundle(vaultKey: Data, createdAt: Int64) throws  -> Data
     
     func setLocalUserId(userId: String) 
     
@@ -1890,6 +1905,24 @@ open func hasSession(contactId: String) -> Bool  {
 })
 }
     
+    /**
+     * The history-file (CTHF) channel key on the receiving side: HKDF-SHA256 over
+     * X25519(identity, sender_eph) ‖ the ML-KEM decapsulation of `kem_ciphertext` under Kyber
+     * prekey `kem_key_id`, salt "construct_history_file_v1", info `snapshot_id`. The channel key,
+     * not the X25519 output: that would open every box sealed to this device.
+     */
+open func historyFileChannelKey(senderEphPub: Data, kemKeyId: UInt32, kemCiphertext: Data, snapshotId: Data)throws  -> Data  {
+    return try  FfiConverterData.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_method_orchestratorcore_history_file_channel_key(
+            self.uniffiCloneHandle(),
+        FfiConverterData.lower(senderEphPub),
+        FfiConverterUInt32.lower(kemKeyId),
+        FfiConverterData.lower(kemCiphertext),
+        FfiConverterData.lower(snapshotId),$0
+    )
+})
+}
+    
 open func hybridSignaturePublicKey() -> Data?  {
     return try!  FfiConverterOptionData.lift(try! rustCall() {
     uniffi_construct_core_fn_method_orchestratorcore_hybrid_signature_public_key(
@@ -2143,6 +2176,21 @@ open func rotateSignedPrekey()throws  -> RotatedSpkBundle  {
     return try  FfiConverterTypeRotatedSpkBundle_lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
     uniffi_construct_core_fn_method_orchestratorcore_rotate_signed_prekey(
             self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+    /**
+     * This device's social-recovery bundle (device keys, derived device id, `created_at`) sealed
+     * under the 32-byte `vault_key` — the `sr_seal_recovery_bundle` format, packed in the core so
+     * only the ciphertext leaves it.
+     */
+open func sealOwnRecoveryBundle(vaultKey: Data, createdAt: Int64)throws  -> Data  {
+    return try  FfiConverterData.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_method_orchestratorcore_seal_own_recovery_bundle(
+            self.uniffiCloneHandle(),
+        FfiConverterData.lower(vaultKey),
+        FfiConverterInt64.lower(createdAt),$0
     )
 })
 }
@@ -7858,6 +7906,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_method_orchestratorcore_has_session() != 45817) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_construct_core_checksum_method_orchestratorcore_history_file_channel_key() != 35330) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_construct_core_checksum_method_orchestratorcore_hybrid_signature_public_key() != 3228) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -7934,6 +7985,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_orchestratorcore_rotate_signed_prekey() != 11331) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_orchestratorcore_seal_own_recovery_bundle() != 42137) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_orchestratorcore_set_local_user_id() != 22865) {

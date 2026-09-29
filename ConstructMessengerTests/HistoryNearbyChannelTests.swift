@@ -38,7 +38,6 @@ final class HistoryNearbyChannelTests: XCTestCase {
             userIdRaw: try XCTUnwrap(HistoryAccountID.raw(userId)),
             deviceIdHex: deviceHex,
             deviceIdRaw: deviceRaw,
-            identityPrivate: identity.rawRepresentation,
             identityPublic: identityPublic,
             hybridPublic: hybrid,
             kyberSPKId: kyber.keyId

@@ -224,8 +224,7 @@ final class AccountRecoveryViewModel {
             )
 
             // 3. Generate fresh device keys
-            let (deviceId, bundle, signingKeyData, identityKeyData) =
-                try CryptoManager.shared.generateRegistrationBundle()
+            let (deviceId, bundle) = try CryptoManager.shared.generateRegistrationBundle()
 
             var publicKeys = Shared_Proto_Services_V1_DevicePublicKeys()
             publicKeys.verifyingKey = bundle.verifyingKey
@@ -249,10 +248,8 @@ final class AccountRecoveryViewModel {
                 publicKeys: publicKeys
             )
 
-            // 5. Persist new keys and tokens
+            // 5. Persist the device id and tokens (the keys are in the record the bundle saved)
             KeychainManager.shared.saveDeviceID(deviceId)
-            KeychainManager.shared.saveDeviceSigningKey(signingKeyData)
-            KeychainManager.shared.saveDeviceIdentityKey(identityKeyData)
             AuthSessionManager.shared.saveTokens(
                 accessToken: response.accessToken,
                 refreshToken: response.refreshToken,

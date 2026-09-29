@@ -131,31 +131,19 @@ class KeychainManager {
         return String(data: data, encoding: .utf8)
     }
     
-    /// Save device signing key (Ed25519 private key, 32 bytes)
-    func saveDeviceSigningKey(_ key: Data) {
-        let success = save(key, forKey: "deviceSigningKey", accessible: Self.cryptoKeyAccessible)
-        if success {
-            Log.info("Device signing key saved to Keychain", category: "Keychain")
+    /// Delete the raw copies of the device keys older builds kept beside the key record
+    /// (`deviceSigningKey`, `deviceIdentityKey`). The record in `crypto_private_keys` is what the
+    /// core loads from; the copies existed so Swift could sign and open with the keys itself, and
+    /// since 2026-09-29 nothing reads them. Called once the core has loaded from the record, so a
+    /// device is never left with neither.
+    func deleteLegacyDeviceKeyCopies() {
+        for account in Self.legacyDeviceKeyAccounts where load(forKey: account) != nil {
+            delete(forKey: account)
+            Log.info("Deleted legacy Keychain copy \(account)", category: "Keychain")
         }
     }
-    
-    /// Load device signing key
-    func loadDeviceSigningKey() -> Data? {
-        return load(forKey: "deviceSigningKey")
-    }
-    
-    /// Save device identity key (for E2EE)
-    func saveDeviceIdentityKey(_ key: Data) {
-        let success = save(key, forKey: "deviceIdentityKey", accessible: Self.cryptoKeyAccessible)
-        if success {
-            Log.info("Device identity key saved to Keychain", category: "Keychain")
-        }
-    }
-    
-    /// Load device identity key
-    func loadDeviceIdentityKey() -> Data? {
-        return load(forKey: "deviceIdentityKey")
-    }
+
+    private static let legacyDeviceKeyAccounts = ["deviceSigningKey", "deviceIdentityKey"]
 
     /// Key that encrypts half-arrived multi-chunk messages at rest (`PendingReassemblyStore`).
     ///
@@ -223,34 +211,22 @@ class KeychainManager {
         return load(forKey: "construct.accountAddress")
     }
 
-    /// Check if device is registered (has device ID and keys)
+    /// Check if device is registered: a device id and the key record the core loads from.
     func isDeviceRegistered() -> Bool {
         let deviceId = loadDeviceID()
-        let signingKey = loadDeviceSigningKey()
-        let identityKey = loadDeviceIdentityKey()
-        
-        let hasKeys = deviceId != nil && signingKey != nil && identityKey != nil
-        
-        if hasKeys {
-            Log.debug("Device keys found in Keychain", category: "Keychain")
-            Log.debug("deviceId: \(deviceId?.prefix(16) ?? "<nil>")...", category: "Keychain")
-            Log.debug("signingKey: \(signingKey?.count ?? 0) bytes", category: "Keychain")
-            Log.debug("identityKey: \(identityKey?.count ?? 0) bytes", category: "Keychain")
-        } else {
-            Log.debug("No device keys in Keychain", category: "Keychain")
-            Log.debug("deviceId: \(deviceId != nil ? "✓" : "✗")", category: "Keychain")
-            Log.debug("signingKey: \(signingKey != nil ? "✓" : "✗")", category: "Keychain")
-            Log.debug("identityKey: \(identityKey != nil ? "✓" : "✗")", category: "Keychain")
-        }
-        
+        let keyRecord = loadPrivateKeysData()
+        let hasKeys = deviceId != nil && keyRecord != nil
+        Log.debug(
+            "Device keys in Keychain: deviceId \(deviceId != nil ? "✓" : "✗") keyRecord \(keyRecord != nil ? "✓" : "✗")",
+            category: "Keychain"
+        )
         return hasKeys
     }
     
     /// Delete all device keys (for logout/reset)
     func deleteDeviceKeys() {
         delete(forKey: "deviceId")
-        delete(forKey: "deviceSigningKey")
-        delete(forKey: "deviceIdentityKey")
+        deleteLegacyDeviceKeyCopies()
         Log.info("Device keys deleted from Keychain", category: "Keychain")
     }
     
@@ -841,7 +817,7 @@ class KeychainManager {
     /// The three-state reads behind the device identity. Their `nil` used to mean "register
     /// a new account", which is why they get the careful API.
     func readDeviceID() -> KeychainRead { read(forKey: "deviceId") }
-    func readDeviceSigningKey() -> KeychainRead { read(forKey: "deviceSigningKey") }
+    func readPrivateKeys() -> KeychainRead { read(forKey: "crypto_private_keys") }
 
     private func delete(forKey key: String) {
         let query: [String: Any] = [

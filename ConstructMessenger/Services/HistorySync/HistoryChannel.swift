@@ -33,7 +33,8 @@ struct HistoryLocalKeys {
     let userIdRaw: Data
     let deviceIdHex: String
     let deviceIdRaw: Data
-    let identityPrivate: Data
+    /// Public only. The identity secret stays in the core, which derives the file channel key
+    /// (`CryptoManager.historyFileChannelKey`); this struct carried it until 2026-09-29.
     let identityPublic: Data
     let hybridPublic: Data
     /// Our current Kyber SPK, the key a peer encapsulates to. Its secret stays in the core:
@@ -57,13 +58,10 @@ enum HistoryChannel {
               let userRaw = HistoryAccountID.raw(userId),
               let deviceHex = KeychainManager.shared.loadDeviceID(),
               let deviceRaw = Self.rawDeviceId(deviceHex),
-              let identityPrivate = KeychainManager.shared.loadDeviceIdentityKey(),
-              identityPrivate.count == 32,
+              let identityPublic = try? CryptoManager.shared.localBundlePublicKeys().identityPublic,
               let hybridPublic = CryptoManager.shared.hybridIdentityPublicKey(),
               hybridPublic.count == CTT1V2Layout.hybridPubCount
         else { throw HistoryChannelError.localKeysUnavailable }
-        let identityPublic = try Curve25519.KeyAgreement.PrivateKey(rawRepresentation: identityPrivate)
-            .publicKey.rawRepresentation
         guard let kyberSPK = try? CryptoManager.shared.currentKyberSpkUpload() else {
             throw HistoryChannelError.localKeysUnavailable
         }
@@ -72,7 +70,6 @@ enum HistoryChannel {
             userIdRaw: userRaw,
             deviceIdHex: deviceHex,
             deviceIdRaw: deviceRaw,
-            identityPrivate: identityPrivate,
             identityPublic: identityPublic,
             hybridPublic: hybridPublic,
             kyberSPKId: kyberSPK.keyId
@@ -231,19 +228,14 @@ enum HistoryChannel {
         }
 
         // Verified: only now touch the secrets.
-        let ourPriv = try Curve25519.KeyAgreement.PrivateKey(rawRepresentation: local.identityPrivate)
-        let senderEph = try Curve25519.KeyAgreement.PublicKey(rawRepresentation: header.senderEphPub)
-        let ecdh = try ourPriv.sharedSecretFromKeyAgreement(with: senderEph).withUnsafeBytes { Data($0) }
-        let kemSS = try CryptoManager.shared.kyberPrekeyDecapsulate(
-            keyId: local.kyberSPKId,
-            ciphertext: header.kemCt
-        )
-        let key = TransferCrypto.deriveChannelKey(
-            ecdh: ecdh,
-            kemSharedSecret: kemSS,
-            salt: .file,
+        // The core does the identity X25519 and the decapsulation and returns only the channel
+        // key; the same schedule as `TransferCrypto.deriveChannelKey(salt: .file)` on the sender.
+        let key = SymmetricKey(data: try CryptoManager.shared.historyFileChannelKey(
+            senderEphPub: header.senderEphPub,
+            kemKeyId: local.kyberSPKId,
+            kemCiphertext: header.kemCt,
             snapshotId: header.snapshotId
-        )
+        ))
 
         let expectedUserId = local.userIdDashed
         let summary = try await context.perform {

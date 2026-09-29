@@ -218,8 +218,6 @@ struct RegistrationFlowView: View {
 
     // Generated keys
     @State private var registrationBundle: RegistrationBundleFields? = nil
-    @State private var signingKey: Data = Data()
-    @State private var identityKey: Data = Data()
 
     var body: some View {
         RegistrationStageView(
@@ -257,40 +255,34 @@ struct RegistrationFlowView: View {
             currentStep = .generatingKeys
 
             let savedId = KeychainManager.shared.loadDeviceID()
-            let savedSigning = KeychainManager.shared.loadDeviceSigningKey()
-            let savedIdentity = KeychainManager.shared.loadDeviceIdentityKey()
+            let savedKeyRecord = KeychainManager.shared.loadPrivateKeysData()
             let savedBundle = RegistrationFlowView.loadSavedBundle()
 
-            if let sid = savedId, let ssign = savedSigning, let sidentity = savedIdentity,
-               let sbundle = savedBundle {
+            // The key record is what the core loaded from at launch, so reusing it keeps the
+            // bundle, the id and the core's keys one identity.
+            if let sid = savedId, savedKeyRecord != nil, let sbundle = savedBundle {
                 // Reuse keys from a previous attempt that failed mid-flight.
                 // Don't regenerate — the keys may already be registered on the server
                 // (the RPC could have timed out after the server persisted the data).
                 Log.info("Reusing previously generated keys: device_id=\(sid)", category: "Registration")
                 deviceId = sid
-                signingKey = ssign
-                identityKey = sidentity
                 registrationBundle = sbundle
             } else {
                 // Generate real cryptographic keys using Rust core
-                let (generatedDeviceId, bundle, signingKeyData, identityKeyData) = try CryptoManager.shared.generateRegistrationBundle()
+                let (generatedDeviceId, bundle) = try CryptoManager.shared.generateRegistrationBundle()
 
                 deviceId = generatedDeviceId
                 registrationBundle = bundle
-                signingKey = signingKeyData
-                identityKey = identityKeyData
 
                 Log.info("Generated keys: device_id=\(generatedDeviceId)", category: "Registration")
                 let verifyingKeyB64 = bundle.verifyingKey.base64EncodedString()
                 Log.info("Registration bundle verifying_key: \(verifyingKeyB64)", category: "Registration")
 
-                // Save device keys and bundle IMMEDIATELY — before any network call.
-                // If the registration RPC succeeds on the server but the response is
-                // lost (deadline exceeded), the next launch will find these keys and
-                // successfully authenticate instead of generating a new identity.
+                // Save the device id and bundle IMMEDIATELY — before any network call (the
+                // key record was saved by `generateRegistrationBundle`). If the registration
+                // RPC succeeds on the server but the response is lost (deadline exceeded), the
+                // next launch finds them and authenticates instead of minting a new identity.
                 KeychainManager.shared.saveDeviceID(deviceId)
-                KeychainManager.shared.saveDeviceSigningKey(signingKey)
-                KeychainManager.shared.saveDeviceIdentityKey(identityKey)
                 RegistrationFlowView.saveBundle(bundle)
                 Log.info("Device keys saved to Keychain before RPC", category: "Registration")
             }
@@ -357,27 +349,21 @@ struct RegistrationFlowView: View {
             //    where keys were loaded from Keychain but not yet saved for this run).
             Log.info("Confirming device credentials in Keychain...", category: "Registration")
             KeychainManager.shared.saveDeviceID(deviceId)
-            KeychainManager.shared.saveDeviceSigningKey(signingKey)
-            KeychainManager.shared.saveDeviceIdentityKey(identityKey)
             
             // 2. Verify Keychain saves
             Log.info("Verifying Keychain data...", category: "Registration")
             let savedDeviceId = KeychainManager.shared.loadDeviceID()
-            let savedSigningKey = KeychainManager.shared.loadDeviceSigningKey()
-            let savedIdentityKey = KeychainManager.shared.loadDeviceIdentityKey()
+            let savedKeyRecordAfter = KeychainManager.shared.loadPrivateKeysData()
+            let keychainOK = savedDeviceId != nil && savedKeyRecordAfter != nil
             
-            let keychainOK = savedDeviceId != nil && savedSigningKey != nil && savedIdentityKey != nil
-            
-            if keychainOK {
-                Log.info("   deviceId: \(savedDeviceId!.prefix(16))... (\(savedDeviceId!.count) chars)", category: "Registration")
-                Log.info("   signingKey: \(savedSigningKey!.count) bytes", category: "Registration")
-                Log.info("   identityKey: \(savedIdentityKey!.count) bytes", category: "Registration")
+            if let savedDeviceId, let savedKeyRecordAfter {
+                Log.info("   deviceId: \(savedDeviceId.prefix(16))... (\(savedDeviceId.count) chars)", category: "Registration")
+                Log.info("   keyRecord: \(savedKeyRecordAfter.count) bytes", category: "Registration")
                 Log.info("   isDeviceRegistered: \(KeychainManager.shared.isDeviceRegistered())", category: "Registration")
             } else {
                 Log.error("   Keychain verification FAILED!", category: "Registration")
                 Log.error("      deviceId: \(savedDeviceId != nil ? "✓" : "✗")", category: "Registration")
-                Log.error("      signingKey: \(savedSigningKey != nil ? "✓" : "✗")", category: "Registration")
-                Log.error("      identityKey: \(savedIdentityKey != nil ? "✓" : "✗")", category: "Registration")
+                Log.error("      keyRecord: \(savedKeyRecordAfter != nil ? "✓" : "✗")", category: "Registration")
             }
             
             // 3. Save session tokens + userId

@@ -53,8 +53,6 @@ final class DeviceLinkViewModel {
 
     private var pollingTask: Task<Void, Never>? = nil
     private var joinDeviceId: String? = nil
-    private var joinSigningKey: Data? = nil
-    private var joinIdentityKey: Data? = nil
 
     // MARK: - Device A: Generate QR
 
@@ -131,8 +129,8 @@ final class DeviceLinkViewModel {
         do {
             CryptoManager.shared.prepareForDeviceLink()
             KeychainManager.shared.deleteDeviceKeys()
-            let (deviceId, bundle, signingKey, identityKey) = try CryptoManager.shared.generateRegistrationBundle()
-            persistDeviceKeys(deviceId: deviceId, signingKey: signingKey, identityKey: identityKey)
+            let (deviceId, bundle) = try CryptoManager.shared.generateRegistrationBundle()
+            KeychainManager.shared.saveDeviceID(deviceId)
 
             var publicKeys = Shared_Proto_Services_V1_DevicePublicKeys()
             publicKeys.verifyingKey = bundle.verifyingKey
@@ -180,11 +178,9 @@ final class DeviceLinkViewModel {
         do {
             CryptoManager.shared.prepareForDeviceLink()
             KeychainManager.shared.deleteDeviceKeys()
-            let (deviceId, bundle, signingKey, identityKey) = try CryptoManager.shared.generateRegistrationBundle()
+            let (deviceId, bundle) = try CryptoManager.shared.generateRegistrationBundle()
             joinDeviceId = deviceId
-            joinSigningKey = signingKey
-            joinIdentityKey = identityKey
-            persistDeviceKeys(deviceId: deviceId, signingKey: signingKey, identityKey: identityKey)
+            KeychainManager.shared.saveDeviceID(deviceId)
             let name = DeviceInfo.deviceName
             let platform = platformString()
             let encoded = name.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? name
@@ -229,9 +225,8 @@ final class DeviceLinkViewModel {
                 do {
                     if let result = try await AuthServiceClient.shared.checkDeviceLinkStatus(pendingId: pendingId) {
                         let deviceId = self.joinDeviceId ?? pendingId
-                        if let signingKey = self.joinSigningKey, let identityKey = self.joinIdentityKey {
-                            self.persistDeviceKeys(deviceId: deviceId, signingKey: signingKey, identityKey: identityKey)
-                        }
+                        // The keys are already in the key record `generateRegistrationBundle` saved.
+                        KeychainManager.shared.saveDeviceID(deviceId)
                         self.isWaitingForApproval = false
                         await self.finishLink(
                             result: result,
@@ -319,12 +314,6 @@ final class DeviceLinkViewModel {
     }
 
     // MARK: - Private helpers
-
-    private func persistDeviceKeys(deviceId: String, signingKey: Data, identityKey: Data) {
-        KeychainManager.shared.saveDeviceID(deviceId)
-        KeychainManager.shared.saveDeviceSigningKey(signingKey)
-        KeychainManager.shared.saveDeviceIdentityKey(identityKey)
-    }
 
     /// Persists session tokens (with expiry + GRPC cache sync), initializes crypto, uploads OTPKs.
     private func finishLink(

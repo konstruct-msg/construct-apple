@@ -518,17 +518,4 @@ final class AuthServiceClient: Sendable {
             _ = try await authClient.storeRecoveryBundle(request: .init(message: request))
         }
     }
-
-    /// Fetch encrypted recovery bundle by username (unauthenticated).
-    /// Returns nil if no bundle is stored for this username.
-    func getRecoveryBundle(username: String) async throws -> Data? {
-        try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.recovery, allowAuthRetry: false) { grpcClient in
-            let authClient = Shared_Proto_Services_V1_AuthService.Client(wrapping: grpcClient)
-            var request = Shared_Proto_Services_V1_GetRecoveryBundleRequest()
-            request.username = username
-            let response = try await authClient.getRecoveryBundle(request: .init(message: request))
-            guard response.bundleExists else { return nil }
-            return response.bundleCiphertext
-        }
-    }
 }

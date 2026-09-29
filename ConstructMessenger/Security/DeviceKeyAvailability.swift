@@ -28,7 +28,7 @@
 import Foundation
 
 enum DeviceKeyAvailability: Equatable {
-    /// Both keys read back. Normal.
+    /// The device id and the key record both read back. Normal.
     case present
     /// Both keys are genuinely absent. Onboarding is the correct destination.
     case absent
@@ -46,8 +46,12 @@ enum DeviceKeyAvailability: Equatable {
     ///   * any unreadable read wins — never claim absence on the strength of a failed read;
     ///   * a partial state (one key present, the other absent) is `unreadable` too. It is not a
     ///     clean install, and re-registering over a half-present identity is the worse mistake.
-    static func resolve(deviceId: KeychainRead, signingKey: KeychainRead) -> DeviceKeyAvailability {
-        let reads = [deviceId, signingKey]
+    ///
+    /// The key read is the key record (`crypto_private_keys`), the one the core loads from. It
+    /// was the raw signing-key copy until 2026-09-29, when the copies lost their last reader; a
+    /// check on a copy could say `.present` for a device whose core would not load.
+    static func resolve(deviceId: KeychainRead, keyRecord: KeychainRead) -> DeviceKeyAvailability {
+        let reads = [deviceId, keyRecord]
 
         if reads.allSatisfy(\.isFound) { return .present }
         if reads.allSatisfy(\.isAbsent) { return .absent }

@@ -261,9 +261,9 @@ Before touching `Networking/gRPC/VEIL/` or `Services/Calls/`, read
   (`signWithDeviceKey`, `openSealedToDevice`, `deviceCopyTag*`, `newMlsStore`/`importMlsStore`)
   since 2026-09-29. Before that the secret was read out (`getSigningKeyBytes`, the Keychain's
   `deviceIdentityKey` copy) on every sealed message and every send, and this file carried a second
-  CryptoKit implementation of the sealed box. Do not add a caller of `getSigningKeyBytes`,
-  `getIdentityKeyBytes` or `loadDeviceIdentityKey`; the remaining ones (registration, social
-  recovery, `HistoryChannel`) are enumerated debt.
+  CryptoKit implementation of the sealed box. The Keychain holds the device keys once, in the
+  key record (`crypto_private_keys`) the core loads from; the raw copies are deleted at launch.
+  The history-file channel key and the social-recovery bundle are made in the core too.
 - Device keys are deleted **only** on gRPC UNAUTHENTICATED (16) / PERMISSION_DENIED (7) — never on
   a network error.
 - **All crypto goes direct via UniFFI** (`ConstructCore.xcframework`) on iOS and macOS alike. The
