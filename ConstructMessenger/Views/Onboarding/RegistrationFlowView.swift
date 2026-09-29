@@ -242,11 +242,25 @@ struct RegistrationFlowView: View {
         .onDisappear { authViewModel.isRegistrationInProgress = false }
         .task {
             guard !hasStarted else { return }
-            // Guard against re-running if keys were already saved (e.g. view recreated during dismiss)
-            guard !KeychainManager.shared.isDeviceRegistered() else { return }
+            // Guard against re-running once registration finished (e.g. view recreated during dismiss)
+            guard Self.shouldRegister(
+                hasKeys: KeychainManager.shared.isDeviceRegistered(),
+                hasUserId: KeychainManager.shared.loadUserID() != nil
+            ) else { return }
             hasStarted = true
             await startRegistration()
         }
+    }
+
+    /// Whether this screen runs registration.
+    ///
+    /// Keys in the Keychain do not mean the server knows them: `startRegistration` saves them
+    /// before its first RPC, so a lost response can be retried with the same identity. Until
+    /// 2026-09-29 the guard read keys alone, so a registration that failed once returned here on
+    /// every retry and stayed on "generating keys" forever — and the reuse branch below was
+    /// unreachable. Only the user id, saved after the server answered, means it is done.
+    static func shouldRegister(hasKeys: Bool, hasUserId: Bool) -> Bool {
+        !(hasKeys && hasUserId)
     }
 
     private func startRegistration() async {
