@@ -7,7 +7,7 @@
 "editor_rotate" = "Պտտել";
 "editor_mirror" = "Շրջել";
 "unknown" = "Անհայտ";
-"construct_title" = "KONSTRUCT";
+"construct_title" = "ԿՈՆՍՏՐՈՒԿՏ";
 "search_prompt" = "Որոնել";
 
 // MARK: - Loading Screen
@@ -81,7 +81,7 @@
 "camera_access_required" = "Անհրաժեշտ է տեսախցիկի հասանելիություն";
 "open_settings" = "Բացել կարգավորումները";
 "allow_camera_access_for_qr" = "Թույլատրեք տեսախցիկի հասանելիությունը Կարգավորումներում՝ QR կոդեր սկանավորելու համար";
-"invalid_qr_code_construct" = "Անվավեր QR կոդ։ Սկանավորեք Konstruct կոնտակտի կոդ։";
+"invalid_qr_code_construct" = "Անվավեր QR կոդ։ Սկանավորեք Կոնստրուկտ կոնտակտի կոդ։";
 
 // MARK: - Settings Main
 "user" = "Օգտատեր";
@@ -147,7 +147,7 @@
 
 // MARK: - Settings -> Appearance
 "theme" = "Թեմա";
-"theme_footer" = "Ընտրեք, թե ինչպես է երևում Konstruct-ը։ Ավտոմատը հարմարվում է համակարգի կարգավորումներին։";
+"theme_footer" = "Ընտրեք, թե ինչպես է երևում Կոնստրուկտը։ Ավտոմատը հարմարվում է համակարգի կարգավորումներին։";
 "automatic" = "Ավտոմատ";
 "light" = "Բաց";
 "dark" = "Մուգ";
@@ -196,7 +196,7 @@
 "denied" = "Մերժված";
 
 // MARK: - Background Fetch & Local Notifications
-"construct_app_name" = "Konstruct";
+"construct_app_name" = "Կոնստրուկտ";
 "construct_new_message" = "Նոր հաղորդագրություն";
 "construct_new_messages" = "Նոր հաղորդագրություններ";
 "construct_new_messages_count" = "Դուք ունեք %d նոր հաղորդագրություն";
@@ -335,9 +335,9 @@
 "onboarding_existing_title" = "Օգտագործել առկա ինքնությունը";
 "onboarding_existing_intro" = "Ընտրեք, թե ինչպես բերել այն այս սարք։";
 "onboarding_restore_title" = "Վերականգնել վերականգնման արտահայտությունից";
-"onboarding_restore_subtitle" = "Չունեք այլ սարք Konstruct-ով։ Օգտագործեք ձեր 12 բառանոց արտահայտությունը։";
+"onboarding_restore_subtitle" = "Չունեք այլ սարք Կոնստրուկտով։ Օգտագործեք ձեր 12 բառանոց արտահայտությունը։";
 "onboarding_link_title" = "Կապել այս սարքը";
-"onboarding_link_subtitle" = "Դեռ ունեք Konstruct մեկ այլ հեռախոսում կամ համակարգչում։";
+"onboarding_link_subtitle" = "Դեռ ունեք Կոնստրուկտ մեկ այլ հեռախոսում կամ համակարգչում։";
 "onboarding_restore" = "Վերականգնել վերականգնման բանալուց";
 "onboarding_recovery_coming_soon" = "Վերականգնումը շուտով";
 "onboarding_network_settings" = "Ցանցի կարգավորումներ";
@@ -346,10 +346,10 @@
 "orientation_section_label" = "> կողմնորոշում";
 "orientation_skip" = "Բաց թողնել";
 "orientation_next" = "Շարունակել";
-"orientation_enter" = "Մտնել Konstruct";
+"orientation_enter" = "Մտնել Կոնստրուկտ";
 "orientation_or" = "կամ";
 "orientation_page_a11y" = "Էջ %d՝ %d-ից";
-"orientation_settings_replay" = "Ինչպես է աշխատում Konstruct-ը";
+"orientation_settings_replay" = "Ինչպես է աշխատում Կոնստրուկտը";
 "orientation_page1_title" = "Ինքնություն";
 "orientation_page1_body" = "Ոչ հեռախոսահամար, ոչ էլ․ փոստ, ոչ իրական անուն։ Ձեր ինքնությունը ստեղծվում է զրոյից այս հեռախոսում և ոչնչի չի հղվում դրսում։ Այստեղ դուք այն եք, ինչ ինքներդ եք դարձնում։";
 "orientation_page1_caption" = "Հանրային @կեղծանունը ոչ պարտադիր է։ Ձեր բանալիները երբեք չեն լքում այս հեռախոսը։";
@@ -409,7 +409,7 @@
 
 // Invite / contact links
 "invite_error_invalid_url" = "Նշված URL-ն անվավեր է։";
-"invite_error_unsupported_link" = "Սա աջակցվող Konstruct հրավերի հղում չէ։";
+"invite_error_unsupported_link" = "Սա աջակցվող Կոնստրուկտ հրավերի հղում չէ։";
 "invite_error_expired" = "Այս հրավերը ժամկետանց է։ Խնդրեք նորը։";
 "invite_error_invalid_fmt" = "Անվավեր հրավեր՝ %@";
 "invite_error_already_used" = "Այս հրավերն արդեն օգտագործվել է։ Խնդրեք նորը։";
@@ -516,7 +516,7 @@
 /* Bootstrap voucher — redemption side (onboarding "can't connect?" door) */
 "onboarding_cant_connect" = "Չե՞ք կարող միանալ։";
 "veil_bootstrap_title" = "Չի հաջողվում միանալ";
-"veil_bootstrap_intro" = "Եթե Konstruct-ը այստեղ չի հասնում ցանցին, արդեն միացած մեկը կարող է ձեզ տալ մեկանգամյա հասանելիության կոդ։ Խնդրեք այն, ապա սկանավորեք կամ տեղադրեք ստորև։";
+"veil_bootstrap_intro" = "Եթե Կոնստրուկտը այստեղ չի հասնում ցանցին, արդեն միացած մեկը կարող է ձեզ տալ մեկանգամյա հասանելիության կոդ։ Խնդրեք այն, ապա սկանավորեք կամ տեղադրեք ստորև։";
 "veil_bootstrap_scan_subtitle" = "Ուղղեք տեսախցիկը նրանց կոդին";
 "veil_bootstrap_paste_subtitle" = "Եթե նրանք ուղարկել են կոդը որպես տեքստ";
 "veil_bootstrap_ok" = "Կապը կարգավորված է";
@@ -526,7 +526,7 @@
 
 // Censorship protection (production soft control — no VEIL / relay disclosure)
 "censorship_protection" = "Ցենզուրայի պաշտպանություն";
-"censorship_protection_footer_off" = "Անջատված։ Կապը գնում է ուղիղ Konstruct։";
+"censorship_protection_footer_off" = "Անջատված։ Կապը գնում է ուղիղ Կոնստրուկտ։";
 "censorship_protection_footer_auto" = "Ավտոմատ միանում է, երբ հայտնաբերվում է արգելափակում։ Կարգավորումը տեղի է ունենում ֆոնում։";
 "censorship_protection_footer_on" = "Միշտ շրջանցում է ցանցային արգելափակումները։ Կարգավորումը տեղի է ունենում ֆոնում։";
 
@@ -676,10 +676,10 @@
 "diagnostics_apns_token" = "APNs նշան";
 "diagnostics_apns_token_missing" = "բացակայում է";
 "diagnostics_apns_token_received_format" = "ստացված (%@…)";
-"diagnostics_registered_with_server" = "Գրանցված է Konstruct-ում";
+"diagnostics_registered_with_server" = "Գրանցված է Կոնստրուկտում";
 "diagnostics_yes" = "այո";
 "diagnostics_not_registered_with_server" = "ոչ — ծանուցումները չեն գա";
-"diagnostics_server_token_warning" = "Նշանը գրանցված չէ Konstruct-ում։ Վերադարձեք զրույցներ — գրանցումը ավտոմատ կկրկնվի, երբ հավելվածը ակտիվանա։";
+"diagnostics_server_token_warning" = "Նշանը գրանցված չէ Կոնստրուկտում։ Վերադարձեք զրույցներ — գրանցումը ավտոմատ կկրկնվի, երբ հավելվածը ակտիվանա։";
 "diagnostics_log_collection" = "Մատյանների հավաքում";
 "diagnostics_status_active" = "Ակտիվ";
 "diagnostics_status_off" = "Անջատված";
@@ -704,7 +704,7 @@
 "onboarding_link_device" = "Կապել առկա ինքնությունը";
 "device_link_scan_title" = "Սկանավորել կապելու համար";
 "link_method_title" = "Կապել սարք";
-"link_method_intro" = "Ավելացրեք այս սարքը ձեր առկա Konstruct ինքնությանը։ Օգտագործեք այն սարքը, որով ավելի հեշտ է տեսախցիկ ուղղել։";
+"link_method_intro" = "Ավելացրեք այս սարքը ձեր առկա Կոնստրուկտ ինքնությանը։ Օգտագործեք այն սարքը, որով ավելի հեշտ է տեսախցիկ ուղղել։";
 "link_method_scan_title" = "Սկանավորել կոդ";
 "link_method_scan_subtitle" = "Ձեր մյուս սարքը ցույց է տալիս QR կոդ";
 "link_method_show_title" = "Ցույց տալ կոդ";
@@ -729,16 +729,16 @@
 // MARK: - Device Join Request (Desktop onboarding)
 "device_link_request_title" = "Կապել առկա ինքնությանը";
 "device_link_request_instruction" = "Սկանավորեք iPhone-ով";
-"device_link_request_steps" = "Բացեք Konstruct-ը iPhone-ում → Կարգավորումներ → Կապված սարքեր → հպեք «Կապել նոր սարք» — կամ պարզապես սկանավորեք այս կոդը, եթե Konstruct-ը բաց է։";
+"device_link_request_steps" = "Բացեք Կոնստրուկտը iPhone-ում → Կարգավորումներ → Կապված սարքեր → հպեք «Կապել նոր սարք» — կամ պարզապես սկանավորեք այս կոդը, եթե Կոնստրուկտը բաց է։";
 "device_link_waiting_approval" = "Սպասում ենք հաստատմանը iPhone-ում…";
-"device_link_scan_on_phone" = "Սկանավորեք այս կոդը Konstruct-ով iPhone-ում";
+"device_link_scan_on_phone" = "Սկանավորեք այս կոդը Կոնստրուկտով iPhone-ում";
 "device_link_request_timeout" = "Կապի հարցումը ժամանակից դուրս եկավ — փորձեք նորից";
 "device_link_feature_unavailable" = "Այս հնարավորությունը պահանջում է սերվերի թարմացում։ Փորձեք ավելի ուշ։";
-"device_link_invalid_qr" = "Անվավեր QR կոդ — համոզվեք, որ սկանավորում եք Konstruct կապի կոդ։";
+"device_link_invalid_qr" = "Անվավեր QR կոդ — համոզվեք, որ սկանավորում եք Կոնստրուկտ կապի կոդ։";
 "device_link_approve_title" = "Կապե՞լ «%@»-ը ձեր ինքնությանը։";
 "device_link_approve_title_fallback" = "Կապե՞լ նոր սարքը ձեր ինքնությանը։";
 "device_link_approve" = "Կապել սարքը";
-"device_link_approve_message" = "Այս սարքը լիարժեք հասանելիություն կունենա ձեր Konstruct ինքնությանը։";
+"device_link_approve_message" = "Այս սարքը լիարժեք հասանելիություն կունենա ձեր Կոնստրուկտ ինքնությանը։";
 "device_link_approved_title" = "Սարքը կապված է";
 "device_link_approved_message" = "Սարքը կապվել է ձեր ինքնությանը։";
 
@@ -885,7 +885,7 @@
 
 // MARK: - Device Deregistered (server no longer recognizes this device)
 "device_deregistered_warning_title" = "⚠ ՍԱՐՔԸ ԳՐԱՆՑՎԱԾ ՉԷ";
-"device_deregistered_warning_body" = "Konstruct-ն այլևս չի ճանաչում այս սարքը։ Սա կարող է պատահել ժամանակավոր խափանումից հետո կամ եթե սարքը հեռացվել է այլ տեղում։\n\nՁեր բանալիները դեռ այս հեռախոսում են — ոչինչ չի ջնջվել։ Կրկնեք ստորև կամ վերականգնեք ինքնությունը վերականգնման արտահայտությունից։";
+"device_deregistered_warning_body" = "Կոնստրուկտն այլևս չի ճանաչում այս սարքը։ Սա կարող է պատահել ժամանակավոր խափանումից հետո կամ եթե սարքը հեռացվել է այլ տեղում։\n\nՁեր բանալիները դեռ այս հեռախոսում են — ոչինչ չի ջնջվել։ Կրկնեք ստորև կամ վերականգնեք ինքնությունը վերականգնման արտահայտությունից։";
 "device_deregistered_retry_hint" = "Մերժումը կարող է լինել ժամանակավոր սերվերային խնդիր։ Փորձեք նորից նույնականանալ։";
 
 // MARK: - Logout
@@ -912,7 +912,7 @@
 "username_not_set" = "օգտանուն չկա";
 "searchable_indicator" = "որոնելի";
 "searchable_indicator_off" = "ոչ որոնելի";
-"synapses_remote_result_header" = "գտնվել է Konstruct-ում";
+"synapses_remote_result_header" = "գտնվել է Կոնստրուկտում";
 "synapses_searching" = "որոնում...";
 "synapses_not_found" = "չի գտնվել";
 
@@ -945,8 +945,8 @@
 // Stealth mode
 "stealth_section" = "թաքնվածություն";
 "stealth_title" = "ուղարկողի անանունություն";
-"stealth_always_on_hint" = "Konstruct-ը երբեք չի իմանում, թե ով է ուղարկել հաղորդագրությունը։ Միշտ միացված է — անջատիչ չկա և լիցքավորելու բան չկա։";
-"stealth_off_hint" = "Անջատված — ձեր ուղարկումները բացահայտում են, թե ով եք դուք Konstruct-ին։ Միայն վրիպազերծման շրջանցում։";
+"stealth_always_on_hint" = "Կոնստրուկտը երբեք չի իմանում, թե ով է ուղարկել հաղորդագրությունը։ Միշտ միացված է — անջատիչ չկա և լիցքավորելու բան չկա։";
+"stealth_off_hint" = "Անջատված — ձեր ուղարկումները բացահայտում են, թե ով եք դուք Կոնստրուկտին։ Միայն վրիպազերծման շրջանցում։";
 
 
 // Key Transparency
@@ -1053,7 +1053,7 @@
 "backup_restore_success_message" = "Ձեր պահուստը ստուգված է և պատրաստված։ Փակեք և նորից բացեք հավելվածը՝ վերականգնումը ավարտելու համար։";
 
 "backup_error_invalid_mnemonic" = "Անվավեր վերականգնման արտահայտություն։ Ստուգեք բոլոր 12 բառերը և փորձեք նորից։";
-"backup_error_invalid_file" = "Սա վավեր Konstruct պահուստ չէ, կամ վերականգնման արտահայտությունը սխալ է։";
+"backup_error_invalid_file" = "Սա վավեր Կոնստրուկտ պահուստ չէ, կամ վերականգնման արտահայտությունը սխալ է։";
 
 // Transfer (P2P nearby)
 "transfer_send_nearby" = "ուղարկել մոտակա սարքին";
@@ -1253,7 +1253,7 @@
 /* VEIL bootstrap voucher — give someone with no way in a short-lived signed entry point. */
 "veil_voucher_row" = "Տալ ինչ-որ մեկին հասանելիություն";
 "veil_voucher_title" = "Տալ հասանելիություն";
-"veil_voucher_instructions" = "Թող սկանավորեն այս կոդը Konstruct-ում։ Այն կարգավորում է նրանց կապը — սա կոնտակտի հրավեր չէ։";
+"veil_voucher_instructions" = "Թող սկանավորեն այս կոդը Կոնստրուկտում։ Այն կարգավորում է նրանց կապը — սա կոնտակտի հրավեր չէ։";
 "veil_voucher_expires_in" = "Վավեր է %@";
 "veil_voucher_expired" = "Այս կոդը ժամկետանց է";
 "veil_voucher_new" = "Ստեղծել նոր կոդ";
@@ -1262,7 +1262,7 @@
 "veil_voucher_unavailable" = "Հասանելիություն տալը այժմ հնարավոր չէ։";
 "veil_voucher_err_generic" = "Չհաջողվեց ստեղծել կոդը";
 "veil_voucher_privacy_hint" = "Ցույց տվեք այս կոդը միայն այն մարդուն, ում համար է։ Մի հրապարակեք և մի ուղարկեք հանրային ալիքով։";
-"veil_voucher_intro" = "Ստեղծում է մեկանգամյա կոդ, որը կարգավորում է կապը նրա համար, ով դեռ չի հասնում Konstruct։ Այն կարճ ժամանակով է վավեր, և օրական կարող եք ստեղծել երեքը։";
+"veil_voucher_intro" = "Ստեղծում է մեկանգամյա կոդ, որը կարգավորում է կապը նրա համար, ով դեռ չի հասնում Կոնստրուկտ։ Այն կարճ ժամանակով է վավեր, և օրական կարող եք ստեղծել երեքը։";
 "veil_voucher_create" = "Ստեղծել կոդ";
 
 /* Desktop chrome — D2–D7 */
@@ -1288,12 +1288,12 @@
 "desktop_add_show_qr" = "Ցույց տվեք սա ինչ-որ մեկին, որ սկանավորի";
 "desktop_add_device_unregistered" = "Սարքը գրանցված չէ";
 "desktop_add_qr_failed" = "Չհաջողվեց ստեղծել QR կոդը";
-"desktop_add_point_camera" = "Ուղղեք տեսախցիկը Konstruct QR կոդին";
+"desktop_add_point_camera" = "Ուղղեք տեսախցիկը Կոնստրուկտ QR կոդին";
 "desktop_add_camera_privacy" = "Թույլատրեք տեսախցիկի հասանելիությունը Համակարգի կարգավորումներ → Գաղտնիություն և անվտանգություն → Տեսախցիկ";
 "desktop_add_drop_image" = "Գցեք պատկերը այստեղ";
 "desktop_add_drop_types" = "PNG, JPG, էկրանի նկար";
 "desktop_add_choose_file" = "Ընտրել ֆայլ…";
-"desktop_add_choose_file_panel" = "Ընտրեք էկրանի նկար կամ պատկեր Konstruct QR կոդով";
+"desktop_add_choose_file_panel" = "Ընտրեք էկրանի նկար կամ պատկեր Կոնստրուկտ QR կոդով";
 "desktop_add_cannot_read_file" = "Չի հաջողվում կարդալ ֆայլը";
 "desktop_add_cannot_decode_image" = "Չի հաջողվում վերծանել պատկերը";
 "desktop_add_cannot_load_image" = "Չի հաջողվում բեռնել պատկերը";
@@ -1304,7 +1304,7 @@
 "desktop_add_supported" = "konstruct://add?invite=… կամ https://konstruct.cc/add?invite=…";
 
 "backup_restore_required_title" = "Անհրաժեշտ է վերագործարկում";
-"backup_restore_required_message" = "Փակեք և նորից բացեք Konstruct-ը՝ այս պահուստի վերականգնումը ավարտելու համար։";
+"backup_restore_required_message" = "Փակեք և նորից բացեք Կոնստրուկտը՝ այս պահուստի վերականգնումը ավարտելու համար։";
 "spam_warning_title" = "Ուղարկվում է…";
 "spam_warning_wait" = "Խնդրում ենք սպասել %d վայրկյան";
 "spam_strong_warning_title" = "Անսովոր ակտիվություն";

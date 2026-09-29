@@ -147,7 +147,8 @@ theme file is **shared, never copied** — the copy is what killed the last atte
   that happen — nothing reported the gap, so it grew by whatever each release added. A locale
   allowed to lag does. Both are complete now and held to the same rule.
 - **One product name per script.** `Konstruct` in Latin, `Конструкт` in Russian, `コンストラクト`
-  in Japanese — a localized name is a transliteration, never a translation. The one deliberate
+  in Japanese, `Կոնստրուկտ` in Armenian (case endings attach without a hyphen:
+  `Կոնստրուկտը`) — a localized name is a transliteration, never a translation. The one deliberate
   exception is `onboarding_tagline`, where "identity is a construct" is the common noun and the
   pun. Why the Japanese changed: `client/GLOSSARY_PRODUCT_LANGUAGE.md` in the vault.
 - **App Store listing copy lives in `fastlane/metadata/<locale>/`**, not only in App Store

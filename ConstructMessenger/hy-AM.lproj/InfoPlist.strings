@@ -3,7 +3,7 @@
    absent here falls back to English, which is what happened to four of these
    seven prompts until 2026-08-16. */
 
-"CFBundleDisplayName" = "Konstruct";
+"CFBundleDisplayName" = "Կոնստրուկտ";
 "NSCameraUsageDescription" = "Konstruct uses the camera to scan invite QR codes and to capture photos and videos for your messages.";
 "NSPhotoLibraryUsageDescription" = "Konstruct needs access to your photo library so you can attach photos and videos to messages.";
 "NSPhotoLibraryAddUsageDescription" = "Konstruct saves photos and videos to your library when you choose to save them from a chat.";
