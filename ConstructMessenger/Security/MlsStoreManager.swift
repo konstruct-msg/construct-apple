@@ -64,15 +64,18 @@ final class MlsStoreManager {
         Log.info("MLS store reset (in-memory + Keychain)", category: "MLS")
     }
 
+    /// The store signs with the device's Ed25519 key, which the core binds into it: the key never
+    /// comes out (`getSigningKeyBytes` handed it over until 2026-09-29).
     private func loadOrCreate() throws -> MlsStore {
-        let (signerPrivate, signerPublic) = try signerKeys()
+        let crypto = CryptoManager.shared
+        crypto.coreLock.lock()
+        defer { crypto.coreLock.unlock() }
+        guard let core = crypto.orchestratorCore else {
+            throw MlsStoreManagerError.coreNotInitialized
+        }
         if let blob = KeychainManager.shared.loadMlsStoreData() {
             do {
-                let imported = try importMlsStoreCfe(
-                    data: blob,
-                    signerPrivateKey: signerPrivate,
-                    signerPublicKey: signerPublic
-                )
+                let imported = try core.importMlsStore(data: blob)
                 Log.info("MLS store restored from Keychain (\(blob.count) bytes)", category: "MLS")
                 return imported
             } catch {
@@ -84,21 +87,7 @@ final class MlsStoreManager {
             }
         }
         Log.info("No MLS store in Keychain — creating fresh store", category: "MLS")
-        return MlsStore(signerPrivateKey: signerPrivate, signerPublicKey: signerPublic)
-    }
-
-    /// Device Ed25519 signing keypair from the Rust core. The MLS BasicCredential
-    /// is built over the public (verifying) key.
-    private func signerKeys() throws -> (privateKey: Data, publicKey: Data) {
-        let crypto = CryptoManager.shared
-        crypto.coreLock.lock()
-        defer { crypto.coreLock.unlock() }
-        guard let core = crypto.orchestratorCore else {
-            throw MlsStoreManagerError.coreNotInitialized
-        }
-        let privateKey = try core.getSigningKeyBytes()
-        let publicKey = try core.getRegistrationBundleFields().verifyingKey
-        return (privateKey, publicKey)
+        return try core.newMlsStore()
     }
 
     // MARK: - Persistence

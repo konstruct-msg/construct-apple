@@ -136,20 +136,39 @@ class CryptoManager {
     
     // MARK: - Device Registration
 
-    /// Export signing secret key from current core (for device-signed flows).
-    func exportSigningSecretKey() throws -> Data {
-        let keyBytes: Data
-        if let oc = orchestratorCore {
-            keyBytes = try oc.getSigningKeyBytes()
-        } else if let bc = _bootstrapCore {
-            keyBytes = try bc.getSigningKeyBytes()
-        } else {
+    // MARK: - Operations with this device's own keys
+    //
+    // The core does them; the secrets never come out. Until 2026-09-29 each caller read the key
+    // (`getSigningKeyBytes`, a Keychain copy of the identity key) and did the operation in
+    // CryptoKit or through a free function taking the secret.
+
+    /// Ed25519 over `message` with the device signing key — device auth, invites.
+    ///
+    /// Before the orchestrator exists (device auth at launch, right after registration) the key
+    /// record in the Keychain signs, through the core, so there is no path that needs the raw key.
+    func signWithDeviceKey(_ message: Data) throws -> Data {
+        coreLock.lock()
+        defer { coreLock.unlock() }
+        if let core = orchestratorCore {
+            return try core.signWithDeviceKey(message: message)
+        }
+        // `signBundleData` is plain Ed25519 with the signing key; the name is its first use.
+        if let bootstrap = _bootstrapCore {
+            return try bootstrap.signBundleData(bundleDataJson: message)
+        }
+        guard let record = KeychainManager.shared.loadPrivateKeysData() else {
             throw CryptoManagerError.coreNotInitialized
         }
-        guard !keyBytes.isEmpty else {
-            throw CryptoError.InvalidKeyData(message: "getSigningKeyBytes returned empty")
-        }
-        return keyBytes
+        return try signBundleDataWithKeys(keys: record, bundleDataJson: message)
+    }
+
+    /// Open a box sealed to this device's identity key: a sender certificate, a sibling's
+    /// device metadata. Throws when the box is sealed to another key.
+    func openSealedToDevice(_ sealedBox: Data) throws -> Data {
+        coreLock.lock()
+        defer { coreLock.unlock() }
+        guard let core = orchestratorCore else { throw CryptoManagerError.coreNotInitialized }
+        return try core.openSealedToDevice(sealedBox: sealedBox)
     }
     
     /// Expose local public key fields for server consistency checks.

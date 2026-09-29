@@ -271,7 +271,7 @@ final class MessageRouter {
             let reading = DeviceCopyWireId.read(
                 wireId: message.id,
                 ourDeviceId: AuthSessionManager.shared.currentDeviceId,
-                ourIdentityPrivateKey: MultiDeviceSendCoordinator.shared.ourIdentityPrivateKey(),
+                tagger: SenderSyncDeviceTag.Tagger.current,
                 peerIdentityKeys: PeerDeviceRegistry.shared.identityKeys(of: message.from),
                 peerDeviceSetIsComplete: PeerDeviceRegistry.shared.deviceSetIsKnown(for: message.from)
             )
@@ -2024,7 +2024,7 @@ final class MessageRouter {
         if DeviceCopyWireId.read(
             wireId: message.id,
             ourDeviceId: AuthSessionManager.shared.currentDeviceId,
-            ourIdentityPrivateKey: MultiDeviceSendCoordinator.shared.ourIdentityPrivateKey(),
+            tagger: SenderSyncDeviceTag.Tagger.current,
             peerIdentityKeys: MultiDeviceSendCoordinator.shared.senderSyncPeerIdentityKeys(myUserId: currentUserId),
             // Own replicas: the cache holds every sibling we know of, and the verdict does not
             // consult this flag for that audience — passed for the shape, not for the decision.

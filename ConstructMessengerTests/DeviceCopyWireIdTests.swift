@@ -15,46 +15,42 @@
 //
 
 import XCTest
-import CryptoKit
 @testable import Construct_Messenger
 
 final class DeviceCopyWireIdTests: XCTestCase {
 
     private let base = "34f009c9-caa1-41a3-964e-40af9f3129a7"
 
-    /// Two devices of one account: identity key pairs and ids, as the bundles would carry them.
+    /// A device: its core, which holds the identity key and computes tags with it, its id (derived
+    /// from that key, as every real device's is) and the public half its bundle carries. Until
+    /// 2026-09-29 the fixture was a CryptoKit key pair handed to the tag code raw; the key no
+    /// longer leaves the core, so the fixture is a core.
     private struct Device {
+        let core: OrchestratorCore
         let id: String
-        let priv: Data
         let pub: Data
+        var tagger: SenderSyncDeviceTag.Tagger { .init(core: core) }
 
-        init(id: String) {
-            let key = Curve25519.KeyAgreement.PrivateKey()
-            self.id = id
-            self.priv = key.rawRepresentation
-            self.pub = key.publicKey.rawRepresentation
+        init() {
+            // A failure here is a broken fixture, not a verdict of the code under test.
+            let device = try! makeTestDevice()
+            core = device.core
+            id = device.deviceId
+            pub = try! device.core.getRegistrationBundleFields().identityPublic
         }
     }
 
-    /// The tag `from` writes for a copy addressed to `to`.
-    ///
-    /// The pair secret is no longer a value this test can hold: it is derived inside the core from
-    /// the two identity keys (2026-08-25, `crypto::device_copy_tag`). Force-unwrapped because a
-    /// `nil` here means the fixture keys are malformed, not that the code under test decided
-    /// anything — and a test that silently skipped on bad fixtures would pass forever.
+    /// The tag `from` writes for a copy addressed to `to`. Force-unwrapped because a `nil` here
+    /// means the fixture keys are malformed, not that the code under test decided anything — and
+    /// a test that silently skipped on bad fixtures would pass forever.
     private func tag(from: Device, to: Device, messageId: String? = nil) -> String {
-        SenderSyncDeviceTag.tag(
-            baseMessageId: messageId ?? base,
-            targetDeviceId: to.id,
-            ourIdentityPrivateKey: from.priv,
-            peerIdentityPublicKey: to.pub
-        )!
+        from.tagger.tag(messageId ?? base, to.id, to.pub)!
     }
 
     /// The id the app would actually hold for a device, derived from its identity key exactly as
-    /// `SessionAddressing.cryptoIdentity` and the core's `derive_device_id` do. The fixture's
-    /// `Device.id` is an arbitrary literal; §D returns the derived one, because the key that
-    /// reproduced the MAC is the only evidence there is.
+    /// `SessionAddressing.cryptoIdentity` and the core's `derive_device_id` do — recomputed from
+    /// the public key rather than read from `Device.id`, because §D's answer must come from the
+    /// key that reproduced the MAC, the only evidence there is.
     private func derivedId(_ d: Device) -> String {
         deriveDeviceId(identityPublicKey: d.pub)
     }
@@ -67,12 +63,12 @@ final class DeviceCopyWireIdTests: XCTestCase {
     /// Mutation: return `senderDevice: nil` on the `.ours` branch — this reddens, and the receive
     /// path silently goes back to guessing by walking every session.
     func testTheMatchingKeyNamesTheSender() {
-        let a = Device(id: "bfbcef09a4db589922c2cfd0cf34885a")
-        let b = Device(id: "b3ed60ab5d0ef2c01f292a40bcdc3465")
+        let a = Device()
+        let b = Device()
         let reading = DeviceCopyWireId.read(
             wireId: "\(base)-fd-\(tag(from: a, to: b))",
             ourDeviceId: b.id,
-            ourIdentityPrivateKey: b.priv,
+            tagger: b.tagger,
             peerIdentityKeys: [a.pub],
             peerDeviceSetIsComplete: true
         )
@@ -83,15 +79,15 @@ final class DeviceCopyWireIdTests: XCTestCase {
     /// The sender is picked out of a set, not confirmed against a guess — which is the whole
     /// difference from the pinned-device assumption that archived a healthy neighbour session.
     func testSenderIsIdentifiedAmongSeveralCandidateDevices() {
-        let phone   = Device(id: "bfbcef09a4db589922c2cfd0cf34885a")
-        let desktop = Device(id: "0a1b2c3d4e5f60718293a4b5c6d7e8f9")
-        let us      = Device(id: "b3ed60ab5d0ef2c01f292a40bcdc3465")
+        let phone   = Device()
+        let desktop = Device()
+        let us      = Device()
 
         // Their Desktop writes to us, with their phone listed first among the candidates.
         let reading = DeviceCopyWireId.read(
             wireId: "\(base)-fd-\(tag(from: desktop, to: us))",
             ourDeviceId: us.id,
-            ourIdentityPrivateKey: us.priv,
+            tagger: us.tagger,
             peerIdentityKeys: [phone.pub, desktop.pub],
             peerDeviceSetIsComplete: true
         )
@@ -104,12 +100,12 @@ final class DeviceCopyWireIdTests: XCTestCase {
     /// A copy for a sibling names no sender: its tag was written for a device id we did not bind,
     /// so nothing here attributes a writer. `nil` must mean "unknown", never "the pinned one".
     func testForeignCopyNamesNoSender() {
-        let a = Device(id: "bfbcef09a4db589922c2cfd0cf34885a")
-        let b = Device(id: "b3ed60ab5d0ef2c01f292a40bcdc3465")
+        let a = Device()
+        let b = Device()
         let reading = DeviceCopyWireId.read(
             wireId: "\(base)-ss-\(tag(from: a, to: b))",
             ourDeviceId: a.id,                    // a receives its own echo
-            ourIdentityPrivateKey: a.priv,
+            tagger: a.tagger,
             peerIdentityKeys: [b.pub],
             peerDeviceSetIsComplete: true
         )
@@ -120,11 +116,11 @@ final class DeviceCopyWireIdTests: XCTestCase {
     /// The legacy 8-hex form encodes the **target** device and involves no pair secret, so it can
     /// place a copy but can never attribute one.
     func testLegacyTagPlacesTheCopyButNamesNoSender() {
-        let b = Device(id: "b3ed60ab5d0ef2c01f292a40bcdc3465")
+        let b = Device()
         let reading = DeviceCopyWireId.read(
-            wireId: "\(base)-ss-b3ed60ab",
+            wireId: "\(base)-ss-\(b.id.prefix(SenderSyncDeviceTag.legacyHexLength))",
             ourDeviceId: b.id,
-            ourIdentityPrivateKey: b.priv,
+            tagger: b.tagger,
             peerIdentityKeys: [],
             peerDeviceSetIsComplete: true
         )
@@ -137,7 +133,7 @@ final class DeviceCopyWireIdTests: XCTestCase {
     func testUntaggedIdNamesNoSender() {
         XCTAssertNil(DeviceCopyWireId.read(
             wireId: base, ourDeviceId: "b3ed60ab5d0ef2c01f292a40bcdc3465",
-            ourIdentityPrivateKey: Device(id: "x").priv, peerIdentityKeys: [Device(id: "y").pub],
+            tagger: Device().tagger, peerIdentityKeys: [Device().pub],
             peerDeviceSetIsComplete: true
         ).senderDevice)
     }
@@ -175,8 +171,8 @@ final class DeviceCopyWireIdTests: XCTestCase {
     /// Mutation: return `targetDeviceId.prefix(8)` — this reddens, and it is exactly the form
     /// that shipped until 2026-08-17.
     func testTagRevealsNothingAboutTheDeviceId() {
-        let a = Device(id: "bfbcef09a4db589922c2cfd0cf34885a")
-        let b = Device(id: "b3ed60ab5d0ef2c01f292a40bcdc3465")
+        let a = Device()
+        let b = Device()
         let tag = tag(from: a, to: b)
 
         XCTAssertEqual(tag.count, SenderSyncDeviceTag.hexLength)
@@ -190,8 +186,8 @@ final class DeviceCopyWireIdTests: XCTestCase {
     /// Mutation: MAC the device id alone, dropping the message id — the tag becomes a stable
     /// per-device identifier again, just an opaque one.
     func testTagDiffersPerMessage() {
-        let a = Device(id: "bfbcef09a4db589922c2cfd0cf34885a")
-        let b = Device(id: "b3ed60ab5d0ef2c01f292a40bcdc3465")
+        let a = Device()
+        let b = Device()
         let first = tag(from: a, to: b)
         let second = tag(from: a, to: b, messageId: "7574fdec-ca31-44ac-9d43-0e6e870fe4d5")
         XCTAssertNotEqual(first, second)
@@ -200,8 +196,8 @@ final class DeviceCopyWireIdTests: XCTestCase {
     /// Every chunk of one message carries the same tag — the MAC is over the base id, not the wire
     /// id. Otherwise chunk 2 would look like a copy for a different device.
     func testAllChunksOfOneMessageShareTheTag() {
-        let a = Device(id: "bfbcef09a4db589922c2cfd0cf34885a")
-        let b = Device(id: "b3ed60ab5d0ef2c01f292a40bcdc3465")
+        let a = Device()
+        let b = Device()
         let tag = tag(from: a, to: b)
         for chunk in 0..<4 {
             let wireId = chunk == 0 ? "\(base)-ss-\(tag)" : "\(base)-ss-\(tag)-c\(chunk)"
@@ -221,20 +217,20 @@ final class DeviceCopyWireIdTests: XCTestCase {
     ///
     /// Mutation: drop `targetDeviceId` from the MAC input — the echo assertion reddens.
     func testCopyForBIsForeignOnAAndOursOnB() {
-        let a = Device(id: "bfbcef09a4db589922c2cfd0cf34885a")
-        let b = Device(id: "b3ed60ab5d0ef2c01f292a40bcdc3465")
+        let a = Device()
+        let b = Device()
         let tag = tag(from: a, to: b)
         let wireId = "\(base)-ss-\(tag)"
 
         XCTAssertEqual(
             DeviceCopyWireId.read(wireId: wireId, ourDeviceId: b.id,
-                                     ourIdentityPrivateKey: b.priv, peerIdentityKeys: [a.pub], peerDeviceSetIsComplete: true).verdict,
+                                     tagger: b.tagger, peerIdentityKeys: [a.pub], peerDeviceSetIsComplete: true).verdict,
             .ours,
             "the addressed device must open it"
         )
         XCTAssertEqual(
             DeviceCopyWireId.read(wireId: wireId, ourDeviceId: a.id,
-                                     ourIdentityPrivateKey: a.priv, peerIdentityKeys: [b.pub], peerDeviceSetIsComplete: true).verdict,
+                                     tagger: a.tagger, peerIdentityKeys: [b.pub], peerDeviceSetIsComplete: true).verdict,
             .foreign,
             "the sender's own echo must not be taken for a copy addressed to it"
         )
@@ -242,15 +238,15 @@ final class DeviceCopyWireIdTests: XCTestCase {
 
     /// Three devices: C shares a secret with neither end of the A→B copy it receives.
     func testThirdDeviceSkipsACopyForSomeoneElse() {
-        let a = Device(id: "bfbcef09a4db589922c2cfd0cf34885a")
-        let b = Device(id: "b3ed60ab5d0ef2c01f292a40bcdc3465")
-        let c = Device(id: "0a1b2c3d4e5f60718293a4b5c6d7e8f9")
+        let a = Device()
+        let b = Device()
+        let c = Device()
         let tag = tag(from: a, to: b)
 
         XCTAssertEqual(DeviceCopyWireId.read(
             wireId: "\(base)-ss-\(tag)",
             ourDeviceId: c.id,
-            ourIdentityPrivateKey: c.priv,
+            tagger: c.tagger,
             peerIdentityKeys: [a.pub, b.pub], peerDeviceSetIsComplete: true
         ).verdict, .foreign)
     }
@@ -262,18 +258,18 @@ final class DeviceCopyWireIdTests: XCTestCase {
     ///
     /// Mutation: `return true` in any of these — copies stop arriving with nothing to show for it.
     func testUndecidableCasesAreTreatedAsOurs() {
-        let a = Device(id: "bfbcef09a4db589922c2cfd0cf34885a")
-        let b = Device(id: "b3ed60ab5d0ef2c01f292a40bcdc3465")
+        let a = Device()
+        let b = Device()
         let tag = tag(from: a, to: b)
 
         XCTAssertEqual(DeviceCopyWireId.read(
-            wireId: base, ourDeviceId: b.id, ourIdentityPrivateKey: b.priv, peerIdentityKeys: [a.pub], peerDeviceSetIsComplete: true).verdict, .undecidable, "not a sender-sync id")
+            wireId: base, ourDeviceId: b.id, tagger: b.tagger, peerIdentityKeys: [a.pub], peerDeviceSetIsComplete: true).verdict, .undecidable, "not a sender-sync id")
         XCTAssertEqual(DeviceCopyWireId.read(
-            wireId: "\(base)-ss-\(tag)", ourDeviceId: b.id, ourIdentityPrivateKey: b.priv, peerIdentityKeys: [], peerDeviceSetIsComplete: true).verdict, .undecidable, "no secrets known yet")
+            wireId: "\(base)-ss-\(tag)", ourDeviceId: b.id, tagger: b.tagger, peerIdentityKeys: [], peerDeviceSetIsComplete: true).verdict, .undecidable, "no secrets known yet")
         XCTAssertEqual(DeviceCopyWireId.read(
-            wireId: "\(base)-ss-\(tag)", ourDeviceId: nil, ourIdentityPrivateKey: b.priv, peerIdentityKeys: [a.pub], peerDeviceSetIsComplete: true).verdict, .undecidable, "no device id")
+            wireId: "\(base)-ss-\(tag)", ourDeviceId: b.id, tagger: nil, peerIdentityKeys: [a.pub], peerDeviceSetIsComplete: true).verdict, .undecidable, "no core yet to check with")
         XCTAssertEqual(DeviceCopyWireId.read(
-            wireId: "\(base)-ss-zzz", ourDeviceId: b.id, ourIdentityPrivateKey: b.priv, peerIdentityKeys: [a.pub], peerDeviceSetIsComplete: true).verdict, .undecidable, "unknown tag shape")
+            wireId: "\(base)-ss-zzz", ourDeviceId: b.id, tagger: b.tagger, peerIdentityKeys: [a.pub], peerDeviceSetIsComplete: true).verdict, .undecidable, "unknown tag shape")
     }
 
     // MARK: - A copy from a peer, where we know less
@@ -290,9 +286,9 @@ final class DeviceCopyWireIdTests: XCTestCase {
     /// field it discards our own message every time a multi-device peer writes from an unpinned
     /// device, silently.
     func testANonMatchingPeerCopyIsUndecidableNotForeign() {
-        let me = Device(id: "bfbcef09a4db589922c2cfd0cf34885a")
-        let peerKnown = Device(id: "b3ed60ab5d0ef2c01f292a40bcdc3465")
-        let peerUnpinned = Device(id: "0a1b2c3d4e5f60718293a4b5c6d7e8f9")
+        let me = Device()
+        let peerKnown = Device()
+        let peerUnpinned = Device()
 
         // The peer wrote from a device we have never pinned, addressing us.
         let tag = tag(from: peerUnpinned, to: me)
@@ -301,7 +297,7 @@ final class DeviceCopyWireIdTests: XCTestCase {
             DeviceCopyWireId.read(
                 wireId: "\(base)\(DeviceDeliveryPlan.Marker.recipient)\(tag)",
                 ourDeviceId: me.id,
-                ourIdentityPrivateKey: me.priv,
+                tagger: me.tagger,
                 peerIdentityKeys: [peerKnown.pub],
                 peerDeviceSetIsComplete: false
             ).verdict,
@@ -319,9 +315,9 @@ final class DeviceCopyWireIdTests: XCTestCase {
     /// copies — this reddens while the loss-of-message test above stays green, which is why both
     /// exist.
     func testAKnownPeerDeviceSetMakesTheSameCopyDecidable() {
-        let me = Device(id: "bfbcef09a4db589922c2cfd0cf34885a")
-        let peer = Device(id: "b3ed60ab5d0ef2c01f292a40bcdc3465")
-        let mySibling = Device(id: "0a1b2c3d4e5f60718293a4b5c6d7e8f9")
+        let me = Device()
+        let peer = Device()
+        let mySibling = Device()
 
         // The peer addressed our sibling, not us.
         let tag = tag(from: peer, to: mySibling)
@@ -330,7 +326,7 @@ final class DeviceCopyWireIdTests: XCTestCase {
             DeviceCopyWireId.read(
                 wireId: "\(base)\(DeviceDeliveryPlan.Marker.recipient)\(tag)",
                 ourDeviceId: me.id,
-                ourIdentityPrivateKey: me.priv,
+                tagger: me.tagger,
                 peerIdentityKeys: [peer.pub],
                 peerDeviceSetIsComplete: true
             ).verdict,
@@ -340,15 +336,15 @@ final class DeviceCopyWireIdTests: XCTestCase {
 
     /// The same shape from our own account IS decidable, because we hold every sibling's key.
     func testANonMatchingOwnReplicaCopyIsForeign() {
-        let me = Device(id: "bfbcef09a4db589922c2cfd0cf34885a")
-        let sibling = Device(id: "b3ed60ab5d0ef2c01f292a40bcdc3465")
+        let me = Device()
+        let sibling = Device()
         let tag = tag(from: me, to: sibling)
 
         XCTAssertEqual(
             DeviceCopyWireId.read(
                 wireId: "\(base)\(DeviceDeliveryPlan.Marker.ownReplica)\(tag)",
                 ourDeviceId: me.id,
-                ourIdentityPrivateKey: me.priv,
+                tagger: me.tagger,
                 peerIdentityKeys: [sibling.pub], peerDeviceSetIsComplete: true
             ).verdict,
             .foreign
@@ -381,13 +377,13 @@ final class DeviceCopyWireIdTests: XCTestCase {
 
         XCTAssertEqual(DeviceCopyWireId.read(
             wireId: "\(base)-ss-bfbcef09", ourDeviceId: mine,
-            ourIdentityPrivateKey: nil, peerIdentityKeys: [], peerDeviceSetIsComplete: true).verdict, .ours)
+            tagger: nil, peerIdentityKeys: [], peerDeviceSetIsComplete: true).verdict, .ours)
         XCTAssertEqual(DeviceCopyWireId.read(
             wireId: "\(base)-ss-b3ed60ab", ourDeviceId: mine,
-            ourIdentityPrivateKey: nil, peerIdentityKeys: [], peerDeviceSetIsComplete: true).verdict, .foreign)
+            tagger: nil, peerIdentityKeys: [], peerDeviceSetIsComplete: true).verdict, .foreign)
         XCTAssertEqual(DeviceCopyWireId.read(
             wireId: "\(base)-ss-b3ed60ab", ourDeviceId: theirs,
-            ourIdentityPrivateKey: nil, peerIdentityKeys: [], peerDeviceSetIsComplete: true).verdict, .ours)
+            tagger: nil, peerIdentityKeys: [], peerDeviceSetIsComplete: true).verdict, .ours)
     }
 
     // MARK: - The secret itself
@@ -400,14 +396,9 @@ final class DeviceCopyWireIdTests: XCTestCase {
     /// process holds when the derivation moved into the core. Same target device, opposite halves
     /// of the pair, same tag — which is the property the receive path actually depends on.
     func testTheTwoHalvesOfThePairProduceTheSameTag() {
-        let a = Device(id: "a")
-        let b = Device(id: "b")
-        XCTAssertEqual(
-            SenderSyncDeviceTag.tag(baseMessageId: base, targetDeviceId: b.id,
-                                    ourIdentityPrivateKey: a.priv, peerIdentityPublicKey: b.pub),
-            SenderSyncDeviceTag.tag(baseMessageId: base, targetDeviceId: b.id,
-                                    ourIdentityPrivateKey: b.priv, peerIdentityPublicKey: a.pub)
-        )
+        let a = Device()
+        let b = Device()
+        XCTAssertEqual(a.tagger.tag(base, b.id, b.pub), b.tagger.tag(base, b.id, a.pub))
     }
 
     // MARK: - Recovering on a device that has never sent anything
@@ -442,12 +433,8 @@ final class DeviceCopyWireIdTests: XCTestCase {
     /// Malformed key material yields no tag rather than a guess. A best-effort tag would be
     /// indistinguishable on the wire from a correct one and would address nobody.
     func testMalformedKeyMaterialYieldsNoTag() {
-        let a = Device(id: "a")
-        XCTAssertNil(SenderSyncDeviceTag.tag(
-            baseMessageId: base, targetDeviceId: a.id,
-            ourIdentityPrivateKey: Data([0x01]), peerIdentityPublicKey: a.pub))
-        XCTAssertNil(SenderSyncDeviceTag.tag(
-            baseMessageId: base, targetDeviceId: a.id,
-            ourIdentityPrivateKey: a.priv, peerIdentityPublicKey: Data()))
+        let a = Device()
+        XCTAssertNil(a.tagger.tag(base, a.id, Data()))
+        XCTAssertNil(a.tagger.tag(base, a.id, Data([0x01])))
     }
 }

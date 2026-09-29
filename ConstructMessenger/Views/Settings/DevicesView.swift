@@ -397,10 +397,8 @@ private struct DeviceRow: View {
     /// then shows what it showed before any of this existed — the short id, which identifies it
     /// either way.
     private var described: Shared_Proto_Services_V1_DeviceMetadata? {
-        guard !device.sealedMetadata.isEmpty,
-              let ourKey = KeychainManager.shared.loadDeviceIdentityKey()
-        else { return nil }
-        return DeviceMetadataService.open(device.sealedMetadata, withIdentityPrivateKey: ourKey)
+        guard !device.sealedMetadata.isEmpty else { return nil }
+        return DeviceMetadataService.open(device.sealedMetadata, openingWith: CryptoManager.shared.openSealedToDevice)
     }
 
     private var displayName: String {

@@ -256,6 +256,14 @@ Before touching `Networking/gRPC/VEIL/` or `Services/Calls/`, read
 - **Keychain**: crypto state that must survive a background/locked push decrypt uses
   `kSecAttrAccessibleAfterFirstUnlock*` (`KeychainManager.cryptoKeyAccessible`), never
   `WhenUnlocked*` — otherwise silent session desync and END_SESSION teardown of healthy sessions.
+- **Ask the core for the operation, never for the key.** Signing with the device key, opening a
+  box sealed to it, device-copy tags and the MLS signer are `OrchestratorCore` calls
+  (`signWithDeviceKey`, `openSealedToDevice`, `deviceCopyTag*`, `newMlsStore`/`importMlsStore`)
+  since 2026-09-29. Before that the secret was read out (`getSigningKeyBytes`, the Keychain's
+  `deviceIdentityKey` copy) on every sealed message and every send, and this file carried a second
+  CryptoKit implementation of the sealed box. Do not add a caller of `getSigningKeyBytes`,
+  `getIdentityKeyBytes` or `loadDeviceIdentityKey`; the remaining ones (registration, social
+  recovery, `HistoryChannel`) are enumerated debt.
 - Device keys are deleted **only** on gRPC UNAUTHENTICATED (16) / PERMISSION_DENIED (7) — never on
   a network error.
 - **All crypto goes direct via UniFFI** (`ConstructCore.xcframework`) on iOS and macOS alike. The

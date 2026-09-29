@@ -6,12 +6,24 @@
 //
 
 import XCTest
-import CryptoKit
 @testable import Construct_Messenger
 
 final class AccountSendTagTests: XCTestCase {
 
     private let uuid = "34f009c9-caa1-41a3-964e-40af9f3129a7"
+
+    /// A device's identity: its core, which holds the private half and tags with it, and the
+    /// public half its bundle carries.
+    private struct TestKey {
+        let core: OrchestratorCore
+        let pub: Data
+        var tagger: SenderSyncDeviceTag.Tagger { .init(core: core) }
+
+        init() throws {
+            core = try makeTestDevice().core
+            pub = try core.getRegistrationBundleFields().identityPublic
+        }
+    }
 
     // MARK: - Chunk suffix
 
@@ -79,15 +91,15 @@ final class AccountSendTagTests: XCTestCase {
     ///
     /// Mutation: `return baseMessageId` at the top of `wireId` — `senderDevice` goes nil and this
     /// reddens, which is the state every ordinary send was in before §D.
-    func testTaggedPrimarySendNamesTheSenderToTheRecipient() {
-        let senderKey = Curve25519.KeyAgreement.PrivateKey()
-        let peerKey = Curve25519.KeyAgreement.PrivateKey()
+    func testTaggedPrimarySendNamesTheSenderToTheRecipient() throws {
+        let senderKey = try TestKey()
+        let peerKey = try TestKey()
         let peerAccount = "14f28d31-2dab-44aa-a123-456789abcdef"
-        let peerDevice = deriveDeviceId(identityPublicKey: peerKey.publicKey.rawRepresentation)
+        let peerDevice = deriveDeviceId(identityPublicKey: peerKey.pub)
 
         AccountSendTag.keys = AccountSendTag.Keys(
-            ourIdentityPrivate: { senderKey.rawRepresentation },
-            pinnedIdentityPublic: { $0 == peerAccount ? peerKey.publicKey.rawRepresentation : nil },
+            ourTagger: { senderKey.tagger },
+            pinnedIdentityPublic: { $0 == peerAccount ? peerKey.pub : nil },
             pinnedDevice: { $0 == peerAccount ? peerDevice : nil },
             deviceIdentityPublic: { _ in nil }
         )
@@ -102,29 +114,29 @@ final class AccountSendTagTests: XCTestCase {
         let reading = DeviceCopyWireId.read(
             wireId: wireId,
             ourDeviceId: peerDevice,
-            ourIdentityPrivateKey: peerKey.rawRepresentation,
-            peerIdentityKeys: [senderKey.publicKey.rawRepresentation],
+            tagger: peerKey.tagger,
+            peerIdentityKeys: [senderKey.pub],
             peerDeviceSetIsComplete: true
         )
         XCTAssertEqual(reading.verdict, .ours)
         XCTAssertEqual(
             reading.senderDevice,
-            deriveDeviceId(identityPublicKey: senderKey.publicKey.rawRepresentation),
+            deriveDeviceId(identityPublicKey: senderKey.pub),
             "an ordinary send must be as attributable as a fan-out copy"
         )
     }
 
     /// All chunks of one message carry the same tag, so a receiver can recompute it from whichever
     /// chunk arrives first — and the shape matches the fan-out's, `<uuid>-fd-<tag>-c<n>`.
-    func testEveryChunkOfOneMessageCarriesTheSameTag() {
-        let senderKey = Curve25519.KeyAgreement.PrivateKey()
-        let peerKey = Curve25519.KeyAgreement.PrivateKey()
+    func testEveryChunkOfOneMessageCarriesTheSameTag() throws {
+        let senderKey = try TestKey()
+        let peerKey = try TestKey()
         let peerAccount = "14f28d31-2dab-44aa-a123-456789abcdef"
-        let peerDevice = deriveDeviceId(identityPublicKey: peerKey.publicKey.rawRepresentation)
+        let peerDevice = deriveDeviceId(identityPublicKey: peerKey.pub)
 
         AccountSendTag.keys = AccountSendTag.Keys(
-            ourIdentityPrivate: { senderKey.rawRepresentation },
-            pinnedIdentityPublic: { _ in peerKey.publicKey.rawRepresentation },
+            ourTagger: { senderKey.tagger },
+            pinnedIdentityPublic: { _ in peerKey.pub },
             pinnedDevice: { _ in peerDevice },
             deviceIdentityPublic: { _ in nil }
         )
@@ -148,19 +160,19 @@ final class AccountSendTagTests: XCTestCase {
     ///
     /// Mutation: take `pinnedIdentityPublic` for a named device — the second device's reading
     /// stops being `.ours` and this reddens.
-    func testANamedDeviceIsTaggedUnderItsOwnKey() {
-        let senderKey = Curve25519.KeyAgreement.PrivateKey()
-        let pinnedKey = Curve25519.KeyAgreement.PrivateKey()
-        let secondKey = Curve25519.KeyAgreement.PrivateKey()
+    func testANamedDeviceIsTaggedUnderItsOwnKey() throws {
+        let senderKey = try TestKey()
+        let pinnedKey = try TestKey()
+        let secondKey = try TestKey()
         let peerAccount = "14f28d31-2dab-44aa-a123-456789abcdef"
-        let pinnedDevice = deriveDeviceId(identityPublicKey: pinnedKey.publicKey.rawRepresentation)
-        let secondDevice = deriveDeviceId(identityPublicKey: secondKey.publicKey.rawRepresentation)
+        let pinnedDevice = deriveDeviceId(identityPublicKey: pinnedKey.pub)
+        let secondDevice = deriveDeviceId(identityPublicKey: secondKey.pub)
 
         AccountSendTag.keys = AccountSendTag.Keys(
-            ourIdentityPrivate: { senderKey.rawRepresentation },
-            pinnedIdentityPublic: { _ in pinnedKey.publicKey.rawRepresentation },
+            ourTagger: { senderKey.tagger },
+            pinnedIdentityPublic: { _ in pinnedKey.pub },
             pinnedDevice: { _ in pinnedDevice },
-            deviceIdentityPublic: { $0 == secondDevice ? secondKey.publicKey.rawRepresentation : nil }
+            deviceIdentityPublic: { $0 == secondDevice ? secondKey.pub : nil }
         )
         defer { AccountSendTag.keys = .production }
 
@@ -172,8 +184,8 @@ final class AccountSendTagTests: XCTestCase {
         let reading = DeviceCopyWireId.read(
             wireId: wireId,
             ourDeviceId: secondDevice,
-            ourIdentityPrivateKey: secondKey.rawRepresentation,
-            peerIdentityKeys: [senderKey.publicKey.rawRepresentation],
+            tagger: secondKey.tagger,
+            peerIdentityKeys: [senderKey.pub],
             peerDeviceSetIsComplete: true
         )
         XCTAssertEqual(reading.verdict, .ours, "the named device must read its own control as its own")

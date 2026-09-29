@@ -9,7 +9,6 @@
 //
 
 import Foundation
-import CryptoKit
 import GRPCCore
 
 /// Outcome of a device-auth attempt (signing key → new access+refresh tokens).
@@ -79,7 +78,7 @@ actor DeviceAuthCoordinator {
         }
 
         guard let deviceId = idRead.data.flatMap({ String(data: $0, encoding: .utf8) }),
-              let rawSigningKey = keyRead.data else {
+              keyRead.data != nil else {
             // `.present` guarantees bytes; a deviceId that is not UTF-8 is corruption, and the
             // safe reading of corruption is still "do not re-register over it".
             Log.error("DeviceAuthCoordinator: device keys unusable — \(detail)", category: "Auth")
@@ -93,15 +92,9 @@ actor DeviceAuthCoordinator {
                 return .failed(message: "encodingFailed")
             }
 
-            let signingKeyBytes: Data
-            do {
-                signingKeyBytes = try CryptoManager.shared.exportSigningSecretKey()
-            } catch {
-                Log.info("DeviceAuthCoordinator: CryptoCore unavailable — raw Keychain key: \(error)", category: "Auth")
-                signingKeyBytes = rawSigningKey
-            }
-            let privateKey = try Curve25519.Signing.PrivateKey(rawRepresentation: signingKeyBytes)
-            let signatureData = try privateKey.signature(for: messageData)
+            // The core signs — with the orchestrator, or the key record before one exists. The
+            // Keychain's raw signing-key copy stays only as the presence check above.
+            let signatureData = try CryptoManager.shared.signWithDeviceKey(messageData)
 
             // allowAuthRetry: false on the client — must not recurse into refresh/device-auth.
             let response = try await AuthServiceClient.shared.authenticateDevice(

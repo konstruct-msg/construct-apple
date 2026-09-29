@@ -336,13 +336,6 @@ final class MultiDeviceSendCoordinator {
             .map(\.bundle.identityPublic)
     }
 
-    /// Our own identity private key — the other half of every pair secret above.
-    ///
-    /// Absent only before registration completes, and then there are no own devices to sync to.
-    func ourIdentityPrivateKey() -> Data? {
-        KeychainManager.shared.loadDeviceIdentityKey()
-    }
-
     /// The tag for a copy addressed to `targetDeviceId`, or the legacy plain-hex prefix when the
     /// key material to compute one is missing.
     ///
@@ -352,15 +345,9 @@ final class MultiDeviceSendCoordinator {
         baseMessageId: String,
         targetDeviceId: String,
         targetIdentityPublic: Data,
-        ourIdentityPrivateKey: Data?
+        tagger: SenderSyncDeviceTag.Tagger?
     ) -> String {
-        guard let ourIdentityPrivateKey,
-              let tag = SenderSyncDeviceTag.tag(
-                  baseMessageId: baseMessageId,
-                  targetDeviceId: targetDeviceId,
-                  ourIdentityPrivateKey: ourIdentityPrivateKey,
-                  peerIdentityPublicKey: targetIdentityPublic
-              ) else {
+        guard let tag = tagger?.tag(baseMessageId, targetDeviceId, targetIdentityPublic) else {
             Log.error(
                 "SenderSync: no pair secret for \(targetDeviceId.prefix(8))… — falling back to the plain device tag, which the relay can read",
                 category: "MultiDevice"
@@ -607,10 +594,10 @@ final class MultiDeviceSendCoordinator {
                 return
             }
 
-            // Our identity private key: the other half of the X25519 pair whose public half is in
-            // every device's bundle. Absent only before registration completes, and then there are
-            // no own devices to sync to either.
-            let ourIdentityKey = KeychainManager.shared.loadDeviceIdentityKey()
+            // Our half of the X25519 pair whose public half is in every device's bundle, held by
+            // the core. Absent only before registration completes, and then there are no own
+            // devices to sync to either.
+            let tagger = SenderSyncDeviceTag.Tagger.current
 
             // Targets from the same plan the recipient copies come from, so "which devices, and
             // is this one of them" is answered once. `otherDevices` has already dropped this
@@ -643,7 +630,7 @@ final class MultiDeviceSendCoordinator {
                     baseMessageId: messageId,
                     targetDeviceId: target.deviceId,
                     targetIdentityPublic: target.identityPublic,
-                    ourIdentityPrivateKey: ourIdentityKey
+                    tagger: tagger
                 )
                 for (index, payload) in plan.payloads.enumerated() {
                     // Discarded on purpose: SENDER_SYNC is a copy to one of *our* devices, and

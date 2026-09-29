@@ -7,7 +7,7 @@
 
 import Foundation
 
-/// Thin seam over the core's `deviceCopyTag` / `deviceCopyTagMatches`.
+/// Thin seam over the core's `OrchestratorCore.deviceCopyTag` / `deviceCopyTagMatches`.
 ///
 /// **This file used to be the implementation** — X25519, HKDF and HMAC-SHA256 written against
 /// CryptoKit. It was moved into `construct-core` on 2026-08-25 and now holds no cryptography at
@@ -49,43 +49,39 @@ enum SenderSyncDeviceTag {
     /// Length of the form this replaced, still read from senders at or below 0.18.0.
     static let legacyHexLength = 8
 
-    /// The tag a copy for `targetDeviceId` travels under, or `nil` when the key material is
-    /// unusable.
+    /// This device's side of the tag: the core computes and checks it with our identity key,
+    /// which never leaves the core. Until 2026-09-29 the key itself was passed down this path,
+    /// read from a Keychain copy on every send and every received copy.
     ///
-    /// `baseMessageId` is the id **without** the `-ss-` suffix and without any `-c<n>` chunk
-    /// suffix, so every chunk of one message carries the same tag.
-    static func tag(
-        baseMessageId: String,
-        targetDeviceId: String,
-        ourIdentityPrivateKey: Data,
-        peerIdentityPublicKey: Data
-    ) -> String? {
-        try? deviceCopyTag(
-            baseMessageId: baseMessageId,
-            targetDeviceId: targetDeviceId,
-            ourIdentityPrivate: ourIdentityPrivateKey,
-            peerIdentityPublic: peerIdentityPublicKey
-        )
-    }
+    /// Two closures rather than the core object so a test can hold several devices at once.
+    struct Tagger {
+        /// The tag a copy for `targetDeviceId` travels under, or `nil` when the peer's key is
+        /// unusable. `baseMessageId` is the id **without** the `-ss-` suffix and without any
+        /// `-c<n>` chunk suffix, so every chunk of one message carries the same tag.
+        let tag: (_ baseMessageId: String, _ targetDeviceId: String, _ peerIdentityPublicKey: Data) -> String?
 
-    /// Whether `tag` was written **for `ourDeviceId`** by the device behind
-    /// `peerIdentityPublicKey`.
-    ///
-    /// False for anything it cannot decide, including unusable key material — see the core for
-    /// why an undecidable answer here must read as "not foreign".
-    static func matches(
-        _ tag: String,
-        baseMessageId: String,
-        ourDeviceId: String,
-        ourIdentityPrivateKey: Data,
-        peerIdentityPublicKey: Data
-    ) -> Bool {
-        deviceCopyTagMatches(
-            tag: tag,
-            baseMessageId: baseMessageId,
-            ourDeviceId: ourDeviceId,
-            ourIdentityPrivate: ourIdentityPrivateKey,
-            peerIdentityPublic: peerIdentityPublicKey
-        )
+        /// Whether `tag` was written **for this device** by the device behind
+        /// `peerIdentityPublicKey`. This device's id is the core's, derived from its key — a
+        /// caller cannot pass the wrong one. False for anything it cannot decide — see the core
+        /// for why an undecidable answer here must read as "not foreign".
+        let matches: (_ tag: String, _ baseMessageId: String, _ peerIdentityPublicKey: Data) -> Bool
+
+        init(core: OrchestratorCore) {
+            tag = { base, target, peer in
+                try? core.deviceCopyTag(baseMessageId: base, targetDeviceId: target, peerIdentityPublic: peer)
+            }
+            matches = { tag, base, peer in
+                core.deviceCopyTagMatches(tag: tag, baseMessageId: base, peerIdentityPublic: peer)
+            }
+        }
+
+        /// The running device's, or `nil` before the orchestrator exists — before registration
+        /// completes, when there are no own devices to sync to either.
+        static var current: Tagger? {
+            let crypto = CryptoManager.shared
+            crypto.coreLock.lock()
+            defer { crypto.coreLock.unlock() }
+            return crypto.orchestratorCore.map(Tagger.init(core:))
+        }
     }
 }

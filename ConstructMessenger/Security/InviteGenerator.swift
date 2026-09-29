@@ -83,10 +83,6 @@ class InviteGenerator {
         let timestamp = Int(Date().timeIntervalSince1970)
         let version = InviteConfig.version
 
-        guard let signingSecretKey = try? getSigningSecretKey() else {
-            throw InviteGenerationError.missingIdentityKey
-        }
-
         let normalizedUsername = username
             .flatMap { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .flatMap { $0.isEmpty ? nil : $0 }
@@ -107,23 +103,20 @@ class InviteGenerator {
         let dataToSign = try unsignedInvite.canonicalString()
         Log.debug("Canonical string for signing: \(dataToSign)", category: "InviteGenerator")
 
-        let expectedVerifyingKey = try deriveVerifyingKeyFromSecret(identitySecretKey: signingSecretKey)
-        let signature = try signInviteData(
-            data: dataToSign,
-            identitySecretKey: signingSecretKey
-        )
+        let (signature, verifyingKey) = try signWithDeviceKey(Data(dataToSign.utf8))
 
+        // Against the verifying key we publish, which is what a recipient checks it with.
         let isSelfValid = try verifyInviteSignature(
             data: dataToSign,
-            signature: signature.signature,
-            verifyingKey: expectedVerifyingKey
+            signature: signature,
+            verifyingKey: verifyingKey
         )
         if !isSelfValid {
             Log.error("Invite self-verify failed (signing key mismatch)", category: "InviteGenerator")
             throw InviteGenerationError.signingFailed
         }
 
-        let signedInvite = unsignedInvite.signed(signature.signature.base64EncodedString())
+        let signedInvite = unsignedInvite.signed(signature.base64EncodedString())
 
         try signedInvite.validate()
 
@@ -240,26 +233,16 @@ class InviteGenerator {
     
     // MARK: - Helper Methods
     
-    /// Get Ed25519 signing secret key from CryptoManager
-    /// - Returns: 32-byte signing secret key
-    /// - Throws: InviteGenerationError if key not available
-    private func getSigningSecretKey() throws -> Data {
-        guard let core = CryptoManager.shared.orchestratorCore else {
+    /// The core's Ed25519 signature over `data` and the verifying key it checks against. The
+    /// signing key stays in the core.
+    private func signWithDeviceKey(_ data: Data) throws -> (signature: Data, verifyingKey: Data) {
+        let crypto = CryptoManager.shared
+        crypto.coreLock.lock()
+        defer { crypto.coreLock.unlock() }
+        guard let core = crypto.orchestratorCore else {
             throw InviteGenerationError.missingIdentityKey
         }
-        let keyBytes = try core.getSigningKeyBytes()
-        guard !keyBytes.isEmpty else {
-            throw InviteGenerationError.keyDecodingFailed
-        }
-        Log.debug("Using signing secret key for invite signing (\(keyBytes.count) bytes)", category: "InviteGenerator")
-        return keyBytes
-    }
-
-    /// Derive the expected verifying key (Base64) from local signing secret.
-    func expectedVerifyingKeyBase64() throws -> String {
-        let signingSecretKey = try getSigningSecretKey()
-        let verifyingKey = try deriveVerifyingKeyFromSecret(identitySecretKey: signingSecretKey)
-        return verifyingKey.base64EncodedString()
+        return (try core.signWithDeviceKey(message: data), try core.getRegistrationBundleFields().verifyingKey)
     }
 
     // MARK: - Server Normalization
@@ -288,7 +271,6 @@ enum InviteGenerationError: LocalizedError {
     case invalidUserId
     case invalidDeviceId
     case missingIdentityKey
-    case keyDecodingFailed
     case signingFailed
     case noAccountAddress
 
@@ -300,8 +282,6 @@ enum InviteGenerationError: LocalizedError {
             return "Invalid device ID (must be 32-char hex)"
         case .missingIdentityKey:
             return "Identity key not available. User may not be logged in."
-        case .keyDecodingFailed:
-            return "Failed to decode cryptographic keys"
         case .signingFailed:
             return "Failed to sign invite data"
         case .noAccountAddress:

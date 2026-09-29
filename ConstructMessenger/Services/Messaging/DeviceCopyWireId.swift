@@ -122,8 +122,8 @@ enum DeviceCopyWireId {
     /// Whether this copy is ours to open.
     ///
     /// `peerIdentityKeys` are the public identity keys of the devices that could have been the
-    /// *other* end of the tag's pair secret; `ourIdentityPrivateKey` is our half; `ourDeviceId` is
-    /// what the sender would have bound into the MAC had it been addressing us.
+    /// *other* end of the tag's pair secret; `tagger` holds our half, in the core, and binds our
+    /// device id into the check itself; `ourDeviceId` is read only by the legacy form.
     ///
     /// ## Why the two kinds of copy get different conclusions
     ///
@@ -143,7 +143,7 @@ enum DeviceCopyWireId {
     static func read(
         wireId: String,
         ourDeviceId: String?,
-        ourIdentityPrivateKey: Data?,
+        tagger: SenderSyncDeviceTag.Tagger?,
         peerIdentityKeys: [Data],
         peerDeviceSetIsComplete: Bool
     ) -> DeviceCopyReading {
@@ -155,22 +155,13 @@ enum DeviceCopyWireId {
 
         switch tag.count {
         case SenderSyncDeviceTag.hexLength:
-            guard let ourDeviceId, !ourDeviceId.isEmpty,
-                  let ourIdentityPrivateKey, !peerIdentityKeys.isEmpty else { return .undecidable }
+            guard let tagger, !peerIdentityKeys.isEmpty else { return .undecidable }
 
             // `first(where:)`, not `contains`. The key that reproduces the MAC names the device
             // that wrote this copy — the whole of §D, and it was being computed and thrown away.
             // The target is bound into the MAC, so a copy we sent to another device does not match
             // here even though we share its pair secret.
-            let senderKey = peerIdentityKeys.first {
-                SenderSyncDeviceTag.matches(
-                    tag,
-                    baseMessageId: base,
-                    ourDeviceId: ourDeviceId,
-                    ourIdentityPrivateKey: ourIdentityPrivateKey,
-                    peerIdentityPublicKey: $0
-                )
-            }
+            let senderKey = peerIdentityKeys.first { tagger.matches(tag, base, $0) }
             if let senderKey {
                 return DeviceCopyReading(
                     verdict: .ours,

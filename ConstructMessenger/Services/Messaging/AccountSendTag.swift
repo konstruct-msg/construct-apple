@@ -52,14 +52,15 @@ enum AccountSendTag {
     /// the wire id by hand and asserted the round trip, and the mutation `return baseMessageId`
     /// survived it untouched.
     struct Keys {
-        var ourIdentityPrivate: () -> Data?
+        /// Our side of the tag, held by the core (`SenderSyncDeviceTag.Tagger`).
+        var ourTagger: () -> SenderSyncDeviceTag.Tagger?
         var pinnedIdentityPublic: (String) -> Data?
         var pinnedDevice: (String) -> String?
         /// The identity key of a named device — `PeerDevice`, then the pinned rows.
         var deviceIdentityPublic: (String) -> Data?
 
         static let production = Keys(
-            ourIdentityPrivate: { KeychainManager.shared.loadDeviceIdentityKey() },
+            ourTagger: { SenderSyncDeviceTag.Tagger.current },
             pinnedIdentityPublic: { SessionAddressing.pinnedIdentityKey(ofUser: $0) },
             pinnedDevice: { SessionAddressing.pinnedDevice(ofPeer: $0) },
             deviceIdentityPublic: { deviceId in
@@ -117,13 +118,7 @@ enum AccountSendTag {
         }
         guard let target, !target.isEmpty,
               let peerKey, !peerKey.isEmpty,
-              let ourKey = keys.ourIdentityPrivate(), !ourKey.isEmpty,
-              let tag = SenderSyncDeviceTag.tag(
-                  baseMessageId: logicalId,
-                  targetDeviceId: target,
-                  ourIdentityPrivateKey: ourKey,
-                  peerIdentityPublicKey: peerKey
-              )
+              let tag = keys.ourTagger()?.tag(logicalId, target, peerKey)
         else { return baseMessageId }
 
         return DeviceDeliveryPlan.wireId(

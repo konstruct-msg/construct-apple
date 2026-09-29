@@ -194,7 +194,7 @@ final class OutboundMessagePipeline {
         // The tag replaces the device id in the wire id, so the relay routes a copy it cannot
         // attribute to a device. Absent only before registration — and then there is nothing to
         // send as.
-        let ourIdentityPrivate = KeychainManager.shared.loadDeviceIdentityKey()
+        let tagger = SenderSyncDeviceTag.Tagger.current
 
         var copies: [RecipientSendReport.Copy] = []
         for target in planned {
@@ -209,7 +209,7 @@ final class OutboundMessagePipeline {
                     kind: kind,
                     stealthOn: stealthOn,
                     spendUnit: spendUnit,
-                    ourIdentityPrivate: ourIdentityPrivate
+                    tagger: tagger
                 )
                 copies.append(.init(deviceId: target.deviceId, response: response, error: nil))
             } catch let blocked as StealthDowngradeBlocked {
@@ -349,7 +349,7 @@ final class OutboundMessagePipeline {
         kind: Kind,
         stealthOn: Bool,
         spendUnit: TokenSpendUnit?,
-        ourIdentityPrivate: Data?
+        tagger: SenderSyncDeviceTag.Tagger?
     ) async throws -> SendMessageResponse {
         try await ensureSession(with: target, recipientId: recipientId)
 
@@ -357,7 +357,7 @@ final class OutboundMessagePipeline {
             baseMessageId: baseMessageId,
             targetDeviceId: target.deviceId,
             targetIdentityPublic: target.identityPublic,
-            ourIdentityPrivateKey: ourIdentityPrivate
+            tagger: tagger
         )
 
         var responses: [SendMessageResponse] = []

@@ -165,23 +165,22 @@ final class DeviceCopyTagConformanceTests: XCTestCase {
 
     // MARK: - The Swift seam
 
-    /// `SenderSyncDeviceTag` holds no cryptography any more; it must forward unchanged.
+    /// `SenderSyncDeviceTag.Tagger` holds no cryptography; it must forward to the core unchanged.
     ///
-    /// Mutation: have the shim swap `ourDeviceId` and `targetDeviceId` — this reddens while the
-    /// core's own tests stay green, which is the whole reason the seam is tested separately.
+    /// Mutation: have the tagger swap `baseMessageId` and `targetDeviceId` — this reddens while
+    /// the core's own tests stay green, which is the whole reason the seam is tested separately.
     func testTheSwiftSeamForwardsWithoutAlteringAnything() throws {
-        let k = try loadVectors().keys
-        let viaCore = try deviceCopyTag(
-            baseMessageId: "m", targetDeviceId: "device-b",
-            ourIdentityPrivate: try bytes(k.aPrivate), peerIdentityPublic: try bytes(k.bPublic)
+        let sender = try makeTestDevice()
+        let target = try makeTestDevice()
+        let targetKey = try target.core.getRegistrationBundleFields().identityPublic
+        let senderKey = try sender.core.getRegistrationBundleFields().identityPublic
+
+        let viaCore = try sender.core.deviceCopyTag(
+            baseMessageId: "m", targetDeviceId: target.deviceId, peerIdentityPublic: targetKey
         )
-        let viaSeam = SenderSyncDeviceTag.tag(
-            baseMessageId: "m",
-            targetDeviceId: "device-b",
-            ourIdentityPrivateKey: Data(try bytes(k.aPrivate)),
-            peerIdentityPublicKey: Data(try bytes(k.bPublic))
-        )
+        let viaSeam = SenderSyncDeviceTag.Tagger(core: sender.core).tag("m", target.deviceId, targetKey)
         XCTAssertEqual(viaSeam, viaCore)
+        XCTAssertTrue(SenderSyncDeviceTag.Tagger(core: target.core).matches(viaCore, "m", senderKey))
     }
 
     /// Unusable key material is "not foreign", never a throw that reaches the routing path.
@@ -190,19 +189,8 @@ final class DeviceCopyTagConformanceTests: XCTestCase {
     /// question there must be no: wrongly opening a copy costs failed decrypts, wrongly discarding
     /// one loses a message from the transcript, silently.
     func testUnusableKeyMaterialDoesNotMatchAndDoesNotThrow() throws {
-        let k = try loadVectors().keys
-        XCTAssertNil(SenderSyncDeviceTag.tag(
-            baseMessageId: "m",
-            targetDeviceId: "d",
-            ourIdentityPrivateKey: Data(repeating: 0, count: 31),
-            peerIdentityPublicKey: Data(try bytes(k.bPublic))
-        ))
-        XCTAssertFalse(SenderSyncDeviceTag.matches(
-            "0123456789abcdef",
-            baseMessageId: "m",
-            ourDeviceId: "d",
-            ourIdentityPrivateKey: Data(repeating: 0, count: 31),
-            peerIdentityPublicKey: Data(try bytes(k.bPublic))
-        ))
+        let tagger = SenderSyncDeviceTag.Tagger(core: try makeTestDevice().core)
+        XCTAssertNil(tagger.tag("m", "d", Data(repeating: 0, count: 31)))
+        XCTAssertFalse(tagger.matches("0123456789abcdef", "m", Data(repeating: 0, count: 31)))
     }
 }

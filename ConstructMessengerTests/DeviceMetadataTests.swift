@@ -1,5 +1,4 @@
 import XCTest
-import CryptoKit
 @testable import Construct_Messenger
 
 /// A device's name and platform, sealed to its own account's devices.
@@ -18,19 +17,23 @@ final class DeviceMetadataTests: XCTestCase {
         return m
     }
 
-    /// An X25519 pair, as a device holds one.
-    private func deviceKeys() -> (privateKey: Data, publicKey: Data) {
-        let secret = Curve25519.KeyAgreement.PrivateKey()
-        return (secret.rawRepresentation, secret.publicKey.rawRepresentation)
+    /// A device: its core, which holds the identity key and opens with it, and the public half.
+    private func deviceKeys() throws -> (core: OrchestratorCore, publicKey: Data) {
+        let core = try makeTestDevice().core
+        return (core, try core.getRegistrationBundleFields().identityPublic)
+    }
+
+    private func open(_ blob: Data, as device: (core: OrchestratorCore, publicKey: Data)) -> Shared_Proto_Services_V1_DeviceMetadata? {
+        DeviceMetadataService.open(blob, openingWith: device.core.openSealedToDevice(sealedBox:))
     }
 
     // MARK: - The account reads it, nobody else does
 
     /// **The property the whole design rests on.** Every device of the account opens the blob;
     /// a key outside it opens nothing.
-    func testEveryDeviceOfTheAccountOpensItAndAStrangerDoesNot() {
-        let devices = [deviceKeys(), deviceKeys(), deviceKeys()]
-        let stranger = deviceKeys()
+    func testEveryDeviceOfTheAccountOpensItAndAStrangerDoesNot() throws {
+        let devices = [try deviceKeys(), try deviceKeys(), try deviceKeys()]
+        let stranger = try deviceKeys()
 
         let blob = DeviceMetadataService.seal(
             metadata("work laptop"),
@@ -39,24 +42,24 @@ final class DeviceMetadataTests: XCTestCase {
         XCTAssertNotNil(blob)
 
         for (i, device) in devices.enumerated() {
-            let opened = DeviceMetadataService.open(blob!, withIdentityPrivateKey: device.privateKey)
+            let opened = open(blob!, as: device)
             XCTAssertEqual(opened?.deviceName, "work laptop", "device \(i) could not read its own copy")
             XCTAssertEqual(opened?.platform, .desktop)
         }
 
         XCTAssertNil(
-            DeviceMetadataService.open(blob!, withIdentityPrivateKey: stranger.privateKey),
+            open(blob!, as: stranger),
             "a key outside the account opened the blob"
         )
     }
 
     /// A device linked after the last re-seal has no copy. That is an ordinary state, not a
     /// failure: the row falls back to the short id, which identifies it either way.
-    func testADeviceWithNoCopyReadsNothingRatherThanFailing() {
-        let sealedFor = deviceKeys()
-        let newcomer = deviceKeys()
+    func testADeviceWithNoCopyReadsNothingRatherThanFailing() throws {
+        let sealedFor = try deviceKeys()
+        let newcomer = try deviceKeys()
         let blob = DeviceMetadataService.seal(metadata("Mac"), toIdentityKeys: [sealedFor.publicKey])!
-        XCTAssertNil(DeviceMetadataService.open(blob, withIdentityPrivateKey: newcomer.privateKey))
+        XCTAssertNil(open(blob, as: newcomer))
     }
 
     /// **Not a blob with no copies.** An empty key set is a cold cache or a failed fetch, and
@@ -68,12 +71,10 @@ final class DeviceMetadataTests: XCTestCase {
 
     /// Garbage in the field is a `nil`, not a crash: the blob comes off the network, and the read
     /// path runs on a screen a person is looking at.
-    func testUnreadableInputIsNil() {
-        let ours = deviceKeys()
-        XCTAssertNil(DeviceMetadataService.open(Data([0xff, 0xff, 0xff]), withIdentityPrivateKey: ours.privateKey))
-        XCTAssertNil(DeviceMetadataService.open(Data(), withIdentityPrivateKey: ours.privateKey))
-        let blob = DeviceMetadataService.seal(metadata("Mac"), toIdentityKeys: [ours.publicKey])!
-        XCTAssertNil(DeviceMetadataService.open(blob, withIdentityPrivateKey: Data()))
+    func testUnreadableInputIsNil() throws {
+        let ours = try deviceKeys()
+        XCTAssertNil(open(Data([0xff, 0xff, 0xff]), as: ours))
+        XCTAssertNil(open(Data(), as: ours))
     }
 
     // MARK: - When to re-publish

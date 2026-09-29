@@ -1343,6 +1343,17 @@ public protocol OrchestratorCoreProtocol: AnyObject, Sendable {
     func decryptWirePayload(contactId: String, wirePayload: Data) throws  -> DecryptedMessageResult
     
     /**
+     * `device_copy_tag` with our identity key.
+     */
+    func deviceCopyTag(baseMessageId: String, targetDeviceId: String, peerIdentityPublic: Data) throws  -> String
+    
+    /**
+     * `device_copy_tag_matches` with our identity key and our device id, which the core derives
+     * from that key rather than taking it from the caller.
+     */
+    func deviceCopyTagMatches(tag: String, baseMessageId: String, peerIdentityPublic: Data)  -> Bool
+    
+    /**
      * Encrypt for a device and return the whole wire payload. Sent as it is: a payload rebuilt
      * from components dropped fields (decisions/responder-authenticates-initiator-by-kem.md).
      */
@@ -1421,6 +1432,11 @@ public protocol OrchestratorCoreProtocol: AnyObject, Sendable {
     
     func importKyberPrekeys(data: Data) throws 
     
+    /**
+     * An MLS store restored from `MlsStore.export_cfe()`, signing with this device's key.
+     */
+    func importMlsStore(data: Data) throws  -> MlsStore
+    
     func importOneTimePrekeys(data: Data) throws 
     
     /**
@@ -1445,9 +1461,21 @@ public protocol OrchestratorCoreProtocol: AnyObject, Sendable {
      */
     func kyberPrekeyDecapsulate(keyId: UInt32, ciphertext: Data) throws  -> Data
     
+    /**
+     * A fresh MLS store signing with this device's Ed25519 key.
+     */
+    func newMlsStore() throws  -> MlsStore
+    
     func oneTimePrekeyCount()  -> UInt32
     
     func openReceiving(device: String)  -> ReceivingOpenResult
+    
+    /**
+     * Open a box sealed to this device's X25519 identity key (`sealed_seal_sender_cert`,
+     * `seal_to_device_key`): a sender certificate, a sibling's device metadata. A box sealed to
+     * another key fails with DecryptionFailed, which is how a caller finds its own copy.
+     */
+    func openSealedToDevice(sealedBox: Data) throws  -> Data
     
     func peerHandshakeHeld(devices: [String])  -> Bool
     
@@ -1488,6 +1516,12 @@ public protocol OrchestratorCoreProtocol: AnyObject, Sendable {
     func signHybrid(message: Data) throws  -> Data
     
     func signHybridPrekey(suiteId: UInt8, publicKey: Data) throws  -> Data
+    
+    /**
+     * Ed25519 over `message` with this device's signing key (device auth, invites). The same
+     * signature `sign_invite_data` / CryptoKit made from the exported key: Ed25519 is deterministic.
+     */
+    func signWithDeviceKey(message: Data) throws  -> Data
     
 }
 /**
@@ -1633,6 +1667,35 @@ open func decryptWirePayload(contactId: String, wirePayload: Data)throws  -> Dec
             self.uniffiCloneHandle(),
         FfiConverterString.lower(contactId),
         FfiConverterData.lower(wirePayload),$0
+    )
+})
+}
+    
+    /**
+     * `device_copy_tag` with our identity key.
+     */
+open func deviceCopyTag(baseMessageId: String, targetDeviceId: String, peerIdentityPublic: Data)throws  -> String  {
+    return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_method_orchestratorcore_device_copy_tag(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(baseMessageId),
+        FfiConverterString.lower(targetDeviceId),
+        FfiConverterData.lower(peerIdentityPublic),$0
+    )
+})
+}
+    
+    /**
+     * `device_copy_tag_matches` with our identity key and our device id, which the core derives
+     * from that key rather than taking it from the caller.
+     */
+open func deviceCopyTagMatches(tag: String, baseMessageId: String, peerIdentityPublic: Data) -> Bool  {
+    return try!  FfiConverterBool.lift(try! rustCall() {
+    uniffi_construct_core_fn_method_orchestratorcore_device_copy_tag_matches(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(tag),
+        FfiConverterString.lower(baseMessageId),
+        FfiConverterData.lower(peerIdentityPublic),$0
     )
 })
 }
@@ -1851,6 +1914,18 @@ open func importKyberPrekeys(data: Data)throws   {try rustCallWithError(FfiConve
 }
 }
     
+    /**
+     * An MLS store restored from `MlsStore.export_cfe()`, signing with this device's key.
+     */
+open func importMlsStore(data: Data)throws  -> MlsStore  {
+    return try  FfiConverterTypeMlsStore_lift(try rustCallWithError(FfiConverterTypeMlsError_lift) {
+    uniffi_construct_core_fn_method_orchestratorcore_import_mls_store(
+            self.uniffiCloneHandle(),
+        FfiConverterData.lower(data),$0
+    )
+})
+}
+    
 open func importOneTimePrekeys(data: Data)throws   {try rustCallWithError(FfiConverterTypeCryptoError_lift) {
     uniffi_construct_core_fn_method_orchestratorcore_import_one_time_prekeys(
             self.uniffiCloneHandle(),
@@ -1933,6 +2008,17 @@ open func kyberPrekeyDecapsulate(keyId: UInt32, ciphertext: Data)throws  -> Data
 })
 }
     
+    /**
+     * A fresh MLS store signing with this device's Ed25519 key.
+     */
+open func newMlsStore()throws  -> MlsStore  {
+    return try  FfiConverterTypeMlsStore_lift(try rustCallWithError(FfiConverterTypeMlsError_lift) {
+    uniffi_construct_core_fn_method_orchestratorcore_new_mls_store(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
 open func oneTimePrekeyCount() -> UInt32  {
     return try!  FfiConverterUInt32.lift(try! rustCall() {
     uniffi_construct_core_fn_method_orchestratorcore_one_time_prekey_count(
@@ -1946,6 +2032,20 @@ open func openReceiving(device: String) -> ReceivingOpenResult  {
     uniffi_construct_core_fn_method_orchestratorcore_open_receiving(
             self.uniffiCloneHandle(),
         FfiConverterString.lower(device),$0
+    )
+})
+}
+    
+    /**
+     * Open a box sealed to this device's X25519 identity key (`sealed_seal_sender_cert`,
+     * `seal_to_device_key`): a sender certificate, a sibling's device metadata. A box sealed to
+     * another key fails with DecryptionFailed, which is how a caller finds its own copy.
+     */
+open func openSealedToDevice(sealedBox: Data)throws  -> Data  {
+    return try  FfiConverterData.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_method_orchestratorcore_open_sealed_to_device(
+            self.uniffiCloneHandle(),
+        FfiConverterData.lower(sealedBox),$0
     )
 })
 }
@@ -2087,6 +2187,19 @@ open func signHybridPrekey(suiteId: UInt8, publicKey: Data)throws  -> Data  {
             self.uniffiCloneHandle(),
         FfiConverterUInt8.lower(suiteId),
         FfiConverterData.lower(publicKey),$0
+    )
+})
+}
+    
+    /**
+     * Ed25519 over `message` with this device's signing key (device auth, invites). The same
+     * signature `sign_invite_data` / CryptoKit made from the exported key: Ed25519 is deterministic.
+     */
+open func signWithDeviceKey(message: Data)throws  -> Data  {
+    return try  FfiConverterData.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_method_orchestratorcore_sign_with_device_key(
+            self.uniffiCloneHandle(),
+        FfiConverterData.lower(message),$0
     )
 })
 }
@@ -7685,6 +7798,12 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_method_orchestratorcore_decrypt_wire_payload() != 22393) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_construct_core_checksum_method_orchestratorcore_device_copy_tag() != 16396) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_orchestratorcore_device_copy_tag_matches() != 16613) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_construct_core_checksum_method_orchestratorcore_encrypt_to_wire() != 5089) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -7748,6 +7867,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_method_orchestratorcore_import_kyber_prekeys() != 16146) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_construct_core_checksum_method_orchestratorcore_import_mls_store() != 61532) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_construct_core_checksum_method_orchestratorcore_import_one_time_prekeys() != 20260) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -7772,10 +7894,16 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_method_orchestratorcore_kyber_prekey_decapsulate() != 28414) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_construct_core_checksum_method_orchestratorcore_new_mls_store() != 46483) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_construct_core_checksum_method_orchestratorcore_one_time_prekey_count() != 21478) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_orchestratorcore_open_receiving() != 32397) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_orchestratorcore_open_sealed_to_device() != 63797) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_orchestratorcore_peer_handshake_held() != 14228) {
@@ -7821,6 +7949,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_orchestratorcore_sign_hybrid_prekey() != 60717) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_orchestratorcore_sign_with_device_key() != 47610) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_rustackstore_cache_len() != 41894) {

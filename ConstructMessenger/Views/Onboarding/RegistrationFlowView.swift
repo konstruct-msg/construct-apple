@@ -284,14 +284,6 @@ struct RegistrationFlowView: View {
                 let verifyingKeyB64 = bundle.verifyingKey.base64EncodedString()
                 Log.info("Registration bundle verifying_key: \(verifyingKeyB64)", category: "Registration")
 
-                do {
-                    let derivedVerifyingKey = try deriveVerifyingKeyFromSecret(identitySecretKey: signingKeyData)
-                    let derivedBase64 = Data(derivedVerifyingKey).base64EncodedString()
-                    Log.info("Derived verifying key from signing_secret: \(derivedBase64)", category: "Registration")
-                } catch {
-                    Log.info("Failed to derive verifying key from signing_secret: \(error.localizedDescription)", category: "Registration")
-                }
-
                 // Save device keys and bundle IMMEDIATELY — before any network call.
                 // If the registration RPC succeeds on the server but the response is
                 // lost (deadline exceeded), the next launch will find these keys and
