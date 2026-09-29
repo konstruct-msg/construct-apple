@@ -22,8 +22,9 @@
 //  • The tag is per *recipient*, identical for every sender holding the key. A pair-wise value
 //    would be a stable pseudonymous handle for the sender inside each epoch, which is precisely
 //    what sealed sender exists to destroy.
-//  • Our own key is per *account*, not per device. A device that minted its own would leave half
-//    our contacts presenting a credential the server does not recognise.
+//  • Our own key is per *device*: each device of the account mints its own and publishes its own
+//    tags, and the server keeps every device's tags as a set per epoch (construct-server
+//    `7fd850b`). Until then it kept one value and the last device to publish revoked the others.
 //
 
 import Foundation
@@ -151,7 +152,7 @@ final class IntakeCredentialService {
 
     // MARK: - Our own key
 
-    /// This account's intake key, minted on first use.
+    /// This device's intake key for our account, minted on first use.
     ///
     /// Minting here rather than at registration is deliberate: an account created before this
     /// shipped has no key either, so the two cases are one, and there is no migration that has to
