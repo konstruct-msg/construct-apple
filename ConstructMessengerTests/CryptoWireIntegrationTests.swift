@@ -112,7 +112,7 @@ final class CryptoWireIntegrationTests: XCTestCase {
         let wirePayload = try alice.encodeWire(components)
 
         // Verify wire payload structure
-        XCTAssertGreaterThan(wirePayload.count, WirePayloadCoder.headerSize)
+        XCTAssertNotNil(try? wireSummary(wirePayload: wirePayload), "the core parses what it packed")
 
         // Bob receives and decrypts from wire
         let decrypted1 = try bob.initReceiverSession(from: alice, wirePayload: wirePayload)
@@ -259,7 +259,7 @@ final class CryptoWireIntegrationTests: XCTestCase {
 
         // First 4 bytes: message_number LE
         // Bytes 4..36: DH public key (32 bytes)
-        XCTAssertGreaterThanOrEqual(wire.count, WirePayloadCoder.headerSize + 1)
+        XCTAssertNotNil(try? wireSummary(wirePayload: wire))
 
         // Verify dh_public_key field is 32 bytes
         let dhBytes = wire[4..<36]
@@ -276,7 +276,7 @@ final class CryptoWireIntegrationTests: XCTestCase {
         for _ in 0..<5 {
             let comp = try alice.encryptRaw("test", to: bob.userId)
             let wire = try alice.encodeWire(comp)
-            let decoded = try WirePayloadCoder.decode(wire)
+            let decoded = try wireSummary(wirePayload: wire)
 
             if previousMsgNum != UInt32.max {
                 XCTAssertGreaterThan(decoded.messageNumber, previousMsgNum,

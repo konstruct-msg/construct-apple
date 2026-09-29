@@ -23,8 +23,7 @@ final class ControlCarrierGuardTests: XCTestCase {
     private func message(contentType: UInt8) -> ChatMessage {
         ChatMessage(
             id: UUID().uuidString, from: "peer", to: "me",
-            ephemeralPublicKey: Data(), messageNumber: 1, content: Data(),
-            suiteId: 1, timestamp: 1_000_000, contentType: contentType
+            timestamp: 1_000_000, contentType: contentType
         )
     }
 

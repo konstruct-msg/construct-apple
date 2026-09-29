@@ -485,30 +485,22 @@ final class MessagingServiceClient: Sendable {
             }()
             // SESSION_RESET_INIT: identified path — sealed deliveries use the generic path below.
             if msg.contentType == .sessionResetInit {
-                guard let decoded = try? WirePayloadCoder.decode(msg.encryptedPayload) else {
+                let message = ChatMessage(
+                    id: msg.messageID,
+                    from: msg.senderID,
+                    to: "",
+                    timestamp: UInt64(msg.timestamp),
+                    serverOrderKey: serverOrderKey,
+                    contentType: 24,
+                    rawPayload: msg.encryptedPayload
+                )
+                guard message.wire != nil else {
                     Log.debug("Failed to decode SESSION_RESET_INIT payload \(msg.messageID) — queuing failed ACK", category: "MessagingServiceClient")
                     failed.append(FailedMessage(id: msg.messageID, senderId: msg.senderID))
                     return nil
                 }
                 Log.debug("SESSION_RESET_INIT pending from \(msg.senderID.prefix(8))… id=\(msg.messageID.prefix(8))…", category: "MessagingServiceClient")
-                return ChatMessage(
-                    id: msg.messageID,
-                    from: msg.senderID,
-                    to: "",
-                    ephemeralPublicKey: decoded.ephemeralPublicKey,
-                    messageNumber: decoded.messageNumber,
-                    content: decoded.content,
-                    suiteId: decoded.suiteId,
-                    timestamp: UInt64(msg.timestamp),
-                    serverOrderKey: serverOrderKey,
-                    oneTimePreKeyId: decoded.oneTimePreKeyId,
-                    kemCiphertext: decoded.kemCiphertext ?? Data(),
-                    contentType: 24,
-                    kyberOtpkId: decoded.kyberOtpkId,
-                    pqMessageEpoch: decoded.pqMessageEpoch,
-                    pqRatchetField: decoded.pqRatchetField,
-                    rawPayload: msg.encryptedPayload
-                )
+                return message
             }
             // END_SESSION: contentType is the sole classifier (size heuristic removed).
             if msg.contentType == .sessionReset {
@@ -517,15 +509,9 @@ final class MessagingServiceClient: Sendable {
                     id: msg.messageID,
                     from: msg.senderID,
                     to: "",
-                    ephemeralPublicKey: Data(),
-                    messageNumber: 0,
-                    content: Data(),
-                    suiteId: 1,
                     timestamp: UInt64(msg.timestamp),
                     serverOrderKey: serverOrderKey,
-                    kemCiphertext: Data(),
                     contentType: 21,
-                    kyberOtpkId: 0,
                     rawPayload: msg.encryptedPayload
                 )
             }
@@ -562,52 +548,24 @@ final class MessagingServiceClient: Sendable {
                     }
                 }
             }
-            guard let decoded = try? WirePayloadCoder.decode(wirePayload) else {
-                if isSealed {
-                    // Fallback for sealed control whose inner is not a WirePayload.
-                    // Preserve rawPayload so SessionControl.reason survives unseal.
-                    let preservedPayload = !wirePayload.isEmpty ? wirePayload : sealedInnerPayload
-                    return ChatMessage(
-                        id: msg.messageID,
-                        from: "",
-                        to: "",
-                        ephemeralPublicKey: Data(),
-                        messageNumber: 0,
-                        content: Data(),
-                        suiteId: 1,
-                        timestamp: UInt64(msg.timestamp),
-                        serverOrderKey: serverOrderKey,
-                        kemCiphertext: Data(),
-                        contentType: UInt8(clamping: msg.contentType.rawValue),
-                        rawPayload: preservedPayload,
-                        sealedInnerData: sealedInner
-                    )
-                }
+            let message = ChatMessage(
+                id: msg.messageID,
+                from: isSealed ? "" : msg.senderID,
+                to: "",
+                timestamp: UInt64(msg.timestamp),
+                serverOrderKey: serverOrderKey,
+                contentType: UInt8(clamping: msg.contentType.rawValue),
+                rawPayload: wirePayload,
+                sealedInnerData: sealedInner
+            )
+            // A sealed control's inner need not be a wire payload (the payload is kept so its
+            // SessionControl reason survives unseal); anything else must be one.
+            guard message.wire != nil || isSealed else {
                 Log.debug("Failed to decode encrypted_payload for message \(msg.messageID) — queuing failed ACK", category: "MessagingServiceClient")
                 failed.append(FailedMessage(id: msg.messageID, senderId: msg.senderID))
                 return nil
             }
-            return ChatMessage(
-                id: msg.messageID,
-                from: isSealed ? "" : msg.senderID,
-                to: "",
-                ephemeralPublicKey: decoded.ephemeralPublicKey,
-                messageNumber: decoded.messageNumber,
-                content: decoded.content,
-                suiteId: decoded.suiteId,
-                timestamp: UInt64(msg.timestamp),
-                serverOrderKey: serverOrderKey,
-                oneTimePreKeyId: decoded.oneTimePreKeyId,
-                kemCiphertext: decoded.kemCiphertext ?? Data(),
-                contentType: UInt8(clamping: msg.contentType.rawValue),
-                kyberOtpkId: decoded.kyberOtpkId,
-                pqMessageEpoch: decoded.pqMessageEpoch,
-                pqRatchetField: decoded.pqRatchetField,
-                senderDeviceId: "",
-                conversationId: "",
-                rawPayload: wirePayload,
-                sealedInnerData: sealedInner
-            )
+            return message
         }
 
         return PendingMessagesResult(

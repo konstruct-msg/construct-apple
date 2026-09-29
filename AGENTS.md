@@ -279,7 +279,10 @@ was deliberate is indistinguishable from one that was forgotten. `pqMessageEpoch
 `pqRatchetField` were dropped at the unseal boundary and nobody could see it, precisely because the
 neighbouring deliberate omission (`sealedInnerData`) *was* commented and these two were not. Better
 still, give the boundary a name (`ChatMessage.resolvingSealedSender(_:currentUserId:)`) so it is an
-object a test can reach rather than an argument list inside a 200-line method.
+object a test can reach rather than an argument list inside a 200-line method. Best, do not list:
+since 2026-09-29 that boundary copies the message and assigns the few fields it replaces, and the
+parsed header fields are gone from `ChatMessage` altogether — it keeps `rawPayload` and the core's
+`wire_summary` of it, so there is no copy of the payload to drop.
 
 **A producer with no consumer is a defect, not dead weight.** If you add a send, a signal or an
 action, the reader must exist in the same change — or the sender must be removed. An unconsumed

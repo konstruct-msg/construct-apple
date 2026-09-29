@@ -338,7 +338,7 @@ final class CallSignalE2EETests: XCTestCase {
         let callWire = try alice.sendCallSignal(to: bob.userId, protoBytes: callProto)
 
         // Verify msgNum=0 in the wire payload (confirms we're testing the right scenario).
-        let decoded = try WirePayloadCoder.decode(callWire)
+        let decoded = try wireSummary(wirePayload: callWire)
         XCTAssertEqual(decoded.messageNumber, 0,
                        "Alice's first-ever send after session init must be msgNum=0")
 

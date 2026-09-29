@@ -44,6 +44,7 @@ final class PerformanceBenchmarks: XCTestCase {
 
     // MARK: - Wire Payload Decode
 
+    /// What every received message now costs at the boundary: one `wire_summary`.
     func testWirePayloadDecodePerformance() throws {
         // A first flight as the core packs it — the header, the KEM identity key and all.
         let alice = try CryptoPeer()
@@ -52,7 +53,7 @@ final class PerformanceBenchmarks: XCTestCase {
         let payload = try alice.core.encryptToWire(contactId: bob.userId, plaintext: Data("x".utf8))
         measure {
             for _ in 0..<1000 {
-                _ = try? WirePayloadCoder.decode(payload)
+                _ = try? wireSummary(wirePayload: payload)
             }
         }
     }

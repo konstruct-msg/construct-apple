@@ -136,7 +136,7 @@ final class SealedRoutingBoundaryTests: XCTestCase {
     // MARK: - B. Parser preserves the sealed control payload
 
     /// A sealed DECRYPTION_ERROR carries the core's sealed box inside SealedInner, not a
-    /// WirePayload, so `WirePayloadCoder.decode` fails and the parser takes its sealed fallback.
+    /// WirePayload, so it has no `wire` summary and the parser keeps it only because it is sealed.
     /// That fallback used to drop the payload (END_SESSION's reason hint went unreadable that way);
     /// dropped now, the error would reach the core empty and be refused.
     func testParser_SealedShortControlInner_PreservesRawPayload() throws {
@@ -195,10 +195,6 @@ final class SealedRoutingBoundaryTests: XCTestCase {
             id: id,
             from: "",
             to: me,
-            ephemeralPublicKey: Data(repeating: 1, count: 32),
-            messageNumber: 0,
-            content: Data(repeating: 2, count: 48),
-            suiteId: 1,
             timestamp: UInt64(Date().timeIntervalSince1970),
             contentType: 1,                                   // outer is forced generic
             rawPayload: Data(repeating: 3, count: 64),
@@ -250,22 +246,20 @@ final class SealedRebuildFieldPreservationTests: XCTestCase {
             id: "6fcec8b4-c2ca-4e94-a8de-764b5623bcb6",
             from: "",
             to: "",
-            ephemeralPublicKey: Data(repeating: 0x11, count: 32),
-            messageNumber: 7,
-            content: Data(repeating: 0x22, count: 48),
-            suiteId: 3,
             timestamp: 1_785_665_817,
-            oneTimePreKeyId: 1_003_750,
-            kemCiphertext: Data(repeating: 0x33, count: 1568),
             contentType: 1,
-            kyberOtpkId: 42,
-            pqMessageEpoch: 9,
-            pqRatchetField: Data(repeating: 0x44, count: 24),
             // Deliberately not `senderDevice`: the boundary must overwrite this, not keep it.
             senderDeviceId: "00000000000000000000000000000000",
             conversationId: "direct:a:b",
             replyToMessageId: "reply-target",
-            rawPayload: Data(repeating: 0x55, count: 1428),
+            // A suite-3 handshake at message 7 with a PQ epoch: every header field the old
+            // parsed-field copies carried is in here, and is read from here.
+            rawPayload: handBuiltWirePayload(
+                messageNumber: 7,
+                suiteId: 3,
+                kemCiphertext: [UInt8](repeating: 0x33, count: 1568),
+                pqMessageEpoch: 9
+            ),
             sealedInnerData: Data(repeating: 0x66, count: 96)
         )
     }
@@ -286,15 +280,17 @@ final class SealedRebuildFieldPreservationTests: XCTestCase {
 
     /// Suite-3 PQ fields must survive. The sender encrypts with a `pq_message_epoch` tag in the
     /// associated data; a responder that rebuilds it from zeros produces different AD and cannot
-    /// decrypt. Suite 3 is negotiated in the field, so these are populated on real carriers.
-    func testPqRatchetFieldsSurviveTheUnsealBoundary() {
+    /// decrypt. Those fields now live only in `rawPayload`, and the boundary copies the message
+    /// rather than listing fields — so what this pins is that the payload and the core's reading
+    /// of it cross unchanged.
+    func testThePayloadAndItsSummarySurviveTheUnsealBoundary() {
         let carrier = sealedCarrier()
         let rebuilt = carrier.resolvingSealedSender(resolved(), currentUserId: me)
 
-        XCTAssertEqual(rebuilt.pqMessageEpoch, 9,
-                       "suite-3 epoch tag dropped — RESPONDER init rebuilds the wrong AEAD AD")
-        XCTAssertEqual(rebuilt.pqRatchetField, carrier.pqRatchetField,
-                       "suite-3 sparse PQ field dropped — same failure, silent")
+        XCTAssertEqual(rebuilt.rawPayload, carrier.rawPayload, "the orchestrator's decrypt input")
+        XCTAssertEqual(rebuilt.wire, carrier.wire)
+        XCTAssertEqual(rebuilt.messageNumber, 7)
+        XCTAssertEqual(rebuilt.initKind, .handshake, "a header at message 7 still opens")
     }
 
     // MARK: Everything else carried through
@@ -304,17 +300,9 @@ final class SealedRebuildFieldPreservationTests: XCTestCase {
         let rebuilt = carrier.resolvingSealedSender(resolved(), currentUserId: me)
 
         XCTAssertEqual(rebuilt.id, carrier.id)
-        XCTAssertEqual(rebuilt.ephemeralPublicKey, carrier.ephemeralPublicKey)
-        XCTAssertEqual(rebuilt.messageNumber, carrier.messageNumber)
-        XCTAssertEqual(rebuilt.content, carrier.content)
-        XCTAssertEqual(rebuilt.suiteId, carrier.suiteId, "suite drives the AD layout — must not shift")
         XCTAssertEqual(rebuilt.timestamp, carrier.timestamp)
-        XCTAssertEqual(rebuilt.oneTimePreKeyId, carrier.oneTimePreKeyId, "X3DH OTPK id — init fails without it")
-        XCTAssertEqual(rebuilt.kemCiphertext, carrier.kemCiphertext, "PQXDH decapsulation input")
-        XCTAssertEqual(rebuilt.kyberOtpkId, carrier.kyberOtpkId, "selects SPK vs one-time Kyber secret")
         XCTAssertEqual(rebuilt.conversationId, carrier.conversationId)
         XCTAssertEqual(rebuilt.replyToMessageId, carrier.replyToMessageId)
-        XCTAssertEqual(rebuilt.rawPayload, carrier.rawPayload, "the orchestrator's decrypt input")
     }
 
     // MARK: The four deliberate replacements
@@ -362,12 +350,7 @@ final class SealedRebuildFieldPreservationTests: XCTestCase {
         XCTAssertEqual(sealedCarrier().resolvingSealedSender(resolved(), currentUserId: me).to, me)
 
         var addressed = sealedCarrier()
-        addressed = ChatMessage(
-            id: addressed.id, from: addressed.from, to: "someone-else",
-            ephemeralPublicKey: addressed.ephemeralPublicKey,
-            messageNumber: addressed.messageNumber, content: addressed.content,
-            suiteId: addressed.suiteId, timestamp: addressed.timestamp
-        )
+        addressed.to = "someone-else"
         XCTAssertEqual(addressed.resolvingSealedSender(resolved(), currentUserId: me).to, "someone-else")
     }
 }

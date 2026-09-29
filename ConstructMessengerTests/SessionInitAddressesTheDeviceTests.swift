@@ -129,22 +129,19 @@ final class SessionInitAddressesTheDeviceTests: XCTestCase {
             id: UUID().uuidString,
             from: account,
             to: "0a1c609f-b37d-4d67-b7b2-b0f8ec16d167",
-            ephemeralPublicKey: Data(repeating: 0x55, count: 32),
-            messageNumber: 0,
-            content: Data(repeating: 0x66, count: 283),
-            suiteId: 1,
             timestamp: 1_788_698_000,
-            oneTimePreKeyId: 1_000_710,
-            kemCiphertext: Data(repeating: 0x77, count: 1568),
             contentType: 0,
-            kyberOtpkId: 1_000_004,
             // Names the bundle's device; the fake core does not check the signature.
             senderCertificate: SenderCertificate(
                 userId: account, domain: "test.example", identityKey: bundleIdentityKey,
                 deviceId: bundleDevice, issuedAt: 1, expiresAt: 2, signature: Data(repeating: 0x09, count: 64)
             ),
-            // The responder init reads the payload as received; the fake core never parses it.
-            rawPayload: Data(repeating: 0x88, count: 64)
+            // A handshake header, so the message classifies as one; the fake core never decrypts it.
+            rawPayload: handBuiltWirePayload(
+                messageNumber: 0,
+                suiteId: 1,
+                kemCiphertext: [UInt8](repeating: 0x77, count: 1568)
+            )
         )
     }
 

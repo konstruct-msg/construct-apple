@@ -58,24 +58,14 @@ enum OwnDeviceCopy {
         conversationId: String,
         payload: Data
     ) -> ChatMessage? {
-        guard let copy = unwrap(payload),
-              let decoded = try? WirePayloadCoder.decode(copy.wirePayload) else { return nil }
-        return ChatMessage(
+        guard let copy = unwrap(payload) else { return nil }
+        let message = ChatMessage(
             id: id,
             from: from,
             to: to,
-            ephemeralPublicKey: decoded.ephemeralPublicKey,
-            messageNumber: decoded.messageNumber,
-            content: decoded.content,
-            suiteId: decoded.suiteId,
             timestamp: timestamp,
             serverOrderKey: serverOrderKey,
-            oneTimePreKeyId: decoded.oneTimePreKeyId,
-            kemCiphertext: decoded.kemCiphertext ?? Data(),
             contentType: UInt8(Shared_Proto_Core_V1_ContentType.senderSync.rawValue),
-            kyberOtpkId: decoded.kyberOtpkId,
-            pqMessageEpoch: decoded.pqMessageEpoch,
-            pqRatchetField: decoded.pqRatchetField,
             // The relay blanks `sender_device`; the copy's certificate names the sibling.
             senderDeviceId: copy.certificate?.deviceId ?? "",
             // A sibling's first message opens a session from it, like a sealed one.
@@ -83,6 +73,7 @@ enum OwnDeviceCopy {
             conversationId: conversationId,
             rawPayload: copy.wirePayload
         )
+        return message.wire == nil ? nil : message
     }
 }
 

@@ -37,10 +37,6 @@ final class IOSAuditFixesTests: XCTestCase {
             id: id,
             from: from,
             to: to,
-            ephemeralPublicKey: Data(),
-            messageNumber: 1,
-            content: Data(),
-            suiteId: 1,
             timestamp: UInt64(Date().timeIntervalSince1970)
         )
     }

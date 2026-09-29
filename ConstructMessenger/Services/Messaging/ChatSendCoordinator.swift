@@ -224,10 +224,6 @@ final class ChatSendCoordinator {
                 id: rowId,
                 from: currentUserId,
                 to: recipientId,
-                ephemeralPublicKey: Data(),
-                messageNumber: 0,
-                content: Data(),
-                suiteId: 0,
                 timestamp: UInt64(Date().timeIntervalSince1970)
             )
             saveMessage(stub, decryptedContent: text, isSentByMe: true, status: .queued,
@@ -497,12 +493,7 @@ final class ChatSendCoordinator {
                 id: messageId,
                 from: currentUserId,
                 to: recipientId,
-                ephemeralPublicKey: Data(),
-                messageNumber: 0,
-                content: Data(),
-                suiteId: 0,
-                timestamp: UInt64(Date().timeIntervalSince1970),
-                oneTimePreKeyId: 0
+                timestamp: UInt64(Date().timeIntervalSince1970)
             )
             Log.debug("Sending message with ID: \(messageId)", category: "ChatViewModel")
             saveMessage(message, decryptedContent: text, isSentByMe: true, status: .sending,

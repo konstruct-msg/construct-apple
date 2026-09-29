@@ -11,8 +11,9 @@
 //  what a DH sending chain restarting at 0 also looks like (device logs 2026-08-19: `msgNum: 0
 //  oneTimePrekeyId: 0 kemCiphertext: 0B` → "PQ epoch 2 secret unavailable").
 //
-//  The rule is the core's (`receiving_init_plan.rs`); these pin the forwarder and that the app's
-//  core is built with PQXDH, which is what makes the KEM ciphertext the whole rule.
+//  The rule is the core's (`receiving_init_plan.rs`), asked through `wire_summary` from the
+//  payload bytes — the one parse this app makes of a received message. These pin that the answer
+//  comes from the header as the core reads it, and that the app's core is built with PQXDH.
 //
 
 import XCTest
@@ -22,38 +23,41 @@ final class ReceivingInitKindTests: XCTestCase {
 
     private func kind(
         msgNum: UInt32 = 0,
-        otpk: UInt32 = 0,
         kem: Int = 0,
         epoch: UInt32 = 0
-    ) -> SessionReducer.ReceivingInitKind {
-        SessionReducer.receivingInitKind(
+    ) throws -> ReceivingInitKind {
+        let payload = handBuiltWirePayload(
             messageNumber: msgNum,
-            oneTimePreKeyId: otpk,
-            kemCiphertextBytes: kem,
+            suiteId: 3,
+            kemCiphertext: kem > 0 ? [UInt8](repeating: 5, count: kem) : nil,
             pqMessageEpoch: epoch
         )
+        let summary = try wireSummary(wirePayload: payload)
+        XCTAssertEqual(summary.messageNumber, msgNum, "the number is read from the header")
+        return summary.initKind
     }
 
     /// The change of 2026-09-27: a header past message 0 opens.
-    func testAHeaderOpensAtAnyMessageNumber() {
-        XCTAssertEqual(kind(msgNum: 0, kem: 1568), .handshake)
-        XCTAssertEqual(kind(msgNum: 5, kem: 1568), .handshake)
+    func testAHeaderOpensAtAnyMessageNumber() throws {
+        XCTAssertEqual(try kind(msgNum: 0, kem: 1568), .handshake)
+        XCTAssertEqual(try kind(msgNum: 5, kem: 1568), .handshake)
     }
 
     /// The field failure of 2026-08-19, and a bare message 0 generally: a DH chain restarting,
     /// not an opener. There is no classical handshake to mistake it for any more.
-    func testABareFirstMessageIsNotAHandshake() {
-        XCTAssertEqual(kind(epoch: 2), .midRatchet)
-        XCTAssertEqual(kind(), .midRatchet)
+    func testABareFirstMessageIsNotAHandshake() throws {
+        XCTAssertEqual(try kind(epoch: 2), .midRatchet)
+        XCTAssertEqual(try kind(), .midRatchet)
     }
 
-    func testMidRatchet_IsNotAHandshake() {
-        XCTAssertEqual(kind(msgNum: 3, epoch: 2), .midRatchet)
-        XCTAssertEqual(kind(msgNum: 1), .midRatchet)
+    func testMidRatchet_IsNotAHandshake() throws {
+        XCTAssertEqual(try kind(msgNum: 3, epoch: 2), .midRatchet)
+        XCTAssertEqual(try kind(msgNum: 1), .midRatchet)
     }
 
-    /// A one-time pre-key id without a KEM ciphertext is not a PQXDH handshake.
-    func testAnOtpkAloneIsNotAHandshake() {
-        XCTAssertEqual(kind(otpk: 1_000_274), .midRatchet)
+    /// A payload the core cannot parse has no summary: it can open nothing, and the parser
+    /// refuses it before routing.
+    func testAnUnparseablePayloadHasNoSummary() {
+        XCTAssertThrowsError(try wireSummary(wirePayload: Data(repeating: 0xFF, count: 7)))
     }
 }

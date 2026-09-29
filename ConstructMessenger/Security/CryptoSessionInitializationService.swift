@@ -117,12 +117,7 @@ final class CryptoSessionInitializationService {
             Log.error("SESSION_STATE[init_refused_unsealed]: \(message.id.prefix(8))… — no sender certificate to open from", category: "SessionInit")
             throw CryptoManagerError.invalidKeyData
         }
-        let initKind = SessionReducer.receivingInitKind(
-            messageNumber: message.messageNumber,
-            oneTimePreKeyId: message.oneTimePreKeyId,
-            kemCiphertextBytes: message.kemCiphertext.count,
-            pqMessageEpoch: message.pqMessageEpoch
-        )
+        let initKind = message.initKind
         guard initKind == .handshake else {
             Log.error(
                 "SESSION_STATE[init_refused_not_handshake]: \(message.id.prefix(8))… kind=\(initKind) msgNum=\(message.messageNumber)",

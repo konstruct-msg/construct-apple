@@ -36,29 +36,21 @@ enum MessageStreamParser {
             // Identified path only — sealed deliveries carry a generic outer content_type and
             // are handled below (real type recovered post-unseal via ContentTypeRouting).
             if envelope.contentType == .sessionResetInit {
-                guard let decoded = try? WirePayloadCoder.decode(envelope.encryptedPayload) else {
+                let message = ChatMessage(
+                    id: envelope.messageID,
+                    from: envelope.sender.userID,
+                    to: envelope.recipient.userID,
+                    timestamp: UInt64(envelope.timestamp),
+                    serverOrderKey: serverOrderKey,
+                    contentType: 24,
+                    rawPayload: envelope.encryptedPayload
+                )
+                guard message.wire != nil else {
                     Log.info("Failed to decode SESSION_RESET_INIT payload for message \(envelope.messageID)", category: "MessageStream")
                     return nil
                 }
                 Log.info("SESSION_RESET_INIT from \(envelope.sender.userID.prefix(8))… id=\(envelope.messageID.prefix(8))…", category: "MessageStream")
-                return .message(ChatMessage(
-                    id: envelope.messageID,
-                    from: envelope.sender.userID,
-                    to: envelope.recipient.userID,
-                    ephemeralPublicKey: decoded.ephemeralPublicKey,
-                    messageNumber: decoded.messageNumber,
-                    content: decoded.content,
-                    suiteId: decoded.suiteId,
-                    timestamp: UInt64(envelope.timestamp),
-                    serverOrderKey: serverOrderKey,
-                    oneTimePreKeyId: decoded.oneTimePreKeyId,
-                    kemCiphertext: decoded.kemCiphertext ?? Data(),
-                    contentType: 24,
-                    kyberOtpkId: decoded.kyberOtpkId,
-                    pqMessageEpoch: decoded.pqMessageEpoch,
-                    pqRatchetField: decoded.pqRatchetField,
-                    rawPayload: envelope.encryptedPayload
-                ), cursor: cursor)
+                return .message(message, cursor: cursor)
             }
             // END_SESSION: identified path only — contentType is the sole classifier.
             // The old "payload < headerSize" heuristic was unsound under sealed sender
@@ -69,15 +61,9 @@ enum MessageStreamParser {
                     id: envelope.messageID,
                     from: envelope.sender.userID,
                     to: envelope.recipient.userID,
-                    ephemeralPublicKey: Data(),
-                    messageNumber: 0,
-                    content: Data(),
-                    suiteId: 1,
                     timestamp: UInt64(envelope.timestamp),
                     serverOrderKey: serverOrderKey,
-                    kemCiphertext: Data(),
                     contentType: 21,
-                    kyberOtpkId: 0,
                     // Preserve the raw payload so the END_SESSION handler can read a typed
                     // SessionControl reason hint (e.g. .otpkUnreproducible → 3-DH re-init).
                     // Legacy senders put a 16-byte sentinel here, which simply won't decode.
@@ -101,11 +87,9 @@ enum MessageStreamParser {
                 Log.info("SENDER_SYNC from device \(message.senderDeviceId.prefix(8))… id=\(envelope.messageID.prefix(8))…", category: "MessageStream")
                 return .message(message, cursor: cursor)
             }
-            // Unpack wire payload blob into crypto components.
             // For STEALTH (sealed sender), the wire payload may be in the outer encryptedPayload
-            // or inside the SealedInner. We decode the appropriate wire data so that
-            // ChatMessage gets correct msgNum/ephemeral etc, and rawPayload is set for the
-            // orchestrator. The sender is resolved later in MessageRouter.
+            // or inside the SealedInner; the message carries whichever it is. The sender is
+            // resolved later in MessageRouter.
             let isSealed = envelope.hasSealedSender
             let sealedInnerBytes = isSealed ? envelope.sealedSender.sealedInner : Data()
             let senderUserId = isSealed ? "" : envelope.sender.userID
@@ -121,54 +105,24 @@ enum MessageStreamParser {
                 }
             }
 
-            guard let decoded = try? WirePayloadCoder.decode(wirePayload) else {
-                if isSealed {
-                    // Fallback for sealed control whose inner is not a WirePayload
-                    // (e.g. END_SESSION 16-byte sentinel / SessionControl). Carry sealed
-                    // bytes for resolveSender AND the inner payload so reason hints survive.
-                    let preservedPayload = !wirePayload.isEmpty ? wirePayload : sealedInnerPayload
-                    return .message(ChatMessage(
-                        id: envelope.messageID,
-                        from: "",
-                        to: envelope.recipient.userID,
-                        ephemeralPublicKey: Data(),
-                        messageNumber: 0,
-                        content: Data(),
-                        suiteId: 1,
-                        timestamp: UInt64(envelope.timestamp),
-                        serverOrderKey: serverOrderKey,
-                        kemCiphertext: Data(),
-                        contentType: UInt8(clamping: envelope.contentType.rawValue),
-                        senderDeviceId: envelope.senderDevice.deviceID,
-                        conversationId: envelope.conversationID,
-                        rawPayload: preservedPayload,
-                        sealedInnerData: sealedInnerBytes
-                    ), cursor: cursor)
-                }
-                Log.info("Failed to decode encrypted_payload for message \(envelope.messageID)", category: "MessageStream")
-                return nil
-            }
             let msg = ChatMessage(
                 id: envelope.messageID,
                 from: senderUserId,
                 to: envelope.recipient.userID,
-                ephemeralPublicKey: decoded.ephemeralPublicKey,
-                messageNumber: decoded.messageNumber,
-                content: decoded.content,
-                suiteId: decoded.suiteId,
                 timestamp: UInt64(envelope.timestamp),
                 serverOrderKey: serverOrderKey,
-                oneTimePreKeyId: decoded.oneTimePreKeyId,
-                kemCiphertext: decoded.kemCiphertext ?? Data(),
                 contentType: UInt8(clamping: envelope.contentType.rawValue),
-                kyberOtpkId: decoded.kyberOtpkId,
-                pqMessageEpoch: decoded.pqMessageEpoch,
-                pqRatchetField: decoded.pqRatchetField,
                 senderDeviceId: envelope.senderDevice.deviceID,
                 conversationId: envelope.conversationID,
                 rawPayload: wirePayload,
                 sealedInnerData: sealedInnerBytes
             )
+            // A sealed control's inner need not be a wire payload (e.g. a SessionControl, whose
+            // reason must survive unseal); anything else must be one.
+            guard msg.wire != nil || isSealed else {
+                Log.info("Failed to decode encrypted_payload for message \(envelope.messageID)", category: "MessageStream")
+                return nil
+            }
             PerformanceMetrics.shared.messageEnvelopeArrived(messageId: envelope.messageID)
             return .message(msg, cursor: cursor)
         case .receipt(let receipt):

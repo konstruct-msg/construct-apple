@@ -23,19 +23,6 @@
 
 import Foundation
 
-/// The core's classification rule, reachable from inside `SessionReducer`.
-///
-/// Needed only because of name resolution: `SessionReducer.receivingInitKind` shadows the core's
-/// free function of the same base name, and Swift refuses the call rather than falling through to
-/// module scope. Qualifying by module is not the fix either — the module is `Construct_Messenger`
-/// on iOS and `Construct_Desktop` on macOS, and this file is compiled into both, so a hardcoded
-/// module name builds on one target and breaks the other.
-///
-/// At file scope there is no member to shadow, so the name resolves to the core.
-private func coreReceivingInitKind(_ carrier: ReceivingInitCarrier) -> ReceivingInitKind {
-    receivingInitKind(carrier: carrier)
-}
-
 enum SessionReducer {
 
     /// Lifecycle phase of the session with a single peer. Absence of an entry (`nil`)
@@ -95,16 +82,6 @@ enum SessionReducer {
         }
     }
 
-    /// What a message is, for the purpose of opening a receiving session: whether it carries the
-    /// initiator's handshake header. Since 2026-09-27 that is the KEM ciphertext, at any message
-    /// number — the first flight repeats it (`decisions/sessions-renew-by-sending.md`).
-    enum ReceivingInitKind: Equatable {
-        /// Carries the handshake header: this message can open a session.
-        case handshake
-        /// Carries none: it decrypts on a state we hold or not at all.
-        case midRatchet
-    }
-
     /// What to do with an envelope from a peer the server said does not exist.
     enum VanishedPeerAction: Equatable {
         /// Not marked, or the mark is old enough to be worth re-testing. Ordinary handling —
@@ -137,31 +114,6 @@ enum SessionReducer {
     static func vanishedPeerAction(markedAt: Date?, now: Date = Date()) -> VanishedPeerAction {
         guard let markedAt else { return .proceed }
         return now.timeIntervalSince(markedAt) < vanishedPeerRetryAfter ? .discard : .proceed
-    }
-
-    /// Classify an incoming envelope for the receiving open.
-    ///
-    /// **The rule itself lives in the core** (`orchestration::receiving_init_plan`). This is a
-    /// forwarder plus a type adapter, not a second implementation: two clients that classify a
-    /// carrier differently do not produce an error, they produce a message that never appears.
-    static func receivingInitKind(
-        messageNumber: UInt32,
-        oneTimePreKeyId: UInt32,
-        kemCiphertextBytes: Int,
-        pqMessageEpoch: UInt32
-    ) -> ReceivingInitKind {
-        let carrier = ReceivingInitCarrier(
-            messageNumber: messageNumber,
-            oneTimePrekeyId: oneTimePreKeyId,
-            // The core takes a byte count, not the bytes: classifying a carrier must never require
-            // holding its body.
-            kemCiphertextBytes: UInt32(max(0, kemCiphertextBytes)),
-            pqMessageEpoch: pqMessageEpoch
-        )
-        switch coreReceivingInitKind(carrier) {
-        case .handshake:  return .handshake
-        case .midRatchet: return .midRatchet
-        }
     }
 
     /// Decide whether to proactively prewarm a session with a peer.

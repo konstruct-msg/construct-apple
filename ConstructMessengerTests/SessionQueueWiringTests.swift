@@ -119,28 +119,20 @@ final class SessionQueueWiringTests: XCTestCase {
         handshake: Bool = true,
         pqEpoch: UInt32 = 0
     ) -> ChatMessage {
-        var message = ChatMessage(
+        let message = ChatMessage(
             id: id,
             from: peer,
             to: me,
-            ephemeralPublicKey: Data(repeating: 1, count: 32),
-            messageNumber: msgNum,
-            content: Data(repeating: 2, count: 48),
-            suiteId: 3,
-            timestamp: UInt64(Date().timeIntervalSince1970)
+            timestamp: UInt64(Date().timeIntervalSince1970),
+            senderDeviceId: device ?? "",
+            rawPayload: handBuiltWirePayload(
+                messageNumber: msgNum,
+                suiteId: 3,
+                kemCiphertext: handshake ? [UInt8](repeating: 7, count: 1088) : nil,
+                pqMessageEpoch: pqEpoch
+            )
         )
-        message.pqMessageEpoch = pqEpoch
-        message.senderDeviceId = device ?? ""
-        // The parser fills this from the wire payload; the router classifies by it.
-        let kem: [UInt8]? = handshake ? [UInt8](repeating: 7, count: 1088) : nil
-        message.kemCiphertext = Data(kem ?? [])
-        message.rawPayload = handBuiltWirePayload(
-            messageNumber: msgNum,
-            suiteId: 3,
-            kemCiphertext: kem,
-            pqMessageEpoch: pqEpoch
-        )
-        XCTAssertFalse(message.rawPayload.isEmpty, "the fixture must carry a wire payload the core can parse")
+        XCTAssertNotNil(message.wire, "the fixture must carry a wire payload the core can parse")
         return message
     }
 

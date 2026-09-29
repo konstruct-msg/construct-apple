@@ -62,8 +62,7 @@ final class LegacyMessageTypeDecodeTests: XCTestCase {
     func testEncodeNeverWritesMessageType() throws {
         let message = ChatMessage(
             id: "m-7", from: "peer", to: "me",
-            ephemeralPublicKey: Data(), messageNumber: 0, content: Data(),
-            suiteId: 1, timestamp: 1_000_000, contentType: 21
+            timestamp: 1_000_000, contentType: 21
         )
         let text = String(decoding: try JSONEncoder().encode(message), as: UTF8.self)
 

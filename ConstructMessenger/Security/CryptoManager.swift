@@ -1225,9 +1225,7 @@ class CryptoManager {
     ) throws -> MessageDecryptResult {
         let logContactId = contactIdOverride ?? message.from
         Log.debug("Decrypting message \(message.id.prefix(8))... contactId=\(logContactId.prefix(16))...", category: "CryptoManager")
-        Log.debug("messageNumber: \(message.messageNumber)", category: "CryptoManager")
-        Log.debug("ephemeralPublicKey: \(message.ephemeralPublicKey.count) bytes", category: "CryptoManager")
-        Log.debug("content length: \(message.content.count) bytes", category: "CryptoManager")
+        Log.debug("messageNumber: \(message.messageNumber) payload: \(message.rawPayload.count)B", category: "CryptoManager")
 
         // Last-resort duplicate guard: if this message was already processed in this launch,
         // the DR state has already advanced past it. Attempting to decrypt would fail and

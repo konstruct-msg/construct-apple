@@ -11,8 +11,10 @@ import GRPCCore
 // MARK: - Message
 struct ChatMessage: Codable, Identifiable {
     let id: String
-    let from: String
-    let to: String
+    // `var` for the unseal boundary only (`resolvingSealedSender`), which copies the message and
+    // replaces exactly these.
+    var from: String
+    var to: String
 
     // `messageType: WireMessageKind` was removed on 2026-08-02. It was a second representation
     // of the same fact as `contentType`, written at twelve construction sites and read at none:
@@ -23,43 +25,16 @@ struct ChatMessage: Codable, Identifiable {
     // persisted JSON may carry it and no `contentType`; that is a compatibility surface, not a
     // second field.
 
-    // Double Ratchet fields (per API_V3_SPEC.md section 5.2.6)
-    // Optional for CONTROL_MESSAGE type
-    let ephemeralPublicKey: Data  // Binary 32 bytes (dh_public_key from EncryptedRatchetMessage)
-    let messageNumber: UInt32  // message_number from EncryptedRatchetMessage
-    let content: Data    // Raw sealed box bytes (nonce || ciphertext || tag); empty for control messages
-    let suiteId: UInt16
-
     let timestamp: UInt64
 
     /// Transport metadata, never part of the encrypted message meaning. This is the server's
     /// total-order key and is filled by the stream parser before the router sees the message.
     var serverOrderKey: String? = nil
 
-    /// OTPK key_id used by sender in X3DH (0 = no OTPK / fallback 3-DH).
-    /// Only meaningful when messageNumber == 0 (X3DH handshake message).
-    var oneTimePreKeyId: UInt32 = 0
-
-    /// ML-KEM-1024 ciphertext of the PQXDH v2 handshake (1568 B). It rides on every message of
-    /// the initiator's first flight, not only msg0, until the peer answers. Empty otherwise.
-    var kemCiphertext: Data = Data()
-
     /// **The** content type. Sole routing authority — there is no second representation.
     /// Identified path: outer envelope. Sealed path: recovered from SealedInner after unseal.
     /// Early-exit predicates (`isEndSession` / `isSessionResetInit` / `isSenderSync`) read this.
     var contentType: UInt8 = 0
-
-    /// The responder's Kyber prekey the sender encapsulated to (signed prekey ids from 1,
-    /// one-time ids from 1 000 000). Meaningful only with a non-empty `kemCiphertext`.
-    var kyberOtpkId: UInt32 = 0
-
-    /// Suite-3 (PQ_RATCHET) per-message PQ epoch tag from the wire header (0 otherwise).
-    /// Must be threaded into `decryptMessage`/`initReceivingSession` so the responder
-    /// rebuilds the exact AEAD associated data — dropping it caused the suite-3 outage.
-    var pqMessageEpoch: UInt32 = 0
-
-    /// Suite-3 sparse PQ-ratchet field from the wire header, serialized (empty = none).
-    var pqRatchetField: Data = Data()
 
     /// Device ID of the sending device.
     ///
@@ -91,10 +66,20 @@ struct ChatMessage: Codable, Identifiable {
     /// Propagated from `envelope.reply_to_message_id`.
     var replyToMessageId: String = ""
 
-    /// Raw binary WirePayload from `Envelope.encrypted_payload`.
-    /// Passed directly to Rust for decryption, bypassing JSON conversion.
+    /// The wire payload as it arrived (`Envelope.encrypted_payload`, or the sealed inner's). The
+    /// one carrier of everything in it: the core decrypts from it and reads its header from it.
     /// For a DECRYPTION_ERROR, the box the core sealed to our identity key.
-    var rawPayload: Data = Data()
+    let rawPayload: Data
+
+    /// What the core read from `rawPayload` when this message was made — its number and whether
+    /// it can open a receiving session (`wire_summary`). `nil` when the payload is not a wire
+    /// payload: a control sentinel, a DECRYPTION_ERROR box, a local row.
+    ///
+    /// Until 2026-09-29 this struct carried nine fields parsed out of `rawPayload` beside it —
+    /// the ciphertext a second time, the KEM ciphertext, the ephemeral key, the PQ epoch — filled
+    /// by hand at every construction site. Twice a site dropped two of them, and that was an
+    /// outage both times. Derived here, once, from the one carrier, there is nothing to drop.
+    let wire: WireSummary?
 
     /// Sealed inner bytes for STEALTH (ConstructSEALED) messages.
     /// When non-empty, `from` is empty — the real sender is recovered by decrypting this.
@@ -127,6 +112,46 @@ struct ChatMessage: Codable, Identifiable {
         ContentTypeRouting.kind(for: contentType) == .direct
     }
 
+    /// The message number from the payload header; 0 when there is no wire payload.
+    var messageNumber: UInt32 { wire?.messageNumber ?? 0 }
+
+    /// Whether this message can open a receiving session — the core's rule, asked through
+    /// `wire_summary`. A message with no wire payload cannot.
+    var initKind: ReceivingInitKind { wire?.initKind ?? .midRatchet }
+
+    init(
+        id: String,
+        from: String,
+        to: String,
+        timestamp: UInt64,
+        serverOrderKey: String? = nil,
+        contentType: UInt8 = 0,
+        senderDeviceId: String = "",
+        senderCertificate: SenderCertificate? = nil,
+        conversationId: String = "",
+        replyToMessageId: String = "",
+        rawPayload: Data = Data(),
+        sealedInnerData: Data = Data()
+    ) {
+        self.id = id
+        self.from = from
+        self.to = to
+        self.timestamp = timestamp
+        self.serverOrderKey = serverOrderKey
+        self.contentType = contentType
+        self.senderDeviceId = senderDeviceId
+        self.senderCertificate = senderCertificate
+        self.conversationId = conversationId
+        self.replyToMessageId = replyToMessageId
+        self.rawPayload = rawPayload
+        self.sealedInnerData = sealedInnerData
+        self.wire = Self.summarize(rawPayload)
+    }
+
+    fileprivate static func summarize(_ payload: Data) -> WireSummary? {
+        payload.isEmpty ? nil : try? wireSummary(wirePayload: payload)
+    }
+
     /// Rebuild with the sender and content type recovered from `SealedInner`.
     ///
     /// This is the unseal boundary. Exactly four things change — the sender the outer envelope
@@ -149,30 +174,16 @@ struct ChatMessage: Codable, Identifiable {
     /// Named and moved here so the boundary is a testable object rather than an argument list —
     /// see `SealedRoutingBoundaryTests`.
     func resolvingSealedSender(_ resolved: ResolvedSender, currentUserId: String) -> ChatMessage {
-        ChatMessage(
-            id: id,
-            from: resolved.senderId,                  // replaced: outer `from` is empty by design
-            to: to.isEmpty ? currentUserId : to,
-            ephemeralPublicKey: ephemeralPublicKey,
-            messageNumber: messageNumber,
-            content: content,
-            suiteId: suiteId,
-            timestamp: timestamp,
-            oneTimePreKeyId: oneTimePreKeyId,
-            kemCiphertext: kemCiphertext,
-            contentType: resolved.contentType,        // replaced: outer type is forced generic
-            kyberOtpkId: kyberOtpkId,
-            pqMessageEpoch: pqMessageEpoch,
-            pqRatchetField: pqRatchetField,
-            // replaced: the relay blanks `sender_device`, the certificate carries it sealed
-            senderDeviceId: resolved.senderDeviceId,
-            // added: the core opens a first message's session from it
-            senderCertificate: resolved.senderCertificate,
-            conversationId: conversationId,
-            replyToMessageId: replyToMessageId,
-            rawPayload: rawPayload
-            // sealedInnerData deliberately omitted — the sender is resolved, the bytes are spent.
-        )
+        // A copy with the replaced fields assigned, not a rebuild: everything not named here —
+        // the payload and its summary among them — carries through because it is never listed.
+        var resolvedMessage = self
+        resolvedMessage.from = resolved.senderId                   // outer `from` is empty by design
+        resolvedMessage.to = to.isEmpty ? currentUserId : to
+        resolvedMessage.contentType = resolved.contentType         // outer type is forced generic
+        resolvedMessage.senderDeviceId = resolved.senderDeviceId   // the relay blanks `sender_device`
+        resolvedMessage.senderCertificate = resolved.senderCertificate  // a first message opens from it
+        resolvedMessage.sealedInnerData = Data()                   // the sender is resolved; spent
+        return resolvedMessage
     }
 }
 
@@ -185,11 +196,13 @@ struct ChatMessage: Codable, Identifiable {
 // representation would have grown back.
 extension ChatMessage {
     private enum CodingKeys: String, CodingKey {
-        case id, from, to, ephemeralPublicKey, messageNumber, content, suiteId
-        case timestamp, oneTimePreKeyId, kemCiphertext, contentType, kyberOtpkId
+        case id, from, to
+        case timestamp, contentType
         case serverOrderKey
-        case pqMessageEpoch, pqRatchetField
         case senderDeviceId, conversationId, replyToMessageId, rawPayload
+        // `wire` deliberately absent: it is derived from `rawPayload` on decode, so a stored row
+        // cannot carry a summary that disagrees with its payload. Rows written before 2026-09-29
+        // also hold the parsed fields; their keys are ignored.
         // `senderCertificate` deliberately absent: a decoded message is a stored one, and a stored
         // message never opens a session — what waits for an open waits in memory, beside the
         // core's queue, and a redelivery is unsealed again.
@@ -200,22 +213,14 @@ extension ChatMessage {
         id = try c.decode(String.self, forKey: .id)
         from = try c.decode(String.self, forKey: .from)
         to = try c.decode(String.self, forKey: .to)
-        ephemeralPublicKey = (try? c.decodeIfPresent(Data.self, forKey: .ephemeralPublicKey)) ?? Data()
-        messageNumber = (try? c.decodeIfPresent(UInt32.self, forKey: .messageNumber)) ?? 0
-        content = (try? c.decodeIfPresent(Data.self, forKey: .content)) ?? Data()
-        suiteId = (try? c.decodeIfPresent(UInt16.self, forKey: .suiteId)) ?? 0
         timestamp = (try? c.decodeIfPresent(UInt64.self, forKey: .timestamp)) ?? 0
         serverOrderKey = try? c.decodeIfPresent(String.self, forKey: .serverOrderKey)
-        oneTimePreKeyId = (try? c.decodeIfPresent(UInt32.self, forKey: .oneTimePreKeyId)) ?? 0
-        kemCiphertext = (try? c.decodeIfPresent(Data.self, forKey: .kemCiphertext)) ?? Data()
         contentType = (try? c.decodeIfPresent(UInt8.self, forKey: .contentType)) ?? 0
-        kyberOtpkId = (try? c.decodeIfPresent(UInt32.self, forKey: .kyberOtpkId)) ?? 0
-        pqMessageEpoch = (try? c.decodeIfPresent(UInt32.self, forKey: .pqMessageEpoch)) ?? 0
-        pqRatchetField = (try? c.decodeIfPresent(Data.self, forKey: .pqRatchetField)) ?? Data()
         senderDeviceId = (try? c.decodeIfPresent(String.self, forKey: .senderDeviceId)) ?? ""
         conversationId = (try? c.decodeIfPresent(String.self, forKey: .conversationId)) ?? ""
         replyToMessageId = (try? c.decodeIfPresent(String.self, forKey: .replyToMessageId)) ?? ""
         rawPayload = (try? c.decodeIfPresent(Data.self, forKey: .rawPayload)) ?? Data()
+        wire = Self.summarize(rawPayload)
     }
 }
 

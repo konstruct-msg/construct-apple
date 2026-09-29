@@ -452,12 +452,7 @@ final class MessageRouter {
         Log.debug("   messageId: \(message.id)", category: "MessageRouter")
         Log.debug("   from: \(message.from)", category: "MessageRouter")
         Log.debug("   to: \(message.to)", category: "MessageRouter")
-        Log.debug("   messageNumber: \(message.messageNumber)", category: "MessageRouter")
-        Log.debug("   oneTimePreKeyId: \(message.oneTimePreKeyId)", category: "MessageRouter")
-        Log.debug("   ephemeralPublicKey: \(message.ephemeralPublicKey.count) bytes", category: "MessageRouter")
-        Log.debug("   ephemeralPublicKey preview: \(message.ephemeralPublicKey.prefix(16).map { String(format: "%02x", $0) }.joined())...", category: "MessageRouter")
-        Log.debug("   content (padded): \(message.content.count) bytes", category: "MessageRouter")
-        Log.debug("   content preview: \(message.content.prefix(16).map { String(format: "%02x", $0) }.joined())…", category: "MessageRouter")
+        Log.debug("   messageNumber: \(message.messageNumber) kind: \(message.initKind) payload: \(message.rawPayload.count)B", category: "MessageRouter")
         Log.debug("   isEndSession: \(message.isEndSession)", category: "MessageRouter")
         #endif
         
@@ -476,12 +471,7 @@ final class MessageRouter {
             // Never re-process control carriers as "orphaned init" — END_SESSION / sender-sync
             // already failed or completed; replaying them loops session teardown. A handshake is
             // the header, at any message number (`decisions/sessions-renew-by-sending.md`).
-            let isOrphanedInit = SessionReducer.receivingInitKind(
-                    messageNumber: message.messageNumber,
-                    oneTimePreKeyId: message.oneTimePreKeyId,
-                    kemCiphertextBytes: message.kemCiphertext.count,
-                    pqMessageEpoch: message.pqMessageEpoch
-                ) == .handshake
+            let isOrphanedInit = message.initKind == .handshake
                 && !message.isEndSession
                 && !message.isSenderSync
                 && !CryptoManager.shared.hasSessionWithAnyDevice(ofPeer: otherUserId)
@@ -608,12 +598,7 @@ final class MessageRouter {
         //    single deletion, reported on device 2026-08-19. Same misreading as the RESPONDER init
         //    guard; same classifier fixes both.
         if DeletedContactsStore.shared.isDeleted(otherUserId) {
-            let kind = SessionReducer.receivingInitKind(
-                messageNumber: message.messageNumber,
-                oneTimePreKeyId: message.oneTimePreKeyId,
-                kemCiphertextBytes: message.kemCiphertext.count,
-                pqMessageEpoch: message.pqMessageEpoch
-            )
+            let kind = message.initKind
             if kind == .handshake {
                 // Guard: don't resurrect a deleted contact for a message we already queued
                 // but couldn't decrypt. This prevents an infinite delete→re-appear loop when
@@ -623,11 +608,11 @@ final class MessageRouter {
                     PerformanceMetrics.shared.record(.undeliveredNoReceipt, label: "stale_pending")
                     return
                 }
-                Log.info("Handshake from previously-deleted contact \(otherUserId.prefix(8))… (otpk=\(message.oneTimePreKeyId) kem=\(message.kemCiphertext.count)B) — clearing deleted flag", category: "MessageRouter")
+                Log.info("Handshake from previously-deleted contact \(otherUserId.prefix(8))… (msgNum=\(message.messageNumber)) — clearing deleted flag", category: "MessageRouter")
                 DeletedContactsStore.shared.remove(otherUserId)
                 // Fall through to normal processing below.
             } else {
-                Log.debug("\(kind) from deleted contact \(otherUserId.prefix(8))… (msgNum=\(message.messageNumber) epoch=\(message.pqMessageEpoch)) — not resurrecting, answering with a decryption error", category: "MessageRouter")
+                Log.debug("\(kind) from deleted contact \(otherUserId.prefix(8))… (msgNum=\(message.messageNumber)) — not resurrecting, answering with a decryption error", category: "MessageRouter")
                 // Answered, not just dropped. The deletion forgot the session, so the core cannot
                 // read this and sends its writer a decryption error; the writer opens a new state
                 // and resends, and that handshake is what the branch above resurrects the contact
@@ -1527,12 +1512,7 @@ final class MessageRouter {
         // with an END_SESSION. It goes to the core now like any other: the core tries the
         // previous states it still holds for the device, and when none reads it sends the writer
         // a decryption error naming the state it wrote on (`decisions/sessions-renew-by-sending.md`).
-        let initKind = SessionReducer.receivingInitKind(
-            messageNumber: message.messageNumber,
-            oneTimePreKeyId: message.oneTimePreKeyId,
-            kemCiphertextBytes: message.kemCiphertext.count,
-            pqMessageEpoch: message.pqMessageEpoch
-        )
+        let initKind = message.initKind
 
         // The server says this account does not exist. No session can ever be built for it, so
         // queueing its replayed backlog buys nothing and costs the stream cursor.
@@ -2210,12 +2190,7 @@ final class MessageRouter {
         candidates: [String],
         in context: NSManagedObjectContext
     ) {
-        let kind = SessionReducer.receivingInitKind(
-            messageNumber: message.messageNumber,
-            oneTimePreKeyId: message.oneTimePreKeyId,
-            kemCiphertextBytes: message.kemCiphertext.count,
-            pqMessageEpoch: message.pqMessageEpoch
-        )
+        let kind = message.initKind
         guard kind == .handshake else {
             Log.error(
                 "SENDER_SYNC: no own-device session opened \(message.id) and it carries no handshake header (messageNumber=\(message.messageNumber)) — dropping",
