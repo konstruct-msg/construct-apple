@@ -35,8 +35,8 @@ extension CryptoManager {
 
     func orchestratorEventSummary(_ event: CfeIncomingEvent) -> String {
         switch event {
-        case .messageReceived(let messageId, let from, let data, let msgNum, _, let otpkId, let contentType, let certificate):
-            return "messageReceived from=\(from.prefix(8))… msgId=\(messageId.prefix(8))… msgNum=\(msgNum) ct=\(contentType) data=\(data.count)B otpkId=\(otpkId) sealed=\(certificate != nil)"
+        case .messageReceived(let messageId, let from, let data, let contentType, let certificate):
+            return "messageReceived from=\(from.prefix(8))… msgId=\(messageId.prefix(8))… ct=\(contentType) data=\(data.count)B sealed=\(certificate != nil)"
         case .outgoingMessage(let contactId, let messageId, let plaintextUtf8, let contentType):
             return "outgoingMessage to=\(contactId.prefix(8))… msgId=\(messageId.prefix(8))… ct=\(contentType) plaintext=\(plaintextUtf8.count)ch"
         case .outgoingCallSignal(let contactId, let messageId, let protoBytes):
@@ -59,8 +59,8 @@ extension CryptoManager {
             return "timerFired id=\(timerId.prefix(24))…"
         case .ackDbResult(let messageId, let isProcessed):
             return "ackDbResult msgId=\(messageId.prefix(8))… processed=\(isProcessed)"
-        case .heartbeatReceived(let contactId, let messageId, let data, let msgNum):
-            return "heartbeatReceived from=\(contactId.prefix(8))… msgId=\(messageId.prefix(8))… msgNum=\(msgNum) data=\(data.count)B"
+        case .heartbeatReceived(let contactId, let messageId, let data):
+            return "heartbeatReceived from=\(contactId.prefix(8))… msgId=\(messageId.prefix(8))… data=\(data.count)B"
         }
     }
 

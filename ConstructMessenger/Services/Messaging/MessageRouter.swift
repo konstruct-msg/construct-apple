@@ -1088,9 +1088,13 @@ final class MessageRouter {
         asDevice: String? = nil
     ) -> CfeIncomingEvent? {
         assertNotControlCarrier(message, path: "buildIncomingEvent")
+        // A message without its wire payload cannot be decrypted: the core reads everything from
+        // it. There was a fallback here that rebuilt a payload as JSON — ciphertext and keys as
+        // arrays of integers — which the core could not parse, so it never opened a message;
+        // removed 2026-09-29 with the event's parsed-field copies.
         guard !message.rawPayload.isEmpty else {
-            Log.error("buildIncomingEvent: empty rawPayload for \(message.id.prefix(8))… — falling back to JSON path", category: "MessageRouter")
-            return buildIncomingEventLegacy(message: message, otherUserId: otherUserId, asDevice: asDevice)
+            Log.error("buildIncomingEvent: empty rawPayload for \(message.id.prefix(8))… — nothing to decrypt", category: "MessageRouter")
+            return nil
         }
 
         // Seam: the orchestrator keeps the session under the sender's device id. `otherUserId` is
@@ -1108,59 +1112,6 @@ final class MessageRouter {
             messageId: message.id,
             from: contactId,
             data: message.rawPayload,
-            msgNum: message.messageNumber,
-            kemCt: message.kemCiphertext,
-            otpkId: message.kyberOtpkId,
-            contentType: message.contentType,
-            senderCertificate: message.senderCertificate
-        )
-    }
-
-    /// Legacy JSON path — only used when rawPayload is unavailable (e.g. old healing records).
-    private func buildIncomingEventLegacy(
-        message: ChatMessage,
-        otherUserId: String,
-        asDevice: String? = nil
-    ) -> CfeIncomingEvent? {
-        assertNotControlCarrier(message, path: "buildIncomingEventLegacy")
-        let sealedBox = message.content
-        guard sealedBox.count >= 12 else {
-            Log.error("buildIncomingEventLegacy: sealed box too short (\(sealedBox.count)b) for \(message.id.prefix(8))…", category: "MessageRouter")
-            return nil
-        }
-
-        let nonce      = Array(sealedBox.prefix(12))
-        let ciphertext = Array(sealedBox.dropFirst(12))
-        let dhPublicKey = Array(message.ephemeralPublicKey)
-
-        let wireMessage: [String: Any] = [
-            "dh_public_key": dhPublicKey.map { Int($0) },
-            "message_number": Int(message.messageNumber),
-            "ciphertext": ciphertext.map { Int($0) },
-            "nonce": nonce.map { Int($0) },
-            "previous_chain_length": 0,
-            "suite_id": Int(message.suiteId)
-        ]
-
-        let wireJsonData: Data
-        do {
-            wireJsonData = try JSONSerialization.data(withJSONObject: wireMessage)
-        } catch {
-            Log.error("buildIncomingEventLegacy: failed to encode wire JSON for \(message.id.prefix(8))…: \(error)", category: "MessageRouter")
-            return nil
-        }
-
-        guard let contactId = asDevice ?? SessionAddressing.pinnedDevice(ofPeer: otherUserId) else {
-            Log.error("buildIncomingEventLegacy: cannot name a device for \(otherUserId.prefix(8))…", category: "MessageRouter")
-            return nil
-        }
-        return .messageReceived(
-            messageId: message.id,
-            from: contactId,
-            data: wireJsonData,
-            msgNum: message.messageNumber,
-            kemCt: message.kemCiphertext,
-            otpkId: message.kyberOtpkId,
             contentType: message.contentType,
             senderCertificate: message.senderCertificate
         )

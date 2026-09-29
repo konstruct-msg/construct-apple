@@ -1210,6 +1210,11 @@ int8_t uniffi_construct_core_fn_func_verify_recovery_signature(RustBuffer public
 RustBuffer uniffi_construct_core_fn_func_wire_payload_unpack(RustBuffer data, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_WIRE_SUMMARY
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_WIRE_SUMMARY
+RustBuffer uniffi_construct_core_fn_func_wire_summary(RustBuffer wire_payload, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_FFI_CONSTRUCT_CORE_RUSTBUFFER_ALLOC
 #define UNIFFI_FFIDEF_FFI_CONSTRUCT_CORE_RUSTBUFFER_ALLOC
 RustBuffer ffi_construct_core_rustbuffer_alloc(uint64_t size, RustCallStatus *_Nonnull out_status
@@ -1863,6 +1868,12 @@ uint16_t uniffi_construct_core_checksum_func_verify_recovery_signature(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_WIRE_PAYLOAD_UNPACK
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_WIRE_PAYLOAD_UNPACK
 uint16_t uniffi_construct_core_checksum_func_wire_payload_unpack(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_WIRE_SUMMARY
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_WIRE_SUMMARY
+uint16_t uniffi_construct_core_checksum_func_wire_summary(void
     
 );
 #endif

@@ -4458,6 +4458,61 @@ public func FfiConverterTypeWirePayload_lower(_ value: WirePayload) -> RustBuffe
     return FfiConverterTypeWirePayload.lower(value)
 }
 
+
+/**
+ * See `wire_summary`.
+ */
+public struct WireSummary: Equatable, Hashable {
+    public var messageNumber: UInt32
+    public var initKind: ReceivingInitKind
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(messageNumber: UInt32, initKind: ReceivingInitKind) {
+        self.messageNumber = messageNumber
+        self.initKind = initKind
+    }
+
+    
+}
+
+#if compiler(>=6)
+extension WireSummary: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeWireSummary: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> WireSummary {
+        return
+            try WireSummary(
+                messageNumber: FfiConverterUInt32.read(from: &buf), 
+                initKind: FfiConverterTypeReceivingInitKind.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: WireSummary, into buf: inout [UInt8]) {
+        FfiConverterUInt32.write(value.messageNumber, into: &buf)
+        FfiConverterTypeReceivingInitKind.write(value.initKind, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeWireSummary_lift(_ buf: RustBuffer) throws -> WireSummary {
+    return try FfiConverterTypeWireSummary.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeWireSummary_lower(_ value: WireSummary) -> RustBuffer {
+    return FfiConverterTypeWireSummary.lower(value)
+}
+
 // Note that we don't yet support `indirect` for enums.
 // See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
 
@@ -4895,7 +4950,7 @@ public func FfiConverterTypeCfeAction_lower(_ value: CfeAction) -> RustBuffer {
 
 public enum CfeIncomingEvent: Equatable, Hashable {
     
-    case messageReceived(messageId: String, from: String, data: Data, msgNum: UInt32, kemCt: Data, otpkId: UInt32, contentType: UInt8, senderCertificate: SenderCertificate?
+    case messageReceived(messageId: String, from: String, data: Data, contentType: UInt8, senderCertificate: SenderCertificate?
     )
     case outgoingMessage(contactId: String, messageId: String, plaintext: Data, contentType: UInt8
     )
@@ -4929,7 +4984,7 @@ public enum CfeIncomingEvent: Equatable, Hashable {
     /**
      * A heartbeat message was received from the peer.
      */
-    case heartbeatReceived(contactId: String, messageId: String, data: Data, msgNum: UInt32
+    case heartbeatReceived(contactId: String, messageId: String, data: Data
     )
     /**
      * A DECRYPTION_ERROR (content type 28) arrived from `contact_id` — the device its sender
@@ -4957,7 +5012,7 @@ public struct FfiConverterTypeCfeIncomingEvent: FfiConverterRustBuffer {
         let variant: Int32 = try readInt(&buf)
         switch variant {
         
-        case 1: return .messageReceived(messageId: try FfiConverterString.read(from: &buf), from: try FfiConverterString.read(from: &buf), data: try FfiConverterData.read(from: &buf), msgNum: try FfiConverterUInt32.read(from: &buf), kemCt: try FfiConverterData.read(from: &buf), otpkId: try FfiConverterUInt32.read(from: &buf), contentType: try FfiConverterUInt8.read(from: &buf), senderCertificate: try FfiConverterOptionTypeSenderCertificate.read(from: &buf)
+        case 1: return .messageReceived(messageId: try FfiConverterString.read(from: &buf), from: try FfiConverterString.read(from: &buf), data: try FfiConverterData.read(from: &buf), contentType: try FfiConverterUInt8.read(from: &buf), senderCertificate: try FfiConverterOptionTypeSenderCertificate.read(from: &buf)
         )
         
         case 2: return .outgoingMessage(contactId: try FfiConverterString.read(from: &buf), messageId: try FfiConverterString.read(from: &buf), plaintext: try FfiConverterData.read(from: &buf), contentType: try FfiConverterUInt8.read(from: &buf)
@@ -4988,7 +5043,7 @@ public struct FfiConverterTypeCfeIncomingEvent: FfiConverterRustBuffer {
         case 11: return .ackDbResult(messageId: try FfiConverterString.read(from: &buf), isProcessed: try FfiConverterBool.read(from: &buf)
         )
         
-        case 12: return .heartbeatReceived(contactId: try FfiConverterString.read(from: &buf), messageId: try FfiConverterString.read(from: &buf), data: try FfiConverterData.read(from: &buf), msgNum: try FfiConverterUInt32.read(from: &buf)
+        case 12: return .heartbeatReceived(contactId: try FfiConverterString.read(from: &buf), messageId: try FfiConverterString.read(from: &buf), data: try FfiConverterData.read(from: &buf)
         )
         
         case 13: return .decryptionErrorReceived(contactId: try FfiConverterString.read(from: &buf), payload: try FfiConverterData.read(from: &buf)
@@ -5002,14 +5057,11 @@ public struct FfiConverterTypeCfeIncomingEvent: FfiConverterRustBuffer {
         switch value {
         
         
-        case let .messageReceived(messageId,from,data,msgNum,kemCt,otpkId,contentType,senderCertificate):
+        case let .messageReceived(messageId,from,data,contentType,senderCertificate):
             writeInt(&buf, Int32(1))
             FfiConverterString.write(messageId, into: &buf)
             FfiConverterString.write(from, into: &buf)
             FfiConverterData.write(data, into: &buf)
-            FfiConverterUInt32.write(msgNum, into: &buf)
-            FfiConverterData.write(kemCt, into: &buf)
-            FfiConverterUInt32.write(otpkId, into: &buf)
             FfiConverterUInt8.write(contentType, into: &buf)
             FfiConverterOptionTypeSenderCertificate.write(senderCertificate, into: &buf)
             
@@ -5070,12 +5122,11 @@ public struct FfiConverterTypeCfeIncomingEvent: FfiConverterRustBuffer {
             FfiConverterBool.write(isProcessed, into: &buf)
             
         
-        case let .heartbeatReceived(contactId,messageId,data,msgNum):
+        case let .heartbeatReceived(contactId,messageId,data):
             writeInt(&buf, Int32(12))
             FfiConverterString.write(contactId, into: &buf)
             FfiConverterString.write(messageId, into: &buf)
             FfiConverterData.write(data, into: &buf)
-            FfiConverterUInt32.write(msgNum, into: &buf)
             
         
         case let .decryptionErrorReceived(contactId,payload):
@@ -7284,6 +7335,19 @@ public func wirePayloadUnpack(data: Data)throws  -> WirePayload  {
     )
 })
 }
+/**
+ * What a received payload is, for routing: its message number and whether it can open a
+ * receiving session. One parse, in the core, from the bytes as they arrived — a platform
+ * keeps the payload and this, not a copy of the parse (`ChatMessage` carried nine parsed
+ * fields beside the payload until 2026-09-29 and sent three of them back in with it).
+ */
+public func wireSummary(wirePayload: Data)throws  -> WireSummary  {
+    return try  FfiConverterTypeWireSummary_lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_func_wire_summary(
+        FfiConverterData.lower(wirePayload),$0
+    )
+})
+}
 
 private enum InitializationResult {
     case ok
@@ -7496,6 +7560,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_func_wire_payload_unpack() != 23560) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_func_wire_summary() != 13986) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_classiccryptocore_export_one_time_prekeys() != 37697) {

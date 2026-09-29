@@ -87,15 +87,10 @@ private final class OrchestratorPeer {
     func receiveWirePayload(_ wirePayload: Data,
                             from contactId: String,
                             contentType: UInt8) throws -> [CfeAction] {
-        let decoded = try WirePayloadCoder.decode(wirePayload)
-
         var actions = try core.handleEvent(event: .messageReceived(
             messageId: UUID().uuidString,
             from: contactId,
             data: wirePayload,
-            msgNum: decoded.messageNumber,
-            kemCt: decoded.kemCiphertext ?? Data(),
-            otpkId: decoded.oneTimePreKeyId,
             contentType: contentType,
             senderCertificate: nil
         ))
