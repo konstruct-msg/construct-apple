@@ -1318,6 +1318,8 @@ public func FfiConverterTypeHistorySender_lower(_ value: HistorySender) -> UInt6
 
 public protocol LocalStoreProtocol: AnyObject, Sendable {
     
+    func allPeerDevices() throws  -> [LocalPeerDevice]
+    
     func calls(limit: UInt32) throws  -> [LocalCall]
     
     func chat(id: String) throws  -> LocalChat?
@@ -1362,6 +1364,11 @@ public protocol LocalStoreProtocol: AnyObject, Sendable {
      */
     func messagesBefore(chatId: String, beforeOrderKey: String?, beforeId: String?, limit: UInt32) throws  -> [LocalMessage]
     
+    func peerDevice(deviceId: String) throws  -> LocalPeerDevice?
+    
+    /**
+     * Oldest first; devices first seen in the same millisecond by id.
+     */
     func peerDevices(accountId: String) throws  -> [LocalPeerDevice]
     
     func put(key: String, value: Data) throws 
@@ -1475,6 +1482,14 @@ public static func inMemory(key: Data)throws  -> LocalStore  {
 }
     
 
+    
+open func allPeerDevices()throws  -> [LocalPeerDevice]  {
+    return try  FfiConverterSequenceTypeLocalPeerDevice.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_all_peer_devices(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
     
 open func calls(limit: UInt32)throws  -> [LocalCall]  {
     return try  FfiConverterSequenceTypeLocalCall.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
@@ -1620,6 +1635,18 @@ open func messagesBefore(chatId: String, beforeOrderKey: String?, beforeId: Stri
 })
 }
     
+open func peerDevice(deviceId: String)throws  -> LocalPeerDevice?  {
+    return try  FfiConverterOptionTypeLocalPeerDevice.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_peer_device(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(deviceId),$0
+    )
+})
+}
+    
+    /**
+     * Oldest first; devices first seen in the same millisecond by id.
+     */
 open func peerDevices(accountId: String)throws  -> [LocalPeerDevice]  {
     return try  FfiConverterSequenceTypeLocalPeerDevice.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
     uniffi_construct_core_fn_method_localstore_peer_devices(
@@ -9164,6 +9191,30 @@ fileprivate struct FfiConverterOptionTypeLocalMessage: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterOptionTypeLocalPeerDevice: FfiConverterRustBuffer {
+    typealias SwiftType = LocalPeerDevice?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeLocalPeerDevice.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeLocalPeerDevice.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterOptionTypeSenderCertificate: FfiConverterRustBuffer {
     typealias SwiftType = SenderCertificate?
 
@@ -10531,6 +10582,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_method_historysender_snapshot_id() != 18376) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_construct_core_checksum_method_localstore_all_peer_devices() != 59848) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_construct_core_checksum_method_localstore_calls() != 50631) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -10571,6 +10625,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_localstore_messages_before() != 61408) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_peer_device() != 48056) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_localstore_peer_devices() != 14816) {

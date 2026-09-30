@@ -518,6 +518,11 @@ uint64_t uniffi_construct_core_fn_constructor_localstore_in_memory(RustBuffer ke
 uint64_t uniffi_construct_core_fn_constructor_localstore_new(RustBuffer path, RustBuffer key, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_LOCALSTORE_ALL_PEER_DEVICES
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_LOCALSTORE_ALL_PEER_DEVICES
+RustBuffer uniffi_construct_core_fn_method_localstore_all_peer_devices(uint64_t ptr, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_LOCALSTORE_CALLS
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_LOCALSTORE_CALLS
 RustBuffer uniffi_construct_core_fn_method_localstore_calls(uint64_t ptr, uint32_t limit, RustCallStatus *_Nonnull out_status
@@ -586,6 +591,11 @@ RustBuffer uniffi_construct_core_fn_method_localstore_message(uint64_t ptr, Rust
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_LOCALSTORE_MESSAGES_BEFORE
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_LOCALSTORE_MESSAGES_BEFORE
 RustBuffer uniffi_construct_core_fn_method_localstore_messages_before(uint64_t ptr, RustBuffer chat_id, RustBuffer before_order_key, RustBuffer before_id, uint32_t limit, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_LOCALSTORE_PEER_DEVICE
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_LOCALSTORE_PEER_DEVICE
+RustBuffer uniffi_construct_core_fn_method_localstore_peer_device(uint64_t ptr, RustBuffer device_id, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_LOCALSTORE_PEER_DEVICES
@@ -2273,6 +2283,12 @@ uint16_t uniffi_construct_core_checksum_method_historysender_snapshot_id(void
     
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_LOCALSTORE_ALL_PEER_DEVICES
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_LOCALSTORE_ALL_PEER_DEVICES
+uint16_t uniffi_construct_core_checksum_method_localstore_all_peer_devices(void
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_LOCALSTORE_CALLS
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_LOCALSTORE_CALLS
 uint16_t uniffi_construct_core_checksum_method_localstore_calls(void
@@ -2354,6 +2370,12 @@ uint16_t uniffi_construct_core_checksum_method_localstore_message(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_LOCALSTORE_MESSAGES_BEFORE
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_LOCALSTORE_MESSAGES_BEFORE
 uint16_t uniffi_construct_core_checksum_method_localstore_messages_before(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_LOCALSTORE_PEER_DEVICE
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_LOCALSTORE_PEER_DEVICE
+uint16_t uniffi_construct_core_checksum_method_localstore_peer_device(void
     
 );
 #endif
