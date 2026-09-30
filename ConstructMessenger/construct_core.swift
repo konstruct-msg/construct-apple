@@ -457,6 +457,22 @@ fileprivate struct FfiConverterUInt16: FfiConverterPrimitive {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterInt16: FfiConverterPrimitive {
+    typealias FfiType = Int16
+    typealias SwiftType = Int16
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> Int16 {
+        return try lift(readInt(&buf))
+    }
+
+    public static func write(_ value: Int16, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterUInt32: FfiConverterPrimitive {
     typealias FfiType = UInt32
     typealias SwiftType = UInt32
@@ -466,6 +482,22 @@ fileprivate struct FfiConverterUInt32: FfiConverterPrimitive {
     }
 
     public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterInt32: FfiConverterPrimitive {
+    typealias FfiType = Int32
+    typealias SwiftType = Int32
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> Int32 {
+        return try lift(readInt(&buf))
+    }
+
+    public static func write(_ value: Int32, into buf: inout [UInt8]) {
         writeInt(&buf, lower(value))
     }
 }
@@ -1277,6 +1309,494 @@ public func FfiConverterTypeHistorySender_lift(_ handle: UInt64) throws -> Histo
 #endif
 public func FfiConverterTypeHistorySender_lower(_ value: HistorySender) -> UInt64 {
     return FfiConverterTypeHistorySender.lower(value)
+}
+
+
+
+
+
+
+public protocol LocalStoreProtocol: AnyObject, Sendable {
+    
+    func calls(limit: UInt32) throws  -> [LocalCall]
+    
+    func chat(id: String) throws  -> LocalChat?
+    
+    /**
+     * Pinned first, then most recent, chats with no message last.
+     */
+    func chats() throws  -> [LocalChat]
+    
+    func contact(id: String) throws  -> LocalContact?
+    
+    /**
+     * People marked as contacts, by the name shown for them.
+     */
+    func contacts() throws  -> [LocalContact]
+    
+    func deleteChat(id: String) throws 
+    
+    /**
+     * Takes the contact's chats and their messages with it.
+     */
+    func deleteContact(id: String) throws 
+    
+    func deleteMessage(id: String) throws 
+    
+    func deleteReaction(targetMessageId: String, reactorUserId: String) throws 
+    
+    func editMessage(id: String, body: Data, searchText: String?, editedAt: Int64) throws  -> Bool
+    
+    func get(key: String) throws  -> Data?
+    
+    /**
+     * `search_text` is what the message says, for the full-text index; null for media/control.
+     */
+    func insertMessage(message: LocalMessage, searchText: String?) throws  -> LocalInsert
+    
+    func message(id: String) throws  -> LocalMessage?
+    
+    /**
+     * Up to `limit` messages just before (`before_order_key`, `before_id`) — both null for the
+     * newest page — oldest first.
+     */
+    func messagesBefore(chatId: String, beforeOrderKey: String?, beforeId: String?, limit: UInt32) throws  -> [LocalMessage]
+    
+    func peerDevices(accountId: String) throws  -> [LocalPeerDevice]
+    
+    func put(key: String, value: Data) throws 
+    
+    func reactions(targetMessageId: String) throws  -> [LocalReaction]
+    
+    /**
+     * An id already known keeps its first account.
+     */
+    func recordPeerDevice(device: LocalPeerDevice) throws  -> LocalInsert
+    
+    func remove(key: String) throws 
+    
+    /**
+     * Forget devices the server no longer lists; an empty list forgets nothing. Returns the removed.
+     */
+    func retainPeerDevices(accountId: String, active: [String]) throws  -> [String]
+    
+    /**
+     * Messages whose text contains `query` (one phrase, three characters at least), newest first.
+     */
+    func search(query: String, limit: UInt32) throws  -> [LocalSearchHit]
+    
+    func setDeliveryStatus(id: String, status: Int16) throws  -> Bool
+    
+    func setObserver(observer: LocalStoreObserver?) 
+    
+    func upsertCall(call: LocalCall) throws 
+    
+    func upsertChat(chat: LocalChat) throws 
+    
+    func upsertContact(contact: LocalContact) throws 
+    
+    func upsertReaction(reaction: LocalReaction) throws 
+    
+    /**
+     * Close and delete every file of the store. Every later call is `Closed`. The platform
+     * deletes the key.
+     */
+    func wipe() throws 
+    
+}
+open class LocalStore: LocalStoreProtocol, @unchecked Sendable {
+    fileprivate let handle: UInt64
+
+    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoHandle {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromHandle handle: UInt64) {
+        self.handle = handle
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noHandle: NoHandle) {
+        self.handle = 0
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiCloneHandle() -> UInt64 {
+        return try! rustCall { uniffi_construct_core_fn_clone_localstore(self.handle, $0) }
+    }
+    /**
+     * Open — creating if absent — the store at `path` under `key`. A key that does not open it
+     * is `WrongKey`, never a fresh empty store.
+     */
+public convenience init(path: String, key: Data)throws  {
+    let handle =
+        try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_constructor_localstore_new(
+        FfiConverterString.lower(path),
+        FfiConverterData.lower(key),$0
+    )
+}
+    self.init(unsafeFromHandle: handle)
+}
+
+    deinit {
+        try! rustCall { uniffi_construct_core_fn_free_localstore(handle, $0) }
+    }
+
+    
+    /**
+     * A store in memory only, under the same encryption path. Tests and previews.
+     */
+public static func inMemory(key: Data)throws  -> LocalStore  {
+    return try  FfiConverterTypeLocalStore_lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_constructor_localstore_in_memory(
+        FfiConverterData.lower(key),$0
+    )
+})
+}
+    
+
+    
+open func calls(limit: UInt32)throws  -> [LocalCall]  {
+    return try  FfiConverterSequenceTypeLocalCall.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_calls(
+            self.uniffiCloneHandle(),
+        FfiConverterUInt32.lower(limit),$0
+    )
+})
+}
+    
+open func chat(id: String)throws  -> LocalChat?  {
+    return try  FfiConverterOptionTypeLocalChat.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_chat(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(id),$0
+    )
+})
+}
+    
+    /**
+     * Pinned first, then most recent, chats with no message last.
+     */
+open func chats()throws  -> [LocalChat]  {
+    return try  FfiConverterSequenceTypeLocalChat.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_chats(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+open func contact(id: String)throws  -> LocalContact?  {
+    return try  FfiConverterOptionTypeLocalContact.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_contact(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(id),$0
+    )
+})
+}
+    
+    /**
+     * People marked as contacts, by the name shown for them.
+     */
+open func contacts()throws  -> [LocalContact]  {
+    return try  FfiConverterSequenceTypeLocalContact.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_contacts(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+open func deleteChat(id: String)throws   {try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_delete_chat(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(id),$0
+    )
+}
+}
+    
+    /**
+     * Takes the contact's chats and their messages with it.
+     */
+open func deleteContact(id: String)throws   {try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_delete_contact(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(id),$0
+    )
+}
+}
+    
+open func deleteMessage(id: String)throws   {try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_delete_message(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(id),$0
+    )
+}
+}
+    
+open func deleteReaction(targetMessageId: String, reactorUserId: String)throws   {try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_delete_reaction(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(targetMessageId),
+        FfiConverterString.lower(reactorUserId),$0
+    )
+}
+}
+    
+open func editMessage(id: String, body: Data, searchText: String?, editedAt: Int64)throws  -> Bool  {
+    return try  FfiConverterBool.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_edit_message(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(id),
+        FfiConverterData.lower(body),
+        FfiConverterOptionString.lower(searchText),
+        FfiConverterInt64.lower(editedAt),$0
+    )
+})
+}
+    
+open func get(key: String)throws  -> Data?  {
+    return try  FfiConverterOptionData.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_get(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(key),$0
+    )
+})
+}
+    
+    /**
+     * `search_text` is what the message says, for the full-text index; null for media/control.
+     */
+open func insertMessage(message: LocalMessage, searchText: String?)throws  -> LocalInsert  {
+    return try  FfiConverterTypeLocalInsert_lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_insert_message(
+            self.uniffiCloneHandle(),
+        FfiConverterTypeLocalMessage_lower(message),
+        FfiConverterOptionString.lower(searchText),$0
+    )
+})
+}
+    
+open func message(id: String)throws  -> LocalMessage?  {
+    return try  FfiConverterOptionTypeLocalMessage.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_message(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(id),$0
+    )
+})
+}
+    
+    /**
+     * Up to `limit` messages just before (`before_order_key`, `before_id`) — both null for the
+     * newest page — oldest first.
+     */
+open func messagesBefore(chatId: String, beforeOrderKey: String?, beforeId: String?, limit: UInt32)throws  -> [LocalMessage]  {
+    return try  FfiConverterSequenceTypeLocalMessage.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_messages_before(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(chatId),
+        FfiConverterOptionString.lower(beforeOrderKey),
+        FfiConverterOptionString.lower(beforeId),
+        FfiConverterUInt32.lower(limit),$0
+    )
+})
+}
+    
+open func peerDevices(accountId: String)throws  -> [LocalPeerDevice]  {
+    return try  FfiConverterSequenceTypeLocalPeerDevice.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_peer_devices(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(accountId),$0
+    )
+})
+}
+    
+open func put(key: String, value: Data)throws   {try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_put(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(key),
+        FfiConverterData.lower(value),$0
+    )
+}
+}
+    
+open func reactions(targetMessageId: String)throws  -> [LocalReaction]  {
+    return try  FfiConverterSequenceTypeLocalReaction.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_reactions(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(targetMessageId),$0
+    )
+})
+}
+    
+    /**
+     * An id already known keeps its first account.
+     */
+open func recordPeerDevice(device: LocalPeerDevice)throws  -> LocalInsert  {
+    return try  FfiConverterTypeLocalInsert_lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_record_peer_device(
+            self.uniffiCloneHandle(),
+        FfiConverterTypeLocalPeerDevice_lower(device),$0
+    )
+})
+}
+    
+open func remove(key: String)throws   {try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_remove(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(key),$0
+    )
+}
+}
+    
+    /**
+     * Forget devices the server no longer lists; an empty list forgets nothing. Returns the removed.
+     */
+open func retainPeerDevices(accountId: String, active: [String])throws  -> [String]  {
+    return try  FfiConverterSequenceString.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_retain_peer_devices(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(accountId),
+        FfiConverterSequenceString.lower(active),$0
+    )
+})
+}
+    
+    /**
+     * Messages whose text contains `query` (one phrase, three characters at least), newest first.
+     */
+open func search(query: String, limit: UInt32)throws  -> [LocalSearchHit]  {
+    return try  FfiConverterSequenceTypeLocalSearchHit.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_search(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(query),
+        FfiConverterUInt32.lower(limit),$0
+    )
+})
+}
+    
+open func setDeliveryStatus(id: String, status: Int16)throws  -> Bool  {
+    return try  FfiConverterBool.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_set_delivery_status(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(id),
+        FfiConverterInt16.lower(status),$0
+    )
+})
+}
+    
+open func setObserver(observer: LocalStoreObserver?)  {try! rustCall() {
+    uniffi_construct_core_fn_method_localstore_set_observer(
+            self.uniffiCloneHandle(),
+        FfiConverterOptionCallbackInterfaceLocalStoreObserver.lower(observer),$0
+    )
+}
+}
+    
+open func upsertCall(call: LocalCall)throws   {try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_upsert_call(
+            self.uniffiCloneHandle(),
+        FfiConverterTypeLocalCall_lower(call),$0
+    )
+}
+}
+    
+open func upsertChat(chat: LocalChat)throws   {try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_upsert_chat(
+            self.uniffiCloneHandle(),
+        FfiConverterTypeLocalChat_lower(chat),$0
+    )
+}
+}
+    
+open func upsertContact(contact: LocalContact)throws   {try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_upsert_contact(
+            self.uniffiCloneHandle(),
+        FfiConverterTypeLocalContact_lower(contact),$0
+    )
+}
+}
+    
+open func upsertReaction(reaction: LocalReaction)throws   {try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_upsert_reaction(
+            self.uniffiCloneHandle(),
+        FfiConverterTypeLocalReaction_lower(reaction),$0
+    )
+}
+}
+    
+    /**
+     * Close and delete every file of the store. Every later call is `Closed`. The platform
+     * deletes the key.
+     */
+open func wipe()throws   {try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_wipe(
+            self.uniffiCloneHandle(),$0
+    )
+}
+}
+    
+
+    
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeLocalStore: FfiConverter {
+    typealias FfiType = UInt64
+    typealias SwiftType = LocalStore
+
+    public static func lift(_ handle: UInt64) throws -> LocalStore {
+        return LocalStore(unsafeFromHandle: handle)
+    }
+
+    public static func lower(_ value: LocalStore) -> UInt64 {
+        return value.uniffiCloneHandle()
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> LocalStore {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+    public static func write(_ value: LocalStore, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLocalStore_lift(_ handle: UInt64) throws -> LocalStore {
+    return try FfiConverterTypeLocalStore.lift(handle)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLocalStore_lower(_ value: LocalStore) -> UInt64 {
+    return FfiConverterTypeLocalStore.lower(value)
 }
 
 
@@ -3928,6 +4448,622 @@ public func FfiConverterTypeKyberPrekeyUpload_lift(_ buf: RustBuffer) throws -> 
 #endif
 public func FfiConverterTypeKyberPrekeyUpload_lower(_ value: KyberPrekeyUpload) -> RustBuffer {
     return FfiConverterTypeKyberPrekeyUpload.lower(value)
+}
+
+
+public struct LocalCall: Equatable, Hashable {
+    public var id: String
+    public var peerUserId: String
+    public var peerName: String
+    public var direction: Int16
+    public var status: Int16
+    public var startedAt: Int64?
+    public var endedAt: Int64?
+    public var durationSeconds: Int32
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(id: String, peerUserId: String, peerName: String, direction: Int16, status: Int16, startedAt: Int64?, endedAt: Int64?, durationSeconds: Int32) {
+        self.id = id
+        self.peerUserId = peerUserId
+        self.peerName = peerName
+        self.direction = direction
+        self.status = status
+        self.startedAt = startedAt
+        self.endedAt = endedAt
+        self.durationSeconds = durationSeconds
+    }
+
+    
+}
+
+#if compiler(>=6)
+extension LocalCall: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeLocalCall: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> LocalCall {
+        return
+            try LocalCall(
+                id: FfiConverterString.read(from: &buf), 
+                peerUserId: FfiConverterString.read(from: &buf), 
+                peerName: FfiConverterString.read(from: &buf), 
+                direction: FfiConverterInt16.read(from: &buf), 
+                status: FfiConverterInt16.read(from: &buf), 
+                startedAt: FfiConverterOptionInt64.read(from: &buf), 
+                endedAt: FfiConverterOptionInt64.read(from: &buf), 
+                durationSeconds: FfiConverterInt32.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: LocalCall, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.id, into: &buf)
+        FfiConverterString.write(value.peerUserId, into: &buf)
+        FfiConverterString.write(value.peerName, into: &buf)
+        FfiConverterInt16.write(value.direction, into: &buf)
+        FfiConverterInt16.write(value.status, into: &buf)
+        FfiConverterOptionInt64.write(value.startedAt, into: &buf)
+        FfiConverterOptionInt64.write(value.endedAt, into: &buf)
+        FfiConverterInt32.write(value.durationSeconds, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLocalCall_lift(_ buf: RustBuffer) throws -> LocalCall {
+    return try FfiConverterTypeLocalCall.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLocalCall_lower(_ value: LocalCall) -> RustBuffer {
+    return FfiConverterTypeLocalCall.lower(value)
+}
+
+
+public struct LocalChat: Equatable, Hashable {
+    public var id: String
+    public var peerId: String
+    public var lastMessageText: String?
+    public var lastMessageTime: Int64?
+    public var sessionId: String?
+    public var isPinned: Bool
+    public var isMuted: Bool
+    public var unreadCount: Int32
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(id: String, peerId: String, lastMessageText: String?, lastMessageTime: Int64?, sessionId: String?, isPinned: Bool, isMuted: Bool, unreadCount: Int32) {
+        self.id = id
+        self.peerId = peerId
+        self.lastMessageText = lastMessageText
+        self.lastMessageTime = lastMessageTime
+        self.sessionId = sessionId
+        self.isPinned = isPinned
+        self.isMuted = isMuted
+        self.unreadCount = unreadCount
+    }
+
+    
+}
+
+#if compiler(>=6)
+extension LocalChat: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeLocalChat: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> LocalChat {
+        return
+            try LocalChat(
+                id: FfiConverterString.read(from: &buf), 
+                peerId: FfiConverterString.read(from: &buf), 
+                lastMessageText: FfiConverterOptionString.read(from: &buf), 
+                lastMessageTime: FfiConverterOptionInt64.read(from: &buf), 
+                sessionId: FfiConverterOptionString.read(from: &buf), 
+                isPinned: FfiConverterBool.read(from: &buf), 
+                isMuted: FfiConverterBool.read(from: &buf), 
+                unreadCount: FfiConverterInt32.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: LocalChat, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.id, into: &buf)
+        FfiConverterString.write(value.peerId, into: &buf)
+        FfiConverterOptionString.write(value.lastMessageText, into: &buf)
+        FfiConverterOptionInt64.write(value.lastMessageTime, into: &buf)
+        FfiConverterOptionString.write(value.sessionId, into: &buf)
+        FfiConverterBool.write(value.isPinned, into: &buf)
+        FfiConverterBool.write(value.isMuted, into: &buf)
+        FfiConverterInt32.write(value.unreadCount, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLocalChat_lift(_ buf: RustBuffer) throws -> LocalChat {
+    return try FfiConverterTypeLocalChat.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLocalChat_lower(_ value: LocalChat) -> RustBuffer {
+    return FfiConverterTypeLocalChat.lower(value)
+}
+
+
+public struct LocalContact: Equatable, Hashable {
+    public var id: String
+    public var username: String
+    public var displayName: String
+    public var localAlias: String?
+    public var avatar: Data?
+    public var publicKey: String?
+    public var knownIdentityKey: Data?
+    public var accountAddress: Data?
+    public var isContact: Bool
+    public var isBlocked: Bool
+    public var isSharingWithMe: Bool
+    public var amISharingWith: Bool
+    public var sharedWithMeAt: Int64?
+    public var addedAt: Int64?
+    public var ktStatus: Int16
+    public var hybridCapable: Bool
+    public var securityNotice: Int16
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(id: String, username: String, displayName: String, localAlias: String?, avatar: Data?, publicKey: String?, knownIdentityKey: Data?, accountAddress: Data?, isContact: Bool, isBlocked: Bool, isSharingWithMe: Bool, amISharingWith: Bool, sharedWithMeAt: Int64?, addedAt: Int64?, ktStatus: Int16, hybridCapable: Bool, securityNotice: Int16) {
+        self.id = id
+        self.username = username
+        self.displayName = displayName
+        self.localAlias = localAlias
+        self.avatar = avatar
+        self.publicKey = publicKey
+        self.knownIdentityKey = knownIdentityKey
+        self.accountAddress = accountAddress
+        self.isContact = isContact
+        self.isBlocked = isBlocked
+        self.isSharingWithMe = isSharingWithMe
+        self.amISharingWith = amISharingWith
+        self.sharedWithMeAt = sharedWithMeAt
+        self.addedAt = addedAt
+        self.ktStatus = ktStatus
+        self.hybridCapable = hybridCapable
+        self.securityNotice = securityNotice
+    }
+
+    
+}
+
+#if compiler(>=6)
+extension LocalContact: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeLocalContact: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> LocalContact {
+        return
+            try LocalContact(
+                id: FfiConverterString.read(from: &buf), 
+                username: FfiConverterString.read(from: &buf), 
+                displayName: FfiConverterString.read(from: &buf), 
+                localAlias: FfiConverterOptionString.read(from: &buf), 
+                avatar: FfiConverterOptionData.read(from: &buf), 
+                publicKey: FfiConverterOptionString.read(from: &buf), 
+                knownIdentityKey: FfiConverterOptionData.read(from: &buf), 
+                accountAddress: FfiConverterOptionData.read(from: &buf), 
+                isContact: FfiConverterBool.read(from: &buf), 
+                isBlocked: FfiConverterBool.read(from: &buf), 
+                isSharingWithMe: FfiConverterBool.read(from: &buf), 
+                amISharingWith: FfiConverterBool.read(from: &buf), 
+                sharedWithMeAt: FfiConverterOptionInt64.read(from: &buf), 
+                addedAt: FfiConverterOptionInt64.read(from: &buf), 
+                ktStatus: FfiConverterInt16.read(from: &buf), 
+                hybridCapable: FfiConverterBool.read(from: &buf), 
+                securityNotice: FfiConverterInt16.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: LocalContact, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.id, into: &buf)
+        FfiConverterString.write(value.username, into: &buf)
+        FfiConverterString.write(value.displayName, into: &buf)
+        FfiConverterOptionString.write(value.localAlias, into: &buf)
+        FfiConverterOptionData.write(value.avatar, into: &buf)
+        FfiConverterOptionString.write(value.publicKey, into: &buf)
+        FfiConverterOptionData.write(value.knownIdentityKey, into: &buf)
+        FfiConverterOptionData.write(value.accountAddress, into: &buf)
+        FfiConverterBool.write(value.isContact, into: &buf)
+        FfiConverterBool.write(value.isBlocked, into: &buf)
+        FfiConverterBool.write(value.isSharingWithMe, into: &buf)
+        FfiConverterBool.write(value.amISharingWith, into: &buf)
+        FfiConverterOptionInt64.write(value.sharedWithMeAt, into: &buf)
+        FfiConverterOptionInt64.write(value.addedAt, into: &buf)
+        FfiConverterInt16.write(value.ktStatus, into: &buf)
+        FfiConverterBool.write(value.hybridCapable, into: &buf)
+        FfiConverterInt16.write(value.securityNotice, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLocalContact_lift(_ buf: RustBuffer) throws -> LocalContact {
+    return try FfiConverterTypeLocalContact.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLocalContact_lower(_ value: LocalContact) -> RustBuffer {
+    return FfiConverterTypeLocalContact.lower(value)
+}
+
+
+public struct LocalMessage: Equatable, Hashable {
+    public var id: String
+    public var chatId: String
+    public var fromUserId: String
+    public var toUserId: String
+    public var isSentByMe: Bool
+    public var timestamp: Int64
+    public var orderKey: String
+    public var body: Data
+    public var contentType: Int16
+    public var deliveryStatus: Int16
+    public var retryCount: Int16
+    public var suiteId: Int16
+    public var isEdited: Bool
+    public var editedAt: Int64?
+    public var replyToMessageId: String?
+    public var replyToContent: String?
+    public var transcriptText: String?
+    public var transcriptLanguage: String?
+    public var transcriptGeneratedAt: Int64?
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(id: String, chatId: String, fromUserId: String, toUserId: String, isSentByMe: Bool, timestamp: Int64, orderKey: String, body: Data, contentType: Int16, deliveryStatus: Int16, retryCount: Int16, suiteId: Int16, isEdited: Bool, editedAt: Int64?, replyToMessageId: String?, replyToContent: String?, transcriptText: String?, transcriptLanguage: String?, transcriptGeneratedAt: Int64?) {
+        self.id = id
+        self.chatId = chatId
+        self.fromUserId = fromUserId
+        self.toUserId = toUserId
+        self.isSentByMe = isSentByMe
+        self.timestamp = timestamp
+        self.orderKey = orderKey
+        self.body = body
+        self.contentType = contentType
+        self.deliveryStatus = deliveryStatus
+        self.retryCount = retryCount
+        self.suiteId = suiteId
+        self.isEdited = isEdited
+        self.editedAt = editedAt
+        self.replyToMessageId = replyToMessageId
+        self.replyToContent = replyToContent
+        self.transcriptText = transcriptText
+        self.transcriptLanguage = transcriptLanguage
+        self.transcriptGeneratedAt = transcriptGeneratedAt
+    }
+
+    
+}
+
+#if compiler(>=6)
+extension LocalMessage: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeLocalMessage: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> LocalMessage {
+        return
+            try LocalMessage(
+                id: FfiConverterString.read(from: &buf), 
+                chatId: FfiConverterString.read(from: &buf), 
+                fromUserId: FfiConverterString.read(from: &buf), 
+                toUserId: FfiConverterString.read(from: &buf), 
+                isSentByMe: FfiConverterBool.read(from: &buf), 
+                timestamp: FfiConverterInt64.read(from: &buf), 
+                orderKey: FfiConverterString.read(from: &buf), 
+                body: FfiConverterData.read(from: &buf), 
+                contentType: FfiConverterInt16.read(from: &buf), 
+                deliveryStatus: FfiConverterInt16.read(from: &buf), 
+                retryCount: FfiConverterInt16.read(from: &buf), 
+                suiteId: FfiConverterInt16.read(from: &buf), 
+                isEdited: FfiConverterBool.read(from: &buf), 
+                editedAt: FfiConverterOptionInt64.read(from: &buf), 
+                replyToMessageId: FfiConverterOptionString.read(from: &buf), 
+                replyToContent: FfiConverterOptionString.read(from: &buf), 
+                transcriptText: FfiConverterOptionString.read(from: &buf), 
+                transcriptLanguage: FfiConverterOptionString.read(from: &buf), 
+                transcriptGeneratedAt: FfiConverterOptionInt64.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: LocalMessage, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.id, into: &buf)
+        FfiConverterString.write(value.chatId, into: &buf)
+        FfiConverterString.write(value.fromUserId, into: &buf)
+        FfiConverterString.write(value.toUserId, into: &buf)
+        FfiConverterBool.write(value.isSentByMe, into: &buf)
+        FfiConverterInt64.write(value.timestamp, into: &buf)
+        FfiConverterString.write(value.orderKey, into: &buf)
+        FfiConverterData.write(value.body, into: &buf)
+        FfiConverterInt16.write(value.contentType, into: &buf)
+        FfiConverterInt16.write(value.deliveryStatus, into: &buf)
+        FfiConverterInt16.write(value.retryCount, into: &buf)
+        FfiConverterInt16.write(value.suiteId, into: &buf)
+        FfiConverterBool.write(value.isEdited, into: &buf)
+        FfiConverterOptionInt64.write(value.editedAt, into: &buf)
+        FfiConverterOptionString.write(value.replyToMessageId, into: &buf)
+        FfiConverterOptionString.write(value.replyToContent, into: &buf)
+        FfiConverterOptionString.write(value.transcriptText, into: &buf)
+        FfiConverterOptionString.write(value.transcriptLanguage, into: &buf)
+        FfiConverterOptionInt64.write(value.transcriptGeneratedAt, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLocalMessage_lift(_ buf: RustBuffer) throws -> LocalMessage {
+    return try FfiConverterTypeLocalMessage.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLocalMessage_lower(_ value: LocalMessage) -> RustBuffer {
+    return FfiConverterTypeLocalMessage.lower(value)
+}
+
+
+public struct LocalPeerDevice: Equatable, Hashable {
+    public var deviceId: String
+    public var accountId: String
+    public var identityKey: Data
+    public var firstSeenAt: Int64
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(deviceId: String, accountId: String, identityKey: Data, firstSeenAt: Int64) {
+        self.deviceId = deviceId
+        self.accountId = accountId
+        self.identityKey = identityKey
+        self.firstSeenAt = firstSeenAt
+    }
+
+    
+}
+
+#if compiler(>=6)
+extension LocalPeerDevice: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeLocalPeerDevice: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> LocalPeerDevice {
+        return
+            try LocalPeerDevice(
+                deviceId: FfiConverterString.read(from: &buf), 
+                accountId: FfiConverterString.read(from: &buf), 
+                identityKey: FfiConverterData.read(from: &buf), 
+                firstSeenAt: FfiConverterInt64.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: LocalPeerDevice, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.deviceId, into: &buf)
+        FfiConverterString.write(value.accountId, into: &buf)
+        FfiConverterData.write(value.identityKey, into: &buf)
+        FfiConverterInt64.write(value.firstSeenAt, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLocalPeerDevice_lift(_ buf: RustBuffer) throws -> LocalPeerDevice {
+    return try FfiConverterTypeLocalPeerDevice.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLocalPeerDevice_lower(_ value: LocalPeerDevice) -> RustBuffer {
+    return FfiConverterTypeLocalPeerDevice.lower(value)
+}
+
+
+public struct LocalReaction: Equatable, Hashable {
+    public var targetMessageId: String
+    public var reactorUserId: String
+    public var emoji: String
+    public var timestampMs: Int64
+    public var receivedAt: Int64?
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(targetMessageId: String, reactorUserId: String, emoji: String, timestampMs: Int64, receivedAt: Int64?) {
+        self.targetMessageId = targetMessageId
+        self.reactorUserId = reactorUserId
+        self.emoji = emoji
+        self.timestampMs = timestampMs
+        self.receivedAt = receivedAt
+    }
+
+    
+}
+
+#if compiler(>=6)
+extension LocalReaction: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeLocalReaction: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> LocalReaction {
+        return
+            try LocalReaction(
+                targetMessageId: FfiConverterString.read(from: &buf), 
+                reactorUserId: FfiConverterString.read(from: &buf), 
+                emoji: FfiConverterString.read(from: &buf), 
+                timestampMs: FfiConverterInt64.read(from: &buf), 
+                receivedAt: FfiConverterOptionInt64.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: LocalReaction, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.targetMessageId, into: &buf)
+        FfiConverterString.write(value.reactorUserId, into: &buf)
+        FfiConverterString.write(value.emoji, into: &buf)
+        FfiConverterInt64.write(value.timestampMs, into: &buf)
+        FfiConverterOptionInt64.write(value.receivedAt, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLocalReaction_lift(_ buf: RustBuffer) throws -> LocalReaction {
+    return try FfiConverterTypeLocalReaction.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLocalReaction_lower(_ value: LocalReaction) -> RustBuffer {
+    return FfiConverterTypeLocalReaction.lower(value)
+}
+
+
+public struct LocalSearchHit: Equatable, Hashable {
+    public var messageId: String
+    public var chatId: String
+    public var timestamp: Int64
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(messageId: String, chatId: String, timestamp: Int64) {
+        self.messageId = messageId
+        self.chatId = chatId
+        self.timestamp = timestamp
+    }
+
+    
+}
+
+#if compiler(>=6)
+extension LocalSearchHit: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeLocalSearchHit: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> LocalSearchHit {
+        return
+            try LocalSearchHit(
+                messageId: FfiConverterString.read(from: &buf), 
+                chatId: FfiConverterString.read(from: &buf), 
+                timestamp: FfiConverterInt64.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: LocalSearchHit, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.messageId, into: &buf)
+        FfiConverterString.write(value.chatId, into: &buf)
+        FfiConverterInt64.write(value.timestamp, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLocalSearchHit_lift(_ buf: RustBuffer) throws -> LocalSearchHit {
+    return try FfiConverterTypeLocalSearchHit.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLocalSearchHit_lower(_ value: LocalSearchHit) -> RustBuffer {
+    return FfiConverterTypeLocalSearchHit.lower(value)
+}
+
+
+public struct LocalStoreChange: Equatable, Hashable {
+    public var table: LocalStoreTable
+    public var ids: [String]
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(table: LocalStoreTable, ids: [String]) {
+        self.table = table
+        self.ids = ids
+    }
+
+    
+}
+
+#if compiler(>=6)
+extension LocalStoreChange: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeLocalStoreChange: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> LocalStoreChange {
+        return
+            try LocalStoreChange(
+                table: FfiConverterTypeLocalStoreTable.read(from: &buf), 
+                ids: FfiConverterSequenceString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: LocalStoreChange, into buf: inout [UInt8]) {
+        FfiConverterTypeLocalStoreTable.write(value.table, into: &buf)
+        FfiConverterSequenceString.write(value.ids, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLocalStoreChange_lift(_ buf: RustBuffer) throws -> LocalStoreChange {
+    return try FfiConverterTypeLocalStoreChange.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLocalStoreChange_lower(_ value: LocalStoreChange) -> RustBuffer {
+    return FfiConverterTypeLocalStoreChange.lower(value)
 }
 
 
@@ -6660,6 +7796,268 @@ public func FfiConverterTypeInitiationDecision_lower(_ value: InitiationDecision
 }
 
 
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+
+public enum LocalInsert: Equatable, Hashable {
+    
+    case inserted
+    case alreadyPresent
+
+
+
+}
+
+#if compiler(>=6)
+extension LocalInsert: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeLocalInsert: FfiConverterRustBuffer {
+    typealias SwiftType = LocalInsert
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> LocalInsert {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .inserted
+        
+        case 2: return .alreadyPresent
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: LocalInsert, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case .inserted:
+            writeInt(&buf, Int32(1))
+        
+        
+        case .alreadyPresent:
+            writeInt(&buf, Int32(2))
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLocalInsert_lift(_ buf: RustBuffer) throws -> LocalInsert {
+    return try FfiConverterTypeLocalInsert.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLocalInsert_lower(_ value: LocalInsert) -> RustBuffer {
+    return FfiConverterTypeLocalInsert.lower(value)
+}
+
+
+
+public enum LocalStoreError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError {
+
+    
+    
+    case WrongKey(message: String)
+    
+    case KeyLength(message: String)
+    
+    case SchemaTooNew(message: String)
+    
+    case Closed(message: String)
+    
+    case Storage(message: String)
+    
+
+    
+
+    
+    public var errorDescription: String? {
+        String(reflecting: self)
+    }
+    
+}
+
+#if compiler(>=6)
+extension LocalStoreError: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeLocalStoreError: FfiConverterRustBuffer {
+    typealias SwiftType = LocalStoreError
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> LocalStoreError {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+
+        
+
+        
+        case 1: return .WrongKey(
+            message: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 2: return .KeyLength(
+            message: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 3: return .SchemaTooNew(
+            message: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 4: return .Closed(
+            message: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 5: return .Storage(
+            message: try FfiConverterString.read(from: &buf)
+        )
+        
+
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: LocalStoreError, into buf: inout [UInt8]) {
+        switch value {
+
+        
+
+        
+        case .WrongKey(_ /* message is ignored*/):
+            writeInt(&buf, Int32(1))
+        case .KeyLength(_ /* message is ignored*/):
+            writeInt(&buf, Int32(2))
+        case .SchemaTooNew(_ /* message is ignored*/):
+            writeInt(&buf, Int32(3))
+        case .Closed(_ /* message is ignored*/):
+            writeInt(&buf, Int32(4))
+        case .Storage(_ /* message is ignored*/):
+            writeInt(&buf, Int32(5))
+
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLocalStoreError_lift(_ buf: RustBuffer) throws -> LocalStoreError {
+    return try FfiConverterTypeLocalStoreError.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLocalStoreError_lower(_ value: LocalStoreError) -> RustBuffer {
+    return FfiConverterTypeLocalStoreError.lower(value)
+}
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+
+public enum LocalStoreTable: Equatable, Hashable {
+    
+    case contacts
+    case chats
+    case messages
+    case reactions
+    case calls
+    case peerDevices
+
+
+
+}
+
+#if compiler(>=6)
+extension LocalStoreTable: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeLocalStoreTable: FfiConverterRustBuffer {
+    typealias SwiftType = LocalStoreTable
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> LocalStoreTable {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .contacts
+        
+        case 2: return .chats
+        
+        case 3: return .messages
+        
+        case 4: return .reactions
+        
+        case 5: return .calls
+        
+        case 6: return .peerDevices
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: LocalStoreTable, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case .contacts:
+            writeInt(&buf, Int32(1))
+        
+        
+        case .chats:
+            writeInt(&buf, Int32(2))
+        
+        
+        case .messages:
+            writeInt(&buf, Int32(3))
+        
+        
+        case .reactions:
+            writeInt(&buf, Int32(4))
+        
+        
+        case .calls:
+            writeInt(&buf, Int32(5))
+        
+        
+        case .peerDevices:
+            writeInt(&buf, Int32(6))
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLocalStoreTable_lift(_ buf: RustBuffer) throws -> LocalStoreTable {
+    return try FfiConverterTypeLocalStoreTable.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLocalStoreTable_lower(_ value: LocalStoreTable) -> RustBuffer {
+    return FfiConverterTypeLocalStoreTable.lower(value)
+}
+
+
 
 /**
  * Errors that can occur during MLS group operations.
@@ -7029,6 +8427,133 @@ public func FfiConverterTypeReceivingInitKind_lower(_ value: ReceivingInitKind) 
     return FfiConverterTypeReceivingInitKind.lower(value)
 }
 
+
+
+
+
+/**
+ * Told after every committed write, on the writing thread, never under the store's lock.
+ */
+public protocol LocalStoreObserver: AnyObject, Sendable {
+    
+    func onChange(change: LocalStoreChange) 
+    
+}
+
+
+// Put the implementation in a struct so we don't pollute the top-level namespace
+fileprivate struct UniffiCallbackInterfaceLocalStoreObserver {
+
+    // Create the VTable using a series of closures.
+    // Swift automatically converts these into C callback functions.
+    //
+    // This creates 1-element array, since this seems to be the only way to construct a const
+    // pointer that we can pass to the Rust code.
+    static let vtable: [UniffiVTableCallbackInterfaceLocalStoreObserver] = [UniffiVTableCallbackInterfaceLocalStoreObserver(
+        uniffiFree: { (uniffiHandle: UInt64) -> () in
+            do {
+                try FfiConverterCallbackInterfaceLocalStoreObserver.handleMap.remove(handle: uniffiHandle)
+            } catch {
+                print("Uniffi callback interface LocalStoreObserver: handle missing in uniffiFree")
+            }
+        },
+        uniffiClone: { (uniffiHandle: UInt64) -> UInt64 in
+            do {
+                return try FfiConverterCallbackInterfaceLocalStoreObserver.handleMap.clone(handle: uniffiHandle)
+            } catch {
+                fatalError("Uniffi callback interface LocalStoreObserver: handle missing in uniffiClone")
+            }
+        },
+        onChange: { (
+            uniffiHandle: UInt64,
+            change: RustBuffer,
+            uniffiOutReturn: UnsafeMutableRawPointer,
+            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
+        ) in
+            let makeCall = {
+                () throws -> () in
+                guard let uniffiObj = try? FfiConverterCallbackInterfaceLocalStoreObserver.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return uniffiObj.onChange(
+                     change: try FfiConverterTypeLocalStoreChange_lift(change)
+                )
+            }
+
+            
+            let writeReturn = { () }
+            uniffiTraitInterfaceCall(
+                callStatus: uniffiCallStatus,
+                makeCall: makeCall,
+                writeReturn: writeReturn
+            )
+        }
+    )]
+}
+
+private func uniffiCallbackInitLocalStoreObserver() {
+    uniffi_construct_core_fn_init_callback_vtable_localstoreobserver(UniffiCallbackInterfaceLocalStoreObserver.vtable)
+}
+
+// FfiConverter protocol for callback interfaces
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterCallbackInterfaceLocalStoreObserver {
+    fileprivate static let handleMap = UniffiHandleMap<LocalStoreObserver>()
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+extension FfiConverterCallbackInterfaceLocalStoreObserver : FfiConverter {
+    typealias SwiftType = LocalStoreObserver
+    typealias FfiType = UInt64
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public static func lift(_ handle: UInt64) throws -> SwiftType {
+        try handleMap.get(handle: handle)
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public static func lower(_ v: SwiftType) -> UInt64 {
+        return handleMap.insert(obj: v)
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public static func write(_ v: SwiftType, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(v))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterCallbackInterfaceLocalStoreObserver_lift(_ handle: UInt64) throws -> LocalStoreObserver {
+    return try FfiConverterCallbackInterfaceLocalStoreObserver.lift(handle)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterCallbackInterfaceLocalStoreObserver_lower(_ v: LocalStoreObserver) -> UInt64 {
+    return FfiConverterCallbackInterfaceLocalStoreObserver.lower(v)
+}
 
 
 
@@ -7471,6 +8996,30 @@ fileprivate struct FfiConverterOptionUInt64: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterOptionInt64: FfiConverterRustBuffer {
+    typealias SwiftType = Int64?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterInt64.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterInt64.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterOptionString: FfiConverterRustBuffer {
     typealias SwiftType = String?
 
@@ -7543,6 +9092,78 @@ fileprivate struct FfiConverterOptionTypeKyberPrekeyUpload: FfiConverterRustBuff
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterOptionTypeLocalChat: FfiConverterRustBuffer {
+    typealias SwiftType = LocalChat?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeLocalChat.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeLocalChat.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterOptionTypeLocalContact: FfiConverterRustBuffer {
+    typealias SwiftType = LocalContact?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeLocalContact.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeLocalContact.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterOptionTypeLocalMessage: FfiConverterRustBuffer {
+    typealias SwiftType = LocalMessage?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeLocalMessage.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeLocalMessage.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterOptionTypeSenderCertificate: FfiConverterRustBuffer {
     typealias SwiftType = SenderCertificate?
 
@@ -7583,6 +9204,30 @@ fileprivate struct FfiConverterOptionTypeSessionHealthReport: FfiConverterRustBu
         switch try readInt(&buf) as Int8 {
         case 0: return nil
         case 1: return try FfiConverterTypeSessionHealthReport.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterOptionCallbackInterfaceLocalStoreObserver: FfiConverterRustBuffer {
+    typealias SwiftType = LocalStoreObserver?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterCallbackInterfaceLocalStoreObserver.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterCallbackInterfaceLocalStoreObserver.read(from: &buf)
         default: throw UniffiInternalError.unexpectedOptionalTag
         }
     }
@@ -7732,6 +9377,181 @@ fileprivate struct FfiConverterSequenceTypeKyberPrekeyUpload: FfiConverterRustBu
         seq.reserveCapacity(Int(len))
         for _ in 0 ..< len {
             seq.append(try FfiConverterTypeKyberPrekeyUpload.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeLocalCall: FfiConverterRustBuffer {
+    typealias SwiftType = [LocalCall]
+
+    public static func write(_ value: [LocalCall], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeLocalCall.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [LocalCall] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [LocalCall]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeLocalCall.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeLocalChat: FfiConverterRustBuffer {
+    typealias SwiftType = [LocalChat]
+
+    public static func write(_ value: [LocalChat], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeLocalChat.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [LocalChat] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [LocalChat]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeLocalChat.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeLocalContact: FfiConverterRustBuffer {
+    typealias SwiftType = [LocalContact]
+
+    public static func write(_ value: [LocalContact], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeLocalContact.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [LocalContact] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [LocalContact]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeLocalContact.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeLocalMessage: FfiConverterRustBuffer {
+    typealias SwiftType = [LocalMessage]
+
+    public static func write(_ value: [LocalMessage], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeLocalMessage.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [LocalMessage] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [LocalMessage]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeLocalMessage.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeLocalPeerDevice: FfiConverterRustBuffer {
+    typealias SwiftType = [LocalPeerDevice]
+
+    public static func write(_ value: [LocalPeerDevice], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeLocalPeerDevice.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [LocalPeerDevice] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [LocalPeerDevice]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeLocalPeerDevice.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeLocalReaction: FfiConverterRustBuffer {
+    typealias SwiftType = [LocalReaction]
+
+    public static func write(_ value: [LocalReaction], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeLocalReaction.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [LocalReaction] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [LocalReaction]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeLocalReaction.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeLocalSearchHit: FfiConverterRustBuffer {
+    typealias SwiftType = [LocalSearchHit]
+
+    public static func write(_ value: [LocalSearchHit], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeLocalSearchHit.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [LocalSearchHit] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [LocalSearchHit]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeLocalSearchHit.read(from: &buf))
         }
         return seq
     }
@@ -8711,6 +10531,90 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_method_historysender_snapshot_id() != 18376) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_construct_core_checksum_method_localstore_calls() != 50631) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_chat() != 45451) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_chats() != 2703) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_contact() != 43265) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_contacts() != 43939) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_delete_chat() != 62753) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_delete_contact() != 25391) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_delete_message() != 53751) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_delete_reaction() != 1671) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_edit_message() != 48649) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_get() != 50579) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_insert_message() != 2107) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_message() != 63926) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_messages_before() != 61408) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_peer_devices() != 14816) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_put() != 58855) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_reactions() != 33658) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_record_peer_device() != 19683) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_remove() != 30144) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_retain_peer_devices() != 39765) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_search() != 46550) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_set_delivery_status() != 61504) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_set_observer() != 60987) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_upsert_call() != 6097) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_upsert_chat() != 50948) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_upsert_contact() != 27336) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_upsert_reaction() != 33013) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_wipe() != 12838) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_construct_core_checksum_method_mlsstore_add_member() != 60309) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -8972,10 +10876,19 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_method_trafficprotectionmanager_update_battery_level() != 31087) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_construct_core_checksum_constructor_localstore_in_memory() != 10006) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_constructor_localstore_new() != 34198) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_construct_core_checksum_constructor_rustackstore_new() != 64675) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_constructor_trafficprotectionmanager_new() != 21642) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstoreobserver_on_change() != 28445) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_platformbridge_save_to_secure_store() != 64407) {
@@ -8997,6 +10910,7 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
 
+    uniffiCallbackInitLocalStoreObserver()
     uniffiCallbackInitPlatformBridge()
     uniffiCallbackInitPowProgressCallback()
     return InitializationResult.ok
