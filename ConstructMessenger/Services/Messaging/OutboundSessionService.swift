@@ -343,8 +343,7 @@ final class OutboundSessionService {
     /// ones the intake bookkeeping is asked about. A peer recorded before `PeerDevice` existed
     /// answers with its pinned device.
     static func sessionDevices(of contactId: String) -> [String] {
-        let context = PersistenceController.shared.container.viewContext
-        var devices = SessionAddressing.devices(ofPeer: contactId, in: context).map(\.deviceId)
+        var devices = SessionAddressing.devices(ofPeer: contactId).map(\.deviceId)
         if devices.isEmpty, let pinned = SessionAddressing.pinnedDevice(ofPeer: contactId) {
             devices = [pinned]
         }

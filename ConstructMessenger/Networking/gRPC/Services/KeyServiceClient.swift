@@ -149,15 +149,10 @@ final class KeyServiceClient: Sendable {
         // questions — "which devices does this account have right now" and "which devices have we
         // pinned a key for" — and the second is the one an envelope may be built against.
         let pins = bundles.map { (deviceId: $0.deviceId, identityKey: $0.bundle.identityPublic) }
-        let context = PersistenceController.shared.container.newBackgroundContext()
-        // Awaited, not fired off: the caller's next move is usually to act on these devices, and a
-        // write that lands after that would leave the first use of a newly-linked device reading an
-        // incomplete set. It is one small write against a background context.
-        await context.perform {
-            SessionAddressing.reconcileDevices(
-                pins, activeSet: activeDevices, ofPeer: userId, in: context
-            )
-        }
+        // Written before returning, not fired off: the caller's next move is usually to act on
+        // these devices, and a write that lands after that would leave the first use of a
+        // newly-linked device reading an incomplete set. This function is not on the main actor.
+        SessionAddressing.reconcileDevices(pins, activeSet: activeDevices, ofPeer: userId)
         return bundles
     }
 
@@ -289,10 +284,7 @@ final class KeyServiceClient: Sendable {
         // unrecorded, a single-bundle fetch was a way for a new device to go unseen.
         // The server's device id, not one derived here: `recordDevices` checks the two agree.
         let pin = [(deviceId: fetched.deviceID, identityKey: fetched.data.identityPublic)]
-        let pinContext = PersistenceController.shared.container.newBackgroundContext()
-        await pinContext.perform {
-            SessionAddressing.recordDevices(pin, ofPeer: userId, in: pinContext)
-        }
+        SessionAddressing.recordDevices(pin, ofPeer: userId)
 
         // Backstop. The KT writer above pins `knownIdentityKey` only on `.verified`, and bails
         // without a word when the `User` row does not exist. Otherwise we have just fetched and

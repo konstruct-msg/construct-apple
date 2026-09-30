@@ -72,7 +72,7 @@ struct HistorySnapshotImporter {
         case .reaction(let reaction):
             return try applyReaction(reaction, in: context)
         case .peerDevice(let hint):
-            return try applyPeerHint(hint, in: context)
+            return try applyPeerHint(hint)
         case .call(let call):
             return try applyCall(call, in: context)
         case .skipped(let type):
@@ -332,8 +332,7 @@ struct HistorySnapshotImporter {
     // MARK: - Peer hint
 
     private func applyPeerHint(
-        _ hint: Construct_Client_History_V1_HistoryPeerDevice,
-        in context: NSManagedObjectContext
+        _ hint: Construct_Client_History_V1_HistoryPeerDevice
     ) throws -> HistoryApplyResult {
         guard HistorySnapshotDisposition.peerDeviceHintAcceptable(
             deviceId: hint.deviceID, identityKey: hint.identityKey
@@ -343,18 +342,18 @@ struct HistorySnapshotImporter {
         guard let accountId = HistoryAccountID.dashed(hint.accountID) else {
             throw HistorySnapshotError.malformed
         }
-        let deviceId = hint.deviceID.lowercased()
-        if try fetchPeerDevice(deviceId: deviceId, in: context) != nil {
-            return .conflictKeepExisting
-        }
-        let row = PeerDevice(context: context)
-        row.deviceId = deviceId
-        row.accountId = accountId
-        row.identityKey = hint.identityKey
-        row.firstSeenAt = hint.firstSeenAtUnix > 0
-            ? Date(timeIntervalSince1970: TimeInterval(hint.firstSeenAtUnix))
-            : Date()
-        return .applied
+        // Written by the peer-device store itself, not in this import's context: a hint is a pin
+        // of what the sending device knew, true whether or not the rest of this batch lands —
+        // the same standing as a pin from a bundle answer (`SessionAddressing.recordDevices`).
+        let recorded = try LocalRepositories.peerDevices.record([PeerDeviceRecord(
+            deviceId: hint.deviceID.lowercased(),
+            accountId: accountId,
+            identityKey: hint.identityKey,
+            firstSeenAt: hint.firstSeenAtUnix > 0
+                ? Date(timeIntervalSince1970: TimeInterval(hint.firstSeenAtUnix))
+                : Date()
+        )])
+        return recorded.isEmpty ? .conflictKeepExisting : .applied
     }
 
     // MARK: - Call
@@ -408,13 +407,6 @@ struct HistorySnapshotImporter {
         let req = Message.fetchRequest()
         req.fetchLimit = 1
         req.predicate = NSPredicate(format: "id ==[c] %@", id)
-        return try context.fetch(req).first
-    }
-
-    private func fetchPeerDevice(deviceId: String, in context: NSManagedObjectContext) throws -> PeerDevice? {
-        let req = PeerDevice.fetchRequest()
-        req.fetchLimit = 1
-        req.predicate = NSPredicate(format: "deviceId == %@", deviceId)
         return try context.fetch(req).first
     }
 

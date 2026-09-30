@@ -523,11 +523,10 @@ final class SessionCoordinator: MessageRouterDelegate {
         if suite > 0 {
             KeychainManager.shared.saveSessionSuiteId(userId: opened, suiteId: suite)
         }
-        if let certificate, certificate.deviceId == opened, let context = viewContext {
+        if let certificate, certificate.deviceId == opened {
             SessionAddressing.recordDevices(
                 [(deviceId: certificate.deviceId, identityKey: certificate.identityKey)],
-                ofPeer: userId,
-                in: context
+                ofPeer: userId
             )
         }
         Log.info(

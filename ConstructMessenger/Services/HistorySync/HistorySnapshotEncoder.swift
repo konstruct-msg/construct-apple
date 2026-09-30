@@ -125,7 +125,7 @@ final class HistorySnapshotEncoder {
         if phase == 1 || phase == 3 {
             let contacts = try fetchContacts(context: context)
             let chats = try fetchChats(context: context)
-            let hints = try fetchHints(context: context)
+            let hints = try fetchHints()
             let calls = try fetchCalls(context: context)
             let emittedIds = Set(lifted.map(\.id))
             let reactions = try fetchReactions(context: context)
@@ -283,10 +283,8 @@ final class HistorySnapshotEncoder {
         return try context.fetch(req)
     }
 
-    private func fetchHints(context: NSManagedObjectContext) throws -> [PeerDevice] {
-        let req = PeerDevice.fetchRequest()
-        req.sortDescriptors = [NSSortDescriptor(key: "firstSeenAt", ascending: true)]
-        return try context.fetch(req)
+    private func fetchHints() throws -> [PeerDeviceRecord] {
+        try LocalRepositories.peerDevices.allDevices()
     }
 
     private func fetchCalls(context: NSManagedObjectContext) throws -> [CTCallRecord] {
@@ -333,7 +331,7 @@ final class HistorySnapshotEncoder {
         return c
     }
 
-    private func encodeHint(_ device: PeerDevice) -> Construct_Client_History_V1_HistoryPeerDevice {
+    private func encodeHint(_ device: PeerDeviceRecord) -> Construct_Client_History_V1_HistoryPeerDevice {
         var h = Construct_Client_History_V1_HistoryPeerDevice()
         if let raw = HistoryAccountID.raw(device.accountId) { h.accountID = raw }
         h.deviceID = device.deviceId.lowercased()

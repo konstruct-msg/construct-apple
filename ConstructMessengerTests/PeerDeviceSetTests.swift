@@ -17,10 +17,13 @@ final class PeerDeviceSetTests: XCTestCase {
 
     override func setUp() {
         super.setUp()
-        context = PersistenceController(inMemory: true).container.viewContext
+        let container = PersistenceController(inMemory: true).container
+        context = container.viewContext
+        LocalRepositories.usePeerDevicesForTesting(CoreDataPeerDeviceStore(container: container))
     }
 
     override func tearDown() {
+        LocalRepositories.usePeerDevicesForTesting(nil)
         SessionAddressing.pinnedIdentityKeyOverrideForTesting = nil
         context = nil
         super.tearDown()
@@ -69,7 +72,7 @@ final class PeerDeviceSetTests: XCTestCase {
             "before recording, a second device has no row and no pinned key: this is the defect"
         )
 
-        SessionAddressing.recordDevices([pinned, second], ofPeer: accountA, in: context)
+        SessionAddressing.recordDevices([pinned, second], ofPeer: accountA)
 
         let resolved = try XCTUnwrap(SessionAddressing.peer(ofDevice: second.deviceId, in: context))
         XCTAssertEqual(resolved.accountId, accountA)
@@ -81,9 +84,9 @@ final class PeerDeviceSetTests: XCTestCase {
     func testDevicesOfPeerReturnsTheWholeSet() {
         let one = device(0x11)
         let two = device(0x22)
-        SessionAddressing.recordDevices([one, two], ofPeer: accountA, in: context)
+        SessionAddressing.recordDevices([one, two], ofPeer: accountA)
 
-        let set = SessionAddressing.devices(ofPeer: accountA, in: context)
+        let set = SessionAddressing.devices(ofPeer: accountA)
         XCTAssertEqual(set.map(\.deviceId).sorted(), [one.deviceId, two.deviceId].sorted())
         XCTAssertEqual(Set(set.map(\.identityKey)), [one.identityKey, two.identityKey])
     }
@@ -94,11 +97,11 @@ final class PeerDeviceSetTests: XCTestCase {
     func testTheSetIsScopedToItsAccount() {
         let a = device(0x11)
         let b = device(0x22)
-        SessionAddressing.recordDevices([a], ofPeer: accountA, in: context)
-        SessionAddressing.recordDevices([b], ofPeer: accountB, in: context)
+        SessionAddressing.recordDevices([a], ofPeer: accountA)
+        SessionAddressing.recordDevices([b], ofPeer: accountB)
 
-        XCTAssertEqual(SessionAddressing.devices(ofPeer: accountA, in: context).map(\.deviceId), [a.deviceId])
-        XCTAssertEqual(SessionAddressing.devices(ofPeer: accountB, in: context).map(\.deviceId), [b.deviceId])
+        XCTAssertEqual(SessionAddressing.devices(ofPeer: accountA).map(\.deviceId), [a.deviceId])
+        XCTAssertEqual(SessionAddressing.devices(ofPeer: accountB).map(\.deviceId), [b.deviceId])
     }
 
     /// Empty means "we have never been told", not "this account has no devices". A fetch that
@@ -106,11 +109,11 @@ final class PeerDeviceSetTests: XCTestCase {
     /// empty answer must not be allowed to overwrite what is already pinned.
     func testAnEmptyAnswerRecordsNothingAndErasesNothing() {
         let one = device(0x11)
-        SessionAddressing.recordDevices([one], ofPeer: accountA, in: context)
+        SessionAddressing.recordDevices([one], ofPeer: accountA)
 
-        SessionAddressing.recordDevices([], ofPeer: accountA, in: context)
+        SessionAddressing.recordDevices([], ofPeer: accountA)
 
-        XCTAssertEqual(SessionAddressing.devices(ofPeer: accountA, in: context).map(\.deviceId), [one.deviceId])
+        XCTAssertEqual(SessionAddressing.devices(ofPeer: accountA).map(\.deviceId), [one.deviceId])
     }
 
     /// The order is total and stable: `firstSeenAt`, then `deviceId`. Two devices recorded in one
@@ -120,10 +123,10 @@ final class PeerDeviceSetTests: XCTestCase {
     func testTheSetHasAStableOrder() {
         let one = device(0x11)
         let two = device(0x22)
-        SessionAddressing.recordDevices([one, two], ofPeer: accountA, in: context)
+        SessionAddressing.recordDevices([one, two], ofPeer: accountA)
 
-        let first = SessionAddressing.devices(ofPeer: accountA, in: context).map(\.deviceId)
-        let second = SessionAddressing.devices(ofPeer: accountA, in: context).map(\.deviceId)
+        let first = SessionAddressing.devices(ofPeer: accountA).map(\.deviceId)
+        let second = SessionAddressing.devices(ofPeer: accountA).map(\.deviceId)
         XCTAssertEqual(first, second)
         XCTAssertEqual(first.count, 2)
     }
@@ -133,10 +136,10 @@ final class PeerDeviceSetTests: XCTestCase {
     /// produced before this entity existed.
     func testAnEarlierDeviceStaysFirst() {
         let first = device(0x11)
-        SessionAddressing.recordDevices([first], ofPeer: accountA, in: context)
-        SessionAddressing.recordDevices([first, device(0x22)], ofPeer: accountA, in: context)
+        SessionAddressing.recordDevices([first], ofPeer: accountA)
+        SessionAddressing.recordDevices([first, device(0x22)], ofPeer: accountA)
 
-        XCTAssertEqual(SessionAddressing.devices(ofPeer: accountA, in: context).first?.deviceId, first.deviceId)
+        XCTAssertEqual(SessionAddressing.devices(ofPeer: accountA).first?.deviceId, first.deviceId)
     }
 
     // MARK: - The translation half
@@ -149,9 +152,9 @@ final class PeerDeviceSetTests: XCTestCase {
     func testAnAccountTranslatesToEveryPinnedDevice() {
         let one = device(0x11)
         let two = device(0x22)
-        SessionAddressing.recordDevices([one, two], ofPeer: accountA, in: context)
+        SessionAddressing.recordDevices([one, two], ofPeer: accountA)
 
-        let ids = SessionAddressing.deviceIds(ofPeer: accountA, in: context)
+        let ids = SessionAddressing.deviceIds(ofPeer: accountA)
         XCTAssertEqual(ids.sorted(), [one.deviceId, two.deviceId].sorted())
     }
 
@@ -161,9 +164,9 @@ final class PeerDeviceSetTests: XCTestCase {
     func testADeviceIdTranslatesToItself() {
         let one = device(0x11)
         let two = device(0x22)
-        SessionAddressing.recordDevices([one, two], ofPeer: accountA, in: context)
+        SessionAddressing.recordDevices([one, two], ofPeer: accountA)
 
-        XCTAssertEqual(SessionAddressing.deviceIds(ofPeer: one.deviceId, in: context), [one.deviceId])
+        XCTAssertEqual(SessionAddressing.deviceIds(ofPeer: one.deviceId), [one.deviceId])
     }
 
     /// An account we have never fetched bundles for has no set, and the pinned key is then the only
@@ -174,7 +177,7 @@ final class PeerDeviceSetTests: XCTestCase {
         makeContact(id: accountA, key: pinned.identityKey)
         SessionAddressing.pinnedIdentityKeyOverrideForTesting = { $0 == self.accountA ? pinned.identityKey : nil }
 
-        XCTAssertEqual(SessionAddressing.deviceIds(ofPeer: accountA, in: context), [pinned.deviceId])
+        XCTAssertEqual(SessionAddressing.deviceIds(ofPeer: accountA), [pinned.deviceId])
     }
 
     /// Nothing pinned, nothing recorded: an empty set. The one answer that must never appear here
@@ -183,7 +186,7 @@ final class PeerDeviceSetTests: XCTestCase {
     func testAPeerWeCannotNameTranslatesToNothing() {
         SessionAddressing.pinnedIdentityKeyOverrideForTesting = { _ in nil }
 
-        XCTAssertTrue(SessionAddressing.deviceIds(ofPeer: accountA, in: context).isEmpty)
+        XCTAssertTrue(SessionAddressing.deviceIds(ofPeer: accountA).isEmpty)
     }
 
     // MARK: - What must not be pinned
@@ -195,9 +198,9 @@ final class PeerDeviceSetTests: XCTestCase {
         let real = device(0x11)
         let mismatched = (deviceId: device(0x22).deviceId, identityKey: real.identityKey)
 
-        SessionAddressing.recordDevices([mismatched], ofPeer: accountA, in: context)
+        SessionAddressing.recordDevices([mismatched], ofPeer: accountA)
 
-        XCTAssertTrue(SessionAddressing.devices(ofPeer: accountA, in: context).isEmpty)
+        XCTAssertTrue(SessionAddressing.devices(ofPeer: accountA).isEmpty)
         XCTAssertNil(SessionAddressing.peer(ofDevice: mismatched.deviceId, in: context))
     }
 
@@ -208,28 +211,28 @@ final class PeerDeviceSetTests: XCTestCase {
         let good = device(0x33)
         let bad = (deviceId: device(0x22).deviceId, identityKey: device(0x11).identityKey)
 
-        SessionAddressing.recordDevices([bad, good], ofPeer: accountA, in: context)
+        SessionAddressing.recordDevices([bad, good], ofPeer: accountA)
 
-        XCTAssertEqual(SessionAddressing.devices(ofPeer: accountA, in: context).map(\.deviceId), [good.deviceId])
+        XCTAssertEqual(SessionAddressing.devices(ofPeer: accountA).map(\.deviceId), [good.deviceId])
     }
 
     /// An account id is not a device id, and must not become a row keyed by one.
     func testAnAccountIdIsNotRecordedAsADevice() {
         let bogus = (deviceId: accountA, identityKey: Data(repeating: 0x11, count: 32))
 
-        SessionAddressing.recordDevices([bogus], ofPeer: accountA, in: context)
+        SessionAddressing.recordDevices([bogus], ofPeer: accountA)
 
-        XCTAssertTrue(SessionAddressing.devices(ofPeer: accountA, in: context).isEmpty)
+        XCTAssertTrue(SessionAddressing.devices(ofPeer: accountA).isEmpty)
     }
 
     /// Recording the same answer twice adds nothing. The uniqueness constraint is on `deviceId`,
     /// and a second row for one device would give `peer(ofDevice:)` two answers to choose between.
     func testRecordingTwiceIsIdempotent() {
         let one = device(0x11)
-        SessionAddressing.recordDevices([one], ofPeer: accountA, in: context)
-        SessionAddressing.recordDevices([one], ofPeer: accountA, in: context)
+        SessionAddressing.recordDevices([one], ofPeer: accountA)
+        SessionAddressing.recordDevices([one], ofPeer: accountA)
 
-        XCTAssertEqual(SessionAddressing.devices(ofPeer: accountA, in: context).count, 1)
+        XCTAssertEqual(SessionAddressing.devices(ofPeer: accountA).count, 1)
     }
 
     /// A device already pinned to one account is not moved by a later answer claiming another.
@@ -237,11 +240,11 @@ final class PeerDeviceSetTests: XCTestCase {
     /// allowed to strengthen; keeping the first pin means a rehome has to be deliberate.
     func testADeviceIsNotRehomedByALaterAnswer() {
         let one = device(0x11)
-        SessionAddressing.recordDevices([one], ofPeer: accountA, in: context)
-        SessionAddressing.recordDevices([one], ofPeer: accountB, in: context)
+        SessionAddressing.recordDevices([one], ofPeer: accountA)
+        SessionAddressing.recordDevices([one], ofPeer: accountB)
 
-        XCTAssertEqual(SessionAddressing.devices(ofPeer: accountA, in: context).map(\.deviceId), [one.deviceId])
-        XCTAssertTrue(SessionAddressing.devices(ofPeer: accountB, in: context).isEmpty)
+        XCTAssertEqual(SessionAddressing.devices(ofPeer: accountA).map(\.deviceId), [one.deviceId])
+        XCTAssertTrue(SessionAddressing.devices(ofPeer: accountB).isEmpty)
         XCTAssertEqual(SessionAddressing.peer(ofDevice: one.deviceId, in: context)?.accountId, accountA)
     }
 }
@@ -270,10 +273,9 @@ extension PeerDeviceSetTests {
         SessionAddressing.recordDevices(
             [(deviceId: kept.deviceId, identityKey: kept.identityKey),
              (deviceId: retired.deviceId, identityKey: retired.identityKey)],
-            ofPeer: accountC, in: context
-        )
+            ofPeer: accountC)
         XCTAssertEqual(
-            Set(SessionAddressing.deviceIds(ofPeer: accountC, in: context)),
+            Set(SessionAddressing.deviceIds(ofPeer: accountC)),
             [kept.deviceId, retired.deviceId],
             "pre-condition: both devices are pinned, or the deletion below proves nothing"
         )
@@ -282,11 +284,10 @@ extension PeerDeviceSetTests {
         SessionAddressing.reconcileDevices(
             [(deviceId: kept.deviceId, identityKey: kept.identityKey)],
             activeSet: [kept.deviceId],
-            ofPeer: accountC, in: context
-        )
+            ofPeer: accountC)
 
         XCTAssertEqual(
-            SessionAddressing.deviceIds(ofPeer: accountC, in: context), [kept.deviceId],
+            SessionAddressing.deviceIds(ofPeer: accountC), [kept.deviceId],
             "a device the server no longer lists must be forgotten"
         )
     }
@@ -302,13 +303,12 @@ extension PeerDeviceSetTests {
         SessionAddressing.recordDevices(
             [(deviceId: a.deviceId, identityKey: a.identityKey),
              (deviceId: b.deviceId, identityKey: b.identityKey)],
-            ofPeer: accountC, in: context
-        )
+            ofPeer: accountC)
 
-        SessionAddressing.reconcileDevices([], activeSet: [], ofPeer: accountC, in: context)
+        SessionAddressing.reconcileDevices([], activeSet: [], ofPeer: accountC)
 
         XCTAssertEqual(
-            Set(SessionAddressing.deviceIds(ofPeer: accountC, in: context)),
+            Set(SessionAddressing.deviceIds(ofPeer: accountC)),
             [a.deviceId, b.deviceId],
             "an empty set is an old server, not an empty account"
         )
@@ -324,18 +324,16 @@ extension PeerDeviceSetTests {
         SessionAddressing.recordDevices(
             [(deviceId: good.deviceId, identityKey: good.identityKey),
              (deviceId: unverifiable.deviceId, identityKey: unverifiable.identityKey)],
-            ofPeer: accountC, in: context
-        )
+            ofPeer: accountC)
 
         // The fetch returned both, but only one survived verification on this side.
         SessionAddressing.reconcileDevices(
             [(deviceId: good.deviceId, identityKey: good.identityKey)],
             activeSet: [good.deviceId, unverifiable.deviceId],
-            ofPeer: accountC, in: context
-        )
+            ofPeer: accountC)
 
         XCTAssertEqual(
-            Set(SessionAddressing.deviceIds(ofPeer: accountC, in: context)),
+            Set(SessionAddressing.deviceIds(ofPeer: accountC)),
             [good.deviceId, unverifiable.deviceId],
             "the server says it is active; this client only failed to verify one of its bundles"
         )
@@ -349,18 +347,16 @@ extension PeerDeviceSetTests {
         makeContact(id: accountC, key: listed.identityKey)
         SessionAddressing.recordDevices(
             [(deviceId: bundledButUnlisted.deviceId, identityKey: bundledButUnlisted.identityKey)],
-            ofPeer: accountC, in: context
-        )
+            ofPeer: accountC)
 
         SessionAddressing.reconcileDevices(
             [(deviceId: listed.deviceId, identityKey: listed.identityKey),
              (deviceId: bundledButUnlisted.deviceId, identityKey: bundledButUnlisted.identityKey)],
             activeSet: [listed.deviceId],
-            ofPeer: accountC, in: context
-        )
+            ofPeer: accountC)
 
         XCTAssertTrue(
-            SessionAddressing.deviceIds(ofPeer: accountC, in: context)
+            SessionAddressing.deviceIds(ofPeer: accountC)
                 .contains(bundledButUnlisted.deviceId),
             "we hold a verified key for it; the list is the half without evidence"
         )
@@ -374,20 +370,17 @@ extension PeerDeviceSetTests {
         makeContact(id: accountC, key: mine.identityKey)
         makeContact(id: accountB, key: theirs.identityKey)
         SessionAddressing.recordDevices(
-            [(deviceId: mine.deviceId, identityKey: mine.identityKey)], ofPeer: accountC, in: context
-        )
+            [(deviceId: mine.deviceId, identityKey: mine.identityKey)], ofPeer: accountC)
         SessionAddressing.recordDevices(
-            [(deviceId: theirs.deviceId, identityKey: theirs.identityKey)], ofPeer: accountB, in: context
-        )
+            [(deviceId: theirs.deviceId, identityKey: theirs.identityKey)], ofPeer: accountB)
 
         // accountC has no active devices left, per the server.
         SessionAddressing.reconcileDevices(
-            [], activeSet: ["ffffffffffffffffffffffffffffffff"], ofPeer: accountC, in: context
-        )
+            [], activeSet: ["ffffffffffffffffffffffffffffffff"], ofPeer: accountC)
 
-        XCTAssertTrue(SessionAddressing.deviceIds(ofPeer: accountC, in: context).isEmpty)
+        XCTAssertTrue(SessionAddressing.deviceIds(ofPeer: accountC).isEmpty)
         XCTAssertEqual(
-            SessionAddressing.deviceIds(ofPeer: accountB, in: context), [theirs.deviceId],
+            SessionAddressing.deviceIds(ofPeer: accountB), [theirs.deviceId],
             "another account's set is not this account's business"
         )
     }

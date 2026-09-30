@@ -17,10 +17,12 @@ final class ContactTrustAlertTests: XCTestCase {
     override func setUp() {
         super.setUp()
         container = PersistenceController(inMemory: true).container
+        LocalRepositories.usePeerDevicesForTesting(CoreDataPeerDeviceStore(container: container))
         SessionAddressing.ownAccountOverrideForTesting = me
     }
 
     override func tearDown() {
+        LocalRepositories.usePeerDevicesForTesting(nil)
         SessionAddressing.ownAccountOverrideForTesting = nil
         KeyChangeUX.setActiveChatContact(nil)
         container = nil
@@ -53,12 +55,11 @@ final class ContactTrustAlertTests: XCTestCase {
     func testANewDeviceAfterTheListingIsPinnedWithoutAnAlert() {
         let user = makeContact(peer)
         let one = device(0x11), added = device(0x33)
-        SessionAddressing.reconcileDevices([one], activeSet: [one.deviceId], ofPeer: peer, in: context)
+        SessionAddressing.reconcileDevices([one], activeSet: [one.deviceId], ofPeer: peer)
         SessionAddressing.reconcileDevices(
-            [one, added], activeSet: [one.deviceId, added.deviceId], ofPeer: peer, in: context
-        )
+            [one, added], activeSet: [one.deviceId, added.deviceId], ofPeer: peer)
 
-        XCTAssertEqual(Set(SessionAddressing.deviceIds(ofPeer: peer, in: context)), [one.deviceId, added.deviceId])
+        XCTAssertEqual(Set(SessionAddressing.deviceIds(ofPeer: peer)), [one.deviceId, added.deviceId])
         XCTAssertNil(user.trustAlert)
     }
 
@@ -80,7 +81,7 @@ final class ContactTrustAlertTests: XCTestCase {
         ContactLinkService.shared.pinKnownIdentityKey(on: user, identityKey: device(0x22).identityKey)
 
         XCTAssertNotEqual(user.ktStatus, .keyChanged)
-        XCTAssertEqual(Set(SessionAddressing.deviceIds(ofPeer: peer, in: context)),
+        XCTAssertEqual(Set(SessionAddressing.deviceIds(ofPeer: peer)),
                        [device(0x11).deviceId, device(0x22).deviceId])
         XCTAssertNil(user.trustAlert)
     }
@@ -123,7 +124,7 @@ final class ContactTrustAlertTests: XCTestCase {
 
     func testSafetyNumbersCoverEveryDevice() {
         let user = makeContact(peer)
-        SessionAddressing.recordDevices([device(0x11), device(0x22)], ofPeer: peer, in: context)
+        SessionAddressing.recordDevices([device(0x11), device(0x22)], ofPeer: peer)
         XCTAssertEqual(Set(KeyChangeUX.safetyDeviceIds(for: user, context: context)),
                        [device(0x11).deviceId, device(0x22).deviceId])
     }

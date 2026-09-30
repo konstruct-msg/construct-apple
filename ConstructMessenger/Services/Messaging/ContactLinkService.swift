@@ -145,11 +145,10 @@ final class ContactLinkService {
             )
             user.knownIdentityKey = identityKey
         }
-        if let context = user.managedObjectContext, !user.id.isEmpty {
+        if !user.id.isEmpty {
             SessionAddressing.recordDevices(
                 [(deviceId: deriveDeviceId(identityPublicKey: identityKey), identityKey: identityKey)],
-                ofPeer: user.id,
-                in: context
+                ofPeer: user.id
             )
         }
     }

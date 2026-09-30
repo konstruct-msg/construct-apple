@@ -186,8 +186,7 @@ final class MultiDeviceSendCoordinator {
               Date().timeIntervalSince(cache.fetchedAt) < recipientCacheTTL
         else { return nil }
 
-        let context = PersistenceController.shared.container.viewContext
-        let known = SessionAddressing.devices(ofPeer: recipientUserId, in: context).map(\.deviceId)
+        let known = SessionAddressing.devices(ofPeer: recipientUserId).map(\.deviceId)
         guard Self.cachedSetStillMatches(cached: cache.bundles.map(\.deviceId), known: known) else {
             Log.info(
                 "MultiDevice: recipient bundle cache for \(recipientUserId.prefix(8))… dropped — device set changed",
@@ -209,8 +208,7 @@ final class MultiDeviceSendCoordinator {
     /// Unknown counts as "yes": a recipient we hold no devices for is one we have certainly not
     /// established sessions with.
     private func fanOutNeedsOneTimePrekey(for recipientUserId: String) -> Bool {
-        let context = PersistenceController.shared.container.viewContext
-        let known = SessionAddressing.devices(ofPeer: recipientUserId, in: context).map(\.deviceId)
+        let known = SessionAddressing.devices(ofPeer: recipientUserId).map(\.deviceId)
         return Self.needsOneTimePrekey(knownDeviceIds: known) {
             CryptoManager.shared.hasSession(for: $0)
         }
@@ -686,15 +684,7 @@ final class MultiDeviceSendCoordinator {
     ) async {
         PerformanceMetrics.shared.record(.fanoutDeviceSkipped, label: reason)
 
-        let believed: Int
-        if peer.isEmpty {
-            believed = 0
-        } else {
-            let context = PersistenceController.shared.container.newBackgroundContext()
-            believed = await context.perform {
-                SessionAddressing.deviceIds(ofPeer: peer, in: context).count
-            }
-        }
+        let believed = peer.isEmpty ? 0 : SessionAddressing.deviceIds(ofPeer: peer).count
 
         let target = device.map { " device=\($0.prefix(8))…" } ?? ""
         let why = error.map { ": \($0)" } ?? ""

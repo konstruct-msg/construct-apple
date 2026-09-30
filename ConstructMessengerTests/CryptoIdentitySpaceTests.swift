@@ -101,7 +101,7 @@ final class CryptoIdentitySpaceTests: XCTestCase {
         let offenders = sites.filter { accountSpaced.contains($0.text) }
         XCTAssertTrue(
             offenders.isEmpty,
-            "these hand the core an account id — expand it with SessionAddressing.deviceIds(ofPeer:in:):\n"
+            "these hand the core an account id — expand it with SessionAddressing.deviceIds(ofPeer:):\n"
                 + offenders.map { "  \($0.file):\($0.line) — contactId: \($0.text)" }
                     .sorted().joined(separator: "\n")
         )
@@ -127,7 +127,7 @@ final class CryptoIdentitySpaceTests: XCTestCase {
 
     /// **The device set is enumerated, never sampled.**
     ///
-    /// `deviceIds(ofPeer:in:)` replaced a function that answered with one device, and the way to
+    /// `deviceIds(ofPeer:)` replaced a function that answered with one device, and the way to
     /// undo that replacement without noticing is to take `.first` of the set — which restores the
     /// old behaviour exactly, including its bug, while reading as if the set were being used. The
     /// order is deliberate and stable (`firstSeenAt`, then `deviceId`), so the first element is

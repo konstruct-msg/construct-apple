@@ -266,8 +266,7 @@ final class OutboundMessagePipeline {
     /// — fail closed under stealth, as the seal key's absence always did — for a peer we hold no
     /// key for at all: nothing can be encrypted to and nothing sealed.
     private func recipientTargets(for recipientId: String, stealthOn: Bool) async throws -> [DeviceDeliveryTarget] {
-        let context = PersistenceController.shared.container.viewContext
-        let local = SessionAddressing.devices(ofPeer: recipientId, in: context).map {
+        let local = SessionAddressing.devices(ofPeer: recipientId).map {
             PlannedRecipientDevice(deviceId: $0.deviceId, identityPublic: $0.identityKey)
         }
         // Free when it is there, never fetched for: the plan is built from what we hold, and the

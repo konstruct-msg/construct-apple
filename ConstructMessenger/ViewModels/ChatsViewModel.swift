@@ -210,8 +210,7 @@ class ChatsViewModel {
         // for, which is every peer we have only ever received from, resolving after the prune
         // returns nothing. `archiveSessions(ofPeer:)` ran in exactly that position and archived
         // nothing for those contacts.
-        let context = PersistenceController.shared.container.viewContext
-        let peerDevices = SessionAddressing.deviceIds(ofPeer: userId, in: context)
+        let peerDevices = SessionAddressing.deviceIds(ofPeer: userId)
 
         chatManagementService.pruneContactLocally(userId: userId)
 

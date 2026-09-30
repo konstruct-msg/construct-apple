@@ -23,10 +23,12 @@ final class HistorySnapshotImporterTests: XCTestCase {
     override func setUp() {
         super.setUp()
         container = PersistenceController(inMemory: true).container
+        LocalRepositories.usePeerDevicesForTesting(CoreDataPeerDeviceStore(container: container))
         MessageDisplayCache.shared.evictAll()
     }
 
     override func tearDown() {
+        LocalRepositories.usePeerDevicesForTesting(nil)
         MessageDisplayCache.shared.evictAll()
         container = nil
         super.tearDown()
@@ -145,7 +147,7 @@ final class HistorySnapshotImporterTests: XCTestCase {
         hint.identityKey = Data(repeating: 0x11, count: 32)
         let result = try importer.apply(.peerDevice(hint), expectedUserId: local, in: context)
         XCTAssertEqual(result, .skipped(.hintDroppedBadId))
-        XCTAssertEqual(try context.fetch(PeerDevice.fetchRequest()).count, 0)
+        XCTAssertEqual(try LocalRepositories.peerDevices.allDevices().count, 0)
     }
 
     func testMediaAlreadyPresentIsNotRewritten() throws {

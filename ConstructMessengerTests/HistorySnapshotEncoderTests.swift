@@ -35,10 +35,12 @@ final class HistorySnapshotEncoderTests: XCTestCase {
     override func setUp() {
         super.setUp()
         container = PersistenceController(inMemory: true).container
+        LocalRepositories.usePeerDevicesForTesting(CoreDataPeerDeviceStore(container: container))
         MessageDisplayCache.shared.evictAll()
     }
 
     override func tearDown() {
+        LocalRepositories.usePeerDevicesForTesting(nil)
         MessageDisplayCache.shared.evictAll()
         container = nil
         super.tearDown()
@@ -131,6 +133,8 @@ final class HistorySnapshotEncoderTests: XCTestCase {
 
         let storeB = PersistenceController(inMemory: true).container
         let contextB = storeB.viewContext
+        // Device B's own peer-device table, or B would re-encode A's hints and prove nothing.
+        LocalRepositories.usePeerDevicesForTesting(CoreDataPeerDeviceStore(container: storeB))
         _ = try HistorySnapshotImporter().importRecords(fromA.records, expectedUserId: local, in: contextB)
 
         let encoderB = HistorySnapshotEncoder(identity: identity)
@@ -224,11 +228,10 @@ final class HistorySnapshotEncoderTests: XCTestCase {
         reaction.timestampMs = 1_700_000_000_500
 
         let key = Data(repeating: 0x11, count: 32)
-        let hint = PeerDevice(context: context)
-        hint.accountId = peer
-        hint.deviceId = deriveDeviceId(identityPublicKey: key)
-        hint.identityKey = key
-        hint.firstSeenAt = Date(timeIntervalSince1970: 1_700_000_000)
+        _ = try LocalRepositories.peerDevices.record([PeerDeviceRecord(
+            deviceId: deriveDeviceId(identityPublicKey: key), accountId: peer,
+            identityKey: key, firstSeenAt: Date(timeIntervalSince1970: 1_700_000_000)
+        )])
 
         _ = CTCallRecord.create(
             id: "call-1",

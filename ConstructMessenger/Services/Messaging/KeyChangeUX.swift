@@ -115,7 +115,7 @@ enum KeyChangeUX {
     /// server added, until device sets are cross-signed
     /// (`decisions/new-device-alarm-waits-for-cross-signing.md`).
     static func safetyDeviceIds(for user: User, context: NSManagedObjectContext) -> [String] {
-        SessionAddressing.deviceIds(ofPeer: user.id, in: context)
+        SessionAddressing.deviceIds(ofPeer: user.id)
     }
 
     // MARK: - Helpers

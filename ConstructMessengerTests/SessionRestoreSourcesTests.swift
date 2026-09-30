@@ -40,13 +40,16 @@ final class SessionRestoreSourcesTests: XCTestCase {
         chat.id = UUID().uuidString
         chat.otherUser = user
         chat.lastMessageTime = Date()
-        for (index, deviceId) in [phone, desktop].enumerated() {
-            let row = PeerDevice(context: context)
-            row.accountId = account
-            row.deviceId = deviceId
-            row.firstSeenAt = Date(timeIntervalSince1970: TimeInterval(1_000 + index))
-        }
         try? context.save()
+        let devices = CoreDataPeerDeviceStore(container: container)
+        LocalRepositories.usePeerDevicesForTesting(devices)
+        defer { LocalRepositories.usePeerDevicesForTesting(nil) }
+        _ = try? devices.record([phone, desktop].enumerated().map { index, deviceId in
+            PeerDeviceRecord(
+                deviceId: deviceId, accountId: account, identityKey: Data(),
+                firstSeenAt: Date(timeIntervalSince1970: TimeInterval(1_000 + index))
+            )
+        })
 
         let ids = SessionRestoreService(persistence: .shared)
             .getRecentChatDeviceIds(limit: 20, context: context)
@@ -76,6 +79,8 @@ final class SessionRestoreSourcesTests: XCTestCase {
         chat.otherUser = user
         chat.lastMessageTime = Date()
         try? context.save()
+        LocalRepositories.usePeerDevicesForTesting(CoreDataPeerDeviceStore(container: container))
+        defer { LocalRepositories.usePeerDevicesForTesting(nil) }
 
         let ids = SessionRestoreService(persistence: .shared)
             .getRecentChatDeviceIds(limit: 20, context: context)

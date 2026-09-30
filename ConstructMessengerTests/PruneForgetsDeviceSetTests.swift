@@ -20,10 +20,13 @@ final class PruneForgetsDeviceSetTests: XCTestCase {
 
     override func setUp() {
         super.setUp()
-        context = PersistenceController(inMemory: true).container.viewContext
+        let container = PersistenceController(inMemory: true).container
+        context = container.viewContext
+        LocalRepositories.usePeerDevicesForTesting(CoreDataPeerDeviceStore(container: container))
     }
 
     override func tearDown() {
+        LocalRepositories.usePeerDevicesForTesting(nil)
         context = nil
         super.tearDown()
     }
@@ -39,12 +42,9 @@ final class PruneForgetsDeviceSetTests: XCTestCase {
     }
 
     private func makePeerDevice(_ deviceId: String) {
-        let row = PeerDevice(context: context)
-        row.deviceId = deviceId
-        row.accountId = account
-        row.identityKey = identityKey
-        row.firstSeenAt = Date()
-        try? context.save()
+        _ = try? LocalRepositories.peerDevices.record([PeerDeviceRecord(
+            deviceId: deviceId, accountId: account, identityKey: identityKey, firstSeenAt: Date()
+        )])
     }
 
     /// The case the ordering exists for.
@@ -55,15 +55,14 @@ final class PruneForgetsDeviceSetTests: XCTestCase {
     /// session with that contact survives the prune that was supposed to end it.
     ///
     /// The pin is driven through `pinnedIdentityKeyOverrideForTesting` rather than the context
-    /// above, because `SessionAddressing.pinnedIdentityKey` does not read the context it is handed
-    /// — it opens its own on `PersistenceController.shared`. That asymmetry is worth knowing about
-    /// (a `deviceIds(ofPeer:in:)` whose fallback ignores `in:` is a seam that will mislead someone)
-    /// but it is not what this test is about, so the override stands in for the row's presence.
+    /// above, because `SessionAddressing.pinnedIdentityKey` opens its own context on
+    /// `PersistenceController.shared` — `User` is not behind the storage seam yet — so the
+    /// override stands in for the row's presence.
     func testLosingThePinLosesTheOnlyNameItsDevicesHad() {
         SessionAddressing.pinnedIdentityKeyOverrideForTesting = { [identityKey] in
             $0 == self.account ? identityKey : nil
         }
-        let before = SessionAddressing.deviceIds(ofPeer: account, in: context)
+        let before = SessionAddressing.deviceIds(ofPeer: account)
         XCTAssertEqual(before.count, 1, "a pinned key names exactly one device")
 
         // What `context.delete(user)` costs the resolver: the pin is gone with the row.
@@ -71,7 +70,7 @@ final class PruneForgetsDeviceSetTests: XCTestCase {
         defer { SessionAddressing.pinnedIdentityKeyOverrideForTesting = nil }
 
         XCTAssertTrue(
-            SessionAddressing.deviceIds(ofPeer: account, in: context).isEmpty,
+            SessionAddressing.deviceIds(ofPeer: account).isEmpty,
             "this is why the device set is resolved before pruneContactLocally, not after"
         )
     }
@@ -84,13 +83,13 @@ final class PruneForgetsDeviceSetTests: XCTestCase {
         makePeerDevice("6f5e37ac9b1d4e2f8a0c5b7d3e1f9a2c")
         makePeerDevice("a1b2c3d4e5f60718293a4b5c6d7e8f90")
 
-        XCTAssertEqual(SessionAddressing.deviceIds(ofPeer: account, in: context).count, 2)
+        XCTAssertEqual(SessionAddressing.deviceIds(ofPeer: account).count, 2)
 
         context.delete(user)
         try? context.save()
 
         XCTAssertEqual(
-            Set(SessionAddressing.deviceIds(ofPeer: account, in: context)),
+            Set(SessionAddressing.deviceIds(ofPeer: account)),
             ["6f5e37ac9b1d4e2f8a0c5b7d3e1f9a2c", "a1b2c3d4e5f60718293a4b5c6d7e8f90"],
             "PeerDevice rows are keyed by device and cascade from nothing"
         )
@@ -101,7 +100,7 @@ final class PruneForgetsDeviceSetTests: XCTestCase {
     /// account UUID to `forgetContactState` would ask the core about a contact it has never held.
     func testAContactWeCannotNameYieldsAnEmptySetNotTheAccountId() {
         makeUser(pinned: false)
-        let devices = SessionAddressing.deviceIds(ofPeer: account, in: context)
+        let devices = SessionAddressing.deviceIds(ofPeer: account)
         XCTAssertTrue(devices.isEmpty)
         XCTAssertFalse(devices.contains(account), "the account id is not a device and must never stand in for one")
     }

@@ -1035,7 +1035,7 @@ final class MessageRouter {
             return [namedSender]
         }
 
-        let known = SessionAddressing.deviceIds(ofPeer: otherUserId, in: context).filter(held.contains)
+        let known = SessionAddressing.deviceIds(ofPeer: otherUserId).filter(held.contains)
         // Nothing on record is not the same as nothing to try: a peer we have never enumerated
         // still has the pinned session, and that is the state every single-device account is in.
         let sessions = known.isEmpty ? (pinned.map { [$0] } ?? []) : known

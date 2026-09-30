@@ -25,10 +25,13 @@ final class HeartbeatAddressingTests: XCTestCase {
 
     override func setUp() {
         super.setUp()
-        context = PersistenceController(inMemory: true).container.viewContext
+        let container = PersistenceController(inMemory: true).container
+        context = container.viewContext
+        LocalRepositories.usePeerDevicesForTesting(CoreDataPeerDeviceStore(container: container))
     }
 
     override func tearDown() {
+        LocalRepositories.usePeerDevicesForTesting(nil)
         context = nil
         super.tearDown()
     }

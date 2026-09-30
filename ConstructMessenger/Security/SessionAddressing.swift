@@ -84,7 +84,7 @@ enum SessionAddressing {
     /// 2026-08-26. It is logged as an error for that reason, and `#function` names the caller so
     /// the log says which one rather than that it happened.
     ///
-    /// A caller holding an account id expands it first — `deviceIds(ofPeer:in:)` — and acts on
+    /// A caller holding an account id expands it first — `deviceIds(ofPeer:)` — and acts on
     /// every device in the set.
     static func asDevice(_ id: String, caller: StaticString = #function) -> String? {
         if isCryptoIdentity(id) { return id }
@@ -110,7 +110,7 @@ enum SessionAddressing {
     /// install.
     ///
     /// Three call sites outside this file may use it, and each names it `pinned…` at the variable:
-    /// the offline fallback in `deviceIds(ofPeer:in:)`, the send-tag fallback, and the coordinator's
+    /// the offline fallback in `deviceIds(ofPeer:)`, the send-tag fallback, and the coordinator's
     /// teardown addressing when the set is empty. Anything on the encrypt, `hasSession` or decrypt
     /// path asks `asDevice(_:)` instead and is handed a device by its caller.
     ///
@@ -164,10 +164,11 @@ enum SessionAddressing {
     /// value the first one already determines. The list is the contact list, and this runs on a
     /// control path, not per message.
     ///
-    /// Runs on `context`'s queue, like its caller.
+    /// Runs on `context`'s queue, like its caller — for the `User` scan; the device set is read
+    /// from `LocalRepositories.peerDevices`.
     static func identityKey(ofDevice deviceId: String, in context: NSManagedObjectContext) -> Data? {
         guard isCryptoIdentity(deviceId) else { return nil }
-        if let row = peerDeviceRow(deviceId, in: context) { return row.identityKey }
+        if let row = try? LocalRepositories.peerDevices.device(deviceId) { return row.identityKey }
         // The pre-`PeerDevice` answer, kept as the fallback rather than deleted: `knownIdentityKey`
         // is still written by the bundle-verify path and is the only pin a device carries before
         // its first `recordDevices`. It answers for exactly one device per account — which is the
@@ -201,24 +202,19 @@ enum SessionAddressing {
     ///
     /// Ordered by `firstSeenAt` so the walk order is stable across runs, and so the device a
     /// single-device peer has always had stays first — which is the order the pinned key produced
-    /// before this entity existed.
+    /// before this entity existed. `deviceId` breaks ties, and the tie is the ordinary case:
+    /// devices first recorded from one bundle answer are written microseconds apart.
     ///
-    /// Runs on `context`'s queue, like its caller.
-    static func devices(ofPeer accountId: String, in context: NSManagedObjectContext)
-        -> [(deviceId: String, identityKey: Data)] {
+    /// Callable from any thread: `LocalRepositories.peerDevices` is not tied to a context.
+    static func devices(ofPeer accountId: String) -> [(deviceId: String, identityKey: Data)] {
         guard !accountId.isEmpty else { return [] }
-        let req = PeerDevice.fetchRequest()
-        req.predicate = NSPredicate(format: "accountId == %@", accountId)
-        // `deviceId` breaks ties, and the tie is the ordinary case: devices first recorded from one
-        // bundle answer are written microseconds apart, so `firstSeenAt` alone leaves the order of
-        // a first fetch to whatever the store hands back. A walk whose order differs between runs
-        // makes a failure reproduce on one launch and not the next.
-        req.sortDescriptors = [
-            NSSortDescriptor(key: "firstSeenAt", ascending: true),
-            NSSortDescriptor(key: "deviceId", ascending: true)
-        ]
-        guard let rows = try? context.fetch(req) else { return [] }
-        return rows.map { (deviceId: $0.deviceId, identityKey: $0.identityKey) }
+        do {
+            return try LocalRepositories.peerDevices.devices(ofAccount: accountId)
+                .map { (deviceId: $0.deviceId, identityKey: $0.identityKey) }
+        } catch {
+            Log.error("PEER_DEVICE_READ_FAIL for \(accountId.prefix(8))…: \(error)", category: "Crypto")
+            return []
+        }
     }
 
     /// Persist what the key server said about `accountId`'s devices.
@@ -237,23 +233,25 @@ enum SessionAddressing {
     /// **Nothing is removed here.** A device absent from `devices` may be deleted, or the answer
     /// may be narrowed, or the client may have dropped it locally on a failed hybrid-PQ check —
     /// three different states that look identical in this list. Pruning belongs to
-    /// `reconcileDevices(_:activeSet:ofPeer:in:)`, which is given the set the server states
+    /// `reconcileDevices(_:activeSet:ofPeer:)`, which is given the set the server states
     /// separately for exactly that reason (§A.3).
     ///
-    /// An empty `devices` is not recorded, for the reason stated on `devices(ofPeer:in:)`.
+    /// An empty `devices` is not recorded, for the reason stated on `devices(ofPeer:)`.
     ///
     /// A device the account did not have is pinned and nothing more: no alert, since it cannot
     /// tell a device the contact linked from one the server added
     /// (`decisions/new-device-alarm-waits-for-cross-signing.md`).
     ///
-    /// Runs on `context`'s queue, like its caller.
+    /// Written by itself, not as part of any caller's context: a row is a pin of what the server
+    /// said, true whether or not the caller's own write later succeeds.
     static func recordDevices(
         _ devices: [(deviceId: String, identityKey: Data)],
-        ofPeer accountId: String,
-        in context: NSManagedObjectContext
+        ofPeer accountId: String
     ) {
         guard !accountId.isEmpty, !devices.isEmpty else { return }
-        var fresh: [String] = []
+        let store = LocalRepositories.peerDevices
+        var candidates: [PeerDeviceRecord] = []
+        let now = Date()
         for device in devices {
             guard isCryptoIdentity(device.deviceId), !device.identityKey.isEmpty else { continue }
             guard deriveDeviceId(identityPublicKey: device.identityKey) == device.deviceId else {
@@ -264,10 +262,10 @@ enum SessionAddressing {
                 )
                 continue
             }
-            if let existing = peerDeviceRow(device.deviceId, in: context) {
-                // `identityKey` cannot have changed: the id is a function of it, and a row is
-                // found by that id. Only the account can move, and it moving is the server
-                // reassigning a device — worth a line, not a silent overwrite.
+            // `identityKey` cannot have changed for a recorded id: the id is a function of it.
+            // Only the account can move, and it moving is the server reassigning a device —
+            // worth a line, not a silent overwrite. The store keeps the first account.
+            if let existing = try? store.device(device.deviceId) {
                 if existing.accountId != accountId {
                     Log.error(
                         "PEER_DEVICE_REHOMED: \(device.deviceId.prefix(8))… was \(existing.accountId.prefix(8))…, "
@@ -277,19 +275,18 @@ enum SessionAddressing {
                 }
                 continue
             }
-            let row = PeerDevice(context: context)
-            row.deviceId = device.deviceId
-            row.accountId = accountId
-            row.identityKey = device.identityKey
-            row.firstSeenAt = Date()
-            fresh.append(device.deviceId)
+            candidates.append(PeerDeviceRecord(
+                deviceId: device.deviceId, accountId: accountId,
+                identityKey: device.identityKey, firstSeenAt: now
+            ))
         }
-        guard !fresh.isEmpty else { return }
+        guard !candidates.isEmpty else { return }
         do {
-            try context.saveOrThrow(category: "Crypto")
+            let fresh = try store.record(candidates)
+            guard !fresh.isEmpty else { return }
             Log.info(
                 "PEER_DEVICE_PINNED: \(fresh.count) new device(s) for \(accountId.prefix(8))… "
-                + "(set is now \(Self.devices(ofPeer: accountId, in: context).count))",
+                + "(set is now \(Self.devices(ofPeer: accountId).count))",
                 category: "Crypto"
             )
         } catch {
@@ -322,34 +319,23 @@ enum SessionAddressing {
     /// combination is the server contradicting itself inside one response, and the bundle is the
     /// half we can check: it carries a key whose derivation we verify. Trusting the list over the
     /// evidence would delete a device we are holding proof of.
-    ///
-    /// Runs on `context`'s queue, like its caller.
     static func reconcileDevices(
         _ devices: [(deviceId: String, identityKey: Data)],
         activeSet: [String],
-        ofPeer accountId: String,
-        in context: NSManagedObjectContext
+        ofPeer accountId: String
     ) {
-        recordDevices(devices, ofPeer: accountId, in: context)
+        recordDevices(devices, ofPeer: accountId)
 
         guard !accountId.isEmpty, !activeSet.isEmpty else { return }
 
         let keep = Set(activeSet).union(devices.map(\.deviceId))
-        let stale = Self.devices(ofPeer: accountId, in: context)
-            .map(\.deviceId)
-            .filter { !keep.contains($0) }
-        guard !stale.isEmpty else { return }
-
-        for deviceId in stale {
-            guard let row = peerDeviceRow(deviceId, in: context) else { continue }
-            context.delete(row)
-        }
         do {
-            try context.saveOrThrow(category: "Crypto")
+            let stale = try LocalRepositories.peerDevices.retain(ofAccount: accountId, keeping: keep)
+            guard !stale.isEmpty else { return }
             Log.info(
                 "PEER_DEVICE_RETIRED: \(stale.count) device(s) of \(accountId.prefix(8))… no longer "
                 + "active — \(stale.map { $0.prefix(8) + "…" }.joined(separator: ",")) "
-                + "(set is now \(Self.devices(ofPeer: accountId, in: context).count))",
+                + "(set is now \(Self.devices(ofPeer: accountId).count))",
                 category: "Crypto"
             )
         } catch {
@@ -380,44 +366,15 @@ enum SessionAddressing {
     /// Callers skip; they must never fall back to addressing the account — that is what put a
     /// teardown in every device's queue and tore down siblings' healthy sessions.
     ///
-    /// Runs on `context`'s queue, like its caller.
-    static func deviceIds(ofPeer peerId: String, in context: NSManagedObjectContext) -> [String] {
+    /// Callable from any thread. Until the peer-device table moved behind `PeerDeviceStore` this
+    /// came in two overloads — one reading the caller's context, one choosing a context by thread —
+    /// because `viewContext` read off the main actor returns nothing instead of failing.
+    static func deviceIds(ofPeer peerId: String) -> [String] {
         guard !peerId.isEmpty else { return [] }
         if isCryptoIdentity(peerId) { return [peerId] }
-        let set = devices(ofPeer: peerId, in: context).map(\.deviceId)
+        let set = devices(ofPeer: peerId).map(\.deviceId)
         if !set.isEmpty { return set }
         return pinnedDevice(ofPeer: peerId).map { [$0] } ?? []
-    }
-
-    /// The peer's device set, read on a context it is legal to read it on.
-    ///
-    /// The overload above takes a context because its callers have one. These callers do not: a
-    /// send gate, a retry decision, a preflight — and several of them run off the main actor,
-    /// where `viewContext` does not fail but **returns nothing**, which reads as "this peer has no
-    /// devices" and is indistinguishable from the truth at the call site. `AccountSendTag` found
-    /// this first and says so in its own comment; every `ofPeer:` fold has the same exposure.
-    ///
-    /// A fresh background context rather than `viewContext.performAndWait` off the main thread:
-    /// `performAndWait` would block on the main queue, and the background decrypt path already
-    /// hops the other way (`DispatchQueue.main.sync`), so the two together are a deadlock. A
-    /// `PeerDevice` fetch is a handful of rows on an indexed column; the context is the cheap part
-    /// of being right.
-    static func deviceIds(ofPeer peerId: String) -> [String] {
-        if Thread.isMainThread {
-            return deviceIds(ofPeer: peerId, in: PersistenceController.shared.container.viewContext)
-        }
-        let context = PersistenceController.shared.container.newBackgroundContext()
-        var out: [String] = []
-        context.performAndWait { out = deviceIds(ofPeer: peerId, in: context) }
-        return out
-    }
-
-    /// One row by device id. Runs on `context`'s queue.
-    private static func peerDeviceRow(_ deviceId: String, in context: NSManagedObjectContext) -> PeerDevice? {
-        let req = PeerDevice.fetchRequest()
-        req.predicate = NSPredicate(format: "deviceId == %@", deviceId)
-        req.fetchLimit = 1
-        return (try? context.fetch(req))?.first
     }
 
     /// The account a device belongs to, and the identity key that names it — the seam read
@@ -449,7 +406,7 @@ enum SessionAddressing {
         // caller that needed an account id for such a device — `sendEndSession` above all — had no
         // way to name it and sent to the account instead, which the server fans out to every
         // device of it. See `decisions/a-peer-is-a-set-of-devices.md`.
-        if let row = peerDeviceRow(deviceId, in: context), !row.accountId.isEmpty {
+        if let row = try? LocalRepositories.peerDevices.device(deviceId), !row.accountId.isEmpty {
             return (row.accountId, row.identityKey)
         }
         let req = User.fetchRequest()

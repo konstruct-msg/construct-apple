@@ -187,7 +187,7 @@ final class SessionRestoreService {
             let chats = try context.fetch(fetchRequest)
             return chats
                 .compactMap { $0.otherUser?.id }
-                .flatMap { SessionAddressing.deviceIds(ofPeer: $0, in: context) }
+                .flatMap { SessionAddressing.deviceIds(ofPeer: $0) }
         } catch {
             return []
         }
