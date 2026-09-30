@@ -37,7 +37,7 @@ struct FileAttachmentBubbleView: View {
             if !fileContent.caption.isEmpty {
                 Text(fileContent.caption)
                     .font(CTFont.ui(ChatUIConstants.Typography.captionSize))
-                    .foregroundColor(isSentByMe ? Color.CT.bg : Color.CT.text)
+                    .foregroundColor(isSentByMe ? Color.CT.outMsgText : Color.CT.text)
                     .padding(.top, 2)
             }
         }
@@ -139,34 +139,34 @@ struct FileAttachmentBubbleView: View {
             HStack(spacing: CTLayout.chromeGap) {
                 Image(systemName: symbolName(for: file.filename))
                     .font(.system(size: 22, weight: .regular))
-                    .foregroundStyle(isSentByMe ? Color.CT.bg : Color.CT.accent)
+                    .foregroundStyle(isSentByMe ? Color.CT.outMsgText : Color.CT.accent)
                     .frame(width: 32)
                     .accessibilityHidden(true)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(file.filename)
                         .font(CTFont.ui(13, weight: .medium))
-                        .foregroundColor(isSentByMe ? Color.CT.bg : Color.CT.text)
+                        .foregroundColor(isSentByMe ? Color.CT.outMsgText : Color.CT.text)
                         .lineLimit(1)
                     Text(ByteCountFormatter.string(fromByteCount: Int64(file.size), countStyle: .file))
                         .font(CTFont.mono(ChatUIConstants.Typography.systemSize))
-                        .foregroundColor(isSentByMe ? Color.CT.bg.opacity(0.7) : Color.CT.textDim)
+                        .foregroundColor(isSentByMe ? Color.CT.outMsgText.opacity(0.7) : Color.CT.textDim)
                 }
 
                 Spacer()
 
                 if downloading.contains(file.mediaId) {
                     ProgressView()
-                        .tint(isSentByMe ? Color.CT.bg : Color.CT.accent)
+                        .tint(isSentByMe ? Color.CT.outMsgText : Color.CT.accent)
                         .scaleEffect(0.8)
                 } else if downloadedURLs[file.mediaId] != nil {
                     Image(systemName: "checkmark.circle.fill")
                         .font(CTFont.body)
-                        .foregroundColor(isSentByMe ? Color.CT.bg.opacity(0.8) : Color.CT.accent)
+                        .foregroundColor(isSentByMe ? Color.CT.outMsgText.opacity(0.8) : Color.CT.accent)
                 } else {
                     Image(systemName: "arrow.down.circle.fill")
                         .font(CTFont.body)
-                        .foregroundColor(isSentByMe ? Color.CT.bg.opacity(0.8) : Color.CT.accent)
+                        .foregroundColor(isSentByMe ? Color.CT.outMsgText.opacity(0.8) : Color.CT.accent)
                 }
             }
         }
@@ -229,11 +229,10 @@ struct FileAttachmentBubbleView: View {
 
     /// Shared download helper — saves decrypted data to a stable temp file.
     private func downloadFile(_ file: FileMessageContent.FileEntry) async throws -> URL {
-        let data = try await MediaManager.shared.downloadAndDecryptFile(
+        let data = try await MediaManager.shared.downloadAndDecryptMedia(
             mediaId: file.mediaId,
             mediaUrl: file.mediaUrl,
-            mediaKey: file.mediaKey,
-            compressed: file.compressed
+            mediaKey: file.mediaKey
         )
         let tmpURL = FileManager.default.temporaryDirectory
             .appendingPathComponent(file.filename)

@@ -409,7 +409,6 @@ class MediaManager {
             thumbnail: optimized.thumbnail,
             hash: uploadResult.hash,
             filename: nil,
-            compressed: false,
             blurhash: blurhash
         )
     }
@@ -450,7 +449,6 @@ class MediaManager {
             thumbnail: thumbnail,
             hash: uploadResult.hash,
             filename: nil,
-            compressed: false,
             blurhash: blurhash
         )
     }
@@ -519,7 +517,6 @@ class MediaManager {
             thumbnail: thumbnail,
             hash: uploadResult.hash,
             filename: nil,
-            compressed: attachment.videoQuality != .original,
             blurhash: blurhash
         )
     }
@@ -705,25 +702,25 @@ class MediaManager {
         let detectedMimeType = UTType(filenameExtension: url.pathExtension)?.preferredMIMEType
             ?? "application/octet-stream"
 
-        // Attempt ZLIB compression for compressible file types
-        let (dataToUpload, compressed) = Self.compressIfBeneficial(originalData, mimeType: detectedMimeType)
-
-        let uploadResult = try await Self.uploadWithRetry(data: dataToUpload, mimeType: detectedMimeType)
-        Log.info("File uploaded: \(uploadResult.mediaId) compressed=\(compressed)", category: "MediaManager")
+        // Sent as it is. Until 2026-09-30 a compressible document was DEFLATEd first, but no
+        // field on the wire said so: receivers showed the compressed bytes (Android now guesses by
+        // trying to inflate). Compression before encryption would also let the sealed size speak
+        // for the contents.
+        let uploadResult = try await Self.uploadWithRetry(data: originalData, mimeType: detectedMimeType)
+        Log.info("File uploaded: \(uploadResult.mediaId)", category: "MediaManager")
 
         return MediaMessageData(
             mediaId: uploadResult.mediaId,
             mediaUrl: uploadResult.mediaUrl,
             mediaKey: uploadResult.encryptionKey,
             mediaType: detectedMimeType,
-            size: originalData.count,         // original size shown to user
+            size: originalData.count,
             width: nil,
             height: nil,
             duration: nil,
             thumbnail: nil,
             hash: uploadResult.hash,
-            filename: filename,
-            compressed: compressed
+            filename: filename
         )
     }
 
@@ -751,46 +748,6 @@ class MediaManager {
             waveform: waveform,
             hash: uploadResult.hash
         )
-    }
-
-    // MARK: - Compression Helpers
-
-    /// MIME types that are already compressed — re-compressing is wasteful
-    private static let alreadyCompressedMimeTypes: Set<String> = [
-        "image/jpeg", "image/png", "image/gif", "image/webp", "image/heic",
-        "video/mp4", "video/quicktime", "video/mpeg", "video/x-msvideo",
-        "audio/mpeg", "audio/aac", "audio/mp4", "audio/ogg",
-        "application/pdf",
-        "application/zip", "application/gzip", "application/x-bzip2",
-        "application/x-rar-compressed", "application/x-7z-compressed"
-    ]
-
-    /// Compress with ZLIB if:
-    ///   a) the MIME type is not already compressed, AND
-    ///   b) compression reduces size by at least 10%
-    /// Returns (data, wasCompressed).
-    static func compressIfBeneficial(_ data: Data, mimeType: String) -> (Data, Bool) {
-        guard !alreadyCompressedMimeTypes.contains(mimeType),
-              data.count > 512 else {   // no point compressing tiny files
-            return (data, false)
-        }
-        guard let compressed = try? (data as NSData).compressed(using: .zlib) as Data else {
-            return (data, false)
-        }
-        let ratio = Double(compressed.count) / Double(data.count)
-        if ratio < 0.90 {
-            Log.debug("Compressed \(data.count) → \(compressed.count) bytes (\(Int(ratio * 100))%)", category: "MediaManager")
-            return (compressed, true)
-        }
-        return (data, false)
-    }
-
-    /// Decompress ZLIB-compressed data (used on the receiver side)
-    static func decompress(_ data: Data) throws -> Data {
-        guard let decompressed = try? (data as NSData).decompressed(using: .zlib) as Data else {
-            throw MediaUploadError.encryptionFailed   // reuse existing error type
-        }
-        return decompressed
     }
 
     /// Upload avatar image (profile sharing)
@@ -888,31 +845,6 @@ class MediaManager {
         return decryptedData
     }
 
-    /// Download, decrypt, and optionally decompress a file attachment.
-    /// - Parameters:
-    ///   - mediaId: UUID of the media file
-    ///   - mediaUrl: Download URL (used for logging)
-    ///   - mediaKey: Raw 32-byte AES-256-GCM key
-    ///   - compressed: Whether the payload was ZLIB-compressed before encryption
-    /// - Returns: Original (decompressed if needed) file data
-    func downloadAndDecryptFile(
-        mediaId: String,
-        mediaUrl: String,
-        mediaKey: Data,
-        compressed: Bool
-    ) async throws -> Data {
-        let decryptedData = try await downloadAndDecryptMedia(
-            mediaId: mediaId,
-            mediaUrl: mediaUrl,
-            mediaKey: mediaKey
-        )
-        guard compressed else { return decryptedData }
-
-        Log.debug("Decompressing file attachment (\(decryptedData.count) bytes)", category: "MediaManager")
-        let decompressed = try Self.decompress(decryptedData)
-        Log.info("Decompressed: \(decryptedData.count) → \(decompressed.count) bytes", category: "MediaManager")
-        return decompressed
-    }
     /// `includingDisk: true` deletes the user's received media permanently — anything past the
     /// server's 7-day retention cannot be fetched again. That is a legitimate thing for a person to
     /// ask for (it is wired to an explicit control in Data & Storage settings) and it is not

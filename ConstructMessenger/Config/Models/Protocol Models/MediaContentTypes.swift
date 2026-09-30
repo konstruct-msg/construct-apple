@@ -55,7 +55,6 @@ struct FileMessageContent: Codable {
         let size: Int
         let hash: String
         let filename: String
-        let compressed: Bool
     }
 }
 

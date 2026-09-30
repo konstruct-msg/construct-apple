@@ -82,7 +82,6 @@ enum HistoryBodyCodec {
                     thumbnail: nil,
                     hash: dict["hash"] as? String ?? "",
                     filename: dict["filename"] as? String,
-                    compressed: nil,
                     blurhash: dict["blurhash"] as? String
                 )
             }
@@ -106,8 +105,7 @@ enum HistoryBodyCodec {
                     duration: nil,
                     thumbnail: nil,
                     hash: entry.hash,
-                    filename: entry.filename,
-                    compressed: nil
+                    filename: entry.filename
                 )
             }
             let wire = MediaWireCodec.fileAlbumContent(mediaList: items, caption: file.caption)

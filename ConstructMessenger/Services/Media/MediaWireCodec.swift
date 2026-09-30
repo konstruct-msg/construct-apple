@@ -117,7 +117,6 @@ enum MediaWireCodec {
                 thumbnail: nil,
                 hash: d["hash"] as? String ?? "",
                 filename: d["filename"] as? String,
-                compressed: nil,
                 blurhash: d["blurhash"] as? String
             )
         }
@@ -338,7 +337,6 @@ enum MediaWireCodec {
                 "size": Int(m.fileSize),
                 "hash": dataToHex(m.fileHash),
                 "filename": m.hasFilename ? m.filename : "file",
-                "compressed": false,
             ]
             return dict
         }

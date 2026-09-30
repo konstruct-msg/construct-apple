@@ -44,7 +44,6 @@ struct MediaMessageData: Codable {
     let thumbnail: Data?    // JPEG thumbnail — JSONEncoder emits base64 transparently
     let hash: String        // SHA-256 of encrypted file
     let filename: String?   // Original filename for document attachments
-    let compressed: Bool?   // true = ZLIB-compressed before AES encryption; decompress after decrypt
     let blurhash: String?   // Compact blurred-preview string (shown before full download)
 
     init(
@@ -59,7 +58,6 @@ struct MediaMessageData: Codable {
         thumbnail: Data?,
         hash: String,
         filename: String?,
-        compressed: Bool?,
         blurhash: String? = nil
     ) {
         self.mediaId = mediaId
@@ -73,7 +71,6 @@ struct MediaMessageData: Codable {
         self.thumbnail = thumbnail
         self.hash = hash
         self.filename = filename
-        self.compressed = compressed
         self.blurhash = blurhash
     }
 }

@@ -139,7 +139,6 @@ class MediaUploadManager {
                 thumbnail: nil,
                 hash: mediaData.hash,
                 filename: mediaData.filename ?? url.lastPathComponent,
-                compressed: mediaData.compressed,
                 blurhash: nil
             ))
         }
