@@ -40,7 +40,13 @@ struct DesktopLinkRequestView: View {
         }
         .frame(minWidth: 420, idealWidth: 460, minHeight: 540)
         .task { await vm.generateJoinRequestQR() }
-        .onDisappear { vm.cancelPolling() }
+        // The join request saves keys the server does not know until the phone approves; a
+        // restore in that window reads "Device not found" and replaces this screen with recovery.
+        .onAppear { authViewModel.isRegistrationInProgress = true }
+        .onDisappear {
+            vm.cancelPolling()
+            authViewModel.isRegistrationInProgress = false
+        }
         .alert(vm.errorMessage ?? "", isPresented: $showError) {
             Button(LocalizedStringKey("ok"), role: .cancel) { vm.errorMessage = nil }
             Button(LocalizedStringKey("device_link_refresh")) {

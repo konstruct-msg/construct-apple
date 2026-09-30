@@ -289,8 +289,9 @@ class AuthViewModel {
     
     /// Restore existing session OR authenticate with device keys
     func restoreOrAuthenticateDevice() async {
-        // Registration is in progress — don't interfere. The stream's UNAUTHENTICATED
-        // errors would otherwise fire repeated re-auth attempts every few seconds.
+        // Registration or a join request is in progress — don't interfere. The stream's
+        // UNAUTHENTICATED errors would otherwise fire repeated re-auth attempts every few seconds,
+        // and a join request's keys read as "Device not found" until the phone approves them.
         if isRegistrationInProgress { return }
         // Coalesce repeated calls (scenePhase, permission prompts, etc.)
         if restoreInFlight { return }
