@@ -14,6 +14,7 @@
 //
 
 import Foundation
+import GRPCCore
 import Observation
 
 @MainActor
@@ -83,6 +84,7 @@ final class AccountRecoveryViewModel {
             quizAnswers = [:]
             setupStep = .displayWords
         } catch {
+            Log.error("Recovery setup: phrase generation failed: \(error)", category: "Recovery")
             setupStep = .failed(error.userFacingMessage)
         }
     }
@@ -130,7 +132,8 @@ final class AccountRecoveryViewModel {
             setupStep = .done(fingerprint: result.fingerprint)
             mnemonic = []   // clear sensitive data after switching away from display view
         } catch {
-            setupStep = .failed(errorMessage(from: error))
+            logFailure("setup", error)
+            setupStep = .failed(Self.errorMessage(from: error))
         }
     }
 
@@ -282,7 +285,8 @@ final class AccountRecoveryViewModel {
             recoverStep = .done
             enteredWords = Array(repeating: "", count: 12)  // clear sensitive data after step change
         } catch {
-            recoverStep = .failed(errorMessage(from: error))
+            logFailure("recover", error)
+            recoverStep = .failed(Self.errorMessage(from: error))
         }
     }
 
@@ -319,7 +323,8 @@ final class AccountRecoveryViewModel {
             confirmPhrase = ""
             confirmStep = .done
         } catch {
-            confirmStep = .failed(errorMessage(from: error))
+            logFailure("confirm", error)
+            confirmStep = .failed(Self.errorMessage(from: error))
         }
     }
 
@@ -340,21 +345,31 @@ final class AccountRecoveryViewModel {
         Array((0..<count).shuffled().prefix(3)).sorted()
     }
 
-    private func errorMessage(from error: Error) -> String {
-        // Map gRPC status codes to user-friendly messages
-        let desc = error.localizedDescription
-        if desc.contains("NOT_FOUND") || desc.contains("not_found") {
-            return NSLocalizedString("recovery_error_not_found", comment: "")
-        } else if desc.contains("FAILED_PRECONDITION") {
-            return NSLocalizedString("recovery_error_not_configured", comment: "")
-        } else if desc.contains("PERMISSION_DENIED") {
-            return NSLocalizedString("recovery_error_wrong_phrase", comment: "")
-        } else if desc.contains("RESOURCE_EXHAUSTED") {
-            return NSLocalizedString("recovery_error_cooldown", comment: "")
-        } else if desc.contains("ALREADY_EXISTS") {
-            return NSLocalizedString("recovery_error_already_set", comment: "")
+    /// What the user reads when a recovery RPC fails, decided by the status code.
+    ///
+    /// Until 2026-09-30 this searched `localizedDescription` for "ALREADY_EXISTS" and the like. A
+    /// grpc-swift 2 `RPCError` describes itself as "The operation couldn't be completed
+    /// (GRPCCore.RPCError error 1)", so no branch ever matched: every refusal — a key already set,
+    /// an expired signature, a server fault — showed that sentence, and nothing was logged.
+    static func errorMessage(from error: Error) -> String {
+        guard let rpc = error as? RPCError else { return error.localizedDescription }
+        switch rpc.code {
+        case .notFound: return NSLocalizedString("recovery_error_not_found", comment: "")
+        case .failedPrecondition: return NSLocalizedString("recovery_error_not_configured", comment: "")
+        case .permissionDenied: return NSLocalizedString("recovery_error_wrong_phrase", comment: "")
+        case .resourceExhausted: return NSLocalizedString("recovery_error_cooldown", comment: "")
+        case .alreadyExists: return NSLocalizedString("recovery_error_already_set", comment: "")
+        default: return error.userFacingMessage
         }
-        return desc
+    }
+
+    /// The code and the server's own words, never the phrase or a key.
+    private func logFailure(_ flow: String, _ error: Error) {
+        if let rpc = error as? RPCError {
+            Log.error("Recovery \(flow) refused: \(rpc.code) — \(rpc.message)", category: "Recovery")
+        } else {
+            Log.error("Recovery \(flow) failed: \(error.localizedDescription)", category: "Recovery")
+        }
     }
 
     enum RecoveryError: LocalizedError {
