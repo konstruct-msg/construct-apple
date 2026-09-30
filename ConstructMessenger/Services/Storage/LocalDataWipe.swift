@@ -44,7 +44,9 @@ enum LocalDataWipe {
     static func run(reason: String) {
         Log.info("LOCAL_WIPE: start reason=\(reason)", category: "Auth")
 
-        // Open handles first: a file removed under an open SQLite handle keeps being written.
+        // The store key first: whatever the sweep fails to remove is already unreadable.
+        LocalStoreKey.destroy()
+        // Open handles next: a file removed under an open SQLite handle keeps being written.
         MessageKeyStore.shared.close()
         PersistenceController.shared.replaceStoreWithEmpty { sweepContainer() }
 

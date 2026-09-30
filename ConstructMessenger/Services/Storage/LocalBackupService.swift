@@ -71,7 +71,12 @@ final class LocalBackupService {
         let coreWALData  = FileManager.default.fileExists(atPath: coreWALURL.path)
                            ? (try? Data(contentsOf: coreWALURL)) ?? Data()
                            : Data()
-        let keyStoreData = try Data(contentsOf: keyStoreURL)
+        // Not the file: its keys are sealed under this device's store key and would open
+        // nowhere else. The portable copy holds them in the clear, and this payload is itself
+        // encrypted (mnemonic) or sent over the transfer channel.
+        guard let keyStoreData = MessageKeyStore.shared.portableCopy() else {
+            throw BackupError.fileNotFound("message_keys.sqlite")
+        }
 
         let manifest = BackupManifest(
             version: 1,

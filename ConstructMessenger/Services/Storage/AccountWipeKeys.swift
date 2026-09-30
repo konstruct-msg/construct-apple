@@ -32,6 +32,9 @@ enum AccountWipeKeys {
         "construct.userId",
         "construct.deviceId",
         "construct.localStore.ownerUserId",
+        // Keychain: the at-rest store key. `LocalDataWipe` deletes it first; listed so the scan
+        // knows it is the account's.
+        "construct.localStore.key.v1",
         // Ids of first messages that failed to open (`FailedInitMessageStore`) — the account's.
         "com.construct.failed_init_message_ids",
         "construct.pendingRegistrationBundle",

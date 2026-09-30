@@ -158,6 +158,19 @@ class KeychainManager {
         return load(forKey: "construct.reassembly_store_key")
     }
 
+    // MARK: - Local store key
+
+    /// The key this device seals what it keeps at rest under (`LocalStoreKey`). `cryptoKeyAccessible`
+    /// for the reason the reassembly key is: message keys are written during a background push
+    /// decrypt, and a store key unreadable then would leave ciphertext with no key.
+    func saveLocalStoreKey(_ key: Data) -> Bool {
+        save(key, forKey: LocalStoreKey.account, accessible: Self.cryptoKeyAccessible)
+    }
+
+    func deleteLocalStoreKey() {
+        delete(forKey: LocalStoreKey.account)
+    }
+
     // MARK: - Intake credentials
 
     /// This account's own `intake_key` — the secret every vouched contact is given so their
