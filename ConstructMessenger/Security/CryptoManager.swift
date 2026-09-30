@@ -529,6 +529,12 @@ class CryptoManager {
             throw CryptoManagerError.coreNotInitialized
         }
 
+        // Before every event, not only before an open: an unread message is answered with a
+        // DECRYPTION_ERROR only to a writer whose certificate the core can check, and the answer
+        // may be decided on the message or on the ACK lookup that follows it. Handed over only in
+        // `openReceiving`, a process that had opened no receiving session answered
+        // `decrypt_failed` instead, and the writer never learned (TODO 80, stand 2026-09-30).
+        handOverTrustedServerKeys(to: core)
         let actions = try core.handleEvent(event: event)
         logOrchestratorEvent(event, actions: actions, tag: tag)
         return actions
@@ -1136,9 +1142,10 @@ class CryptoManager {
     }
 
     /// The server keys a sender certificate is checked against, as this app resolves them (the
-    /// well-known key and the build pins, `BundleSigningTrust`). Handed over before every open
-    /// rather than once: the fetched key can arrive or rotate while the app runs, and a stale copy
-    /// in the core would refuse certificates the app itself accepts. Caller holds `coreLock`.
+    /// well-known key and the build pins, `BundleSigningTrust`). Handed over before every open and
+    /// every orchestrator event rather than once: the fetched key can arrive or rotate while the
+    /// app runs, and a stale copy in the core would refuse certificates the app itself accepts.
+    /// Caller holds `coreLock`.
     private func handOverTrustedServerKeys(to core: OrchestratorCore) {
         core.setTrustedServerKeys(keys: BundleSigningTrust.trustedKeyBytes())
     }
