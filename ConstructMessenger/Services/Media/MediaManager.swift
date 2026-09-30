@@ -523,7 +523,7 @@ class MediaManager {
 
     /// Export `asset` to `outputURL` at the given quality. `.original` uses passthrough
     /// (container remux only). Reports export progress via `onProgress` (0…1).
-    private static func transcodeVideo(
+    static func transcodeVideo(
         asset: AVURLAsset,
         to outputURL: URL,
         quality: VideoQuality,
@@ -531,11 +531,18 @@ class MediaManager {
     ) async throws -> URL {
         try? FileManager.default.removeItem(at: outputURL)
 
+        // The picture and nothing about where or when it was shot. Exported directly, the session
+        // copies the source's metadata — a camera's location and capture date went out with every
+        // video until 2026-09-30, at every quality — and neither `metadata = []` (read as "unset")
+        // nor `.forSharing()` (keeps the date) stops it. A composition of the source's tracks has
+        // no metadata to copy; the orientation is the track's transform and is carried over.
+        let source = try await metadataFreeComposition(of: asset)
+
         // Fall back to passthrough if the requested preset isn't compatible with the source.
-        let compatible = await AVAssetExportSession.compatibility(ofExportPreset: quality.exportPreset, with: asset, outputFileType: .mp4)
+        let compatible = await AVAssetExportSession.compatibility(ofExportPreset: quality.exportPreset, with: source, outputFileType: .mp4)
         let preset = compatible ? quality.exportPreset : AVAssetExportPreset1280x720
 
-        guard let export = AVAssetExportSession(asset: asset, presetName: preset) else {
+        guard let export = AVAssetExportSession(asset: source, presetName: preset) else {
             throw MediaUploadError.uploadFailed("Cannot create video export session")
         }
 
@@ -553,6 +560,23 @@ class MediaManager {
         try await export.export(to: outputURL, as: .mp4)
         onProgress?(1.0)
         return outputURL
+    }
+
+    /// The video and audio tracks of `asset`, whole, in a composition that carries none of its
+    /// metadata. See `transcodeVideo`.
+    private static func metadataFreeComposition(of asset: AVURLAsset) async throws -> AVComposition {
+        let composition = AVMutableComposition()
+        let range = CMTimeRange(start: .zero, duration: try await asset.load(.duration))
+        for track in try await asset.load(.tracks) where track.mediaType == .video || track.mediaType == .audio {
+            guard let copy = composition.addMutableTrack(
+                withMediaType: track.mediaType, preferredTrackID: kCMPersistentTrackID_Invalid
+            ) else { continue }
+            try copy.insertTimeRange(range, of: track, at: .zero)
+            if track.mediaType == .video {
+                copy.preferredTransform = try await track.load(.preferredTransform)
+            }
+        }
+        return composition
     }
 
     /// Orientation-corrected display dimensions of a video's first video track.
