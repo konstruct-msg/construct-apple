@@ -166,14 +166,14 @@ enum HistoryChannel {
         if fm.fileExists(atPath: url.path) { try fm.removeItem(at: url) }
         try fm.moveItem(at: tmp, to: url)
         Log.info(
-            "history_file_written snapshot=\(sender.snapshotId().prefix(4).map { String(format: "%02x", $0) }.joined()) records=\(items.count) to=\(peer.deviceIdHex.prefix(8))…",
+            "history_file_written snapshot=\(HistorySnapshotIdentity.tag(sender.snapshotId())) records=\(items.count) to=\(peer.deviceIdHex.prefix(8))…",
             category: "HistorySync"
         )
         return (sender.snapshotId(), counters)
     }
 
     static func suggestedFileName(forSnapshot snapshotId: Data) -> String {
-        "konstruct-history-" + snapshotId.prefix(4).map { String(format: "%02x", $0) }.joined() + ".cthf"
+        "konstruct-history-" + HistorySnapshotIdentity.tag(snapshotId) + ".cthf"
     }
 
     // MARK: - File: new device

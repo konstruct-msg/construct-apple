@@ -119,7 +119,7 @@ struct DevicesView: View {
                         }
                     }
 
-                    // MARK: - History retry (DEBUG override or enabled flag)
+                    // MARK: - History retry (stand build or enabled flag)
                     if DeviceLinkHistorySyncPolicy.isOffered {
                         VStack(alignment: .leading, spacing: DevicesSettingsLayout.sectionSpacing) {
                             CTSettingsSectionHeader(title: NSLocalizedString("history_sync_settings_section", comment: ""))

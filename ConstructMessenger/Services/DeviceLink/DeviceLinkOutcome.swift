@@ -37,19 +37,17 @@ enum DeviceLinkPhase: Equatable {
 enum DeviceLinkHistorySyncPolicy {
     static let isPostLinkEnabled = false
 
-    /// Stand-only. Production stays on `isPostLinkEnabled`.
-    #if DEBUG
-    static var debugForceEnabled = false
+    /// The two-device stand's build: `scripts/history_stand.sh` compiles with
+    /// `-DHISTORY_STAND`, and no configuration in the project defines it — not Beta, which keeps
+    /// `DEBUG` and reaches TestFlight. Until 2026-09-29 this was a `DEBUG` static nothing could
+    /// set, so the stand had no way in short of editing this line.
+    #if HISTORY_STAND
+    static let isStandBuild = true
+    #else
+    static let isStandBuild = false
     #endif
 
-    static var isOffered: Bool {
-        if isPostLinkEnabled { return true }
-        #if DEBUG
-        return debugForceEnabled
-        #else
-        return false
-        #endif
-    }
+    static var isOffered: Bool { isPostLinkEnabled || isStandBuild }
 }
 
 /// Whether the UI offers to link a second device at all.

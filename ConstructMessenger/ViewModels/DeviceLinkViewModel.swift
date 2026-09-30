@@ -197,6 +197,12 @@ final class DeviceLinkViewModel {
             Log.info("Join request submitted to server — deviceId=\(deviceId.prefix(8))…", category: "DeviceLink")
 
             joinRequestQRContent = url
+            #if DEBUG
+            // Same reason as the Flow A token above: a simulator phone cannot scan this Mac's QR,
+            // so `scripts/history_stand.sh` reads it here. It names a device and its public key and
+            // grants nothing — the phone's approval does.
+            Log.info("DeviceLink stand join request: \(url)", category: "DeviceLink")
+            #endif
             isWaitingForApproval = true
             startPollingForApproval(pendingId: deviceId)
             Log.info("Join request QR generated — deviceId=\(deviceId.prefix(8))…", category: "DeviceLink")

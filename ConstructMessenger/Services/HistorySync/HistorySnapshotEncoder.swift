@@ -43,6 +43,12 @@ struct HistorySnapshotIdentity {
 
     /// `snapshotId` is the one the core's sender announced (`HistorySender.snapshotId()`): the
     /// manifest must carry it, and the core refuses a stream whose manifest names another.
+    /// The first four bytes of a snapshot id in hex: what a file name and every log line of one
+    /// transfer carry, so the two devices' logs of it can be matched.
+    static func tag(_ snapshotId: Data) -> String {
+        snapshotId.prefix(4).map { String(format: "%02x", $0) }.joined()
+    }
+
     static func make(userId: String, sourceDeviceId: String, snapshotId: Data) -> HistorySnapshotIdentity {
         let version = (Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String) ?? ""
         return HistorySnapshotIdentity(

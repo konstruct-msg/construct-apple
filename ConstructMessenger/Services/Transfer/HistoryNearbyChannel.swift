@@ -159,7 +159,7 @@ final class HistoryNearbyChannel {
             pinnedReceiverIdentity: nil
         )
         try await transport.send(sender.firstFrame())
-        Log.info("history_opening_sent kind=\(kind) to=\(peer.deviceIdHex.prefix(8))…", category: "HistorySync")
+        Log.info("history_opening_sent kind=\(kind) snapshot=\(HistorySnapshotIdentity.tag(sender.snapshotId())) to=\(peer.deviceIdHex.prefix(8))…", category: "HistorySync")
         if kind == .skip {
             coordinator.markSkipped()
             return

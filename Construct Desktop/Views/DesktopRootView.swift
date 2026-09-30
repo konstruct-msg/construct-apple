@@ -135,6 +135,7 @@ struct DesktopRootView: View {
             NSApplication.shared.dockTile.badgeLabel = count > 0 ? "\(count)" : nil
         }
         .onChange(of: authViewModel.deviceLinkPhase) { _, phase in
+            Log.info("Desktop deviceLinkPhase → \(phase)", category: "DeviceLink")
             if case .historySyncReceive(let pendingId) = phase {
                 historySyncPendingDeviceId = pendingId
                 showReceiveHistorySync = true

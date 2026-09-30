@@ -336,6 +336,7 @@ final class HistoryImportSink {
                 let record = try HistoryRecord.decode(type: type, proto: proto)
                 if case .manifest(let m) = record {
                     manifestPhase = m.phase
+                    Log.info("history_manifest phase=\(m.phase) snapshot=\(HistorySnapshotIdentity.tag(m.snapshotID))", category: "HistorySync")
                     onManifest?(m)
                 }
                 records.append(record)

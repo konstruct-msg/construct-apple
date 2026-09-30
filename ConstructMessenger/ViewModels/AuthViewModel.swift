@@ -603,6 +603,7 @@ class AuthViewModel {
             return
         }
 
+        Log.info("Post-link history sync offered role=\(outcome.role)", category: "DeviceLink")
         switch outcome.role {
         case .linkedNewDevice:
             #if os(macOS)
