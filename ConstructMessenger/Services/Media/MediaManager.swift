@@ -413,15 +413,19 @@ class MediaManager {
         )
     }
 
-    /// Upload the original source bytes untouched (no JPEG re-encode), preserving the
-    /// real mime (HEIC/PNG/JPEG). A small JPEG thumbnail + pixel dimensions are still
-    /// derived from the display image so bubbles render before the full download.
+    /// Upload the original picture (no JPEG re-encode), preserving the real mime
+    /// (HEIC/PNG/JPEG) — without its metadata: the library's file carries GPS, capture time and
+    /// camera, and went out with them until 2026-09-30 (`ImageMetadataStripper`). A small JPEG
+    /// thumbnail + pixel dimensions are still derived from the display image so bubbles render
+    /// before the full download.
     private func uploadOriginalImage(
         _ attachment: MediaAttachment,
         for recipientId: String,
         onProgress: (@Sendable (Double) -> Void)? = nil
     ) async throws -> MediaMessageData {
-        let data = attachment.originalData
+        guard let data = ImageMetadataStripper.strip(attachment.originalData) else {
+            throw MediaOptimizationError.conversionFailed
+        }
         Log.info("Uploading ORIGINAL image for recipient: \(recipientId) (mime=\(attachment.mimeType), \(data.count) bytes)", category: "MediaManager")
         guard Int64(data.count) <= MessageSizeLimits.maxImageBytes else {
             throw MediaUploadError.fileTooLarge(data.count, Int(MessageSizeLimits.maxImageBytes))
