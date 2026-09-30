@@ -159,7 +159,8 @@ func handBuiltWirePayload(
     out += le(UInt16(kem.count)) + le(UInt32(0))
     out += le(kem.isEmpty ? suiteId : suiteId | 0x0100)   // PQXDH_V2_FLAG follows the ciphertext
     out += kem
-    if suiteId == 3 { out += le(pqMessageEpoch) + [0] }   // suite-3 section: epoch, no field
+    // PQ-ratchet section (suite 4): epoch, key index 0 (one LEB128 byte), no field.
+    if suiteId == 4 { out += le(pqMessageEpoch) + [0, 0] }
     return Data(out + sealedBox)
 }
 

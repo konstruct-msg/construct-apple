@@ -127,7 +127,7 @@ final class SessionQueueWiringTests: XCTestCase {
             senderDeviceId: device ?? "",
             rawPayload: handBuiltWirePayload(
                 messageNumber: msgNum,
-                suiteId: 3,
+                suiteId: 4,
                 kemCiphertext: handshake ? [UInt8](repeating: 7, count: 1088) : nil,
                 pqMessageEpoch: pqEpoch
             )

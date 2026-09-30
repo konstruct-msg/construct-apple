@@ -47,7 +47,7 @@ final class UnreadMessageAnswerTests: XCTestCase {
         var actions = try CryptoManager.shared.handleOrchestratorEvent(.messageReceived(
             messageId: messageId,
             from: writer.deviceId,
-            data: handBuiltWirePayload(messageNumber: 5, suiteId: 3),
+            data: handBuiltWirePayload(messageNumber: 5, suiteId: 4),
             contentType: 0,
             senderCertificate: certificate
         ))

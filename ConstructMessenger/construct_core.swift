@@ -6213,10 +6213,11 @@ public struct WirePayload: Equatable, Hashable {
     public var pqxdhV2: Bool
     public var kemIdentity: Data?
     public var identityProofCiphertext: Data?
+    public var pqKeyIndex: UInt32
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(dhPublicKey: Data, messageNumber: UInt32, oneTimePrekeyId: UInt32, kyberOtpkId: UInt32, previousChainLength: UInt32, suiteId: UInt16, kemCiphertext: Data?, sealedBox: Data, pqMessageEpoch: UInt32, pqRatchetField: Data, pqxdhV2: Bool = false, kemIdentity: Data? = nil, identityProofCiphertext: Data? = nil) {
+    public init(dhPublicKey: Data, messageNumber: UInt32, oneTimePrekeyId: UInt32, kyberOtpkId: UInt32, previousChainLength: UInt32, suiteId: UInt16, kemCiphertext: Data?, sealedBox: Data, pqMessageEpoch: UInt32, pqRatchetField: Data, pqxdhV2: Bool = false, kemIdentity: Data? = nil, identityProofCiphertext: Data? = nil, pqKeyIndex: UInt32 = UInt32(0)) {
         self.dhPublicKey = dhPublicKey
         self.messageNumber = messageNumber
         self.oneTimePrekeyId = oneTimePrekeyId
@@ -6230,6 +6231,7 @@ public struct WirePayload: Equatable, Hashable {
         self.pqxdhV2 = pqxdhV2
         self.kemIdentity = kemIdentity
         self.identityProofCiphertext = identityProofCiphertext
+        self.pqKeyIndex = pqKeyIndex
     }
 
     
@@ -6258,7 +6260,8 @@ public struct FfiConverterTypeWirePayload: FfiConverterRustBuffer {
                 pqRatchetField: FfiConverterData.read(from: &buf), 
                 pqxdhV2: FfiConverterBool.read(from: &buf), 
                 kemIdentity: FfiConverterOptionData.read(from: &buf), 
-                identityProofCiphertext: FfiConverterOptionData.read(from: &buf)
+                identityProofCiphertext: FfiConverterOptionData.read(from: &buf), 
+                pqKeyIndex: FfiConverterUInt32.read(from: &buf)
         )
     }
 
@@ -6276,6 +6279,7 @@ public struct FfiConverterTypeWirePayload: FfiConverterRustBuffer {
         FfiConverterBool.write(value.pqxdhV2, into: &buf)
         FfiConverterOptionData.write(value.kemIdentity, into: &buf)
         FfiConverterOptionData.write(value.identityProofCiphertext, into: &buf)
+        FfiConverterUInt32.write(value.pqKeyIndex, into: &buf)
     }
 }
 

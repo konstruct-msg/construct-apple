@@ -28,7 +28,7 @@ final class ReceivingInitKindTests: XCTestCase {
     ) throws -> ReceivingInitKind {
         let payload = handBuiltWirePayload(
             messageNumber: msgNum,
-            suiteId: 3,
+            suiteId: 4,
             kemCiphertext: kem > 0 ? [UInt8](repeating: 5, count: kem) : nil,
             pqMessageEpoch: epoch
         )

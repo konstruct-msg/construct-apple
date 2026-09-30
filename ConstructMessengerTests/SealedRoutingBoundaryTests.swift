@@ -256,7 +256,7 @@ final class SealedRebuildFieldPreservationTests: XCTestCase {
             // parsed-field copies carried is in here, and is read from here.
             rawPayload: handBuiltWirePayload(
                 messageNumber: 7,
-                suiteId: 3,
+                suiteId: 4,
                 kemCiphertext: [UInt8](repeating: 0x33, count: 1568),
                 pqMessageEpoch: 9
             ),
