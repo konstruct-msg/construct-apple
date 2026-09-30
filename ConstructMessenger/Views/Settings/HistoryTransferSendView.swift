@@ -161,6 +161,10 @@ struct HistoryTransferSendView: View {
                 break
             }
             DeviceLinkPendingPin.clearPeerIdentity(forDeviceId: peerDeviceId)
+            if coordinator.phase == .complete {
+                try await Task.sleep(for: HistoryTransferCoordinator.resultHold)
+                dismiss()
+            }
         } catch is CancellationError {
             // Sheet dismissed.
         } catch {

@@ -2,7 +2,7 @@
 //  HistoryTransferOfferView.swift
 //  Construct Messenger
 //
-//  New-device post-link offer: Wi-Fi / file / skip. No PIN.
+//  New-device post-link receive: waits for the other device; a file or Skip as ways out. No PIN.
 //
 
 import CoreData
@@ -16,65 +16,34 @@ struct HistoryTransferOfferView: View {
     var onFinish: () -> Void
 
     @Environment(\.dismiss) private var dismiss
-    @State private var showReceive = false
     @State private var showImporter = false
     @State private var isImporting = false
     @State private var errorMessage: String?
     @State private var importedSummary: HistoryImportSummary?
 
+    /// No question here: the device that has the history decides whether to send it
+    /// (2026-09-30). This one listens straight away and keeps a file and Skip as ways out.
     var body: some View {
-        ZStack {
-            Color.CT.bg.ignoresSafeArea()
-            VStack(spacing: 0) {
-                CTNavBar(
-                    title: NSLocalizedString("history_sync_receive_title", comment: ""),
-                    showBack: true,
-                    backAction: { finish() }
-                ) {
-                    EmptyView()
-                } trailing: {
-                    EmptyView()
-                }
-                ScrollView {
-                    VStack(alignment: .leading, spacing: CTLayout.sectionGap) {
-                        Text(NSLocalizedString("history_sync_offer_message_with_media", comment: ""))
-                            .font(CTFont.ui(14))
-                            .foregroundStyle(Color.CT.text)
-                        Text(NSLocalizedString("history_sync_empty_explanation", comment: ""))
-                            .font(CTFont.secondary)
+        HistoryTransferReceiveView(
+            userId: userId,
+            localDeviceId: localDeviceId,
+            // The receive screen dismisses itself; `onFinish` only clears the link phase.
+            onDone: onFinish,
+            onImportFile: { showImporter = true }
+        )
+        .overlay {
+            if isImporting {
+                ZStack {
+                    Color.CT.bg.opacity(0.9).ignoresSafeArea()
+                    HStack(spacing: CTLayout.inlinePad) {
+                        ProgressView()
+                        Text(NSLocalizedString("history_sync_importing", comment: ""))
+                            .font(CTFont.body)
                             .foregroundStyle(Color.CT.textDim)
-
-                        if isImporting {
-                            HStack(spacing: CTLayout.inlinePad) {
-                                ProgressView()
-                                Text(NSLocalizedString("history_sync_importing", comment: ""))
-                                    .font(CTFont.body)
-                                    .foregroundStyle(Color.CT.textDim)
-                            }
-                        } else {
-                            CTSectionGroup {
-                                ConstructButtonRow(
-                                    systemImage: "wifi",
-                                    title: LocalizedStringKey("history_sync_receive_wifi")
-                                ) { showReceive = true }
-                                ConstructRowDivider(indent: CTLayout.edgePad)
-                                ConstructButtonRow(
-                                    systemImage: "folder",
-                                    title: LocalizedStringKey("history_sync_import_file")
-                                ) { showImporter = true }
-                                ConstructRowDivider(indent: CTLayout.edgePad)
-                                ConstructButtonRow(
-                                    systemImage: "forward",
-                                    title: LocalizedStringKey("history_sync_offer_skip")
-                                ) { finish() }
-                            }
-                        }
                     }
-                    .padding(CTLayout.edgePad)
                 }
             }
         }
-        .modifier(ReceiveCover(isPresented: $showReceive, userId: userId, localDeviceId: localDeviceId))
         .fileImporter(
             isPresented: $showImporter,
             allowedContentTypes: [UTType(filenameExtension: "cthf") ?? .data]
@@ -145,24 +114,5 @@ struct HistoryTransferOfferView: View {
         } catch {
             errorMessage = HistoryTransferUserMessage.text(for: error)
         }
-    }
-}
-
-/// `fullScreenCover` is iOS-only; the Desktop window is a sheet.
-private struct ReceiveCover: ViewModifier {
-    @Binding var isPresented: Bool
-    var userId: String
-    var localDeviceId: String
-
-    func body(content: Content) -> some View {
-        #if os(iOS)
-        content.fullScreenCover(isPresented: $isPresented) {
-            HistoryTransferReceiveView(userId: userId, localDeviceId: localDeviceId)
-        }
-        #else
-        content.sheet(isPresented: $isPresented) {
-            HistoryTransferReceiveView(userId: userId, localDeviceId: localDeviceId)
-        }
-        #endif
     }
 }

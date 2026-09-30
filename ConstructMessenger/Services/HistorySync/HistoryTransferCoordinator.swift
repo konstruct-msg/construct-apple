@@ -30,6 +30,10 @@ final class HistoryTransferCoordinator {
     private(set) var phase: HistoryTransferPhase = .idle
     var progress: Double = 0
 
+    /// How long a finished transfer shows its result before its screen closes itself. The
+    /// outcomes that leave something to do — a file to save, media to retry — stay open.
+    static let resultHold: Duration = .milliseconds(1500)
+
     func sendTranscript(
         items: AsyncThrowingStream<HistoryOutbound, Error>,
         through sender: HistorySender,

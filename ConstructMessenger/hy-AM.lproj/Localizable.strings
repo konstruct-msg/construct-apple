@@ -1090,6 +1090,7 @@
 "history_sync_send_offer_yes" = "Համաժամեցնել պատմությունը";
 "history_sync_send_offer_skip" = "Բաց թողնել";
 "history_sync_auto_connecting" = "Միացում ձեր հեռախոսին…";
+"history_sync_waiting_for_other_device" = "Սպասում ենք ձեր մյուս սարքին։ Պատմությունն ուղարկելու մասին որոշումը կայացվում է այնտեղ։";
 "history_sync_auto_sending" = "Պատմության ուղարկում ձեր համակարգչին…";
 "history_sync_skip_title" = "Բաց թողնել պատմությունը";
 "history_sync_skip_sending" = "Ավարտ առանց պատմության…";
@@ -1097,7 +1098,6 @@
 "history_sync_chats_transferred" = "Զրույցները փոխանցված են։ Լուսանկարների և ֆայլերի ուղարկում…";
 "history_sync_media_incomplete" = "Զրույցները փոխանցված են, մեդիան թերի է — կրկնեք Կարգավորումներից կամ պահպանեք ֆայլ։";
 "history_sync_save_file_instead" = "Փոխարենը պահպանել ֆայլ։";
-"history_sync_offer_message_with_media" = "Ստացեք զրույցներ, լուսանկարներ և ֆայլեր մյուս սարքից Wi‑Fi-ով կամ ներմուծեք ֆայլ։ Կարող եք բաց թողնել և սկսել դատարկ զրույցներով։";
 "history_sync_empty_explanation" = "Նոր զրույցները կերևան այստեղ, երբ մարդիկ ձեզ գրեն։ Մյուս սարքի պատմությունը դեռ այս սարքում չէ։";
 "history_sync_receive_wifi" = "Ստանալ Wi‑Fi-ով";
 "history_sync_import_file" = "Ներմուծել ֆայլ";

@@ -1031,6 +1031,7 @@
 "history_sync_offer_yes" = "Recevoir l’historique";
 "history_sync_offer_skip" = "Passer";
 "history_sync_auto_connecting" = "Connexion à votre téléphone…";
+"history_sync_waiting_for_other_device" = "En attente de votre autre appareil. C'est là-bas que vous choisissez d'envoyer l'historique.";
 "history_sync_auto_sending" = "Envoi de l’historique vers votre ordinateur…";
 "history_sync_skip_title" = "Ignorer l’historique";
 "history_sync_skip_sending" = "Finalisation sans historique…";
@@ -1038,7 +1039,6 @@
 "history_sync_chats_transferred" = "Discussions transférées. Envoi des photos et fichiers…";
 "history_sync_media_incomplete" = "Discussions transférées, médias incomplets — réessayez depuis Réglages ou enregistrez un fichier.";
 "history_sync_save_file_instead" = "Enregistrez un fichier à la place.";
-"history_sync_offer_message_with_media" = "Recevez discussions, photos et fichiers depuis l’autre appareil en Wi‑Fi, ou importez un fichier. Vous pouvez passer et commencer avec des discussions vides.";
 "history_sync_empty_explanation" = "Les nouvelles discussions apparaîtront ici quand on vous écrira. L’historique de l’autre appareil n’est pas encore ici.";
 "history_sync_receive_wifi" = "Recevoir en Wi‑Fi";
 "history_sync_import_file" = "Importer un fichier";

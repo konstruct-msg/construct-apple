@@ -4,12 +4,19 @@
 //
 //  New-device nearby receive. Additive import; no backup restore / restart alert.
 //
+//  Starts listening as soon as it appears: whether history moves is decided on the device
+//  that has it (2026-09-30). This one waits, and offers only a way out — a file, or skipping.
+//
 
 import SwiftUI
 
 struct HistoryTransferReceiveView: View {
     var userId: String
     var localDeviceId: String
+    /// Called once the offer has ended — imported, skipped, or left with Back.
+    var onDone: () -> Void = {}
+    /// Post-link only: the phone chose to save a file, or never answers.
+    var onImportFile: (() -> Void)?
 
     @Environment(\.dismiss) private var dismiss
     @State private var coordinator = HistoryTransferCoordinator()
@@ -23,7 +30,7 @@ struct HistoryTransferReceiveView: View {
                 CTNavBar(
                     title: NSLocalizedString("history_sync_receive_title", comment: ""),
                     showBack: true,
-                    backAction: { dismiss() }
+                    backAction: { onDone(); dismiss() }
                 ) {
                     EmptyView()
                 } trailing: {
@@ -31,10 +38,31 @@ struct HistoryTransferReceiveView: View {
                 }
                 ScrollView {
                     LazyVStack(spacing: 24) {
+                        if isWaiting {
+                            ProgressView()
+                        }
                         Text(NSLocalizedString(statusKey, comment: ""))
                             .font(CTFont.ui(14))
                             .foregroundStyle(Color.CT.text)
                             .multilineTextAlignment(.center)
+                        if let onImportFile, isWaiting || coordinator.phase == .saveFileInstead {
+                            Text(NSLocalizedString("history_sync_empty_explanation", comment: ""))
+                                .font(CTFont.secondary)
+                                .foregroundStyle(Color.CT.textDim)
+                                .multilineTextAlignment(.center)
+                            CTSectionGroup {
+                                ConstructButtonRow(
+                                    systemImage: "folder",
+                                    title: LocalizedStringKey("history_sync_import_file"),
+                                    action: onImportFile
+                                )
+                                ConstructRowDivider(indent: CTLayout.edgePad)
+                                ConstructButtonRow(
+                                    systemImage: "forward",
+                                    title: LocalizedStringKey("history_sync_offer_skip")
+                                ) { onDone(); dismiss() }
+                            }
+                        }
                     }
                     .padding(CTLayout.edgePad)
                 }
@@ -51,9 +79,12 @@ struct HistoryTransferReceiveView: View {
         }
     }
 
+    private var isWaiting: Bool { coordinator.phase == .idle }
+
     private var statusKey: String {
         switch coordinator.phase {
-        case .idle, .transcript: return "history_sync_auto_connecting"
+        case .idle: return "history_sync_waiting_for_other_device"
+        case .transcript: return "history_sync_auto_connecting"
         case .chatsTransferred: return "history_sync_chats_transferred"
         case .media: return "history_sync_auto_connecting"
         case .complete: return "transfer_complete"
@@ -90,6 +121,9 @@ struct HistoryTransferReceiveView: View {
                 }
             }
             DeviceLinkPendingPin.clear(forUserId: userId)
+            try await Task.sleep(for: HistoryTransferCoordinator.resultHold)
+            onDone()
+            dismiss()
         } catch is CancellationError {
             // Sheet dismissed.
         } catch {
