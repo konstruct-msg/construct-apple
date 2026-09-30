@@ -711,7 +711,7 @@ class AuthViewModel {
     /// account deletion.
     static let userDataEntityNames = [
         "Message", "HealingMessage", "ProcessedMessage", "CallRecord", "Chat", "User",
-        "Reaction", "PeerDevice"
+        "Reaction", "PeerDevice", "ServerMessageId"
     ]
 
     /// Handles the critical case where the user is authenticated (has a session token) but

@@ -45,20 +45,6 @@ protocol PeerDeviceStore: Sendable {
     func retain(ofAccount accountId: String, keeping: Set<String>) throws -> [String]
 }
 
-/// The stores the app reads and writes through. One place decides which implementation answers;
-/// step 3 of the migration plan makes that `LocalStore` on macOS.
-enum LocalRepositories {
-    private(set) nonisolated(unsafe) static var peerDevices: any PeerDeviceStore =
-        CoreDataPeerDeviceStore(container: PersistenceController.shared.container)
-
-    #if DEBUG
-    /// A test's own store (an in-memory container); `nil` restores the app's.
-    static func usePeerDevicesForTesting(_ store: (any PeerDeviceStore)?) {
-        peerDevices = store ?? CoreDataPeerDeviceStore(container: PersistenceController.shared.container)
-    }
-    #endif
-}
-
 /// `PeerDevice` rows.
 ///
 /// Each call runs on a fresh background context. Callers are on the main actor, on other

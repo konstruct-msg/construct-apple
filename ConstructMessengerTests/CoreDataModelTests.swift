@@ -35,6 +35,15 @@ final class CoreDataModelTests: XCTestCase {
         }
     }
 
+    /// Model 13 adds `ServerMessageId` and nothing else: a store written by 12 opens under it
+    /// without a mapping model.
+    func testVersion12MigratesLightweight() throws {
+        let current = PersistenceController(inMemory: true).container.managedObjectModel
+        XCTAssertNoThrow(
+            try NSMappingModel.inferredMappingModel(forSourceModel: model("ConstructMessenger 12"), destinationModel: current)
+        )
+    }
+
     /// A store written by version 11 opens under the current model without a mapping model.
     func testVersion11MigratesLightweight() throws {
         let current = PersistenceController(inMemory: true).container.managedObjectModel

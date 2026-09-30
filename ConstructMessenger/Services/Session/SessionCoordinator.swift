@@ -655,8 +655,8 @@ final class SessionCoordinator: MessageRouterDelegate {
         // A sealed copy's id is the server's, not ours: the peer names what it received, and the
         // send response is where we learned which of our messages that is. Stand 2026-09-28: the
         // first error named `e474825e…` for the row `8b403ce9…`, and without this nothing was
-        // resent. The map is in memory (`ServerMessageIdMap`), so an error answered across a
-        // restart retires the state but resends nothing.
+        // resent. The map is persisted (`ServerMessageIdMap`) so an error answered across a
+        // restart still finds the row — in memory, it retired the state and resent nothing.
         let localId = ServerMessageIdMap.shared.localId(for: messageId)
         let fetch = Message.fetchRequest()
         fetch.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [

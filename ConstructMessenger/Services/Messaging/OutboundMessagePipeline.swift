@@ -1,42 +1,52 @@
 import CoreData
 import Foundation
 
-/// In-memory map from server-assigned wire message ids to the sender's local message ids.
+/// The server-assigned wire id of each sealed copy we sent → the local message id.
+///
 /// On the sealed-sender path the server reassigns every message id (it must not trust a
-/// client-chosen id), so server-side delivery receipts arrive with ids the sender never
-/// stored. Recording the sendMessage response id lets receipt handling find the local row.
-/// Best-effort: not persisted — E2E receipts (which carry the canonical E2E id) cover the
-/// post-restart case.
+/// client-chosen id), so a server-side delivery receipt and a peer's DECRYPTION_ERROR arrive with
+/// ids the sender never stored; recording the `sendMessage` response id lets both find the row.
+///
+/// Persisted (`LocalRepositories.serverMessageIds`) since 2026-09-30. It was an in-memory
+/// dictionary, and the reader sends its DECRYPTION_ERROR when it next comes online — usually after
+/// the sender has restarted — so the error retired the state and the resend found no row: the
+/// message was lost without a word (construct-docs TODO 80 (2); Android `4975a14`).
 final class ServerMessageIdMap: @unchecked Sendable {
     static let shared = ServerMessageIdMap()
 
+    /// As long as the server keeps a device's queue (`XTRIM MINID`, 30 days): an error or receipt
+    /// cannot name a copy older than the queue that carried it.
+    static let retention: TimeInterval = 30 * 24 * 3600
+
     private let lock = NSLock()
-    private var serverToLocal: [String: String] = [:]
-    private var insertionOrder: [String] = []
-    private let capacity = 512
+    private var swept = false
 
     private init() {}
 
     func record(serverId: String, localId: String) {
-        let server = serverId.lowercased()
-        let local = localId.lowercased()
-        guard !server.isEmpty, server != local else { return }
-        lock.lock()
-        defer { lock.unlock() }
-        if serverToLocal[server] == nil {
-            insertionOrder.append(server)
-            if insertionOrder.count > capacity {
-                serverToLocal.removeValue(forKey: insertionOrder.removeFirst())
-            }
+        guard !serverId.isEmpty, serverId.lowercased() != localId.lowercased() else { return }
+        let store = LocalRepositories.serverMessageIds
+        sweepOnce(store)
+        do {
+            try store.record(serverId: serverId, localId: localId, at: Date())
+        } catch {
+            Log.error("ServerMessageIdMap: \(serverId.prefix(8))… not recorded: \(error)", category: "Storage")
         }
-        serverToLocal[server] = local
     }
 
     /// Returns the local id for a (possibly server-assigned) id; identity when unknown.
     func localId(for id: String) -> String {
+        (try? LocalRepositories.serverMessageIds.localId(forServerId: id)) ?? id
+    }
+
+    /// Expired ids go once per process, on the first record — no launch hook of their own.
+    private func sweepOnce(_ store: any ServerMessageIdStore) {
         lock.lock()
-        defer { lock.unlock() }
-        return serverToLocal[id.lowercased()] ?? id
+        let first = !swept
+        swept = true
+        lock.unlock()
+        guard first else { return }
+        _ = try? store.forget(recordedBefore: Date().addingTimeInterval(-Self.retention))
     }
 }
 
