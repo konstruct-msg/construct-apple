@@ -226,7 +226,7 @@ final class InviteSystemCompletionTests: XCTestCase {
     // MARK: - ContactPolicy / TOFU pin
 
     // `testPinThenChangeMarksKeyChanged` stood here until 2026-09-29: a second invite key is a
-    // device of the account, not a key change — `NewDeviceEventTests`.
+    // device of the account, not a key change — `ContactTrustAlertTests`.
 
     func testApplyInviteRedeemSetsContactAndPin() throws {
         let ctx = container.viewContext

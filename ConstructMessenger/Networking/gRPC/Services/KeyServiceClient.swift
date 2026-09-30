@@ -291,7 +291,7 @@ final class KeyServiceClient: Sendable {
         let pin = [(deviceId: fetched.deviceID, identityKey: fetched.data.identityPublic)]
         let pinContext = PersistenceController.shared.container.newBackgroundContext()
         await pinContext.perform {
-            _ = SessionAddressing.recordDevices(pin, ofPeer: userId, in: pinContext)
+            SessionAddressing.recordDevices(pin, ofPeer: userId, in: pinContext)
         }
 
         // Backstop. The KT writer above pins `knownIdentityKey` only on `.verified`, and bails

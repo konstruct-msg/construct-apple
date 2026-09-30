@@ -122,7 +122,8 @@ enum AccountWipeKeys {
 
         // Per-contact / per-message UI and delivery state
         "construct.contactKeyChangeAcknowledged",
-        // Contacts' device sets as last listed: the new-device event reads them.
+        // Contacts' device sets as last listed. Nothing writes it since the new-device alarm went
+        // (2026-09-30); kept here so installs that wrote it lose it with the account.
         "construct.peerDeviceSets.listed.v1",
         "construct.openChatForKeyChange",
         "construct.inviteAcceptedContactCreated",

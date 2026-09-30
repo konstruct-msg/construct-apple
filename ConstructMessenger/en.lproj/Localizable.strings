@@ -960,12 +960,9 @@
 "key_change_banner_subtitle_failed" = "We could not confirm this person's security key with the transparency log. Verify in person if you can.";
 "key_change_verify" = "Verify";
 "address_change_toast_fmt" = "%@ is now claiming a different address. Open the chat to verify.";
-"security_notice_new_device_title" = "New device";
-"security_notice_new_device_body_fmt" = "%@ has a device you have not seen before. If they did not add one, someone may be reading along. Compare Safety Numbers before you trust this chat.";
 "security_notice_address_title" = "Different address";
 "security_notice_address_body_fmt" = "%@ is claiming a different address than before. Compare Safety Numbers before you trust this chat.";
 "security_notice_acknowledge" = "I've checked";
-"new_device_toast_fmt" = "%@ has a new device. Open the chat to verify.";
 "safety_numbers_device_fmt" = "Device %@";
 "key_change_toast_open" = "Open";
 

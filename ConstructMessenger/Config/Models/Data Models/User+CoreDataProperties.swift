@@ -15,9 +15,8 @@ enum KTStatus: Int16, Sendable {
     /// Last verification succeeded and identity key matches the Merkle log.
     case verified = 1
     /// No longer written. It meant "the one key we pinned for this account differs from the one
-    /// just fetched", which a second device of the contact always satisfied; the event is now a
-    /// device the account did not have (`SecurityNotice.newDevice`). The value stays readable
-    /// because stored rows may carry it; nothing raises an alert for it.
+    /// just fetched", which a second device of the contact always satisfied. The value stays
+    /// readable because stored rows may carry it; nothing raises an alert for it.
     case keyChanged = 2
     /// Last verification failed (proof invalid, signature mismatch, etc.).
     case failed = 3
@@ -26,19 +25,21 @@ enum KTStatus: Int16, Sendable {
 // MARK: - Security events per contact
 
 /// A security event about a contact, kept until the user acknowledges it. Same values as Android's
-/// `SecurityNotice`. `decisions/a-new-device-is-the-security-event.md`
+/// `SecurityNotice`.
+///
+/// 2 was "a device the contact's account did not have" from 2026-09-29 to 09-30. It could not tell
+/// a device the contact linked from one the server added, so every honest link warned every
+/// contact that someone may be reading along. It returns once a new device carries a signature by
+/// one we already know (`decisions/new-device-alarm-waits-for-cross-signing.md`). Stored rows with
+/// 2 read as `.none` through `securityNotice`, and the value is not reused.
 enum SecurityNotice: Int16, Sendable {
     case none = 0
     /// The contact named an account address other than the one pinned for them.
     case addressChanged = 1
-    /// A device appeared on the contact's account after we had seen its device list. A device id
-    /// is the hash of its identity key, so a substituted key can only show up as such a device.
-    case newDevice = 2
 }
 
 /// The warning shown for a contact, whichever source raised it.
 enum ContactTrustAlert: Equatable, Sendable {
-    case newDevice
     case addressChanged
     /// The key server's proof for their bundle did not verify.
     case verificationFailed
@@ -46,7 +47,6 @@ enum ContactTrustAlert: Equatable, Sendable {
     /// A pending event outranks a failed proof: it is the one the user has to acknowledge.
     init?(notice: SecurityNotice, ktStatus: KTStatus) {
         switch notice {
-        case .newDevice: self = .newDevice
         case .addressChanged: self = .addressChanged
         case .none:
             guard ktStatus == .failed else { return nil }
@@ -56,7 +56,6 @@ enum ContactTrustAlert: Equatable, Sendable {
 
     var titleKey: String {
         switch self {
-        case .newDevice: return "security_notice_new_device_title"
         case .addressChanged: return "security_notice_address_title"
         case .verificationFailed: return "key_change_banner_title_failed"
         }
@@ -64,8 +63,6 @@ enum ContactTrustAlert: Equatable, Sendable {
 
     func subtitle(contactName: String) -> String {
         switch self {
-        case .newDevice:
-            return String(format: NSLocalizedString("security_notice_new_device_body_fmt", comment: ""), contactName)
         case .addressChanged:
             return String(format: NSLocalizedString("security_notice_address_body_fmt", comment: ""), contactName)
         case .verificationFailed:

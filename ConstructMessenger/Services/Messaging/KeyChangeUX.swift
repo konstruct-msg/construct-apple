@@ -25,8 +25,7 @@ enum KeyChangeUX {
     /// Record `notice` on the contact and tell the user — the banner in their chat until
     /// acknowledged, and a notice here unless that chat is open.
     ///
-    /// Our own account is never the subject: a device we added ourselves is not an event, and a
-    /// row for us is residue (`SelfAddressedResidue`). No row means no contact to warn about — the
+    /// Our own account is never the subject: a row for us is residue (`SelfAddressedResidue`). No row means no contact to warn about — the
     /// event exists to protect a conversation.
     @discardableResult
     static func raise(_ notice: SecurityNotice, userId: String, context: NSManagedObjectContext) -> Bool {
@@ -61,7 +60,6 @@ enum KeyChangeUX {
         let format: String
         switch notice {
         case .none: return
-        case .newDevice: format = "new_device_toast_fmt"
         case .addressChanged: format = "address_change_toast_fmt"
         }
         ErrorRouter.shared.presentNotice(
@@ -113,7 +111,9 @@ enum KeyChangeUX {
     }
 
     /// The contact's devices to compare Safety Numbers with — every one of them, since a
-    /// substituted key is a device of its own (`decisions/a-new-device-is-the-security-event.md`).
+    /// substituted key is a device of its own. Comparing them is the only check on a device the
+    /// server added, until device sets are cross-signed
+    /// (`decisions/new-device-alarm-waits-for-cross-signing.md`).
     static func safetyDeviceIds(for user: User, context: NSManagedObjectContext) -> [String] {
         SessionAddressing.deviceIds(ofPeer: user.id, in: context)
     }

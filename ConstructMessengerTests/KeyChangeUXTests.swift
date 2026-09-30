@@ -67,7 +67,7 @@ final class KeyChangeUXTests: XCTestCase {
         KeyChangeUX.setActiveChatContact(id)
         // Should not crash / not clear active contact
         makeUser(id: id, kt: .verified, key: nil)
-        XCTAssertTrue(KeyChangeUX.raise(.newDevice, userId: id, context: container.viewContext))
+        XCTAssertTrue(KeyChangeUX.raise(.addressChanged, userId: id, context: container.viewContext))
         XCTAssertEqual(KeyChangeUX.activeChatContactId, id)
     }
 }

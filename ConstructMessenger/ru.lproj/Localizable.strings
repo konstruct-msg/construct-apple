@@ -971,12 +971,9 @@
 "key_change_banner_subtitle_failed" = "Не удалось подтвердить ключ этого человека в журнале прозрачности. По возможности проверьте лично.";
 "key_change_verify" = "Проверить";
 "address_change_toast_fmt" = "%@ называет другой адрес, чем раньше. Откройте чат, чтобы проверить.";
-"security_notice_new_device_title" = "Новое устройство";
-"security_notice_new_device_body_fmt" = "У %@ появилось устройство, которого раньше не было. Если собеседник его не добавлял, переписку может читать кто-то ещё. Сверьте Safety Numbers, прежде чем доверять чату.";
 "security_notice_address_title" = "Другой адрес";
 "security_notice_address_body_fmt" = "%@ называет другой адрес, чем раньше. Сверьте Safety Numbers, прежде чем доверять чату.";
 "security_notice_acknowledge" = "Проверено";
-"new_device_toast_fmt" = "У %@ новое устройство. Откройте чат, чтобы проверить.";
 "safety_numbers_device_fmt" = "Устройство %@";
 "key_change_toast_open" = "Открыть";
 
