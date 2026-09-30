@@ -163,16 +163,16 @@ final class StealthSenderService: SealedSenderResolving {
     /// Test seam: overrides the KT-verified-identity lookup so unit tests exercise the KT
     /// cross-check without a Core Data stack. `nil` (default) uses the real `User` store.
     var ktLookupOverrideForTesting: ((String) -> (key: Data, status: KTStatus)?)?
+    #endif
 
     /// The account address a sealed envelope names its recipient by. Injected so a test can build
-    /// an envelope without a store.
+    /// an envelope without a store — but read on every send, so it exists in every build.
     var accountAddressLookup: (String) -> Data? = { accountId in
         AccountAddress.of(
             accountId: accountId,
             context: PersistenceController.shared.container.viewContext
         )
     }
-    #endif
 
     /// The recipient's locally stored, previously-KT-verified identity key for `userId`
     /// (plus its status), read from the `User` Core Data record. `nil` for a first contact
