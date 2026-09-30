@@ -416,7 +416,7 @@ class AuthViewModel {
             // `DeviceKeyAvailability`. Send it to the same recovery screen the token-refresh
             // path has always used.
             handleLostDeviceKeys(userId: currentUserId ?? "", reason: "device auth: \(detail)")
-        case .failed(let description):
+        case .failed(let description, let overDirectTLS):
             Log.info("Device authentication failed: \(description)", category: "Auth")
 
             // Only wipe device keys when the server explicitly rejects this device
@@ -444,7 +444,7 @@ class AuthViewModel {
                         Log.info("Device not registered yet — routing back to registration (pending bundle found)", category: "Auth")
                         // Keep keys; RegistrationFlowView will pick them up and retry.
                         hasRegisteredDeviceKeys = false
-                    } else if Self.isRemovedDevice(description) {
+                    } else if Self.isRemovedDevice(description, overDirectTLS: overDirectTLS) {
                         // Another device of the account removed this one, or it signed out
                         // elsewhere: the server deactivates the row and never reactivates it.
                         // Everything the account left here goes (`LocalDataWipe`).
@@ -477,8 +477,12 @@ class AuthViewModel {
     ///
     /// A message string, because the server sends nothing more typed (construct-server
     /// `devices.rs`, `AppError::auth("Device is inactive")`); vault TODO 77 asks for a typed reason.
-    nonisolated static func isRemovedDevice(_ description: String) -> Bool {
-        description.lowercased().contains("device is inactive")
+    ///
+    /// Only over a direct TLS connection to our server. Through VEIL the client speaks plaintext
+    /// gRPC to the relay, and a relay able to forge this answer would be able to erase the device.
+    /// A removed device reached only through VEIL keeps its data until it connects directly.
+    nonisolated static func isRemovedDevice(_ description: String, overDirectTLS: Bool) -> Bool {
+        overDirectTLS && description.lowercased().contains("device is inactive")
     }
 
     /// Legacy method - kept for backward compatibility

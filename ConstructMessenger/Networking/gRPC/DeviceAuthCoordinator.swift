@@ -20,7 +20,11 @@ enum DeviceAuthOutcome: Sendable {
     /// (locked device before first unlock, protected data unavailable). The caller MUST route
     /// to recovery, never to registration — see `DeviceKeyAvailability`.
     case keysUnreadable(detail: String)
-    case failed(message: String)
+    /// `overDirectTLS`: the answer came on a TLS connection to our server both before and after
+    /// the call. Over VEIL the client speaks plaintext gRPC to the relay, which can forge any
+    /// answer — so an answer that erases this device (`AuthViewModel.isRemovedDevice`) counts
+    /// only when this is true.
+    case failed(message: String, overDirectTLS: Bool)
 }
 
 /// Serializes device-auth RPCs so concurrent recovery paths share one mint.
@@ -85,17 +89,19 @@ actor DeviceAuthCoordinator {
             return .keysUnreadable(detail: detail)
         }
 
+        var directBefore = false
         do {
             let timestamp = Int64(Date().timeIntervalSince1970)
             let message = "\(deviceId)\(timestamp)"
             guard let messageData = message.data(using: .utf8) else {
-                return .failed(message: "encodingFailed")
+                return .failed(message: "encodingFailed", overDirectTLS: false)
             }
 
             // The core signs — with the orchestrator, or the key record before one exists.
             let signatureData = try CryptoManager.shared.signWithDeviceKey(messageData)
 
             // allowAuthRetry: false on the client — must not recurse into refresh/device-auth.
+            directBefore = GRPCChannelManager.shared.veilProxyPort() == nil
             let response = try await AuthServiceClient.shared.authenticateDevice(
                 deviceId: deviceId,
                 timestamp: timestamp,
@@ -127,7 +133,8 @@ actor DeviceAuthCoordinator {
             return .success(userId: response.userId)
         } catch {
             Log.error("DeviceAuthCoordinator: device auth failed: \(error)", category: "Auth")
-            return .failed(message: "\(error)")
+            let direct = directBefore && GRPCChannelManager.shared.veilProxyPort() == nil
+            return .failed(message: "\(error)", overDirectTLS: direct)
         }
     }
 }

@@ -61,12 +61,21 @@ final class LocalDataWipeTests: XCTestCase {
     /// The server's word for a deactivated device, and nothing else. "Device not found" is also
     /// what an unapproved join request gets — wiping on it would erase a device mid-link.
     func testOnlyAnInactiveDeviceIsARemovedOne() {
-        XCTAssertTrue(AuthViewModel.isRemovedDevice(
-            "RPCError(code: unauthenticated, message: \"Device is inactive\")"
+        let inactive = "RPCError(code: unauthenticated, message: \"Device is inactive\")"
+        XCTAssertTrue(AuthViewModel.isRemovedDevice(inactive, overDirectTLS: true))
+        XCTAssertFalse(AuthViewModel.isRemovedDevice(
+            "RPCError(code: unauthenticated, message: \"Device not found\")", overDirectTLS: true
         ))
-        XCTAssertFalse(AuthViewModel.isRemovedDevice("RPCError(code: unauthenticated, message: \"Device not found\")"))
-        XCTAssertFalse(AuthViewModel.isRemovedDevice("GRPCCore.RPCError error 16"))
-        XCTAssertFalse(AuthViewModel.isRemovedDevice("deadline exceeded"))
+        XCTAssertFalse(AuthViewModel.isRemovedDevice("GRPCCore.RPCError error 16", overDirectTLS: true))
+        XCTAssertFalse(AuthViewModel.isRemovedDevice("deadline exceeded", overDirectTLS: true))
+    }
+
+    /// Through VEIL the relay sees plaintext gRPC and can forge the answer. Mutation: drop the
+    /// path check — any relay can erase the device.
+    func testARelayedAnswerNeverWipes() {
+        XCTAssertFalse(AuthViewModel.isRemovedDevice(
+            "RPCError(code: unauthenticated, message: \"Device is inactive\")", overDirectTLS: false
+        ))
     }
 
     // MARK: - Defaults
