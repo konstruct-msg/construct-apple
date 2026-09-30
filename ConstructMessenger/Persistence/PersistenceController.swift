@@ -215,6 +215,32 @@ struct PersistenceController {
         }
     }
 
+    /// Empty the store by replacing its file rather than deleting its rows: a batch delete leaves
+    /// the deleted rows' bytes in the SQLite free pages and the WAL. `sweep` runs while no store is
+    /// attached, so it may remove the store files and the external-blob directory with the rest.
+    /// `LocalDataWipe` only.
+    func replaceStoreWithEmpty(sweep: () -> Void) {
+        let coordinator = container.persistentStoreCoordinator
+        container.viewContext.reset()
+        for store in coordinator.persistentStores {
+            let url = store.url
+            do {
+                try coordinator.remove(store)
+                if let url, url.path != "/dev/null" {
+                    try coordinator.destroyPersistentStore(at: url, type: .sqlite)
+                }
+            } catch {
+                Log.error("Core Data: could not detach the store for the wipe: \(error)", category: "Persistence")
+            }
+        }
+        sweep()
+        container.loadPersistentStores { _, error in
+            if let error {
+                Log.error("Core Data: empty store did not load after the wipe: \(error)", category: "Persistence")
+            }
+        }
+    }
+
     /// Creates a fresh background context for off-main-thread writes.
     func newBackgroundContext() -> NSManagedObjectContext {
         container.newBackgroundContext()

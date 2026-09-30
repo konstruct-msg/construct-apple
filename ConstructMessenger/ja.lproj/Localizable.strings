@@ -648,7 +648,7 @@
 // MARK: - Session Management
 "session_management" = "セッション管理";
 "sign_out_this_device" = "このデバイスからサインアウト";
-"sign_out_this_device_message" = "このデバイスのみサインアウトします。他の連携済みデバイスはアクティブなままです。";
+"sign_out_this_device_message" = "チャット・メディア・連絡先など、このデバイス上のすべてが消去されます。他のリンク済みデバイスはそのまま使えます。";
 "sign_out_other_devices" = "他のデバイスからサインアウト";
 "sign_out_other_devices_message" = "他のすべての連携済みデバイスからサインアウトします。このデバイスはアクティブなままです。";
 "sign_out_all_devices" = "すべてのデバイスからサインアウト";
@@ -656,7 +656,8 @@
 "sign_out_all_hint" = "すべてのデバイスからサインアウトすると、すべてのセッションが即座に無効化されます。すべてのデバイスで再認証が必要になります。";
 "sign_out" = "サインアウト";
 "device_scan_to_approve" = "スキャンして新しいデバイスを承認";
-"device_revoke_confirm_message" = "\"%@\" をリモートでサインアウトしますか？このデバイスはアイデンティティから切断されます。";
+"device_revoke_confirm_message" = "「%@」を削除しますか？次に接続したときにサインアウトし、保存しているすべてを消去します。";
+"device_removed_notice" = "このデバイスはアカウントから削除されました。保存されていたものはすべて消去されました。";
 "other_devices" = "他のデバイス";
 "other_devices_hint" = "－ をタップして、アイデンティティからデバイスを削除します。";
 "device_active_now" = "現在アクティブ";
@@ -784,7 +785,7 @@
 "logout_row" = "サインアウト";
 "logout_all_row" = "すべてのデバイスからサインアウト";
 "logout_confirm_title" = "サインアウトしますか？";
-"logout_confirm_message" = "このデバイスからセッション終了します。シードフレーズがあれば再開できます。";
+"logout_confirm_message" = "このデバイスからサインアウトし、チャット・メディア・連絡先など、このデバイス上のすべてを消去します。シードフレーズで再度サインインでき、履歴は他のデバイスから送れます。";
 "logout_confirm_action" = "サインアウト";
 "logout_all_confirm_title" = "すべてのデバイスからサインアウトしますか？";
 "logout_all_confirm_message" = "すべてのデバイス上のすべてのセッションが即座に無効化されます。シードフレーズを使用して、すべてのデバイスで再認証が必要になります。";

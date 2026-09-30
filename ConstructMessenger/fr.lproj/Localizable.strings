@@ -743,7 +743,7 @@
 "device_link_approved_message" = "L’appareil a été lié à votre identité.";
 "session_management" = "Gestion des sessions";
 "sign_out_this_device" = "Se déconnecter de cet appareil";
-"sign_out_this_device_message" = "Vous serez déconnecté sur cet appareil uniquement. Les autres appareils liés restent actifs.";
+"sign_out_this_device_message" = "Tout ce que contient cet appareil — discussions, médias, contacts — sera effacé. Les autres appareils liés restent actifs.";
 "sign_out_other_devices" = "Déconnecter les autres appareils";
 "sign_out_other_devices_message" = "Tous les autres appareils liés seront déconnectés. Cet appareil reste actif.";
 "sign_out_all_devices" = "Déconnecter tous les appareils";
@@ -751,7 +751,8 @@
 "sign_out_all_hint" = "Se déconnecter de tous les appareils invalide toutes les sessions immédiatement. Vous devrez vous réauthentifier sur chaque appareil.";
 "sign_out" = "Se déconnecter";
 "device_scan_to_approve" = "Scanner pour approuver un nouvel appareil";
-"device_revoke_confirm_message" = "Déconnecter \"%@\" à distance ? Cet appareil sera détaché de votre identité.";
+"device_revoke_confirm_message" = "Retirer « %@ » ? Il sera déconnecté et effacera tout ce qu'il contient à sa prochaine connexion.";
+"device_removed_notice" = "Cet appareil a été retiré de votre compte. Tout ce qu'il contenait a été effacé.";
 "other_devices" = "Autres appareils";
 "other_devices_hint" = "Touchez − pour retirer un appareil de votre identité.";
 "device_active_now" = "Actif maintenant";
@@ -864,7 +865,7 @@
 "logout_row" = "se déconnecter";
 "logout_all_row" = "déconnecter tous les appareils";
 "logout_confirm_title" = "Se déconnecter ?";
-"logout_confirm_message" = "Vous serez déconnecté sur cet appareil. Vous pourrez vous reconnecter avec votre phrase de récupération.";
+"logout_confirm_message" = "Vous serez déconnecté de cet appareil et tout ce qu'il contient — discussions, médias, contacts — sera effacé. Reconnectez-vous avec votre phrase de récupération ; vos autres appareils peuvent renvoyer l'historique.";
 "logout_confirm_action" = "Se déconnecter";
 "logout_all_confirm_title" = "Déconnecter tous les appareils ?";
 "logout_all_confirm_message" = "Toutes les sessions sur tous vos appareils seront invalidées immédiatement. Vous devrez vous réauthentifier sur chaque appareil avec votre phrase de récupération.";

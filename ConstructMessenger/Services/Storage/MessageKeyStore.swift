@@ -93,6 +93,15 @@ final class MessageKeyStore {
     }
 
     /// VACUUM the database. Call periodically (e.g. on app backgrounding) after large deletions.
+    /// Close the database so its file can be removed with the account; the next call opens a
+    /// fresh, empty one (`database()`). `LocalDataWipe` only.
+    func close() {
+        queue.sync {
+            if let db { sqlite3_close(db) }
+            db = nil
+        }
+    }
+
     func vacuum() {
         queue.async { [weak self] in
             guard let db = self?.database() else { return }

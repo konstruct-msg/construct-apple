@@ -745,7 +745,7 @@
 // MARK: - Session Management
 "session_management" = "Session Management";
 "sign_out_this_device" = "Sign Out This Device";
-"sign_out_this_device_message" = "You will be signed out on this device only. Other linked devices remain active.";
+"sign_out_this_device_message" = "Everything on this device — chats, media, contacts — will be erased. Other linked devices remain active.";
 "sign_out_other_devices" = "Sign Out Other Devices";
 "sign_out_other_devices_message" = "All other linked devices will be signed out. This device stays active.";
 "sign_out_all_devices" = "Sign Out All Devices";
@@ -753,7 +753,8 @@
 "sign_out_all_hint" = "Signing out of all devices invalidates all sessions immediately. You will need to re-authenticate on every device.";
 "sign_out" = "Sign Out";
 "device_scan_to_approve" = "Scan to Approve New Device";
-"device_revoke_confirm_message" = "Sign out \"%@\" remotely? This device will be disconnected from your identity.";
+"device_revoke_confirm_message" = "Remove \"%@\"? It will be signed out and erase everything it holds the next time it connects.";
+"device_removed_notice" = "This device was removed from your account. Everything it held has been erased.";
 "other_devices" = "Other Devices";
 "other_devices_hint" = "Tap − to remove a device from your identity.";
 "device_active_now" = "Active now";
@@ -892,7 +893,7 @@
 "logout_row" = "sign out";
 "logout_all_row" = "sign out all devices";
 "logout_confirm_title" = "Sign Out?";
-"logout_confirm_message" = "You will be signed out on this device. You can sign back in with your seed phrase.";
+"logout_confirm_message" = "You will be signed out on this device, and everything it holds — chats, media, contacts — will be erased. Sign back in with your seed phrase; your other devices can send the history back.";
 "logout_confirm_action" = "Sign Out";
 "logout_all_confirm_title" = "Sign Out All Devices?";
 "logout_all_confirm_message" = "All sessions on all your devices will be invalidated immediately. You will need to re-authenticate on every device using your seed phrase.";

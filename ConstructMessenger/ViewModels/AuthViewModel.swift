@@ -444,6 +444,16 @@ class AuthViewModel {
                         Log.info("Device not registered yet — routing back to registration (pending bundle found)", category: "Auth")
                         // Keep keys; RegistrationFlowView will pick them up and retry.
                         hasRegisteredDeviceKeys = false
+                    } else if Self.isRemovedDevice(description) {
+                        // Another device of the account removed this one, or it signed out
+                        // elsewhere: the server deactivates the row and never reactivates it.
+                        // Everything the account left here goes (`LocalDataWipe`).
+                        Log.error("Server says this device was removed — wiping it", category: "Auth")
+                        performLocalSignOut()
+                        ErrorRouter.shared.presentNotice(
+                            NSLocalizedString("device_removed_notice", comment: ""),
+                            autoDismissAfter: 10
+                        )
                     } else {
                         // Server says this device is unregistered, but we still hold valid
                         // crypto keys. Do NOT wipe — a wipe would silently destroy the identity
@@ -460,6 +470,17 @@ class AuthViewModel {
         }
     }
     
+    /// The server's answer for a device whose row it deactivated — `RevokeDevice`, or `Logout` from
+    /// this device's own session elsewhere — and nothing else. Deactivation is permanent, so this is
+    /// the one rejection that may wipe. "Device not found" is not it: an unapproved join request
+    /// answers that too, and so would a server that lost its rows.
+    ///
+    /// A message string, because the server sends nothing more typed (construct-server
+    /// `devices.rs`, `AppError::auth("Device is inactive")`); vault TODO 77 asks for a typed reason.
+    nonisolated static func isRemovedDevice(_ description: String) -> Bool {
+        description.lowercased().contains("device is inactive")
+    }
+
     /// Legacy method - kept for backward compatibility
     func restoreSession() {
         Task { [weak self] in
@@ -783,7 +804,8 @@ class AuthViewModel {
         }
     }
 
-    /// Wipes local session + device identity so ContentView routes back to onboarding.
+    /// Wipes the session, the device identity and every local trace of the account
+    /// (`LocalDataWipe`), so ContentView routes back to onboarding.
     /// Safe to call when the server logout RPC is unavailable (revoked/inactive device).
     func performLocalSignOut() {
         cancelTimeouts()
@@ -798,6 +820,10 @@ class AuthViewModel {
         UserDefaults.standard.removeObject(forKey: "recovery_banner_dismissed")
         UserDefaults.standard.removeObject(forKey: "cr_pending_nav_user_ids")
         OrientationStore.reset()
+        // Signing out leaves nothing of the account on this device: the transcript used to stay
+        // for a later seed recovery of the same account. History moves between devices now, and
+        // a device that was signed out — or removed — must not keep reading as the account.
+        LocalDataWipe.run(reason: "sign_out")
         deviceLinkPhase = .idle
         deviceKeysUnavailable = false
         deviceDeregistered = false
@@ -1025,43 +1051,9 @@ class AuthViewModel {
         KeychainManager.shared.deleteDeviceKeys()
         KeychainManager.shared.deleteOtpks()
 
-        // Every `construct.*` key is classified as wiped-or-survives in `AccountWipeKeys`, and a
-        // test fails on an unclassified one. The inline array this replaces had never contained
-        // `construct.stream.cursor`, so a wipe left the resume cursor behind and the "clean start"
-        // resumed from the old watermark.
-        AccountWipeKeys.wipe()
-        
-        // Clear CoreData - delete all user's data
-        let context = viewContext
-        
-        guard context.persistentStoreCoordinator != nil else {
-            Log.info("Core Data persistent store coordinator not ready, skipping data deletion", category: "AuthViewModel")
-            isAuthenticated = false
-            currentUserId = nil
-            currentUser = nil
-            hasRegisteredDeviceKeys = false
-            return
-        }
-        
-        // Delete all entities using batch delete for efficiency. Same list the ownership gate
-        // uses — see `userDataEntityNames`.
-        for entityName in Self.userDataEntityNames {
-            let fetchRequest = NSFetchRequest<NSFetchRequestResult>(entityName: entityName)
-            let batchDelete = NSBatchDeleteRequest(fetchRequest: fetchRequest)
-            batchDelete.resultType = .resultTypeObjectIDs
-            do {
-                let result = try context.execute(batchDelete) as? NSBatchDeleteResult
-                if let objectIDs = result?.result as? [NSManagedObjectID], !objectIDs.isEmpty {
-                    NSManagedObjectContext.mergeChanges(
-                        fromRemoteContextSave: [NSDeletedObjectsKey: objectIDs],
-                        into: [context]
-                    )
-                }
-            } catch {
-                Log.error("Failed to delete \(entityName) from CoreData: \(error)", category: "AuthViewModel")
-            }
-        }
-        Log.info("All user data deleted from CoreData", category: "AuthViewModel")
+        // Rows, files, defaults — `LocalDataWipe`. It replaces the batch delete that stood here,
+        // which left the deleted rows' bytes in the SQLite file and never touched media.
+        LocalDataWipe.run(reason: "account_deleted")
 
         // Reset auth state
         isAuthenticated = false

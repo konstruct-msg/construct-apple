@@ -32,6 +32,8 @@ enum AccountWipeKeys {
         "construct.userId",
         "construct.deviceId",
         "construct.localStore.ownerUserId",
+        // Ids of first messages that failed to open (`FailedInitMessageStore`) — the account's.
+        "com.construct.failed_init_message_ids",
         "construct.pendingRegistrationBundle",
         // This account's intake key, and the note of which epoch we last published tags for.
         // Wiped together: a new account minting a fresh key while the old publish marker says
@@ -156,6 +158,10 @@ enum AccountWipeKeys {
         "construct.tokenSpendUnit.v1.",
         "construct.kyber.otpk.sk.",
         "construct.pq_deferred.",
+        // Not `construct.`-named, so the scan does not require them; listed because they are the
+        // account's: thumbnail JPEGs of builds before 2026-08-11 (`ThumbnailStore` moved them to
+        // Caches, and a failed move leaves them here).
+        "message_thumbnail_",
         // The per-peer PQXDH downgrade flag of builds before PQXDH v2 (Keychain). Nothing writes
         // it any more; `KyberPrekeyService.deleteLegacyItems` sweeps what an older build left.
         "construct.pqxdh.downgraded.",
