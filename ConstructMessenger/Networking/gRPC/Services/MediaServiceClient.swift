@@ -50,7 +50,12 @@ extension MediaServiceClient {
         // Media downloads are long-running server-streaming RPCs. Do NOT arm the 4s
         // fast-fallback direct timeout here — it causes false .deadlineExceeded on
         // healthy but high-latency/slow links.
-        try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.downloadMedia) { grpcClient in
+        //
+        // On the channel with no token (the sealed one, as Android's `publicMedia`): the
+        // server serves `DownloadMedia` to anyone holding the id, and over the signed-in
+        // channel every download named the account and device that fetched it — who
+        // received whose attachment. Avatars come through here too.
+        try await GRPCChannelManager.shared.performSealedRPC(timeout: GRPCTimeouts.downloadMedia) { grpcClient in
             let client = Shared_Proto_Services_V1_MediaService.Client(wrapping: grpcClient)
 
             var request = Shared_Proto_Services_V1_DownloadMediaRequest()

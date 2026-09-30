@@ -643,10 +643,11 @@ final class GRPCChannelManager: Sendable {
     /// (stealth-sealed-sender-v2 Phase 2).
     ///
     /// Deliberately simpler than `performRPC`/`GRPCCallExecutor`: there is no auth to
-    /// refresh on this channel, and VEIL-aware relay rotation is left to the message
-    /// layer above (sends already retry there). On a transport failure the sealed
-    /// connection is invalidated and the operation is retried once with a fresh client;
-    /// a second failure propagates to the caller.
+    /// refresh on this channel, and VEIL-aware relay rotation is left to the layer above.
+    /// On a failure the sealed connection is invalidated and the operation is retried once
+    /// with a fresh client; a second failure propagates to the caller. A failure the server
+    /// answered (`sealedFailureKeepsConnection`) propagates at once: the connection worked,
+    /// and a second try would get the same answer.
     func performSealedRPC<Result: Sendable>(
         timeout: TimeInterval? = nil,
         _ operation: @Sendable @escaping (GRPCClient<HTTP2ClientTransport.TransportServices>) async throws -> Result
@@ -673,12 +674,24 @@ final class GRPCChannelManager: Sendable {
                     return try await operation(client)
                 }
             } catch {
+                if Self.sealedFailureKeepsConnection(error) { throw error }
                 lastError = error
                 invalidateSealedPersistentClient()
                 if attempt == 1 { throw error }
             }
         }
         throw lastError ?? NetworkError.connectionFailed
+    }
+
+    /// The server answered — a status such as NOT_FOUND for expired media, or a refused
+    /// token. Until 2026-09-30 every failure replaced the sealed connection and asked again,
+    /// which was harmless while only sends used it; a media download that finds its item
+    /// expired would tear down the channel sends are using, every time.
+    nonisolated static func sealedFailureKeepsConnection(_ error: Error) -> Bool {
+        switch RPCFailureClassifier.classify(error) {
+        case .applicationError, .authRejected: return true
+        default: return false
+        }
     }
 }
 
