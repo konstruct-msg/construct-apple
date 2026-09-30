@@ -64,6 +64,8 @@ struct Construct_DesktopApp: App {
                 // Packs that ship in the app, into the store once. No network; first launch only.
                 StickerService.shared.seedBundledPacks()
                     StorageMigrationService.shared.migrateIfNeeded(context: viewContext)
+                    // Media from before 2026-09-30 lies in the clear in the container; seal it.
+                    Task.detached(priority: .utility) { MediaManager.sealClearFiles() }
                     Log.debug("Desktop launch bootstrap — storage migration complete", category: "Desktop")
 
                     // Direct path (Strategy B): construct-core (UniFFI) + gRPC-Swift + VEIL from core.

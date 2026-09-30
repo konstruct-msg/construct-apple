@@ -131,7 +131,9 @@ final class HistoryCoreStreamTests: XCTestCase {
         XCTAssertEqual(phase, 3)
         XCTAssertEqual(try context.count(for: User.fetchRequest()), 3)
         XCTAssertEqual(summary.applied, 4, "three contacts and one media file")
-        XCTAssertEqual(try Data(contentsOf: MediaManager.onDiskURL(for: media.id)), media.data)
+        // Written sealed at rest, never in the clear (`AtRestFiles`); read back whole.
+        XCTAssertTrue(SealedFile.isSealed(fileAt: MediaManager.onDiskURL(for: media.id)))
+        XCTAssertEqual(MediaManager.loadOnDisk(mediaId: media.id), media.data)
         XCTAssertEqual(try partFiles(), [])
     }
 

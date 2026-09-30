@@ -205,21 +205,26 @@ enum HistoryCoreStream {
         write: (Data) async throws -> Void
     ) async throws {
         let url = MediaManager.onDiskURL(for: id)
-        guard let handle = try? FileHandle(forReadingFrom: url) else { return }
-        defer { try? handle.close() }
-        let size = try handle.seekToEnd()
-        try handle.seek(toOffset: 0)
+        // Clear size and clear chunks: the file is sealed at rest (`AtRestFiles`), the core
+        // seals it again for the other device.
+        guard let size = AtRestFiles.clearSize(of: url),
+              let chunks = try? AtRestFiles.chunks(of: url, context: MediaManager.sealContext(for: id)) else { return }
         try await write(try sender.beginMedia(mediaId: id, mimeType: mime, byteLen: size))
         var remaining = size
         while remaining > 0 {
-            let want = Int(min(UInt64(mediaPieceSize), remaining))
-            guard let piece = try handle.read(upToCount: want), !piece.isEmpty else {
+            guard let chunk = chunks.next(), !chunk.isEmpty else {
                 // Shorter than announced: the core refuses to end a blob early, so this stream
                 // cannot be completed. Fail it rather than send a lie.
                 throw HistoryError.Truncated(message: "truncated")
             }
-            remaining -= UInt64(piece.count)
-            try await write(try sender.pushMedia(piece: piece))
+            var offset = chunk.startIndex
+            while offset < chunk.endIndex, remaining > 0 {
+                let end = chunk.index(offset, offsetBy: min(mediaPieceSize, Int(remaining)), limitedBy: chunk.endIndex) ?? chunk.endIndex
+                let piece = chunk[offset..<end]
+                remaining -= UInt64(piece.count)
+                try await write(try sender.pushMedia(piece: Data(piece)))
+                offset = end
+            }
         }
     }
 
@@ -394,6 +399,8 @@ final class HistoryMediaSink {
     private var handle: FileHandle?
     private var partURL: URL?
     private var finalURL: URL?
+    /// Seals what arrives: the file is written sealed at rest (`AtRestFiles`), never in the clear.
+    private var sealer: SealedFile.Writer?
 
     /// A blob begins. One already on disk is kept, and this copy's bytes are dropped.
     func start(mediaId: String) throws -> HistoryApplyResult {
@@ -408,21 +415,28 @@ final class HistoryMediaSink {
         #if os(iOS)
         attributes[.protectionKey] = FileProtectionType.completeUntilFirstUserAuthentication
         #endif
+        guard let key = LocalStoreKey.current() else { return .ignored }
         guard FileManager.default.createFile(atPath: part.path, contents: nil, attributes: attributes) else {
             return .ignored
         }
+        let sealer = try SealedFile.Writer(key: key, context: MediaManager.sealContext(for: mediaId))
         handle = try FileHandle(forWritingTo: part)
+        try handle?.write(contentsOf: sealer.header)
+        self.sealer = sealer
         partURL = part
         finalURL = url
         return .ignored
     }
 
     func append(_ data: Data) throws {
-        try handle?.write(contentsOf: data)
+        guard let sealer else { return }
+        try handle?.write(contentsOf: try sealer.append(data))
     }
 
     func end() throws -> HistoryApplyResult {
-        guard let handle, let partURL, let finalURL else { return .ignored }
+        guard let handle, let partURL, let finalURL, let sealer else { return .ignored }
+        try handle.write(contentsOf: try sealer.finish())
+        self.sealer = nil
         try handle.close()
         self.handle = nil
         self.partURL = nil
@@ -435,6 +449,7 @@ final class HistoryMediaSink {
     func abandon() {
         try? handle?.close()
         handle = nil
+        sealer = nil
         if let partURL { try? FileManager.default.removeItem(at: partURL) }
         partURL = nil
         finalURL = nil

@@ -112,6 +112,11 @@ class MediaManager {
         onDiskDirectory.appendingPathComponent(mediaId)
     }
 
+    /// What a media file is sealed to: its id, so a file renamed to another id does not open.
+    nonisolated static func sealContext(for mediaId: String) -> String {
+        "media/\(mediaId)"
+    }
+
     nonisolated static func hasOnDiskFile(mediaId: String) -> Bool {
         FileManager.default.fileExists(atPath: onDiskURL(for: mediaId).path)
     }
@@ -122,35 +127,46 @@ class MediaManager {
     nonisolated static func importHistoryBlob(_ data: Data, mediaId: String) -> Bool {
         let url = onDiskURL(for: mediaId)
         if FileManager.default.fileExists(atPath: url.path) { return false }
-        try? data.write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
-        return true
+        return AtRestFiles.write(data, to: url, context: sealContext(for: mediaId))
     }
 
     nonisolated static func onDiskFileSize(mediaId: String) -> UInt64? {
-        let url = onDiskURL(for: mediaId)
-        guard FileManager.default.fileExists(atPath: url.path),
-              let values = try? url.resourceValues(forKeys: [.fileSizeKey]),
-              let size = values.fileSize else { return nil }
-        return UInt64(size)
+        AtRestFiles.clearSize(of: onDiskURL(for: mediaId))
     }
 
     nonisolated static func loadOnDisk(mediaId: String) -> Data? {
-        try? Data(contentsOf: onDiskURL(for: mediaId))
+        AtRestFiles.read(onDiskURL(for: mediaId), context: sealContext(for: mediaId))
     }
 
     private func saveToDiskcache(_ data: Data, mediaId: String) {
-        let url = diskCacheURL(for: mediaId)
-        try? data.write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+        AtRestFiles.write(data, to: diskCacheURL(for: mediaId), context: Self.sealContext(for: mediaId))
     }
 
     private func loadFromDiskCache(mediaId: String) -> Data? {
-        if let data = try? Data(contentsOf: diskCacheURL(for: mediaId)) { return data }
+        if let data = AtRestFiles.read(diskCacheURL(for: mediaId), context: Self.sealContext(for: mediaId)) {
+            return data
+        }
 
         // Not migrated yet. Move it rather than copy: two copies of a video is not a rounding error.
         let legacy = legacyCacheDirectory.appendingPathComponent(mediaId)
         guard let data = try? Data(contentsOf: legacy) else { return nil }
-        try? FileManager.default.moveItem(at: legacy, to: diskCacheURL(for: mediaId))
+        if AtRestFiles.write(data, to: diskCacheURL(for: mediaId), context: Self.sealContext(for: mediaId)) {
+            try? FileManager.default.removeItem(at: legacy)
+        }
         return data
+    }
+
+    /// Seals every media file still in the clear — written before 2026-09-30, when media lay open
+    /// in the container. Streaming, so a video is not loaded whole. Launch, background.
+    nonisolated static func sealClearFiles() {
+        guard let entries = try? FileManager.default.contentsOfDirectory(
+            at: onDiskDirectory, includingPropertiesForKeys: nil
+        ) else { return }
+        var sealed = 0
+        for url in entries where !url.lastPathComponent.hasPrefix(".") {
+            if AtRestFiles.sealInPlace(url, context: sealContext(for: url.lastPathComponent)) { sealed += 1 }
+        }
+        if sealed > 0 { Log.info("Media: sealed \(sealed) clear file(s)", category: "MediaManager") }
     }
 
     /// Moves everything still sitting in `Library/Caches/media/` into the durable store.
@@ -180,6 +196,7 @@ class MediaManager {
                     [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication],
                     ofItemAtPath: destination.path
                 )
+                AtRestFiles.sealInPlace(destination, context: Self.sealContext(for: source.lastPathComponent))
                 moved += 1
                 bytes += size
             } catch {

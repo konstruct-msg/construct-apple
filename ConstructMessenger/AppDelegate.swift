@@ -59,6 +59,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
             // and the server drops the object 7 days after upload, so a purge on day nine takes
             // the last copy that exists. See MediaManager.mediaDirectory.
             Task { @MainActor in MediaManager.shared.migrateMediaOutOfCaches() }
+            Task.detached(priority: .utility) { MediaManager.sealClearFiles() }
 
             let migrated = ThumbnailStore.shared.migrateFromUserDefaults()
             if migrated.keys > 0 {
