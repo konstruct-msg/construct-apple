@@ -53,6 +53,10 @@ struct PersistenceController {
         } else if let description = c.persistentStoreDescriptions.first {
             description.shouldInferMappingModelAutomatically = true
             description.shouldMigrateStoreAutomatically = true
+            // Deleted and overwritten rows are zeroed rather than left in free pages: a message
+            // deleted, or a clear body the storage migration replaced, must not be readable
+            // from the file afterwards. SQLite applies it to pages freed from now on.
+            description.setOption(["secure_delete": "ON"] as NSDictionary, forKey: NSSQLitePragmasOption)
             // .completeUntilFirstUserAuthentication (not .complete) allows the store to be
             // created and opened on first launch and from background wakes. .complete would
             // block file I/O until the device is unlocked AND can race with store creation

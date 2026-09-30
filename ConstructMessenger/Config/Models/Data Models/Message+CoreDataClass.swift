@@ -78,8 +78,10 @@ public class Message: NSManagedObject {
     /// - Clears `decryptedContent`.
     /// - Stores the key in `MessageKeyStore` and warms `MessageDisplayCache`.
     ///
-    /// Falls back to writing `decryptedContent` if encryption fails (should never happen
-    /// on a supported device, but keeps the message visible in any case).
+    /// If encryption fails the body is not stored at all — never `decryptedContent` instead.
+    /// That fallback wrote the clear text into the store, and nothing on disk said which rows
+    /// it had taken (MESSAGE_STORAGE_PRIVACY_SPEC S-1, 2026-09-30). A message without a body is
+    /// better than a body anyone copying the container can read.
     /// Encrypt UTF-8 text for at-rest storage. Prefer `plaintextData` when the caller
     /// already holds binary (CTM1 envelope / media album).
     func applyStoredEncryption(
@@ -129,10 +131,9 @@ public class Message: NSManagedObject {
         guard status == errSecSuccess,
               let encrypted = try? MessageStorageCrypto.encrypt(plaintext: plaintextData, key: keyBytes)
         else {
-            Log.error("applyStoredEncryption failed for \(msgId.prefix(8))… — falling back to plaintext", category: "Storage")
+            Log.error("applyStoredEncryption failed for \(msgId.prefix(8))… — body not stored", category: "Storage")
             encryptedContent = Data()
-            // Fallback column is String — only valid for UTF-8 legacy bodies.
-            decryptedContent = String(data: plaintextData, encoding: .utf8)
+            decryptedContent = nil
             return
         }
 
