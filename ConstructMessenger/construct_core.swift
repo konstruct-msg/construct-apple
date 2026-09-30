@@ -1349,12 +1349,16 @@ public protocol LocalStoreProtocol: AnyObject, Sendable {
     
     func editMessage(id: String, body: Data, searchText: String?, editedAt: Int64) throws  -> Bool
     
+    func forgetServerMessageIdsBefore(cutoff: Int64) throws  -> UInt64
+    
     func get(key: String) throws  -> Data?
     
     /**
      * `search_text` is what the message says, for the full-text index; null for media/control.
      */
     func insertMessage(message: LocalMessage, searchText: String?) throws  -> LocalInsert
+    
+    func localMessageId(serverId: String) throws  -> String?
     
     func message(id: String) throws  -> LocalMessage?
     
@@ -1379,6 +1383,11 @@ public protocol LocalStoreProtocol: AnyObject, Sendable {
      * An id already known keeps its first account.
      */
     func recordPeerDevice(device: LocalPeerDevice) throws  -> LocalInsert
+    
+    /**
+     * The server's id of a sealed copy we sent → our message id; lowercase, kept 30 days.
+     */
+    func recordServerMessageId(serverId: String, localId: String, recordedAt: Int64) throws 
     
     func remove(key: String) throws 
     
@@ -1588,6 +1597,15 @@ open func editMessage(id: String, body: Data, searchText: String?, editedAt: Int
 })
 }
     
+open func forgetServerMessageIdsBefore(cutoff: Int64)throws  -> UInt64  {
+    return try  FfiConverterUInt64.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_forget_server_message_ids_before(
+            self.uniffiCloneHandle(),
+        FfiConverterInt64.lower(cutoff),$0
+    )
+})
+}
+    
 open func get(key: String)throws  -> Data?  {
     return try  FfiConverterOptionData.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
     uniffi_construct_core_fn_method_localstore_get(
@@ -1606,6 +1624,15 @@ open func insertMessage(message: LocalMessage, searchText: String?)throws  -> Lo
             self.uniffiCloneHandle(),
         FfiConverterTypeLocalMessage_lower(message),
         FfiConverterOptionString.lower(searchText),$0
+    )
+})
+}
+    
+open func localMessageId(serverId: String)throws  -> String?  {
+    return try  FfiConverterOptionString.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_local_message_id(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(serverId),$0
     )
 })
 }
@@ -1684,6 +1711,19 @@ open func recordPeerDevice(device: LocalPeerDevice)throws  -> LocalInsert  {
         FfiConverterTypeLocalPeerDevice_lower(device),$0
     )
 })
+}
+    
+    /**
+     * The server's id of a sealed copy we sent → our message id; lowercase, kept 30 days.
+     */
+open func recordServerMessageId(serverId: String, localId: String, recordedAt: Int64)throws   {try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_record_server_message_id(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(serverId),
+        FfiConverterString.lower(localId),
+        FfiConverterInt64.lower(recordedAt),$0
+    )
+}
 }
     
 open func remove(key: String)throws   {try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
@@ -10615,10 +10655,16 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_method_localstore_edit_message() != 48649) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_construct_core_checksum_method_localstore_forget_server_message_ids_before() != 29537) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_construct_core_checksum_method_localstore_get() != 50579) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_localstore_insert_message() != 2107) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_local_message_id() != 42048) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_localstore_message() != 63926) {
@@ -10640,6 +10686,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_localstore_record_peer_device() != 19683) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_record_server_message_id() != 7632) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_localstore_remove() != 30144) {
