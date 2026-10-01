@@ -70,6 +70,8 @@ struct OrchestratorActionPlan {
                 return .messageQueuedPendingInit(contactId: contactId, queuedCount: queuedCount)
             case .duplicateDropped(let messageId):
                 return .duplicate(messageId: messageId)
+            case .malformedDropped(let messageId):
+                return .malformed(messageId: messageId)
             default:
                 continue
             }
@@ -99,6 +101,10 @@ enum IncomingRoutingVerdict: Equatable {
     /// core since 2026-09-26 (`DuplicateDropped`); before, it was an empty list that also meant
     /// "no decision", and after a DB answer of "not processed" it held the stream cursor.
     case duplicate(messageId: String)
+    /// Its payload does not parse — garbage, or a suite this build no longer reads — so it can
+    /// never open. Named by the core since 0.28 (`MalformedDropped`); before, only a reason
+    /// came back, which is no decision, and the message was redelivered until its queue expired.
+    case malformed(messageId: String)
     case none
 }
 

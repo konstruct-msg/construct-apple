@@ -96,6 +96,16 @@ final class OrchestratorActionPlanTests: XCTestCase {
         ]), .unreadable)
     }
 
+    /// A payload that does not parse is a verdict of its own, ahead of the reason the core logs
+    /// beside it. Read as `.none` (all it was before core 0.28) it is neither recorded nor
+    /// acknowledged and comes back on every redelivery.
+    func testAMalformedPayload_IsAMalformedVerdict() {
+        XCTAssertEqual(OrchestratorActionPlan.routingVerdict(from: [
+            .malformedDropped(messageId: messageId),
+            .notifyError(code: "MALFORMED_WIRE_PAYLOAD", message: "suite 3 is retired")
+        ]), .malformed(messageId: messageId))
+    }
+
     func testTimerAlone_IsNotARoutingVerdict() {
         let verdict = OrchestratorActionPlan.routingVerdict(from: [
             .scheduleTimer(timerId: "cooldown_expired:\(peer)", delayMs: 100)

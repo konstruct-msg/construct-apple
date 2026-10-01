@@ -903,6 +903,18 @@ final class MessageRouter {
             )
             if isNewChat { context.delete(chat) }
             return
+        case .malformed:
+            // Can never open: decrypt uses the parser that just refused it. Recorded and passed,
+            // like a duplicate; nothing is answered — there is no state in it to name. The
+            // executor logs the core's reason (the `notifyError` beside the verdict).
+            SessionActionExecutor.shared.execute(actions)
+            PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId, in: context)
+            Log.info(
+                "Malformed payload named by the core — \(message.id.prefix(8))…, recorded and dropped",
+                category: "MessageRouter"
+            )
+            if isNewChat { context.delete(chat) }
+            return
         case .messageQueuedPendingInit(let contactId, let queuedCount):
             // Held inside the core, drained on SessionInitCompleted or NetworkReconnected. The
             // watermark must not move past a message the core has not finished with, and the
@@ -939,6 +951,7 @@ final class MessageRouter {
             case .checkAckInDb:                  return "checkAckInDb"
             case .messageQueuedPendingInit:      return "messageQueuedPendingInit"
             case .duplicateDropped:              return "duplicateDropped"
+            case .malformedDropped:              return "malformedDropped"
             case .scheduleTimer:                 return "scheduleTimer"
             case .cancelTimer:                   return "cancelTimer"
             default:                             return "unknown(\(action))"

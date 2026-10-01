@@ -108,6 +108,10 @@ final class SessionActionExecutor {
             // A routing verdict; MessageRouter records the message as processed and moves the
             // cursor past it. Off the router (a drain) it concerns a message already handled.
             break
+        case .malformedDropped:
+            // A routing verdict, like `duplicateDropped`: MessageRouter records the unparseable
+            // message and moves past it. Nothing for the executor to do.
+            break
         case .sendEncryptedMessage:
             break
         case .sendReceipt:
