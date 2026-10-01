@@ -63,6 +63,24 @@ final class CallAudioController {
         try? session.setPreferredIOBufferDuration(NetworkTiming.Calls.audioPreferredIOBufferDuration)
     }
 
+    // MARK: - Loudspeaker
+
+    /// Loudspeaker on or off for the call in progress. An override of the output port, not a
+    /// category change: `.voiceChat` keeps the earpiece as the default and `.none` returns to it,
+    /// and a Bluetooth or wired route plugged in later still takes over as the system decides.
+    /// Through `RTCAudioSession`, which WebRTC requires to be locked around any session change.
+    nonisolated static func setSpeaker(_ on: Bool) {
+        let rtc = RTCAudioSession.sharedInstance()
+        rtc.lockForConfiguration()
+        defer { rtc.unlockForConfiguration() }
+        do {
+            try rtc.overrideOutputAudioPort(on ? .speaker : .none)
+        } catch {
+            Log.error("CallAudio: speaker \(on ? "on" : "off") failed: \(error)", category: "Calls")
+        }
+        dumpRoute(label: on ? "speaker-on" : "speaker-off", audioSession: AVAudioSession.sharedInstance(), rtc: rtc)
+    }
+
     // MARK: - CallKit activation events (from CallKitProvider's nonisolated delegate)
 
     /// CallKit activated the AVAudioSession — hand it to WebRTC and enable I/O.

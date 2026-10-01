@@ -10,6 +10,7 @@ import SwiftUI
 #if os(iOS)
 import AVKit
 import AVFoundation
+import Combine
 #endif
 
 struct InCallView: View {
@@ -112,7 +113,7 @@ struct InCallView: View {
                     CallControlsBar(onEnd: onEnd) {
                         CallControlButton(config: muteConfig)
                         #if os(iOS)
-                        AudioRoutePickerButton()
+                        AudioRouteControl()
                         #endif
                     }
                     .padding(.bottom, 52)
@@ -285,6 +286,70 @@ struct CallControlButton: View {
 // MARK: - Audio route picker
 
 #if os(iOS)
+/// Which control the audio button is.
+///
+/// With only the phone's own earpiece and loudspeaker there are two places for the sound to go,
+/// and the control is a toggle, as in the Phone app. It used to be the system route picker in
+/// every case, laid transparently over our icon; on 2026-10-01 a tap on it did nothing on a
+/// device without a headset. With a headset, Bluetooth or AirPlay present there is a real choice,
+/// and the system picker is the control.
+enum CallAudioRouteControl: Equatable {
+    case speakerToggle(isOn: Bool)
+    case routePicker
+
+    /// Ports that are not the phone itself. Any of them, in use or merely available, makes the
+    /// choice more than earpiece-or-speaker.
+    static let externalPorts: Set<AVAudioSession.Port> = [
+        .bluetoothA2DP, .bluetoothHFP, .bluetoothLE, .airPlay,
+        .headphones, .headsetMic, .carAudio, .usbAudio,
+    ]
+
+    static func control(outputs: [AVAudioSession.Port], availableInputs: [AVAudioSession.Port]) -> Self {
+        if (outputs + availableInputs).contains(where: externalPorts.contains) { return .routePicker }
+        return .speakerToggle(isOn: outputs.contains(.builtInSpeaker))
+    }
+}
+
+/// The call's audio button: a loudspeaker toggle or the system route picker, whichever
+/// `CallAudioRouteControl` says, re-read on every route change.
+struct AudioRouteControl: View {
+    @State private var control: CallAudioRouteControl = .speakerToggle(isOn: false)
+
+    var body: some View {
+        Group {
+            switch control {
+            case .speakerToggle(let isOn):
+                CallControlButton(config: CallControlConfig(
+                    systemImage: isOn ? "speaker.wave.3.fill" : "speaker.fill",
+                    label: NSLocalizedString("call_speaker", comment: ""),
+                    tint: isOn ? Color.CT.accent : Color.CT.textDim,
+                    action: {
+                        CallAudioController.setSpeaker(!isOn)
+                        refresh()
+                    }
+                ))
+                .accessibilityAddTraits(isOn ? .isSelected : [])
+            case .routePicker:
+                AudioRoutePickerButton()
+            }
+        }
+        .onAppear { refresh() }
+        .onReceive(
+            NotificationCenter.default
+                .publisher(for: AVAudioSession.routeChangeNotification)
+                .receive(on: RunLoop.main)
+        ) { _ in refresh() }
+    }
+
+    private func refresh() {
+        let session = AVAudioSession.sharedInstance()
+        control = .control(
+            outputs: session.currentRoute.outputs.map(\.portType),
+            availableInputs: (session.availableInputs ?? []).map(\.portType)
+        )
+    }
+}
+
 /// Custom-styled audio-route button. Renders our CT 56pt circular control with
 /// a route-aware SF Symbol, and overlays a transparent `AVRoutePickerView` that
 /// captures taps and presents the system AirPlay / Bluetooth / Speaker picker.
