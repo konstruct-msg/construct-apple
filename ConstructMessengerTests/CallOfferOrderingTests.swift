@@ -39,7 +39,8 @@ final class CallOfferOrderingTests: XCTestCase {
             callOfferDisposition(
                 hasRecentlyEnded: false,
                 matchesActiveIncomingCall: true,
-                awaitingOfferAfterAnswer: true
+                awaitingOfferAfterAnswer: true,
+                isBusyWithAnotherCall: false
             ),
             .resumeAnswer,
             "storing it is storing it for a consumer that has already returned — the caller then "
@@ -57,7 +58,8 @@ final class CallOfferOrderingTests: XCTestCase {
             callOfferDisposition(
                 hasRecentlyEnded: false,
                 matchesActiveIncomingCall: true,
-                awaitingOfferAfterAnswer: false
+                awaitingOfferAfterAnswer: false,
+                isBusyWithAnotherCall: false
             ),
             .storeForAnswer
         )
@@ -75,7 +77,8 @@ final class CallOfferOrderingTests: XCTestCase {
             callOfferDisposition(
                 hasRecentlyEnded: true,
                 matchesActiveIncomingCall: false,
-                awaitingOfferAfterAnswer: false
+                awaitingOfferAfterAnswer: false,
+                isBusyWithAnotherCall: false
             ),
             .ignoreCallEnded
         )
@@ -88,7 +91,8 @@ final class CallOfferOrderingTests: XCTestCase {
             callOfferDisposition(
                 hasRecentlyEnded: true,
                 matchesActiveIncomingCall: true,
-                awaitingOfferAfterAnswer: true
+                awaitingOfferAfterAnswer: true,
+                isBusyWithAnotherCall: false
             ),
             .ignoreCallEnded,
             "the end is the most recent fact about this call id"
@@ -108,7 +112,8 @@ final class CallOfferOrderingTests: XCTestCase {
             callOfferDisposition(
                 hasRecentlyEnded: false,
                 matchesActiveIncomingCall: false,
-                awaitingOfferAfterAnswer: false
+                awaitingOfferAfterAnswer: false,
+                isBusyWithAnotherCall: false
             ),
             .reportNewCall
         )
@@ -121,7 +126,8 @@ final class CallOfferOrderingTests: XCTestCase {
             callOfferDisposition(
                 hasRecentlyEnded: false,
                 matchesActiveIncomingCall: false,
-                awaitingOfferAfterAnswer: true
+                awaitingOfferAfterAnswer: true,
+                isBusyWithAnotherCall: false
             ),
             .reportNewCall
         )
@@ -139,7 +145,8 @@ final class CallOfferOrderingTests: XCTestCase {
                     seen.insert(callOfferDisposition(
                         hasRecentlyEnded: ended,
                         matchesActiveIncomingCall: match,
-                        awaitingOfferAfterAnswer: awaiting
+                        awaitingOfferAfterAnswer: awaiting,
+                        isBusyWithAnotherCall: false
                     ))
                 }
             }
@@ -272,7 +279,8 @@ final class CallOfferOrderingTests: XCTestCase {
             incomingPushDisposition(
                 hasActiveCall: true,
                 isBusyState: false,
-                matchesTrackedCallId: true
+                matchesTrackedCallId: true,
+                isGlareWithCaller: false
             ),
             .alreadyTracking,
             "begin() here replaces the ActiveCall, and the stored offer SDP and every buffered ICE "
@@ -290,7 +298,8 @@ final class CallOfferOrderingTests: XCTestCase {
             incomingPushDisposition(
                 hasActiveCall: true,
                 isBusyState: false,
-                matchesTrackedCallId: true
+                matchesTrackedCallId: true,
+                isGlareWithCaller: false
             ),
             .alreadyTracking
         )
@@ -298,7 +307,8 @@ final class CallOfferOrderingTests: XCTestCase {
             incomingPushDisposition(
                 hasActiveCall: true,
                 isBusyState: true,
-                matchesTrackedCallId: true
+                matchesTrackedCallId: true,
+                isGlareWithCaller: false
             ),
             .alreadyTracking,
             "our own call reaching a busy state does not make its own push a second call"
@@ -314,20 +324,23 @@ final class CallOfferOrderingTests: XCTestCase {
             incomingPushDisposition(
                 hasActiveCall: true,
                 isBusyState: true,
-                matchesTrackedCallId: false
+                matchesTrackedCallId: false,
+                isGlareWithCaller: false
             ),
             .declineBusy
         )
     }
 
-    /// A stale ActiveCall left behind in a non-busy state must not block a genuinely new call —
-    /// this is the path the foreground `IncomingCallNotification` fallback takes.
+    /// A stale ActiveCall left behind in a non-busy state (`.idle`, `.ended`) must not block a
+    /// genuinely new call — this is the path the foreground `IncomingCallNotification` fallback
+    /// takes.
     func testADifferentCallWithNothingInProgressBegins() {
         XCTAssertEqual(
             incomingPushDisposition(
                 hasActiveCall: true,
                 isBusyState: false,
-                matchesTrackedCallId: false
+                matchesTrackedCallId: false,
+                isGlareWithCaller: false
             ),
             .beginNewCall
         )
@@ -343,7 +356,8 @@ final class CallOfferOrderingTests: XCTestCase {
             incomingPushDisposition(
                 hasActiveCall: false,
                 isBusyState: false,
-                matchesTrackedCallId: false
+                matchesTrackedCallId: false,
+                isGlareWithCaller: false
             ),
             .beginNewCall
         )
@@ -358,7 +372,8 @@ final class CallOfferOrderingTests: XCTestCase {
                     incomingPushDisposition(
                         hasActiveCall: false,
                         isBusyState: busy,
-                        matchesTrackedCallId: match
+                        matchesTrackedCallId: match,
+                        isGlareWithCaller: false
                     ),
                     .beginNewCall,
                     "busy=\(busy) match=\(match)"
@@ -377,11 +392,112 @@ final class CallOfferOrderingTests: XCTestCase {
                     seen.insert(incomingPushDisposition(
                         hasActiveCall: hasActive,
                         isBusyState: busy,
-                        matchesTrackedCallId: match
+                        matchesTrackedCallId: match,
+                        isGlareWithCaller: false
                     ))
                 }
             }
         }
         XCTAssertEqual(seen, [.declineBusy, .alreadyTracking, .beginNewCall])
+    }
+
+    // MARK: - A second call never ends the call in progress (2026-10-01)
+    //
+    //  Android pointed at it from its own code: there the offer decides "busy", the second caller
+    //  gets hangup BUSY and the call in progress is untouched. Here only the push asked; the offer
+    //  for the same second call found no match, took `.reportNewCall`, and `begin()` began with
+    //  `active?.close()` — the call in progress was hung up by someone else dialling in.
+
+    /// The defect. An offer for a different call while one is up is refused, not begun.
+    ///
+    /// Mutation: ignore `isBusyWithAnotherCall` — restores the hang-up of the call in progress.
+    func testAnOfferForASecondCallIsDeclinedAsBusy() {
+        XCTAssertEqual(
+            callOfferDisposition(
+                hasRecentlyEnded: false,
+                matchesActiveIncomingCall: false,
+                awaitingOfferAfterAnswer: false,
+                isBusyWithAnotherCall: true
+            ),
+            .declineBusy,
+            "`.reportNewCall` runs begin(), which closes the call in progress"
+        )
+    }
+
+    /// The push declined this call first and remembered it as ended; its offer, arriving later,
+    /// must be dropped quietly rather than refused a second time.
+    func testAnEndedSecondCallIsIgnoredNotDeclinedAgain() {
+        XCTAssertEqual(
+            callOfferDisposition(
+                hasRecentlyEnded: true,
+                matchesActiveIncomingCall: false,
+                awaitingOfferAfterAnswer: false,
+                isBusyWithAnotherCall: true
+            ),
+            .ignoreCallEnded
+        )
+    }
+
+    /// Being busy is about *another* call. The offer for the call we are ringing with is that call's
+    /// own SDP, and must still be stored.
+    func testBusyDoesNotRefuseTheOfferOfOurOwnCall() {
+        XCTAssertEqual(
+            callOfferDisposition(
+                hasRecentlyEnded: false,
+                matchesActiveIncomingCall: true,
+                awaitingOfferAfterAnswer: false,
+                isBusyWithAnotherCall: true
+            ),
+            .storeForAnswer
+        )
+    }
+
+    /// A call ringing unanswered occupies the phone. Until 2026-10-01 `.incoming` was not busy, and
+    /// a second caller replaced the first while it was still ringing.
+    ///
+    /// Mutation: drop `.incoming` from `callStateIsBusy`.
+    func testARingingIncomingCallIsBusy() {
+        let session = CallSession(id: "c1", uuid: UUID(), peerUserId: "p", peerName: "P", direction: .incoming)
+        XCTAssertTrue(callStateIsBusy(.incoming(session)))
+        XCTAssertTrue(callStateIsBusy(.active(session)))
+        XCTAssertFalse(callStateIsBusy(.idle))
+        XCTAssertFalse(callStateIsBusy(.ended(session, .local("test"))))
+    }
+
+    /// Glare is not a second caller: our call to them is up and they dialled us. The push must not
+    /// refuse it or remember it as ended — the offer's tie-break decides which call survives.
+    ///
+    /// Mutation: return `.declineBusy` regardless of `isGlareWithCaller` — the loser of the
+    /// tie-break would then find the winner's call ended and never answer it.
+    func testAPushInGlareDefersToTheTieBreak() {
+        XCTAssertEqual(
+            incomingPushDisposition(
+                hasActiveCall: true,
+                isBusyState: true,
+                matchesTrackedCallId: false,
+                isGlareWithCaller: true
+            ),
+            .deferToGlareTieBreak
+        )
+    }
+
+    /// Every push combination maps to one disposition and each is reachable, glare included.
+    func testEveryPushOrderingWithGlareHasADisposition() {
+        var seen: Set<IncomingPushDisposition> = []
+        for hasActive in [true, false] {
+            for busy in [true, false] {
+                for match in [true, false] {
+                    for glare in [true, false] {
+                        seen.insert(incomingPushDisposition(
+                            hasActiveCall: hasActive,
+                            isBusyState: busy,
+                            matchesTrackedCallId: match,
+                            isGlareWithCaller: glare
+                        ))
+                    }
+                }
+            }
+        }
+        XCTAssertEqual(seen, [.declineBusy, .deferToGlareTieBreak, .alreadyTracking, .beginNewCall])
     }
 }

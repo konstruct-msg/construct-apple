@@ -300,6 +300,9 @@ enum NetworkTiming {
         /// archived the session 1 s after CallKit start). Shorter than the 45 s offer
         /// wait — the user is staring at a dial tone, not an answered call.
         static let sessionReadyWait: TimeInterval = 12
+        /// How long an incoming call may ring unanswered before this side ends it with TIMEOUT.
+        /// Same value as Android's, so a call nobody picks up ends on both platforms at once.
+        static let unansweredIncomingTimeout: TimeInterval = 90
         static let sessionReadyPoll: TimeInterval = 0.2
         static let audioPreferredSampleRateHz: Double = 48_000
         static let audioPreferredIOBufferDuration: TimeInterval = 0.01
