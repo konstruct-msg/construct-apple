@@ -411,6 +411,19 @@ otherwise have looked.
 [Conventional Commits](https://www.conventionalcommits.org/): `feat(scope): …`, `fix(scope): …`,
 `refactor(scope): …`, `chore(scope): …`.
 
+**Never commit on `develop` or `main`.** `develop` is what goes to TestFlight; `main` is what goes
+to the App Store. Every change goes on a topic branch cut from an up-to-date `develop`
+(`feat|fix|docs|chore|test/<topic>`) and lands in `develop` through a GitHub pull request.
+`develop → main` is the release step, and the owner takes it. Agents push and open the PR only
+when asked.
+
+From 2026-09-11 to 2026-10-01 changes went straight to the default branch across the
+construct-* repos — two people on the project made a branch per change look like ceremony. That
+was reversed on purpose: the habit has to be in place before there is an App Store release for it
+to break. A commit that landed on `develop` by mistake and is not pushed moves off it with
+`git branch <topic> && git reset --keep origin/develop && git switch <topic>`. Pushed history is
+never rewritten.
+
 ## Documentation & session notes
 
 Docs live in `~/Code/construct-docs` (Obsidian vault, flat domain folders). **The vault's
