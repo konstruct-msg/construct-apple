@@ -406,7 +406,7 @@
 				BFF6FCF22F4C4CCA00A31F36 /* XCRemoteSwiftPackageReference "grpc-swift-protobuf" */,
 				BFF6FCF72F4C4D6600A31F36 /* XCRemoteSwiftPackageReference "grpc-swift-nio-transport" */,
 				BFF6FCFE2F4C4E5300A31F36 /* XCRemoteSwiftPackageReference "swift-protobuf" */,
-				BFCB6D912F7C4C4800C59B83 /* XCRemoteSwiftPackageReference "WebRTC" */,
+				BFCB6D912F7C4C4800C59B83 /* XCLocalSwiftPackageReference "Packages/WebRTC" */,
 				BF0A1D212FCF418600D0597C /* XCRemoteSwiftPackageReference "argmax-oss-swift" */,
 			);
 			preferredProjectObjectVersion = 77;
@@ -1349,6 +1349,13 @@
 		};
 /* End XCConfigurationList section */
 
+/* Begin XCLocalSwiftPackageReference section */
+		BFCB6D912F7C4C4800C59B83 /* XCLocalSwiftPackageReference "Packages/WebRTC" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/WebRTC;
+		};
+/* End XCLocalSwiftPackageReference section */
+
 /* Begin XCRemoteSwiftPackageReference section */
 		BF0A1D212FCF418600D0597C /* XCRemoteSwiftPackageReference "argmax-oss-swift" */ = {
 			isa = XCRemoteSwiftPackageReference;
@@ -1356,15 +1363,6 @@
 			requirement = {
 				kind = upToNextMajorVersion;
 				minimumVersion = 1.0.0;
-			};
-		};
-		BFCB6D912F7C4C4800C59B83 /* XCRemoteSwiftPackageReference "WebRTC" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/stasel/WebRTC.git";
-			requirement = {
-				kind = versionRange;
-				maximumVersion = 151.0.0;
-				minimumVersion = 150.0.0;
 			};
 		};
 		BFF6FCF22F4C4CCA00A31F36 /* XCRemoteSwiftPackageReference "grpc-swift-protobuf" */ = {
@@ -1429,7 +1427,7 @@
 		};
 		BFCB6D922F7C4C4800C59B83 /* WebRTC */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = BFCB6D912F7C4C4800C59B83 /* XCRemoteSwiftPackageReference "WebRTC" */;
+			package = BFCB6D912F7C4C4800C59B83 /* XCLocalSwiftPackageReference "Packages/WebRTC" */;
 			productName = WebRTC;
 		};
 		BFF6FC9C2F4C3E1F00A31F36 /* GRPCCore */ = {

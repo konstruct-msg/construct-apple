@@ -58,10 +58,28 @@ private final class WebRTCFactory {
         // wasn't init'd yet, so `useManualAudio` was still false. Then when this
         // factory finally init'd mid-call, it flipped `isAudioEnabled` back to false
         // and silenced the audio unit for the rest of the call.
+        // Read once, into the environment the factory is built with — so it must precede it.
+        RTCPeerConnectionFactory.configureFieldTrials(WebRTCFieldTrials.configured)
         let encoderFactory = RTCDefaultVideoEncoderFactory()
         let decoderFactory = RTCDefaultVideoDecoderFactory()
         self.factory = RTCPeerConnectionFactory(encoderFactory: encoderFactory, decoderFactory: decoderFactory)
     }
+}
+
+/// Field trials this app runs WebRTC with.
+///
+/// `WebRTC-EnableDtlsPqc` puts X25519MLKEM768 first among the DTLS key-exchange groups
+/// (`rtc_base/ssl_stream_adapter.cc`, `GetDefaultEphemeralKeyExchangeCipherGroups`); DTLS 1.3 is
+/// already the default from M150. The media keys of a call then come from a hybrid exchange, and
+/// a recording of the call does not open once X25519 does (`PQC-4`,
+/// `decisions/calls-post-quantum-dtls.md`). The DTLS fingerprint that authenticates the exchange
+/// travels in the SDP, inside the session.
+///
+/// Upstream keeps it behind a trial (bug 404763475), so a WebRTC update can rename or drop it
+/// without a compile error; `WebRTCFieldTrialsTests` reads the linked binary for the key.
+enum WebRTCFieldTrials {
+    static let dtlsPqcKey = "WebRTC-EnableDtlsPqc"
+    static let configured = "\(dtlsPqcKey)/Enabled/"
 }
 
 /// One-time WebRTC runtime setup. Call `bootstrap()` exactly once at app launch,
