@@ -1128,6 +1128,40 @@ class CryptoManager {
         return orchestratorCore?.openEnvelope(envelope: envelope)
     }
 
+    /// Seal a first flight — a wire payload written on a session `deviceId` has not answered yet —
+    /// whole, with the sender certificate, under the handshake's hybrid key
+    /// (`decisions/first-flight-sealed-whole.md`). `nil` when the payload is not a first flight: it
+    /// goes with a certificate. Throws for a first flight that cannot be sealed, which must not go
+    /// any other way — its header names the sender.
+    func sealFirstFlight(
+        forDevice deviceId: String,
+        recipientIdentityKey: Data,
+        wirePayload: Data,
+        certificate: Data
+    ) throws -> Data? {
+        coreLock.lock()
+        defer { coreLock.unlock() }
+        guard let core = orchestratorCore else { throw CryptoManagerError.coreNotInitialized }
+        guard let contactId = SessionAddressing.asDevice(deviceId) else {
+            throw CryptoManagerError.invalidKeyData
+        }
+        return try core.sealFirstFlight(
+            contactId: contactId,
+            recipientIdentity: recipientIdentityKey,
+            wirePayload: wirePayload,
+            certificate: certificate
+        )
+    }
+
+    /// Open a `SealedInner.first_flight` sealed to this device: the certificate and the wire
+    /// payload, as a first message always carried them.
+    func openFirstFlight(_ sealed: Data) throws -> FirstFlightOpened {
+        coreLock.lock()
+        defer { coreLock.unlock() }
+        guard let core = orchestratorCore else { throw CryptoManagerError.coreNotInitialized }
+        return try core.openFirstFlight(sealed: sealed)
+    }
+
     /// How late messages have arrived since launch (PQR-4) — `nil` before the core is up.
     func reorderStats() -> ReorderStats? {
         orchestratorCore?.reorderStats()

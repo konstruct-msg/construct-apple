@@ -194,6 +194,11 @@ struct ChatMessage: Codable, Identifiable {
             resolvedMessage.rawPayload = envelope.body
             resolvedMessage.wire = Self.summarize(envelope.body)
             resolvedMessage.envelopeSession = envelope.sessionId
+        } else if let wire = resolved.firstFlightPayload {
+            // A first flight sealed whole: the wire payload came out of the box with the
+            // certificate, and replaces the empty outer one the same way.
+            resolvedMessage.rawPayload = wire
+            resolvedMessage.wire = Self.summarize(wire)
         }
         return resolvedMessage
     }

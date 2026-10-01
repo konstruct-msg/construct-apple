@@ -219,6 +219,28 @@ final class SealedRoutingBoundaryTests: XCTestCase {
         XCTAssertEqual(delegate.decryptionErrors.first?.opened, false)
     }
 
+    // MARK: - First flight sealed whole (decisions/first-flight-sealed-whole.md)
+
+    /// The wire payload of a first flight comes out of the box beside the certificate, and the
+    /// message carries it from there on — the outer one is empty.
+    ///
+    /// Mutation: drop the `firstFlightPayload` branch in `resolvingSealedSender` — this reddens.
+    func testAFirstFlightsPayloadReplacesTheOuterOne() {
+        let wire = Data(repeating: 0x61, count: 80)
+        let resolved = ResolvedSender(
+            senderId: peer,
+            senderDeviceId: senderDevice,
+            contentType: 0,
+            trust: .vouched(.signature),
+            senderCertificate: stubCertificate(account: peer, device: senderDevice),
+            firstFlightPayload: wire
+        )
+        let message = sealedMessage().resolvingSealedSender(resolved, currentUserId: me)
+        XCTAssertEqual(message.rawPayload, wire)
+        XCTAssertNotNil(message.senderCertificate, "a first message opens from its certificate")
+        XCTAssertNil(message.envelopeSession)
+    }
+
     /// Stands in for StealthSenderService: yields a known sender/content type without needing
     /// Keychain identity keys or a genuine sealed box.
     private struct StubResolver: SealedSenderResolving {

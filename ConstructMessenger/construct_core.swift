@@ -2403,6 +2403,12 @@ public protocol OrchestratorCoreProtocol: AnyObject, Sendable {
      */
     func openEnvelope(envelope: Data)  -> EnvelopeOpened?
     
+    /**
+     * Open a `SealedInner.first_flight` sealed to this device. Throws when it does not open — a
+     * Kyber prekey no longer held (`FIRST_FLIGHT_KEY_UNAVAILABLE`), or not ours.
+     */
+    func openFirstFlight(sealed: Data) throws  -> FirstFlightOpened
+    
     func openReceiving(device: String)  -> ReceivingOpenResult
     
     /**
@@ -2452,6 +2458,15 @@ public protocol OrchestratorCoreProtocol: AnyObject, Sendable {
      * must go with a certificate (first flight, or a session made before the envelope).
      */
     func sealEnvelope(contactId: String, wirePayload: Data)  -> Data?
+    
+    /**
+     * Seal a first flight — a wire payload written on a session the peer has not answered yet —
+     * with the sender certificate, to `recipient_identity` (the X25519 key the session was opened
+     * to; it must derive to `contact_id`). Goes in `SealedInner.first_flight`. Null when the
+     * payload carries no handshake — not a first flight; it goes with a certificate. Throws for a
+     * first flight that cannot be sealed: never send that one any other way.
+     */
+    func sealFirstFlight(contactId: String, recipientIdentity: Data, wirePayload: Data, certificate: Data) throws  -> Data?
     
     /**
      * This device's social-recovery bundle (device keys, derived device id, `created_at`) sealed
@@ -3032,6 +3047,19 @@ open func openEnvelope(envelope: Data) -> EnvelopeOpened?  {
 })
 }
     
+    /**
+     * Open a `SealedInner.first_flight` sealed to this device. Throws when it does not open — a
+     * Kyber prekey no longer held (`FIRST_FLIGHT_KEY_UNAVAILABLE`), or not ours.
+     */
+open func openFirstFlight(sealed: Data)throws  -> FirstFlightOpened  {
+    return try  FfiConverterTypeFirstFlightOpened_lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_method_orchestratorcore_open_first_flight(
+            self.uniffiCloneHandle(),
+        FfiConverterData.lower(sealed),$0
+    )
+})
+}
+    
 open func openReceiving(device: String) -> ReceivingOpenResult  {
     return try!  FfiConverterTypeReceivingOpenResult_lift(try! rustCall() {
     uniffi_construct_core_fn_method_orchestratorcore_open_receiving(
@@ -3173,6 +3201,25 @@ open func sealEnvelope(contactId: String, wirePayload: Data) -> Data?  {
             self.uniffiCloneHandle(),
         FfiConverterString.lower(contactId),
         FfiConverterData.lower(wirePayload),$0
+    )
+})
+}
+    
+    /**
+     * Seal a first flight — a wire payload written on a session the peer has not answered yet —
+     * with the sender certificate, to `recipient_identity` (the X25519 key the session was opened
+     * to; it must derive to `contact_id`). Goes in `SealedInner.first_flight`. Null when the
+     * payload carries no handshake — not a first flight; it goes with a certificate. Throws for a
+     * first flight that cannot be sealed: never send that one any other way.
+     */
+open func sealFirstFlight(contactId: String, recipientIdentity: Data, wirePayload: Data, certificate: Data)throws  -> Data?  {
+    return try  FfiConverterOptionData.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_method_orchestratorcore_seal_first_flight(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(contactId),
+        FfiConverterData.lower(recipientIdentity),
+        FfiConverterData.lower(wirePayload),
+        FfiConverterData.lower(certificate),$0
     )
 })
 }
@@ -4177,6 +4224,63 @@ public func FfiConverterTypeEphemeralKeyPair_lift(_ buf: RustBuffer) throws -> E
 #endif
 public func FfiConverterTypeEphemeralKeyPair_lower(_ value: EphemeralKeyPair) -> RustBuffer {
     return FfiConverterTypeEphemeralKeyPair.lower(value)
+}
+
+
+/**
+ * A session's first flight opened by `OrchestratorCore.open_first_flight`
+ * (construct-docs decisions/first-flight-sealed-whole.md): handled as before — the
+ * certificate names the writer, the wire payload goes to MessageReceived.
+ */
+public struct FirstFlightOpened: Equatable, Hashable {
+    public var certificate: Data
+    public var wirePayload: Data
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(certificate: Data, wirePayload: Data) {
+        self.certificate = certificate
+        self.wirePayload = wirePayload
+    }
+
+    
+}
+
+#if compiler(>=6)
+extension FirstFlightOpened: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeFirstFlightOpened: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> FirstFlightOpened {
+        return
+            try FirstFlightOpened(
+                certificate: FfiConverterData.read(from: &buf), 
+                wirePayload: FfiConverterData.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: FirstFlightOpened, into buf: inout [UInt8]) {
+        FfiConverterData.write(value.certificate, into: &buf)
+        FfiConverterData.write(value.wirePayload, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeFirstFlightOpened_lift(_ buf: RustBuffer) throws -> FirstFlightOpened {
+    return try FfiConverterTypeFirstFlightOpened.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeFirstFlightOpened_lower(_ value: FirstFlightOpened) -> RustBuffer {
+    return FfiConverterTypeFirstFlightOpened.lower(value)
 }
 
 
@@ -11123,6 +11227,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_method_orchestratorcore_open_envelope() != 45343) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_construct_core_checksum_method_orchestratorcore_open_first_flight() != 23369) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_construct_core_checksum_method_orchestratorcore_open_receiving() != 32397) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -11163,6 +11270,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_orchestratorcore_seal_envelope() != 59409) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_orchestratorcore_seal_first_flight() != 54924) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_orchestratorcore_seal_own_recovery_bundle() != 42137) {

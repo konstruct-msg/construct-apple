@@ -311,13 +311,20 @@ final class StealthSenderService: SealedSenderResolving {
     func resolveSender(sealedInnerBytes: Data) -> ResolvedSender? {
         let cert: Shared_Proto_Core_V1_SenderCertificate
         let contentType: UInt8
+        var firstFlightPayload: Data?
         do {
             let sealedInner = try Shared_Proto_Core_V1_SealedInner(serializedBytes: sealedInnerBytes)
             if !sealedInner.sessionEnvelope.isEmpty {
                 return resolveEnvelopeSender(sealedInner.sessionEnvelope)
             }
-            guard !sealedInner.senderCertCiphertext.isEmpty else { return nil }
-            cert = try unsealSenderCert(sealedInner.senderCertCiphertext)
+            if !sealedInner.firstFlight.isEmpty {
+                let opened = try CryptoManager.shared.openFirstFlight(sealedInner.firstFlight)
+                cert = try Shared_Proto_Core_V1_SenderCertificate(serializedBytes: opened.certificate)
+                firstFlightPayload = opened.wirePayload
+            } else {
+                guard !sealedInner.senderCertCiphertext.isEmpty else { return nil }
+                cert = try unsealSenderCert(sealedInner.senderCertCiphertext)
+            }
             contentType = UInt8(sealedInner.contentType.rawValue)
         } catch {
             // Unseal failed — genuinely unrecoverable (wrong key / corruption / not for us).
@@ -353,7 +360,8 @@ final class StealthSenderService: SealedSenderResolving {
             senderDeviceId: cert.senderDeviceID,
             contentType: contentType,
             trust: trust,
-            senderCertificate: SenderCertificate(proto: cert)
+            senderCertificate: SenderCertificate(proto: cert),
+            firstFlightPayload: firstFlightPayload
         )
     }
 
@@ -472,7 +480,10 @@ final class StealthSenderService: SealedSenderResolving {
         /// A session envelope the core sealed (`CryptoManager.sealEnvelope`, or a DECRYPTION_ERROR
         /// it built). When set, it replaces both the certificate and `encryptedPayload`: the
         /// session names the writer, and the wire payload is inside it.
-        sessionEnvelope: Data? = nil
+        sessionEnvelope: Data? = nil,
+        /// A first flight the core sealed whole (`CryptoManager.sealFirstFlight`): the certificate
+        /// and the wire payload are inside it, so it replaces both as an envelope does.
+        firstFlight: Data? = nil
     ) async throws -> Data {
         var inner = Shared_Proto_Core_V1_SealedInner()
         // The recipient by their address when this device knows it, by the server's id otherwise.
@@ -497,6 +508,8 @@ final class StealthSenderService: SealedSenderResolving {
         inner.recipientDevice = SessionAddressing.cryptoIdentity(ofIdentityKey: recipientIdentityKey) ?? ""
         if let sessionEnvelope {
             inner.sessionEnvelope = sessionEnvelope
+        } else if let firstFlight {
+            inner.firstFlight = firstFlight
         } else {
             inner.senderCertCiphertext = try sealSenderCert(certBytes, recipientIdentityKey: recipientIdentityKey)
             inner.encryptedPayload = encryptedPayload
@@ -638,6 +651,20 @@ final class StealthSenderService: SealedSenderResolving {
         let certBytes = sessionEnvelope == nil
             ? try await StealthSenderService.shared.getSenderCertificate()
             : Data()
+        // A first flight goes sealed whole: its PQXDH header names the initiator's KEM identity
+        // key, which must not travel beside the certificate box (FF-1,
+        // `decisions/first-flight-sealed-whole.md`). The core says whether this payload is one;
+        // a throw is a first flight it could not seal, and that one is not sent at all.
+        var firstFlight: Data?
+        if sessionEnvelope == nil,
+           let device = SessionAddressing.cryptoIdentity(ofIdentityKey: recipientIdentityKey) {
+            firstFlight = try CryptoManager.shared.sealFirstFlight(
+                forDevice: device,
+                recipientIdentityKey: recipientIdentityKey,
+                wirePayload: encryptedPayload,
+                certificate: certBytes
+            )
+        }
         return try await StealthSenderService.shared.buildSealedInner(
             recipientUserId: recipientUserId,
             certBytes: certBytes,
@@ -646,7 +673,8 @@ final class StealthSenderService: SealedSenderResolving {
             contentType: contentType,
             spendUnit: spendUnit,
             afterCredentialRejection: afterCredentialRejection,
-            sessionEnvelope: sessionEnvelope
+            sessionEnvelope: sessionEnvelope,
+            firstFlight: firstFlight
         )
     }
 
@@ -772,6 +800,9 @@ struct ResolvedSender: Equatable {
     /// Set when the message came in a session envelope: the session its tag matched and the
     /// opened body (the wire payload, or a DECRYPTION_ERROR).
     let envelope: OpenedSessionEnvelope?
+    /// Set when the message came as a first flight sealed whole: the wire payload that was inside
+    /// it beside the certificate (`SealedInner.first_flight`).
+    let firstFlightPayload: Data?
 
     init(
         senderId: String,
@@ -779,7 +810,8 @@ struct ResolvedSender: Equatable {
         contentType: UInt8,
         trust: SenderTrust,
         senderCertificate: SenderCertificate?,
-        envelope: OpenedSessionEnvelope? = nil
+        envelope: OpenedSessionEnvelope? = nil,
+        firstFlightPayload: Data? = nil
     ) {
         self.senderId = senderId
         self.senderDeviceId = senderDeviceId
@@ -787,6 +819,7 @@ struct ResolvedSender: Equatable {
         self.trust = trust
         self.senderCertificate = senderCertificate
         self.envelope = envelope
+        self.firstFlightPayload = firstFlightPayload
     }
 }
 

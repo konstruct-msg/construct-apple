@@ -331,6 +331,29 @@ final class SealedInnerRecipientDeviceTests: XCTestCase {
         return try Shared_Proto_Core_V1_SealedInner(serializedBytes: bytes)
     }
 
+    /// FF-1: a first flight the core sealed whole replaces the certificate box and the clear wire
+    /// payload — leaving either beside it would put the PQXDH header, and the initiator's KEM
+    /// identity key in it, back on the wire (`decisions/first-flight-sealed-whole.md`).
+    ///
+    /// Mutation: drop the `firstFlight` branch in `buildSealedInner` — this reddens.
+    func testAFirstFlightReplacesTheCertificateAndThePayload() async throws {
+        let key = Curve25519.KeyAgreement.PrivateKey().publicKey.rawRepresentation
+        let sealed = Data(repeating: 0x5F, count: 40)
+        let bytes = try await StealthSenderService.shared.buildSealedInner(
+            recipientUserId: "14f28d31-0000-0000-0000-000000000001",
+            certBytes: Data([0x01, 0x02, 0x03]),
+            recipientIdentityKey: key,
+            encryptedPayload: Data([0xAA, 0xBB]),
+            contentType: .generic,
+            firstFlight: sealed
+        )
+        let inner = try Shared_Proto_Core_V1_SealedInner(serializedBytes: bytes)
+        XCTAssertEqual(inner.firstFlight, sealed)
+        XCTAssertTrue(inner.senderCertCiphertext.isEmpty)
+        XCTAssertTrue(inner.encryptedPayload.isEmpty)
+        XCTAssertEqual(inner.recipientDevice, SessionAddressing.cryptoIdentity(ofIdentityKey: key))
+    }
+
     func testNamesTheDeviceTheCertificateIsSealedTo() async throws {
         let key = Curve25519.KeyAgreement.PrivateKey().publicKey.rawRepresentation
         let inner = try await sealedInner(to: key)
