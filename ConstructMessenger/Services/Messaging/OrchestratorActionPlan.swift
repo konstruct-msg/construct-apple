@@ -103,7 +103,8 @@ enum IncomingRoutingVerdict: Equatable {
     case duplicate(messageId: String)
     /// Its payload does not parse — garbage, or a suite this build no longer reads — so it can
     /// never open. Named by the core since 0.28 (`MalformedDropped`); before, only a reason
-    /// came back, which is no decision, and the message was redelivered until its queue expired.
+    /// came back, which is no decision: the router logged "no routing decision … NOT acked" as an
+    /// ERROR and wrote no processed record (the cursor still moved past it, so it did not return).
     case malformed(messageId: String)
     case none
 }

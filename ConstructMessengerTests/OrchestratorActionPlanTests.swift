@@ -97,8 +97,8 @@ final class OrchestratorActionPlanTests: XCTestCase {
     }
 
     /// A payload that does not parse is a verdict of its own, ahead of the reason the core logs
-    /// beside it. Read as `.none` (all it was before core 0.28) it is neither recorded nor
-    /// acknowledged and comes back on every redelivery.
+    /// beside it. Read as `.none` (all it was before core 0.28) it is logged as an undecided
+    /// message — an ERROR — and no processed record is written.
     func testAMalformedPayload_IsAMalformedVerdict() {
         XCTAssertEqual(OrchestratorActionPlan.routingVerdict(from: [
             .malformedDropped(messageId: messageId),
