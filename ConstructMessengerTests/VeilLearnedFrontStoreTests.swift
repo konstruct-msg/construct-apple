@@ -16,7 +16,7 @@ import XCTest
 @testable import Construct_Messenger
 
 /// In-memory backing so the store's own logic is testable without a Keychain.
-private final class MemoryLearnedFrontPersistence: VeilLearnedFrontPersistence {
+final class MemoryLearnedFrontPersistence: VeilLearnedFrontPersistence {
     var data: Data?
     var saveSucceeds = true
     private(set) var saveCount = 0

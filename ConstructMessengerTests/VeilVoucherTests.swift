@@ -179,19 +179,20 @@ final class VeilVoucherTests: XCTestCase {
         // minutes: the pipeline asked for `VEILConfig.ruRelayAddress` no matter which
         // relay the device was actually on, so the learned front's B2 expired with no
         // replacement ever requested.
-        let store = VeilLearnedFrontStore.shared
+        //
+        // An empty store of its own, not `.shared`: the shared one is the Keychain, and a
+        // stand simulator that has learned a front made "nothing learned" false (TODO 84).
+        let store = VeilLearnedFrontStore(persistence: MemoryLearnedFrontPersistence())
         let address = "target.example:443"
-        try XCTSkipUnless(store.pin(for: address) == nil, "address must start unlearned")
-        defer { store.remove(address) }
 
-        let seed = VeilProxyManager.shared.capabilityTargetAddress()
+        let seed = VeilProxyManager.shared.capabilityTargetAddress(learnedFronts: store)
         XCTAssertEqual(seed, VEILConfig.hardcodedRelayAddresses.first,
                        "with nothing learned and no active relay, the seed is the target")
 
         XCTAssertTrue(store.save(
             address: address, sni: "target.example", spki: String(repeating: "e", count: 64)
         ))
-        XCTAssertEqual(VeilProxyManager.shared.capabilityTargetAddress(), address,
+        XCTAssertEqual(VeilProxyManager.shared.capabilityTargetAddress(learnedFronts: store), address,
                        "a learned front must be the pipeline's target, not the seed")
     }
 

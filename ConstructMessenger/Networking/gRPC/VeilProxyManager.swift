@@ -327,7 +327,13 @@ final class VeilProxyManager: ObservableObject {
     /// two hardcodes that had to move before the seed pool can be emptied (phase 6):
     /// with no bundled front, this list must contain only what the device actually
     /// learned, not a constant nothing will pin.
-    func capabilityCandidateAddresses(preferring address: String? = nil) -> [String] {
+    ///
+    /// `learnedFronts` is a parameter so a test can hand it an empty store: the shared one is
+    /// the Keychain, and whatever the simulator has learned would decide the test.
+    func capabilityCandidateAddresses(
+        preferring address: String? = nil,
+        learnedFronts: VeilLearnedFrontStore = .shared
+    ) -> [String] {
         var ordered: [String] = []
         func append(_ candidate: String?) {
             guard let candidate, !candidate.isEmpty, !ordered.contains(candidate) else { return }
@@ -335,7 +341,7 @@ final class VeilProxyManager: ObservableObject {
         }
         append(address)
         append(activeRelay?.address)
-        for front in VeilLearnedFrontStore.shared.all() { append(front.address) }
+        for front in learnedFronts.all() { append(front.address) }
         for seed in VEILConfig.hardcodedRelayAddresses { append(seed) }
         return ordered
     }
@@ -360,8 +366,11 @@ final class VeilProxyManager: ObservableObject {
     /// there is simply nothing to ask for until a voucher or the manifest supplies a
     /// front. Returning a seed constant here would send the pipeline at an address no
     /// anchor can pin.
-    func capabilityTargetAddress(preferring address: String? = nil) -> String? {
-        let candidates = capabilityCandidateAddresses(preferring: address)
+    func capabilityTargetAddress(
+        preferring address: String? = nil,
+        learnedFronts: VeilLearnedFrontStore = .shared
+    ) -> String? {
+        let candidates = capabilityCandidateAddresses(preferring: address, learnedFronts: learnedFronts)
         return candidates.first(where: needsCapabilityWork) ?? candidates.first
     }
 
