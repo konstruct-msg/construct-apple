@@ -81,6 +81,28 @@ final class CallManager: CallUIManaging {
         return Date().timeIntervalSince(endedAt) < Self.endedCallMemory
     }
 
+    /// Our outgoing call to `userId` is the one in progress — a call from them now is glare, which
+    /// the offer's tie-break resolves, not a second caller to refuse.
+    private func isOutgoingCall(to userId: String) -> Bool {
+        guard let active, case .outgoing = active.session.direction else { return false }
+        return active.session.peerUserId == userId
+    }
+
+    /// Refuse a second call while one is in progress: hangup BUSY to its caller over E2EE, and the
+    /// id remembered as ended, so the push and the offer — whichever comes second — find it ended
+    /// instead of ringing. The call in progress is not touched. Not over the signaling stream: that
+    /// stream belongs to the call in progress; the caller's client tells the server when it ends.
+    private func declineAsBusy(callId: String, callerUserId: String) {
+        rememberEnded(callId: callId)
+        var sig = Shared_Proto_Signaling_V1_WebRTCSignal()
+        sig.callID = callId
+        sig.senderDeviceID = Self.currentDeviceId()
+        sig.timestamp = Self.nowMs()
+        sig.signal = .hangup(Self.makeCallHangup(deviceId: Self.currentDeviceId(), timestampMs: Self.nowMs(), reason: .busy))
+        let result = sendCallSignalProto(sig, to: callerUserId)
+        Log.info("Busy hangup for callId=\(callId.prefix(8))… to \(callerUserId.prefix(8))… (\(result))", category: "Calls")
+    }
+
     /// Pull the message backlog so an SDP that is already on the server can land
     /// without waiting for a zombie MessageStream to time out (7CDE9769: 15 s).
     /// Coalesced with silent-push fetches; a no-op if the offer is already in hand.
@@ -166,6 +188,8 @@ final class CallManager: CallUIManaging {
         var awaitingOfferAfterAnswer: Bool = false
         /// Bounds that wait. Without it the callee waits forever on an offer that may never come.
         var offerWaitTimeout: Task<Void, Never>?
+        /// Ends an incoming call nobody answers. See `startUnansweredTimeout`.
+        var unansweredTimeout: Task<Void, Never>?
         /// ICE candidates received via E2EE before the remote offer was applied.
         /// Applied automatically when pendingRemoteOfferSdp is consumed in answer().
         var pendingIceCandidates: [WebRTCIceCandidate] = []
@@ -209,6 +233,7 @@ final class CallManager: CallUIManaging {
             iceFlushTask?.cancel()
             iceRestartTask?.cancel()
             offerWaitTimeout?.cancel()
+            unansweredTimeout?.cancel()
             iceFlushTask = nil
             iceRestartTask = nil
             offerWaitTimeout = nil
@@ -321,7 +346,6 @@ final class CallManager: CallUIManaging {
             let initResp = try await SignalingServiceClient.shared.initiateCall(
                 callId: callId,
                 calleeUserId: userId,
-                callerName: AuthSessionManager.shared.currentDisplayName,
                 hasVideo: hasVideo
             )
             guard self.active === call else { Log.info("Call replaced during initiateCall — aborting outgoing setup", category: "Calls"); return }
@@ -431,22 +455,25 @@ final class CallManager: CallUIManaging {
             return
         }
 
-        let isBusyState: Bool = {
-            switch state {
-            case .active, .connecting, .dialing, .ringing: return true
-            default: return false
-            }
-        }()
         switch incomingPushDisposition(
             hasActiveCall: active != nil,
-            isBusyState: isBusyState,
-            matchesTrackedCallId: active?.session.id == callId
+            isBusyState: callStateIsBusy(state),
+            matchesTrackedCallId: active?.session.id == callId,
+            isGlareWithCaller: isOutgoingCall(to: callerId)
         ) {
         case .declineBusy:
             // `begin()` would silently close the active call via active?.close() — don't let that happen.
             Log.info("Busy — declining second incoming push (uuid=\(reportedUUID.uuidString.prefix(8))…)", category: "Calls")
             #if os(iOS)
             // PushKit already reported this to CallKit synchronously; tell it the call ended.
+            CallKitProvider.shared.reportCallEnded(uuid: reportedUUID)
+            #endif
+            declineAsBusy(callId: callId, callerUserId: callerId)
+            return
+
+        case .deferToGlareTieBreak:
+            Log.info("Push from \(callerId.prefix(8))… while our call to them is up — the offer's tie-break decides", category: "Calls")
+            #if os(iOS)
             CallKitProvider.shared.reportCallEnded(uuid: reportedUUID)
             #endif
             return
@@ -626,6 +653,26 @@ final class CallManager: CallUIManaging {
         }
     }
 
+    /// End an incoming call that is still ringing after `unansweredIncomingTimeout`.
+    ///
+    /// Nothing else ends it. The callee opens its signaling stream only on answer, so the server's
+    /// reaper — which sends `ErrorToCaller` at 45 s without ringing, and `HangupBoth` only over a
+    /// stream — never reaches a callee that has not answered. The caller's E2EE hangup usually does;
+    /// a caller that crashed or lost the network sends none, and the call rang on — and now that
+    /// `.incoming` counts as busy, it would refuse every later caller. Android ends it at 90 s with
+    /// TIMEOUT; the
+    /// same value here, so both platforms give up on one schedule.
+    private func startUnansweredTimeout(for call: ActiveCall) {
+        call.unansweredTimeout?.cancel()
+        call.unansweredTimeout = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(NetworkTiming.Calls.unansweredIncomingTimeout))
+            guard !Task.isCancelled, let self, self.active === call, case .incoming = self.state else { return }
+            Log.info("Incoming call unanswered for \(Int(NetworkTiming.Calls.unansweredIncomingTimeout))s — ending (call_id=\(call.session.id.prefix(8))…)", category: "Calls")
+            self.sendHangup(reason: .timeout, origin: .local)
+            self.endActiveCall(reason: .hangup(.timeout), reportToCallKit: true)
+        }
+    }
+
     // MARK: - Convenience UI actions
 
     /// End the active call (for in-app end-call button).
@@ -713,6 +760,7 @@ final class CallManager: CallUIManaging {
         callSignalSendChain = nil
         active = ActiveCall(session: session)
         state = initialState
+        if case .incoming = initialState, let active { startUnansweredTimeout(for: active) }
         PerformanceMetrics.shared.start(.callSetupStart, label: String(session.id.prefix(8)))
     }
 
@@ -859,11 +907,15 @@ final class CallManager: CallUIManaging {
             guard CallsFeature.isEnabled else { return }
             if case .idle = state {
                 Log.info("IncomingCallNotification received (call_id=\(call.callID.prefix(8))…)", category: "Calls")
+                // `call.callerName` is server-supplied and empty since 2026-10-01 — the name is
+                // resolved from our own contacts, as on the push path.
+                let callerName = Self.resolveContactDisplayName(userId: call.callerID)
+                    ?? NSLocalizedString("call_incoming_audio", comment: "")
                 #if os(iOS)
                 let reportedUUID = CallKitProvider.shared.reportIncomingCall(
                     callId: call.callID,
                     callerId: call.callerID,
-                    callerName: call.callerName,
+                    callerName: callerName,
                     hasVideo: false
                 )
                 let payload: [AnyHashable: Any] = [
@@ -877,7 +929,7 @@ final class CallManager: CallUIManaging {
                     id: call.callID,
                     uuid: UUID(),
                     peerUserId: call.callerID,
-                    peerName: call.callerName,
+                    peerName: callerName,
                     direction: .incoming
                 )
                 begin(session: session, initialState: .incoming(session))
@@ -1655,11 +1707,21 @@ final class CallManager: CallUIManaging {
             return active
         }()
 
+        let isBusyWithAnotherCall = active.map { $0.session.id != callId } == true
+            && callStateIsBusy(state)
+            && !isOutgoingCall(to: callerUserId)
+
         switch callOfferDisposition(
             hasRecentlyEnded: hasRecentlyEnded(callId: callId),
             matchesActiveIncomingCall: matchingIncoming != nil,
-            awaitingOfferAfterAnswer: matchingIncoming?.awaitingOfferAfterAnswer ?? false
+            awaitingOfferAfterAnswer: matchingIncoming?.awaitingOfferAfterAnswer ?? false,
+            isBusyWithAnotherCall: isBusyWithAnotherCall
         ) {
+        case .declineBusy:
+            Log.info("Busy — declining offer for a second call from \(callerUserId.prefix(8))… (callId=\(callId.prefix(8))…)", category: "Calls")
+            declineAsBusy(callId: callId, callerUserId: callerUserId)
+            return
+
         case .ignoreCallEnded:
             Log.info("Ignoring offer for already-ended call \(callId.prefix(8))… — not re-reporting to CallKit", category: "Calls")
             PerformanceMetrics.shared.record(.callSignalAfterEnd, label: "offer")
