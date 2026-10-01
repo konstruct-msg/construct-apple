@@ -57,6 +57,11 @@ struct ChatMessage: Codable, Identifiable {
     /// core). Not persisted — see `CodingKeys`.
     var senderCertificate: SenderCertificate? = nil
 
+    /// The session whose envelope this message came in (`CryptoManager.openEnvelope`) — set
+    /// instead of `senderCertificate`, and handed to the core so an unreadable message is
+    /// answered along the same pair. Not persisted, for the same reason as the certificate.
+    var envelopeSession: String? = nil
+
     /// Canonical conversation ID from the envelope (e.g. "direct:{a}:{b}").
     /// Required for SENDER_SYNC routing — identifies the original conversation
     /// even when `from` and `to` are both the current user.
@@ -69,7 +74,7 @@ struct ChatMessage: Codable, Identifiable {
     /// The wire payload as it arrived (`Envelope.encrypted_payload`, or the sealed inner's). The
     /// one carrier of everything in it: the core decrypts from it and reads its header from it.
     /// For a DECRYPTION_ERROR, the box the core sealed to our identity key.
-    let rawPayload: Data
+    private(set) var rawPayload: Data
 
     /// What the core read from `rawPayload` when this message was made — its number and whether
     /// it can open a receiving session (`wire_summary`). `nil` when the payload is not a wire
@@ -79,7 +84,7 @@ struct ChatMessage: Codable, Identifiable {
     /// the ciphertext a second time, the KEM ciphertext, the ephemeral key, the PQ epoch — filled
     /// by hand at every construction site. Twice a site dropped two of them, and that was an
     /// outage both times. Derived here, once, from the one carrier, there is nothing to drop.
-    let wire: WireSummary?
+    private(set) var wire: WireSummary?
 
     /// Sealed inner bytes for STEALTH (ConstructSEALED) messages.
     /// When non-empty, `from` is empty — the real sender is recovered by decrypting this.
@@ -183,6 +188,13 @@ struct ChatMessage: Codable, Identifiable {
         resolvedMessage.senderDeviceId = resolved.senderDeviceId   // the relay blanks `sender_device`
         resolvedMessage.senderCertificate = resolved.senderCertificate  // a first message opens from it
         resolvedMessage.sealedInnerData = Data()                   // the sender is resolved; spent
+        if let envelope = resolved.envelope {
+            // The wire payload was inside the envelope; the session, not a certificate, named
+            // the writer. Payload and summary are replaced together — one carrier.
+            resolvedMessage.rawPayload = envelope.body
+            resolvedMessage.wire = Self.summarize(envelope.body)
+            resolvedMessage.envelopeSession = envelope.sessionId
+        }
         return resolvedMessage
     }
 }

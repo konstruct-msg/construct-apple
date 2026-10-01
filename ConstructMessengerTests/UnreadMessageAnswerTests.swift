@@ -49,7 +49,8 @@ final class UnreadMessageAnswerTests: XCTestCase {
             from: writer.deviceId,
             data: handBuiltWirePayload(messageNumber: 5, suiteId: 4),
             contentType: 0,
-            senderCertificate: certificate
+            senderCertificate: certificate,
+            envelopeSession: nil
         ))
         if actions.contains(where: { if case .checkAckInDb = $0 { return true }; return false }) {
             actions = try CryptoManager.shared.handleOrchestratorEvent(
@@ -59,7 +60,7 @@ final class UnreadMessageAnswerTests: XCTestCase {
 
         XCTAssertTrue(
             actions.contains {
-                guard case .sendDecryptionError(let contactId, let id, _) = $0 else { return false }
+                guard case .sendDecryptionError(let contactId, let id, _, _) = $0 else { return false }
                 return contactId == writer.deviceId && id == messageId
             },
             "the writer is told, so it resends on a state it opens: \(actions)"

@@ -2398,6 +2398,11 @@ public protocol OrchestratorCoreProtocol: AnyObject, Sendable {
     
     func oneTimePrekeyCount()  -> UInt32
     
+    /**
+     * Who wrote `envelope`, by its tag, and its opened body; null when no pair matches.
+     */
+    func openEnvelope(envelope: Data)  -> EnvelopeOpened?
+    
     func openReceiving(device: String)  -> ReceivingOpenResult
     
     /**
@@ -2441,6 +2446,12 @@ public protocol OrchestratorCoreProtocol: AnyObject, Sendable {
     func rollbackKyberSpkRotation() 
     
     func rotateSignedPrekey() throws  -> RotatedSpkBundle
+    
+    /**
+     * Seal a wire payload just encrypted for `contact_id` as a session envelope; null when it
+     * must go with a certificate (first flight, or a session made before the envelope).
+     */
+    func sealEnvelope(contactId: String, wirePayload: Data)  -> Data?
     
     /**
      * This device's social-recovery bundle (device keys, derived device id, `created_at`) sealed
@@ -3009,6 +3020,18 @@ open func oneTimePrekeyCount() -> UInt32  {
 })
 }
     
+    /**
+     * Who wrote `envelope`, by its tag, and its opened body; null when no pair matches.
+     */
+open func openEnvelope(envelope: Data) -> EnvelopeOpened?  {
+    return try!  FfiConverterOptionTypeEnvelopeOpened.lift(try! rustCall() {
+    uniffi_construct_core_fn_method_orchestratorcore_open_envelope(
+            self.uniffiCloneHandle(),
+        FfiConverterData.lower(envelope),$0
+    )
+})
+}
+    
 open func openReceiving(device: String) -> ReceivingOpenResult  {
     return try!  FfiConverterTypeReceivingOpenResult_lift(try! rustCall() {
     uniffi_construct_core_fn_method_orchestratorcore_open_receiving(
@@ -3136,6 +3159,20 @@ open func rotateSignedPrekey()throws  -> RotatedSpkBundle  {
     return try  FfiConverterTypeRotatedSpkBundle_lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
     uniffi_construct_core_fn_method_orchestratorcore_rotate_signed_prekey(
             self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+    /**
+     * Seal a wire payload just encrypted for `contact_id` as a session envelope; null when it
+     * must go with a certificate (first flight, or a session made before the envelope).
+     */
+open func sealEnvelope(contactId: String, wirePayload: Data) -> Data?  {
+    return try!  FfiConverterOptionData.lift(try! rustCall() {
+    uniffi_construct_core_fn_method_orchestratorcore_seal_envelope(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(contactId),
+        FfiConverterData.lower(wirePayload),$0
     )
 })
 }
@@ -4020,6 +4057,74 @@ public func FfiConverterTypeEnergyMetrics_lift(_ buf: RustBuffer) throws -> Ener
 #endif
 public func FfiConverterTypeEnergyMetrics_lower(_ value: EnergyMetrics) -> RustBuffer {
     return FfiConverterTypeEnergyMetrics.lower(value)
+}
+
+
+/**
+ * A session envelope opened by `OrchestratorCore.open_envelope`
+ * (construct-docs decisions/sealed-envelope-keyed-by-the-session.md).
+ */
+public struct EnvelopeOpened: Equatable, Hashable {
+    public var contactId: String
+    public var sessionId: String
+    public var kind: UInt8
+    public var body: Data
+    public var retired: Bool
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(contactId: String, sessionId: String, kind: UInt8, body: Data, retired: Bool) {
+        self.contactId = contactId
+        self.sessionId = sessionId
+        self.kind = kind
+        self.body = body
+        self.retired = retired
+    }
+
+    
+}
+
+#if compiler(>=6)
+extension EnvelopeOpened: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeEnvelopeOpened: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> EnvelopeOpened {
+        return
+            try EnvelopeOpened(
+                contactId: FfiConverterString.read(from: &buf), 
+                sessionId: FfiConverterString.read(from: &buf), 
+                kind: FfiConverterUInt8.read(from: &buf), 
+                body: FfiConverterData.read(from: &buf), 
+                retired: FfiConverterBool.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: EnvelopeOpened, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.contactId, into: &buf)
+        FfiConverterString.write(value.sessionId, into: &buf)
+        FfiConverterUInt8.write(value.kind, into: &buf)
+        FfiConverterData.write(value.body, into: &buf)
+        FfiConverterBool.write(value.retired, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeEnvelopeOpened_lift(_ buf: RustBuffer) throws -> EnvelopeOpened {
+    return try FfiConverterTypeEnvelopeOpened.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeEnvelopeOpened_lower(_ value: EnvelopeOpened) -> RustBuffer {
+    return FfiConverterTypeEnvelopeOpened.lower(value)
 }
 
 
@@ -6580,8 +6685,10 @@ public enum CfeAction: Equatable, Hashable {
      * We could not read `message_id` from `contact_id`: send `payload` to that device as a
      * DECRYPTION_ERROR (content type 28) envelope, sealed-sender, and acknowledge the message.
      * The core built and sealed `payload`; one per unread message.
+     * `enveloped`: `payload` is a session envelope — send it as the sealed inner's envelope with
+     * no certificate; otherwise it is the X25519 box, sent as before.
      */
-    case sendDecryptionError(contactId: String, messageId: String, payload: Data
+    case sendDecryptionError(contactId: String, messageId: String, payload: Data, enveloped: Bool
     )
     /**
      * The peer could not read our current state with `contact_id`; it is retired and the next
@@ -6672,7 +6779,7 @@ public struct FfiConverterTypeCfeAction: FfiConverterRustBuffer {
         case 14: return .sendReceipt(messageId: try FfiConverterString.read(from: &buf), status: try FfiConverterString.read(from: &buf)
         )
         
-        case 15: return .sendDecryptionError(contactId: try FfiConverterString.read(from: &buf), messageId: try FfiConverterString.read(from: &buf), payload: try FfiConverterData.read(from: &buf)
+        case 15: return .sendDecryptionError(contactId: try FfiConverterString.read(from: &buf), messageId: try FfiConverterString.read(from: &buf), payload: try FfiConverterData.read(from: &buf), enveloped: try FfiConverterBool.read(from: &buf)
         )
         
         case 16: return .sessionRetired(contactId: try FfiConverterString.read(from: &buf), withoutOneTimePrekey: try FfiConverterBool.read(from: &buf)
@@ -6791,11 +6898,12 @@ public struct FfiConverterTypeCfeAction: FfiConverterRustBuffer {
             FfiConverterString.write(status, into: &buf)
             
         
-        case let .sendDecryptionError(contactId,messageId,payload):
+        case let .sendDecryptionError(contactId,messageId,payload,enveloped):
             writeInt(&buf, Int32(15))
             FfiConverterString.write(contactId, into: &buf)
             FfiConverterString.write(messageId, into: &buf)
             FfiConverterData.write(payload, into: &buf)
+            FfiConverterBool.write(enveloped, into: &buf)
             
         
         case let .sessionRetired(contactId,withoutOneTimePrekey):
@@ -6878,7 +6986,11 @@ public func FfiConverterTypeCfeAction_lower(_ value: CfeAction) -> RustBuffer {
 
 public enum CfeIncomingEvent: Equatable, Hashable {
     
-    case messageReceived(messageId: String, from: String, data: Data, contentType: UInt8, senderCertificate: SenderCertificate?
+    /**
+     * `envelope_session`: the session whose envelope the message came in (`open_envelope`),
+     * set instead of `sender_certificate`.
+     */
+    case messageReceived(messageId: String, from: String, data: Data, contentType: UInt8, senderCertificate: SenderCertificate?, envelopeSession: String?
     )
     case outgoingMessage(contactId: String, messageId: String, plaintext: Data, contentType: UInt8
     )
@@ -6918,8 +7030,9 @@ public enum CfeIncomingEvent: Equatable, Hashable {
      * A DECRYPTION_ERROR (content type 28) arrived from `contact_id` — the device its sender
      * certificate names; `payload` is the envelope's sealed box. Answered with `SessionRetired` +
      * `ResendMessage`, `ResendMessage` alone, or nothing when the error is stale.
+     * `opened`: `payload` came out of a session envelope and is the error itself.
      */
-    case decryptionErrorReceived(contactId: String, payload: Data
+    case decryptionErrorReceived(contactId: String, payload: Data, opened: Bool
     )
 
 
@@ -6940,7 +7053,7 @@ public struct FfiConverterTypeCfeIncomingEvent: FfiConverterRustBuffer {
         let variant: Int32 = try readInt(&buf)
         switch variant {
         
-        case 1: return .messageReceived(messageId: try FfiConverterString.read(from: &buf), from: try FfiConverterString.read(from: &buf), data: try FfiConverterData.read(from: &buf), contentType: try FfiConverterUInt8.read(from: &buf), senderCertificate: try FfiConverterOptionTypeSenderCertificate.read(from: &buf)
+        case 1: return .messageReceived(messageId: try FfiConverterString.read(from: &buf), from: try FfiConverterString.read(from: &buf), data: try FfiConverterData.read(from: &buf), contentType: try FfiConverterUInt8.read(from: &buf), senderCertificate: try FfiConverterOptionTypeSenderCertificate.read(from: &buf), envelopeSession: try FfiConverterOptionString.read(from: &buf)
         )
         
         case 2: return .outgoingMessage(contactId: try FfiConverterString.read(from: &buf), messageId: try FfiConverterString.read(from: &buf), plaintext: try FfiConverterData.read(from: &buf), contentType: try FfiConverterUInt8.read(from: &buf)
@@ -6974,7 +7087,7 @@ public struct FfiConverterTypeCfeIncomingEvent: FfiConverterRustBuffer {
         case 12: return .heartbeatReceived(contactId: try FfiConverterString.read(from: &buf), messageId: try FfiConverterString.read(from: &buf), data: try FfiConverterData.read(from: &buf)
         )
         
-        case 13: return .decryptionErrorReceived(contactId: try FfiConverterString.read(from: &buf), payload: try FfiConverterData.read(from: &buf)
+        case 13: return .decryptionErrorReceived(contactId: try FfiConverterString.read(from: &buf), payload: try FfiConverterData.read(from: &buf), opened: try FfiConverterBool.read(from: &buf)
         )
         
         default: throw UniffiInternalError.unexpectedEnumCase
@@ -6985,13 +7098,14 @@ public struct FfiConverterTypeCfeIncomingEvent: FfiConverterRustBuffer {
         switch value {
         
         
-        case let .messageReceived(messageId,from,data,contentType,senderCertificate):
+        case let .messageReceived(messageId,from,data,contentType,senderCertificate,envelopeSession):
             writeInt(&buf, Int32(1))
             FfiConverterString.write(messageId, into: &buf)
             FfiConverterString.write(from, into: &buf)
             FfiConverterData.write(data, into: &buf)
             FfiConverterUInt8.write(contentType, into: &buf)
             FfiConverterOptionTypeSenderCertificate.write(senderCertificate, into: &buf)
+            FfiConverterOptionString.write(envelopeSession, into: &buf)
             
         
         case let .outgoingMessage(contactId,messageId,plaintext,contentType):
@@ -7057,10 +7171,11 @@ public struct FfiConverterTypeCfeIncomingEvent: FfiConverterRustBuffer {
             FfiConverterData.write(data, into: &buf)
             
         
-        case let .decryptionErrorReceived(contactId,payload):
+        case let .decryptionErrorReceived(contactId,payload,opened):
             writeInt(&buf, Int32(13))
             FfiConverterString.write(contactId, into: &buf)
             FfiConverterData.write(payload, into: &buf)
+            FfiConverterBool.write(opened, into: &buf)
             
         }
     }
@@ -9227,6 +9342,30 @@ fileprivate struct FfiConverterOptionData: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterOptionTypeEnvelopeOpened: FfiConverterRustBuffer {
+    typealias SwiftType = EnvelopeOpened?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeEnvelopeOpened.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeEnvelopeOpened.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterOptionTypeKyberPrekeyUpload: FfiConverterRustBuffer {
     typealias SwiftType = KyberPrekeyUpload?
 
@@ -10981,6 +11120,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_method_orchestratorcore_one_time_prekey_count() != 21478) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_construct_core_checksum_method_orchestratorcore_open_envelope() != 45343) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_construct_core_checksum_method_orchestratorcore_open_receiving() != 32397) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -11018,6 +11160,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_orchestratorcore_rotate_signed_prekey() != 11331) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_orchestratorcore_seal_envelope() != 59409) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_orchestratorcore_seal_own_recovery_bundle() != 42137) {

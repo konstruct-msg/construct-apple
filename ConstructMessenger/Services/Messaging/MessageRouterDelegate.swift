@@ -31,9 +31,10 @@ protocol MessageRouterDelegate: AnyObject {
 
     /// The peer could not read something we sent it: a DECRYPTION_ERROR (content type 28).
     /// `peer.device` is the device its sender certificate names — the one whose record the error
-    /// is about — and `payload` the box the peer's core sealed to our identity key. The conformer
-    /// hands both to the core, which decides everything.
-    func messageRouter(_ router: MessageRouter, receivedDecryptionError peer: PeerAddress, payload: Data)
+    /// is about — and `payload` the box the peer's core sealed to our identity key, or, when
+    /// `opened`, the error itself out of a session envelope. The conformer hands them to the
+    /// core, which decides everything.
+    func messageRouter(_ router: MessageRouter, receivedDecryptionError peer: PeerAddress, payload: Data, opened: Bool)
 
     // MARK: - Session initialisation
 

@@ -346,7 +346,10 @@ final class MessagingServiceClient: Sendable {
     ///   cannot be addressed to one person and sealed to another.
     /// - Sealed like a message body, fail-closed under stealth: the content type rides inside
     ///   `SealedInner`, and an identified control envelope is never emitted.
-    func sendDecryptionError(toDevice deviceId: String, payload: Data) async throws -> ControlSendResponse {
+    /// `enveloped`: the core sealed `payload` as a session envelope back along the pair the unread
+    /// message came by — sent as the sealed inner's envelope, generic on the outside, so the server
+    /// cannot tell an error from a message. Otherwise `payload` is the X25519 box, sent as type 28.
+    func sendDecryptionError(toDevice deviceId: String, payload: Data, enveloped: Bool) async throws -> ControlSendResponse {
         let myUserId = await MainActor.run { AuthSessionManager.shared.currentUserId } ?? ""
         let messageId = UUID().uuidString
 
@@ -370,8 +373,9 @@ final class MessagingServiceClient: Sendable {
             decryptionErrorSealing = .sealed(try await StealthSenderService.buildSealedInner(
                 recipientUserId: recipientId,
                 recipientIdentityKey: peer.identityKey,
-                encryptedPayload: payload,
-                contentType: .decryptionError
+                encryptedPayload: enveloped ? Data() : payload,
+                contentType: enveloped ? .generic : .decryptionError,
+                envelope: enveloped ? payload : nil
             ))
         }
         // Not sent through `sendMessage`, so it asks the chokepoint's question itself. Two send
@@ -389,9 +393,10 @@ final class MessagingServiceClient: Sendable {
                 try await StealthSenderService.buildSealedInner(
                     recipientUserId: recipientId,
                     recipientIdentityKey: peer.identityKey,
-                    encryptedPayload: payload,
-                    contentType: .decryptionError,
-                    afterCredentialRejection: afterCredentialRejection
+                    encryptedPayload: enveloped ? Data() : payload,
+                    contentType: enveloped ? .generic : .decryptionError,
+                    afterCredentialRejection: afterCredentialRejection,
+                    envelope: enveloped ? payload : nil
                 )
             }, send: { inner in
                 try await self.sendSealedMessage(sealedInner: inner, timestamp: timestamp)

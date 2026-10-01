@@ -563,7 +563,8 @@ final class MessageRouter {
             delegate?.messageRouter(
                 self,
                 receivedDecryptionError: PeerAddress(account: otherUserId, device: message.senderDeviceId),
-                payload: message.rawPayload
+                payload: message.rawPayload,
+                opened: message.envelopeSession != nil
             )
             return
         }
@@ -1098,7 +1099,8 @@ final class MessageRouter {
             from: contactId,
             data: message.rawPayload,
             contentType: message.contentType,
-            senderCertificate: message.senderCertificate
+            senderCertificate: message.senderCertificate,
+            envelopeSession: message.envelopeSession
         )
     }
 

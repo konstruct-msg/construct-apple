@@ -45,7 +45,7 @@ final class SessionQueueWiringTests: XCTestCase {
             openRequests.append(peer.account)
             openAddresses.append(peer)
         }
-        func messageRouter(_ router: MessageRouter, receivedDecryptionError peer: PeerAddress, payload: Data) {
+        func messageRouter(_ router: MessageRouter, receivedDecryptionError peer: PeerAddress, payload: Data, opened: Bool) {
             decryptionErrorAddresses.append(peer)
         }
         func messageRouter(_ router: MessageRouter, didDecryptDeliveryReceipt messageIds: [String]) {}

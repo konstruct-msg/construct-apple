@@ -26,7 +26,7 @@ final class ReceivingDecryptWalkTests: XCTestCase {
     /// the first device, and this reddens.
     func testAFailedSessionIsWorthAnotherDevice() {
         XCTAssertTrue(MessageRouter.worthAnotherDevice([
-            .sendDecryptionError(contactId: "dev-a", messageId: "m1", payload: Data([1]))
+            .sendDecryptionError(contactId: "dev-a", messageId: "m1", payload: Data([1]), enveloped: false)
         ]))
         XCTAssertTrue(MessageRouter.worthAnotherDevice([
             .notifyError(code: OrchestratorActionPlan.decryptFailedCode, message: "AEAD decryption failed")
@@ -65,7 +65,7 @@ final class ReceivingDecryptWalkTests: XCTestCase {
     func testAChoreInFrontDoesNotHideTheVerdict() {
         XCTAssertTrue(MessageRouter.worthAnotherDevice([
             .scheduleTimer(timerId: "t", delayMs: 10),
-            .sendDecryptionError(contactId: "dev-a", messageId: "m1", payload: Data([1]))
+            .sendDecryptionError(contactId: "dev-a", messageId: "m1", payload: Data([1]), enveloped: false)
         ]))
     }
 

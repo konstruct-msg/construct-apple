@@ -88,7 +88,7 @@ final class OrchestratorActionPlanTests: XCTestCase {
     func testAnUnreadMessage_IsAnUnreadableVerdict() {
         XCTAssertEqual(OrchestratorActionPlan.routingVerdict(from: [
             .persistAck(messageId: messageId, timestamp: 1),
-            .sendDecryptionError(contactId: peer, messageId: messageId, payload: Data([1])),
+            .sendDecryptionError(contactId: peer, messageId: messageId, payload: Data([1]), enveloped: false),
             .notifyError(code: OrchestratorActionPlan.decryptFailedCode, message: "AEAD decryption failed")
         ]), .unreadable)
         XCTAssertEqual(OrchestratorActionPlan.routingVerdict(from: [
@@ -113,7 +113,7 @@ final class OrchestratorActionPlanTests: XCTestCase {
         let decrypted = OrchestratorActionPlan.routingVerdict(from: [
             .scheduleTimer(timerId: "x", delayMs: 1),
             .messageDecrypted(contactId: peer, messageId: messageId, plaintext: Data("hi".utf8)),
-            .sendDecryptionError(contactId: peer, messageId: messageId, payload: Data([1]))
+            .sendDecryptionError(contactId: peer, messageId: messageId, payload: Data([1]), enveloped: false)
         ])
         XCTAssertEqual(decrypted, .decrypted)
     }

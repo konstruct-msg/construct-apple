@@ -342,7 +342,7 @@ final class SessionCoordinator: MessageRouterDelegate {
     /// when the error names it, resend the named message once, or nothing when the error is
     /// stale. END_SESSION (21), which this replaced, named no state, and the 30 s windows, the
     /// stale-by-timestamp check and the resend of everything unconfirmed stood in for that.
-    func messageRouter(_ router: MessageRouter, receivedDecryptionError peer: PeerAddress, payload: Data) {
+    func messageRouter(_ router: MessageRouter, receivedDecryptionError peer: PeerAddress, payload: Data, opened: Bool) {
         guard let device = peer.device, !device.isEmpty else {
             // Unsealed: nothing names the device, and a record is per device.
             Log.info("DECRYPTION_ERROR from \(peer.account.prefix(8))… names no device — ignored", category: "SessionCoordinator")
@@ -351,7 +351,7 @@ final class SessionCoordinator: MessageRouterDelegate {
         let actions: [CfeAction]
         do {
             actions = try CryptoManager.shared.handleOrchestratorEvent(
-                .decryptionErrorReceived(contactId: device, payload: payload),
+                .decryptionErrorReceived(contactId: device, payload: payload, opened: opened),
                 tag: "decryption_error"
             )
         } catch {

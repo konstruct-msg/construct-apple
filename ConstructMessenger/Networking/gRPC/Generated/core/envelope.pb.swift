@@ -808,6 +808,18 @@ public nonisolated struct Shared_Proto_Core_V1_SealedInner: Sendable {
   /// tags, the envelope is silently charged a token, and nothing reports a mismatch.
   public var intakeTagSealed: Data = Data()
 
+  /// Session envelope (construct-core 0.26; construct-docs
+  /// decisions/sealed-envelope-keyed-by-the-session.md, PQC-1). Once two devices hold a session,
+  /// a message goes as
+  ///   nonce(12) ‖ tag(16) ‖ ChaCha20-Poly1305(k_env, kind ‖ body, ad = tag)
+  /// with keys derived from the session's post-quantum root, and the recipient finds who wrote
+  /// it by the tag (`OrchestratorCore.open_envelope`). When present:
+  ///   • sender_cert_ciphertext and encrypted_payload are EMPTY — the wire payload, header
+  ///     included, is inside the envelope, and the session names the writer;
+  ///   • the server treats it as opaque, as it does encrypted_payload.
+  /// Empty = the first flight of a session, which still carries the certificate.
+  public var sessionEnvelope: Data = Data()
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -1416,7 +1428,7 @@ nonisolated extension Shared_Proto_Core_V1_SealedSenderEnvelope: SwiftProtobuf.M
 
 nonisolated extension Shared_Proto_Core_V1_SealedInner: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".SealedInner"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}recipient_user_id\0\u{3}delivery_tag\0\u{3}sender_cert_ciphertext\0\u{3}encrypted_payload\0\u{3}content_type\0\u{1}priority\0\u{1}ttl\0\u{4}\u{9}token_nonce\0\u{3}token_bytes\0\u{3}token_spend_id\0\u{3}recipient_device\0\u{3}intake_tag_sealed\0\u{c}\u{8}\u{8}")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}recipient_user_id\0\u{3}delivery_tag\0\u{3}sender_cert_ciphertext\0\u{3}encrypted_payload\0\u{3}content_type\0\u{1}priority\0\u{1}ttl\0\u{4}\u{9}token_nonce\0\u{3}token_bytes\0\u{3}token_spend_id\0\u{3}recipient_device\0\u{3}intake_tag_sealed\0\u{3}session_envelope\0\u{c}\u{8}\u{8}")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -1436,6 +1448,7 @@ nonisolated extension Shared_Proto_Core_V1_SealedInner: SwiftProtobuf.Message, S
       case 18: try { try decoder.decodeSingularBytesField(value: &self.tokenSpendID) }()
       case 19: try { try decoder.decodeSingularStringField(value: &self.recipientDevice) }()
       case 20: try { try decoder.decodeSingularBytesField(value: &self.intakeTagSealed) }()
+      case 21: try { try decoder.decodeSingularBytesField(value: &self.sessionEnvelope) }()
       default: break
       }
     }
@@ -1478,6 +1491,9 @@ nonisolated extension Shared_Proto_Core_V1_SealedInner: SwiftProtobuf.Message, S
     if !self.intakeTagSealed.isEmpty {
       try visitor.visitSingularBytesField(value: self.intakeTagSealed, fieldNumber: 20)
     }
+    if !self.sessionEnvelope.isEmpty {
+      try visitor.visitSingularBytesField(value: self.sessionEnvelope, fieldNumber: 21)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -1494,6 +1510,7 @@ nonisolated extension Shared_Proto_Core_V1_SealedInner: SwiftProtobuf.Message, S
     if lhs.tokenSpendID != rhs.tokenSpendID {return false}
     if lhs.recipientDevice != rhs.recipientDevice {return false}
     if lhs.intakeTagSealed != rhs.intakeTagSealed {return false}
+    if lhs.sessionEnvelope != rhs.sessionEnvelope {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

@@ -35,8 +35,8 @@ extension CryptoManager {
 
     func orchestratorEventSummary(_ event: CfeIncomingEvent) -> String {
         switch event {
-        case .messageReceived(let messageId, let from, let data, let contentType, let certificate):
-            return "messageReceived from=\(from.prefix(8))… msgId=\(messageId.prefix(8))… ct=\(contentType) data=\(data.count)B sealed=\(certificate != nil)"
+        case .messageReceived(let messageId, let from, let data, let contentType, let certificate, let envelopeSession):
+            return "messageReceived from=\(from.prefix(8))… msgId=\(messageId.prefix(8))… ct=\(contentType) data=\(data.count)B sealed=\(certificate != nil) envelope=\(envelopeSession != nil)"
         case .outgoingMessage(let contactId, let messageId, let plaintextUtf8, let contentType):
             return "outgoingMessage to=\(contactId.prefix(8))… msgId=\(messageId.prefix(8))… ct=\(contentType) plaintext=\(plaintextUtf8.count)ch"
         case .outgoingCallSignal(let contactId, let messageId, let protoBytes):
@@ -53,8 +53,8 @@ extension CryptoManager {
             return "networkReconnected"
         case .appLaunched:
             return "appLaunched"
-        case .decryptionErrorReceived(let contactId, let payload):
-            return "decryptionErrorReceived from=\(contactId.prefix(8))… payload=\(payload.count)B"
+        case .decryptionErrorReceived(let contactId, let payload, let opened):
+            return "decryptionErrorReceived from=\(contactId.prefix(8))… payload=\(payload.count)B opened=\(opened)"
         case .timerFired(let timerId):
             return "timerFired id=\(timerId.prefix(24))…"
         case .ackDbResult(let messageId, let isProcessed):

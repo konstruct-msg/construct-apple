@@ -156,14 +156,18 @@ final class SessionActionExecutor {
             break
 
         // ── Decryption errors (decisions/sessions-renew-by-sending.md, variant B) ──
-        case .sendDecryptionError(let contactId, let messageId, let payload):
+        case .sendDecryptionError(let contactId, let messageId, let payload, let enveloped):
             // We could not read `messageId`; the core built the error and sealed it to the writer.
             // Sent from here because it is the answer to a routed message *and* to a failed open,
             // and both answers pass through this executor. The message itself is recorded by the
             // router (or was given up by the open); nothing here decides anything.
             Task {
                 do {
-                    _ = try await MessagingServiceClient.shared.sendDecryptionError(toDevice: contactId, payload: payload)
+                    _ = try await MessagingServiceClient.shared.sendDecryptionError(
+                        toDevice: contactId,
+                        payload: payload,
+                        enveloped: enveloped
+                    )
                     Log.info(
                         "SESSION_STATE[decryption_error_sent]: \(contactId.prefix(8))… could not be read (\(messageId.prefix(8))…)",
                         category: "SessionInit"

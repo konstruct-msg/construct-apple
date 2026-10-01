@@ -40,11 +40,11 @@ final class SealedRoutingBoundaryTests: XCTestCase {
     /// SESSION_RESET_INIT branches it once recorded beside it went on 2026-09-27
     /// (`decisions/sessions-renew-by-sending.md`).
     private final class RecordingDelegate: MessageRouterDelegate {
-        var decryptionErrors: [(peer: PeerAddress, payload: Data)] = []
+        var decryptionErrors: [(peer: PeerAddress, payload: Data, opened: Bool)] = []
 
         func messageRouter(_ router: MessageRouter, canOpenReceiving peer: PeerAddress, for message: ChatMessage) {}
-        func messageRouter(_ router: MessageRouter, receivedDecryptionError peer: PeerAddress, payload: Data) {
-            decryptionErrors.append((peer, payload))
+        func messageRouter(_ router: MessageRouter, receivedDecryptionError peer: PeerAddress, payload: Data, opened: Bool) {
+            decryptionErrors.append((peer, payload, opened))
         }
         func messageRouter(_ router: MessageRouter, didDecryptDeliveryReceipt messageIds: [String]) {}
         func messageRouter(_ router: MessageRouter, needsUsernameUpdate peer: PeerAddress) {}
@@ -181,6 +181,44 @@ final class SealedRoutingBoundaryTests: XCTestCase {
         )
     }
 
+    /// A session envelope resolved: the writer named by its session, the body opened.
+    private func stubEnvelope(contentType: UInt8, body: Data) {
+        router.sealedSenderResolver = StubResolver(
+            resolved: ResolvedSender(
+                senderId: peer,
+                senderDeviceId: senderDevice,
+                contentType: contentType,
+                trust: .vouched(.session),
+                senderCertificate: nil,
+                envelope: OpenedSessionEnvelope(sessionId: "5e55", body: body)
+            )
+        )
+    }
+
+    // MARK: - Session envelope (decisions/sealed-envelope-keyed-by-the-session.md)
+
+    /// An enveloped DECRYPTION_ERROR reaches its branch with the error itself, marked opened —
+    /// there is no box for the core to open, and handing it one would fail as unreadable.
+    ///
+    /// Mutation: pass `opened: false` from the router — this reddens.
+    func testAnEnvelopedDecryptionError_ReachesItsBranchOpened() {
+        let error = Data([0x01, 0x00, 0xAB])
+        stubEnvelope(contentType: 28, body: error)
+
+        router.routeIncomingMessage(sealedMessage(), in: context)
+
+        XCTAssertEqual(delegate.decryptionErrors.map(\.peer.device), [senderDevice])
+        XCTAssertEqual(delegate.decryptionErrors.first?.payload, error)
+        XCTAssertEqual(delegate.decryptionErrors.first?.opened, true)
+    }
+
+    /// The certificate path still hands the box over unopened.
+    func testACertifiedDecryptionError_IsNotMarkedOpened() {
+        stubUnseal(contentType: 28)
+        router.routeIncomingMessage(sealedMessage(), in: context)
+        XCTAssertEqual(delegate.decryptionErrors.first?.opened, false)
+    }
+
     /// Stands in for StealthSenderService: yields a known sender/content type without needing
     /// Keychain identity keys or a genuine sealed box.
     private struct StubResolver: SealedSenderResolving {
@@ -291,6 +329,31 @@ final class SealedRebuildFieldPreservationTests: XCTestCase {
         XCTAssertEqual(rebuilt.wire, carrier.wire)
         XCTAssertEqual(rebuilt.messageNumber, 7)
         XCTAssertEqual(rebuilt.initKind, .handshake, "a header at message 7 still opens")
+    }
+
+    /// An envelope carries the wire payload inside it: the boundary replaces the payload and the
+    /// core's reading of it together, names the session, and carries no certificate.
+    ///
+    /// Mutation: skip the payload replacement in `resolvingSealedSender` — this reddens.
+    func testAnEnvelopeReplacesThePayloadAndNamesItsSession() {
+        let carrier = sealedCarrier()
+        let body = handBuiltWirePayload(messageNumber: 3, suiteId: 4)
+        let resolved = ResolvedSender(
+            senderId: peer,
+            senderDeviceId: senderDevice,
+            contentType: 0,
+            trust: .vouched(.session),
+            senderCertificate: nil,
+            envelope: OpenedSessionEnvelope(sessionId: "5e55", body: body)
+        )
+        let rebuilt = carrier.resolvingSealedSender(resolved, currentUserId: me)
+
+        XCTAssertEqual(rebuilt.rawPayload, body)
+        XCTAssertEqual(rebuilt.messageNumber, 3, "the summary is of the opened payload")
+        XCTAssertEqual(rebuilt.envelopeSession, "5e55")
+        XCTAssertNil(rebuilt.senderCertificate)
+        XCTAssertEqual(rebuilt.id, carrier.id)
+        XCTAssertEqual(rebuilt.senderDeviceId, senderDevice)
     }
 
     // MARK: Everything else carried through

@@ -92,7 +92,8 @@ private final class OrchestratorPeer {
             from: contactId,
             data: wirePayload,
             contentType: contentType,
-            senderCertificate: nil
+            senderCertificate: nil,
+            envelopeSession: nil
         ))
 
         // Rust ACK-cache miss after restart: respond synchronously and use the follow-up actions.

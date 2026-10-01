@@ -1107,6 +1107,27 @@ class CryptoManager {
         return SessionAddressing.deviceIds(ofPeer: peerId).contains { restoreSession(for: $0) }
     }
 
+    /// Seal a wire payload just encrypted for `deviceId` as a session envelope, or `nil` when it
+    /// must go with a certificate: the session's first flight (the peer cannot find a tag yet),
+    /// or a session made before the envelope. The core decides
+    /// (`decisions/sealed-envelope-keyed-by-the-session.md`).
+    func sealEnvelope(forDevice deviceId: String, wirePayload: Data) -> Data? {
+        coreLock.lock()
+        defer { coreLock.unlock() }
+        guard let core = orchestratorCore, let contactId = SessionAddressing.asDevice(deviceId) else {
+            return nil
+        }
+        return core.sealEnvelope(contactId: contactId, wirePayload: wirePayload)
+    }
+
+    /// Who wrote a session envelope, found by its tag, and its opened body; `nil` when no pair this
+    /// device holds matches.
+    func openEnvelope(_ envelope: Data) -> EnvelopeOpened? {
+        coreLock.lock()
+        defer { coreLock.unlock() }
+        return orchestratorCore?.openEnvelope(envelope: envelope)
+    }
+
     /// How late messages have arrived since launch (PQR-4) — `nil` before the core is up.
     func reorderStats() -> ReorderStats? {
         orchestratorCore?.reorderStats()
