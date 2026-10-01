@@ -121,10 +121,15 @@ Tokens — source of truth `ConstructMessenger/Utilities/ConstructTheme.swift`:
 - Tab bar is the standard SwiftUI `TabView`; hide it in a conversation only via
   `.toolbar(.hidden, for: .tabBar)` on the `ChatView` destination.
 
-**Xcode Previews do not run in the app target.** It links WebRTC and WhisperKit, and the preview
-process dies at launch with `_objc_fatal: Attempt to use unknown class` whenever those load — on
-any iOS runtime, independent of app code, and compile flags cannot help because the frameworks stay
-linked. Every `#Preview` block in the app is therefore decorative today.
+**Xcode Previews run in the app target since 2026-10-01** — `InCallView`'s preview rendered on
+Xcode 27 (JIT executor), with the scheme `ConstructMessenger` (Debug, `-Onone`). Until then this
+paragraph said they could not: the preview process died at launch with `_objc_fatal: Attempt to
+use unknown class` once WebRTC or WhisperKit loaded. Which change ended that is not established —
+the same day WebRTC moved from `stasel/WebRTC` to webrtc-sdk (`Packages/WebRTC`), and the toolchain
+was Xcode 27 — so if previews break again, check those two first. A preview needs the Debug
+configuration: the `Construct Messenger Beta` scheme runs Beta, built `-O`, which Previews refuse.
+A preview that fails with "ThunkContentMarker … invalidated" lost its file to an edit mid-build;
+refresh it.
 
 A separate previewable package is a recurring idea and was tried once. If you rebuild it, the
 theme file is **shared, never copied** — the copy is what killed the last attempt. Read
