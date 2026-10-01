@@ -2425,6 +2425,11 @@ public protocol OrchestratorCoreProtocol: AnyObject, Sendable {
     func reopenSession(contactId: String, recipientBundle: BinaryKeyBundle) throws  -> String
     
     /**
+     * How late messages have arrived since the process started (PQR-4).
+     */
+    func reorderStats()  -> ReorderStats
+    
+    /**
      * The person reset the session with `contact_id`: the current state is retired locally and
      * the next send opens a new one. Nothing is sent. Execute the returned save.
      */
@@ -3089,6 +3094,17 @@ open func reopenSession(contactId: String, recipientBundle: BinaryKeyBundle)thro
             self.uniffiCloneHandle(),
         FfiConverterString.lower(contactId),
         FfiConverterTypeBinaryKeyBundle_lower(recipientBundle),$0
+    )
+})
+}
+    
+    /**
+     * How late messages have arrived since the process started (PQR-4).
+     */
+open func reorderStats() -> ReorderStats  {
+    return try!  FfiConverterTypeReorderStats_lift(try! rustCall() {
+    uniffi_construct_core_fn_method_orchestratorcore_reorder_stats(
+            self.uniffiCloneHandle(),$0
     )
 })
 }
@@ -5862,6 +5878,78 @@ public func FfiConverterTypeRegistrationBundleFields_lift(_ buf: RustBuffer) thr
 #endif
 public func FfiConverterTypeRegistrationBundleFields_lower(_ value: RegistrationBundleFields) -> RustBuffer {
     return FfiConverterTypeRegistrationBundleFields.lower(value)
+}
+
+
+/**
+ * How late messages arrive, for this process (PQR-4, construct-docs TODO 64.3). Local
+ * diagnostics for the platform's log: never sent anywhere.
+ */
+public struct ReorderStats: Equatable, Hashable {
+    public var decrypted: UInt64
+    public var previousEpoch: UInt64
+    public var olderEpoch: UInt64
+    public var maxEpochLag: UInt32
+    public var maxSkipDepth: UInt32
+    public var evictedEpochFailures: UInt64
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(decrypted: UInt64, previousEpoch: UInt64, olderEpoch: UInt64, maxEpochLag: UInt32, maxSkipDepth: UInt32, evictedEpochFailures: UInt64) {
+        self.decrypted = decrypted
+        self.previousEpoch = previousEpoch
+        self.olderEpoch = olderEpoch
+        self.maxEpochLag = maxEpochLag
+        self.maxSkipDepth = maxSkipDepth
+        self.evictedEpochFailures = evictedEpochFailures
+    }
+
+    
+}
+
+#if compiler(>=6)
+extension ReorderStats: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeReorderStats: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ReorderStats {
+        return
+            try ReorderStats(
+                decrypted: FfiConverterUInt64.read(from: &buf), 
+                previousEpoch: FfiConverterUInt64.read(from: &buf), 
+                olderEpoch: FfiConverterUInt64.read(from: &buf), 
+                maxEpochLag: FfiConverterUInt32.read(from: &buf), 
+                maxSkipDepth: FfiConverterUInt32.read(from: &buf), 
+                evictedEpochFailures: FfiConverterUInt64.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: ReorderStats, into buf: inout [UInt8]) {
+        FfiConverterUInt64.write(value.decrypted, into: &buf)
+        FfiConverterUInt64.write(value.previousEpoch, into: &buf)
+        FfiConverterUInt64.write(value.olderEpoch, into: &buf)
+        FfiConverterUInt32.write(value.maxEpochLag, into: &buf)
+        FfiConverterUInt32.write(value.maxSkipDepth, into: &buf)
+        FfiConverterUInt64.write(value.evictedEpochFailures, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeReorderStats_lift(_ buf: RustBuffer) throws -> ReorderStats {
+    return try FfiConverterTypeReorderStats.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeReorderStats_lower(_ value: ReorderStats) -> RustBuffer {
+    return FfiConverterTypeReorderStats.lower(value)
 }
 
 
@@ -10918,6 +11006,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_orchestratorcore_reopen_session() != 45402) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_orchestratorcore_reorder_stats() != 53206) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_orchestratorcore_retire_session() != 42727) {

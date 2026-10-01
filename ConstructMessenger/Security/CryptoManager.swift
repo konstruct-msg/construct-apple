@@ -1107,6 +1107,11 @@ class CryptoManager {
         return SessionAddressing.deviceIds(ofPeer: peerId).contains { restoreSession(for: $0) }
     }
 
+    /// How late messages have arrived since launch (PQR-4) — `nil` before the core is up.
+    func reorderStats() -> ReorderStats? {
+        orchestratorCore?.reorderStats()
+    }
+
     /// Return a read-only health snapshot for the session with one device.
     /// Returns `nil` if no session exists or the core is not initialized.
     func getSessionHealth(for deviceId: String) -> SessionHealthReport? {

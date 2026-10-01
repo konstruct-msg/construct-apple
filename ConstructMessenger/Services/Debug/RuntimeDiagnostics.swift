@@ -20,6 +20,8 @@ final class RuntimeDiagnostics {
     /// Previous cumulative counters. CPU is a rate, so the first snapshot after launch has
     /// nothing to divide by and honestly reports `cpu=n/a`.
     private var lastCPUSample: CPUUsageRate.Sample?
+    /// The reorder counters last written, so the line appears when they move and not every 30 s.
+    private var lastReorderStats: ReorderStats?
 
     private init() {}
 
@@ -185,6 +187,26 @@ final class RuntimeDiagnostics {
         // the acceptance criterion is "0 unexplained ERROR".
         if let signals = PerformanceMetrics.shared.changedSignalsSummary() {
             Log.info("SIGNALS \(signals)", category: "Runtime")
+        }
+
+        // PQR-4 (construct-docs TODO 64.3): how late messages arrive, counted by the core since
+        // launch. `evicted` is a message lost because its PQ epoch's chain was already gone; the
+        // others size how deep reordering gets. Local only, like every line in this file.
+        if let reorder = CryptoManager.shared.reorderStats(), reorder != lastReorderStats {
+            lastReorderStats = reorder
+            let line = [
+                "decrypted=\(reorder.decrypted)",
+                "prev_epoch=\(reorder.previousEpoch)",
+                "older_epoch=\(reorder.olderEpoch)",
+                "max_lag=\(reorder.maxEpochLag)",
+                "max_skip=\(reorder.maxSkipDepth)",
+                "evicted=\(reorder.evictedEpochFailures)"
+            ].joined(separator: " ")
+            if reorder.evictedEpochFailures > 0 {
+                Log.error("REORDER \(line)", category: "Runtime")
+            } else {
+                Log.info("REORDER \(line)", category: "Runtime")
+            }
         }
     }
 }
