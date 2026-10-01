@@ -252,6 +252,11 @@ final class SessionActionExecutor {
             break
 
         // ── Error reporting ───────────────────────────────────────
+        case .notifyError(let code, let msg) where code == OrchestratorActionPlan.decryptFailedCode:
+            // The cause of a refusal the core is already answering with a DECRYPTION_ERROR —
+            // a message from a deleted chat or a reset state lands here every time, and the
+            // writer opens a new state. Logged at ERROR it read as a fault on every such delivery.
+            Log.info("Unreadable message, answered [\(code)]: \(msg)", category: "SessionActionExecutor")
         case .notifyError(let code, let msg):
             Log.error("Rust orchestrator error [\(code)]: \(msg)", category: "SessionActionExecutor")
         }
