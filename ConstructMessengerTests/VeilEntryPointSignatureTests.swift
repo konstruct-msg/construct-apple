@@ -199,7 +199,9 @@ final class VeilEntryPointSignatureTests: XCTestCase {
     func testASignatureCannotRepointASeedRelay() throws {
         // The invariant that keeps the manifest meaningful: a public anchor wins, so the
         // live server cannot re-point a published front by signing over it.
-        let seed = try XCTUnwrap(VEILConfig.seedRelays.first)
+        guard let seed = VEILConfig.seedRelays.first else {
+            throw XCTSkip("no bundled front since 2026-10-02 — nothing to anchor (VeilBundledFrontPolicyTests)")
+        }
         let exp = Int64(Date().timeIntervalSince1970) + 3600
         let foreign = String(repeating: "d", count: 64)
         let rejection = VeilRelayTrust.verifyAndLearn(

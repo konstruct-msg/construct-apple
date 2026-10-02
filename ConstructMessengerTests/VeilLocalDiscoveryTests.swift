@@ -90,10 +90,10 @@ final class VeilLocalDiscoveryTests: XCTestCase {
     /// End-to-end trust decision: an advert bearing a bundled seed's own SPKI is accepted
     /// (it's just a new LAN reachability path for a relay we already trust); a foreign
     /// SPKI at the same address is rejected.
-    func testDiscoveryAcceptsSeedIdentityRejectsForeign() {
+    func testDiscoveryAcceptsSeedIdentityRejectsForeign() throws {
         let trusted = VeilLocalDiscovery.trustedSPKIs()
         guard let seedSPKI = VEILConfig.seedRelays.first?.spki else {
-            return XCTFail("expected at least one bundled seed relay")
+            throw XCTSkip("no bundled front since 2026-10-02 — nothing to anchor (VeilBundledFrontPolicyTests)")
         }
         XCTAssertTrue(VeilLocalDiscovery.accept(spki: seedSPKI, trusted: trusted))
         XCTAssertFalse(VeilLocalDiscovery.accept(

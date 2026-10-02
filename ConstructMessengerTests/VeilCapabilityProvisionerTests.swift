@@ -95,9 +95,9 @@ final class VeilCapabilityProvisionerTests: XCTestCase {
                        "server-asserted coords for an unknown relay must be rejected")
     }
 
-    func testAlternatesAccept_rejectsSPKIMismatchOnSeedRelay() {
+    func testAlternatesAccept_rejectsSPKIMismatchOnSeedRelay() throws {
         guard let seed = VEILConfig.seedRelays.first else {
-            return XCTFail("expected at least one seed relay")
+            throw XCTSkip("no bundled front since 2026-10-02 — nothing to anchor (VeilBundledFrontPolicyTests)")
         }
         // Same address as a trusted seed, but a foreign pin — anti-redirection.
         let alt = VeilServiceClient.Alternate(
@@ -113,9 +113,9 @@ final class VeilCapabilityProvisionerTests: XCTestCase {
                        "SPKI mismatch against seed/manifest pin must be rejected")
     }
 
-    func testAlternatesAccept_rejectsEmptySPKIOnSeedRelay() {
+    func testAlternatesAccept_rejectsEmptySPKIOnSeedRelay() throws {
         guard let seed = VEILConfig.seedRelays.first else {
-            return XCTFail("expected at least one seed relay")
+            throw XCTSkip("no bundled front since 2026-10-02 — nothing to anchor (VeilBundledFrontPolicyTests)")
         }
         let alt = VeilServiceClient.Alternate(
             capability: Data([0]),
@@ -152,9 +152,9 @@ final class VeilCapabilityProvisionerTests: XCTestCase {
     }
 
     /// Gate 2 on the primary path — the anti-redirection check that used to run after the store.
-    func testPrimaryVerify_rejectsSPKIMismatchOnSeedRelay() {
+    func testPrimaryVerify_rejectsSPKIMismatchOnSeedRelay() throws {
         guard let seed = VEILConfig.seedRelays.first else {
-            return XCTFail("expected at least one seed relay")
+            throw XCTSkip("no bundled front since 2026-10-02 — nothing to anchor (VeilBundledFrontPolicyTests)")
         }
         let rejection = VeilRelayTrust.verify(
             relayAddress: seed.address,
@@ -168,9 +168,9 @@ final class VeilCapabilityProvisionerTests: XCTestCase {
     }
 
     /// An absent SPKI is a mismatch, not a pass. Mutation: drop `!spki.isEmpty` from the guard.
-    func testPrimaryVerify_rejectsEmptySPKIOnSeedRelay() {
+    func testPrimaryVerify_rejectsEmptySPKIOnSeedRelay() throws {
         guard let seed = VEILConfig.seedRelays.first else {
-            return XCTFail("expected at least one seed relay")
+            throw XCTSkip("no bundled front since 2026-10-02 — nothing to anchor (VeilBundledFrontPolicyTests)")
         }
         let rejection = VeilRelayTrust.verify(
             relayAddress: seed.address,
@@ -184,9 +184,9 @@ final class VeilCapabilityProvisionerTests: XCTestCase {
     }
 
     /// Gate 3: right coordinates, forged blob.
-    func testPrimaryVerify_rejectsInvalidCapabilityWithMatchingCoords() {
+    func testPrimaryVerify_rejectsInvalidCapabilityWithMatchingCoords() throws {
         guard let seed = VEILConfig.seedRelays.first else {
-            return XCTFail("expected at least one seed relay")
+            throw XCTSkip("no bundled front since 2026-10-02 — nothing to anchor (VeilBundledFrontPolicyTests)")
         }
         let rejection = VeilRelayTrust.verify(
             relayAddress: seed.address,
@@ -231,11 +231,11 @@ final class VeilCapabilityProvisionerTests: XCTestCase {
         }
     }
 
-    func testAlternatesAccept_rejectsMatchingCoordsButInvalidCapabilityBlob() {
+    func testAlternatesAccept_rejectsMatchingCoordsButInvalidCapabilityBlob() throws {
         // Even with matching seed pin, a garbage capability blob must not be accepted —
         // the issuer signature is the third gate of Option C.
         guard let seed = VEILConfig.seedRelays.first else {
-            return XCTFail("expected at least one seed relay")
+            throw XCTSkip("no bundled front since 2026-10-02 — nothing to anchor (VeilBundledFrontPolicyTests)")
         }
         let alt = VeilServiceClient.Alternate(
             capability: Data("not-a-real-capability".utf8),

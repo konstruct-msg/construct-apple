@@ -582,8 +582,9 @@ struct VEILRelayRegion: Codable {
 /// *floor*: even with `.well-known` unreachable and no cached manifest, the client
 /// still has a pool of fronts to probe.
 ///
-/// Seeds are expendable — assume a censor eventually blocks each IP; rotate the pool
-/// per release. Adding a front is a one-line append to `VEILConfig.seedRelays`; every
+/// Seeds are expendable — assume a censor eventually blocks each IP, and that a name
+/// in the binary is known to it. None is bundled now (see `VEILConfig`). Adding a
+/// front is a one-line append to `VEILConfig.seedRelays`; every
 /// consumer (relay selector candidates, TransportRouter pin/SNI, `VeilAlternatesCache`
 /// accept-gate, `importBlob` anti-redirection) derives from that list, so nothing else
 /// needs touching.
@@ -607,18 +608,16 @@ struct VEILConfig {
     // The Amsterdam obfs4 relay (ice.ams.konstruct.cc) was retired — see retiredRelayHosts.
     // The main gRPC server is still ams.konstruct.cc (direct path); only the relay is gone.
 
-    // ── Relay: RU veil-front (api.divany-kresla.uk) — the sole VEIL relay ─────
-    /// 2026-06-11: VPS repurposed as the **veil-front relay** (honest-front HTTPS +
-    /// session-bound ticket auth). It terminates veil-TLS with its own Let's Encrypt
-    /// cert and re-wraps gRPC over TLS to ams.konstruct.cc:443 (--backend-tls).
-    /// SPKI below is now that veil-front cert. obfs4/WebTunnel are no longer served
-    /// here — veil-front wins the coordinator race via `ruRelayVeilFrontTicket`.
-    /// 2026-06-14: relay moved to a new VPS (195.133.44.113); cert reissued, so the
-    /// pinned SPKI below was rotated. `api.divany-kresla.uk` A-record must point at
-    /// the new IP for the on-wire SNI to match a resolvable host.
-    static let ruRelayAddress    = "api.divany-kresla.uk:443"
-    static let ruRelaySNI        = "api.divany-kresla.uk"
-    static let ruRelayPinnedSPKI = "5621e47a745614de08efb054b01388f3bcf32c763ecf5f0aeaeb6b0785ff6861"
+    // ── No front is bundled (2026-10-02) ──────────────────────────────────────
+    /// The build carried one front, its address, SNI and pin in this file. Whatever
+    /// ships in the app is public — this repository is public and a binary is read
+    /// by anyone who wants to — and that front was retired for exactly that reason.
+    /// Fronts now reach a device only as signed data: the server's Ed25519-signed
+    /// manifest (`relayConfigSigningKey`), fetched while the direct path still works,
+    /// or a signed config link / QR (`konstruct://veil-config`) handed over out of
+    /// band. A fresh install on a network that already blocks the direct path needs
+    /// the link. `seedRelays` stays as the mechanism and is empty;
+    /// `VeilBundledFrontPolicyTests` fails if a name is added back without deciding to.
     /// Stale obfs4 keypair cert — kept only so the obfs4 probe has a bridge line; it
     /// fails fast (relay no longer speaks obfs4) and veil-front wins the race.
     // The veil-front ticket is per-user auth material — NOT hardcoded here. It is
@@ -668,14 +667,9 @@ struct VEILConfig {
     }
 
     /// Bundled seed-front pool (EntryDirectory Source 2) — the single source of truth
-    /// the address list and the SNI/SPKI/WT dicts below all derive from. Add a bundled
-    /// front here and every consumer picks it up; no other edit needed. Keep the primary
-    /// (ruRelay*) first — order is the relay selector's tie-break priority.
-    static let seedRelays: [VEILSeedRelay] = [
-        VEILSeedRelay(address: ruRelayAddress, sni: ruRelaySNI, spki: ruRelayPinnedSPKI, wtPath: "/api/stream"),
-        // Append additional bundled fronts here (e.g. co-tenancy relays). Each needs a
-        // distinct address, its TLS SNI, and the hex SHA-256 SPKI pin of its live cert.
-    ]
+    /// the address list and the SNI/SPKI/WT dicts below all derive from. Empty on
+    /// purpose since 2026-10-02: see "No front is bundled" above.
+    static let seedRelays: [VEILSeedRelay] = []
 
     /// Ordered relay candidate list used as a last resort when discovery is unavailable.
     /// Order matters: relays are probed concurrently but this sets tie-break priority.
@@ -720,10 +714,9 @@ struct VEILConfig {
     /// The first matching rule wins; unmatched → default ordering.
     ///
     /// Override via `.well-known/construct-server` `ice.relay_regions` without a new build.
-    /// Only one relay (veil-front) remains, so the region rule just prefers it everywhere.
-    static let hardcodedRelayRegions: [VEILRelayRegion] = [
-        VEILRelayRegion(tzOffsetMin: -12, tzOffsetMax: 12, preferredRelays: [ruRelayAddress]),
-    ]
+    /// Empty: no front is bundled, so there is nothing to prefer before the server's
+    /// regions arrive.
+    static let hardcodedRelayRegions: [VEILRelayRegion] = []
 }
 
 // MARK: - Log Categories
