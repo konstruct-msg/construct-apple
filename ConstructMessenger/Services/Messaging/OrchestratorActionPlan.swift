@@ -58,6 +58,8 @@ struct OrchestratorActionPlan {
                 return .decrypted
             case .callSignalDecrypted:
                 return .callSignalDecrypted
+            case .controlFrameDecrypted:
+                return .controlFrameDecrypted
             case .sendDecryptionError:
                 return .unreadable
             // No error to send — an unsealed message names no writer to seal it to — but the core
@@ -89,6 +91,8 @@ struct OrchestratorActionPlan {
 enum IncomingRoutingVerdict: Equatable {
     case decrypted
     case callSignalDecrypted
+    /// A silent control frame the core named from byte 5 of its KNST frame (core 0.30).
+    case controlFrameDecrypted
     /// Nothing held reads it and it carries no handshake header. The core built a DECRYPTION_ERROR
     /// to its writer when it could (a sealed message) and recorded the message; the writer resends
     /// it on the state it opens next. Replaced `sendEndSession` / `endSessionSuppressed` on

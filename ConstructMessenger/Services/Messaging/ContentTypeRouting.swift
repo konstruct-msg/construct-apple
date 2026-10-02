@@ -134,7 +134,7 @@ enum ContentTypeRouting {
 
     /// Which side-channel handler owns a framed payload, or nil when byte 5 names none.
     ///
-    /// Extracted from `MessageRouter.handleFramedSideChannel`'s switch so the mapping is an
+    /// Extracted from `MessageRouter.handleControlFrame`'s switch so the mapping is an
     /// object a test can reach, per the rule about naming boundaries. The switch there now asks
     /// this rather than repeating `case 12` / `case 14`.
     static func framedSideChannel(for contentType: UInt8) -> FramedSideChannel? {
