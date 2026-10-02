@@ -855,10 +855,15 @@ final class MessageRouter {
             _ = executeRustActions(actions, for: message, chat: chat, otherUserId: otherUserId, in: context)
             return
         case .callSignalDecrypted:
-            // ct=12: Rust decrypted the call signal — dispatch to CallManager directly.
-            // There is no .messageDecrypted in the action list for call signals, so this
-            // case must be handled here before the loop falls through to "no routing decision".
+            // A call signal, named by the core — by the envelope's type or, since core 0.29, by
+            // the KNST frame's (every sealed one). Dispatched to CallManager by the executor.
+            //
+            // Handled, so recorded as processed: the core asked for a durable record, and until
+            // 2026-10-02 this path wrote none — "PersistAck unmet" on every identified call signal,
+            // and a restart would hand a stale offer back. Unnoticed while sealed signals went
+            // through `handleFramedSideChannel`, which did write it; since 0.29 they all come here.
             _ = executeRustActions(actions, for: message, chat: chat, otherUserId: otherUserId, in: context)
+            PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId, in: context)
             return
         case .unreadable:
             // Nothing held for the device reads it and it carries no handshake. The core recorded
@@ -1747,11 +1752,11 @@ final class MessageRouter {
 
         switch ContentTypeRouting.framedSideChannel(for: control.contentType) {
         case .callSignal:
-            if let signal = CallManager.decodeSignalProto(from: control.payload) {
-                CallManager.shared.handleCallSignalProto(from: otherUserId, signal: signal)
-            } else {
-                Log.error("Call signal frame from \(otherUserId.prefix(8))… failed to decode", category: "MessageRouter")
-            }
+            // The core names a framed call signal itself since 0.29 and hands it over as
+            // `.callSignalDecrypted` with the frame's body (TODO 94), so a decrypted message never
+            // reaches here carrying one. If one does, the core and this app disagree about the
+            // frame: say so, and drop it rather than let a call signal reach the transcript.
+            Log.error("Call signal frame from \(otherUserId.prefix(8))… reached the body path — the core should have named it", category: "MessageRouter")
             PersistentACKStore.shared.markProcessed(messageId, senderId: otherUserId, in: context)
             return true
         case .deliveryReceipt:
