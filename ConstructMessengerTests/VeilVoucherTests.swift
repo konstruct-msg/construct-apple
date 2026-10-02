@@ -219,14 +219,17 @@ final class VeilVoucherTests: XCTestCase {
                        "the relay that just proved it works is tried first")
         XCTAssertTrue(candidates.contains(learned),
                       "a learned front stays in the queue even when it is not the active relay")
-        XCTAssertEqual(candidates.last, VEILConfig.hardcodedRelayAddresses.last,
-                       "the seed pool is the floor, never the head")
+        if let floor = VEILConfig.hardcodedRelayAddresses.last {
+            XCTAssertEqual(candidates.last, floor, "the seed pool is the floor, never the head")
+        }
         XCTAssertEqual(Set(candidates).count, candidates.count, "no duplicates")
     }
 
     @MainActor
     func testCapabilityCandidatesDoNotRepeatTheSeedWhenItIsAlsoPreferred() throws {
-        let seed = try XCTUnwrap(VEILConfig.hardcodedRelayAddresses.first)
+        guard let seed = VEILConfig.hardcodedRelayAddresses.first else {
+            throw XCTSkip("no bundled front since 2026-10-02 — nothing to repeat (VeilBundledFrontPolicyTests)")
+        }
         let candidates = VeilProxyManager.shared.capabilityCandidateAddresses(preferring: seed)
         XCTAssertEqual(candidates.filter { $0 == seed }.count, 1)
     }
@@ -242,7 +245,10 @@ final class VeilVoucherTests: XCTestCase {
             XCTAssertTrue(candidates.contains(seed), "every bundled seed belongs in the queue")
         }
         if VEILConfig.hardcodedRelayAddresses.isEmpty {
-            XCTAssertNil(VeilProxyManager.shared.capabilityTargetAddress(),
+            // Its own empty store: the shared one is the Keychain, where a stand simulator
+            // may have learned a front (TODO 84).
+            let empty = VeilLearnedFrontStore(persistence: MemoryLearnedFrontPersistence())
+            XCTAssertNil(VeilProxyManager.shared.capabilityTargetAddress(learnedFronts: empty),
                          "no seeds and nothing learned means there is nothing to ask for")
         }
     }
