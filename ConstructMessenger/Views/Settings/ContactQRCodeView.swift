@@ -293,7 +293,7 @@ struct ContactQRCodeView: View {
             return
         }
         do {
-            // HTTPS share can land in third-party messenger logs/previews — never embed `un`.
+            // HTTPS share: the generator leaves the username out (see `generateDeepLink`).
             let minted = try generator.generateDeepLink(
                 userId: userId,
                 deviceId: deviceId,
@@ -337,12 +337,12 @@ struct ContactQRCodeView: View {
             // stringValue for this. Pure byte-mode CIv1 often yields nil stringValue
             // on device (no haptic, no redeem). Scanner still dual-reads Latin-1
             // byte-mode for already-printed binary QRs.
-            // Metadata minimization (thread 5): do not embed plaintext username in the
-            // signed invite by default — identity chrome stays in UI only (`displayName`).
+            // The QR carries our username, so the person scanning it sees who they added. Shown
+            // in person and rotated in seconds; the HTTPS link does not carry it (TODO 95).
             let minted = try generator.generateQRBinary(
                 userId: userId,
                 deviceId: deviceId,
-                username: nil,
+                username: username.isEmpty ? nil : username,
                 server: serverHostname
             )
             let textPayload = InviteBinaryCodec.base64URLEncode(minted.artifact)

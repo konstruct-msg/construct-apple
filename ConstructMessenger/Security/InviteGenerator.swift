@@ -52,8 +52,9 @@ class InviteGenerator {
     /// - Parameters:
     ///   - userId: Sender's user UUID (for chat creation)
     ///   - deviceId: Sender's device ID (for fetching keys)
-    ///   - username: Optional plaintext @alias in the signed payload. **Default nil**
-    ///     (metadata minimization). Never pass for HTTPS deep links.
+    ///   - username: Optional plaintext @alias in the signed payload, so the new contact sees who
+    ///     it added (as Android shows it). Carried by the QR and the `konstruct://` link; an
+    ///     HTTPS link drops it (`generateDeepLink`).
     ///   - serverFQDN: Server FQDN (optional, uses default if nil)
     ///   - ttlSeconds: how long this invite should stay redeemable. Pass the artifact's own
     ///     life — a QR is scanned in seconds, a link waits in an inbox for hours.
@@ -208,6 +209,16 @@ class InviteGenerator {
     /// A link keeps the full `InviteConfig.ttlSeconds`. It is the artifact that travels
     /// through another messenger and waits in an inbox, which is the reason that number is
     /// twelve hours in the first place.
+    /// The username a link may carry. An HTTPS link travels through other messengers: their link
+    /// previews and scanners fetch it and keep it in their logs. Without the username it names an
+    /// opaque account id; with it, anyone holding those logs could tie the invite to the name the
+    /// person goes by. A `konstruct://` link and the QR carry it, so the new contact sees who it
+    /// added. Decided with the owner 2026-10-02 (construct-docs TODO 95). The rule lives here, not
+    /// at each caller.
+    static func linkUsername(_ username: String?, useHTTPS: Bool) -> String? {
+        useHTTPS ? nil : username
+    }
+
     func generateDeepLink(
         userId: String,
         deviceId: String,
@@ -220,7 +231,7 @@ class InviteGenerator {
         let payload = try generateQRPayload(
             userId: userId,
             deviceId: deviceId,
-            username: username,
+            username: Self.linkUsername(username, useHTTPS: useHTTPS),
             server: normalizedServer,
             ttlSeconds: ttlSeconds
         )
