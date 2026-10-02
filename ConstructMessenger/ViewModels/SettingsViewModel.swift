@@ -139,7 +139,7 @@ class SettingsViewModel {
                 // Re-send profile to all contacts we share with so they see the new avatar
                 Task {
                     let shareVM = ProfileShareViewModel(context: context)
-                    shareVM.rebroadcastProfileToSharedContacts()
+                    await shareVM.rebroadcastProfileToSharedContacts()
                 }
             } else {
                 Log.info("User not found in Core Data")
@@ -226,7 +226,7 @@ class SettingsViewModel {
                 // Re-send profile to all contacts we share with so they see the updated name
                 Task {
                     let shareVM = ProfileShareViewModel(context: context)
-                    shareVM.rebroadcastProfileToSharedContacts()
+                    await shareVM.rebroadcastProfileToSharedContacts()
                 }
             }
         } catch {
