@@ -313,16 +313,11 @@ struct DesktopAccountSettingsView: View {
         viewModel.saveAvatar(image, authViewModel: authViewModel)
     }
 
+    /// The shared path: the avatar goes, the profile version moves, and contacts are sent
+    /// "removed". Until 2026-10-02 this cleared the picture here only — no version, no rebroadcast —
+    /// so every contact kept showing it.
     private func removeAvatar() {
-        guard let context = viewModel.viewContextPublic, !viewModel.userId.isEmpty else { return }
-        let req = User.fetchRequest()
-        req.predicate = NSPredicate(format: "id == %@", viewModel.userId)
-        req.fetchLimit = 1
-        if let user = try? context.fetch(req).first {
-            user.avatarData = nil
-            try? context.save()
-            viewModel.profileImage = nil
-        }
+        viewModel.removeAvatar()
     }
 
     private func saveUsernameIfNeeded() async {

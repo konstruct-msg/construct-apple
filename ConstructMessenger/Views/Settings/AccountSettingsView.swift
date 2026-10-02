@@ -262,7 +262,7 @@ struct AccountSettingsView: View {
                     Button(role: .destructive) {
                         viewModel.removeAvatar()
                     } label: {
-                        Label(NSLocalizedString("remove_photo", comment: ""), systemImage: "trash")
+                        Label(NSLocalizedString("remove_avatar", comment: ""), systemImage: "trash")
                     }
                 } label: {
                     changePhotoLabel
