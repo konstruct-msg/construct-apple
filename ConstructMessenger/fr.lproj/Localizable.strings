@@ -826,6 +826,8 @@
 "recovery_not_configured_title" = "Récupération non configurée";
 "developer" = "Développeur";
 "change_photo" = "changer la photo";
+"choose_photo" = "choisir une photo";
+"remove_photo" = "supprimer la photo";
 "identity_section" = "identité";
 "account_section" = "compte";
 "bio" = "présentation";

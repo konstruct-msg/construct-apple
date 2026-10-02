@@ -151,6 +151,16 @@ public nonisolated enum Shared_Proto_Core_V1_ContentType: SwiftProtobuf.Enum, Sw
   ///
   /// Sealed-sender envelope; the server forwards it opaquely.
   case decryptionError // = 28
+
+  /// PROFILE — the sender's display name and avatar, as a `ProfileShare` (below), to a contact it
+  /// shares its profile with. Until 2026-10-02 a profile had no type: each client recognised it by
+  /// whether the plaintext parsed as a hand-written binary layout (version byte 0x01, u16 LE
+  /// lengths) that iOS and Android each wrote and read on their own. Readers keep accepting that
+  /// layout on an untyped message for one release; nothing sends it.
+  ///
+  /// Framed side channel inside the ciphertext: knst_byte5 = true, sealed_inner_content_type =
+  /// false. Server forwards opaquely. decisions/profile-share-is-a-typed-versioned-state.md
+  case profile // = 29
   case UNRECOGNIZED(Int)
 
   public init() {
@@ -176,6 +186,7 @@ public nonisolated enum Shared_Proto_Core_V1_ContentType: SwiftProtobuf.Enum, Sw
     case 26: self = .sessionReady
     case 27: self = .contactCard
     case 28: self = .decryptionError
+    case 29: self = .profile
     default: self = .UNRECOGNIZED(rawValue)
     }
   }
@@ -199,6 +210,7 @@ public nonisolated enum Shared_Proto_Core_V1_ContentType: SwiftProtobuf.Enum, Sw
     case .sessionReady: return 26
     case .contactCard: return 27
     case .decryptionError: return 28
+    case .profile: return 29
     case .UNRECOGNIZED(let i): return i
     }
   }
@@ -222,6 +234,7 @@ public nonisolated enum Shared_Proto_Core_V1_ContentType: SwiftProtobuf.Enum, Sw
     .sessionReady,
     .contactCard,
     .decryptionError,
+    .profile,
   ]
 
 }
@@ -926,6 +939,79 @@ public nonisolated struct Shared_Proto_Core_V1_OwnDeviceCopy: Sendable {
 /// `account_address` never changes for the life of the account. A receiver pins the first address
 /// it hears for an account and treats a different one as a security event, never as an update;
 /// an address from a signed invite outranks one from a card.
+/// The payload of CONTENT_TYPE_PROFILE (29): who the sender is to this contact, by its own account.
+///
+/// A receiver keeps the `edited_at_ms` it last applied for the sender and ignores a profile that is
+/// not newer — whole, name and avatar together — so a resend, a redelivery or a reordered queue
+/// cannot put an older name back. Equal is not newer: the same profile twice is applied once.
+///
+/// `avatar` has three states, and the third is the reason it is a oneof:
+///   set     — download this, replace the avatar;
+///   removed — the sender has no avatar now: clear it;
+///   absent  — the avatar did not change in this profile (or the sender could not upload it):
+///             keep what is held.
+/// A `set` whose key is not 32 bytes is read as absent.
+public nonisolated struct Shared_Proto_Core_V1_ProfileShare: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var displayName: String = String()
+
+  /// When the sender last changed its name or avatar, ms since the epoch, by the sender's clock.
+  /// Not the send time: a profile sent again carries the same value.
+  public var editedAtMs: UInt64 = 0
+
+  public var avatar: Shared_Proto_Core_V1_ProfileShare.OneOf_Avatar? = nil
+
+  public var avatarSet: Shared_Proto_Core_V1_AvatarRef {
+    get {
+      if case .avatarSet(let v)? = avatar {return v}
+      return Shared_Proto_Core_V1_AvatarRef()
+    }
+    set {avatar = .avatarSet(newValue)}
+  }
+
+  public var avatarRemoved: Bool {
+    get {
+      if case .avatarRemoved(let v)? = avatar {return v}
+      return false
+    }
+    set {avatar = .avatarRemoved(newValue)}
+  }
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public nonisolated enum OneOf_Avatar: Equatable, Sendable {
+    case avatarSet(Shared_Proto_Core_V1_AvatarRef)
+    case avatarRemoved(Bool)
+
+  }
+
+  public init() {}
+}
+
+/// An avatar in the media store, encrypted under `media_key`. Lives as long as any other media
+/// (MEDIA_FILE_TTL_SECONDS); a receiver that finds it gone keeps the avatar it has.
+public nonisolated struct Shared_Proto_Core_V1_AvatarRef: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var mediaID: String = String()
+
+  public var mediaURL: String = String()
+
+  /// 32 bytes, AES-256.
+  public var mediaKey: Data = Data()
+
+  public var mimeType: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
 public nonisolated struct Shared_Proto_Core_V1_ContactCard: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -947,7 +1033,7 @@ public nonisolated struct Shared_Proto_Core_V1_ContactCard: Sendable {
 fileprivate nonisolated let _protobuf_package = "shared.proto.core.v1"
 
 nonisolated extension Shared_Proto_Core_V1_ContentType: SwiftProtobuf._ProtoNameProviding {
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0CONTENT_TYPE_UNSPECIFIED\0\u{1}CONTENT_TYPE_E2EE_SIGNAL\0\u{1}CONTENT_TYPE_E2EE_MLS\0\u{2}\u{8}CONTENT_TYPE_WEBRTC_SIGNAL\0\u{1}CONTENT_TYPE_PRESENCE\0\u{1}CONTENT_TYPE_CALL_SIGNAL\0\u{1}CONTENT_TYPE_HEARTBEAT\0\u{1}CONTENT_TYPE_DELIVERY_RECEIPT\0\u{2}\u{6}CONTENT_TYPE_KEY_EXCHANGE\0\u{1}CONTENT_TYPE_SESSION_RESET\0\u{1}CONTENT_TYPE_KEY_SYNC\0\u{1}CONTENT_TYPE_SENDER_SYNC\0\u{1}CONTENT_TYPE_SESSION_RESET_INIT\0\u{1}CONTENT_TYPE_SESSION_PING\0\u{1}CONTENT_TYPE_SESSION_READY\0\u{1}CONTENT_TYPE_CONTACT_CARD\0\u{1}CONTENT_TYPE_DECRYPTION_ERROR\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0CONTENT_TYPE_UNSPECIFIED\0\u{1}CONTENT_TYPE_E2EE_SIGNAL\0\u{1}CONTENT_TYPE_E2EE_MLS\0\u{2}\u{8}CONTENT_TYPE_WEBRTC_SIGNAL\0\u{1}CONTENT_TYPE_PRESENCE\0\u{1}CONTENT_TYPE_CALL_SIGNAL\0\u{1}CONTENT_TYPE_HEARTBEAT\0\u{1}CONTENT_TYPE_DELIVERY_RECEIPT\0\u{2}\u{6}CONTENT_TYPE_KEY_EXCHANGE\0\u{1}CONTENT_TYPE_SESSION_RESET\0\u{1}CONTENT_TYPE_KEY_SYNC\0\u{1}CONTENT_TYPE_SENDER_SYNC\0\u{1}CONTENT_TYPE_SESSION_RESET_INIT\0\u{1}CONTENT_TYPE_SESSION_PING\0\u{1}CONTENT_TYPE_SESSION_READY\0\u{1}CONTENT_TYPE_CONTACT_CARD\0\u{1}CONTENT_TYPE_DECRYPTION_ERROR\0\u{1}CONTENT_TYPE_PROFILE\0")
 }
 
 nonisolated extension Shared_Proto_Core_V1_MessagePriority: SwiftProtobuf._ProtoNameProviding {
@@ -1623,6 +1709,123 @@ nonisolated extension Shared_Proto_Core_V1_OwnDeviceCopy: SwiftProtobuf.Message,
   public static func ==(lhs: Shared_Proto_Core_V1_OwnDeviceCopy, rhs: Shared_Proto_Core_V1_OwnDeviceCopy) -> Bool {
     if lhs._senderCertificate != rhs._senderCertificate {return false}
     if lhs.wirePayload != rhs.wirePayload {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Shared_Proto_Core_V1_ProfileShare: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ProfileShare"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}display_name\0\u{3}edited_at_ms\0\u{3}avatar_set\0\u{3}avatar_removed\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.displayName) }()
+      case 2: try { try decoder.decodeSingularUInt64Field(value: &self.editedAtMs) }()
+      case 3: try {
+        var v: Shared_Proto_Core_V1_AvatarRef?
+        var hadOneofValue = false
+        if let current = self.avatar {
+          hadOneofValue = true
+          if case .avatarSet(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.avatar = .avatarSet(v)
+        }
+      }()
+      case 4: try {
+        var v: Bool?
+        try decoder.decodeSingularBoolField(value: &v)
+        if let v = v {
+          if self.avatar != nil {try decoder.handleConflictingOneOf()}
+          self.avatar = .avatarRemoved(v)
+        }
+      }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    if !self.displayName.isEmpty {
+      try visitor.visitSingularStringField(value: self.displayName, fieldNumber: 1)
+    }
+    if self.editedAtMs != 0 {
+      try visitor.visitSingularUInt64Field(value: self.editedAtMs, fieldNumber: 2)
+    }
+    switch self.avatar {
+    case .avatarSet?: try {
+      guard case .avatarSet(let v)? = self.avatar else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 3)
+    }()
+    case .avatarRemoved?: try {
+      guard case .avatarRemoved(let v)? = self.avatar else { preconditionFailure() }
+      try visitor.visitSingularBoolField(value: v, fieldNumber: 4)
+    }()
+    case nil: break
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Shared_Proto_Core_V1_ProfileShare, rhs: Shared_Proto_Core_V1_ProfileShare) -> Bool {
+    if lhs.displayName != rhs.displayName {return false}
+    if lhs.editedAtMs != rhs.editedAtMs {return false}
+    if lhs.avatar != rhs.avatar {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Shared_Proto_Core_V1_AvatarRef: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".AvatarRef"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}media_id\0\u{3}media_url\0\u{3}media_key\0\u{3}mime_type\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.mediaID) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.mediaURL) }()
+      case 3: try { try decoder.decodeSingularBytesField(value: &self.mediaKey) }()
+      case 4: try { try decoder.decodeSingularStringField(value: &self.mimeType) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.mediaID.isEmpty {
+      try visitor.visitSingularStringField(value: self.mediaID, fieldNumber: 1)
+    }
+    if !self.mediaURL.isEmpty {
+      try visitor.visitSingularStringField(value: self.mediaURL, fieldNumber: 2)
+    }
+    if !self.mediaKey.isEmpty {
+      try visitor.visitSingularBytesField(value: self.mediaKey, fieldNumber: 3)
+    }
+    if !self.mimeType.isEmpty {
+      try visitor.visitSingularStringField(value: self.mimeType, fieldNumber: 4)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Shared_Proto_Core_V1_AvatarRef, rhs: Shared_Proto_Core_V1_AvatarRef) -> Bool {
+    if lhs.mediaID != rhs.mediaID {return false}
+    if lhs.mediaURL != rhs.mediaURL {return false}
+    if lhs.mediaKey != rhs.mediaKey {return false}
+    if lhs.mimeType != rhs.mimeType {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

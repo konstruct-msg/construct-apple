@@ -9,6 +9,7 @@
 
 import Foundation
 import CoreData
+import GRPCCore
 
 /// Manages profile sharing between users
 @MainActor
@@ -81,6 +82,13 @@ class ProfileSharingManager {
             Log.error("User not found for profile update: \(userId)", category: "ProfileSharingManager")
             return
         }
+        // An untyped profile carries the send time, not a version, so it cannot be ordered against
+        // a typed one: once a typed profile is held, the old layout is a resend from a build that
+        // predates the type, and applying it could put an older name back.
+        guard user.profileEditedAtMs == 0 else {
+            Log.info("Untyped profile from \(userId.prefix(8))… ignored — a typed profile is held", category: "ProfileSharingManager")
+            return
+        }
         
         // Update display name immediately so chat list / headers show the real name
         // even while the avatar is still downloading.
@@ -151,4 +159,104 @@ class ProfileSharingManager {
         }
     }
     
+    // MARK: - Typed profile (content type 29)
+
+    /// A typed profile from `userId`, applied only if newer than the one held
+    /// (`ProfileShare.decision`). Onto an existing row only: a sender must not be able to put a
+    /// contact in our store by sending to us.
+    ///
+    /// `startDownload` is what happens to a newly pending avatar; a test passes a recorder so the
+    /// rule can be checked without the media store.
+    func apply(
+        _ profile: ProfileShare,
+        from userId: String,
+        in context: NSManagedObjectContext,
+        startDownload: (NSManagedObjectID) -> Void = { id in Task { await ProfileSharingManager.fetchPendingAvatar(of: id) } }
+    ) {
+        let request = User.fetchRequest()
+        request.predicate = NSPredicate(format: "id == %@", userId)
+        request.fetchLimit = 1
+        guard let user = try? context.fetch(request).first else {
+            Log.error("Profile from \(userId.prefix(8))… for a contact we do not hold", category: "ProfileSharingManager")
+            return
+        }
+        guard let action = profile.decision(heldEditedAtMs: user.profileEditedAtMs) else {
+            Log.info("Profile from \(userId.prefix(8))… not newer than the one held — ignored", category: "ProfileSharingManager")
+            return
+        }
+
+        let name = profile.displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !name.isEmpty { user.displayName = name }
+        user.isSharingWithMe = true
+        user.sharedWithMeAt = Date()
+        user.profileEditedAtMs = Int64(clamping: profile.editedAtMs)
+
+        switch action {
+        case .download(let ref):
+            user.pendingAvatarRef = try? ref.stored()
+            user.pendingAvatarSince = Date()
+        case .clear:
+            user.avatarData = nil
+            user.pendingAvatarRef = nil
+            user.pendingAvatarSince = nil
+        case .keep:
+            break
+        }
+
+        do {
+            try context.save()
+        } catch {
+            Log.error("Failed to save profile from \(userId.prefix(8))…: \(error)", category: "ProfileSharingManager")
+            return
+        }
+        if case .download = action {
+            startDownload(user.objectID)
+        }
+    }
+
+    /// How long a pending avatar is worth asking for: the media store deletes everything after
+    /// `MEDIA_FILE_TTL_SECONDS` (7 days), and an avatar is media like any other.
+    static let pendingAvatarLifetime: TimeInterval = 7 * 24 * 3600
+
+    /// Download the avatar a contact's profile named, if one is still pending. On success it
+    /// replaces the avatar; if the store says the file is gone, or it is older than the store keeps
+    /// anything, the reference is dropped and the avatar held stays. Any other failure leaves it
+    /// pending for the next stream connect (`AvatarRetryService`).
+    static func fetchPendingAvatar(of objectID: NSManagedObjectID) async {
+        let viewContext = PersistenceController.shared.container.viewContext
+        guard let user = viewContext.object(with: objectID) as? User,
+              let stored = user.pendingAvatarRef else { return }
+        let contact = user.id.prefix(8)
+        if let since = user.pendingAvatarSince, Date().timeIntervalSince(since) > pendingAvatarLifetime {
+            Log.info("Avatar of \(contact)… expired in the media store — dropped", category: "ProfileSharingManager")
+            clearPending(user, ifStill: stored, in: viewContext)
+            return
+        }
+        guard let ref = ProfileShare.AvatarRef(stored: stored) else {
+            clearPending(user, ifStill: stored, in: viewContext)
+            return
+        }
+        do {
+            let data = try await MediaManager.shared.downloadAndDecryptAvatar(
+                mediaId: ref.mediaId, mediaUrl: ref.mediaUrl, mediaKey: ref.mediaKey
+            )
+            // A newer profile may have named another avatar while this one downloaded.
+            guard user.pendingAvatarRef == stored else { return }
+            user.avatarData = data
+            clearPending(user, ifStill: stored, in: viewContext)
+            Log.info("Avatar of \(contact)… downloaded", category: "ProfileSharingManager")
+        } catch let error as RPCError where error.code == .notFound {
+            Log.info("Avatar of \(contact)… is gone from the media store — dropped", category: "ProfileSharingManager")
+            clearPending(user, ifStill: stored, in: viewContext)
+        } catch {
+            Log.info("Avatar of \(contact)… not downloaded (\(error.localizedDescription)) — retried on reconnect", category: "ProfileSharingManager")
+        }
+    }
+
+    private static func clearPending(_ user: User, ifStill stored: Data, in context: NSManagedObjectContext) {
+        guard user.pendingAvatarRef == stored else { return }
+        user.pendingAvatarRef = nil
+        user.pendingAvatarSince = nil
+        try? context.save()
+    }
 }

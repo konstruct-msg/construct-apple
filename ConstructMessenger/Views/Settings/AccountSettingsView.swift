@@ -250,19 +250,43 @@ struct AccountSettingsView: View {
             }
             .opacity(isEditingProfile ? AccountSettingsLayout.avatarSectionEditingOpacity : 1)
 
-            Button {
-                guard !isEditingProfile else { return }
-                showingImagePicker = true
-            } label: {
-                Text("[\(NSLocalizedString("change_photo", comment: ""))]")
-                    .font(CTFont.body)
-                    .foregroundStyle(isEditingProfile ? Color.CT.textDim : Color.CT.accent)
+            // With a photo set, a native menu: choose another or remove it. Without one there is
+            // nothing to remove, and the label opens the picker as before.
+            if viewModel.profileImage != nil {
+                Menu {
+                    Button {
+                        showingImagePicker = true
+                    } label: {
+                        Label(NSLocalizedString("choose_photo", comment: ""), systemImage: "photo")
+                    }
+                    Button(role: .destructive) {
+                        viewModel.removeAvatar()
+                    } label: {
+                        Label(NSLocalizedString("remove_photo", comment: ""), systemImage: "trash")
+                    }
+                } label: {
+                    changePhotoLabel
+                }
+                .disabled(isEditingProfile)
+            } else {
+                Button {
+                    guard !isEditingProfile else { return }
+                    showingImagePicker = true
+                } label: {
+                    changePhotoLabel
+                }
+                .buttonStyle(.plain)
+                .disabled(isEditingProfile)
             }
-            .buttonStyle(.plain)
-            .disabled(isEditingProfile)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, AccountSettingsLayout.avatarSectionVerticalPadding)
+    }
+
+    private var changePhotoLabel: some View {
+        Text("[\(NSLocalizedString("change_photo", comment: ""))]")
+            .font(CTFont.body)
+            .foregroundStyle(isEditingProfile ? Color.CT.textDim : Color.CT.accent)
     }
 
     // MARK: - Identity Section

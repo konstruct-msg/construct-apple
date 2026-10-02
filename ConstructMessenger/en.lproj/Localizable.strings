@@ -843,6 +843,8 @@
 "recovery_not_configured_title" = "Recovery Not Configured";
 "developer" = "Developer";
 "change_photo" = "change photo";
+"choose_photo" = "choose photo";
+"remove_photo" = "remove photo";
 "identity_section" = "identity";
 "account_section" = "account";
 "bio" = "bio";

@@ -85,3 +85,13 @@ extension User {
         }
     }
 }
+
+// MARK: - Profile version
+
+extension User {
+    /// Our own name or avatar changed: the profile we send carries this as its version
+    /// (`ProfileShare.editedAtMs`), so contacts apply it over the one they hold and ignore older ones.
+    func markProfileEdited(now: Date = Date()) {
+        profileEditedAtMs = Int64((now.timeIntervalSince1970 * 1000).rounded())
+    }
+}

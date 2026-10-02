@@ -1224,7 +1224,8 @@ final class MessageRouter {
                     Log.info("Unknown framed content type \(control.contentType) from \(otherUserId.prefix(8))… — treating as a message body", category: "MessageRouter")
                 }
 
-                // Profile share: support binary wire (no JSON) + legacy. Detect on raw Data here.
+                // Profile from a build before content type 29: recognised by its layout, as it
+                // always was. Read for one release; ignored once a typed profile is held.
                 if let profile = ProfileShareData.fromBinaryData(plaintext) {
                     ProfileSharingManager.shared.handleProfileMessage(profile, from: otherUserId, in: context)
                     PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId, in: context)
@@ -1774,6 +1775,16 @@ final class MessageRouter {
                 }
             } else {
                 Log.error("Contact card from \(otherUserId.prefix(8))… did not decode", category: "MessageRouter")
+            }
+            PersistentACKStore.shared.markProcessed(messageId, senderId: otherUserId, in: context)
+            return true
+        case .profile:
+            // Their name and avatar, applied only if newer than the one held — the version is
+            // what makes a resend or a reordered queue harmless. Filed by account, like the card.
+            if let profile = ProfileShare.read(control.payload) {
+                ProfileSharingManager.shared.apply(profile, from: otherUserId, in: context)
+            } else {
+                Log.error("Profile from \(otherUserId.prefix(8))… did not decode", category: "MessageRouter")
             }
             PersistentACKStore.shared.markProcessed(messageId, senderId: otherUserId, in: context)
             return true

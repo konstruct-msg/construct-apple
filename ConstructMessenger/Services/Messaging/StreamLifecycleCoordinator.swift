@@ -198,6 +198,7 @@ final class StreamLifecycleCoordinator {
                 // the call is a no-op on every launch after the first of the day.
                 await IntakeCredentialService.shared.publishTagWindowIfNeeded()
                 AvatarRetryService.shared.retryPendingAvatarsIfNeeded()
+                await ProfileShareViewModel.rebroadcastIfOwed()
             }
         }
     }
