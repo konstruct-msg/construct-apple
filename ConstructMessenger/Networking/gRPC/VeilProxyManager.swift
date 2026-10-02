@@ -433,11 +433,14 @@ final class VeilProxyManager: ObservableObject {
         await TransportRouter.shared.updateRelays(freshRelays)
     }
 
-    /// Foreground hook: the TransportRouter FSM detects stale proxies via the next failed RPC
-    /// (which classifies as `.staleLocalProxy` → rotates). Kept as a no-op for callers that
-    /// still invoke it; once removed in Chunk 4 this method goes away entirely.
+    /// Foreground hook: replace the local listener if iOS reclaimed it during a suspend.
+    ///
+    /// This was a no-op, on the theory that the next failed RPC would classify as
+    /// `.staleLocalProxy` and rotate. That RPC can fail to come: on 2026-10-02 the session restore
+    /// ran before `didBecomeActive`, its stale-proxy failure was a background one and ignored, so
+    /// no token, so no stream, so no foreground RPC — "Connecting…" for good.
     func verifyAliveOrRestart() async {
-        // intentional no-op
+        await TransportRouter.shared.restartVeilForBackgroundWake()
     }
 
     // MARK: - Server-provided configuration
