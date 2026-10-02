@@ -6824,6 +6824,13 @@ public enum CfeAction: Equatable, Hashable {
     case callSignalDecrypted(contactId: String, messageId: String, protoBytes: Data
     )
     /**
+     * A silent control frame other than a call signal (13, 14, 25, 26, 27, 29), named by byte 5
+     * of its KNST frame; `body` is without the header. Never a chat message: handle by
+     * `content_type` and record the message processed.
+     */
+    case controlFrameDecrypted(contactId: String, messageId: String, contentType: UInt8, body: Data
+    )
+    /**
      * Platform must query its persistent ACK store for `message_id` and reply with `AckDbResult`.
      */
     case checkAckInDb(messageId: String
@@ -6919,7 +6926,10 @@ public struct FfiConverterTypeCfeAction: FfiConverterRustBuffer {
         case 24: return .callSignalDecrypted(contactId: try FfiConverterString.read(from: &buf), messageId: try FfiConverterString.read(from: &buf), protoBytes: try FfiConverterData.read(from: &buf)
         )
         
-        case 25: return .checkAckInDb(messageId: try FfiConverterString.read(from: &buf)
+        case 25: return .controlFrameDecrypted(contactId: try FfiConverterString.read(from: &buf), messageId: try FfiConverterString.read(from: &buf), contentType: try FfiConverterUInt8.read(from: &buf), body: try FfiConverterData.read(from: &buf)
+        )
+        
+        case 26: return .checkAckInDb(messageId: try FfiConverterString.read(from: &buf)
         )
         
         default: throw UniffiInternalError.unexpectedEnumCase
@@ -7071,8 +7081,16 @@ public struct FfiConverterTypeCfeAction: FfiConverterRustBuffer {
             FfiConverterData.write(protoBytes, into: &buf)
             
         
-        case let .checkAckInDb(messageId):
+        case let .controlFrameDecrypted(contactId,messageId,contentType,body):
             writeInt(&buf, Int32(25))
+            FfiConverterString.write(contactId, into: &buf)
+            FfiConverterString.write(messageId, into: &buf)
+            FfiConverterUInt8.write(contentType, into: &buf)
+            FfiConverterData.write(body, into: &buf)
+            
+        
+        case let .checkAckInDb(messageId):
+            writeInt(&buf, Int32(26))
             FfiConverterString.write(messageId, into: &buf)
             
         }

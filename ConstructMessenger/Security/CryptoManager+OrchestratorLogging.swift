@@ -71,6 +71,7 @@ extension CryptoManager {
             switch action {
             case .messageDecrypted:         labels.insert("decrypted")
             case .callSignalDecrypted:      labels.insert("call_signal")
+            case .controlFrameDecrypted:    labels.insert("control_frame")
             case .sendEncryptedMessage:     labels.insert("send")
             case .saveToSecureStore: labels.insert("save")
             case .sendDecryptionError:      labels.insert("decryption_error")

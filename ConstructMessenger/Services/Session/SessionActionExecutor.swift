@@ -86,6 +86,7 @@ final class SessionActionExecutor {
         case .openReceiving: return "openReceiving"
         case .messageDecrypted: return "messageDecrypted"
         case .callSignalDecrypted: return "callSignalDecrypted"
+        case .controlFrameDecrypted: return "controlFrameDecrypted"
         default: return nil
         }
     }
@@ -246,6 +247,10 @@ final class SessionActionExecutor {
         case .messageDecrypted:
             // Requires MessageRouter.chunkReassembler + save path
             break  // scaffold
+
+        case .controlFrameDecrypted:
+            // Router-bound: its handlers file by account, which only MessageRouter holds.
+            break
 
         case .callSignalDecrypted:
             // Router-bound. The core names the sender by *device* — the ratchet it decrypted on —

@@ -80,7 +80,8 @@ final class MessageRouter {
         }
         SessionActionExecutor.shared.executeOffRouter(actions, site: site) { [coreQueuedEnvelopes] action in
             switch action {
-            case .messageDecrypted(_, let messageId, _), .callSignalDecrypted(_, let messageId, _):
+            case .messageDecrypted(_, let messageId, _), .callSignalDecrypted(_, let messageId, _),
+                 .controlFrameDecrypted(_, let messageId, _, _):
                 return coreQueuedEnvelopes[messageId] != nil
             default:
                 return false
@@ -95,6 +96,14 @@ final class MessageRouter {
                   let held = coreQueuedEnvelopes.removeValue(forKey: messageId) else { continue }
             Self.dispatchCallSignals(in: [action], from: held.otherUserId)
             PersistentACKStore.shared.markProcessed(messageId, senderId: held.otherUserId, in: context)
+            _ = PersistentACKStore.shared.settleDurableWrite(messageId, in: context)
+            StreamCursorTracker.shared.resolve(messageId: messageId)
+        }
+        // A control frame the drain opened: handled by the account its envelope was held under.
+        for action in actions {
+            guard case .controlFrameDecrypted(_, let messageId, _, _) = action,
+                  let held = coreQueuedEnvelopes.removeValue(forKey: messageId) else { continue }
+            handleControlFrames(in: [action], messageId: messageId, from: held.otherUserId, in: context)
             _ = PersistentACKStore.shared.settleDurableWrite(messageId, in: context)
             StreamCursorTracker.shared.resolve(messageId: messageId)
         }
@@ -900,6 +909,12 @@ final class MessageRouter {
             Self.dispatchCallSignals(in: actions, from: otherUserId)
             PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId, in: context)
             return
+        case .controlFrameDecrypted:
+            // A receipt, a card, a profile, a heartbeat — named by the core from the KNST frame
+            // (core 0.30). Never a transcript row.
+            _ = executeRustActions(actions, for: message, chat: chat, otherUserId: otherUserId, in: context)
+            handleControlFrames(in: actions, messageId: message.id, from: otherUserId, in: context)
+            return
         case .unreadable:
             // Nothing held for the device reads it and it carries no handshake. The core recorded
             // it and built the decryption error to its writer (sealed messages); executing the
@@ -982,6 +997,7 @@ final class MessageRouter {
             switch action {
             case .messageDecrypted:              return "messageDecrypted"
             case .callSignalDecrypted:           return "callSignalDecrypted"
+            case .controlFrameDecrypted:         return "controlFrameDecrypted"
             case .sendDecryptionError:           return "sendDecryptionError"
             case .openReceiving:                 return "openReceiving"
             case .saveToSecureStore:             return "saveToSecureStore"
@@ -1218,38 +1234,17 @@ final class MessageRouter {
                     continue
                 }
 
-                // ── The type comes out of the plaintext, not off the wire ────────────────
-                // Call signal (12), delivery receipt (14) and ping/ready (25/26) carry their
-                // type in KNST byte 5, inside the ciphertext. Nothing outside this decrypt
-                // knows what they are: `SealedInner.content_type` is UNSPECIFIED for all four,
-                // which is the point — the server can no longer tell a receipt from a body, or
-                // see that a call is being set up.
-                //
-                // `message.contentType` remains meaningful only for the two types that must be
-                // recognised *before* decryption (END_SESSION 21, SESSION_RESET_INIT 24) and for
-                // the never-sealed carriers (heartbeat 13, SENDER_SYNC 23) — none of which reach
-                // this branch framed. See decisions/sealed-content-type-inside-the-plaintext-frame.md.
-                if handleFramedSideChannel(
-                    plaintext, messageId: message.id, from: otherUserId, in: context
-                ) {
-                    continue
-                }
-                // Session ping / session_ready (25/26) from a build before 2026-09-27: they closed
-                // a confirm window that no longer exists. Discarded — never a transcript row.
+                // ── A control frame is the core's to name ─────────────────────────────────
+                // Call signal (12), heartbeat (13), receipt (14), ping/ready (25/26), contact card
+                // (27) and profile (29) carry their type in KNST byte 5, inside the ciphertext —
+                // the server sees a generic envelope. Since core 0.30 the core reads the frame and
+                // hands each over as `callSignalDecrypted` / `controlFrameDecrypted`, so a decrypted
+                // message never carries one here. If one does, the core and this app disagree
+                // about the frame: say so and drop it — a control payload must never become a
+                // transcript row. decisions/sealed-content-type-inside-the-plaintext-frame.md
                 if let control = ChunkedMessageCodec.controlFrame(plaintext),
-                   control.contentType == 25 || control.contentType == 26 {
-                    Log.info("Session control ct=\(control.contentType) from \(otherUserId.prefix(8))… discarded — nothing waits for it", category: "MessageRouter")
-                    PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId, in: context)
-                    continue
-                }
-                // HEARTBEAT: a silent liveness probe for a session that has been quiet. Decrypting
-                // it is the whole point — that exercises the ratchet — so there is nothing to do
-                // but acknowledge and drop it. Read from KNST byte 5 since 2026-08-17; the outer
-                // `content_type = 13` it used to travel under told the server which of your
-                // messages were probes.
-                if let control = ChunkedMessageCodec.controlFrame(plaintext),
-                   control.contentType == WireMessageKind.heartbeatContentType {
-                    Log.debug("Heartbeat received from \(otherUserId.prefix(8))… — session healthy", category: "MessageRouter")
+                   ContentTypeRouting.disposition(forFrameContentType: control.contentType) == .silentControl {
+                    Log.error("Control frame ct=\(control.contentType) from \(otherUserId.prefix(8))… reached the body path — the core should have named it", category: "MessageRouter")
                     PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId, in: context)
                     continue
                 }
@@ -1751,62 +1746,56 @@ final class MessageRouter {
         PersistentACKStore.shared.markProcessed(message.id, senderId: userId, in: context)
     }
 
-    /// Route a framed payload that is a pure side channel — a call signal (12) or a delivery
-    /// receipt (14). Returns true when it was consumed and must never become a chat row.
+    /// The control frames in `actions`, as `(contentType, body)` — what the core named after
+    /// reading byte 5 of the KNST frame (core 0.30).
+    static func controlFrames(in actions: [CfeAction]) -> [(contentType: UInt8, body: Data)] {
+        actions.compactMap { action in
+            if case .controlFrameDecrypted(_, _, let contentType, let body) = action { return (contentType, body) }
+            return nil
+        }
+    }
+
+    /// Carry out the control frames the core named for one message from `otherUserId`, and
+    /// record it processed.
     ///
-    /// Shared by the ordinary path and by `SessionCoordinator`'s session-init path, which had no
-    /// equivalent at all: it knew about session-control ops and nothing else, so a receipt arriving
-    /// as the first message of a fresh session was persisted and rendered as a bubble containing
-    /// the id it referenced (observed 2026-08-04, `08b9653c-…`).
-    ///
-    /// Deliberately **not** extended to session control (24/25/26). Those look like one decision
-    /// and are two: the session-init path additionally cancels tie-break watchdogs, responder
-    /// fallbacks and pending re-inits, which the ordinary path has no business doing. Folding them
-    /// in here would have silently dropped those cancellations — the same class of loss this whole
-    /// exercise is about, just in the other direction.
-    ///
-    /// An unknown framed type returns false: a peer speaking a newer dialect should reach the body
-    /// pipeline rather than vanish.
-    /// `otherUserId` is an **account**, and every branch below depends on that. The
-    /// `.messageDecrypted` action that leads here names the peer by *device*, because that is what
-    /// the core keeps the session under; the caller passes the account instead, deliberately (see
-    /// `executeRustActions`).
-    ///
-    /// Between 2026-09-11 and 2026-09-14 there was a second parameter, `resolvedSender`, carrying
-    /// the same value under a comment explaining why the two had to differ. Both call sites —
-    /// this router and `SessionCoordinator`'s session-init path — passed one value twice. There
-    /// was no path on which they could diverge, so the comment was the only evidence the
-    /// distinction existed: one meaning on two carriers, in a signature, defended in prose.
-    func handleFramedSideChannel(
-        _ plaintext: Data,
+    /// `otherUserId` is an **account**: the action names the peer by device, because that is what
+    /// the core keeps the session under, and every handler below files by account — the receipt,
+    /// the card's intake key and address, the profile. A blocked contact's frames are dropped,
+    /// as its messages are (`SECURITY[block_drop]` on the body path): the ratchet has advanced,
+    /// nothing is applied.
+    func handleControlFrames(
+        in actions: [CfeAction],
         messageId: String,
         from otherUserId: String,
         in context: NSManagedObjectContext
-    ) -> Bool {
-        guard let control = ChunkedMessageCodec.controlFrame(plaintext) else { return false }
+    ) {
+        defer { PersistentACKStore.shared.markProcessed(messageId, senderId: otherUserId, in: context) }
+        if BlockedContacts.isBlocked(otherUserId, in: context) {
+            Log.info("SECURITY[block_drop]: suppressed control frame \(messageId.prefix(8))… from blocked \(otherUserId.prefix(8))…", category: "MessageRouter")
+            return
+        }
+        for frame in Self.controlFrames(in: actions) {
+            handleControlFrame(contentType: frame.contentType, body: frame.body, messageId: messageId, from: otherUserId, in: context)
+        }
+    }
 
-        switch ContentTypeRouting.framedSideChannel(for: control.contentType) {
-        case .callSignal:
-            // The core names a framed call signal itself since 0.29 and hands it over as
-            // `.callSignalDecrypted` with the frame's body (TODO 94), so a decrypted message never
-            // reaches here carrying one. If one does, the core and this app disagree about the
-            // frame: say so, and drop it rather than let a call signal reach the transcript.
-            Log.error("Call signal frame from \(otherUserId.prefix(8))… reached the body path — the core should have named it", category: "MessageRouter")
-            PersistentACKStore.shared.markProcessed(messageId, senderId: otherUserId, in: context)
-            return true
+    private func handleControlFrame(
+        contentType: UInt8,
+        body: Data,
+        messageId: String,
+        from otherUserId: String,
+        in context: NSManagedObjectContext
+    ) {
+        switch ContentTypeRouting.framedSideChannel(for: contentType) {
         case .deliveryReceipt:
-            handleIncomingE2EDeliveryReceipt(control.payload, messageId: messageId, from: otherUserId, in: context)
-            return true
+            handleIncomingE2EDeliveryReceipt(body, messageId: messageId, from: otherUserId, in: context)
         case .contactCard:
             // The peer's card: the intake key their account accepts, so our envelopes to them
             // carry a tag instead of buying a Privacy Pass token, and their account address.
-            //
-            // Filed by ACCOUNT, and that is the whole requirement: `sealedTag(forRecipient:)`
-            // looks the key up by account, and the tag itself is derived over the recipient's
-            // account id. A key filed under a device id would be one we never find, never use,
-            // and — because a missing credential is a token spent rather than an error — never
-            // notice not using. The address is the account's by definition.
-            if let card = ContactCardPayload.read(control.payload) {
+            // Filed by ACCOUNT: `sealedTag(forRecipient:)` looks the key up by account, and the
+            // tag is derived over the recipient's account id — a key filed under a device id
+            // would never be found, and a missing credential is a token spent, not an error.
+            if let card = ContactCardPayload.read(body) {
                 if let key = card.intakeKey {
                     IntakeCredentialService.shared.recordPeerIntakeKey(key, from: otherUserId)
                 }
@@ -1816,20 +1805,29 @@ final class MessageRouter {
             } else {
                 Log.error("Contact card from \(otherUserId.prefix(8))… did not decode", category: "MessageRouter")
             }
-            PersistentACKStore.shared.markProcessed(messageId, senderId: otherUserId, in: context)
-            return true
         case .profile:
-            // Their name and avatar, applied only if newer than the one held — the version is
-            // what makes a resend or a reordered queue harmless. Filed by account, like the card.
-            if let profile = ProfileShare.read(control.payload) {
+            // Applied only if newer than the one held — the version makes a resend or a
+            // reordered queue harmless.
+            if let profile = ProfileShare.read(body) {
                 ProfileSharingManager.shared.apply(profile, from: otherUserId, in: context)
             } else {
                 Log.error("Profile from \(otherUserId.prefix(8))… did not decode", category: "MessageRouter")
             }
-            PersistentACKStore.shared.markProcessed(messageId, senderId: otherUserId, in: context)
-            return true
+        case .callSignal:
+            // The core hands a call signal over as `callSignalDecrypted`, never as a control frame.
+            Log.error("Call signal from \(otherUserId.prefix(8))… arrived as a control frame — dropped", category: "MessageRouter")
         case nil:
-            return false
+            switch contentType {
+            case WireMessageKind.heartbeatContentType:
+                // A liveness probe: decrypting it exercised the ratchet, which was the point.
+                Log.debug("Heartbeat received from \(otherUserId.prefix(8))… — session healthy", category: "MessageRouter")
+            case 25, 26:
+                // Ping / ready from a build before 2026-09-27: they closed a confirm window that
+                // no longer exists.
+                Log.info("Session control ct=\(contentType) from \(otherUserId.prefix(8))… discarded — nothing waits for it", category: "MessageRouter")
+            default:
+                Log.error("Control frame ct=\(contentType) from \(otherUserId.prefix(8))… has no handler — dropped", category: "MessageRouter")
+            }
         }
     }
 
