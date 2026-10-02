@@ -22,11 +22,14 @@ actor NativeProxyEffector: ProxyEffector {
         self.pool = RelayPool(relays: initialRelays, blockedPenalty: blockedPenalty)
     }
 
-    /// The listening socket itself. Neither the Swift flag nor `veil_is_alive` (a session is
-    /// held) notices that iOS reclaimed the port during a suspend; a connect does.
+    /// Whether the port the proxy gave us is still held. Not `veil_is_alive`: it misses a port
+    /// iOS reclaimed during a suspend, and on the native-TLS path — where Swift, not the Rust
+    /// coordinator, owns the listener — it says "no" while the port works, which restarted a
+    /// healthy proxy on every return to the foreground (2026-10-02). Not a connect either: that
+    /// opens a tunnel. `LocalListenerProbe` binds the port instead.
     func listenerIsAlive() async -> Bool {
-        guard await proxy.isAlive, let port = await proxy.port else { return false }
-        return LocalListenerProbe.accepts(port: port)
+        guard let port = await proxy.port else { return false }
+        return LocalListenerProbe.isHeld(port: port)
     }
 
     func start() async -> TransportEvent {

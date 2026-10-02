@@ -2,7 +2,7 @@
 //  LocalListenerProbe.swift
 //  Construct Messenger
 //
-//  Whether something accepts TCP connections on a loopback port.
+//  Whether a loopback port is still held — asked without connecting to it.
 //
 
 import Foundation
@@ -10,25 +10,28 @@ import Foundation
 import Darwin
 #endif
 
-/// Asks the socket, not the proxy, whether the local VEIL listener is there.
+/// Asks the kernel, not the proxy, whether the local VEIL listener is there.
 ///
-/// `veil_is_alive` answers whether the coordinator holds a session, and a suspended process keeps
-/// that session after iOS has reclaimed its listening socket. On 2026-10-02 an incoming call woke
-/// the app from the background: `is_alive` said yes, the push-wake restart was skipped, and every
-/// RPC — the offer fetch included — was refused on 127.0.0.1. The call rang and never connected.
+/// `veil_is_alive` answers whether the Rust coordinator holds a session. A suspended process keeps
+/// that session after iOS has reclaimed its listening socket, and on the native-TLS path the
+/// listener is not the coordinator's at all, so the answer is "no" while the port works. On
+/// 2026-10-02 an incoming call woke the app: `is_alive` said yes, the push-wake restart was
+/// skipped, and every RPC — the offer fetch included — was refused on 127.0.0.1.
+///
+/// The probe binds the port rather than connecting to it. A connect is not free here: every
+/// connection the proxy accepts opens a tunnel to the front (TLS and AUTH), and on the native path
+/// the first one takes the connection prepared at start. `bind` creates nothing:
+///
+/// - `EADDRINUSE` — something holds the port: alive.
+/// - bind succeeds — nothing does: the listener is gone.
+///
+/// No `SO_REUSEADDR`, so every way this can be wrong (a lingering TIME_WAIT, a listener on the
+/// wildcard address) reads as alive — which is what the caller did before it asked at all.
 enum LocalListenerProbe {
-    /// Loopback answers a connect at once — accepted or refused — so the wait only bounds a
-    /// stalled backlog.
-    static let timeoutMs: Int32 = 300
-
-    static func accepts(port: UInt16) -> Bool {
+    static func isHeld(port: UInt16) -> Bool {
         let fd = socket(AF_INET, SOCK_STREAM, 0)
-        guard fd >= 0 else { return false }
+        guard fd >= 0 else { return true }
         defer { close(fd) }
-
-        var noSigPipe: Int32 = 1
-        setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &noSigPipe, socklen_t(MemoryLayout<Int32>.size))
-        _ = fcntl(fd, F_SETFL, fcntl(fd, F_GETFL, 0) | O_NONBLOCK)
 
         var addr = sockaddr_in()
         addr.sin_len = UInt8(MemoryLayout<sockaddr_in>.size)
@@ -38,17 +41,10 @@ enum LocalListenerProbe {
 
         let result = withUnsafePointer(to: &addr) {
             $0.withMemoryRebound(to: sockaddr.self, capacity: 1) {
-                connect(fd, $0, socklen_t(MemoryLayout<sockaddr_in>.size))
+                bind(fd, $0, socklen_t(MemoryLayout<sockaddr_in>.size))
             }
         }
-        if result == 0 { return true }
-        guard errno == EINPROGRESS else { return false }
-
-        var pfd = pollfd(fd: fd, events: Int16(POLLOUT), revents: 0)
-        guard poll(&pfd, 1, timeoutMs) == 1 else { return false }
-        var soError: Int32 = 0
-        var len = socklen_t(MemoryLayout<Int32>.size)
-        guard getsockopt(fd, SOL_SOCKET, SO_ERROR, &soError, &len) == 0 else { return false }
-        return soError == 0
+        // EADDRINUSE is the answer; any other failure is not evidence the listener is gone.
+        return result != 0
     }
 }
