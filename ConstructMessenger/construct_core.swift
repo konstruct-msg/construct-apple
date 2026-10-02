@@ -4675,6 +4675,79 @@ public func FfiConverterTypeInitiationContext_lower(_ value: InitiationContext) 
 
 
 /**
+ * A parsed KNST frame. `message_id` is the dashed lowercase UUID; `payload` is everything after
+ * the header — for a control frame (`total_chunks == 1`) the body is its first
+ * `plaintext_length` bytes.
+ */
+public struct KnstFrame: Equatable, Hashable {
+    public var contentType: UInt8
+    public var messageId: String
+    public var chunkIndex: UInt16
+    public var totalChunks: UInt16
+    public var plaintextLength: UInt32
+    public var payload: Data
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(contentType: UInt8, messageId: String, chunkIndex: UInt16, totalChunks: UInt16, plaintextLength: UInt32, payload: Data) {
+        self.contentType = contentType
+        self.messageId = messageId
+        self.chunkIndex = chunkIndex
+        self.totalChunks = totalChunks
+        self.plaintextLength = plaintextLength
+        self.payload = payload
+    }
+
+    
+}
+
+#if compiler(>=6)
+extension KnstFrame: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeKnstFrame: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> KnstFrame {
+        return
+            try KnstFrame(
+                contentType: FfiConverterUInt8.read(from: &buf), 
+                messageId: FfiConverterString.read(from: &buf), 
+                chunkIndex: FfiConverterUInt16.read(from: &buf), 
+                totalChunks: FfiConverterUInt16.read(from: &buf), 
+                plaintextLength: FfiConverterUInt32.read(from: &buf), 
+                payload: FfiConverterData.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: KnstFrame, into buf: inout [UInt8]) {
+        FfiConverterUInt8.write(value.contentType, into: &buf)
+        FfiConverterString.write(value.messageId, into: &buf)
+        FfiConverterUInt16.write(value.chunkIndex, into: &buf)
+        FfiConverterUInt16.write(value.totalChunks, into: &buf)
+        FfiConverterUInt32.write(value.plaintextLength, into: &buf)
+        FfiConverterData.write(value.payload, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeKnstFrame_lift(_ buf: RustBuffer) throws -> KnstFrame {
+    return try FfiConverterTypeKnstFrame.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeKnstFrame_lower(_ value: KnstFrame) -> RustBuffer {
+    return FfiConverterTypeKnstFrame.lower(value)
+}
+
+
+/**
  * One ML-KEM-1024 Kyber prekey to upload (PQXDH v2). Both signatures are over
  * `"KonstruktX3DH-v1" || 0x00 0x11 || created_at (u64 BE) || public_key`; upload `created_at`
  * with the key — the signatures cover it.
@@ -9502,6 +9575,30 @@ fileprivate struct FfiConverterOptionTypeEnvelopeOpened: FfiConverterRustBuffer 
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterOptionTypeKnstFrame: FfiConverterRustBuffer {
+    typealias SwiftType = KnstFrame?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeKnstFrame.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeKnstFrame.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterOptionTypeKyberPrekeyUpload: FfiConverterRustBuffer {
     typealias SwiftType = KyberPrekeyUpload?
 
@@ -9710,6 +9807,30 @@ fileprivate struct FfiConverterOptionCallbackInterfacePowProgressCallback: FfiCo
         switch try readInt(&buf) as Int8 {
         case 0: return nil
         case 1: return try FfiConverterCallbackInterfacePowProgressCallback.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterOptionSequenceData: FfiConverterRustBuffer {
+    typealias SwiftType = [Data]?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterSequenceData.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterSequenceData.read(from: &buf)
         default: throw UniffiInternalError.unexpectedOptionalTag
         }
     }
@@ -10330,6 +10451,43 @@ public func jitteredIntervalMs(baseMs: UInt64, jitterMs: UInt64) -> UInt64  {
 })
 }
 /**
+ * `payload` split into frames of at most 3770 bytes, each carrying the whole body's length;
+ * an empty body is one frame. Null when it needs more than 256 frames, or `message_id` is not
+ * a UUID.
+ */
+public func knstEncodeChunks(payload: Data, contentType: UInt8, messageId: String) -> [Data]?  {
+    return try!  FfiConverterOptionSequenceData.lift(try! rustCall() {
+    uniffi_construct_core_fn_func_knst_encode_chunks(
+        FfiConverterData.lower(payload),
+        FfiConverterUInt8.lower(contentType),
+        FfiConverterString.lower(messageId),$0
+    )
+})
+}
+/**
+ * One frame holding the whole payload — a control carrier, never split. Null when
+ * `message_id` is not a UUID.
+ */
+public func knstFrameWhole(payload: Data, contentType: UInt8, messageId: String) -> Data?  {
+    return try!  FfiConverterOptionData.lift(try! rustCall() {
+    uniffi_construct_core_fn_func_knst_frame_whole(
+        FfiConverterData.lower(payload),
+        FfiConverterUInt8.lower(contentType),
+        FfiConverterString.lower(messageId),$0
+    )
+})
+}
+/**
+ * The header and payload of a frame; null when `frame` is not one (magic, version, length).
+ */
+public func knstParse(frame: Data) -> KnstFrame?  {
+    return try!  FfiConverterOptionTypeKnstFrame.lift(try! rustCall() {
+    uniffi_construct_core_fn_func_knst_parse(
+        FfiConverterData.lower(frame),$0
+    )
+})
+}
+/**
  * Generate an ML-DSA-65 keypair (post-quantum signature scheme, NIST FIPS 204).
  */
 public func mldsa65Keygen()throws  -> MldsaKeyPair  {
@@ -10804,6 +10962,15 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_func_jittered_interval_ms() != 6840) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_func_knst_encode_chunks() != 7537) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_func_knst_frame_whole() != 59193) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_func_knst_parse() != 40094) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_func_mldsa65_keygen() != 58411) {

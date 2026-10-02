@@ -83,20 +83,9 @@ final class ChunkedMessageReassembler {
         // most likely to be noticed while ordinary traffic keeps flowing from other peers.
         store.sweepExpired(now: now)
 
-        // ── Binary KNST frame ────────────────────────────────────────────────
-        let magic = ChunkedDeliveryConfig.magic
-        if data.count >= magic.count + 1,
-           data.prefix(magic.count).elementsEqual(magic),
-           data[magic.count] == ChunkedDeliveryConfig.version
-        {
-            guard let parsed = ChunkedMessageCodec.parseChunk(data: data) else {
-                Log.info("Binary KNST magic found but header invalid, falling through", category: "ChunkedDelivery")
-                return .notFramed(data)
-            }
-            return assembleKnstChunk(parsed, envelopeId: envelopeId, now: now)
-        }
-
-        return .notFramed(data)
+        // A KNST frame, as the core reads it; anything else is a direct proto or legacy text.
+        guard let parsed = ChunkedMessageCodec.parseChunk(data: data) else { return .notFramed(data) }
+        return assembleKnstChunk(parsed, envelopeId: envelopeId, now: now)
     }
 
     private func assembleKnstChunk(
@@ -348,36 +337,15 @@ enum ChunkedMessageCodec {
         let contentType: UInt8
     }
 
+    /// `plaintext` as KNST frames — the core's `knst_encode_chunks` since core 0.31, the one
+    /// writer of the frame for every client (TODO 94). Empty when the body needs more than
+    /// `maxChunks` frames.
     static func encodeChunks(plaintext: Data, messageId: UUID, contentType: UInt8) -> [Data] {
-        let payloadSize = ChunkedDeliveryConfig.chunkPayloadSize
-        let totalChunks = UInt16((plaintext.count + payloadSize - 1) / payloadSize)
-        if totalChunks > ChunkedDeliveryConfig.maxChunks {
-            Log.error("Chunked message exceeds max chunks (\(totalChunks) > \(ChunkedDeliveryConfig.maxChunks))", category: "ChunkedDelivery")
+        guard let frames = knstEncodeChunks(payload: plaintext, contentType: contentType, messageId: messageId.uuidString) else {
+            Log.error("Chunked message exceeds max chunks (\(plaintext.count) bytes)", category: "ChunkedDelivery")
             return []
         }
-        let clampedTotal = max(totalChunks, 1)
-
-        var payloads: [Data] = []
-        payloads.reserveCapacity(Int(clampedTotal))
-
-        for index in 0..<Int(clampedTotal) {
-            let start = index * payloadSize
-            let end = min(start + payloadSize, plaintext.count)
-            let chunkData = plaintext.subdata(in: start..<end)
-            let header = buildHeader(
-                messageId: messageId,
-                chunkIndex: UInt16(index),
-                totalChunks: clampedTotal,
-                plaintextLength: plaintext.count,
-                contentType: contentType
-            )
-            var frame = Data(capacity: header.count + chunkData.count)
-            frame.append(header)
-            frame.append(chunkData)
-            payloads.append(frame)
-        }
-
-        return payloads
+        return frames
     }
 
     /// One frame holding the whole payload, whatever its size (`totalChunks == 1`).
@@ -389,16 +357,8 @@ enum ChunkedMessageCodec {
     /// The frame exists here only to carry `contentType` in byte 5: inside the ciphertext, where
     /// the server cannot read it, unlike `SealedInner.content_type`.
     static func frameWhole(_ payload: Data, contentType: UInt8, messageId: UUID) -> Data {
-        var frame = Data(capacity: ChunkedDeliveryConfig.headerSize + payload.count)
-        frame.append(buildHeader(
-            messageId: messageId,
-            chunkIndex: 0,
-            totalChunks: 1,
-            plaintextLength: payload.count,
-            contentType: contentType
-        ))
-        frame.append(payload)
-        return frame
+        // A UUID's string is always a valid message id, so the core's null cannot happen here.
+        knstFrameWhole(payload: payload, contentType: contentType, messageId: messageId.uuidString) ?? Data()
     }
 
     /// Read a single-frame control carrier: its content type and its unframed payload.
@@ -419,112 +379,20 @@ enum ChunkedMessageCodec {
         return String(decryptedText.dropFirst(prefix.count))
     }
 
+    /// The header and payload of a frame, read by the core (`knst_parse`, core 0.31). Nil when
+    /// `data` is not a frame: magic, version or a whole header missing.
     static func parseChunk(data: Data) -> ParsedChunk? {
-        guard data.count >= ChunkedDeliveryConfig.headerSize else {
-            return nil
-        }
-
-        let magic = [UInt8](data.prefix(4))
-        guard magic == ChunkedDeliveryConfig.magic else {
-            return nil
-        }
-
-        let version = data[4]
-        guard version == ChunkedDeliveryConfig.version else {
-            return nil
-        }
-
-        // Byte 5 was `flags`: written 0x00 and never read, so it was free and already on the
-        // wire. It now carries the content type — inside the ciphertext, where the server
-        // cannot reach it, unlike `SealedInner.content_type`.
-        let contentType = data[5]
-
-        let messageIdData = data.subdata(in: 6..<22)
-        let messageId = UUID(uuid: messageIdData.toUUIDBytes())
-
-        let chunkIndex = data.subdata(in: 22..<24).toUInt16()
-        let totalChunks = data.subdata(in: 24..<26).toUInt16()
-        let plaintextLength = Int(data.subdata(in: 26..<30).toUInt32())
-
-        let payload = data.subdata(in: 30..<data.count)
+        guard let frame = knstParse(frame: data) else { return nil }
         return ParsedChunk(
-            messageId: messageId,
-            chunkIndex: chunkIndex,
-            totalChunks: totalChunks,
-            plaintextLength: plaintextLength,
-            payload: payload,
-            contentType: contentType
+            // The core writes the dashed lowercase UUID; a malformed one cannot come back from it.
+            messageId: UUID(uuidString: frame.messageId) ?? UUID(uuid: (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)),
+            chunkIndex: frame.chunkIndex,
+            totalChunks: frame.totalChunks,
+            plaintextLength: Int(frame.plaintextLength),
+            payload: frame.payload,
+            contentType: frame.contentType
         )
     }
 
-    private static func buildHeader(
-        messageId: UUID,
-        chunkIndex: UInt16,
-        totalChunks: UInt16,
-        plaintextLength: Int,
-        contentType: UInt8
-    ) -> Data {
-        var data = Data(capacity: ChunkedDeliveryConfig.headerSize)
-        data.append(contentsOf: ChunkedDeliveryConfig.magic)
-        data.append(ChunkedDeliveryConfig.version)
-        data.append(contentType)
-        data.append(contentsOf: messageId.uuidBytes)
-        data.append(contentsOf: chunkIndex.bigEndianBytes)
-        data.append(contentsOf: totalChunks.bigEndianBytes)
-        data.append(contentsOf: UInt32(plaintextLength).bigEndianBytes)
-        return data
-    }
 }
 
-private extension UUID {
-    var uuidBytes: [UInt8] {
-        withUnsafeBytes(of: uuid) { Array($0) }
-    }
-}
-
-private extension Data {
-    func toUInt16() -> UInt16 {
-        let bytes = [UInt8](self)
-        guard bytes.count >= 2 else { return 0 }
-        return (UInt16(bytes[0]) << 8) | UInt16(bytes[1])
-    }
-
-    func toUInt32() -> UInt32 {
-        let bytes = [UInt8](self)
-        guard bytes.count >= 4 else { return 0 }
-        return (UInt32(bytes[0]) << 24)
-            | (UInt32(bytes[1]) << 16)
-            | (UInt32(bytes[2]) << 8)
-            | UInt32(bytes[3])
-    }
-
-    func toUUIDBytes() -> uuid_t {
-        let bytes = [UInt8](self)
-        guard bytes.count >= 16 else {
-            return (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
-        }
-        return (
-            bytes[0], bytes[1], bytes[2], bytes[3],
-            bytes[4], bytes[5], bytes[6], bytes[7],
-            bytes[8], bytes[9], bytes[10], bytes[11],
-            bytes[12], bytes[13], bytes[14], bytes[15]
-        )
-    }
-}
-
-private extension UInt16 {
-    var bigEndianBytes: [UInt8] {
-        [UInt8((self >> 8) & 0xFF), UInt8(self & 0xFF)]
-    }
-}
-
-private extension UInt32 {
-    var bigEndianBytes: [UInt8] {
-        [
-            UInt8((self >> 24) & 0xFF),
-            UInt8((self >> 16) & 0xFF),
-            UInt8((self >> 8) & 0xFF),
-            UInt8(self & 0xFF)
-        ]
-    }
-}
