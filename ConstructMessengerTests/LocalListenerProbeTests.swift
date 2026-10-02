@@ -2,8 +2,9 @@
 //  LocalListenerProbeTests.swift
 //  ConstructMessengerTests
 //
-//  The push-wake restart asks whether the local VEIL listener accepts; the answer has to come from
-//  the socket, because a session that outlived its port said yes (2026-10-02).
+//  The push-wake and foreground restart ask whether the local VEIL listener still holds its port.
+//  The answer has to come from the kernel and must not cost a connection: every connection the
+//  proxy accepts opens a tunnel to the front (2026-10-02).
 //
 
 import XCTest
@@ -32,16 +33,30 @@ final class LocalListenerProbeTests: XCTestCase {
         return (fd, UInt16(bigEndian: addr.sin_port))
     }
 
-    func testAListeningPortAccepts() throws {
+    func testAListeningPortIsHeld() throws {
         let (fd, port) = try listen()
         defer { close(fd) }
-        XCTAssertTrue(LocalListenerProbe.accepts(port: port))
+        XCTAssertTrue(LocalListenerProbe.isHeld(port: port))
     }
 
     /// What the suspended app had: the port it remembered, with nothing behind it.
-    func testAClosedPortDoesNotAccept() throws {
+    func testAClosedPortIsNotHeld() throws {
         let (fd, port) = try listen()
         close(fd)
-        XCTAssertFalse(LocalListenerProbe.accepts(port: port))
+        XCTAssertFalse(LocalListenerProbe.isHeld(port: port))
+    }
+
+    /// The reason the probe binds rather than connects: asking must not hand the listener a
+    /// connection, because the proxy turns every accepted connection into a tunnel.
+    func testProbingLeavesNoConnectionToAccept() throws {
+        let (fd, port) = try listen()
+        defer { close(fd) }
+        XCTAssertTrue(LocalListenerProbe.isHeld(port: port))
+        _ = fcntl(fd, F_SETFL, fcntl(fd, F_GETFL, 0) | O_NONBLOCK)
+        let accepted = accept(fd, nil, nil)
+        let acceptErrno = errno
+        if accepted >= 0 { close(accepted) }
+        XCTAssertEqual(accepted, -1, "the probe must not have connected")
+        XCTAssertEqual(acceptErrno, EWOULDBLOCK)
     }
 }
