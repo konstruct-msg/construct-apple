@@ -79,10 +79,24 @@ final class MessageRouter {
             return
         }
         SessionActionExecutor.shared.executeOffRouter(actions, site: site) { [coreQueuedEnvelopes] action in
-            if case .messageDecrypted(_, let messageId, _) = action {
+            switch action {
+            case .messageDecrypted(_, let messageId, _), .callSignalDecrypted(_, let messageId, _):
                 return coreQueuedEnvelopes[messageId] != nil
+            default:
+                return false
             }
-            return false
+        }
+        // A call signal the drain opened: dispatched by the account its envelope was held under,
+        // as a live one is, and released like a saved message. Until 2026-10-02 only message
+        // bodies were taken from a drain — a queued call signal was executed by device id, gated
+        // out, and its cursor left held.
+        for action in actions {
+            guard case .callSignalDecrypted(_, let messageId, _) = action,
+                  let held = coreQueuedEnvelopes.removeValue(forKey: messageId) else { continue }
+            Self.dispatchCallSignals(in: [action], from: held.otherUserId)
+            PersistentACKStore.shared.markProcessed(messageId, senderId: held.otherUserId, in: context)
+            _ = PersistentACKStore.shared.settleDurableWrite(messageId, in: context)
+            StreamCursorTracker.shared.resolve(messageId: messageId)
         }
         for action in actions {
             guard case .messageDecrypted(_, let messageId, _) = action,
@@ -106,6 +120,26 @@ final class MessageRouter {
                     "Core drain (\(site)) opened \(messageId.prefix(8))… but its chat could not be found or created: \(error)",
                     category: "MessageRouter"
                 )
+            }
+        }
+    }
+
+    /// The call signals in `actions`, as the proto bytes CallManager reads. Separate so the
+    /// sender it is dispatched under is visible at the call site — the account, never the device
+    /// id the action carries.
+    static func callSignals(in actions: [CfeAction]) -> [Data] {
+        actions.compactMap { action in
+            if case .callSignalDecrypted(_, _, let protoBytes) = action { return protoBytes }
+            return nil
+        }
+    }
+
+    private static func dispatchCallSignals(in actions: [CfeAction], from account: String) {
+        for bytes in callSignals(in: actions) {
+            if let signal = CallManager.decodeSignalProto(from: bytes) {
+                CallManager.shared.handleCallSignalProto(from: account, signal: signal)
+            } else {
+                Log.error("Call signal from \(account.prefix(8))… failed to decode", category: "MessageRouter")
             }
         }
     }
@@ -856,13 +890,14 @@ final class MessageRouter {
             return
         case .callSignalDecrypted:
             // A call signal, named by the core — by the envelope's type or, since core 0.29, by
-            // the KNST frame's (every sealed one). Dispatched to CallManager by the executor.
+            // the KNST frame's (every sealed one).
             //
-            // Handled, so recorded as processed: the core asked for a durable record, and until
-            // 2026-10-02 this path wrote none — "PersistAck unmet" on every identified call signal,
-            // and a restart would hand a stale offer back. Unnoticed while sealed signals went
-            // through `handleFramedSideChannel`, which did write it; since 0.29 they all come here.
+            // Dispatched here, by account: the core names the sender by device, and CallManager's
+            // gate (blocked, callable contact) reads an account — handed the device id it dropped
+            // every signal (2026-10-02, after core 0.29). Recorded as processed: the core asked
+            // for a durable record, and this path wrote none until 0.29 sent every signal here.
             _ = executeRustActions(actions, for: message, chat: chat, otherUserId: otherUserId, in: context)
+            Self.dispatchCallSignals(in: actions, from: otherUserId)
             PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId, in: context)
             return
         case .unreadable:
