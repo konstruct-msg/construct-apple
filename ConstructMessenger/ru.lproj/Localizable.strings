@@ -845,7 +845,6 @@
 // MARK: - Account / Identity Settings
 "change_photo" = "изменить фото";
 "choose_photo" = "выбрать фото";
-"remove_photo" = "удалить фото";
 "identity_section" = "идентичность";
 "account_section" = "аккаунт";
 "bio" = "био";
