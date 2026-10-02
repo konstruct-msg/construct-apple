@@ -81,10 +81,11 @@ final class SessionActionExecutor {
 
     /// The actions only `MessageRouter` can carry out, by name — never the payload, which for a
     /// decrypted message is plaintext.
-    private static func routerBoundName(_ action: CfeAction) -> String? {
+    static func routerBoundName(_ action: CfeAction) -> String? {
         switch action {
         case .openReceiving: return "openReceiving"
         case .messageDecrypted: return "messageDecrypted"
+        case .callSignalDecrypted: return "callSignalDecrypted"
         default: return nil
         }
     }
@@ -246,10 +247,13 @@ final class SessionActionExecutor {
             // Requires MessageRouter.chunkReassembler + save path
             break  // scaffold
 
-        case .callSignalDecrypted(let contactId, _, let protoBytes):
-            if let signal = CallManager.decodeSignalProto(from: protoBytes) {
-                CallManager.shared.handleCallSignalProto(from: contactId, signal: signal)
-            }
+        case .callSignalDecrypted:
+            // Router-bound. The core names the sender by *device* — the ratchet it decrypted on —
+            // and CallManager gates every signal on the *account* (blocked, callable contact).
+            // Dispatched from here with the device id, a call signal failed that gate and was
+            // dropped as "non-callable": since core 0.29 every sealed one came this way
+            // (2026-10-02). Only MessageRouter, which holds the account, dispatches it.
+            break
 
         // ── Informational ─────────────────────────────────────────
         case .notifyNewMessage:
