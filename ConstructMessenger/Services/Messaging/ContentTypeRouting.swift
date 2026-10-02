@@ -113,6 +113,8 @@ enum FramedSideChannel: String, Equatable {
     /// token, and their account address. Framed, and it has to be: the key is a secret, so a
     /// relay that could read it could use it.
     case contactCard = "contact_card"
+    /// 29 — the peer's profile (`ProfileShare`): its name and avatar, as a version.
+    case profile = "profile"
 }
 
 /// Named mapping used at the unseal boundary and by ingest parsers.
@@ -124,7 +126,7 @@ enum ContentTypeRouting {
         switch contentType {
         case 1:                  return .transcriptIncoming
         case 23:                 return .transcriptOwnDevice
-        case 12, 13, 14, 21, 24, 25, 26, 27, 28:
+        case 12, 13, 14, 21, 24, 25, 26, 27, 28, 29:
                                  return .silentControl
         default:                 return .notCarried
         }
@@ -140,6 +142,7 @@ enum ContentTypeRouting {
         case 12: return .callSignal
         case 14: return .deliveryReceipt
         case 27: return .contactCard
+        case 29: return .profile
         default: return nil
         }
     }
@@ -172,7 +175,7 @@ enum ContentTypeRouting {
     static func isKnownControlContentType(_ contentType: UInt8) -> Bool {
         if SessionControlCodec.op(forContentType: Int(contentType)) != nil { return true }
         switch contentType {
-        case 12, 14, 23, 27, 28: return true  // callSignal, deliveryReceipt, senderSync, contactCard, decryptionError
+        case 12, 14, 23, 27, 28, 29: return true  // callSignal, deliveryReceipt, senderSync, contactCard, decryptionError, profile
         default: return false
         }
     }

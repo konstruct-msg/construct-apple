@@ -37,7 +37,25 @@ class ProfileShareViewModel {
     /// uploaded, so the profile only names it.
     struct OutgoingProfile {
         let senderId: String
-        let data: ProfileShareData
+        let data: ProfileShare
+    }
+
+    /// Set when a profile went out without the avatar because the upload failed: the avatar was
+    /// left as "unchanged" rather than sent as removed, so contacts keep the old one, and the
+    /// rebroadcast is owed until it succeeds. Consumed on the next stream connect.
+    private static let rebroadcastOwedKey = "profileRebroadcastOwed"
+    static var rebroadcastOwed: Bool {
+        get { UserDefaults.standard.bool(forKey: rebroadcastOwedKey) }
+        set { UserDefaults.standard.set(newValue, forKey: rebroadcastOwedKey) }
+    }
+
+    /// Rebroadcast if an earlier one went out without its avatar. Called on stream connect.
+    static func rebroadcastIfOwed() async {
+        guard rebroadcastOwed else { return }
+        rebroadcastOwed = false
+        Log.info("Profile rebroadcast owed from a failed avatar upload — sending again", category: "ProfileShare")
+        let shareVM = ProfileShareViewModel(context: PersistenceController.shared.container.viewContext)
+        await shareVM.rebroadcastProfileToSharedContacts()
     }
 
     /// Share profile (displayName and avatar) with another user via E2E encrypted message.
@@ -64,7 +82,11 @@ class ProfileShareViewModel {
     }
 
     /// Snapshot our name and avatar, and upload the avatar. Nil when there is no signed-in user.
-    /// An avatar that fails to upload is left out, not the profile.
+    ///
+    /// The avatar goes as one of three states (`ProfileShare.Avatar`): uploaded → `set`; we have
+    /// none → `removed`, so a contact holding an old one clears it; the upload failed → `unchanged`,
+    /// so contacts keep what they have, and the rebroadcast is owed (`rebroadcastOwed`). Before
+    /// 2026-10-02 the last two were the same message, and no contact ever cleared an avatar.
     ///
     /// The `Task`s that send it hold `self` strongly on purpose. Until 2026-10-02 they captured it
     /// weakly (`463a8533`, 2026-04-10), and `rebroadcastProfileToSharedContacts` runs on a view
@@ -79,39 +101,43 @@ class ProfileShareViewModel {
         userFetchRequest.predicate = NSPredicate(format: "id == %@", currentUserId)
         guard let currentUser = try? context.fetch(userFetchRequest).first else { return nil }
 
+        // A profile that has never been stamped (edited before the stamp existed) gets one now,
+        // once, and keeps it: what makes it a version is that sending again does not change it.
+        if currentUser.profileEditedAtMs == 0 {
+            currentUser.markProfileEdited()
+            try? context.save()
+        }
+
         // Snapshot values we need before any await — NSManagedObject must not be
         // read off MainActor after suspension points.
         let displayName = currentUser.resolvedDisplayName
+        let editedAtMs = UInt64(currentUser.profileEditedAtMs)
         let avatarImage = currentUser.avatarData.flatMap { ImageHelper.imageFromData($0) }
 
-        var avatarMediaId: String? = nil
-        var avatarMediaUrl: String? = nil
-        var avatarMediaKey: Data? = nil
-        var avatarMediaType: String? = nil
-
+        let avatar: ProfileShare.Avatar
         if let avatarImage {
             do {
-                Log.info("Uploading avatar via MediaManager", category: "ProfileShare")
-                let uploadResult = try await MediaManager.shared.uploadAvatar(avatarImage)
-                avatarMediaId = uploadResult.mediaId
-                avatarMediaUrl = uploadResult.mediaUrl
-                avatarMediaKey = uploadResult.encryptionKey  // Data
-                avatarMediaType = "image/jpeg"
-                Log.info("Avatar uploaded: \(uploadResult.mediaId)", category: "ProfileShare")
+                let upload = try await MediaManager.shared.uploadAvatar(avatarImage)
+                avatar = .set(ProfileShare.AvatarRef(
+                    mediaId: upload.mediaId,
+                    mediaUrl: upload.mediaUrl,
+                    mediaKey: upload.encryptionKey,
+                    mimeType: "image/jpeg"
+                ))
+                Log.info("Avatar uploaded: \(upload.mediaId)", category: "ProfileShare")
             } catch {
-                Log.error("Failed to upload avatar: \(error.localizedDescription)", category: "ProfileShare")
+                Log.error("Failed to upload avatar: \(error.localizedDescription) — profile goes with the avatar unchanged, rebroadcast owed", category: "ProfileShare")
+                avatar = .unchanged
+                Self.rebroadcastOwed = true
             }
+        } else {
+            avatar = .removed
         }
 
-        let profileData = ProfileShareData(
-            displayName: displayName,
-            avatarMediaId: avatarMediaId,
-            avatarMediaUrl: avatarMediaUrl,
-            avatarMediaKey: avatarMediaKey,
-            avatarMediaType: avatarMediaType,
-            timestamp: Int64(Date().timeIntervalSince1970)
+        return OutgoingProfile(
+            senderId: currentUserId,
+            data: ProfileShare(displayName: displayName, editedAtMs: editedAtMs, avatar: avatar)
         )
-        return OutgoingProfile(senderId: currentUserId, data: profileData)
     }
 
     /// [profile] to every device of [userId]. True when a device of theirs took it.
@@ -137,17 +163,17 @@ class ProfileShareViewModel {
             }
         }
 
-        // Serialize to binary (closes legacy JSON in wire payload).
-        // Still E2EE via DR. Supports stealth when enabled.
-        let binaryPayload = profile.data.toBinaryData()
-        Log.debug("Profile data binary size: \(binaryPayload.count) bytes (before encryption)", category: "ProfileShare")
-        Log.debug("   displayName: \(profile.data.displayName)", category: "ProfileShare")
-        Log.debug("   avatarMediaId: \(profile.data.avatarMediaId ?? "nil")", category: "ProfileShare")
-
-        // Encrypt and send via E2E message (binary payload)
-        Log.debug("Sending profile message for user \(userId), binary size: \(binaryPayload.count) bytes", category: "ProfileShare")
+        // Content type 29 in KNST byte 5, inside the ciphertext: the receiver no longer has to
+        // guess a profile from its bytes, and the server sees a generic envelope as before.
+        let payload: Data
+        do {
+            payload = try profile.data.encoded()
+        } catch {
+            Log.error("Profile did not encode: \(error)", category: "ProfileShare")
+            return (false, error.localizedDescription)
+        }
         let messageId = UUID().uuidString.lowercased()
-        let plan = ChunkedMessageSender.shared.buildPlan(plaintext: binaryPayload, messageId: UUID(uuidString: messageId) ?? UUID())
+        let plan: ChunkedMessagePlan = .whole(payload, contentType: 29, messageId: UUID(uuidString: messageId) ?? UUID())
 
         do {
             // Every device of theirs. Until 2026-09-22 this reached the pinned one only, so a
@@ -171,87 +197,6 @@ class ProfileShareViewModel {
         }
     }
     
-    /// Handle received profile data from another user
-    func handleReceivedProfile(_ profileData: ProfileShareData, from userId: String) {
-        guard let context = viewContext else { return }
-        
-        let userFetchRequest: NSFetchRequest<User> = User.fetchRequest()
-        userFetchRequest.predicate = NSPredicate(format: "id == %@", userId)
-        
-        guard let user = try? context.fetch(userFetchRequest).first else {
-            Log.error("User not found for profile update: \(userId)", category: "ProfileShare")
-            return
-        }
-        
-        // Update user's display name
-        user.displayName = profileData.displayName
-        
-        // Update avatar if provided
-        // Priority: new format (Media Upload API) > old format (base64)
-        if let avatarMediaId = profileData.avatarMediaId,
-           let avatarMediaUrl = profileData.avatarMediaUrl,
-           let avatarMediaKey = profileData.avatarMediaKey {
-            // New format: download and decrypt media from Media Upload API
-            Task { [weak self] in
-                guard self != nil else { return }
-                do {
-                    Log.info("Downloading avatar from Media Upload API: \(avatarMediaId)", category: "ProfileShare")
-                    
-                    // Decrypt media key from Double Ratchet message
-                    // The avatarMediaKey is encrypted with Double Ratchet, so we need to decrypt it
-                    // But we don't have the message structure... Let's use a workaround:
-                    // Create a temporary message structure to decrypt the key
-                    
-                    // Actually, for profile sharing, we should decrypt the mediaKey as part of the profile message
-                    // But the mediaKey is in the JSON, which is already decrypted...
-                    // So the mediaKey should be the raw base64-encoded key, not Double Ratchet encrypted.
-                    
-                    // Let me check the current implementation... In shareProfile(), we call:
-                    // encryptMediaKey() which returns encrypted.content (Double Ratchet encrypted)
-                    // But to decrypt it, we need ephemeralPublicKey and messageNumber.
-                    
-                    // Solution: For profile sharing, we should include the raw media key in the JSON
-                    // (the JSON is already E2E encrypted, so it's secure).
-                    // Let's update shareProfile() to use the raw key instead of encrypting it again.
-                    
-                    // The mediaKey is base64-encoded raw key (JSON is already E2E encrypted)
-                    let avatarData = try await MediaManager.shared.downloadAndDecryptMedia(
-                        mediaId: avatarMediaId,
-                        mediaUrl: avatarMediaUrl,
-                        mediaKey: avatarMediaKey
-                    )
-                    
-                    await MainActor.run {
-                        user.avatarData = avatarData
-                        do {
-                            try context.save()
-                            Log.info("Avatar downloaded and saved for user \(userId)", category: "ProfileShare")
-                        } catch {
-                            Log.error("Failed to save avatar: \(error)", category: "ProfileShare")
-                        }
-                    }
-                } catch {
-                    Log.error("Failed to download avatar: \(error.localizedDescription)", category: "ProfileShare")
-                }
-            }
-        } else if let avatarBase64 = profileData.avatarData,
-                  let avatarData = Data(base64Encoded: avatarBase64) {
-            // Old format: base64 data (backward compatibility)
-            user.avatarData = avatarData
-        }
-        
-        // Mark as sharing with us
-        user.isSharingWithMe = true
-        user.sharedWithMeAt = Date()
-        
-        do {
-            try context.save()
-            Log.info("Profile data updated for user \(userId)", category: "ProfileShare")
-        } catch {
-            Log.error("Failed to save profile data: \(error)", category: "ProfileShare")
-        }
-    }
-
     // MARK: - Avatar rebroadcast
 
     /// Re-send current profile (including updated avatar) to all contacts we are sharing with.

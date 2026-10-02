@@ -107,6 +107,19 @@ extension User {
     /// sends name the recipient by it; nil for a contact added before invites carried it.
     @NSManaged public var accountAddress: Data?
 
+    // MARK: Profile (model 14)
+
+    /// `edited_at_ms` of the last typed profile (content type 29) applied for this contact; 0 when
+    /// none has been. On our own row: when we last changed our name or avatar — what our profile
+    /// carries, so a profile sent again is not mistaken for a newer one.
+    /// decisions/profile-share-is-a-typed-versioned-state.md
+    @NSManaged public var profileEditedAtMs: Int64
+    /// An avatar a profile named that has not been downloaded yet (`AvatarRef` proto bytes).
+    /// Retried on every stream connect until it arrives, the media store says it is gone, or it is
+    /// older than the media store keeps anything.
+    @NSManaged public var pendingAvatarRef: Data?
+    @NSManaged public var pendingAvatarSince: Date?
+
     /// Raw `SecurityNotice` value stored in Core Data. Use `securityNotice`.
     @NSManaged public var securityNoticeRaw: Int16
 

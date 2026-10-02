@@ -129,6 +129,7 @@ class SettingsViewModel {
         do {
             if let user = try context.fetch(fetchRequest).first {
                 user.avatarData = processedData
+                user.markProfileEdited()
                 try context.save()
 
                 // Update UI
@@ -215,6 +216,7 @@ class SettingsViewModel {
         do {
             if let user = try context.fetch(fetchRequest).first {
                 user.displayName = trimmed
+                user.markProfileEdited()
                 try context.save()
                 
                 // Update local state

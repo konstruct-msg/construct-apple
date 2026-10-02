@@ -1113,6 +1113,7 @@ class AuthViewModel {
                         // Also update displayName if it's empty or was same as old username
                         if user.displayName.isEmpty || user.displayName == oldUsername {
                             user.displayName = newUsername
+                            user.markProfileEdited()
                         }
                         needsSave = true
                     }

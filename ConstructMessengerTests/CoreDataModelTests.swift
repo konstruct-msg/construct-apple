@@ -35,6 +35,16 @@ final class CoreDataModelTests: XCTestCase {
         }
     }
 
+    /// Model 14 adds the profile version to `User` (`profileEditedAtMs` with a default,
+    /// `pendingAvatarRef`, `pendingAvatarSince` optional): a store written by 13 opens under it
+    /// without a mapping model.
+    func testVersion13MigratesLightweight() throws {
+        let current = PersistenceController(inMemory: true).container.managedObjectModel
+        XCTAssertNoThrow(
+            try NSMappingModel.inferredMappingModel(forSourceModel: model("ConstructMessenger 13"), destinationModel: current)
+        )
+    }
+
     /// Model 13 adds `ServerMessageId` and nothing else: a store written by 12 opens under it
     /// without a mapping model.
     func testVersion12MigratesLightweight() throws {
