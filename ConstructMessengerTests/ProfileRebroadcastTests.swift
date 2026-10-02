@@ -95,4 +95,27 @@ final class ProfileRebroadcastTests: XCTestCase {
         await vm.rebroadcastProfileToSharedContacts()
         XCTAssertGreaterThan(sent[2].editedAtMs, sent[1].editedAtMs, "an edit is a newer version")
     }
+
+    /// Removing our photo is an edit: the avatar goes, the version moves, and the profile that
+    /// follows says "removed" — the state a contact needs to clear the one it holds.
+    func testRemovingOurAvatarIsAnEditThatTravelsAsRemoved() async {
+        let context = PersistenceController(inMemory: true).container.viewContext
+        let self_ = User(context: context)
+        self_.id = me
+        self_.username = "me"
+        self_.displayName = "Alice"
+        self_.avatarData = Data([1, 2, 3])
+        self_.profileEditedAtMs = 1
+        try? context.save()
+
+        let settings = SettingsViewModel()
+        settings.setContext(context)
+        settings.userId = me
+        settings.removeAvatar()
+
+        XCTAssertNil(self_.avatarData)
+        XCTAssertGreaterThan(self_.profileEditedAtMs, 1, "a removal is a newer version, or contacts would ignore it")
+        let profile = await ProfileShareViewModel(context: context).prepareProfile()
+        XCTAssertEqual(profile?.data.avatar, .removed)
+    }
 }

@@ -102,6 +102,31 @@ class SettingsViewModel {
         }
     }
 
+    /// Removes our avatar and tells every contact we share with, so theirs clears too: the profile
+    /// goes out with the avatar "removed" (`ProfileShare.Avatar.removed`). Until 2026-10-02 there
+    /// was no way to remove a photo once set — and had there been, no contact would have noticed.
+    func removeAvatar() {
+        guard let context = viewContext, !userId.isEmpty else { return }
+        let fetchRequest = User.fetchRequest()
+        fetchRequest.predicate = NSPredicate(format: "id == %@", userId)
+        fetchRequest.fetchLimit = 1
+        guard let user = try? context.fetch(fetchRequest).first, user.avatarData != nil else { return }
+        user.avatarData = nil
+        user.markProfileEdited()
+        do {
+            try context.save()
+        } catch {
+            Log.error("Failed to remove avatar: \(error)")
+            return
+        }
+        profileImage = nil
+        Log.info("Avatar removed")
+        Task {
+            let shareVM = ProfileShareViewModel(context: context)
+            await shareVM.rebroadcastProfileToSharedContacts()
+        }
+    }
+
     /// Saves avatar to Core Data using ImageHelper for processing
     func saveAvatar(_ image: PlatformImage, authViewModel: AuthViewModel) {
         guard let context = viewContext, !userId.isEmpty else {
