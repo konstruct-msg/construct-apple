@@ -16,14 +16,19 @@ extension User {
     /// Priority:
     /// 1. `localAlias` if non-empty (local-only override the user assigned; never leaves
     ///    the device) — wins over everything so the user always sees the name they chose
-    /// 2. `displayName` if non-empty (profile-shared real name or server username)
+    /// 2. `displayName` if non-empty and not the generated name (profile-shared real name or
+    ///    server username)
     /// 3. `username` if non-empty (server-assigned handle, shown without @)
     /// 4. Generated deterministic name from `id` (always non-nil fallback)
+    ///
+    /// A generated name held in `displayName` is skipped rather than shown: it stands in for "no
+    /// name", and showing it hid a username the contact did have. Until 2026-10-02 a profile from
+    /// Android carrying its generated name replaced the username taken from the invite.
     var resolvedDisplayName: String {
         if let alias = localAlias?.trimmingCharacters(in: .whitespacesAndNewlines), !alias.isEmpty {
             return alias
         }
-        if !displayName.isEmpty { return displayName }
+        if !displayName.isEmpty, !DisplayNameGenerator.isGenerated(displayName, for: id) { return displayName }
         if !username.isEmpty { return username }
         return DisplayNameGenerator.generate(from: id)
     }

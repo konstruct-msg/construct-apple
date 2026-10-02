@@ -110,7 +110,11 @@ class ProfileShareViewModel {
 
         // Snapshot values we need before any await — NSManagedObject must not be
         // read off MainActor after suspension points.
-        let displayName = currentUser.resolvedDisplayName
+        // Only a name we chose, or our username: never the generated one, which a contact
+        // computes for itself and would take for a name we picked (`ProfileShare.chosenName`).
+        let displayName = DisplayNameGenerator.isGenerated(currentUser.displayName, for: currentUserId)
+            ? currentUser.username
+            : (currentUser.displayName.isEmpty ? currentUser.username : currentUser.displayName)
         let editedAtMs = UInt64(currentUser.profileEditedAtMs)
         let avatarImage = currentUser.avatarData.flatMap { ImageHelper.imageFromData($0) }
 

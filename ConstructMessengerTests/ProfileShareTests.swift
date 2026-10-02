@@ -229,4 +229,38 @@ final class ProfileShareTests: XCTestCase {
         ProfileSharingManager.shared.handleProfileMessage(legacy, from: contact.id, in: context)
         XCTAssertEqual(contact.displayName, "Alice Old")
     }
+
+    // MARK: - No chosen name
+
+    /// The defect of 2026-10-02: Android sends its generated name when its user set none, and it
+    /// replaced the username the invite gave us.
+    func testAGeneratedNameDoesNotReplaceTheUsername() {
+        contact.displayName = "alice"
+        let generated = DisplayNameGenerator.generate(from: contact.id).lowercased()
+        _ = apply(ProfileShare(displayName: generated, editedAtMs: 100, avatar: .unchanged))
+        XCTAssertEqual(contact.resolvedDisplayName, "alice")
+        XCTAssertEqual(contact.profileEditedAtMs, 100, "the profile still applies — only the name is none")
+    }
+
+    func testAnEmptyNameShowsTheUsername() {
+        _ = apply(ProfileShare(displayName: "Alice One", editedAtMs: 100, avatar: .unchanged))
+        _ = apply(ProfileShare(displayName: "", editedAtMs: 101, avatar: .unchanged))
+        XCTAssertEqual(contact.resolvedDisplayName, "alice", "a newer profile with no name drops the old one")
+    }
+
+    func testAnUntypedGeneratedNameDoesNotReplaceTheUsername() {
+        contact.displayName = "alice"
+        let legacy = ProfileShareData(displayName: DisplayNameGenerator.generate(from: contact.id), avatarMediaId: nil,
+                                      avatarMediaUrl: nil, avatarMediaKey: nil, avatarMediaType: nil, timestamp: 1)
+        ProfileSharingManager.shared.handleProfileMessage(legacy, from: contact.id, in: context)
+        XCTAssertEqual(contact.resolvedDisplayName, "alice")
+    }
+
+    /// Rows already overwritten before the fix: the generated name held is skipped for the username.
+    func testAGeneratedNameAlreadyHeldShowsTheUsername() {
+        contact.displayName = DisplayNameGenerator.generate(from: contact.id)
+        XCTAssertEqual(contact.resolvedDisplayName, "alice")
+        contact.username = ""
+        XCTAssertEqual(contact.resolvedDisplayName, DisplayNameGenerator.generate(from: contact.id))
+    }
 }
