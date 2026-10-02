@@ -96,7 +96,13 @@ struct ContentView: View {
             if AuthSessionManager.shared.sessionToken == nil || !AuthSessionManager.shared.isSessionValid
                 || !CryptoManager.shared.isInitialized {
                 Log.info("App returning to foreground — restoring session (token missing, expired, or crypto uninitialised)", category: "Auth")
-                authViewModel.restoreSession()
+                // The listener first: this runs before `didBecomeActive`, when a refused connect to
+                // the suspended proxy is ignored as a background failure, and a restore that fails
+                // there leaves no token for the stream that would have replaced it.
+                Task {
+                    await VeilProxyManager.shared.verifyAliveOrRestart()
+                    authViewModel.restoreSession()
+                }
             }
 
             // Foreground trigger for the token wallet. No balance threshold here on purpose:

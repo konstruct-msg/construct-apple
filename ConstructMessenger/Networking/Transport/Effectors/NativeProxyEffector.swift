@@ -22,10 +22,11 @@ actor NativeProxyEffector: ProxyEffector {
         self.pool = RelayPool(relays: initialRelays, blockedPenalty: blockedPenalty)
     }
 
-    /// The Rust listener, not the Swift flag. After a suspend the flag can say
-    /// the proxy is up while nothing is accepting on the port.
+    /// The listening socket itself. Neither the Swift flag nor `veil_is_alive` (a session is
+    /// held) notices that iOS reclaimed the port during a suspend; a connect does.
     func listenerIsAlive() async -> Bool {
-        await proxy.isAlive
+        guard await proxy.isAlive, let port = await proxy.port else { return false }
+        return LocalListenerProbe.accepts(port: port)
     }
 
     func start() async -> TransportEvent {
