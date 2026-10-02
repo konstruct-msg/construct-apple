@@ -1361,6 +1361,21 @@ int8_t uniffi_construct_core_fn_func_is_dummy_message(RustBuffer data, RustCallS
 uint64_t uniffi_construct_core_fn_func_jittered_interval_ms(uint64_t base_ms, uint64_t jitter_ms, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_KNST_ENCODE_CHUNKS
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_KNST_ENCODE_CHUNKS
+RustBuffer uniffi_construct_core_fn_func_knst_encode_chunks(RustBuffer payload, uint8_t content_type, RustBuffer message_id, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_KNST_FRAME_WHOLE
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_KNST_FRAME_WHOLE
+RustBuffer uniffi_construct_core_fn_func_knst_frame_whole(RustBuffer payload, uint8_t content_type, RustBuffer message_id, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_KNST_PARSE
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_KNST_PARSE
+RustBuffer uniffi_construct_core_fn_func_knst_parse(RustBuffer frame, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_MLDSA65_KEYGEN
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_MLDSA65_KEYGEN
 RustBuffer uniffi_construct_core_fn_func_mldsa65_keygen(RustCallStatus *_Nonnull out_status
@@ -1954,6 +1969,24 @@ uint16_t uniffi_construct_core_checksum_func_is_dummy_message(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_JITTERED_INTERVAL_MS
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_JITTERED_INTERVAL_MS
 uint16_t uniffi_construct_core_checksum_func_jittered_interval_ms(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_KNST_ENCODE_CHUNKS
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_KNST_ENCODE_CHUNKS
+uint16_t uniffi_construct_core_checksum_func_knst_encode_chunks(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_KNST_FRAME_WHOLE
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_KNST_FRAME_WHOLE
+uint16_t uniffi_construct_core_checksum_func_knst_frame_whole(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_KNST_PARSE
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_KNST_PARSE
+uint16_t uniffi_construct_core_checksum_func_knst_parse(void
     
 );
 #endif
