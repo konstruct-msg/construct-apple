@@ -104,6 +104,16 @@ struct ProfileShare: Equatable {
         return try proto.serializedData()
     }
 
+    /// The name this profile carries, if the sender chose one. Nil for none: empty, or only the
+    /// name generated from the sender's id, which Android sends when its user has set no name.
+    /// A receiver then shows the contact's username, and the generated name only if there is none
+    /// (`User.resolvedDisplayName`).
+    func chosenName(of senderId: String) -> String? {
+        let name = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty, !DisplayNameGenerator.isGenerated(name, for: senderId) else { return nil }
+        return name
+    }
+
     /// Whether to apply this profile over the one held, and what then happens to the avatar. Nil:
     /// ignore it whole — it is not newer, so a resend, a redelivery or a reordered queue cannot put
     /// an older name or avatar back. Equal is not newer: the same profile twice applies once.

@@ -108,6 +108,14 @@ struct DisplayNameGenerator {
         return "\(adjectives[adjIndex]) \(noun)"
     }
     
+    /// Whether [name] is only the name generated from [userId] — something any client computes
+    /// for itself, so it says nothing about what the person chose to be called. Android writes it
+    /// lowercase, this generator capitalised, so the comparison ignores case.
+    static func isGenerated(_ name: String, for userId: String) -> Bool {
+        name.trimmingCharacters(in: .whitespacesAndNewlines)
+            .caseInsensitiveCompare(generate(from: userId)) == .orderedSame
+    }
+
     /// Generate short ID (first 6 chars of hash) as fallback
     /// - Parameter userId: User's UUID
     /// - Returns: Short hex like "a3f8c2"

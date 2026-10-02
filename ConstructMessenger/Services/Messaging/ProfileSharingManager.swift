@@ -92,7 +92,9 @@ class ProfileSharingManager {
         
         // Update display name immediately so chat list / headers show the real name
         // even while the avatar is still downloading.
-        let trimmedName = profileData.displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+        // The generated name is no name (`ProfileShare.chosenName`): the username stays.
+        let shared = profileData.displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedName = DisplayNameGenerator.isGenerated(shared, for: userId) ? "" : shared
         if !trimmedName.isEmpty {
             user.displayName = trimmedName
         }
@@ -185,8 +187,9 @@ class ProfileSharingManager {
             return
         }
 
-        let name = profile.displayName.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !name.isEmpty { user.displayName = name }
+        // A profile is the sender's whole state at its version: no chosen name means none, so a
+        // name shared earlier is dropped and the username shows again — never the generated name.
+        user.displayName = profile.chosenName(of: userId) ?? ""
         user.isSharingWithMe = true
         user.sharedWithMeAt = Date()
         user.profileEditedAtMs = Int64(clamping: profile.editedAtMs)
