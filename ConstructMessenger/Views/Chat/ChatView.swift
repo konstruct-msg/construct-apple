@@ -535,9 +535,18 @@ struct ChatView: View {
         }
     }
 
+    @ViewBuilder
     private var chatNavBar: some View {
+        if let user = viewModel.chat.otherUser {
+            ObservedPeerName(user: user) { chatNavBar(title: $0) }
+        } else {
+            chatNavBar(title: NSLocalizedString("chat", comment: ""))
+        }
+    }
+
+    private func chatNavBar(title: String) -> some View {
         ChatNavBarView(
-            title: viewModel.chat.otherUser?.resolvedDisplayName ?? NSLocalizedString("chat", comment: ""),
+            title: title,
             subtitle: navigationStatusSubtitle,
             contactKTStatus: contactKTStatus,
             contactTrustAlert: contactTrustAlert,
@@ -1267,3 +1276,18 @@ struct ChatView: View {
     }
 }
 #endif
+
+/// Hands its content the peer's current name. `ChatViewModel` is `@Observable`, and Observation
+/// does not track a managed object's attributes, so reading `otherUser.resolvedDisplayName` in
+/// `ChatView.body` subscribed to nothing: a profile applied while the chat was open renamed the
+/// chat list row (a `@FetchRequest`) and left this header on the old name until the chat was
+/// reopened. `@ObservedObject` re-renders on the object's `objectWillChange`, which a save or a
+/// merge into the view context fires.
+private struct ObservedPeerName<Content: View>: View {
+    @ObservedObject var user: User
+    let content: (String) -> Content
+
+    var body: some View {
+        content(user.resolvedDisplayName)
+    }
+}
