@@ -606,7 +606,7 @@
 				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_INCLUDE_PATHS = "$(PROJECT_DIR)";
-				SWIFT_OBJC_BRIDGING_HEADER = "/Users/maximeliseyev/Code/construct-messenger/ConstructMessenger/ConstructMessenger-Bridging-Header.h";
+				SWIFT_OBJC_BRIDGING_HEADER = "ConstructMessenger/ConstructMessenger-Bridging-Header.h";
 				SWIFT_VERSION = 5.7;
 				TARGETED_DEVICE_FAMILY = "1,2,6";
 			};
@@ -792,7 +792,7 @@
 				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_INCLUDE_PATHS = "$(PROJECT_DIR)";
-				SWIFT_OBJC_BRIDGING_HEADER = "/Users/maximeliseyev/Code/construct-messenger/ConstructMessenger/ConstructMessenger-Bridging-Header.h";
+				SWIFT_OBJC_BRIDGING_HEADER = "ConstructMessenger/ConstructMessenger-Bridging-Header.h";
 				SWIFT_VERSION = 5.7;
 				TARGETED_DEVICE_FAMILY = "1,2,6";
 			};
@@ -849,7 +849,7 @@
 				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_INCLUDE_PATHS = "$(PROJECT_DIR)";
-				SWIFT_OBJC_BRIDGING_HEADER = "/Users/maximeliseyev/Code/construct-messenger/ConstructMessenger/ConstructMessenger-Bridging-Header.h";
+				SWIFT_OBJC_BRIDGING_HEADER = "ConstructMessenger/ConstructMessenger-Bridging-Header.h";
 				SWIFT_VERSION = 5.7;
 				TARGETED_DEVICE_FAMILY = "1,2,6";
 			};
