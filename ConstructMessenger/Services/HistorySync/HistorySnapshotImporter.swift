@@ -52,8 +52,25 @@ struct HistorySnapshotImporter {
     static let saveBatchSize = 200
 
     /// Apply one already-decoded record. Does not save. Caller owns the queue.
+    ///
+    /// A refused record aborts the whole phase, and the error alone ("malformed") does not say
+    /// which one. Every caller — the streaming path and `Batch` alike — comes through here, so the
+    /// shape is logged here: kind and field sizes, never content or ids.
     @discardableResult
     func apply(
+        _ record: HistoryRecord,
+        expectedUserId: String,
+        in context: NSManagedObjectContext
+    ) throws -> HistoryApplyResult {
+        do {
+            return try applyUnlogged(record, expectedUserId: expectedUserId, in: context)
+        } catch {
+            Log.error("history_record_rejected \(record.shape) error=\(error)", category: "HistorySync")
+            throw error
+        }
+    }
+
+    private func applyUnlogged(
         _ record: HistoryRecord,
         expectedUserId: String,
         in context: NSManagedObjectContext
@@ -116,7 +133,6 @@ struct HistorySnapshotImporter {
         private let context: NSManagedObjectContext
         private var summary = HistoryImportSummary()
         private var sinceSave = 0
-        private var index = 0
 
         init(
             importer: HistorySnapshotImporter,
@@ -129,19 +145,7 @@ struct HistorySnapshotImporter {
         }
 
         mutating func apply(_ record: HistoryRecord) throws {
-            defer { index += 1 }
-            let result: HistoryApplyResult
-            do {
-                result = try importer.apply(record, expectedUserId: expectedUserId, in: context)
-            } catch {
-                // A refused record aborts the whole phase, and the error alone ("malformed") does
-                // not say which one. Shapes only — never content, ids or bodies.
-                Log.error(
-                    "history_record_rejected index=\(index) \(record.shape) error=\(error)",
-                    category: "HistorySync"
-                )
-                throw error
-            }
+            let result = try importer.apply(record, expectedUserId: expectedUserId, in: context)
             summary.add(result)
             sinceSave += 1
             if sinceSave >= HistorySnapshotImporter.saveBatchSize {
