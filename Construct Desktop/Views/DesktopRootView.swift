@@ -31,6 +31,10 @@ struct DesktopRootView: View {
     @AppStorage(OrientationStore.completedUserIdsKey) private var orientationCompletedUserIds = ""
 
     @State private var showAddContact = false
+    /// The recovery key, offered once right after the first orientation — same as iOS
+    /// `ContentView`. Contacts wait on it (`RecoveryGated`), so this is where it is asked for
+    /// before anyone reaches for an invite.
+    @State private var showingRecoveryPrompt = false
     @State private var callManager = CallManager.shared
     @State private var showReceiveHistorySync = false
     @State private var historySyncPendingDeviceId: String? = nil
@@ -83,6 +87,15 @@ struct DesktopRootView: View {
         }
         .errorToast()
         .preferredColorScheme(appTheme.colorScheme)
+        .onChange(of: orientationCompletedForCurrentUser) { _, completed in
+            if completed, AccountAddress.own() == nil {
+                showingRecoveryPrompt = true
+            }
+        }
+        .sheet(isPresented: $showingRecoveryPrompt) {
+            RecoveryGateView(reason: .afterRegistration)
+                .frame(minWidth: 460, minHeight: 560)
+        }
         .onAppear {
             authViewModel.refreshDeviceKeyState()
             chatsViewModel.setContext(viewContext)

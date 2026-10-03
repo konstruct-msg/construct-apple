@@ -393,6 +393,7 @@ private struct MyQRTab: View {
             generatedAt = Date()
             timeRemaining = InviteConfig.ttlSeconds
         } catch {
+            Log.error("DesktopAddContact: QR invite generation failed: \(error)", category: "Invite")
             errorMessage = NSLocalizedString("desktop_add_qr_failed", comment: "")
         }
     }
