@@ -266,6 +266,10 @@ struct DevicesView: View {
         do {
             devices = try await AuthServiceClient.shared.listDevices()
         } catch {
+            // `.refreshable` cancels its task when the list under it redraws (`isLoading` swaps the
+            // spinner for the rows), and `.task` starts the same load. A cancelled load is not a
+            // failure: the other one is still running, and an alert for it says nothing true.
+            if error is CancellationError || Task.isCancelled { return }
             errorMessage = error.localizedDescription
             Log.error("listDevices failed: \(error)", category: "DevicesView")
         }
