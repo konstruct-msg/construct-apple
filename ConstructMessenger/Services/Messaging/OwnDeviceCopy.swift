@@ -88,7 +88,9 @@ extension SenderCertificate {
             deviceId: cert.senderDeviceID,
             issuedAt: cert.issuedAt,
             expiresAt: cert.expiresAt,
-            signature: cert.serverSignature
+            signature: cert.serverSignature,
+            serverKid: cert.serverKid,
+            serverSignatureHybrid: cert.serverSignatureHybrid
         )
     }
 }

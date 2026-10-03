@@ -97,8 +97,22 @@ func makeTestDevice() throws -> (core: OrchestratorCore, deviceId: String) {
     return (core, deviceId)
 }
 
-/// Signs sender certificates the way `identity-service` does (Ed25519 over the variant-0 payload,
-/// `StealthSenderService.buildCertPayload`), for tests that open sessions from them.
+/// The Ed25519 certificate payload `identity-service` signs (variant 0: direct concatenation,
+/// big-endian times). Test-only since 2026-10-03: the app no longer checks certificates itself —
+/// the core does — so only tests that sign one need the bytes.
+func legacyCertPayload(userID: String, domain: String, ik: Data, deviceID: String, issued: Int64, expires: Int64) -> Data {
+    var p = Data()
+    p.append(contentsOf: userID.utf8)
+    p.append(contentsOf: domain.utf8)
+    p.append(ik)
+    p.append(contentsOf: deviceID.utf8)
+    withUnsafeBytes(of: issued.bigEndian) { p.append(contentsOf: $0) }
+    withUnsafeBytes(of: expires.bigEndian) { p.append(contentsOf: $0) }
+    return p
+}
+
+/// Signs sender certificates the way `identity-service` does (Ed25519 over `legacyCertPayload`),
+/// for tests that open sessions from them.
 final class TestCertificateServer {
     static let shared = TestCertificateServer()
 
@@ -126,7 +140,7 @@ final class TestCertificateServer {
         let device = deviceId ?? deriveDeviceId(identityPublicKey: identityKey)
         let issued = Int64(issuedAt.timeIntervalSince1970)
         let expires = issued + 86_400
-        let payload = StealthSenderService.buildCertPayload(
+        let payload = legacyCertPayload(
             userID: account, domain: "test.example", ik: identityKey,
             deviceID: device, issued: issued, expires: expires
         )
@@ -137,7 +151,9 @@ final class TestCertificateServer {
             deviceId: device,
             issuedAt: issued,
             expiresAt: expires,
-            signature: try key.signature(for: payload)
+            signature: try key.signature(for: payload),
+            serverKid: Data(),
+            serverSignatureHybrid: Data()
         )
     }
 }

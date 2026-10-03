@@ -206,56 +206,42 @@ final class KeyServiceClient: Sendable {
             let bundle = response.bundle
 
             // KT verification (non-blocking: failure is logged but does not reject the bundle).
+            // The core judges both proofs and the head they share — the Swift verifier that did
+            // this until 2026-10-03 is gone (`decisions/server-keys-rooted-offline-and-hybrid.md`).
             // Core Data write is deferred to MainActor after the RPC — see apply below.
             var ktStatus: KTStatus? = nil
             if response.hasKtProof {
-                let p = response.ktProof
-                let serverKey = UserDefaults.standard.data(forKey: VeilCertFetcher.cachedBundleSigningKeyKey)
-                let result = KeyTransparencyVerifier.verify(
-                    leafIndex: p.leafIndex,
-                    treeSize: p.treeSize,
-                    rootHash: p.rootHash,
-                    proofHashes: p.proofHashes,
-                    treeHeadSignature: p.treeHeadSignature,
+                let hasHybrid = response.hasHybridKtProof && bundle.hasHybridIdentityKey
+                    && !bundle.hybridIdentityKey.isEmpty
+                let verdicts = CryptoManager.shared.verifyKtProofs(
                     deviceId: response.deviceID,
                     identityKey: bundle.identityKey,
-                    serverBundleSigningPublicKey: serverKey
+                    identityProof: KtInclusionProof(proto: response.ktProof),
+                    hybridIdentityKey: hasHybrid ? bundle.hybridIdentityKey : nil,
+                    hybridProof: hasHybrid ? KtInclusionProof(proto: response.hybridKtProof) : nil,
+                    treeHead: response.hasTreeHead ? KtSignedTreeHead(proto: response.treeHead) : nil
                 )
-                switch result {
+                switch verdicts?.identity {
                 case .verified:
                     KTStore.shared.recordVerified()
                     Log.info("KT: inclusion proof verified for device \(response.deviceID)", category: "KT")
                     ktStatus = .verified
-                case .failed(let e):
+                case .unavailable, nil:
+                    break
+                case let failure?:
                     KTStore.shared.recordFailure()
-                    Log.error("KT: proof FAILED for device \(response.deviceID) — \(e)", category: "KT")
+                    Log.error("KT: proof FAILED for device \(response.deviceID) — \(failure)", category: "KT")
                     ktStatus = .failed
-                case .unavailable:
-                    break
                 }
-            }
-
-            // Hybrid identity KT inclusion proof (defense-in-depth, non-blocking like the
-            // identity KT proof above — the blocking PQ checks are the core's, at session init).
-            if response.hasHybridKtProof, bundle.hasHybridIdentityKey, !bundle.hybridIdentityKey.isEmpty {
-                let hp = response.hybridKtProof
-                let serverKey = UserDefaults.standard.data(forKey: VeilCertFetcher.cachedBundleSigningKeyKey)
-                switch KeyTransparencyVerifier.verifyHybrid(
-                    leafIndex: hp.leafIndex,
-                    treeSize: hp.treeSize,
-                    rootHash: hp.rootHash,
-                    proofHashes: hp.proofHashes,
-                    treeHeadSignature: hp.treeHeadSignature,
-                    deviceId: response.deviceID,
-                    hybridIdentityKey: bundle.hybridIdentityKey,
-                    serverBundleSigningPublicKey: serverKey
-                ) {
-                case .verified:
+                // Hybrid identity proof: defense-in-depth, logged only — the blocking PQ checks
+                // are the core's, at session init.
+                switch verdicts?.hybrid {
+                case .verified?:
                     Log.info("KT(hybrid): inclusion proof verified for device \(response.deviceID)", category: "KT")
-                case .failed(let e):
-                    Log.error("KT(hybrid): proof FAILED for device \(response.deviceID) — \(e)", category: "KT")
-                case .unavailable:
+                case .unavailable?, nil:
                     break
+                case let failure?:
+                    Log.error("KT(hybrid): proof FAILED for device \(response.deviceID) — \(failure)", category: "KT")
                 }
             }
 
@@ -603,5 +589,25 @@ final class KeyServiceClient: Sendable {
         if context.hasChanges {
             try? context.save()
         }
+    }
+}
+
+extension KtInclusionProof {
+    /// The proof as the core takes it.
+    init(proto p: Shared_Proto_Services_V1_KtInclusionProof) {
+        self.init(
+            leafIndex: p.leafIndex,
+            treeSize: p.treeSize,
+            rootHash: p.rootHash,
+            proofHashes: p.proofHashes,
+            treeHeadSignature: p.treeHeadSignature
+        )
+    }
+}
+
+extension KtSignedTreeHead {
+    /// The delegated tree head as the core takes it.
+    init(proto h: Shared_Proto_Services_V1_SignedTreeHead) {
+        self.init(treeSize: h.treeSize, rootHash: h.rootHash, kid: h.kid, signature: h.signature)
     }
 }

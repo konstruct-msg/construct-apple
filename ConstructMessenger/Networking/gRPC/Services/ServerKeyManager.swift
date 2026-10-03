@@ -23,6 +23,14 @@ actor ServerKeyManager {
     private static let cacheKey    = "construct.server.token_enc_pub"
     private static let cacheAgeKey = "construct.server.token_enc_pub.fetched_at"
     private static let cacheTTL: TimeInterval = 24 * 3600
+    private static let delegationsKey = "construct.server.trust_delegations"
+
+    /// Delegations of the server's hybrid signing keys (`server_trust.delegations`), as last
+    /// served. Public data: each is signed by the offline root, and the core keeps only those a
+    /// root pinned in this build signed (`decisions/server-keys-rooted-offline-and-hybrid.md`).
+    nonisolated static func cachedServerDelegations() -> [Data] {
+        UserDefaults.standard.array(forKey: delegationsKey) as? [Data] ?? []
+    }
 
     // MARK: - Public API
 
@@ -103,6 +111,13 @@ actor ServerKeyManager {
             guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
                 Log.debug("ServerKeyManager: token_encryption_key missing or invalid in well-known", category: "Stealth")
                 return
+            }
+            // Replaced whole when served: the gateway serves every delegation a client may still
+            // need. Kept when absent — a server that does not serve them yet says nothing.
+            if let list = (json["server_trust"] as? [String: Any])?["delegations"] as? [String] {
+                let delegations = list.compactMap { Data(base64Encoded: $0) }
+                UserDefaults.standard.set(delegations, forKey: Self.delegationsKey)
+                Log.info("ServerKeyManager: \(delegations.count) server key delegation(s) cached", category: "Stealth")
             }
             let rootKey = json["token_encryption_key"] as? String
             let serverSection = json["server"] as? [String: Any]

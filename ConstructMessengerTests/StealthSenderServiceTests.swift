@@ -15,7 +15,7 @@ final class StealthSenderServiceTests: XCTestCase {
         userId: String = "user-123",
         domain: String = "construct.example",
         ik: Data = Data(repeating: 0xAB, count: 32),
-        deviceId: String = "device-1",
+        deviceId: String? = nil,
         issued: Int64 = 1_000,
         expires: Int64 = 2_000
     ) -> Shared_Proto_Core_V1_SenderCertificate {
@@ -23,14 +23,15 @@ final class StealthSenderServiceTests: XCTestCase {
         cert.senderUserID = userId
         cert.senderDomain = domain
         cert.senderIdentityKey = ik
-        cert.senderDeviceID = deviceId
+        // The core checks that the key derives to the device the certificate names.
+        cert.senderDeviceID = deviceId ?? deriveDeviceId(identityPublicKey: ik)
         cert.issuedAt = issued
         cert.expiresAt = expires
         return cert
     }
 
     private func sign(_ cert: inout Shared_Proto_Core_V1_SenderCertificate, with key: Curve25519.Signing.PrivateKey) {
-        let payload = StealthSenderService.buildCertPayload(
+        let payload = legacyCertPayload(
             userID: cert.senderUserID, domain: cert.senderDomain, ik: cert.senderIdentityKey,
             deviceID: cert.senderDeviceID, issued: cert.issuedAt, expires: cert.expiresAt
         )
@@ -47,7 +48,14 @@ final class StealthSenderServiceTests: XCTestCase {
         return makeCert(userId: userId, ik: ik, issued: now - 60, expires: now + 3_600)
     }
 
+    override func setUpWithError() throws {
+        try super.setUpWithError()
+        // The verdict is the core's; unit tests do not start CryptoManager's, so ask a test one.
+        StealthSenderService.shared.verdictCoreForTesting = try makeTestDevice().core
+    }
+
     override func tearDown() {
+        StealthSenderService.shared.verdictCoreForTesting = nil
         UserDefaults.standard.removeObject(forKey: VeilCertFetcher.cachedBundleSigningKeyKey)
         StealthSenderService.shared.extraTrustedBundleKeysForTesting = []
         StealthSenderService.shared.ktLookupOverrideForTesting = nil
@@ -182,9 +190,14 @@ final class StealthSenderServiceTests: XCTestCase {
     }
 
     func testAttest_expiredBeatsKT() {
-        // An expired cert is .unvouched(.expired) even when KT would otherwise vouch.
+        // An expired cert is .unvouched(.expired) even when KT would otherwise vouch. Signed, as
+        // every certificate a server issues is: the core reports expiry only once the signature
+        // and the device have passed.
         let ik = Data(repeating: 0x44, count: 32)
-        let cert = makeCert(userId: "dave", ik: ik, issued: 1_000, expires: 2_000) // long expired
+        let signer = Curve25519.Signing.PrivateKey()
+        StealthSenderService.shared.extraTrustedBundleKeysForTesting = [signer.publicKey.rawRepresentation]
+        var cert = makeCert(userId: "dave", ik: ik, issued: 1_000, expires: 2_000) // long expired
+        sign(&cert, with: signer)
         StealthSenderService.shared.ktLookupOverrideForTesting = { _ in (ik, .verified) }
         XCTAssertEqual(StealthSenderService.shared.attest(cert), .unvouched(.expired))
     }

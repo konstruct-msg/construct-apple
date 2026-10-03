@@ -143,63 +143,82 @@ public nonisolated struct Shared_Proto_Services_V1_GetPreKeyBundleRequest: Senda
   fileprivate var _consumeOneTimePrekey: Bool? = nil
 }
 
-public nonisolated struct Shared_Proto_Services_V1_GetPreKeyBundleResponse: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_GetPreKeyBundleResponse: @unchecked Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
   /// Pre-key bundle
   public var bundle: Shared_Proto_Services_V1_PreKeyBundle {
-    get {_bundle ?? Shared_Proto_Services_V1_PreKeyBundle()}
-    set {_bundle = newValue}
+    get {_storage._bundle ?? Shared_Proto_Services_V1_PreKeyBundle()}
+    set {_uniqueStorage()._bundle = newValue}
   }
   /// Returns true if `bundle` has been explicitly set.
-  public var hasBundle: Bool {self._bundle != nil}
+  public var hasBundle: Bool {_storage._bundle != nil}
   /// Clears the value of `bundle`. Subsequent reads from it will return its default value.
-  public mutating func clearBundle() {self._bundle = nil}
+  public mutating func clearBundle() {_uniqueStorage()._bundle = nil}
 
   /// Bundle device ID
-  public var deviceID: String = String()
+  public var deviceID: String {
+    get {_storage._deviceID}
+    set {_uniqueStorage()._deviceID = newValue}
+  }
 
   /// Was one-time pre-key included?
   /// If false, only signed pre-key available (less forward secrecy)
-  public var hasOneTimeKey_p: Bool = false
+  public var hasOneTimeKey_p: Bool {
+    get {_storage._hasOneTimeKey_p}
+    set {_uniqueStorage()._hasOneTimeKey_p = newValue}
+  }
 
   /// Ed25519 public key for verifying device signatures
-  public var verifyingKey: Data = Data()
+  public var verifyingKey: Data {
+    get {_storage._verifyingKey}
+    set {_uniqueStorage()._verifyingKey = newValue}
+  }
 
   /// Key Transparency inclusion proof for the device's identity key.
   /// Absent in dev/test environments where the KT log is not populated.
   /// Clients SHOULD verify this when non-empty (see KeyTransparencyVerifier).
   public var ktProof: Shared_Proto_Services_V1_KtInclusionProof {
-    get {_ktProof ?? Shared_Proto_Services_V1_KtInclusionProof()}
-    set {_ktProof = newValue}
+    get {_storage._ktProof ?? Shared_Proto_Services_V1_KtInclusionProof()}
+    set {_uniqueStorage()._ktProof = newValue}
   }
   /// Returns true if `ktProof` has been explicitly set.
-  public var hasKtProof: Bool {self._ktProof != nil}
+  public var hasKtProof: Bool {_storage._ktProof != nil}
   /// Clears the value of `ktProof`. Subsequent reads from it will return its default value.
-  public mutating func clearKtProof() {self._ktProof = nil}
+  public mutating func clearKtProof() {_uniqueStorage()._ktProof = nil}
 
   /// Key Transparency inclusion proof for the device's HYBRID identity key (leaf kind 1).
   /// Present only when the device has a hybrid key and the KT log is populated. Relative to
   /// the same Merkle tree / signed tree head as kt_proof. Leaf = SHA-256(0x02 || device_id ||
   /// hybrid_identity_key). Clients SHOULD verify this when the hybrid key is present.
   public var hybridKtProof: Shared_Proto_Services_V1_KtInclusionProof {
-    get {_hybridKtProof ?? Shared_Proto_Services_V1_KtInclusionProof()}
-    set {_hybridKtProof = newValue}
+    get {_storage._hybridKtProof ?? Shared_Proto_Services_V1_KtInclusionProof()}
+    set {_uniqueStorage()._hybridKtProof = newValue}
   }
   /// Returns true if `hybridKtProof` has been explicitly set.
-  public var hasHybridKtProof: Bool {self._hybridKtProof != nil}
+  public var hasHybridKtProof: Bool {_storage._hybridKtProof != nil}
   /// Clears the value of `hybridKtProof`. Subsequent reads from it will return its default value.
-  public mutating func clearHybridKtProof() {self._hybridKtProof = nil}
+  public mutating func clearHybridKtProof() {_uniqueStorage()._hybridKtProof = nil}
+
+  /// The one tree head both proofs above are relative to, signed by a delegated server key. Both
+  /// proofs are built from the same snapshot of the log, so their tree_size and root_hash equal
+  /// this head's. Sent beside the Ed25519 tree_head_signature in each proof while clients move.
+  public var treeHead: Shared_Proto_Services_V1_SignedTreeHead {
+    get {_storage._treeHead ?? Shared_Proto_Services_V1_SignedTreeHead()}
+    set {_uniqueStorage()._treeHead = newValue}
+  }
+  /// Returns true if `treeHead` has been explicitly set.
+  public var hasTreeHead: Bool {_storage._treeHead != nil}
+  /// Clears the value of `treeHead`. Subsequent reads from it will return its default value.
+  public mutating func clearTreeHead() {_uniqueStorage()._treeHead = nil}
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
 
-  fileprivate var _bundle: Shared_Proto_Services_V1_PreKeyBundle? = nil
-  fileprivate var _ktProof: Shared_Proto_Services_V1_KtInclusionProof? = nil
-  fileprivate var _hybridKtProof: Shared_Proto_Services_V1_KtInclusionProof? = nil
+  fileprivate var _storage = _StorageClass.defaultInstance
 }
 
 /// RFC 6962-style inclusion proof for a device's identity key in the KT log.
@@ -226,6 +245,32 @@ public nonisolated struct Shared_Proto_Services_V1_KtInclusionProof: Sendable {
   /// Ed25519 signature over: "ConstructKT-v1" || tree_size (8 BE) || root_hash (32)
   /// Signed with the server's bundle signing key (same key as bundle_signature).
   public var treeHeadSignature: Data = Data()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+/// A Key Transparency tree head signed by a server key the offline root delegated
+/// (construct-docs/decisions/server-keys-rooted-offline-and-hybrid.md). The same message will
+/// answer a consistency-proof request.
+public nonisolated struct Shared_Proto_Services_V1_SignedTreeHead: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var treeSize: UInt64 = 0
+
+  /// Merkle root (32 bytes, SHA-256)
+  public var rootHash: Data = Data()
+
+  /// Id of the signing key: SHA-256("konstruct/v1/kid" ‖ key)[0..16]
+  public var kid: Data = Data()
+
+  /// Hybrid Ed25519 ‖ ML-DSA-65 (3373 bytes) over
+  ///   "konstruct/v1/kt-head" ‖ kid ‖ BE64(tree_size) ‖ root_hash
+  /// — construct-server-trust `kt_head_body`, vectors in conformance/knst_server_trust.json.
+  public var signature: Data = Data()
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -581,59 +626,76 @@ public nonisolated struct Shared_Proto_Services_V1_GetPreKeyBundlesResponse: Sen
   public init() {}
 }
 
-public nonisolated struct Shared_Proto_Services_V1_DevicePreKeyBundle: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_DevicePreKeyBundle: @unchecked Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
   /// Device ID
-  public var deviceID: String = String()
+  public var deviceID: String {
+    get {_storage._deviceID}
+    set {_uniqueStorage()._deviceID = newValue}
+  }
 
   /// Pre-key bundle
   public var bundle: Shared_Proto_Services_V1_PreKeyBundle {
-    get {_bundle ?? Shared_Proto_Services_V1_PreKeyBundle()}
-    set {_bundle = newValue}
+    get {_storage._bundle ?? Shared_Proto_Services_V1_PreKeyBundle()}
+    set {_uniqueStorage()._bundle = newValue}
   }
   /// Returns true if `bundle` has been explicitly set.
-  public var hasBundle: Bool {self._bundle != nil}
+  public var hasBundle: Bool {_storage._bundle != nil}
   /// Clears the value of `bundle`. Subsequent reads from it will return its default value.
-  public mutating func clearBundle() {self._bundle = nil}
+  public mutating func clearBundle() {_uniqueStorage()._bundle = nil}
 
   /// Device platform (for UI hints)
-  public var platform: Shared_Proto_Core_V1_DevicePlatform = .unspecified
+  public var platform: Shared_Proto_Core_V1_DevicePlatform {
+    get {_storage._platform}
+    set {_uniqueStorage()._platform = newValue}
+  }
 
   /// Key Transparency inclusion proof (absent in dev/test environments).
   public var ktProof: Shared_Proto_Services_V1_KtInclusionProof {
-    get {_ktProof ?? Shared_Proto_Services_V1_KtInclusionProof()}
-    set {_ktProof = newValue}
+    get {_storage._ktProof ?? Shared_Proto_Services_V1_KtInclusionProof()}
+    set {_uniqueStorage()._ktProof = newValue}
   }
   /// Returns true if `ktProof` has been explicitly set.
-  public var hasKtProof: Bool {self._ktProof != nil}
+  public var hasKtProof: Bool {_storage._ktProof != nil}
   /// Clears the value of `ktProof`. Subsequent reads from it will return its default value.
-  public mutating func clearKtProof() {self._ktProof = nil}
+  public mutating func clearKtProof() {_uniqueStorage()._ktProof = nil}
 
   /// Ed25519 public key for verifying this device's signatures (same value as the
   /// single-fetch GetPreKeyBundleResponse.verifying_key). Required client-side to verify
   /// the hybrid identity cross-signature in PreKeyBundle field 21.
-  public var verifyingKey: Data = Data()
+  public var verifyingKey: Data {
+    get {_storage._verifyingKey}
+    set {_uniqueStorage()._verifyingKey = newValue}
+  }
 
   /// Key Transparency inclusion proof for this device's hybrid identity key (leaf kind 1).
   public var hybridKtProof: Shared_Proto_Services_V1_KtInclusionProof {
-    get {_hybridKtProof ?? Shared_Proto_Services_V1_KtInclusionProof()}
-    set {_hybridKtProof = newValue}
+    get {_storage._hybridKtProof ?? Shared_Proto_Services_V1_KtInclusionProof()}
+    set {_uniqueStorage()._hybridKtProof = newValue}
   }
   /// Returns true if `hybridKtProof` has been explicitly set.
-  public var hasHybridKtProof: Bool {self._hybridKtProof != nil}
+  public var hasHybridKtProof: Bool {_storage._hybridKtProof != nil}
   /// Clears the value of `hybridKtProof`. Subsequent reads from it will return its default value.
-  public mutating func clearHybridKtProof() {self._hybridKtProof = nil}
+  public mutating func clearHybridKtProof() {_uniqueStorage()._hybridKtProof = nil}
+
+  /// The tree head this device's two proofs are relative to, as GetPreKeyBundleResponse.tree_head.
+  public var treeHead: Shared_Proto_Services_V1_SignedTreeHead {
+    get {_storage._treeHead ?? Shared_Proto_Services_V1_SignedTreeHead()}
+    set {_uniqueStorage()._treeHead = newValue}
+  }
+  /// Returns true if `treeHead` has been explicitly set.
+  public var hasTreeHead: Bool {_storage._treeHead != nil}
+  /// Clears the value of `treeHead`. Subsequent reads from it will return its default value.
+  public mutating func clearTreeHead() {_uniqueStorage()._treeHead = nil}
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
 
-  fileprivate var _bundle: Shared_Proto_Services_V1_PreKeyBundle? = nil
-  fileprivate var _ktProof: Shared_Proto_Services_V1_KtInclusionProof? = nil
-  fileprivate var _hybridKtProof: Shared_Proto_Services_V1_KtInclusionProof? = nil
+  fileprivate var _storage = _StorageClass.defaultInstance
 }
 
 public nonisolated struct Shared_Proto_Services_V1_UploadPreKeysRequest: Sendable {
@@ -1188,58 +1250,111 @@ nonisolated extension Shared_Proto_Services_V1_GetPreKeyBundleRequest: SwiftProt
 
 nonisolated extension Shared_Proto_Services_V1_GetPreKeyBundleResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".GetPreKeyBundleResponse"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}bundle\0\u{3}device_id\0\u{3}has_one_time_key\0\u{4}\u{8}verifying_key\0\u{4}\u{9}kt_proof\0\u{3}hybrid_kt_proof\0\u{c}\u{4}\u{7}")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}bundle\0\u{3}device_id\0\u{3}has_one_time_key\0\u{4}\u{8}verifying_key\0\u{4}\u{9}kt_proof\0\u{3}hybrid_kt_proof\0\u{3}tree_head\0\u{c}\u{4}\u{7}")
+
+  fileprivate class _StorageClass {
+    var _bundle: Shared_Proto_Services_V1_PreKeyBundle? = nil
+    var _deviceID: String = String()
+    var _hasOneTimeKey_p: Bool = false
+    var _verifyingKey: Data = Data()
+    var _ktProof: Shared_Proto_Services_V1_KtInclusionProof? = nil
+    var _hybridKtProof: Shared_Proto_Services_V1_KtInclusionProof? = nil
+    var _treeHead: Shared_Proto_Services_V1_SignedTreeHead? = nil
+
+      // This property is used as the initial default value for new instances of the type.
+      // The type itself is protecting the reference to its storage via CoW semantics.
+      // This will force a copy to be made of this reference when the first mutation occurs;
+      // hence, it is safe to mark this as `nonisolated(unsafe)`.
+      static nonisolated(unsafe) let defaultInstance = _StorageClass()
+
+    private init() {}
+
+    init(copying source: _StorageClass) {
+      _bundle = source._bundle
+      _deviceID = source._deviceID
+      _hasOneTimeKey_p = source._hasOneTimeKey_p
+      _verifyingKey = source._verifyingKey
+      _ktProof = source._ktProof
+      _hybridKtProof = source._hybridKtProof
+      _treeHead = source._treeHead
+    }
+  }
+
+  fileprivate mutating func _uniqueStorage() -> _StorageClass {
+    if !isKnownUniquelyReferenced(&_storage) {
+      _storage = _StorageClass(copying: _storage)
+    }
+    return _storage
+  }
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
-    while let fieldNumber = try decoder.nextFieldNumber() {
-      // The use of inline closures is to circumvent an issue where the compiler
-      // allocates stack space for every case branch when no optimizations are
-      // enabled. https://github.com/apple/swift-protobuf/issues/1034
-      switch fieldNumber {
-      case 1: try { try decoder.decodeSingularMessageField(value: &self._bundle) }()
-      case 2: try { try decoder.decodeSingularStringField(value: &self.deviceID) }()
-      case 3: try { try decoder.decodeSingularBoolField(value: &self.hasOneTimeKey_p) }()
-      case 11: try { try decoder.decodeSingularBytesField(value: &self.verifyingKey) }()
-      case 20: try { try decoder.decodeSingularMessageField(value: &self._ktProof) }()
-      case 21: try { try decoder.decodeSingularMessageField(value: &self._hybridKtProof) }()
-      default: break
+    _ = _uniqueStorage()
+    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
+      while let fieldNumber = try decoder.nextFieldNumber() {
+        // The use of inline closures is to circumvent an issue where the compiler
+        // allocates stack space for every case branch when no optimizations are
+        // enabled. https://github.com/apple/swift-protobuf/issues/1034
+        switch fieldNumber {
+        case 1: try { try decoder.decodeSingularMessageField(value: &_storage._bundle) }()
+        case 2: try { try decoder.decodeSingularStringField(value: &_storage._deviceID) }()
+        case 3: try { try decoder.decodeSingularBoolField(value: &_storage._hasOneTimeKey_p) }()
+        case 11: try { try decoder.decodeSingularBytesField(value: &_storage._verifyingKey) }()
+        case 20: try { try decoder.decodeSingularMessageField(value: &_storage._ktProof) }()
+        case 21: try { try decoder.decodeSingularMessageField(value: &_storage._hybridKtProof) }()
+        case 22: try { try decoder.decodeSingularMessageField(value: &_storage._treeHead) }()
+        default: break
+        }
       }
     }
   }
 
   public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    // The use of inline closures is to circumvent an issue where the compiler
-    // allocates stack space for every if/case branch local when no optimizations
-    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
-    // https://github.com/apple/swift-protobuf/issues/1182
-    try { if let v = self._bundle {
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
-    } }()
-    if !self.deviceID.isEmpty {
-      try visitor.visitSingularStringField(value: self.deviceID, fieldNumber: 2)
+    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every if/case branch local when no optimizations
+      // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+      // https://github.com/apple/swift-protobuf/issues/1182
+      try { if let v = _storage._bundle {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
+      } }()
+      if !_storage._deviceID.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._deviceID, fieldNumber: 2)
+      }
+      if _storage._hasOneTimeKey_p != false {
+        try visitor.visitSingularBoolField(value: _storage._hasOneTimeKey_p, fieldNumber: 3)
+      }
+      if !_storage._verifyingKey.isEmpty {
+        try visitor.visitSingularBytesField(value: _storage._verifyingKey, fieldNumber: 11)
+      }
+      try { if let v = _storage._ktProof {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 20)
+      } }()
+      try { if let v = _storage._hybridKtProof {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 21)
+      } }()
+      try { if let v = _storage._treeHead {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 22)
+      } }()
     }
-    if self.hasOneTimeKey_p != false {
-      try visitor.visitSingularBoolField(value: self.hasOneTimeKey_p, fieldNumber: 3)
-    }
-    if !self.verifyingKey.isEmpty {
-      try visitor.visitSingularBytesField(value: self.verifyingKey, fieldNumber: 11)
-    }
-    try { if let v = self._ktProof {
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 20)
-    } }()
-    try { if let v = self._hybridKtProof {
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 21)
-    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Shared_Proto_Services_V1_GetPreKeyBundleResponse, rhs: Shared_Proto_Services_V1_GetPreKeyBundleResponse) -> Bool {
-    if lhs._bundle != rhs._bundle {return false}
-    if lhs.deviceID != rhs.deviceID {return false}
-    if lhs.hasOneTimeKey_p != rhs.hasOneTimeKey_p {return false}
-    if lhs.verifyingKey != rhs.verifyingKey {return false}
-    if lhs._ktProof != rhs._ktProof {return false}
-    if lhs._hybridKtProof != rhs._hybridKtProof {return false}
+    if lhs._storage !== rhs._storage {
+      let storagesAreEqual: Bool = withExtendedLifetime((lhs._storage, rhs._storage)) { (_args: (_StorageClass, _StorageClass)) in
+        let _storage = _args.0
+        let rhs_storage = _args.1
+        if _storage._bundle != rhs_storage._bundle {return false}
+        if _storage._deviceID != rhs_storage._deviceID {return false}
+        if _storage._hasOneTimeKey_p != rhs_storage._hasOneTimeKey_p {return false}
+        if _storage._verifyingKey != rhs_storage._verifyingKey {return false}
+        if _storage._ktProof != rhs_storage._ktProof {return false}
+        if _storage._hybridKtProof != rhs_storage._hybridKtProof {return false}
+        if _storage._treeHead != rhs_storage._treeHead {return false}
+        return true
+      }
+      if !storagesAreEqual {return false}
+    }
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -1290,6 +1405,51 @@ nonisolated extension Shared_Proto_Services_V1_KtInclusionProof: SwiftProtobuf.M
     if lhs.rootHash != rhs.rootHash {return false}
     if lhs.proofHashes != rhs.proofHashes {return false}
     if lhs.treeHeadSignature != rhs.treeHeadSignature {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Shared_Proto_Services_V1_SignedTreeHead: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".SignedTreeHead"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}tree_size\0\u{3}root_hash\0\u{1}kid\0\u{1}signature\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularUInt64Field(value: &self.treeSize) }()
+      case 2: try { try decoder.decodeSingularBytesField(value: &self.rootHash) }()
+      case 3: try { try decoder.decodeSingularBytesField(value: &self.kid) }()
+      case 4: try { try decoder.decodeSingularBytesField(value: &self.signature) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if self.treeSize != 0 {
+      try visitor.visitSingularUInt64Field(value: self.treeSize, fieldNumber: 1)
+    }
+    if !self.rootHash.isEmpty {
+      try visitor.visitSingularBytesField(value: self.rootHash, fieldNumber: 2)
+    }
+    if !self.kid.isEmpty {
+      try visitor.visitSingularBytesField(value: self.kid, fieldNumber: 3)
+    }
+    if !self.signature.isEmpty {
+      try visitor.visitSingularBytesField(value: self.signature, fieldNumber: 4)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Shared_Proto_Services_V1_SignedTreeHead, rhs: Shared_Proto_Services_V1_SignedTreeHead) -> Bool {
+    if lhs.treeSize != rhs.treeSize {return false}
+    if lhs.rootHash != rhs.rootHash {return false}
+    if lhs.kid != rhs.kid {return false}
+    if lhs.signature != rhs.signature {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -1645,58 +1805,111 @@ nonisolated extension Shared_Proto_Services_V1_GetPreKeyBundlesResponse: SwiftPr
 
 nonisolated extension Shared_Proto_Services_V1_DevicePreKeyBundle: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".DevicePreKeyBundle"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}device_id\0\u{1}bundle\0\u{1}platform\0\u{3}kt_proof\0\u{3}verifying_key\0\u{3}hybrid_kt_proof\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}device_id\0\u{1}bundle\0\u{1}platform\0\u{3}kt_proof\0\u{3}verifying_key\0\u{3}hybrid_kt_proof\0\u{3}tree_head\0")
+
+  fileprivate class _StorageClass {
+    var _deviceID: String = String()
+    var _bundle: Shared_Proto_Services_V1_PreKeyBundle? = nil
+    var _platform: Shared_Proto_Core_V1_DevicePlatform = .unspecified
+    var _ktProof: Shared_Proto_Services_V1_KtInclusionProof? = nil
+    var _verifyingKey: Data = Data()
+    var _hybridKtProof: Shared_Proto_Services_V1_KtInclusionProof? = nil
+    var _treeHead: Shared_Proto_Services_V1_SignedTreeHead? = nil
+
+      // This property is used as the initial default value for new instances of the type.
+      // The type itself is protecting the reference to its storage via CoW semantics.
+      // This will force a copy to be made of this reference when the first mutation occurs;
+      // hence, it is safe to mark this as `nonisolated(unsafe)`.
+      static nonisolated(unsafe) let defaultInstance = _StorageClass()
+
+    private init() {}
+
+    init(copying source: _StorageClass) {
+      _deviceID = source._deviceID
+      _bundle = source._bundle
+      _platform = source._platform
+      _ktProof = source._ktProof
+      _verifyingKey = source._verifyingKey
+      _hybridKtProof = source._hybridKtProof
+      _treeHead = source._treeHead
+    }
+  }
+
+  fileprivate mutating func _uniqueStorage() -> _StorageClass {
+    if !isKnownUniquelyReferenced(&_storage) {
+      _storage = _StorageClass(copying: _storage)
+    }
+    return _storage
+  }
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
-    while let fieldNumber = try decoder.nextFieldNumber() {
-      // The use of inline closures is to circumvent an issue where the compiler
-      // allocates stack space for every case branch when no optimizations are
-      // enabled. https://github.com/apple/swift-protobuf/issues/1034
-      switch fieldNumber {
-      case 1: try { try decoder.decodeSingularStringField(value: &self.deviceID) }()
-      case 2: try { try decoder.decodeSingularMessageField(value: &self._bundle) }()
-      case 3: try { try decoder.decodeSingularEnumField(value: &self.platform) }()
-      case 4: try { try decoder.decodeSingularMessageField(value: &self._ktProof) }()
-      case 5: try { try decoder.decodeSingularBytesField(value: &self.verifyingKey) }()
-      case 6: try { try decoder.decodeSingularMessageField(value: &self._hybridKtProof) }()
-      default: break
+    _ = _uniqueStorage()
+    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
+      while let fieldNumber = try decoder.nextFieldNumber() {
+        // The use of inline closures is to circumvent an issue where the compiler
+        // allocates stack space for every case branch when no optimizations are
+        // enabled. https://github.com/apple/swift-protobuf/issues/1034
+        switch fieldNumber {
+        case 1: try { try decoder.decodeSingularStringField(value: &_storage._deviceID) }()
+        case 2: try { try decoder.decodeSingularMessageField(value: &_storage._bundle) }()
+        case 3: try { try decoder.decodeSingularEnumField(value: &_storage._platform) }()
+        case 4: try { try decoder.decodeSingularMessageField(value: &_storage._ktProof) }()
+        case 5: try { try decoder.decodeSingularBytesField(value: &_storage._verifyingKey) }()
+        case 6: try { try decoder.decodeSingularMessageField(value: &_storage._hybridKtProof) }()
+        case 7: try { try decoder.decodeSingularMessageField(value: &_storage._treeHead) }()
+        default: break
+        }
       }
     }
   }
 
   public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    // The use of inline closures is to circumvent an issue where the compiler
-    // allocates stack space for every if/case branch local when no optimizations
-    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
-    // https://github.com/apple/swift-protobuf/issues/1182
-    if !self.deviceID.isEmpty {
-      try visitor.visitSingularStringField(value: self.deviceID, fieldNumber: 1)
+    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every if/case branch local when no optimizations
+      // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+      // https://github.com/apple/swift-protobuf/issues/1182
+      if !_storage._deviceID.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._deviceID, fieldNumber: 1)
+      }
+      try { if let v = _storage._bundle {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
+      } }()
+      if _storage._platform != .unspecified {
+        try visitor.visitSingularEnumField(value: _storage._platform, fieldNumber: 3)
+      }
+      try { if let v = _storage._ktProof {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 4)
+      } }()
+      if !_storage._verifyingKey.isEmpty {
+        try visitor.visitSingularBytesField(value: _storage._verifyingKey, fieldNumber: 5)
+      }
+      try { if let v = _storage._hybridKtProof {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 6)
+      } }()
+      try { if let v = _storage._treeHead {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 7)
+      } }()
     }
-    try { if let v = self._bundle {
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
-    } }()
-    if self.platform != .unspecified {
-      try visitor.visitSingularEnumField(value: self.platform, fieldNumber: 3)
-    }
-    try { if let v = self._ktProof {
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 4)
-    } }()
-    if !self.verifyingKey.isEmpty {
-      try visitor.visitSingularBytesField(value: self.verifyingKey, fieldNumber: 5)
-    }
-    try { if let v = self._hybridKtProof {
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 6)
-    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Shared_Proto_Services_V1_DevicePreKeyBundle, rhs: Shared_Proto_Services_V1_DevicePreKeyBundle) -> Bool {
-    if lhs.deviceID != rhs.deviceID {return false}
-    if lhs._bundle != rhs._bundle {return false}
-    if lhs.platform != rhs.platform {return false}
-    if lhs._ktProof != rhs._ktProof {return false}
-    if lhs.verifyingKey != rhs.verifyingKey {return false}
-    if lhs._hybridKtProof != rhs._hybridKtProof {return false}
+    if lhs._storage !== rhs._storage {
+      let storagesAreEqual: Bool = withExtendedLifetime((lhs._storage, rhs._storage)) { (_args: (_StorageClass, _StorageClass)) in
+        let _storage = _args.0
+        let rhs_storage = _args.1
+        if _storage._deviceID != rhs_storage._deviceID {return false}
+        if _storage._bundle != rhs_storage._bundle {return false}
+        if _storage._platform != rhs_storage._platform {return false}
+        if _storage._ktProof != rhs_storage._ktProof {return false}
+        if _storage._verifyingKey != rhs_storage._verifyingKey {return false}
+        if _storage._hybridKtProof != rhs_storage._hybridKtProof {return false}
+        if _storage._treeHead != rhs_storage._treeHead {return false}
+        return true
+      }
+      if !storagesAreEqual {return false}
+    }
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

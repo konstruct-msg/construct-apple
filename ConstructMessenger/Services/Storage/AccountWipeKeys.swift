@@ -191,6 +191,8 @@ enum AccountWipeKeys {
         "construct.bundle_signing_key",
         "construct.server.token_enc_pub",
         "construct.server.token_enc_pub.fetched_at",
+        // Delegations of the server's hybrid keys — root-signed public data, the same for everyone.
+        "construct.server.trust_delegations",
 
         // Device-level app preferences.
         "customServerURL",
