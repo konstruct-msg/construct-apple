@@ -206,8 +206,15 @@ final class HistorySnapshotEncoder {
         }
         var wire = Construct_Client_History_V1_HistoryMessage()
         wire.id = HistorySnapshotDisposition.lowercaseMessageId(message.id)
-        if let from = HistoryAccountID.raw(message.fromUserId) { wire.fromUserID = from }
-        if let to = HistoryAccountID.raw(message.toUserId) { wire.toUserID = to }
+        let who = HistorySnapshotDisposition.participants(
+            storedFrom: message.fromUserId,
+            storedTo: message.toUserId,
+            isSentByMe: message.isSentByMe,
+            ownId: identity.userId,
+            chatPeerId: message.chat?.otherUser?.id
+        )
+        if let from = who.from.flatMap(HistoryAccountID.raw) { wire.fromUserID = from }
+        if let to = who.to.flatMap(HistoryAccountID.raw) { wire.toUserID = to }
         wire.timestampUnixMs = Int64((message.timestamp.timeIntervalSince1970 * 1000).rounded())
         wire.isSentByMe = message.isSentByMe
         wire.body = body

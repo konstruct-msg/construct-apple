@@ -45,4 +45,25 @@ enum HistorySnapshotDisposition {
     static func lowercaseMessageId(_ id: String) -> String {
         id.lowercased()
     }
+
+    /// The two account ids a transferred message names, as dashed strings.
+    ///
+    /// A row's stored `fromUserId` / `toUserId` is not always an account id — older rows carry
+    /// something else (empty, or a device id). The wire field is 16 bytes, and the encoder used to
+    /// leave an unparseable one out; the receiver then refused the record, and a refused record
+    /// ends the whole phase (a real phone's first transfer died on exactly this: `from=0B`).
+    /// A side that does not parse is the one the row's role names: ours for a sent row, the
+    /// chat's peer for a received one. A value that does parse is kept as stored.
+    static func participants(
+        storedFrom: String,
+        storedTo: String,
+        isSentByMe: Bool,
+        ownId: String,
+        chatPeerId: String?
+    ) -> (from: String?, to: String?) {
+        func valid(_ id: String) -> String? { HistoryAccountID.raw(id) != nil ? id : nil }
+        let from = valid(storedFrom) ?? (isSentByMe ? ownId : chatPeerId)
+        let to = valid(storedTo) ?? (isSentByMe ? chatPeerId : ownId)
+        return (from, to)
+    }
 }
