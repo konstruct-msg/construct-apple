@@ -38,6 +38,45 @@ class ChatsViewModel {
         }
     }()
 
+    /// An imported history brings chats this device was not subscribed to. The stream is opened at
+    /// launch with whatever chats existed then — on a freshly linked device, none — and nothing else
+    /// asks it to look again: a stand run logged `subscriptions=[]` for the rest of the session.
+    ///
+    /// The subscription set is the chats with a `lastMessageTime`, and the importer writes
+    /// messages without touching the chat's preview, so an imported chat would stay out of it
+    /// even after a reconnect. The preview is rebuilt from the transcript first.
+    private static let sharedHistoryImportedObserver: NSObjectProtocol? = {
+        guard !PreviewDetector.isRunningInPreview else { return nil }
+        return NotificationCenter.default.addObserver(
+            forName: .historyImported, object: nil, queue: nil
+        ) { _ in
+            Task {
+                await ChatsViewModel.stampImportedChatPreviews()
+                await MainActor.run {
+                    ChatsViewModel.sharedStreamLifecycle.reconnectIfSubscriptionsChanged()
+                }
+            }
+        }
+    }()
+
+    private static func stampImportedChatPreviews() async {
+        let context = PersistenceController.shared.newBackgroundContext()
+        await context.perform {
+            let request = Chat.fetchRequest()
+            request.predicate = NSPredicate(format: "lastMessageTime == nil")
+            guard let chats = try? context.fetch(request), !chats.isEmpty else { return }
+            var stamped = 0
+            for chat in chats where chat.reconcilePreviewFromTranscript(in: context) { stamped += 1 }
+            guard stamped > 0 else { return }
+            do {
+                try context.save()
+                Log.info("history_import: stamped \(stamped) chat preview(s) so the stream subscribes to them", category: "HistorySync")
+            } catch {
+                Log.error("history_import: could not stamp chat previews: \(error)", category: "HistorySync")
+            }
+        }
+    }
+
     // MARK: - UI state
 
     var chatToOpen: String?
@@ -79,6 +118,7 @@ class ChatsViewModel {
         self.streamManager = Self.sharedStreamManager
         self.streamLifecycle = Self.sharedStreamLifecycle
         _ = Self.sharedContactAcceptedObserver
+        _ = Self.sharedHistoryImportedObserver
 
         self.lastMessageId = UserDefaults.standard.string(forKey: "construct.lastMessageId")
         if let restored = lastMessageId {

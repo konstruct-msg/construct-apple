@@ -307,6 +307,7 @@ final class HistoryNearbyChannel {
                 "history_snapshot_done source=nearby phase=\(manifestPhase) applied=\(summary.applied) conflicts=\(summary.conflictKeepExisting) skipped=\(summary.skipped.values.reduce(0, +))",
                 category: "HistorySync"
             )
+            NotificationCenter.default.post(name: .historyImported, object: nil)
             return .imported(summary, manifestPhase: manifestPhase)
         }
     }

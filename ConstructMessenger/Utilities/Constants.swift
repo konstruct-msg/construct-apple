@@ -767,6 +767,9 @@ extension APIConstants {
 
 // MARK: - Notifications
 extension Notification.Name {
+    /// A history snapshot (nearby or file) was applied: chats and contacts this device did not have
+    /// a moment ago are in Core Data. The message stream subscribes per chat, so it has to look again.
+    static let historyImported = Notification.Name("constructHistoryImported")
     /// The Core Data store was replaced by an empty one (`PersistenceController.replaceStoreWithEmpty`).
     /// Every object a view still holds from the old store is dead: reading one raises.
     static let localStoreReplaced = Notification.Name("constructLocalStoreReplaced")
