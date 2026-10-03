@@ -146,7 +146,7 @@ struct DesktopMessageInputView: View {
     private var attachmentButton: some View {
         Button { showAttachmentMenu = true } label: {
             Image(systemName: "plus.circle")
-                .font(.system(size: 20))
+                .font(CTFont.ui(20))
                 .foregroundColor(Color.CT.textDim)
         }
         .buttonStyle(.automatic)
@@ -182,24 +182,24 @@ struct DesktopMessageInputView: View {
         HStack(spacing: 12) {
             Button { audioRecorder.cancel() } label: {
                 Image(systemName: "xmark.circle.fill")
-                    .font(.system(size: 18, weight: .light))
+                    .font(CTFont.ui(18, weight: .light))
                     .foregroundStyle(Color.CT.textDim)
             }
             .buttonStyle(.plain)
 
             Image(systemName: "waveform")
-                .font(.system(size: 13, weight: .medium))
+                .font(CTFont.ui(13, weight: .medium))
                 .foregroundStyle(Color.CT.danger)
 
             Text(String(format: "%d:%02d", Int(duration) / 60, Int(duration) % 60))
-                .font(.system(size: 13, weight: .medium).monospacedDigit())
+                .font(CTFont.ui(13, weight: .medium).monospacedDigit())
                 .foregroundStyle(Color.CT.danger)
 
             Spacer()
 
             Button { audioRecorder.stopRecording() } label: {
                 Image(systemName: "stop.circle.fill")
-                    .font(.system(size: 20, weight: .regular))
+                    .font(CTFont.ui(20, weight: .regular))
                     .foregroundStyle(Color.CT.danger)
             }
             .buttonStyle(.plain)
@@ -217,17 +217,17 @@ struct DesktopMessageInputView: View {
         HStack(spacing: 12) {
             Button { audioRecorder.cancel() } label: {
                 Image(systemName: "trash.circle.fill")
-                    .font(.system(size: 18, weight: .light))
+                    .font(CTFont.ui(18, weight: .light))
                     .foregroundStyle(Color.CT.danger)
             }
             .buttonStyle(.plain)
 
             Text(String(format: "%d:%02d", Int(duration) / 60, Int(duration) % 60))
-                .font(.system(size: 13, weight: .medium).monospacedDigit())
+                .font(CTFont.ui(13, weight: .medium).monospacedDigit())
                 .foregroundStyle(Color.CT.textDim)
 
             Text(NSLocalizedString("voice_ready_to_send", comment: ""))
-                .font(.system(size: 13, weight: .regular))
+                .font(CTFont.ui(13, weight: .regular))
                 .foregroundStyle(Color.CT.textDim)
 
             Spacer()
@@ -237,7 +237,7 @@ struct DesktopMessageInputView: View {
                 audioRecorder.resetAfterSend()
             } label: {
                 Image(systemName: "arrow.up.circle.fill")
-                    .font(.system(size: 20, weight: .regular))
+                    .font(CTFont.ui(20, weight: .regular))
                     .foregroundStyle(Color.CT.accent)
             }
             .buttonStyle(.plain)

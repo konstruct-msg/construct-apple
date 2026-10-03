@@ -55,8 +55,6 @@ struct Construct_DesktopApp: App {
                 .environment(\.commandBridge, commandBridge)
                 .task {
                     if PreviewDetector.isRunningInPreview { return }
-
-                    NSApp.appearance = NSAppearance(named: .darkAqua)
                     let viewContext = PersistenceController.shared.container.viewContext
                     chatsViewModel.setContext(viewContext)
 

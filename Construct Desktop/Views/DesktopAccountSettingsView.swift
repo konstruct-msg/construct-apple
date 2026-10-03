@@ -85,7 +85,7 @@ struct DesktopAccountSettingsView: View {
     private var recoveryBanner: some View {
         HStack(alignment: .top, spacing: 10) {
             Image(systemName: "exclamationmark.circle.fill")
-                .font(.system(size: 16, weight: .semibold))
+                .font(CTFont.ui(16, weight: .semibold))
                 .foregroundStyle(Color.CT.danger)
             VStack(alignment: .leading, spacing: 6) {
                 Text(NSLocalizedString("recovery_not_configured_title", comment: "").uppercased())
@@ -99,7 +99,7 @@ struct DesktopAccountSettingsView: View {
                         Text(NSLocalizedString("recovery_setup_action", comment: ""))
                             .font(CTFont.badge)
                         Image(systemName: "chevron.right")
-                            .font(.system(size: 10, weight: .semibold))
+                            .font(CTFont.ui(10, weight: .semibold))
                     }
                     .foregroundStyle(Color.CT.accent)
                 }
@@ -111,7 +111,7 @@ struct DesktopAccountSettingsView: View {
                 UserDefaults.standard.set(true, forKey: "recovery_banner_dismissed")
             } label: {
                 Image(systemName: "xmark")
-                    .font(.system(size: 11))
+                    .font(CTFont.ui(11))
                     .foregroundStyle(Color.CT.textDim)
             }
             .buttonStyle(.plain)
@@ -266,7 +266,7 @@ struct DesktopAccountSettingsView: View {
                         .foregroundStyle(Color.CT.text)
                     Spacer()
                     Image(systemName: "chevron.right")
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(CTFont.ui(12, weight: .semibold))
                         .foregroundStyle(Color.CT.textDim)
                         .accessibilityHidden(true)
                 }

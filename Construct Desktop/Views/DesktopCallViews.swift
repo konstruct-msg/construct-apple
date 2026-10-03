@@ -36,7 +36,7 @@ struct DesktopIncomingCallView: View {
                 CallManager.shared.declineIncomingCall()
             } label: {
                 Image(systemName: "phone.down.fill")
-                    .font(.system(size: 16, weight: .medium))
+                    .font(CTFont.ui(16, weight: .medium))
                     .foregroundStyle(.white)
                     .frame(width: 36, height: 36)
                     .background(Color.CT.danger)
@@ -50,7 +50,7 @@ struct DesktopIncomingCallView: View {
                 CallManager.shared.answerIncomingCall()
             } label: {
                 Image(systemName: "phone.fill")
-                    .font(.system(size: 16, weight: .medium))
+                    .font(CTFont.ui(16, weight: .medium))
                     .foregroundStyle(.white)
                     .frame(width: 36, height: 36)
                     .background(Color.CT.accent)
@@ -121,7 +121,7 @@ struct DesktopInCallView: View {
                     CallManager.shared.setMuted(isMuted)
                 } label: {
                     Image(systemName: isMuted ? "mic.slash.fill" : "mic.fill")
-                        .font(.system(size: 14, weight: .medium))
+                        .font(CTFont.ui(14, weight: .medium))
                         .foregroundStyle(isMuted ? Color.CT.accent : Color.CT.textDim)
                         .frame(width: 28, height: 28)
                 }
@@ -133,7 +133,7 @@ struct DesktopInCallView: View {
                     CallManager.shared.endCall()
                 } label: {
                     Image(systemName: "phone.down.fill")
-                        .font(.system(size: 14, weight: .medium))
+                        .font(CTFont.ui(14, weight: .medium))
                         .foregroundStyle(.white)
                         .frame(width: 28, height: 28)
                         .background(Color.CT.danger)

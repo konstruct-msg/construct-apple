@@ -27,7 +27,7 @@ struct DesktopRootView: View {
     @Environment(\.commandBridge) private var commandBridge
     @Environment(\.openSettings) private var openSettings
     @Environment(\.openWindow) private var openWindow
-    @AppStorage("appTheme") private var appTheme: AppTheme = .automatic
+    @AppStorage("appTheme") private var appTheme: AppTheme = .dark
     @AppStorage(OrientationStore.completedUserIdsKey) private var orientationCompletedUserIds = ""
 
     @State private var showAddContact = false
