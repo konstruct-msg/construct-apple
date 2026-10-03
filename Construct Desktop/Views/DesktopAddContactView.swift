@@ -207,10 +207,21 @@ private struct MyQRTab: View {
     @State private var timeRemaining: TimeInterval = InviteConfig.ttlSeconds
     @State private var generatedAt: Date? = nil
 
+    /// Links minted by the copy button in this sitting; tap two reads differently from tap one
+    /// only because this number moved (same rule as iOS `ContactQRCodeView`).
+    @State private var copiedCount = 0
+    @State private var lastCopyAt: Date? = nil
+    @State private var copyError: String? = nil
+
     private let generator = InviteGenerator()
     private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
+    /// Nothing is minted until this device knows the account's address — the gate says why.
     var body: some View {
+        RecoveryGated { page }
+    }
+
+    private var page: some View {
         VStack(spacing: 20) {
             if let img = qrImage {
                 Image(nsImage: img)
@@ -256,9 +267,25 @@ private struct MyQRTab: View {
                     .background(CTShape.card().stroke(Color.CT.accent.opacity(0.6), lineWidth: 1))
             }
 
+            copyLinkButton
+
             Text(NSLocalizedString("desktop_add_show_qr", comment: ""))
                 .font(CTFont.ui(11))
                 .foregroundStyle(Color.CT.textDim.opacity(0.55))
+
+            Text(String(
+                format: NSLocalizedString("invite_share_rule_fmt", comment: ""),
+                InviteConfig.ttlDescription
+            ))
+            .font(CTFont.ui(11))
+            .foregroundStyle(Color.CT.textDim)
+            .multilineTextAlignment(.center)
+
+            if let copyError {
+                Text(copyError)
+                    .font(CTFont.caption)
+                    .foregroundStyle(Color.CT.danger)
+            }
         }
         .padding(24)
         .onAppear { generate() }
@@ -271,6 +298,65 @@ private struct MyQRTab: View {
                Date().timeIntervalSince(at) >= InviteConfig.qrRotateIntervalSeconds {
                 generate()
             }
+        }
+    }
+
+    // MARK: Copy link
+
+    private var copyFeedback: InviteShareDecision.CopyFeedback {
+        InviteShareDecision.feedback(copiedCount: copiedCount)
+    }
+
+    private var copyLabel: String {
+        switch copyFeedback {
+        case .idle:
+            return NSLocalizedString("invite_copy_link", comment: "")
+        case .copied:
+            return NSLocalizedString("share_copied", comment: "")
+        case .copiedAgain(let n):
+            return String(format: NSLocalizedString("invite_copied_nth_fmt", comment: ""), n)
+        }
+    }
+
+    private var copyLinkButton: some View {
+        Button { copyLink() } label: {
+            Label(copyLabel, systemImage: copyFeedback == .idle ? "link" : "checkmark")
+        }
+        .buttonStyle(.bordered)
+        .controlSize(.large)
+    }
+
+    /// Mint a fresh one-time HTTPS invite and put it on the pasteboard. Failure is shown, never
+    /// swallowed: otherwise the button reports "copied" over whatever was there before.
+    /// Not journalled — same reason as the QR above: the journal has no reader on this device.
+    private func copyLink() {
+        guard InviteShareDecision.shouldMint(
+            now: Date(),
+            lastMintAt: lastCopyAt,
+            debounce: SettingsShareLayout.copyDebounce
+        ) else { return }
+
+        guard let userId = authViewModel.currentUserId,
+              let deviceId = KeychainManager.shared.loadDeviceID() else {
+            copyError = NSLocalizedString("invite_create_failed", comment: "")
+            return
+        }
+        do {
+            // HTTPS share: the generator leaves the username out.
+            let minted = try generator.generateDeepLink(
+                userId: userId,
+                deviceId: deviceId,
+                username: nil,
+                server: ServerConfig.inviteHost,
+                useHTTPS: true
+            )
+            PlatformClipboard.copy(minted.artifact)
+            lastCopyAt = Date()
+            copyError = nil
+            withAnimation { copiedCount += 1 }
+        } catch {
+            Log.error("DesktopAddContact: invite generation failed: \(error)", category: "Invite")
+            copyError = NSLocalizedString("invite_create_failed", comment: "")
         }
     }
 
@@ -307,6 +393,7 @@ private struct MyQRTab: View {
             generatedAt = Date()
             timeRemaining = InviteConfig.ttlSeconds
         } catch {
+            Log.error("DesktopAddContact: QR invite generation failed: \(error)", category: "Invite")
             errorMessage = NSLocalizedString("desktop_add_qr_failed", comment: "")
         }
     }
