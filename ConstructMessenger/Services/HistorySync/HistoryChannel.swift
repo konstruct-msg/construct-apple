@@ -219,6 +219,7 @@ enum HistoryChannel {
             "history_snapshot_done source=file applied=\(summary.applied) conflicts=\(summary.conflictKeepExisting) skipped=\(summary.skipped.values.reduce(0, +))",
             category: "HistorySync"
         )
+        NotificationCenter.default.post(name: .historyImported, object: nil)
         return summary
     }
 
