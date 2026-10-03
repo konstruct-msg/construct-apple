@@ -889,6 +889,18 @@ public nonisolated struct Shared_Proto_Core_V1_SenderCertificate: Sendable {
   /// iOS StealthSenderService.buildCertPayload).
   public var serverSignature: Data = Data()
 
+  /// Id of the server key that made server_signature_hybrid: SHA-256("konstruct/v1/kid" ‖ key)[0..16].
+  /// The key itself reaches the client as a delegation signed by the offline root, served in
+  /// /.well-known (construct-docs/decisions/server-keys-rooted-offline-and-hybrid.md).
+  public var serverKid: Data = Data()
+
+  /// Hybrid Ed25519 ‖ ML-DSA-65 signature (3373 bytes) by that key over
+  ///   "konstruct/v1/sender-cert" ‖ server_kid ‖ BE16(len) user_id ‖ BE16(len) domain
+  ///   ‖ BE16(len) identity_key ‖ BE16(len) device_id ‖ BE64(issued_at) ‖ BE64(expires_at)
+  /// — construct-server-trust `sender_cert_body`, vectors in conformance/knst_server_trust.json.
+  /// Sent beside server_signature while clients move; server_signature goes once none reads it.
+  public var serverSignatureHybrid: Data = Data()
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -1617,7 +1629,7 @@ nonisolated extension Shared_Proto_Core_V1_SealedInner: SwiftProtobuf.Message, S
 
 nonisolated extension Shared_Proto_Core_V1_SenderCertificate: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".SenderCertificate"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}sender_user_id\0\u{3}sender_domain\0\u{3}sender_identity_key\0\u{3}sender_device_id\0\u{3}issued_at\0\u{3}expires_at\0\u{3}server_signature\0\u{c}\u{8}\u{8}")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}sender_user_id\0\u{3}sender_domain\0\u{3}sender_identity_key\0\u{3}sender_device_id\0\u{3}issued_at\0\u{3}expires_at\0\u{3}server_signature\0\u{3}server_kid\0\u{3}server_signature_hybrid\0\u{c}\u{a}\u{6}")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -1632,6 +1644,8 @@ nonisolated extension Shared_Proto_Core_V1_SenderCertificate: SwiftProtobuf.Mess
       case 5: try { try decoder.decodeSingularInt64Field(value: &self.issuedAt) }()
       case 6: try { try decoder.decodeSingularInt64Field(value: &self.expiresAt) }()
       case 7: try { try decoder.decodeSingularBytesField(value: &self.serverSignature) }()
+      case 8: try { try decoder.decodeSingularBytesField(value: &self.serverKid) }()
+      case 9: try { try decoder.decodeSingularBytesField(value: &self.serverSignatureHybrid) }()
       default: break
       }
     }
@@ -1659,6 +1673,12 @@ nonisolated extension Shared_Proto_Core_V1_SenderCertificate: SwiftProtobuf.Mess
     if !self.serverSignature.isEmpty {
       try visitor.visitSingularBytesField(value: self.serverSignature, fieldNumber: 7)
     }
+    if !self.serverKid.isEmpty {
+      try visitor.visitSingularBytesField(value: self.serverKid, fieldNumber: 8)
+    }
+    if !self.serverSignatureHybrid.isEmpty {
+      try visitor.visitSingularBytesField(value: self.serverSignatureHybrid, fieldNumber: 9)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -1670,6 +1690,8 @@ nonisolated extension Shared_Proto_Core_V1_SenderCertificate: SwiftProtobuf.Mess
     if lhs.issuedAt != rhs.issuedAt {return false}
     if lhs.expiresAt != rhs.expiresAt {return false}
     if lhs.serverSignature != rhs.serverSignature {return false}
+    if lhs.serverKid != rhs.serverKid {return false}
+    if lhs.serverSignatureHybrid != rhs.serverSignatureHybrid {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

@@ -2,10 +2,11 @@
 //  BundleSigningTrust.swift
 //  Construct Messenger
 //
-//  The keys this client accepts a server-side Ed25519 signature from: sender certificates,
-//  prekey bundles, and now sticker-pack manifests are all signed with the one key deployed as
-//  BUNDLE_SIGNING_KEY. One resolution, three verifiers — a fourth signature scheme would read
-//  from here too, so that a rotation is handled in one place.
+//  The Ed25519 keys the server signs with as BUNDLE_SIGNING_KEY: sender certificates, KT tree
+//  heads and sticker-pack manifests. One resolution, handed to the core — which decides about
+//  certificates and KT proofs, beside the delegated hybrid keys it admits — and read here only
+//  for sticker manifests, which are not moved yet
+//  (construct-docs decisions/server-keys-rooted-offline-and-hybrid.md).
 //
 
 import CryptoKit

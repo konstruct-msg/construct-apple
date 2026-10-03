@@ -26,7 +26,8 @@ import SwiftProtobuf
 private func stubCertificate(account: String, device: String) -> SenderCertificate {
     SenderCertificate(
         userId: account, domain: "test.example", identityKey: Data(repeating: 0x07, count: 32),
-        deviceId: device, issuedAt: 1, expiresAt: 2, signature: Data(repeating: 0x09, count: 64)
+        deviceId: device, issuedAt: 1, expiresAt: 2, signature: Data(repeating: 0x09, count: 64),
+        serverKid: Data(), serverSignatureHybrid: Data()
     )
 }
 

@@ -122,41 +122,49 @@ final class StealthSenderService: SealedSenderResolving {
 
     // MARK: - Verify / attest
 
-    /// The trusted bundle-signing keys, in preference order: the key fetched from
-    /// `/.well-known/construct-server` (if present), followed by the build-time pins
-    /// (`VEILConfig.pinnedBundleSigningKeys`). sealed-sender-resilience lever B — the
-    /// pins guarantee a sealed receive can be attested even when the fetched key was
-    /// never cached (e.g. VEIL inactive, the 2026-07-05 incident) or after a rotation.
-    private func trustedBundleKeys() -> [Curve25519.Signing.PublicKey] {
-        #if DEBUG
-        return BundleSigningTrust.trustedKeys(extra: extraTrustedBundleKeysForTesting)
-        #else
-        return BundleSigningTrust.trustedKeys()
-        #endif
-    }
-
     #if DEBUG
-    /// Test seam: additional trusted bundle keys (raw 32-byte) injected by unit tests to
-    /// exercise the pin/rotation path without shipping a private key for a real pin.
+    /// Test seam: additional trusted bundle keys (raw 32-byte) handed to the core beside the real
+    /// ones, to exercise the pin/rotation path without shipping a private key for a real pin.
     /// Empty in production paths.
     var extraTrustedBundleKeysForTesting: [Data] = []
     #endif
 
-    /// Checks the server Ed25519 signature on a SenderCertificate against every trusted
-    /// bundle key. Canonical (and only) payload format — stealth-sealed-sender-v2 Phase 3:
-    /// direct concatenation, no separators, issued_at/expires_at as big-endian i64 bytes.
-    /// Must match identity-service::get_sender_certificate's sign_payload exactly.
-    /// Returns a *reason* rather than a bare Bool so the caller can tell "no key to check
-    /// with" apart from "signature genuinely bad" (the old code conflated them, which is
-    /// why the 2026-07-05 nil-key failure was mislogged as `signature invalid`).
-    func attestSignature(_ cert: Shared_Proto_Core_V1_SenderCertificate) -> SenderTrust {
-        guard !cert.serverSignature.isEmpty else { return .unvouched(.badSignature) }
-        let keys = trustedBundleKeys()
-        guard !keys.isEmpty else { return .unvouched(.noKey) }
+    /// The core's verdict on the certificate, as this app's label. Until 2026-10-03 this was an
+    /// Ed25519 check written here, beside the one the core makes before opening a session from the
+    /// same certificate; the two disagreed on age (the core allows the relay's 7 days) and on the
+    /// device (the core checks the key derives to it). One check now, the core's, which also knows
+    /// the delegated hybrid keys (`decisions/server-keys-rooted-offline-and-hybrid.md`).
+    ///
+    /// Returns a *reason* rather than a bare Bool so the caller can tell "no key to check with"
+    /// apart from "signature genuinely bad" (the 2026-07-05 nil-key failure was mislogged as
+    /// `signature invalid` when they were conflated).
+    func coreVerdict(_ cert: Shared_Proto_Core_V1_SenderCertificate) -> CertificateVerdict {
+        #if DEBUG
+        let extra = extraTrustedBundleKeysForTesting
+        if let core = verdictCoreForTesting {
+            core.setTrustedServerKeys(keys: BundleSigningTrust.trustedKeyBytes() + extra)
+            return core.certificateVerdict(certificate: SenderCertificate(proto: cert))
+        }
+        #else
+        let extra: [Data] = []
+        #endif
+        return CryptoManager.shared.certificateVerdict(SenderCertificate(proto: cert), extraKeys: extra)
+            ?? .noKey
+    }
 
-        let payload = Self.buildCertPayload(userID: cert.senderUserID, domain: cert.senderDomain, ik: cert.senderIdentityKey, deviceID: cert.senderDeviceID, issued: cert.issuedAt, expires: cert.expiresAt)
-        let ok = keys.contains { $0.isValidSignature(cert.serverSignature, for: payload) }
-        return ok ? .vouched(.signature) : .unvouched(.badSignature)
+    #if DEBUG
+    /// Test seam: the core to ask instead of `CryptoManager.shared`'s, which unit tests do not
+    /// start. A real core either way — the verdict is never stubbed.
+    var verdictCoreForTesting: OrchestratorCore?
+    #endif
+
+    /// The signature half of the label: what the core says, expiry aside.
+    func attestSignature(_ cert: Shared_Proto_Core_V1_SenderCertificate) -> SenderTrust {
+        switch coreVerdict(cert) {
+        case .vouched, .expired: return .vouched(.signature)
+        case .noKey: return .unvouched(.noKey)
+        case .badSignature: return .unvouched(.badSignature)
+        }
     }
 
     #if DEBUG
@@ -199,8 +207,8 @@ final class StealthSenderService: SealedSenderResolving {
     ///     MITM-suspicion case KT exists to catch).
     ///  3. Signature (lever B): fall back to the bundle-key check for a first contact.
     func attest(_ cert: Shared_Proto_Core_V1_SenderCertificate) -> SenderTrust {
-        let now = Int64(Date().timeIntervalSince1970)
-        if cert.expiresAt <= now { return .unvouched(.expired) }
+        let verdict = coreVerdict(cert)
+        if verdict == .expired { return .unvouched(.expired) }
 
         if let kt = ktVerifiedIdentity(for: cert.senderUserID),
            kt.status == .verified,
@@ -208,23 +216,11 @@ final class StealthSenderService: SealedSenderResolving {
             return .vouched(.kt)
         }
 
-        return attestSignature(cert)
-    }
-
-    nonisolated static func buildCertPayload(userID: String, domain: String, ik: Data, deviceID: String, issued: Int64, expires: Int64) -> Data {
-        var p = Data()
-        p.append(contentsOf: userID.utf8)
-        p.append(contentsOf: domain.utf8)
-        p.append(ik)
-        p.append(contentsOf: deviceID.utf8)
-        p.append(bigEndian64(issued))
-        p.append(bigEndian64(expires))
-        return p
-    }
-
-    nonisolated private static func bigEndian64(_ value: Int64) -> Data {
-        var v = value.bigEndian
-        return Data(bytes: &v, count: 8)
+        switch verdict {
+        case .vouched, .expired: return .vouched(.signature)
+        case .noKey: return .unvouched(.noKey)
+        case .badSignature: return .unvouched(.badSignature)
+        }
     }
 
     // MARK: - Resolve sender (receive path, full pipeline)

@@ -35,12 +35,15 @@ final class IdentityKeyRetentionTests: XCTestCase {
     private let fetchedKey = Data(repeating: 0xA1, count: 32)
     private let pinnedKey = Data(repeating: 0xB2, count: 32)
 
-    override func setUp() {
-        super.setUp()
+    override func setUpWithError() throws {
+        try super.setUpWithError()
         container = PersistenceController(inMemory: true).container
+        // The certificate verdict is the core's; unit tests do not start CryptoManager's.
+        StealthSenderService.shared.verdictCoreForTesting = try makeTestDevice().core
     }
 
     override func tearDown() {
+        StealthSenderService.shared.verdictCoreForTesting = nil
         container = nil
         super.tearDown()
     }
@@ -249,11 +252,13 @@ final class IdentityKeyRetentionTests: XCTestCase {
         cert.senderUserID = peerId
         cert.senderDomain = "construct.example"
         cert.senderIdentityKey = fetchedKey
-        cert.senderDeviceID = "device-1"
+        cert.senderDeviceID = deriveDeviceId(identityPublicKey: cert.senderIdentityKey)
         let now = Int64(Date().timeIntervalSince1970)
-        cert.issuedAt = now - 86_400
-        cert.expiresAt = now - 60
-        let payload = StealthSenderService.buildCertPayload(
+        // Expired past what the relay holds a message for (7 days), so the core calls it expired
+        // rather than still openable.
+        cert.issuedAt = now - 9 * 86_400
+        cert.expiresAt = now - 8 * 86_400
+        let payload = legacyCertPayload(
             userID: cert.senderUserID, domain: cert.senderDomain, ik: cert.senderIdentityKey,
             deviceID: cert.senderDeviceID, issued: cert.issuedAt, expires: cert.expiresAt
         )
@@ -298,11 +303,11 @@ final class IdentityKeyRetentionTests: XCTestCase {
         cert.senderUserID = peerId
         cert.senderDomain = "construct.example"
         cert.senderIdentityKey = fetchedKey
-        cert.senderDeviceID = "device-1"
+        cert.senderDeviceID = deriveDeviceId(identityPublicKey: cert.senderIdentityKey)
         let now = Int64(Date().timeIntervalSince1970)
         cert.issuedAt = now - 60
         cert.expiresAt = now + 86_400
-        let payload = StealthSenderService.buildCertPayload(
+        let payload = legacyCertPayload(
             userID: cert.senderUserID, domain: cert.senderDomain, ik: cert.senderIdentityKey,
             deviceID: cert.senderDeviceID, issued: cert.issuedAt, expires: cert.expiresAt
         )
@@ -332,12 +337,12 @@ final class IdentityKeyRetentionTests: XCTestCase {
             cert.senderUserID = peerId
             cert.senderDomain = "construct.example"
             cert.senderIdentityKey = identityKey
-            cert.senderDeviceID = "device-1"
+            cert.senderDeviceID = deriveDeviceId(identityPublicKey: cert.senderIdentityKey)
             let now = Int64(Date().timeIntervalSince1970)
             cert.issuedAt = now - 60
             cert.expiresAt = now + 86_400
             cert.serverSignature = try! signingKey.signature(
-                for: StealthSenderService.buildCertPayload(
+                for: legacyCertPayload(
                     userID: cert.senderUserID, domain: cert.senderDomain, ik: cert.senderIdentityKey,
                     deviceID: cert.senderDeviceID, issued: cert.issuedAt, expires: cert.expiresAt
                 )

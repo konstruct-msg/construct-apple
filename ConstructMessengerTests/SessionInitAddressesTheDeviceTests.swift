@@ -134,7 +134,8 @@ final class SessionInitAddressesTheDeviceTests: XCTestCase {
             // Names the bundle's device; the fake core does not check the signature.
             senderCertificate: SenderCertificate(
                 userId: account, domain: "test.example", identityKey: bundleIdentityKey,
-                deviceId: bundleDevice, issuedAt: 1, expiresAt: 2, signature: Data(repeating: 0x09, count: 64)
+                deviceId: bundleDevice, issuedAt: 1, expiresAt: 2, signature: Data(repeating: 0x09, count: 64),
+                serverKid: Data(), serverSignatureHybrid: Data()
             ),
             // A handshake header, so the message classifies as one; the fake core never decrypts it.
             rawPayload: handBuiltWirePayload(

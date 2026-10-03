@@ -2231,6 +2231,8 @@ public protocol OrchestratorCoreProtocol: AnyObject, Sendable {
      */
     func ackMarkProcessed(messageId: String) 
     
+    func admitServerDelegations(delegations: [Data])  -> UInt32
+    
     /**
      * Start a Kyber SPK rotation (with the classic SPK): the key to upload. Calling it again
      * before commit/rollback returns the same key, so a retried upload uploads the same key.
@@ -2240,6 +2242,8 @@ public protocol OrchestratorCoreProtocol: AnyObject, Sendable {
     func buildHybridIdentityBindMessage(hybridPublicKey: Data)  -> Data
     
     func buildX3dhSignMessage(suiteId: UInt8, publicKey: Data)  -> Data
+    
+    func certificateVerdict(certificate: SenderCertificate)  -> CertificateVerdict
     
     /**
      * The server confirmed the upload. Returns false if nothing was pending.
@@ -2491,6 +2495,8 @@ public protocol OrchestratorCoreProtocol: AnyObject, Sendable {
      */
     func signWithDeviceKey(message: Data) throws  -> Data
     
+    func verifyKtProofs(deviceId: String, identityKey: Data, identityProof: KtInclusionProof, hybridIdentityKey: Data?, hybridProof: KtInclusionProof?, treeHead: KtSignedTreeHead?)  -> KtVerdicts
+    
 }
 /**
  * Top-level orchestration facade.
@@ -2573,6 +2579,15 @@ open func ackMarkProcessed(messageId: String)  {try! rustCall() {
 }
 }
     
+open func admitServerDelegations(delegations: [Data]) -> UInt32  {
+    return try!  FfiConverterUInt32.lift(try! rustCall() {
+    uniffi_construct_core_fn_method_orchestratorcore_admit_server_delegations(
+            self.uniffiCloneHandle(),
+        FfiConverterSequenceData.lower(delegations),$0
+    )
+})
+}
+    
     /**
      * Start a Kyber SPK rotation (with the classic SPK): the key to upload. Calling it again
      * before commit/rollback returns the same key, so a retried upload uploads the same key.
@@ -2600,6 +2615,15 @@ open func buildX3dhSignMessage(suiteId: UInt8, publicKey: Data) -> Data  {
             self.uniffiCloneHandle(),
         FfiConverterUInt8.lower(suiteId),
         FfiConverterData.lower(publicKey),$0
+    )
+})
+}
+    
+open func certificateVerdict(certificate: SenderCertificate) -> CertificateVerdict  {
+    return try!  FfiConverterTypeCertificateVerdict_lift(try! rustCall() {
+    uniffi_construct_core_fn_method_orchestratorcore_certificate_verdict(
+            self.uniffiCloneHandle(),
+        FfiConverterTypeSenderCertificate_lower(certificate),$0
     )
 })
 }
@@ -3292,6 +3316,20 @@ open func signWithDeviceKey(message: Data)throws  -> Data  {
     uniffi_construct_core_fn_method_orchestratorcore_sign_with_device_key(
             self.uniffiCloneHandle(),
         FfiConverterData.lower(message),$0
+    )
+})
+}
+    
+open func verifyKtProofs(deviceId: String, identityKey: Data, identityProof: KtInclusionProof, hybridIdentityKey: Data?, hybridProof: KtInclusionProof?, treeHead: KtSignedTreeHead?) -> KtVerdicts  {
+    return try!  FfiConverterTypeKtVerdicts_lift(try! rustCall() {
+    uniffi_construct_core_fn_method_orchestratorcore_verify_kt_proofs(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(deviceId),
+        FfiConverterData.lower(identityKey),
+        FfiConverterTypeKtInclusionProof_lower(identityProof),
+        FfiConverterOptionData.lower(hybridIdentityKey),
+        FfiConverterOptionTypeKtInclusionProof.lower(hybridProof),
+        FfiConverterOptionTypeKtSignedTreeHead.lower(treeHead),$0
     )
 })
 }
@@ -4744,6 +4782,182 @@ public func FfiConverterTypeKnstFrame_lift(_ buf: RustBuffer) throws -> KnstFram
 #endif
 public func FfiConverterTypeKnstFrame_lower(_ value: KnstFrame) -> RustBuffer {
     return FfiConverterTypeKnstFrame.lower(value)
+}
+
+
+public struct KtInclusionProof: Equatable, Hashable {
+    public var leafIndex: UInt64
+    public var treeSize: UInt64
+    public var rootHash: Data
+    public var proofHashes: [Data]
+    public var treeHeadSignature: Data
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(leafIndex: UInt64, treeSize: UInt64, rootHash: Data, proofHashes: [Data], treeHeadSignature: Data) {
+        self.leafIndex = leafIndex
+        self.treeSize = treeSize
+        self.rootHash = rootHash
+        self.proofHashes = proofHashes
+        self.treeHeadSignature = treeHeadSignature
+    }
+
+    
+}
+
+#if compiler(>=6)
+extension KtInclusionProof: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeKtInclusionProof: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> KtInclusionProof {
+        return
+            try KtInclusionProof(
+                leafIndex: FfiConverterUInt64.read(from: &buf), 
+                treeSize: FfiConverterUInt64.read(from: &buf), 
+                rootHash: FfiConverterData.read(from: &buf), 
+                proofHashes: FfiConverterSequenceData.read(from: &buf), 
+                treeHeadSignature: FfiConverterData.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: KtInclusionProof, into buf: inout [UInt8]) {
+        FfiConverterUInt64.write(value.leafIndex, into: &buf)
+        FfiConverterUInt64.write(value.treeSize, into: &buf)
+        FfiConverterData.write(value.rootHash, into: &buf)
+        FfiConverterSequenceData.write(value.proofHashes, into: &buf)
+        FfiConverterData.write(value.treeHeadSignature, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeKtInclusionProof_lift(_ buf: RustBuffer) throws -> KtInclusionProof {
+    return try FfiConverterTypeKtInclusionProof.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeKtInclusionProof_lower(_ value: KtInclusionProof) -> RustBuffer {
+    return FfiConverterTypeKtInclusionProof.lower(value)
+}
+
+
+public struct KtSignedTreeHead: Equatable, Hashable {
+    public var treeSize: UInt64
+    public var rootHash: Data
+    public var kid: Data
+    public var signature: Data
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(treeSize: UInt64, rootHash: Data, kid: Data, signature: Data) {
+        self.treeSize = treeSize
+        self.rootHash = rootHash
+        self.kid = kid
+        self.signature = signature
+    }
+
+    
+}
+
+#if compiler(>=6)
+extension KtSignedTreeHead: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeKtSignedTreeHead: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> KtSignedTreeHead {
+        return
+            try KtSignedTreeHead(
+                treeSize: FfiConverterUInt64.read(from: &buf), 
+                rootHash: FfiConverterData.read(from: &buf), 
+                kid: FfiConverterData.read(from: &buf), 
+                signature: FfiConverterData.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: KtSignedTreeHead, into buf: inout [UInt8]) {
+        FfiConverterUInt64.write(value.treeSize, into: &buf)
+        FfiConverterData.write(value.rootHash, into: &buf)
+        FfiConverterData.write(value.kid, into: &buf)
+        FfiConverterData.write(value.signature, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeKtSignedTreeHead_lift(_ buf: RustBuffer) throws -> KtSignedTreeHead {
+    return try FfiConverterTypeKtSignedTreeHead.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeKtSignedTreeHead_lower(_ value: KtSignedTreeHead) -> RustBuffer {
+    return FfiConverterTypeKtSignedTreeHead.lower(value)
+}
+
+
+public struct KtVerdicts: Equatable, Hashable {
+    public var identity: KtVerdict
+    public var hybrid: KtVerdict?
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(identity: KtVerdict, hybrid: KtVerdict?) {
+        self.identity = identity
+        self.hybrid = hybrid
+    }
+
+    
+}
+
+#if compiler(>=6)
+extension KtVerdicts: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeKtVerdicts: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> KtVerdicts {
+        return
+            try KtVerdicts(
+                identity: FfiConverterTypeKtVerdict.read(from: &buf), 
+                hybrid: FfiConverterOptionTypeKtVerdict.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: KtVerdicts, into buf: inout [UInt8]) {
+        FfiConverterTypeKtVerdict.write(value.identity, into: &buf)
+        FfiConverterOptionTypeKtVerdict.write(value.hybrid, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeKtVerdicts_lift(_ buf: RustBuffer) throws -> KtVerdicts {
+    return try FfiConverterTypeKtVerdicts.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeKtVerdicts_lower(_ value: KtVerdicts) -> RustBuffer {
+    return FfiConverterTypeKtVerdicts.lower(value)
 }
 
 
@@ -6302,10 +6516,12 @@ public struct SenderCertificate: Equatable, Hashable {
     public var issuedAt: Int64
     public var expiresAt: Int64
     public var signature: Data
+    public var serverKid: Data
+    public var serverSignatureHybrid: Data
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(userId: String, domain: String, identityKey: Data, deviceId: String, issuedAt: Int64, expiresAt: Int64, signature: Data) {
+    public init(userId: String, domain: String, identityKey: Data, deviceId: String, issuedAt: Int64, expiresAt: Int64, signature: Data, serverKid: Data, serverSignatureHybrid: Data) {
         self.userId = userId
         self.domain = domain
         self.identityKey = identityKey
@@ -6313,6 +6529,8 @@ public struct SenderCertificate: Equatable, Hashable {
         self.issuedAt = issuedAt
         self.expiresAt = expiresAt
         self.signature = signature
+        self.serverKid = serverKid
+        self.serverSignatureHybrid = serverSignatureHybrid
     }
 
     
@@ -6335,7 +6553,9 @@ public struct FfiConverterTypeSenderCertificate: FfiConverterRustBuffer {
                 deviceId: FfiConverterString.read(from: &buf), 
                 issuedAt: FfiConverterInt64.read(from: &buf), 
                 expiresAt: FfiConverterInt64.read(from: &buf), 
-                signature: FfiConverterData.read(from: &buf)
+                signature: FfiConverterData.read(from: &buf), 
+                serverKid: FfiConverterData.read(from: &buf), 
+                serverSignatureHybrid: FfiConverterData.read(from: &buf)
         )
     }
 
@@ -6347,6 +6567,8 @@ public struct FfiConverterTypeSenderCertificate: FfiConverterRustBuffer {
         FfiConverterInt64.write(value.issuedAt, into: &buf)
         FfiConverterInt64.write(value.expiresAt, into: &buf)
         FfiConverterData.write(value.signature, into: &buf)
+        FfiConverterData.write(value.serverKid, into: &buf)
+        FfiConverterData.write(value.serverSignatureHybrid, into: &buf)
     }
 }
 
@@ -6801,6 +7023,85 @@ public func FfiConverterTypeAckCheckResult_lift(_ buf: RustBuffer) throws -> Ack
 #endif
 public func FfiConverterTypeAckCheckResult_lower(_ value: AckCheckResult) -> RustBuffer {
     return FfiConverterTypeAckCheckResult.lower(value)
+}
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+
+public enum CertificateVerdict: Equatable, Hashable {
+    
+    case vouched
+    case noKey
+    case badSignature
+    case expired
+
+
+
+}
+
+#if compiler(>=6)
+extension CertificateVerdict: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeCertificateVerdict: FfiConverterRustBuffer {
+    typealias SwiftType = CertificateVerdict
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> CertificateVerdict {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .vouched
+        
+        case 2: return .noKey
+        
+        case 3: return .badSignature
+        
+        case 4: return .expired
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: CertificateVerdict, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case .vouched:
+            writeInt(&buf, Int32(1))
+        
+        
+        case .noKey:
+            writeInt(&buf, Int32(2))
+        
+        
+        case .badSignature:
+            writeInt(&buf, Int32(3))
+        
+        
+        case .expired:
+            writeInt(&buf, Int32(4))
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeCertificateVerdict_lift(_ buf: RustBuffer) throws -> CertificateVerdict {
+    return try FfiConverterTypeCertificateVerdict.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeCertificateVerdict_lower(_ value: CertificateVerdict) -> RustBuffer {
+    return FfiConverterTypeCertificateVerdict.lower(value)
 }
 
 
@@ -8282,6 +8583,92 @@ public func FfiConverterTypeInitiationDecision_lower(_ value: InitiationDecision
 // Note that we don't yet support `indirect` for enums.
 // See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
 
+public enum KtVerdict: Equatable, Hashable {
+    
+    case verified
+    case unavailable
+    case malformedProof
+    case inclusionProofInvalid
+    case signatureInvalid
+
+
+
+}
+
+#if compiler(>=6)
+extension KtVerdict: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeKtVerdict: FfiConverterRustBuffer {
+    typealias SwiftType = KtVerdict
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> KtVerdict {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .verified
+        
+        case 2: return .unavailable
+        
+        case 3: return .malformedProof
+        
+        case 4: return .inclusionProofInvalid
+        
+        case 5: return .signatureInvalid
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: KtVerdict, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case .verified:
+            writeInt(&buf, Int32(1))
+        
+        
+        case .unavailable:
+            writeInt(&buf, Int32(2))
+        
+        
+        case .malformedProof:
+            writeInt(&buf, Int32(3))
+        
+        
+        case .inclusionProofInvalid:
+            writeInt(&buf, Int32(4))
+        
+        
+        case .signatureInvalid:
+            writeInt(&buf, Int32(5))
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeKtVerdict_lift(_ buf: RustBuffer) throws -> KtVerdict {
+    return try FfiConverterTypeKtVerdict.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeKtVerdict_lower(_ value: KtVerdict) -> RustBuffer {
+    return FfiConverterTypeKtVerdict.lower(value)
+}
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+
 public enum LocalInsert: Equatable, Hashable {
     
     case inserted
@@ -9599,6 +9986,54 @@ fileprivate struct FfiConverterOptionTypeKnstFrame: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterOptionTypeKtInclusionProof: FfiConverterRustBuffer {
+    typealias SwiftType = KtInclusionProof?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeKtInclusionProof.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeKtInclusionProof.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterOptionTypeKtSignedTreeHead: FfiConverterRustBuffer {
+    typealias SwiftType = KtSignedTreeHead?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeKtSignedTreeHead.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeKtSignedTreeHead.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterOptionTypeKyberPrekeyUpload: FfiConverterRustBuffer {
     typealias SwiftType = KyberPrekeyUpload?
 
@@ -9759,6 +10194,30 @@ fileprivate struct FfiConverterOptionTypeSessionHealthReport: FfiConverterRustBu
         switch try readInt(&buf) as Int8 {
         case 0: return nil
         case 1: return try FfiConverterTypeSessionHealthReport.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterOptionTypeKtVerdict: FfiConverterRustBuffer {
+    typealias SwiftType = KtVerdict?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeKtVerdict.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeKtVerdict.read(from: &buf)
         default: throw UniffiInternalError.unexpectedOptionalTag
         }
     }
@@ -11297,6 +11756,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_method_orchestratorcore_ack_mark_processed() != 13454) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_construct_core_checksum_method_orchestratorcore_admit_server_delegations() != 9633) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_construct_core_checksum_method_orchestratorcore_begin_kyber_spk_rotation() != 57721) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -11304,6 +11766,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_orchestratorcore_build_x3dh_sign_message() != 28178) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_orchestratorcore_certificate_verdict() != 10591) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_orchestratorcore_commit_kyber_spk_rotation() != 27935) {
@@ -11493,6 +11958,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_orchestratorcore_sign_with_device_key() != 47610) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_orchestratorcore_verify_kt_proofs() != 62141) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_rustackstore_cache_len() != 41894) {

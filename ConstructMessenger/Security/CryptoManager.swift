@@ -1206,8 +1206,46 @@ class CryptoManager {
     /// every orchestrator event rather than once: the fetched key can arrive or rotate while the
     /// app runs, and a stale copy in the core would refuse certificates the app itself accepts.
     /// Caller holds `coreLock`.
-    private func handOverTrustedServerKeys(to core: OrchestratorCore) {
-        core.setTrustedServerKeys(keys: BundleSigningTrust.trustedKeyBytes())
+    private func handOverTrustedServerKeys(to core: OrchestratorCore, extraKeys: [Data] = []) {
+        core.setTrustedServerKeys(keys: BundleSigningTrust.trustedKeyBytes() + extraKeys)
+        // Delegations of the server's hybrid keys. The core keeps only those a root pinned in this
+        // build signed, so where they came from does not matter; one it already holds is kept once.
+        _ = core.admitServerDelegations(delegations: ServerKeyManager.cachedServerDelegations())
+    }
+
+    /// The core's verdict on a sender certificate — signature, device and age, judged as an open
+    /// would (`decisions/server-keys-rooted-offline-and-hybrid.md`). Until 2026-10-03 this app
+    /// checked the Ed25519 signature itself, beside the core's check, and the two disagreed on age
+    /// and on the device. `nil` only when there is no core to ask. `extraKeys` is a test seam.
+    func certificateVerdict(_ certificate: SenderCertificate, extraKeys: [Data] = []) -> CertificateVerdict? {
+        coreLock.lock()
+        defer { coreLock.unlock() }
+        guard let core = orchestratorCore else { return nil }
+        handOverTrustedServerKeys(to: core, extraKeys: extraKeys)
+        return core.certificateVerdict(certificate: certificate)
+    }
+
+    /// The core's verdicts on a bundle's KT proofs. `nil` only when there is no core to ask.
+    func verifyKtProofs(
+        deviceId: String,
+        identityKey: Data,
+        identityProof: KtInclusionProof,
+        hybridIdentityKey: Data?,
+        hybridProof: KtInclusionProof?,
+        treeHead: KtSignedTreeHead?
+    ) -> KtVerdicts? {
+        coreLock.lock()
+        defer { coreLock.unlock() }
+        guard let core = orchestratorCore else { return nil }
+        handOverTrustedServerKeys(to: core)
+        return core.verifyKtProofs(
+            deviceId: deviceId,
+            identityKey: identityKey,
+            identityProof: identityProof,
+            hybridIdentityKey: hybridIdentityKey,
+            hybridProof: hybridProof,
+            treeHead: treeHead
+        )
     }
 
     /// Whether any of `devices` is opening a session with us right now (a handshake of theirs
