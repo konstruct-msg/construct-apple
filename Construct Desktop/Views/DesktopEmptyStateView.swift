@@ -2,149 +2,75 @@
 //  DesktopEmptyStateView.swift
 //  Construct Desktop
 //
-//  Empty-state panel — CT terminal aesthetic.
-//  Three protocol cards connected by ASCII lines; sharp borders, JetBrains Mono.
+//  The detail pane with no chat open. It used to be a spec sheet of the protocol stack; what a
+//  person needs here is the next step: set up the recovery phrase (contacts wait on it) or add
+//  someone.
 //
 
 import SwiftUI
 
 struct DesktopEmptyStateView: View {
+    /// Whether this device knows the account's address (`AccountAddress.own() != nil`). Without it
+    /// no invite can be made or redeemed, so the phrase comes first.
+    let hasAddress: Bool
+    let onAddContact: () -> Void
+    let onSetUpRecovery: () -> Void
+
+    private static let contentWidth: CGFloat = 380
+    private static let iconSize: CGFloat = 40
+
     var body: some View {
         VStack(spacing: 0) {
             Spacer()
 
-            // Wordmark
-            VStack(spacing: 4) {
-                Text("KONSTRUCT")
-                    .font(CTFont.ui(20, weight: .bold))
-                    .foregroundStyle(Color.CT.text)
-                    .tracking(8)
-
-                Text("post-quantum secure messaging")
-                    .font(CTFont.micro)
+            VStack(spacing: CTLayout.sectionGap) {
+                Image(systemName: hasAddress ? "bubble.left.and.bubble.right" : "key.horizontal")
+                    .font(CTFont.ui(Self.iconSize, weight: .light))
                     .foregroundStyle(Color.CT.textDim)
-                    .tracking(2)
-            }
-            .padding(.bottom, 40)
+                    .accessibilityHidden(true)
 
-            // Protocol stack — three ASCII cards connected by lines
-            HStack(alignment: .top, spacing: 0) {
-                protocolCard(
-                    label: "TRANSPORT",
-                    rows: [("PROTOCOL", "gRPC"), ("SECURITY", "TLS 1.3"), ("DELIVERY", "BiDi Stream")],
-                    isAccent: false
-                )
-                connectorLine
-                protocolCard(
-                    label: "KEY EXCHANGE",
-                    rows: [("ALGORITHM", "PQXDH"), ("CLASSICAL", "X25519"), ("PQ", "Kyber-768")],
-                    isAccent: true
-                )
-                connectorLine
-                protocolCard(
-                    label: "MESSAGING",
-                    rows: [("RATCHET", "Double Ratchet"), ("CIPHER", "AES-256-GCM"), ("FWD. SECRECY", "Per-msg")],
-                    isAccent: false
-                )
+                VStack(spacing: CTLayout.chromeGap) {
+                    Text(LocalizedStringKey(hasAddress ? "select_chat" : "recovery_gate_title"))
+                        .font(CTFont.headline)
+                        .foregroundStyle(Color.CT.text)
+                        .multilineTextAlignment(.center)
+                    Text(LocalizedStringKey(hasAddress ? "select_chat_description" : "recovery_intro_body"))
+                        .font(CTFont.secondary)
+                        .foregroundStyle(Color.CT.textDim)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                HStack(spacing: CTLayout.chromeGap) {
+                    if !hasAddress {
+                        Button(action: onSetUpRecovery) {
+                            Label(LocalizedStringKey("recovery_gate_setup_action"), systemImage: "key.horizontal")
+                        }
+                        .buttonStyle(.borderedProminent)
+                    }
+                    Button(action: onAddContact) {
+                        Label(LocalizedStringKey("add_contact_menu"), systemImage: "person.badge.plus")
+                    }
+                    .buttonStyle(.bordered)
+                }
+                .controlSize(.large)
             }
+            .frame(maxWidth: Self.contentWidth)
+            .padding(.horizontal, CTLayout.edgePad)
 
             Spacer()
-
-            // Bottom shortcut hint row
-            HStack(spacing: 12) {
-                shortcutHint("⌘N",  "new conversation")
-                Text("·").foregroundStyle(Color.CT.textDim)
-                shortcutHint("⌘K",  "quick open")
-                Text("·").foregroundStyle(Color.CT.textDim)
-                shortcutHint("⌘⌥N", "add contact")
-                Text("·").foregroundStyle(Color.CT.textDim)
-                shortcutHint("⌘,",  "settings")
-            }
-            .font(CTFont.caption)
-            .foregroundStyle(Color.CT.textDim)
-            .padding(.bottom, 28)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .ctBackground()
     }
-
-    // MARK: - ASCII protocol card
-
-    private func protocolCard(
-        label: String,
-        rows: [(String, String)],
-        isAccent: Bool
-    ) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            // Header line: ┌── LABEL ──┐
-            HStack(spacing: 0) {
-                Text(isAccent ? "[" : "╔")
-                    .font(CTFont.ui(9, weight: .bold))
-                    .foregroundStyle(isAccent ? Color.CT.accent : Color.CT.textDim)
-                Text(" \(label) ")
-                    .font(CTFont.ui(9, weight: .bold))
-                    .foregroundStyle(isAccent ? Color.CT.accent : Color.CT.text)
-                    .tracking(1.5)
-                Text(isAccent ? "]" : "╗")
-                    .font(CTFont.ui(9, weight: .bold))
-                    .foregroundStyle(isAccent ? Color.CT.accent : Color.CT.textDim)
-            }
-            .padding(.bottom, 10)
-
-            // Rows
-            VStack(alignment: .leading, spacing: 11) {
-                ForEach(rows, id: \.0) { key, value in
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(key)
-                            .font(CTFont.mono(8))
-                            .foregroundStyle(Color.CT.textDim)
-                            .tracking(1.5)
-                        Text(value)
-                            .font(CTFont.caption)
-                            .foregroundStyle(isAccent ? Color.CT.accent : Color.CT.text)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                }
-            }
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 16)
-        .frame(width: 148)
-        .background(
-            Rectangle()
-                .fill(isAccent ? Color.CT.accent.opacity(0.04) : Color.CT.bgMsg)
-        )
-        .overlay(
-            Rectangle()
-                .stroke(isAccent ? Color.CT.accent.opacity(0.5) : Color.CT.textDim.opacity(0.35), lineWidth: 1)
-        )
-    }
-
-    private var connectorLine: some View {
-        Rectangle()
-            .fill(Color.CT.noise)
-            .frame(width: 16, height: 1)
-            .padding(.top, 22)
-    }
-
-    // MARK: - Shortcut badge
-
-    private func shortcutHint(_ key: String, _ label: String) -> some View {
-        HStack(spacing: 5) {
-            Text("[\(key)]")
-                .font(CTFont.caption)
-                .foregroundStyle(Color.CT.accent)
-            Text(label)
-                .font(CTFont.caption)
-                .foregroundStyle(Color.CT.textDim)
-        }
-    }
 }
 
-#Preview {
-    DesktopEmptyStateView()
+#Preview("No address") {
+    DesktopEmptyStateView(hasAddress: false, onAddContact: {}, onSetUpRecovery: {})
         .frame(width: 640, height: 520)
 }
 
-
-
+#Preview("Ready") {
+    DesktopEmptyStateView(hasAddress: true, onAddContact: {}, onSetUpRecovery: {})
+        .frame(width: 640, height: 520)
+}
