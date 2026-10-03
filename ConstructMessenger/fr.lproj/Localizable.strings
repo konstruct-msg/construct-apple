@@ -1238,3 +1238,4 @@
 "mic_denied_title" = "Accès au micro refusé";
 "mic_denied_message_macos" = "Autorisez le micro dans Réglages pour envoyer des messages vocaux.";
 "voice_ready_to_send" = "Prêt à envoyer";
+"save_as" = "Enregistrer sous…";

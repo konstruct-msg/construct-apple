@@ -60,6 +60,13 @@ struct FileAttachmentBubbleView: View {
             VideoPlayerView(url: item.url)
                 .ignoresSafeArea()
         }
+        #elseif os(macOS)
+        .sheet(item: Binding(
+            get: { videoPlayerURL.map { VideoPlayerItem(url: $0) } },
+            set: { if $0 == nil { videoPlayerURL = nil } }
+        )) { item in
+            MacVideoPlayerSheet(url: item.url) { videoPlayerURL = nil }
+        }
         #endif
     }
 
@@ -129,6 +136,9 @@ struct FileAttachmentBubbleView: View {
             }
         }
         .buttonStyle(.plain)
+        #if os(macOS)
+        .contextMenu { saveAsButton(file) }
+        #endif
     }
 
     @ViewBuilder
@@ -171,7 +181,42 @@ struct FileAttachmentBubbleView: View {
             }
         }
         .buttonStyle(.plain)
+        #if os(macOS)
+        .contextMenu { saveAsButton(file) }
+        #endif
     }
+
+    #if os(macOS)
+    private func saveAsButton(_ file: FileMessageContent.FileEntry) -> some View {
+        Button { saveAs(file) } label: {
+            Label(NSLocalizedString("save_as", comment: ""), systemImage: "square.and.arrow.down")
+        }
+    }
+
+    /// Write a copy where the person chooses. The file is downloaded first if it has not been
+    /// opened yet; cancelling the panel is not an error.
+    private func saveAs(_ file: FileMessageContent.FileEntry) {
+        guard !downloading.contains(file.mediaId) else { return }
+        Task { @MainActor in
+            do {
+                let url: URL
+                if let cached = downloadedURLs[file.mediaId] {
+                    url = cached
+                } else {
+                    downloading.insert(file.mediaId)
+                    defer { downloading.remove(file.mediaId) }
+                    url = try await downloadFile(file)
+                    downloadedURLs[file.mediaId] = url
+                }
+                if MediaSaver.export(fileAt: url, suggestedName: file.filename) == .failed {
+                    Log.error("File save failed: \(file.filename)", category: "FileAttachment")
+                }
+            } catch {
+                Log.error("File download failed: \(error)", category: "FileAttachment")
+            }
+        }
+    }
+    #endif
 
     private func openOrDownload(_ file: FileMessageContent.FileEntry) {
         if let url = downloadedURLs[file.mediaId] {
@@ -298,5 +343,27 @@ private struct VideoPlayerView: UIViewControllerRepresentable {
     }
 
     func updateUIViewController(_ uiViewController: AVPlayerViewController, context: Context) {}
+}
+#endif
+
+#if os(macOS)
+/// A downloaded video file, played in a resizable sheet. Esc closes it.
+private struct MacVideoPlayerSheet: View {
+    let url: URL
+    let onClose: () -> Void
+    @State private var player: AVPlayer?
+
+    var body: some View {
+        VideoPlayer(player: player)
+            .frame(minWidth: 640, idealWidth: 960, minHeight: 400, idealHeight: 600)
+            .background(Color.black)
+            .onAppear {
+                let p = AVPlayer(url: url)
+                player = p
+                p.play()
+            }
+            .onDisappear { player?.pause() }
+            .onExitCommand(perform: onClose)
+    }
 }
 #endif

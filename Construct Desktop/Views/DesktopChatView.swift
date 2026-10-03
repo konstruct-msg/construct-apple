@@ -165,7 +165,7 @@ struct DesktopChatView: View {
                 .frame(minWidth: 400, minHeight: 320)
             }
             .sheet(item: $galleryStartItem) { item in
-                MediaGalleryViewer(
+                DesktopMediaViewer(
                     messages: mediaMessages,
                     initialMessageId: item.messageId,
                     initialItemIndex: item.itemIndex,
