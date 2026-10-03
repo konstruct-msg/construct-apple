@@ -66,7 +66,7 @@ Sibling repos: `~/Code/construct-core` (crypto), `~/Code/construct-transport` (Q
 | Layer | Who decides the look |
 |---|---|
 | **Control and state** — buttons, toggles, navigation, selection, status, disclosure | the platform, always |
-| **Structure and rhythm** — grid and density, hairlines, section headers, palette, dark default, hex avatars, the monospace chrome | us; this is the identity |
+| **Structure and rhythm** — grid and density, hairlines, section headers, palette, dark default, identicon avatars (a circle — hexagons were dropped 2026-05-04), the monospace chrome | us; this is the identity |
 | **Content** — message text (`CTFont.message`) | the reader |
 
 The test: *does a person have to learn this app to know what it does?* If yes it is a control, and
