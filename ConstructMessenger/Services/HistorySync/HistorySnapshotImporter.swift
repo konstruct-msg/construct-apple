@@ -116,6 +116,7 @@ struct HistorySnapshotImporter {
         private let context: NSManagedObjectContext
         private var summary = HistoryImportSummary()
         private var sinceSave = 0
+        private var index = 0
 
         init(
             importer: HistorySnapshotImporter,
@@ -128,7 +129,19 @@ struct HistorySnapshotImporter {
         }
 
         mutating func apply(_ record: HistoryRecord) throws {
-            let result = try importer.apply(record, expectedUserId: expectedUserId, in: context)
+            defer { index += 1 }
+            let result: HistoryApplyResult
+            do {
+                result = try importer.apply(record, expectedUserId: expectedUserId, in: context)
+            } catch {
+                // A refused record aborts the whole phase, and the error alone ("malformed") does
+                // not say which one. Shapes only — never content, ids or bodies.
+                Log.error(
+                    "history_record_rejected index=\(index) \(record.shape) error=\(error)",
+                    category: "HistorySync"
+                )
+                throw error
+            }
             summary.add(result)
             sinceSave += 1
             if sinceSave >= HistorySnapshotImporter.saveBatchSize {
@@ -419,5 +432,31 @@ struct HistorySnapshotImporter {
 
     private func isBlankDisplayName(_ name: String, userId: String) -> Bool {
         name.isEmpty || name == DisplayNameGenerator.generate(from: userId)
+    }
+}
+
+private extension HistoryRecord {
+    /// What a rejected record looked like, for the log: its kind and the sizes of the fields the
+    /// importer checks.
+    var shape: String {
+        switch self {
+        case .manifest:
+            return "kind=manifest"
+        case .contact(let c):
+            return "kind=contact userId=\(c.userID.count)B"
+        case .chat(let c):
+            return "kind=chat otherUserId=\(c.otherUserID.count)B"
+        case .message(let m):
+            return "kind=message id=\(m.id.count)B from=\(m.fromUserID.count)B to=\(m.toUserID.count)B "
+                + "body=\(m.body != nil) sentByMe=\(m.isSentByMe)"
+        case .reaction(let r):
+            return "kind=reaction target=\(r.targetMessageID.count)B reactor=\(r.reactorUserID.count)B"
+        case .peerDevice:
+            return "kind=peerDevice"
+        case .call(let c):
+            return "kind=call id=\(c.id.count)B"
+        case .skipped(let type):
+            return "kind=skipped type=\(type)"
+        }
     }
 }
