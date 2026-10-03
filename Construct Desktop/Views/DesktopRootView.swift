@@ -37,6 +37,8 @@ struct DesktopRootView: View {
     /// `ContentView`. Contacts wait on it (`RecoveryGated`), so this is where it is asked for
     /// before anyone reaches for an invite.
     @State private var showingRecoveryPrompt = false
+    /// Read again when the recovery sheet closes: `AccountAddress` is not observable.
+    @State private var hasAccountAddress = AccountAddress.own() != nil
     @State private var callManager = CallManager.shared
     @State private var showReceiveHistorySync = false
     @State private var historySyncPendingDeviceId: String? = nil
@@ -98,6 +100,9 @@ struct DesktopRootView: View {
             if completed, AccountAddress.own() == nil {
                 showingRecoveryPrompt = true
             }
+        }
+        .onChange(of: showingRecoveryPrompt) { _, showing in
+            if !showing { hasAccountAddress = AccountAddress.own() != nil }
         }
         .sheet(isPresented: $showingRecoveryPrompt) {
             RecoveryGateView(reason: .afterRegistration)
@@ -309,7 +314,11 @@ struct DesktopRootView: View {
                     handleDrop(providers: providers, into: chat)
                 }
         } else {
-            DesktopEmptyStateView()
+            DesktopEmptyStateView(
+                hasAddress: hasAccountAddress,
+                onAddContact: { showAddContact = true },
+                onSetUpRecovery: { showingRecoveryPrompt = true }
+            )
                 .navigationTitle(NSLocalizedString("construct_title", comment: ""))
                 .onDrop(of: [.fileURL], isTargeted: nil) { _ in false }
         }
@@ -429,7 +438,7 @@ struct DesktopRootView: View {
 #Preview("Empty state (no chat selected)") {
     // Shows the detail pane when no conversation is open — quick layout check
     // without needing to launch the full app.
-    DesktopEmptyStateView()
+    DesktopEmptyStateView(hasAddress: false, onAddContact: {}, onSetUpRecovery: {})
         .frame(width: 760, height: 500)
 }
 
