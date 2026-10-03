@@ -22,7 +22,6 @@ struct DevicesView: View {
     @State private var isLoading = false
     @State private var errorMessage: String? = nil
     @State private var showingQRSheet = false
-    @State private var showingScanner = false
     @State private var deviceToRevoke: AuthServiceClient.LinkedDevice? = nil
     @State private var showRevokeConfirm = false
     @State private var showSignOutConfirm = false
@@ -93,24 +92,7 @@ struct DevicesView: View {
                     if DeviceLinkOfferPolicy.isLinkingOffered {
                         VStack(alignment: .leading, spacing: DevicesSettingsLayout.sectionSpacing) {
                             CTSectionGroup {
-                                #if os(iOS)
-                                // Primary: open the camera to scan the QR shown on the other device.
-                                ConstructButtonRow(systemImage: "qrcode.viewfinder", title: LocalizedStringKey("link_new_device")) {
-                                    showingScanner = true
-                                }
-                                .accessibilityIdentifier(A11y.Devices.linkNew)
-                                ConstructRowDivider(indent: DevicesSettingsLayout.dividerIndent)
-                                // Secondary: show this device's QR (camera-broken fallback / other device scans us).
-                                ConstructButtonRow(systemImage: "qrcode", title: LocalizedStringKey("device_link_show_qr")) {
-                                    showingQRSheet = true
-                                }
-                                .accessibilityIdentifier(A11y.Devices.showQR)
-                                #else
-                                // macOS has no camera — the only path is showing this device's QR.
-                                ConstructButtonRow(systemImage: "qrcode", title: LocalizedStringKey("link_new_device")) {
-                                    showingQRSheet = true
-                                }
-                                #endif
+                                DeviceLinkActions { showingQRSheet = true }
                             }
                             Text(LocalizedStringKey("linked_devices_hint"))
                                 .font(CTFont.secondary)
@@ -207,9 +189,6 @@ struct DevicesView: View {
             .environment(\.managedObjectContext, PersistenceController.shared.container.viewContext)
         }
         .sheet(isPresented: $showingQRSheet) { DeviceLinkQRSheet() }
-        #if os(iOS)
-        .sheet(isPresented: $showingScanner) { DeviceLinkScanView() }
-        #endif
 
         // MARK: Confirmations — revoke device
         .confirmationDialog(

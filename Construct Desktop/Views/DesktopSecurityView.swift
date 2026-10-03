@@ -64,7 +64,7 @@ struct DesktopSecurityView: View {
                                 .foregroundStyle(Color.CT.text)
                             Spacer()
                             Image(systemName: "chevron.right")
-                                .font(.system(size: 12))
+                                .font(CTFont.ui(12))
                                 .foregroundStyle(Color.CT.textDim)
                         }
                         .padding(.horizontal, 12).padding(.vertical, 10)
@@ -104,7 +104,7 @@ struct DesktopSecurityView: View {
                     }
                     Spacer()
                     Image(systemName: "chevron.right")
-                        .font(.system(size: 12))
+                        .font(CTFont.ui(12))
                         .foregroundStyle(Color.CT.textDim)
                 }
                 .padding(.horizontal, 12).padding(.vertical, 10)

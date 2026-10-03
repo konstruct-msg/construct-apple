@@ -80,7 +80,7 @@ struct DesktopPeopleListView: View {
     private var emptyState: some View {
         VStack(spacing: CTLayout.sectionGap) {
             Image(systemName: "person.2")
-                .font(.system(size: 30, weight: .light))
+                .font(CTFont.ui(30, weight: .light))
                 .foregroundStyle(Color.CT.textDim)
 
             Text(LocalizedStringKey("synapses_empty_title"))
@@ -115,7 +115,7 @@ private struct DesktopPeopleRow: View {
 
                     if user.trustAlert != nil {
                         Image(systemName: "exclamationmark.shield.fill")
-                            .font(.system(size: 11, weight: .semibold))
+                            .font(CTFont.ui(11, weight: .semibold))
                             .foregroundStyle(Color.CT.danger)
                             .accessibilityLabel(Text(LocalizedStringKey("kt_warning")))
                     }

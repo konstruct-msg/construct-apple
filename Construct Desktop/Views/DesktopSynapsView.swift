@@ -234,7 +234,7 @@ struct DesktopSynapsView: View {
                         }
                         Spacer()
                         Image(systemName: "chevron.right")
-                            .font(.system(size: 12, weight: .semibold))
+                            .font(CTFont.ui(12, weight: .semibold))
                             .foregroundStyle(Color.CT.textDim)
                     }
                     .padding(.horizontal, 14)
@@ -268,7 +268,7 @@ struct DesktopSynapsView: View {
                         .font(CTFont.ui(12, weight: .medium))
                 } icon: {
                     Image(systemName: "person.crop.circle.badge.plus")
-                        .font(.system(size: 12, weight: .medium))
+                        .font(CTFont.ui(12, weight: .medium))
                 }
                 .foregroundStyle(Color.CT.accent)
                 .padding(.horizontal, 12)

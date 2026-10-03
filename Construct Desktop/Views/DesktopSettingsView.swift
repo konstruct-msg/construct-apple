@@ -152,7 +152,7 @@ private struct DesktopAccountSettingsTab: View {
                             .foregroundStyle(Color.CT.danger)
                         Spacer()
                         Image(systemName: "chevron.right")
-                            .font(.system(size: 12, weight: .semibold))
+                            .font(CTFont.ui(12, weight: .semibold))
                             .foregroundStyle(Color.CT.danger.opacity(0.6))
                     }
                     .padding(.horizontal, 12).padding(.vertical, 10)
@@ -244,7 +244,7 @@ enum DesktopTextSize: String, CaseIterable {
 
 // MARK: - Appearance (top-level, as requested)
 private struct DesktopAppearanceSettingsTab: View {
-    @AppStorage("appTheme") private var appTheme: AppTheme = .automatic
+    @AppStorage("appTheme") private var appTheme: AppTheme = .dark
     @AppStorage("textSize") private var textSize: DesktopTextSize = .standard
 
     var body: some View {
@@ -260,7 +260,7 @@ private struct DesktopAppearanceSettingsTab: View {
                         } label: {
                             HStack(spacing: 10) {
                                 Image(systemName: theme.iconName)
-                                    .font(.system(size: 14))
+                                    .font(CTFont.ui(14))
                                     .foregroundStyle(appTheme == theme ? Color.CT.accent : Color.CT.textDim)
                                     .frame(width: 24, alignment: .leading)
                                 Text(theme.displayName)
@@ -269,7 +269,7 @@ private struct DesktopAppearanceSettingsTab: View {
                                 Spacer()
                                 if appTheme == theme {
                                     Image(systemName: "checkmark")
-                                        .font(.system(size: 12, weight: .semibold))
+                                        .font(CTFont.ui(12, weight: .semibold))
                                         .foregroundStyle(Color.CT.accent)
                                 }
                             }
@@ -297,7 +297,7 @@ private struct DesktopAppearanceSettingsTab: View {
                                 Spacer()
                                 if textSize == size {
                                     Image(systemName: "checkmark")
-                                        .font(.system(size: 12, weight: .semibold))
+                                        .font(CTFont.ui(12, weight: .semibold))
                                         .foregroundStyle(Color.CT.accent)
                                 }
                             }

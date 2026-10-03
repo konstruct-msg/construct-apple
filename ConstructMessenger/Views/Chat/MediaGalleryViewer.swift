@@ -6,11 +6,6 @@
 import SwiftUI
 import Combine
 import AVKit
-#if os(iOS)
-import Photos
-#else
-import UniformTypeIdentifiers
-#endif
 
 // MARK: - Shared Image Cache
 
@@ -407,38 +402,10 @@ struct MediaGalleryViewer: View {
               !Self.isVideoEntry(entry),
               let img = MediaImageCache.shared.original(for: entry.message.id, at: entry.itemIndex) else { return }
         saveStatus = .saving
-
-        #if os(iOS)
-        PHPhotoLibrary.requestAuthorization(for: .addOnly) { status in
-            DispatchQueue.main.async {
-                guard status == .authorized || status == .limited else {
-                    saveStatus = .failed
-                    resetSaveStatus()
-                    return
-                }
-                UIImageWriteToSavedPhotosAlbum(img, nil, nil, nil)
-                saveStatus = .saved
-                resetSaveStatus()
-            }
+        Task { @MainActor in
+            saveStatus = await MediaSaver.save(img) ? .saved : .failed
+            resetSaveStatus()
         }
-        #else
-        if let tiffData = img.tiffRepresentation,
-           let bitmapRep = NSBitmapImageRep(data: tiffData),
-           let pngData = bitmapRep.representation(using: .png, properties: [:]) {
-            let panel = NSSavePanel()
-            panel.allowedContentTypes = [.png]
-            panel.nameFieldStringValue = "image.png"
-            if panel.runModal() == .OK, let url = panel.url {
-                try? pngData.write(to: url)
-                saveStatus = .saved
-            } else {
-                saveStatus = .failed
-            }
-        } else {
-            saveStatus = .failed
-        }
-        resetSaveStatus()
-        #endif
     }
 
     private func resetSaveStatus() {

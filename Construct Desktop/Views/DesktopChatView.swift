@@ -381,7 +381,7 @@ struct DesktopChatView: View {
                 } label: {
                     ZStack(alignment: .topTrailing) {
                         Image(systemName: "chevron.down.circle.fill")
-                            .font(.system(size: 32, weight: .semibold))
+                            .font(CTFont.ui(32, weight: .semibold))
                             .foregroundStyle(Color.CT.accent, Color.CT.bg.opacity(0.85))
                         if viewModel.chat.unreadCount > 0 {
                             Circle()
