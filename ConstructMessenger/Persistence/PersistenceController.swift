@@ -242,6 +242,7 @@ struct PersistenceController {
             if let error {
                 Log.error("Core Data: empty store did not load after the wipe: \(error)", category: "Persistence")
             }
+            NotificationCenter.default.post(name: .localStoreReplaced, object: nil)
         }
     }
 

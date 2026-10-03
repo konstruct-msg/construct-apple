@@ -767,6 +767,9 @@ extension APIConstants {
 
 // MARK: - Notifications
 extension Notification.Name {
+    /// The Core Data store was replaced by an empty one (`PersistenceController.replaceStoreWithEmpty`).
+    /// Every object a view still holds from the old store is dead: reading one raises.
+    static let localStoreReplaced = Notification.Name("constructLocalStoreReplaced")
     static let serverURLChanged   = Notification.Name("serverURLChanged")
     static let deleteChat         = Notification.Name("constructDeleteChat")
     /// Posted when a contact's identity key changes since the last verified bundle.
