@@ -144,26 +144,24 @@ struct ChatsSplitView: View {
     // MARK: - Vertical section rail (left)
 
     /// iPadOS 26 pattern: primary sections as a floating vertical control, not a fused
-    /// bottom bar. QR sits apart at the bottom of the rail (action vs destination).
+    /// bottom bar.
     ///
-    /// Streams list toggle is a **permanent rail slot** (not tab-conditional). Hiding it
-    /// only on `.chats` made the control pop in/out when switching Synaps/Settings —
-    /// bad discoverability and a flickering chrome layout.
+    /// The streams list toggle is a **permanent rail slot** at the bottom, under the left
+    /// thumb when the iPad is held in both hands (2026-10-03; it sat under the sections
+    /// before). It is not tab-conditional: hiding it on Synaps/Settings made the control pop
+    /// in and out. The QR scan that used to sit here moved to Settings — scanning is a
+    /// phone action, and a permanent rail slot was too much for it on the iPad.
     private var sectionRail: some View {
         VStack(spacing: CTLayout.chromeGap) {
             ForEach(SidebarTab.allCases, id: \.rawValue) { tab in
                 railDestinationButton(tab)
             }
 
-            railChromeDivider
+            Spacer(minLength: CTLayout.sectionGap)
 
             // Fixed slot — same position whether the list is open, collapsed, or another
             // section is selected. Never animates its own presence.
             railListToggleButton
-
-            Spacer(minLength: CTLayout.sectionGap)
-
-            railQRButton
             connectionRailBadge
         }
         .padding(.vertical, 14)
@@ -172,13 +170,6 @@ struct ChatsSplitView: View {
         .frame(maxHeight: .infinity)
         .modifier(RegularShellFloatingChrome(cornerRadius: CTRadius.pill))
         .accessibilityElement(children: .contain)
-    }
-
-    private var railChromeDivider: some View {
-        Rectangle()
-            .fill(Color.CT.noise.opacity(0.55))
-            .frame(width: 22, height: 1)
-            .frame(width: CTLayout.hitTarget)
     }
 
     private func railDestinationButton(_ tab: SidebarTab) -> some View {
@@ -225,6 +216,8 @@ struct ChatsSplitView: View {
                 .contentShape(Circle())
         }
         .buttonStyle(.plain)
+        // ⌃⌘S — the system shortcut for showing and hiding a sidebar on iPad.
+        .keyboardShortcut("s", modifiers: [.command, .control])
         .accessibilityLabel(Text(LocalizedStringKey(listToggleAccessibilityKey)))
     }
 
@@ -251,20 +244,6 @@ struct ChatsSplitView: View {
         return listCollapsed ? "show_chat_list" : "hide_chat_list"
     }
 
-    private var railQRButton: some View {
-        Button {
-            showingQRScanner = true
-        } label: {
-            Image(systemName: "qrcode.viewfinder")
-                .font(.system(size: 17, weight: .regular))
-                .foregroundStyle(Color.CT.accent)
-                .frame(width: CTLayout.hitTarget, height: CTLayout.hitTarget)
-                .contentShape(Circle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(Text(LocalizedStringKey("scan_qr_code")))
-    }
-
     private var connectionRailBadge: some View {
         ConnectionStatusIndicator()
             .scaleEffect(0.85)
@@ -280,14 +259,14 @@ struct ChatsSplitView: View {
             chatsStage
         case .synaps:
             floatingStage {
-                // Rail already exposes a global QR scan — don't duplicate it in the nav bar.
+                // On the iPad the scan lives in Settings; Synaps keeps its nav bar clear.
                 SynapsView(showsScanAction: false)
                     .environment(chatsViewModel)
             }
         case .settings:
             floatingStage {
                 #if os(iOS)
-                SettingsView()
+                SettingsView(onScanQR: { showingQRScanner = true })
                     .environment(chatsViewModel)
                 #else
                 DesktopSettingsView()
@@ -297,7 +276,8 @@ struct ChatsSplitView: View {
     }
 
     /// Streams: floating list column + detail (not one fused split chrome slab).
-    /// The list collapses (via the rail toggle) so an open chat can span the stage.
+    /// The list collapses (rail toggle, ⌃⌘S, or a swipe on the seam) so an open chat can
+    /// span the stage.
     private var chatsStage: some View {
         HStack(alignment: .top, spacing: CTLayout.chromeGap) {
             if !listCollapsed {
@@ -310,26 +290,55 @@ struct ChatsSplitView: View {
             chatDetailPanel
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+        .overlay(alignment: .topLeading) { seamSwipeStrip }
         .animation(.easeInOut(duration: 0.25), value: listCollapsed)
+    }
+
+    /// Width of the invisible strip on the seam between the list and the chat.
+    private let seamStripWidth: CGFloat = 20
+    /// Horizontal travel that commits a seam swipe.
+    private let seamSwipeCommit: CGFloat = 60
+
+    /// Swipe left on the seam hides the list, swipe right shows it.
+    ///
+    /// Only on the seam, because both neighbours already own a horizontal swipe: leftward on
+    /// a chat row is delete (full swipe), leftward on a bubble is reply. The strip straddles
+    /// the gap and reaches a few points into each panel — inside their own insets — so it
+    /// takes no tap or swipe from either. With the list collapsed it sits on the chat's
+    /// leading edge.
+    private var seamSwipeStrip: some View {
+        let seamX = listCollapsed ? 0 : streamsColumnWidth + CTLayout.chromeGap / 2
+        return Color.clear
+            .frame(width: seamStripWidth)
+            .frame(maxHeight: .infinity)
+            .contentShape(Rectangle())
+            .offset(x: max(0, seamX - seamStripWidth / 2))
+            .gesture(
+                DragGesture(minimumDistance: 12)
+                    .onEnded { value in
+                        guard let collapse = Self.seamSwipeCollapses(
+                            translation: value.translation, commit: seamSwipeCommit
+                        ) else { return }
+                        guard collapse != listCollapsed else { return }
+                        withAnimation(.easeInOut(duration: 0.25)) { listCollapsed = collapse }
+                    }
+            )
+            .accessibilityHidden(true)
+    }
+
+    /// What a seam swipe asks for: `true` hide the list, `false` show it, `nil` nothing —
+    /// too short, or more vertical than horizontal. Plain numbers so a test can supply them.
+    static func seamSwipeCollapses(translation: CGSize, commit: CGFloat) -> Bool? {
+        let h = translation.width
+        guard abs(h) >= commit, abs(h) > abs(translation.height) * 1.5 else { return nil }
+        return h < 0
     }
 
     private var streamsListPanel: some View {
         VStack(spacing: 0) {
-            // Secondary hide affordance co-located with the list surface (Mail/Notes).
-            // Expand always lives on the permanent rail slot — list chrome can't own that.
-            panelHeader(titleKey: "chats") {
-                Button {
-                    withAnimation(.easeInOut(duration: 0.25)) { listCollapsed = true }
-                } label: {
-                    Image(systemName: "rectangle.lefthalf.inset.filled")
-                        .font(.system(size: 15, weight: .regular))
-                        .foregroundStyle(Color.CT.textDim)
-                        .frame(width: CTLayout.hitTarget, height: CTLayout.hitTarget)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(Text(LocalizedStringKey("hide_chat_list")))
-            }
+            // No hide button here (removed 2026-10-03): it duplicated the rail toggle a few
+            // centimetres away. Hiding is the rail toggle, ⌃⌘S or a swipe on the seam.
+            panelHeader(titleKey: "chats") { EmptyView() }
 
             List(selection: $selectedChatId) {
                 ForEach(dedupedChats) { chat in

@@ -27,6 +27,13 @@ struct SettingsView: View {
     @State private var showEmergencyImport = false
     @State private var emergencyPasteText = ""
     @State private var emergencyImportMsg: String?
+    /// Opens the QR scanner. Only the iPad shell passes it: its rail has no scan button, and
+    /// on the phone the scan lives in the chats list.
+    private let onScanQR: (() -> Void)?
+
+    init(onScanQR: (() -> Void)? = nil) {
+        self.onScanQR = onScanQR
+    }
 
     /// Content cap on regular width (iPad two-column); unbounded on compact iPhone.
     private var settingsContentMaxWidth: CGFloat {
@@ -237,6 +244,17 @@ struct SettingsView: View {
             }
             .buttonStyle(.plain)
             .accessibilityIdentifier(A11y.Settings.invite)
+            if let onScanQR {
+                CTSep(style: .thin)
+                Button(action: onScanQR) {
+                    CTSettingsRow(
+                        label: NSLocalizedString("scan_qr_code", comment: "").uppercased(),
+                        icon: "qrcode.viewfinder",
+                        disclosure: true
+                    )
+                }
+                .buttonStyle(.plain)
+            }
         }
     }
 
