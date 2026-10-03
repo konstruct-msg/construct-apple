@@ -1319,3 +1319,4 @@
 "mic_denied_title" = "マイクへのアクセスが拒否されました";
 "mic_denied_message_macos" = "ボイスメッセージを送るには、設定でマイクを許可してください。";
 "voice_ready_to_send" = "送信できます";
+"save_as" = "別名で保存…";

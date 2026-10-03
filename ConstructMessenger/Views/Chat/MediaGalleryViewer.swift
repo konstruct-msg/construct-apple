@@ -197,11 +197,37 @@ struct GalleryStartItem: Identifiable {
 
 // MARK: - Flat gallery entry (message + item index)
 
-private struct GalleryEntry: Identifiable {
+struct GalleryEntry: Identifiable {
     let id: String          // "\(messageId)_\(itemIndex)"
     let message: Message
     let itemIndex: Int
     let mediaItem: [String: Any]
+
+    /// Expand each message into per-item entries. Images and videos are shown; audio is skipped.
+    static func expand(_ messages: [Message]) -> [GalleryEntry] {
+        messages.flatMap { msg -> [GalleryEntry] in
+            guard let mc = parseMediaContent(from: msg.displayText), !mc.mediaItems.isEmpty else {
+                return [GalleryEntry(id: "\(msg.id)_0", message: msg, itemIndex: 0, mediaItem: [:])]
+            }
+            return mc.mediaItems.enumerated().compactMap { idx, item in
+                // Show images + videos; skip audio (no visual page for it).
+                if let mimeType = item["mediaType"] as? String,
+                   !mimeType.hasPrefix("image/"), !mimeType.hasPrefix("video/") { return nil }
+                return GalleryEntry(id: "\(msg.id)_\(idx)", message: msg, itemIndex: idx, mediaItem: item)
+            }
+        }.filter { !$0.mediaItem.isEmpty || parseMediaContent(from: $0.message.displayText) == nil }
+    }
+
+    var isVideo: Bool { (mediaItem["mediaType"] as? String)?.hasPrefix("video/") == true }
+
+    /// Prefer the tapped album tile; fall back to first page of that message if the index is gone.
+    static func initialId(messageId: String, itemIndex: Int, in messages: [Message]) -> String {
+        let preferred = "\(messageId)_\(itemIndex)"
+        let validIds = Set(expand(messages).map(\.id))
+        if validIds.contains(preferred) { return preferred }
+        if validIds.contains("\(messageId)_0") { return "\(messageId)_0" }
+        return preferred
+    }
 }
 
 // MARK: - Gallery Viewer
@@ -219,47 +245,9 @@ struct MediaGalleryViewer: View {
 
     @State private var dismissOffset: CGFloat = 0
 
-    /// Expand each message into per-item entries. Images and videos are shown; audio is skipped.
-    private var entries: [GalleryEntry] {
-        messages.flatMap { msg -> [GalleryEntry] in
-            guard let mc = parseMediaContent(from: msg.displayText), !mc.mediaItems.isEmpty else {
-                return [GalleryEntry(id: "\(msg.id)_0", message: msg, itemIndex: 0, mediaItem: [:])]
-            }
-            return mc.mediaItems.enumerated().compactMap { idx, item in
-                // Show images + videos; skip audio (no visual page for it).
-                if let mimeType = item["mediaType"] as? String,
-                   !mimeType.hasPrefix("image/"), !mimeType.hasPrefix("video/") { return nil }
-                return GalleryEntry(id: "\(msg.id)_\(idx)", message: msg, itemIndex: idx, mediaItem: item)
-            }
-        }.filter { !$0.mediaItem.isEmpty || parseMediaContent(from: $0.message.displayText) == nil }
-    }
+    private var entries: [GalleryEntry] { GalleryEntry.expand(messages) }
 
-    private static func isVideoEntry(_ entry: GalleryEntry) -> Bool {
-        (entry.mediaItem["mediaType"] as? String)?.hasPrefix("video/") == true
-    }
-
-    /// Prefer the tapped album tile; fall back to first page of that message if the index is gone.
-    private static func initialEntryId(
-        messageId: String,
-        itemIndex: Int,
-        messages: [Message]
-    ) -> String {
-        let preferred = "\(messageId)_\(itemIndex)"
-        // Build the same id set as `entries` without storing `self` in init.
-        let validIds: Set<String> = Set(messages.flatMap { msg -> [String] in
-            guard let mc = parseMediaContent(from: msg.displayText), !mc.mediaItems.isEmpty else {
-                return ["\(msg.id)_0"]
-            }
-            return mc.mediaItems.enumerated().compactMap { idx, item in
-                if let mimeType = item["mediaType"] as? String,
-                   !mimeType.hasPrefix("image/"), !mimeType.hasPrefix("video/") { return nil }
-                return "\(msg.id)_\(idx)"
-            }
-        })
-        if validIds.contains(preferred) { return preferred }
-        if validIds.contains("\(messageId)_0") { return "\(messageId)_0" }
-        return preferred
-    }
+    private static func isVideoEntry(_ entry: GalleryEntry) -> Bool { entry.isVideo }
 
     init(
         messages: [Message],
@@ -272,10 +260,10 @@ struct MediaGalleryViewer: View {
         self.initialItemIndex = max(0, initialItemIndex)
         self._isPresented = isPresented
         self._currentEntryId = State(
-            initialValue: Self.initialEntryId(
+            initialValue: GalleryEntry.initialId(
                 messageId: initialMessageId,
                 itemIndex: max(0, initialItemIndex),
-                messages: messages
+                in: messages
             )
         )
     }

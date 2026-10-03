@@ -1318,3 +1318,4 @@
 "mic_denied_title" = "Microphone access denied";
 "mic_denied_message_macos" = "Allow microphone access in Settings to send voice messages.";
 "voice_ready_to_send" = "Ready to send";
+"save_as" = "Save As…";
