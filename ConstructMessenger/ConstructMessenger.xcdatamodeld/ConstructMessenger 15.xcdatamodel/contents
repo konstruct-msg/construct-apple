@@ -70,7 +70,10 @@
         <attribute name="id" attributeType="String"/>
         <attribute name="isEdited" optional="YES" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
         <attribute name="isSentByMe" attributeType="Boolean" usesScalarValueType="YES"/>
+        <!-- Legacy, plaintext: emptied at launch into encryptedReplyQuote (TODO 115); remove in the next model -->
         <attribute name="replyToContent" optional="YES" attributeType="String"/>
+        <!-- The reply's quote sealed with the row's storage key (Message.replyQuote) -->
+        <attribute name="encryptedReplyQuote" optional="YES" attributeType="Binary"/>
         <!-- Voice message transcript (on-device STT via WhisperKit) -->
         <!-- Legacy, plaintext: emptied at launch into encryptedTranscript (TODO 115); remove in the next model -->
         <attribute name="transcriptText" optional="YES" attributeType="String"/>

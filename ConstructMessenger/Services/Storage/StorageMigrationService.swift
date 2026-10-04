@@ -40,7 +40,7 @@ final class StorageMigrationService {
         await bgContext.perform {
             self.migrateBatch(in: bgContext)
             self.cleanupLeakedControlRows(in: bgContext)
-            self.sealPlaintextTranscripts(in: bgContext)
+            self.sealPlaintextColumns(in: bgContext)
         }
         // A child context's save lands in its parent, not on disk; the plaintext is gone from
         // the file only once the parent saves too.
@@ -49,25 +49,31 @@ final class StorageMigrationService {
         }
     }
 
-    /// Move every transcript still in the plaintext `transcriptText` column into the sealed
-    /// `encryptedTranscript` (`Message.transcript`) and empty the column (TODO 115). A row with no
-    /// storage key loses its transcript rather than keep it in the clear — it can be recognised
-    /// again from the audio. The store runs with `secure_delete`, so the old text is overwritten
-    /// on disk rather than left in a free page.
-    nonisolated func sealPlaintextTranscripts(in context: NSManagedObjectContext) {
+    /// Move every transcript and reply quote still in a plaintext column (`transcriptText`,
+    /// `replyToContent`) into its sealed field (`Message.transcript`, `Message.replyQuote`) and
+    /// empty the column (TODO 115). A row with no storage key loses the value rather than keep it
+    /// in the clear — a transcript can be recognised again, a quote falls back to the replied-to
+    /// message's id. The store runs with `secure_delete`, so the old text is overwritten on disk
+    /// rather than left in a free page.
+    nonisolated func sealPlaintextColumns(in context: NSManagedObjectContext) {
         let fetchRequest = Message.fetchRequest()
-        fetchRequest.predicate = NSPredicate(format: "transcriptText != nil")
+        fetchRequest.predicate = NSPredicate(format: "transcriptText != nil OR replyToContent != nil")
         fetchRequest.fetchBatchSize = batchSize
         guard let messages = try? context.fetch(fetchRequest), !messages.isEmpty else { return }
 
         var sealed = 0, dropped = 0
         for message in messages {
-            let text = message.transcriptText
-            message.transcript = text
-            if message.encryptedTranscript != nil { sealed += 1 } else { dropped += 1 }
+            if let text = message.transcriptText {
+                message.transcript = text
+                if message.encryptedTranscript != nil { sealed += 1 } else { dropped += 1 }
+            }
+            if let quote = message.replyToContent {
+                message.replyQuote = quote
+                if message.encryptedReplyQuote != nil { sealed += 1 } else { dropped += 1 }
+            }
         }
         if context.hasChanges { try? context.save() }
-        Log.info("Transcripts: \(sealed) sealed, \(dropped) without a storage key dropped", category: "StorageMigration")
+        Log.info("Plaintext columns: \(sealed) values sealed, \(dropped) without a storage key dropped", category: "StorageMigration")
     }
 
     /// One-time cleanup of session-control payloads (`session_ready`, `session_ping`,

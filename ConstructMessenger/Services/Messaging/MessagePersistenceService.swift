@@ -92,7 +92,7 @@ class MessagePersistenceService {
             // Set reply information
             if let replyMessage = replyTo {
                 newMessage.replyToMessageId = replyMessage.id.lowercased()
-                newMessage.replyToContent = ReplyPreviewPayload.projecting(
+                newMessage.replyQuote = ReplyPreviewPayload.projecting(
                     originalContent: replyMessage.displayText,
                     textOverride: replyToContentOverride
                 )?.storedContent
@@ -244,7 +244,7 @@ class MessagePersistenceService {
 
         if let replyMessage = replyTo {
             newMessage.replyToMessageId = replyMessage.id.lowercased()
-            newMessage.replyToContent = ReplyPreviewPayload.projecting(
+            newMessage.replyQuote = ReplyPreviewPayload.projecting(
                 originalContent: replyMessage.displayText,
                 textOverride: replyToContentOverride
             )?.storedContent
