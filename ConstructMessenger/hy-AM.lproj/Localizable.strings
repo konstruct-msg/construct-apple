@@ -1330,3 +1330,12 @@
 "mic_denied_message_macos" = "Թույլատրեք խոսափողի հասանելիությունը Կարգավորումներում՝ ձայնային հաղորդագրություններ ուղարկելու համար։";
 "voice_ready_to_send" = "Պատրաստ է ուղարկման";
 "save_as" = "Պահել որպես…";
+
+// Recovery key made silently, copied later (decisions/recovery-key-backup-is-deferred-not-skipped.md)
+"recovery_backup_auth_reason" = "Ցույց տալ վերականգնման բանալին";
+"recovery_backup_intro_title" = "Պահպանեք վերականգնման բանալին";
+"recovery_backup_intro_body" = "Կոնստրուկտը չունի ձեր հեռախոսահամարը կամ էլ. փոստը։ Այս բանալին հաշիվը վերադարձնելու միակ միջոցն է, եթե կորցնեք բոլոր սարքերը։ Գրի առեք 12 բառերը և պահեք ապահով տեղում։";
+"recovery_backup_show" = "Ցույց տալ բանալին";
+"recovery_backup_pending_title" = "Վերականգնման բանալին պահպանված չէ";
+"recovery_backup_pending_subtitle" = "Գրի առեք վերականգնման բանալին․ դա միակ միջոցն է, եթե կորցնեք բոլոր սարքերը։";
+"recovery_backup_pending" = "Դեռ պահպանված չէ";

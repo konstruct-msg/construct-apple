@@ -101,7 +101,11 @@ struct SecurityView: View {
                             Text(LocalizedStringKey("account_recovery_seed"))
                                 .font(CTFont.body)
                                 .foregroundStyle(Color.CT.text)
-                            if recoveryVM.isSetup, let fp = recoveryVM.fingerprint {
+                            if recoveryVM.isSetup && recoveryVM.backupPending {
+                                Text(NSLocalizedString("recovery_backup_pending", comment: ""))
+                                    .font(CTFont.caption)
+                                    .foregroundStyle(.orange)
+                            } else if recoveryVM.isSetup, let fp = recoveryVM.fingerprint {
                                 Text(fp)
                                     .font(CTFont.mono(11))
                                     .foregroundStyle(Color.CT.textDim)

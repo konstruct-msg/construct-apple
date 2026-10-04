@@ -2,7 +2,11 @@
 //  RecoverySetupView.swift
 //  ConstructMessenger
 //
-//  Flow: Show 12 words → Word quiz (3 random words) → Upload to server
+//  Two flows on one screen (`AccountRecoveryViewModel.SetupMode`):
+//  - create: show 12 new words → pick 3 of them → set the key on the server. Runs where the key
+//    could not be made silently (no passcode on the device).
+//  - backupHeld: the key was made silently at registration; unlock the phrase → show it → pick 3
+//    → the phrase leaves the device. Nothing is sent.
 //
 
 import SwiftUI
@@ -48,6 +52,9 @@ struct RecoverySetupView: View {
             }
         }
         .background(Color.CT.bg)
+        .onAppear {
+            if case .idle = vm.setupStep { vm.prepareSetup() }
+        }
     }
 
     private var showsCancelButton: Bool {
@@ -66,20 +73,32 @@ struct RecoverySetupView: View {
                 .font(.system(size: 48, weight: .regular))
                 .foregroundStyle(Color.CT.accent)
                 .accessibilityHidden(true)
-            Text(NSLocalizedString("recovery_intro_title", comment: ""))
+            Text(NSLocalizedString(
+                vm.setupMode == .backupHeld ? "recovery_backup_intro_title" : "recovery_intro_title",
+                comment: ""
+            ))
                 .font(CTFont.title)
                 .foregroundColor(Color.CT.text)
                 .multilineTextAlignment(.center)
-            Text(NSLocalizedString("recovery_intro_body", comment: ""))
+            Text(NSLocalizedString(
+                vm.setupMode == .backupHeld ? "recovery_backup_intro_body" : "recovery_intro_body",
+                comment: ""
+            ))
                 .font(CTFont.body)
                 .foregroundColor(Color.CT.textDim)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal)
             Spacer()
             Button {
-                vm.startSetup()
+                switch vm.setupMode {
+                case .create: vm.startSetup()
+                case .backupHeld: Task { await vm.startBackup() }
+                }
             } label: {
-                Text(NSLocalizedString("recovery_generate", comment: ""))
+                Text(NSLocalizedString(
+                    vm.setupMode == .backupHeld ? "recovery_backup_show" : "recovery_generate",
+                    comment: ""
+                ))
                     .font(CTFont.body)
                     .foregroundColor(Color.CT.text)
                     .frame(maxWidth: .infinity)
@@ -299,8 +318,10 @@ struct RecoverySetupView: View {
     }
 }
 
-// MARK: - Quiz Word Field
+// MARK: - Quiz Word Choice
 
+/// One of the three checks: which of these is word N. A native button per option, the picked
+/// one marked — choosing, not typing (`decisions/recovery-key-backup-is-deferred-not-skipped.md`).
 private struct QuizWordField: View {
     @Bindable var vm: AccountRecoveryViewModel
     let index: Int
@@ -310,22 +331,30 @@ private struct QuizWordField: View {
             Text(String(format: NSLocalizedString("recovery_quiz_word_n", comment: ""), index + 1))
                 .font(CTFont.caption)
                 .foregroundColor(Color.CT.textDim)
-            TextField(
-                NSLocalizedString("recovery_quiz_placeholder", comment: ""),
-                text: Binding(
-                    get: { vm.quizAnswers[index] ?? "" },
-                    set: { vm.quizAnswers[index] = $0 }
-                )
-            )
-            .autocorrectionDisabled()
-            #if os(iOS)
-            .textInputAutocapitalization(.never)
-            #endif
-            .font(CTFont.body)
-            .foregroundColor(Color.CT.text)
-            .padding(10)
-            .background(Color.CT.bgMsg)
-            .overlay(Rectangle().stroke(Color.CT.noise, lineWidth: 1))
+            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
+                ForEach(vm.quizOptions[index] ?? [], id: \.self) { word in
+                    let picked = vm.quizAnswers[index] == word
+                    Button {
+                        vm.quizAnswers[index] = word
+                    } label: {
+                        HStack {
+                            Text(word)
+                                .font(CTFont.body)
+                                .foregroundColor(Color.CT.text)
+                            Spacer(minLength: 0)
+                            if picked {
+                                Image(systemName: "checkmark")
+                                    .foregroundStyle(Color.CT.accent)
+                            }
+                        }
+                        .padding(10)
+                        .background(Color.CT.bgMsg)
+                        .overlay(CTShape.card().stroke(picked ? Color.CT.accent : Color.CT.noise, lineWidth: 1))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityAddTraits(picked ? .isSelected : [])
+                }
+            }
         }
         .padding(.horizontal)
     }

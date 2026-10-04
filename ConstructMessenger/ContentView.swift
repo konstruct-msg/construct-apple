@@ -11,15 +11,17 @@ import CoreData
 struct ContentView: View {
     @Environment(AuthViewModel.self) var authViewModel
     @Environment(DeepLinkHandler.self) var deepLinkHandler
+    @Environment(AccountRecoveryViewModel.self) private var recoveryViewModel
     @Environment(\.managedObjectContext) private var viewContext
     @AppStorage("appTheme") private var appTheme: AppTheme = .dark
     /// Per-identity orientation completion list (see `OrientationStore`).
     @AppStorage(OrientationStore.completedUserIdsKey) private var orientationCompletedUserIds = ""
 
     @State private var chatsViewModel = ChatsViewModel()
-    /// The recovery key, offered once right after the first orientation. Registration itself
-    /// stays one step; contacts wait on the key (`RecoveryGated`), so this is where it is asked
-    /// for before anyone reaches for an invite.
+    /// The recovery setup, shown after the first orientation only when the key could not be made
+    /// silently — no passcode on this device, or the account has a key this device has not seen.
+    /// Everyone else gets the key without a screen and copies it later from Settings
+    /// (`RecoveryKeyProvisioner`, `decisions/recovery-key-backup-is-deferred-not-skipped.md`).
     @State private var showingRecoveryPrompt = false
 
     /// Orientation is product education for **this** ServerUserId — not a global device flag.
@@ -28,6 +30,20 @@ struct ContentView: View {
             for: authViewModel.currentUserId ?? AuthSessionManager.shared.currentUserId,
             rawList: orientationCompletedUserIds
         )
+    }
+
+    private func provisionRecoveryKey(promptIfNeeded: Bool) async {
+        guard let userId = authViewModel.currentUserId ?? AuthSessionManager.shared.currentUserId else {
+            return
+        }
+        switch await RecoveryKeyProvisioner.shared.ensureKey(userId: userId) {
+        case .provisioned:
+            await recoveryViewModel.refreshStatus()
+        case .needsVisibleSetup, .setElsewhere:
+            if promptIfNeeded, AccountAddress.own() == nil { showingRecoveryPrompt = true }
+        case .alreadyKnown, .deferred:
+            break
+        }
     }
 
     var body: some View {
@@ -73,8 +89,16 @@ struct ContentView: View {
         .errorToast()
         .preferredColorScheme(appTheme.colorScheme)
         .onChange(of: orientationCompletedForCurrentUser) { _, completed in
-            if completed, AccountAddress.own() == nil {
-                showingRecoveryPrompt = true
+            if completed {
+                Task { await provisionRecoveryKey(promptIfNeeded: true) }
+            }
+        }
+        // Every launch of a signed-in account: accounts registered before the silent key get
+        // theirs here, and a key whose upload never got an answer is retried. Never prompts —
+        // a launch is not the moment for a setup screen.
+        .task(id: authViewModel.isAuthenticated && orientationCompletedForCurrentUser) {
+            if authViewModel.isAuthenticated && orientationCompletedForCurrentUser {
+                await provisionRecoveryKey(promptIfNeeded: false)
             }
         }
         .sheet(isPresented: $showingRecoveryPrompt) {

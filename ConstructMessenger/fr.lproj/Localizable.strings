@@ -1250,3 +1250,12 @@
 "mic_denied_message_macos" = "Autorisez le micro dans Réglages pour envoyer des messages vocaux.";
 "voice_ready_to_send" = "Prêt à envoyer";
 "save_as" = "Enregistrer sous…";
+
+// Recovery key made silently, copied later (decisions/recovery-key-backup-is-deferred-not-skipped.md)
+"recovery_backup_auth_reason" = "Afficher votre clé de récupération";
+"recovery_backup_intro_title" = "Enregistrez votre clé de récupération";
+"recovery_backup_intro_body" = "Konstruct ne connaît ni votre numéro ni votre e-mail. Cette clé est le seul moyen de retrouver votre compte si vous perdez tous vos appareils. Notez les 12 mots et gardez-les en lieu sûr.";
+"recovery_backup_show" = "Afficher la clé";
+"recovery_backup_pending_title" = "Clé de récupération non enregistrée";
+"recovery_backup_pending_subtitle" = "Notez votre clé de récupération : c’est le seul moyen de revenir si vous perdez tous vos appareils.";
+"recovery_backup_pending" = "Pas encore enregistrée";

@@ -483,8 +483,8 @@ struct AccountSettingsView: View {
 
     private func handleLogoutTap(allDevices: Bool) {
         pendingLogoutAll = allDevices
-        // Guard: if recovery phrase not yet set up, warn before proceeding.
-        if recoveryVM.statusLoaded && !recoveryVM.isSetup {
+        // Guard: no recovery key, or a silent one not yet copied — warn before proceeding.
+        if recoveryVM.needsBackup {
             showingNoBackupWarning = true
         } else if allDevices {
             showingLogoutAllConfirm = true

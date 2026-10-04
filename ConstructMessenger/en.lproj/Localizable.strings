@@ -1330,3 +1330,12 @@
 "mic_denied_message_macos" = "Allow microphone access in Settings to send voice messages.";
 "voice_ready_to_send" = "Ready to send";
 "save_as" = "Save As…";
+
+// Recovery key made silently, copied later (decisions/recovery-key-backup-is-deferred-not-skipped.md)
+"recovery_backup_auth_reason" = "Show your recovery key";
+"recovery_backup_intro_title" = "Save your recovery key";
+"recovery_backup_intro_body" = "Konstruct has no phone number or email for you. This key is the only way back into your account if you lose every device. Write the 12 words down and keep them somewhere safe.";
+"recovery_backup_show" = "Show the key";
+"recovery_backup_pending_title" = "Recovery key not saved";
+"recovery_backup_pending_subtitle" = "Write down your recovery key — it is the only way back if you lose every device.";
+"recovery_backup_pending" = "Not saved yet";
