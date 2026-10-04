@@ -72,6 +72,10 @@ enum AccountWipeKeys {
         // wipe left one identity's pruned contacts shielding the next identity's messages.
         "construct.deletedContacts.v2",
 
+        // The reactions this person uses most (`ReactionQuickSetStore`). A habit of this
+        // identity's; the next one starts from the popular set.
+        "construct.reactions.quickSet.v1",
+
         // Stream position. The omission that prompted this file: leaving it behind means the next
         // identity resumes from the previous one's watermark.
         "construct.stream.cursor",
