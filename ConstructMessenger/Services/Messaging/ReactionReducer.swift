@@ -14,11 +14,8 @@ import Foundation
 
 enum ReactionReducer {
 
-    /// Instagram DM quick set. Display order is the array order. v1 is this
-    /// popular set; later it can become the user's most frequent.
-    static let quickSet = ["❤️", "😂", "😮", "😢", "😠", "🔥"]
-
-    /// Double-tap target. First of `quickSet` so the fast path and the capsule agree.
+    /// Double-tap target. The first of `ReactionQuickSet.defaults`, so a fresh menu row starts
+    /// with what a double tap sends.
     static let likeEmoji = "❤️"
 
     struct SendPlan: Equatable {
