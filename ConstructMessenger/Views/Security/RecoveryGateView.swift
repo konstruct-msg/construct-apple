@@ -14,6 +14,10 @@ import SwiftUI
 
 /// Shows `content` once this device knows the account's address, the gate until then.
 ///
+/// The address is checked against the server's fingerprint when the gate opens
+/// (`AccountAddress.confirmedOwn`): an invite names it, so a stale one would send every
+/// redeemer's messages to another account.
+///
 /// Wraps the surfaces that make or take a contact invite — the own QR and the contact scanners —
 /// and nothing else: the same scanner links devices and imports VEIL configs, which need no
 /// address.
@@ -22,10 +26,19 @@ struct RecoveryGated<Content: View>: View {
     @State private var ready = AccountAddress.own() != nil
 
     var body: some View {
-        if ready {
-            content()
-        } else {
-            RecoveryGateView(reason: .contacts) { ready = true }
+        Group {
+            if ready {
+                content()
+            } else {
+                RecoveryGateView(reason: .contacts) { ready = true }
+            }
+        }
+        // Once per opening, not per invite: the QR is re-minted every few seconds. A key the
+        // server says is another account's is deleted here and the gate closes; an unreachable
+        // server leaves the stored one (an invite minted offline is unchecked, as before).
+        .task {
+            _ = await AccountAddress.confirmedOwn()
+            ready = AccountAddress.own() != nil
         }
     }
 }
