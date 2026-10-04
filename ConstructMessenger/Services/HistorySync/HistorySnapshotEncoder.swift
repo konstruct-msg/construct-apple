@@ -221,7 +221,7 @@ final class HistorySnapshotEncoder {
         if let reply = message.replyToMessageId, !reply.isEmpty {
             wire.replyToMessageID = HistorySnapshotDisposition.lowercaseMessageId(reply)
         }
-        if let replyContent = message.replyToContent, !replyContent.isEmpty {
+        if let replyContent = message.replyQuote, !replyContent.isEmpty {
             wire.replyToContent = replyContent
         }
         wire.isEdited = message.isEdited

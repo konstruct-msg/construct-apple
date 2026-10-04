@@ -294,9 +294,6 @@ struct HistorySnapshotImporter {
         if !message.replyToMessageID.isEmpty {
             row.replyToMessageId = HistorySnapshotDisposition.lowercaseMessageId(message.replyToMessageID)
         }
-        if !message.replyToContent.isEmpty {
-            row.replyToContent = message.replyToContent
-        }
         row.isEdited = message.isEdited
         if message.editedAtUnixMs > 0 {
             row.editedAt = Date(timeIntervalSince1970: TimeInterval(message.editedAtUnixMs) / 1000)
@@ -308,7 +305,11 @@ struct HistorySnapshotImporter {
             row.transcriptGeneratedAt = Date(timeIntervalSince1970: TimeInterval(message.transcriptGeneratedAtUnix))
         }
         row.applyStoredEncryption(plaintextData: stored, contactId: peer)
-        // After the body: sealing the transcript needs the key the body's encryption made.
+        // After the body: sealing the quote and the transcript needs the key the body's
+        // encryption made.
+        if !message.replyToContent.isEmpty {
+            row.replyQuote = message.replyToContent
+        }
         if !message.transcriptText.isEmpty {
             row.transcript = message.transcriptText
         }

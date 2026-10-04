@@ -2,9 +2,9 @@
 //  TranscriptSealedAtRestTests.swift
 //  ConstructMessengerTests
 //
-//  What was said in a voice message or video note is stored sealed with the row's storage key,
-//  as the body is — not in the plaintext `transcriptText` column it lived in until 2026-10-04
-//  (vault TODO 115). These read the stored bytes, not only the round trip, because a round trip
+//  What was said in a voice message or video note, and the quote a reply carries, are stored
+//  sealed with the row's storage key, as the body is — not in the plaintext `transcriptText` and
+//  `replyToContent` columns they lived in until 2026-10-04 (vault TODO 115). These read the stored bytes, not only the round trip, because a round trip
 //  through a plaintext column passes too.
 //
 
@@ -79,7 +79,7 @@ final class TranscriptSealedAtRestTests: XCTestCase {
         keyless.transcriptText = said
         try context.save()
 
-        StorageMigrationService.shared.sealPlaintextTranscripts(in: context)
+        StorageMigrationService.shared.sealPlaintextColumns(in: context)
 
         XCTAssertNil(legacy.transcriptText)
         XCTAssertNotNil(legacy.encryptedTranscript)
@@ -90,5 +90,40 @@ final class TranscriptSealedAtRestTests: XCTestCase {
         let left = Message.fetchRequest()
         left.predicate = NSPredicate(format: "transcriptText != nil")
         XCTAssertEqual(try context.count(for: left), 0)
+    }
+
+    func testAReplyQuoteIsStoredSealedAndReadsBack() throws {
+        let message = row()
+        message.replyQuote = said
+        XCTAssertNil(message.replyToContent)
+        let sealed = try XCTUnwrap(message.encryptedReplyQuote)
+        XCTAssertNil(sealed.range(of: Data(said.utf8)))
+        XCTAssertEqual(message.replyQuote, said)
+    }
+
+    func testTheMigrationSealsPlaintextQuotes() throws {
+        let legacy = row()
+        legacy.replyToContent = said
+        try context.save()
+        StorageMigrationService.shared.sealPlaintextColumns(in: context)
+        XCTAssertNil(legacy.replyToContent)
+        XCTAssertEqual(legacy.replyQuote, said)
+    }
+
+    /// An edit re-encrypts the body. It must reuse the row's key, or whatever else was sealed
+    /// under the old one stops opening. Read through a fresh key lookup, not the opened cache.
+    func testSealedFieldsSurviveTheBodyBeingReencrypted() throws {
+        let message = row()
+        message.transcript = said
+        message.replyQuote = "the question"
+        let keyBefore = MessageKeyStore.shared.fetch(messageId: message.id)
+
+        message.applyStoredEncryption(plaintextData: Data("an edited body".utf8), contactId: "peer")
+
+        let key = try XCTUnwrap(MessageKeyStore.shared.fetch(messageId: message.id))
+        XCTAssertEqual(key, keyBefore, "one key for the row's life")
+        XCTAssertEqual(String(data: try MessageStorageCrypto.decrypt(ciphertext: try XCTUnwrap(message.encryptedTranscript), key: key), encoding: .utf8), said)
+        XCTAssertEqual(String(data: try MessageStorageCrypto.decrypt(ciphertext: try XCTUnwrap(message.encryptedReplyQuote), key: key), encoding: .utf8), "the question")
+        XCTAssertEqual(message.displayText, "an edited body")
     }
 }

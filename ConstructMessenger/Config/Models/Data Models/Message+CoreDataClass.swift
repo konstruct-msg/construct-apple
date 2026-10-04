@@ -124,8 +124,12 @@ public class Message: NSManagedObject {
         let inferredType = MessageContentType.infer(from: plaintextData)
         if inferredType != .regular { contentType = inferredType }
 
-        var keyBytes = Data(count: 32)
-        let status = keyBytes.withUnsafeMutableBytes {
+        // One key for the row's whole life. A fresh key on every call — an edit re-encrypts the
+        // body — left whatever else was sealed under the old one (the transcript, the quote)
+        // unopenable.
+        let existingKey = contentKeyRef == msgId ? MessageKeyStore.shared.fetch(messageId: msgId) : nil
+        var keyBytes = existingKey ?? Data(count: 32)
+        let status = existingKey != nil ? errSecSuccess : keyBytes.withUnsafeMutableBytes {
             SecRandomCopyBytes(kSecRandomDefault, 32, $0.baseAddress!)
         }
         guard status == errSecSuccess,
@@ -141,7 +145,9 @@ public class Message: NSManagedObject {
         contentKeyRef = msgId
         decryptedContent = nil
 
-        MessageKeyStore.shared.storeSync(messageId: msgId, key: keyBytes, contactId: contactId)
+        if existingKey == nil {
+            MessageKeyStore.shared.storeSync(messageId: msgId, key: keyBytes, contactId: contactId)
+        }
         MessageDisplayCache.shared.store(messageId: msgId, plaintextData: plaintextData)
     }
 
