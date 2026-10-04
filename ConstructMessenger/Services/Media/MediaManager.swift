@@ -527,6 +527,11 @@ class MediaManager {
 
     /// Export `asset` to `outputURL` at the given quality. `.original` uses passthrough
     /// (container remux only). Reports export progress via `onProgress` (0…1).
+    ///
+    /// `.p720` / `.p1080` are HEVC — about half the bytes of H.264 at the same quality, and a
+    /// hardware encoder on every supported iPhone — scaled to fit the quality's box, in SDR and at
+    /// no more than 30 frames a second (`sdrVideoComposition`). H.264 at the same size only when
+    /// the HEVC preset refuses the source. Until 2026-10-04 both qualities were H.264 presets.
     static func transcodeVideo(
         asset: AVURLAsset,
         to outputURL: URL,
@@ -542,12 +547,24 @@ class MediaManager {
         // no metadata to copy; the orientation is the track's transform and is carried over.
         let source = try await metadataFreeComposition(of: asset)
 
-        // Fall back to passthrough if the requested preset isn't compatible with the source.
-        let compatible = await AVAssetExportSession.compatibility(ofExportPreset: quality.exportPreset, with: source, outputFileType: .mp4)
-        let preset = compatible ? quality.exportPreset : AVAssetExportPreset1280x720
-
-        guard let export = AVAssetExportSession(asset: source, presetName: preset) else {
-            throw MediaUploadError.uploadFailed("Cannot create video export session")
+        let export: AVAssetExportSession
+        if let bounds = quality.bounds {
+            var chosen: AVAssetExportSession?
+            for preset in [AVAssetExportPresetHEVC1920x1080, quality.h264Preset]
+            where await AVAssetExportSession.compatibility(ofExportPreset: preset, with: source, outputFileType: .mp4) {
+                chosen = AVAssetExportSession(asset: source, presetName: preset)
+                if chosen != nil { break }
+            }
+            guard let chosen else {
+                throw MediaUploadError.uploadFailed("Cannot create video export session")
+            }
+            chosen.videoComposition = try await sdrVideoComposition(for: source, fitting: bounds)
+            export = chosen
+        } else {
+            guard let passthrough = AVAssetExportSession(asset: source, presetName: AVAssetExportPresetPassthrough) else {
+                throw MediaUploadError.uploadFailed("Cannot create video export session")
+            }
+            export = passthrough
         }
 
         let progressTask: Task<Void, Never>? = onProgress.map { cb in
@@ -564,6 +581,55 @@ class MediaManager {
         try await export.export(to: outputURL, as: .mp4)
         onProgress?(1.0)
         return outputURL
+    }
+
+    /// Most frames a second a compressed video keeps. A phone's 60 — or a slow-motion clip's 240 —
+    /// is mostly bytes nobody sees in a chat.
+    static let maxSentFrameRate: Float = 30
+
+    /// How the picture is rendered for `.p720` / `.p1080`: upright, scaled to fit `bounds` (never
+    /// up), in Rec. 709 SDR, at most `maxSentFrameRate`. The rotation is applied to the pixels, so
+    /// the exported track's transform is identity.
+    ///
+    /// SDR because an iPhone films HDR (HLG / Dolby Vision) by default: it costs bits, and on a
+    /// screen or a player that does not tone-map it the picture comes out washed out or blown out.
+    /// The H.264 presets always converted; the HEVC ones keep HDR unless the composition says not to.
+    /// Nil for a source with no video track — the preset then exports the audio as it would.
+    private static func sdrVideoComposition(
+        for source: AVComposition,
+        fitting bounds: (long: CGFloat, short: CGFloat)
+    ) async throws -> AVVideoComposition? {
+        guard let track = try await source.loadTracks(withMediaType: .video).first else { return nil }
+        let (natural, transform, fps) = try await track.load(.naturalSize, .preferredTransform, .nominalFrameRate)
+        // Where the transform puts the picture. A camera's transform carries the translation
+        // that brings it back to the origin; one that does not would render off the canvas.
+        let placed = CGRect(origin: .zero, size: natural).applying(transform)
+        let width = placed.width, height = placed.height
+        guard width > 0, height > 0 else { return nil }
+
+        let scale = min(1, bounds.long / max(width, height), bounds.short / min(width, height))
+        // Encoders want even dimensions; rounding down keeps the picture inside the box.
+        let even = { (v: CGFloat) in max(2, (v * scale / 2).rounded(.down) * 2) }
+
+        let composition = AVMutableVideoComposition()
+        composition.renderSize = CGSize(width: even(width), height: even(height))
+        let rate = fps > 0 ? min(fps, maxSentFrameRate) : maxSentFrameRate
+        composition.frameDuration = CMTime(value: 1, timescale: CMTimeScale(rate.rounded()))
+        composition.colorPrimaries = AVVideoColorPrimaries_ITU_R_709_2
+        composition.colorTransferFunction = AVVideoTransferFunction_ITU_R_709_2
+        composition.colorYCbCrMatrix = AVVideoYCbCrMatrix_ITU_R_709_2
+
+        let layer = AVMutableVideoCompositionLayerInstruction(assetTrack: track)
+        // Turn the picture upright, move it to the origin, then shrink it there.
+        let upright = transform
+            .concatenating(CGAffineTransform(translationX: -placed.minX, y: -placed.minY))
+            .concatenating(CGAffineTransform(scaleX: scale, y: scale))
+        layer.setTransform(upright, at: .zero)
+        let instruction = AVMutableVideoCompositionInstruction()
+        instruction.timeRange = CMTimeRange(start: .zero, duration: try await source.load(.duration))
+        instruction.layerInstructions = [layer]
+        composition.instructions = [instruction]
+        return composition
     }
 
     /// The video and audio tracks of `asset`, whole, in a composition that carries none of its

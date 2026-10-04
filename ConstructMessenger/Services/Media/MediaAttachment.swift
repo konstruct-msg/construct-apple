@@ -27,13 +27,23 @@ enum MediaQuality: Sendable {
     case original
 }
 
-/// Video send quality. Maps to an `AVAssetExportSession` preset; `.original` is passthrough.
+/// Video send quality: the box the picture is scaled to fit, or the source untouched.
 enum VideoQuality: String, Sendable, CaseIterable {
     case p720
     case p1080
     case original
 
-    var exportPreset: String {
+    /// The long and short edge the picture is scaled down to fit; nil for passthrough.
+    var bounds: (long: CGFloat, short: CGFloat)? {
+        switch self {
+        case .p720:     return (1280, 720)
+        case .p1080:    return (1920, 1080)
+        case .original: return nil
+        }
+    }
+
+    /// H.264 at the same size, for a source the HEVC encoder refuses.
+    var h264Preset: String {
         switch self {
         case .p720:     return AVAssetExportPreset1280x720
         case .p1080:    return AVAssetExportPreset1920x1080
