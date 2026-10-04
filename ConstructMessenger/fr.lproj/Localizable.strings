@@ -334,7 +334,7 @@
 "change_avatar" = "Changer la photo";
 
 // Onboarding
-"onboarding_tagline" = "messagerie postmoderne";
+"onboarding_tagline" = "Internet est un espace de liberté de pensée";
 "onboarding_username_placeholder" = "choisissez un alias public (facultatif)";
 "onboarding_create_identity" = "Créer une identité d'appareil";
 "onboarding_already_have" = "Vous avez déjà une identité ?";
