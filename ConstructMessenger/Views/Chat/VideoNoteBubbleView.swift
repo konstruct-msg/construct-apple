@@ -29,7 +29,7 @@ struct VideoNoteBubbleView: View {
     @State private var isDownloading = false
     @State private var downloadProgress: Double = 0
     @State private var isMissingMedia = false
-    /// What was said, recognised on this device (`message.transcriptText`, as for voice).
+    /// What was said, recognised on this device (`message.transcript`, as for voice).
     @State private var transcript: String?
     @State private var isTranscribing = false
     @State private var showsTranscript = true
@@ -56,7 +56,7 @@ struct VideoNoteBubbleView: View {
                     .textSelection(.enabled)
             }
         }
-        .onAppear { transcript = message.transcriptText }
+        .onAppear { transcript = message.transcript }
     }
 
     private var card: some View {
@@ -137,7 +137,7 @@ struct VideoNoteBubbleView: View {
                 let audio = try await MediaVideoFile.speech(of: url)
                 guard let context = message.managedObjectContext else { return }
                 try await VoiceTranscriptionService.shared.transcribe(audioData: audio, message: message, context: context)
-                transcript = message.transcriptText
+                transcript = message.transcript
                 showsTranscript = true
             } catch {
                 Log.error("Video note transcription failed: \(error)", category: "VideoNoteBubbleView")
