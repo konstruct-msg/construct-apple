@@ -35,6 +35,9 @@ private final class FakeStore: RecoveryPhraseStore {
         return true
     }
     func hasHeld(account: String) -> Bool { held?.account == account }
+    func phrasePresence(account: String) -> RecoveryPhrasePresence {
+        pending?.account == account || held?.account == account ? .present : .absent
+    }
     func readHeld(account: String, reason: String) async -> String? {
         held?.account == account ? held?.phrase : nil
     }
@@ -55,6 +58,7 @@ final class RecoveryKeyProvisionerTests: XCTestCase {
     private var uploadResult: Result<Data, Error> = .success(Data(repeating: 7, count: 32))
     private var uploads: [String] = []
     private var generated = 0
+    private var silentMarks: [String] = []
 
     private func expectOutcome(
         _ expected: RecoveryKeyProvisioner.Outcome,
@@ -83,6 +87,7 @@ final class RecoveryKeyProvisionerTests: XCTestCase {
             },
             isOtherKeySet: { $0 is OtherKey },
             rememberAddress: { [unowned self] in address = $0 },
+            markSilent: { [unowned self] in silentMarks.append($0) },
             store: store
         ))
     }
@@ -96,6 +101,7 @@ final class RecoveryKeyProvisionerTests: XCTestCase {
         XCTAssertEqual(store.held?.phrase, "phrase-1", "moved behind authentication once set")
         XCTAssertNil(store.pending)
         XCTAssertEqual(address, Data(repeating: 7, count: 32))
+        XCTAssertEqual(silentMarks, ["u1"], "the copy is owed from now")
     }
 
     /// Mutation: generate a fresh phrase on every run — the retry sets a second key whose first

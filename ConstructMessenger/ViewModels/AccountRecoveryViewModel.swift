@@ -52,6 +52,20 @@ final class AccountRecoveryViewModel {
     /// (`decisions/recovery-key-backup-is-deferred-not-skipped.md`).
     private(set) var backupPending = false
     private let phraseStore: RecoveryPhraseStore = RecoveryPhraseVault.shared
+    private let marks = RecoveryBackupMarks()
+
+    /// What the chat list should say about the copy (`RecoveryReminder.decide`). Recomputed with
+    /// the status, not per render — it asks the Keychain.
+    private(set) var reminder: RecoveryReminder = .none
+    /// The silent key's phrase left the device before it was copied — whatever the reminder's
+    /// snooze says. Settings show it permanently; it cannot be fixed, only known.
+    private(set) var phraseLost = false
+
+    /// The person closed the reminder: ask again after the same delay.
+    func snoozeReminder() {
+        marks.snooze()
+        refreshBackupPending()
+    }
 
     /// Settings asks for a copy while there is no key or the silent one is not copied yet.
     var needsBackup: Bool { statusLoaded && (!isSetup || backupPending) }
@@ -104,9 +118,25 @@ final class AccountRecoveryViewModel {
     func refreshBackupPending() {
         guard let userId = AuthSessionManager.shared.currentUserId else {
             backupPending = false
+            reminder = .none
+            phraseLost = false
             return
         }
         backupPending = phraseStore.hasHeld(account: userId)
+        phraseLost = RecoveryReminder.decide(
+            now: Date(),
+            silentAt: marks.silentAt(account: userId),
+            copied: marks.copied,
+            phrase: phraseStore.phrasePresence(account: userId),
+            snoozedUntil: nil
+        ) == .phraseLost
+        reminder = RecoveryReminder.decide(
+            now: Date(),
+            silentAt: marks.silentAt(account: userId),
+            copied: marks.copied,
+            phrase: phraseStore.phrasePresence(account: userId),
+            snoozedUntil: marks.snoozedUntil
+        )
     }
 
     /// Shows the silently made phrase, after Face ID / Touch ID / the passcode.
@@ -181,6 +211,7 @@ final class AccountRecoveryViewModel {
             // The key is on the server already; copying it is all that was left. The phrase
             // leaves the device now, and the rule "never stored" applies again.
             phraseStore.forgetHeld()
+            marks.markCopied()
             refreshBackupPending()
             setupStep = .done(fingerprint: fingerprint ?? "")
             mnemonic = []

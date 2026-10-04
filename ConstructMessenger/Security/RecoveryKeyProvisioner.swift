@@ -43,6 +43,8 @@ final class RecoveryKeyProvisioner {
         /// True when the server refused because another key is set.
         var isOtherKeySet: (Error) -> Bool
         var rememberAddress: (Data) -> Void
+        /// Notes that the key was made without a screen, so the copy is owed (`RecoveryBackupMarks`).
+        var markSilent: (_ userId: String) -> Void
         var store: RecoveryPhraseStore
     }
 
@@ -108,6 +110,7 @@ final class RecoveryKeyProvisioner {
         }
 
         d.rememberAddress(publicKey)
+        d.markSilent(userId)
         if !d.store.promotePending(account: userId) {
             // The key is set and the address known, but the phrase could not move behind
             // authentication. It stays pending — readable, never lost — and the next run retries.
@@ -141,6 +144,7 @@ extension RecoveryKeyProvisioner.Dependencies {
             },
             isOtherKeySet: { ($0 as? RPCError)?.code == .alreadyExists },
             rememberAddress: { AccountAddress.rememberOwn($0) },
+            markSilent: { RecoveryBackupMarks().markSilent(account: $0) },
             store: RecoveryPhraseVault.shared
         )
     }

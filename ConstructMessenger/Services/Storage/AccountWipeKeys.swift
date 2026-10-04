@@ -77,6 +77,12 @@ enum AccountWipeKeys {
         // are the account's. The sign-out warning fires while a copy is still owed.
         "construct.recovery.phrase.pending",
         "construct.recovery.phrase.held",
+        // When the silent key was made, whether its copy was confirmed, and the reminder's
+        // snooze (`RecoveryBackupMarks`). The account's; the next one starts with none.
+        "construct.recovery.silentAt",
+        "construct.recovery.silentAccount",
+        "construct.recovery.copied",
+        "construct.recovery.reminderSnoozedUntil",
 
         // The reactions this person uses most (`ReactionQuickSetStore`). A habit of this
         // identity's; the next one starts from the popular set.

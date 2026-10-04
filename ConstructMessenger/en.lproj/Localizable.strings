@@ -1339,3 +1339,6 @@
 "recovery_backup_pending_title" = "Recovery key not saved";
 "recovery_backup_pending_subtitle" = "Write down your recovery key — it is the only way back if you lose every device.";
 "recovery_backup_pending" = "Not saved yet";
+"recovery_reminder_lost_title" = "Recovery key can no longer be shown";
+"recovery_reminder_lost_body" = "The device passcode was turned off before the key was saved, and iOS deleted it. Your account works on this device, but if you lose it or sign out, the account cannot be recovered.";
+"logout_backup_pending_message" = "Your recovery key is on this device and has not been saved. Signing out deletes it, and the account cannot be recovered without it.";
