@@ -78,4 +78,32 @@ final class VideoNotePresentationTests: XCTestCase {
             MediaMessageData.self, from: JSONSerialization.data(withJSONObject: old))
         XCTAssertNil(decoded.presentation)
     }
+
+    // MARK: Names in the chat list and in replies
+
+    private func storedAlbum(_ presentation: MediaPresentation?, mime: String = "video/mp4") -> LocalMessagePayload {
+        var data = item(presentation)
+        if mime != "video/mp4" {
+            data = MediaMessageData(mediaId: "m1", mediaUrl: "u1", mediaKey: Data(repeating: 1, count: 32),
+                                    mediaType: mime, size: 4096, width: 1, height: 1, duration: nil,
+                                    thumbnail: nil, hash: "00", filename: nil)
+        }
+        let album = MediaWireCodec.albumContent(mediaList: [data], caption: "", quoted: nil).mediaAlbum
+        return LocalMessagePayload.decode(LocalMessagePayload.encodeMediaAlbum(album))
+    }
+
+    func testChatListNamesTheKindOfMedia() {
+        XCTAssertEqual(storedAlbum(.videoNote).previewHint, NSLocalizedString("video_note", comment: ""))
+        XCTAssertEqual(storedAlbum(nil).previewHint, NSLocalizedString("video", comment: ""))
+        XCTAssertEqual(storedAlbum(nil, mime: "image/jpeg").previewHint, NSLocalizedString("photo", comment: ""))
+    }
+
+    func testAReplyToAVideoNoteSaysSoLocallyAndVideoOnTheWire() throws {
+        let content = MediaWireCodec.albumContent(mediaList: [item(.videoNote)], caption: "", quoted: nil)
+        let json = try XCTUnwrap(MediaWireCodec.mediaJSON(from: content.mediaAlbum))
+        let reply = try XCTUnwrap(ReplyPreviewPayload.projecting(originalContent: json))
+        XCTAssertEqual(reply.kind, .videoNote)
+        XCTAssertEqual(reply.localizedDisplayText, NSLocalizedString("video_note", comment: ""))
+        XCTAssertEqual(reply.protoMediaType, .video)
+    }
 }

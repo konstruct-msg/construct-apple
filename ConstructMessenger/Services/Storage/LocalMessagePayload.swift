@@ -209,6 +209,11 @@ enum LocalMessagePayload: Equatable {
         if MediaWireCodec.looksLikeFileAlbum(album) {
             return NSLocalizedString("file", comment: "")
         }
+        // Named by the first item, as the bubble is. A video read "Photo" here until 2026-10-04.
+        if let first = album.items.first {
+            if first.presentation == .videoNote { return NSLocalizedString("video_note", comment: "") }
+            if first.mimeType.lowercased().hasPrefix("video/") { return NSLocalizedString("video", comment: "") }
+        }
         return NSLocalizedString("photo", comment: "")
     }
 
