@@ -1391,6 +1391,12 @@ RustBuffer uniffi_construct_core_fn_func_knst_frame_whole(RustBuffer payload, ui
 RustBuffer uniffi_construct_core_fn_func_knst_parse(RustBuffer frame, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_MEDIA_MAX_PLAINTEXT_LEN
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_MEDIA_MAX_PLAINTEXT_LEN
+uint64_t uniffi_construct_core_fn_func_media_max_plaintext_len(RustCallStatus *_Nonnull out_status
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_MLDSA65_KEYGEN
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_MLDSA65_KEYGEN
 RustBuffer uniffi_construct_core_fn_func_mldsa65_keygen(RustCallStatus *_Nonnull out_status
@@ -1415,6 +1421,11 @@ RustBuffer uniffi_construct_core_fn_func_mlkem1024_encapsulate(RustBuffer public
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_MNEMONIC_TO_SEED
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_MNEMONIC_TO_SEED
 RustBuffer uniffi_construct_core_fn_func_mnemonic_to_seed(RustBuffer mnemonic, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_OPEN_MEDIA
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_OPEN_MEDIA
+RustBuffer uniffi_construct_core_fn_func_open_media(RustBuffer key, RustBuffer blob, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_PLAN_INITIATION
@@ -1475,6 +1486,11 @@ uint64_t uniffi_construct_core_fn_func_recommended_send_delay_ms(int8_t is_high_
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_REGISTRATION_BUNDLE_FIELDS_FROM_KEYS
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_REGISTRATION_BUNDLE_FIELDS_FROM_KEYS
 RustBuffer uniffi_construct_core_fn_func_registration_bundle_fields_from_keys(RustBuffer keys, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_SEAL_MEDIA
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_SEAL_MEDIA
+RustBuffer uniffi_construct_core_fn_func_seal_media(RustBuffer plaintext, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_SEAL_TO_DEVICE_KEY
@@ -2005,6 +2021,12 @@ uint16_t uniffi_construct_core_checksum_func_knst_parse(void
     
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_MEDIA_MAX_PLAINTEXT_LEN
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_MEDIA_MAX_PLAINTEXT_LEN
+uint16_t uniffi_construct_core_checksum_func_media_max_plaintext_len(void
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_MLDSA65_KEYGEN
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_MLDSA65_KEYGEN
 uint16_t uniffi_construct_core_checksum_func_mldsa65_keygen(void
@@ -2032,6 +2054,12 @@ uint16_t uniffi_construct_core_checksum_func_mlkem1024_encapsulate(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_MNEMONIC_TO_SEED
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_MNEMONIC_TO_SEED
 uint16_t uniffi_construct_core_checksum_func_mnemonic_to_seed(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_OPEN_MEDIA
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_OPEN_MEDIA
+uint16_t uniffi_construct_core_checksum_func_open_media(void
     
 );
 #endif
@@ -2104,6 +2132,12 @@ uint16_t uniffi_construct_core_checksum_func_recommended_send_delay_ms(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_REGISTRATION_BUNDLE_FIELDS_FROM_KEYS
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_REGISTRATION_BUNDLE_FIELDS_FROM_KEYS
 uint16_t uniffi_construct_core_checksum_func_registration_bundle_fields_from_keys(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_SEAL_MEDIA
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_SEAL_MEDIA
+uint16_t uniffi_construct_core_checksum_func_seal_media(void
     
 );
 #endif
