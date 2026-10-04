@@ -166,7 +166,7 @@ struct MessageBubbleRegularView: View {
                         isSentByMe: message.isSentByMe,
                         deliveryStatus: message.deliveryStatus,
                         onRetry: onRetry != nil ? { onRetry?(message) } : nil,
-                        transcript: message.transcriptText,
+                        transcript: message.transcript,
                         isTranscribing: isTranscribingVoice,
                         onTranscribe: {
                             guard !isTranscribingVoice else { return }
@@ -502,7 +502,7 @@ struct MessageBubbleRegularView: View {
     private var replyIndicatorView: some View {
         if hasReplyReference {
             MessageBubbleReplyPreview(
-                content: message.replyToContent,
+                content: message.replyQuote,
                 messageId: message.replyToMessageId,
                 onTap: { onJumpToReply?(message) }
             )

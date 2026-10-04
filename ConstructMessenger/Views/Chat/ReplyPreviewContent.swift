@@ -16,7 +16,7 @@ private enum ReplyPreviewLayout {
 }
 
 struct ReplyPreviewContent: View {
-    /// The content string — `replyToContent` stored on the replying message,
+    /// The content string — `replyQuote` stored on the replying message,
     /// or `decryptedContent` of the original message when composing.
     let content: String?
     /// Message ID used to look up a local thumbnail via MediaManager.

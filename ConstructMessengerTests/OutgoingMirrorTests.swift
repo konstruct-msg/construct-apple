@@ -123,7 +123,9 @@ final class RecoveredWirePlaintextTests: XCTestCase {
         let message = Construct_Messenger.Message(context: context)
         message.id = UUID().uuidString
         message.timestamp = Date()
-        message.decryptedContent = text
+        // Encrypted at rest, as every row is written now: the reply quote is sealed with the
+        // row's key, and a row without one (the old `decryptedContent` shape) keeps none.
+        message.applyStoredEncryption(plaintext: text, contactId: "peer")
         message.contentTypeRaw = contentType.rawValue
         return message
     }
@@ -141,7 +143,7 @@ final class RecoveredWirePlaintextTests: XCTestCase {
     func testAReplyKeepsItsQuote() throws {
         let message = makeMessage(text: "answering")
         message.replyToMessageId = "8a0c1f6e-0000-0000-0000-000000000001"
-        message.replyToContent = "the question"
+        message.replyQuote = "the question"
         let recovered = try XCTUnwrap(MessageRetryManager.recoverWirePlaintext(for: message))
         let content = try Shared_Proto_Messaging_V1_MessageContent(serializedBytes: recovered)
         XCTAssertEqual(content.text.quoted.messageID, "8a0c1f6e-0000-0000-0000-000000000001")

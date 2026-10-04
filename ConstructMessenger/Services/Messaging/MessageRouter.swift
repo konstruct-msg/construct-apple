@@ -1980,7 +1980,7 @@ final class MessageRouter {
         // Fallback: legacy replyToMessageId from envelope (old clients without proto payload).
         if let qm = quotedMessage, !qm.messageID.isEmpty {
             message.replyToMessageId = qm.messageID.lowercased()
-            message.replyToContent = ReplyPreviewPayload.receiving(
+            message.replyQuote = ReplyPreviewPayload.receiving(
                 textPreview: qm.hasTextPreview ? qm.textPreview : nil,
                 mediaType: qm.hasMediaType ? qm.mediaType : nil
             )?.storedContent
@@ -1991,7 +1991,7 @@ final class MessageRouter {
             replyFetch.fetchLimit = 1
             do {
                 if let replyMsg = try context.fetch(replyFetch).first {
-                    message.replyToContent = ReplyPreviewPayload.projecting(
+                    message.replyQuote = ReplyPreviewPayload.projecting(
                         originalContent: replyMsg.displayText
                     )?.storedContent
                 }
