@@ -227,7 +227,8 @@ enum ChatUIConstants {
 
         // The mic ↔ camera switch on a long press (`MicModeButton`)
         static let switchPressDelay: Duration = .milliseconds(350)
-        static let switchSegmentWidth: CGFloat = 52
+        /// Height of each segment; the switch is two of them, upwards from the mic.
+        static let switchSegmentLength: CGFloat = 52
         /// How far past the switch a finger may drift and still choose; beyond it, release cancels.
         static let switchCancelMargin: CGFloat = 44
     }

@@ -3,7 +3,7 @@
 //  ConstructMessengerTests
 //
 //  Where a finger lets go on the mic ↔ camera switch decides what is recorded — or that nothing
-//  is. The switch grows leftwards from the mic: [camera | mic], the mic under the finger.
+//  is. The switch grows upwards from the mic: camera over mic, the mic under the finger.
 //
 
 import XCTest
@@ -11,7 +11,7 @@ import XCTest
 
 final class MicModeButtonTests: XCTestCase {
     private let size: CGFloat = 42
-    private var segment: CGFloat { ChatUIConstants.VideoNote.switchSegmentWidth }
+    private var segment: CGFloat { ChatUIConstants.VideoNote.switchSegmentLength }
     private var margin: CGFloat { ChatUIConstants.VideoNote.switchCancelMargin }
 
     private func mode(_ x: CGFloat, _ y: CGFloat) -> MicModeButton.Mode? {
@@ -22,20 +22,25 @@ final class MicModeButtonTests: XCTestCase {
         XCTAssertEqual(mode(size / 2, size / 2), .voice)
     }
 
-    func testSlidingLeftOntoTheCameraSegmentIsTheVideoNote() {
-        XCTAssertEqual(mode(size - segment - 1, size / 2), .videoNote)
-        XCTAssertEqual(mode(size - 2 * segment + 1, size / 2), .videoNote)
+    func testSlidingUpOntoTheCameraSegmentIsTheVideoNote() {
+        XCTAssertEqual(mode(size / 2, size - segment - 1), .videoNote)
+        XCTAssertEqual(mode(size / 2, size - 2 * segment + 1), .videoNote)
+    }
+
+    /// Sideways is not the gesture any more: a slide left stays on the mic, and far enough is off.
+    func testSlidingLeftDoesNotChooseTheCamera() {
+        XCTAssertEqual(mode(-margin + 1, size / 2), .voice)
+        XCTAssertNil(mode(-margin - 1, size / 2))
     }
 
     func testLeavingTheSwitchChoosesNothing() {
-        XCTAssertNil(mode(size / 2, -margin - 1), "dragged up, away from the switch")
+        XCTAssertNil(mode(size / 2, size - 2 * segment - margin - 1), "past the camera end")
         XCTAssertNil(mode(size / 2, size + margin + 1), "dragged down")
-        XCTAssertNil(mode(size - 2 * segment - margin - 1, size / 2), "past the camera end")
-        XCTAssertNil(mode(size + margin + 1, size / 2), "past the mic end")
+        XCTAssertNil(mode(size + margin + 1, size / 2), "dragged right")
     }
 
     func testAFingerThatDriftsALittleStillChooses() {
-        XCTAssertEqual(mode(size / 2, -margin + 1), .voice)
-        XCTAssertEqual(mode(size - 2 * segment - margin + 1, size / 2), .videoNote)
+        XCTAssertEqual(mode(size + margin - 1, size / 2), .voice)
+        XCTAssertEqual(mode(size / 2, size - 2 * segment - margin + 1), .videoNote)
     }
 }
