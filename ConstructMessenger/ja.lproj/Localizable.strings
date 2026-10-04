@@ -1331,3 +1331,12 @@
 "mic_denied_message_macos" = "ボイスメッセージを送るには、設定でマイクを許可してください。";
 "voice_ready_to_send" = "送信できます";
 "save_as" = "別名で保存…";
+
+// Recovery key made silently, copied later (decisions/recovery-key-backup-is-deferred-not-skipped.md)
+"recovery_backup_auth_reason" = "リカバリーキーを表示";
+"recovery_backup_intro_title" = "リカバリーキーを保存";
+"recovery_backup_intro_body" = "コンストラクトはあなたの電話番号もメールアドレスも持っていません。すべての端末を失ったとき、アカウントを取り戻す方法はこのキーだけです。12個の単語を書き留め、安全な場所に保管してください。";
+"recovery_backup_show" = "キーを表示";
+"recovery_backup_pending_title" = "リカバリーキーが未保存です";
+"recovery_backup_pending_subtitle" = "リカバリーキーを書き留めてください。すべての端末を失ったときに戻れる唯一の方法です。";
+"recovery_backup_pending" = "未保存";

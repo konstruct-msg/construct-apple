@@ -35,7 +35,26 @@ final class AccountRecoveryViewModel {
     var setupStep: SetupStep = .idle
     var mnemonic: [String] = []           // 12 words shown to user
     var quizIndices: [Int] = []           // 3 random indices for word quiz
-    var quizAnswers: [Int: String] = [:]  // index → user input
+    var quizAnswers: [Int: String] = [:]  // index → the word the user picked
+    /// Index → the words offered for it: the right one and others from the same phrase. Picking
+    /// is the check (owner's decision 2026-10-04); typing on a phone was the wall.
+    var quizOptions: [Int: [String]] = [:]
+
+    /// What the setup screen is doing: making a key and setting it (no passcode on this device,
+    /// or no key yet), or showing one that was made silently so the person can copy it.
+    enum SetupMode: Equatable {
+        case create
+        case backupHeld
+    }
+    var setupMode: SetupMode = .create
+
+    /// The silent key's phrase waits in the vault until it is copied
+    /// (`decisions/recovery-key-backup-is-deferred-not-skipped.md`).
+    private(set) var backupPending = false
+    private let phraseStore: RecoveryPhraseStore = RecoveryPhraseVault.shared
+
+    /// Settings asks for a copy while there is no key or the silent one is not copied yet.
+    var needsBackup: Bool { statusLoaded && (!isSetup || backupPending) }
 
     // MARK: - Recovery status state
 
@@ -76,17 +95,68 @@ final class AccountRecoveryViewModel {
 
     // MARK: - Setup Flow
 
+    /// Which flow the screen opens on. Called when it appears.
+    func prepareSetup() {
+        refreshBackupPending()
+        setupMode = backupPending ? .backupHeld : .create
+    }
+
+    func refreshBackupPending() {
+        guard let userId = AuthSessionManager.shared.currentUserId else {
+            backupPending = false
+            return
+        }
+        backupPending = phraseStore.hasHeld(account: userId)
+    }
+
+    /// Shows the silently made phrase, after Face ID / Touch ID / the passcode.
+    func startBackup() async {
+        guard let userId = AuthSessionManager.shared.currentUserId,
+              let phrase = await phraseStore.readHeld(
+                account: userId,
+                reason: NSLocalizedString("recovery_backup_auth_reason", comment: "")
+              )
+        else { return }
+        beginQuiz(with: phrase)
+    }
+
     func startSetup() {
         do {
-            let phrase = try generateMnemonic(wordCount: 12)
-            mnemonic = phrase.split(separator: " ").map(String.init)
-            quizIndices = threeRandomIndices(count: mnemonic.count)
-            quizAnswers = [:]
-            setupStep = .displayWords
+            beginQuiz(with: try generateMnemonic(wordCount: 12))
         } catch {
             Log.error("Recovery setup: phrase generation failed: \(error)", category: "Recovery")
             setupStep = .failed(error.userFacingMessage)
         }
+    }
+
+    private func beginQuiz(with phrase: String) {
+        mnemonic = phrase.split(separator: " ").map(String.init)
+        quizIndices = threeRandomIndices(count: mnemonic.count)
+        quizAnswers = [:]
+        var generator = SystemRandomNumberGenerator()
+        quizOptions = Dictionary(uniqueKeysWithValues: quizIndices.map {
+            ($0, Self.quizOptions(for: mnemonic, index: $0, using: &generator))
+        })
+        setupStep = .displayWords
+    }
+
+    /// The word at `index` and up to three others from the same phrase, shuffled. Decoys from the
+    /// phrase itself are the point: they are all words the person just saw, so the pick checks the
+    /// position they wrote down, not whether a word looks familiar.
+    static func quizOptions<R: RandomNumberGenerator>(
+        for mnemonic: [String],
+        index: Int,
+        count: Int = 4,
+        using generator: inout R
+    ) -> [String] {
+        guard mnemonic.indices.contains(index) else { return [] }
+        let answer = mnemonic[index]
+        var decoys: [String] = []
+        for word in mnemonic.shuffled(using: &generator)
+        where word != answer && !decoys.contains(word) && decoys.count < count - 1 {
+            decoys.append(word)
+        }
+        return ([answer] + decoys).shuffled(using: &generator)
     }
 
     func proceedToQuiz() {
@@ -105,6 +175,15 @@ final class AccountRecoveryViewModel {
     func submitSetup(userId: String) async {
         guard quizPassed else {
             setupStep = .failed(NSLocalizedString("recovery_quiz_failed", comment: ""))
+            return
+        }
+        if setupMode == .backupHeld {
+            // The key is on the server already; copying it is all that was left. The phrase
+            // leaves the device now, and the rule "never stored" applies again.
+            phraseStore.forgetHeld()
+            refreshBackupPending()
+            setupStep = .done(fingerprint: fingerprint ?? "")
+            mnemonic = []
             return
         }
         setupStep = .uploading
@@ -142,6 +221,7 @@ final class AccountRecoveryViewModel {
         mnemonic = []
         quizIndices = []
         quizAnswers = [:]
+        quizOptions = [:]
     }
 
     // MARK: - Status check
@@ -166,6 +246,7 @@ final class AccountRecoveryViewModel {
                 if status.isSetup {
                     UserDefaults.standard.set(true, forKey: Self.udKeyIsSetup)
                 }
+                refreshBackupPending()
                 statusLoaded = true
             } catch {
                 // Non-fatal — silently skip banner on network error

@@ -72,6 +72,12 @@ enum AccountWipeKeys {
         // wipe left one identity's pruned contacts shielding the next identity's messages.
         "construct.deletedContacts.v2",
 
+        // Keychain: the recovery phrase waiting to be uploaded or copied (`RecoveryPhraseVault`).
+        // `LocalDataWipe` deletes both, on sign-out as on deletion; listed so the scan knows they
+        // are the account's. The sign-out warning fires while a copy is still owed.
+        "construct.recovery.phrase.pending",
+        "construct.recovery.phrase.held",
+
         // The reactions this person uses most (`ReactionQuickSetStore`). A habit of this
         // identity's; the next one starts from the popular set.
         "construct.reactions.quickSet.v1",

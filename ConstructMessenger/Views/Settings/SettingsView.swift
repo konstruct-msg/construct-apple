@@ -58,7 +58,7 @@ struct SettingsView: View {
                 ScrollView {
                     LazyVStack(spacing: SettingsRootLayout.listSpacing) {
                         // MARK: Recovery warning (full width in both layouts)
-                        if recoveryVM.statusLoaded && !recoveryVM.isSetup && !recoveryBannerDismissed {
+                        if recoveryVM.needsBackup && !recoveryBannerDismissed {
                             recoveryBanner
                         }
 
@@ -384,10 +384,18 @@ struct SettingsView: View {
                 .font(.system(size: SettingsRootLayout.recoveryBannerIconSize, weight: .semibold))
                 .foregroundColor(Color.CT.danger)
             VStack(alignment: .leading, spacing: SettingsRootLayout.recoveryBannerTextSpacing) {
-                Text(NSLocalizedString("recovery_not_configured_title", comment: "").uppercased())
+                // A key made silently and not yet copied is the common case since 2026-10-04;
+                // "not configured" is left for devices that could not make one.
+                Text(NSLocalizedString(
+                    recoveryVM.isSetup ? "recovery_backup_pending_title" : "recovery_not_configured_title",
+                    comment: ""
+                ).uppercased())
                     .font(CTFont.badge)
                     .foregroundColor(Color.CT.danger)
-                Text(NSLocalizedString("recovery_banner_subtitle", comment: ""))
+                Text(NSLocalizedString(
+                    recoveryVM.isSetup ? "recovery_backup_pending_subtitle" : "recovery_banner_subtitle",
+                    comment: ""
+                ))
                     .font(CTFont.caption)
                     .foregroundColor(Color.CT.textDim)
                 Button {

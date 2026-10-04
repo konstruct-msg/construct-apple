@@ -1341,3 +1341,12 @@
 "mic_denied_message_macos" = "Разрешите микрофон в настройках, чтобы отправлять голосовые сообщения.";
 "voice_ready_to_send" = "Можно отправить";
 "save_as" = "Сохранить как…";
+
+// Recovery key made silently, copied later (decisions/recovery-key-backup-is-deferred-not-skipped.md)
+"recovery_backup_auth_reason" = "Показать ключ восстановления";
+"recovery_backup_intro_title" = "Сохраните ключ восстановления";
+"recovery_backup_intro_body" = "У Конструкта нет вашего телефона и почты. Этот ключ — единственный способ вернуть аккаунт, если вы потеряете все устройства. Запишите 12 слов и храните их в надёжном месте.";
+"recovery_backup_show" = "Показать ключ";
+"recovery_backup_pending_title" = "Ключ восстановления не сохранён";
+"recovery_backup_pending_subtitle" = "Запишите ключ восстановления — это единственный способ вернуть аккаунт, если пропадут все устройства.";
+"recovery_backup_pending" = "Ещё не сохранён";

@@ -57,6 +57,11 @@ enum LocalDataWipe {
 
         AccountWipeKeys.wipe()
         KeychainManager.shared.deleteAllContactRequestMappings()
+        // The recovery phrase, if it is still waiting for its copy. A wipe is the account going
+        // away from this device — sign-out or deletion — and the next identity must not find
+        // the last one's key. Sign-out warns first while the copy is owed (`needsBackup`).
+        RecoveryPhraseVault.shared.forgetPending()
+        RecoveryPhraseVault.shared.forgetHeld()
         Task { await MediaSendCache.shared.clear() }
 
         Log.info("LOCAL_WIPE: done reason=\(reason)", category: "Auth")
