@@ -40,6 +40,24 @@ func parseMediaContent(from content: String?) -> MediaMessageContent? {
     )
 }
 
+// MARK: - Presentation
+
+/// How a media item is shown beyond what its MIME type implies — `MediaMessage.presentation` on
+/// the wire, `"presentation"` in an item's local JSON. A value this build does not know is read as
+/// nil, the ordinary bubble, which is what the wire field promises an older client does.
+enum MediaPresentation: String, Codable, Sendable {
+    /// A short video recorded in the chat: 3:4, uncropped, muted loop in the transcript, full
+    /// screen with sound on tap (`decisions/video-notes-are-uncropped-and-expand.md`).
+    case videoNote = "video_note"
+
+    static let jsonKey = "presentation"
+
+    /// The presentation of one local media item dict.
+    static func of(_ item: [String: Any]) -> MediaPresentation? {
+        (item[jsonKey] as? String).flatMap(MediaPresentation.init(rawValue:))
+    }
+}
+
 // MARK: - File message
 
 struct FileMessageContent: Codable {

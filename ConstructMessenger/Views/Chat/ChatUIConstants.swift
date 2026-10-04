@@ -195,6 +195,21 @@ enum ChatUIConstants {
         static let selectionStrokeWidth: CGFloat = 2
     }
 
+    /// A video note in the transcript (`VideoNoteBubbleView`).
+    enum VideoNote {
+        /// Narrower than a photo (`MediaPreviewLayout.maxWidth` 260): it is a message, not a
+        /// picture to look at, and at 3:4 it already stands taller than a photo row.
+        static let width: CGFloat = 200
+        /// The recorded shape. A note from a client that did not record 3:4 keeps its own.
+        static let aspectRatio: CGFloat = 3.0 / 4.0
+        static let chipIconSize: CGFloat = 10
+        static let chipSpacing: CGFloat = 4
+        static let chipHorizontalPadding: CGFloat = 6
+        static let chipVerticalPadding: CGFloat = 3
+        static let downloadIconSize: CGFloat = 30
+        static let blurDecodeSize = CGSize(width: 24, height: 32)
+    }
+
     // MARK: - Reply focus (soft dim, not Apple-style isolation)
 
     /// When the user is composing a reply or peeks a reply chain, non-focused

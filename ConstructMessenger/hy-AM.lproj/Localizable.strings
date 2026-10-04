@@ -602,6 +602,7 @@
 "reply_with_selection" = "Պատասխանել ընտրվածին";
 "photo" = "Լուսանկար";
 "video" = "Տեսանյութ";
+"video_note" = "Տեսահաղորդագրություն";
 "file_attachment" = "Ֆայլ";
 "sticker" = "Կպչուն";
 "media_picker_tab_stickers" = "Կպչուններ";

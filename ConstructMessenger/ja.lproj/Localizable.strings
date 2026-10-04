@@ -540,6 +540,7 @@
 "reply_with_selection" = "選択範囲に返信";
 "photo" = "写真";
 "video" = "動画";
+"video_note" = "ビデオメモ";
 "file_attachment" = "ファイル";
 "sticker" = "ステッカー";
 "media_picker_tab_stickers" = "ステッカー";

@@ -603,6 +603,7 @@
 "reply_with_selection" = "Ответить на выделенное";
 "photo" = "Фото";
 "video" = "Видео";
+"video_note" = "Видеозаметка";
 "file_attachment" = "Файл";
 "sticker" = "Стикер";
 "media_picker_tab_stickers" = "Стикеры";

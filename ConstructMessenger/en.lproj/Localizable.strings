@@ -602,6 +602,7 @@
 "reply_with_selection" = "Reply to Selection";
 "photo" = "Photo";
 "video" = "Video";
+"video_note" = "Video note";
 "file_attachment" = "File";
 "sticker" = "Sticker";
 "media_picker_tab_stickers" = "Stickers";
