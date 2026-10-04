@@ -38,6 +38,14 @@ final class CoreDataModelTests: XCTestCase {
     /// Model 14 adds the profile version to `User` (`profileEditedAtMs` with a default,
     /// `pendingAvatarRef`, `pendingAvatarSince` optional): a store written by 13 opens under it
     /// without a mapping model.
+    /// 15 adds the sealed transcript (TODO 115); a 14 store must open without a mapping model.
+    func testVersion14MigratesLightweight() throws {
+        let current = PersistenceController(inMemory: true).container.managedObjectModel
+        XCTAssertNoThrow(
+            try NSMappingModel.inferredMappingModel(forSourceModel: model("ConstructMessenger 14"), destinationModel: current)
+        )
+    }
+
     func testVersion13MigratesLightweight() throws {
         let current = PersistenceController(inMemory: true).container.managedObjectModel
         XCTAssertNoThrow(

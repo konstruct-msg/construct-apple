@@ -88,7 +88,7 @@ public final class VoiceTranscriptionService {
     ) async throws {
         let result = try await provider.transcribe(audioData: audioData)
         await MainActor.run {
-            message.transcriptText = result.text
+            message.transcript = result.text
             message.transcriptLanguage = result.language
             message.transcriptGeneratedAt = Date()
             try? context.save()

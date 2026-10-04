@@ -159,7 +159,11 @@ extension Message {
     @NSManaged public var chat: Chat?
 
     // Voice message transcript (on-device STT via WhisperKit)
+    /// Legacy plaintext column — read and write `transcript` instead. Emptied at launch
+    /// (`StorageMigrationService`), removed in the next model (TODO 115).
     @NSManaged public var transcriptText: String?
+    /// `transcript`, sealed with the row's storage key.
+    @NSManaged public var encryptedTranscript: Data?
     @NSManaged public var transcriptLanguage: String?
     @NSManaged public var transcriptGeneratedAt: Date?
 

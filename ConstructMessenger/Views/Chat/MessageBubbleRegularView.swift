@@ -166,7 +166,7 @@ struct MessageBubbleRegularView: View {
                         isSentByMe: message.isSentByMe,
                         deliveryStatus: message.deliveryStatus,
                         onRetry: onRetry != nil ? { onRetry?(message) } : nil,
-                        transcript: message.transcriptText,
+                        transcript: message.transcript,
                         isTranscribing: isTranscribingVoice,
                         onTranscribe: {
                             guard !isTranscribingVoice else { return }
