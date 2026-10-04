@@ -203,6 +203,7 @@ enum ChatUIConstants {
         /// The recorded shape. A note from a client that did not record 3:4 keeps its own.
         static let aspectRatio: CGFloat = 3.0 / 4.0
         static let chipIconSize: CGFloat = 10
+        static let transcriptIconSize: CGFloat = 14
         static let chipSpacing: CGFloat = 4
         static let chipHorizontalPadding: CGFloat = 6
         static let chipVerticalPadding: CGFloat = 3

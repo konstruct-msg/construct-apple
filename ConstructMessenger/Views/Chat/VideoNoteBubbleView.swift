@@ -29,6 +29,10 @@ struct VideoNoteBubbleView: View {
     @State private var isDownloading = false
     @State private var downloadProgress: Double = 0
     @State private var isMissingMedia = false
+    /// What was said, recognised on this device (`message.transcriptText`, as for voice).
+    @State private var transcript: String?
+    @State private var isTranscribing = false
+    @State private var showsTranscript = true
 
     private var size: CGSize {
         let width = ChatUIConstants.VideoNote.width
@@ -42,6 +46,20 @@ struct VideoNoteBubbleView: View {
     private var isUploading: Bool { isPlaceholder && message.deliveryStatus == .sending }
 
     var body: some View {
+        VStack(alignment: .leading, spacing: ChatUIConstants.Bubble.stackSpacing) {
+            card
+            if showsTranscript, let transcript, !transcript.isEmpty {
+                Text(transcript)
+                    .font(CTFont.message(ChatUIConstants.Typography.messageTextSize))
+                    .foregroundColor(Color.CT.text)
+                    .frame(width: size.width, alignment: .leading)
+                    .textSelection(.enabled)
+            }
+        }
+        .onAppear { transcript = message.transcriptText }
+    }
+
+    private var card: some View {
         ZStack {
             if let poster {
                 Image(platformImage: poster).resizable().scaledToFill()
@@ -73,6 +91,58 @@ struct VideoNoteBubbleView: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(NSLocalizedString("video_note", comment: "A video note in the transcript"))
         .accessibilityAddTraits(.isButton)
+        // After the element above, so VoiceOver reaches it on its own.
+        .overlay(alignment: .topTrailing) { if !isPlaceholder, !isMissingMedia { transcriptButton } }
+    }
+
+    // MARK: Transcript
+
+    /// Recognise the note's speech, or show / hide what was recognised. On this device only
+    /// (`VoiceTranscriptionService`), from the decrypted file.
+    @ViewBuilder
+    private var transcriptButton: some View {
+        let has = transcript?.isEmpty == false
+        if has || VoiceTranscriptionService.shared.isAvailable {
+            Button {
+                if has { showsTranscript.toggle() } else { transcribe() }
+            } label: {
+                Group {
+                    if isTranscribing {
+                        ProgressView().tint(.white)
+                    } else {
+                        Image(systemName: has && showsTranscript ? "captions.bubble.fill" : "captions.bubble")
+                            .font(.system(size: ChatUIConstants.VideoNote.transcriptIconSize))
+                            .foregroundColor(.white)
+                    }
+                }
+                .frame(width: CTLayout.hitTarget, height: CTLayout.hitTarget)
+                .background(.black.opacity(0.45), in: Circle().inset(by: CTLayout.inlinePad))
+            }
+            .buttonStyle(.plain)
+            .disabled(isTranscribing)
+            .accessibilityLabel(Text(LocalizedStringKey(
+                has ? (showsTranscript ? "stt_hide_transcript" : "stt_show_transcript") : "stt_transcribe_button"
+            )))
+        }
+    }
+
+    private func transcribe() {
+        guard !isTranscribing else { return }
+        isTranscribing = true
+        Task {
+            defer { isTranscribing = false }
+            do {
+                let url = try await MediaVideoFile.fetch(item: item, messageId: message.id, itemIndex: itemIndex)
+                await MainActor.run { videoURL = url }
+                let audio = try await MediaVideoFile.speech(of: url)
+                guard let context = message.managedObjectContext else { return }
+                try await VoiceTranscriptionService.shared.transcribe(audioData: audio, message: message, context: context)
+                transcript = message.transcriptText
+                showsTranscript = true
+            } catch {
+                Log.error("Video note transcription failed: \(error)", category: "VideoNoteBubbleView")
+            }
+        }
     }
 
     // MARK: Overlays
@@ -209,6 +279,20 @@ enum MediaVideoFile {
         await MainActor.run { MediaVideoCache.shared.store(url, for: messageId, at: itemIndex) }
         await GalleryVideoPage.cacheFirstFramePoster(from: url, messageId: messageId, itemIndex: itemIndex)
         return url
+    }
+}
+
+extension MediaVideoFile {
+    /// The audio of a video, as m4a — what the recognisers take. Stays on the device.
+    static func speech(of url: URL) async throws -> Data {
+        let out = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString).appendingPathExtension("m4a")
+        defer { try? FileManager.default.removeItem(at: out) }
+        guard let export = AVAssetExportSession(asset: AVURLAsset(url: url), presetName: AVAssetExportPresetAppleM4A) else {
+            throw MediaUploadError.uploadFailed("Cannot extract audio")
+        }
+        try await export.export(to: out, as: .m4a)
+        return try Data(contentsOf: out)
     }
 }
 
