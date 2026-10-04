@@ -4712,11 +4712,6 @@ public func FfiConverterTypeInitiationContext_lower(_ value: InitiationContext) 
 }
 
 
-/**
- * A parsed KNST frame. `message_id` is the dashed lowercase UUID; `payload` is everything after
- * the header — for a control frame (`total_chunks == 1`) the body is its first
- * `plaintext_length` bytes.
- */
 public struct KnstFrame: Equatable, Hashable {
     public var contentType: UInt8
     public var messageId: String
@@ -6505,6 +6500,68 @@ public func FfiConverterTypeRotatedSpkBundle_lift(_ buf: RustBuffer) throws -> R
 #endif
 public func FfiConverterTypeRotatedSpkBundle_lower(_ value: RotatedSpkBundle) -> RustBuffer {
     return FfiConverterTypeRotatedSpkBundle.lower(value)
+}
+
+
+/**
+ * A parsed KNST frame. `message_id` is the dashed lowercase UUID; `payload` is everything after
+ * the header — for a control frame (`total_chunks == 1`) the body is its first
+ * `plaintext_length` bytes.
+ * See `seal_media`.
+ */
+public struct SealedMedia: Equatable, Hashable {
+    public var key: Data
+    public var blob: Data
+    public var sha256: Data
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(key: Data, blob: Data, sha256: Data) {
+        self.key = key
+        self.blob = blob
+        self.sha256 = sha256
+    }
+
+    
+}
+
+#if compiler(>=6)
+extension SealedMedia: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeSealedMedia: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SealedMedia {
+        return
+            try SealedMedia(
+                key: FfiConverterData.read(from: &buf), 
+                blob: FfiConverterData.read(from: &buf), 
+                sha256: FfiConverterData.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: SealedMedia, into buf: inout [UInt8]) {
+        FfiConverterData.write(value.key, into: &buf)
+        FfiConverterData.write(value.blob, into: &buf)
+        FfiConverterData.write(value.sha256, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeSealedMedia_lift(_ buf: RustBuffer) throws -> SealedMedia {
+    return try FfiConverterTypeSealedMedia.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeSealedMedia_lower(_ value: SealedMedia) -> RustBuffer {
+    return FfiConverterTypeSealedMedia.lower(value)
 }
 
 
@@ -10947,6 +11004,15 @@ public func knstParse(frame: Data) -> KnstFrame?  {
 })
 }
 /**
+ * The largest file `seal_media` takes — check before encoding or uploading anything.
+ */
+public func mediaMaxPlaintextLen() -> UInt64  {
+    return try!  FfiConverterUInt64.lift(try! rustCall() {
+    uniffi_construct_core_fn_func_media_max_plaintext_len($0
+    )
+})
+}
+/**
  * Generate an ML-DSA-65 keypair (post-quantum signature scheme, NIST FIPS 204).
  */
 public func mldsa65Keygen()throws  -> MldsaKeyPair  {
@@ -10992,6 +11058,19 @@ public func mnemonicToSeed(mnemonic: String)throws  -> Data  {
     return try  FfiConverterData.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
     uniffi_construct_core_fn_func_mnemonic_to_seed(
         FfiConverterString.lower(mnemonic),$0
+    )
+})
+}
+/**
+ * The file in `blob`. Throws `InvalidKeyData` for a key that is not 32 bytes,
+ * `DecryptionFailed` when the blob does not open with it, `InvalidCiphertext` when it opens
+ * but is not well formed.
+ */
+public func openMedia(key: Data, blob: Data)throws  -> Data  {
+    return try  FfiConverterData.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_func_open_media(
+        FfiConverterData.lower(key),
+        FfiConverterData.lower(blob),$0
     )
 })
 }
@@ -11142,6 +11221,17 @@ public func registrationBundleFieldsFromKeys(keys: Data)throws  -> RegistrationB
     return try  FfiConverterTypeRegistrationBundleFields_lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
     uniffi_construct_core_fn_func_registration_bundle_fields_from_keys(
         FfiConverterData.lower(keys),$0
+    )
+})
+}
+/**
+ * A fresh key, the blob to upload, and the blob's SHA-256 for the message.
+ * Throws `EncryptionFailed` when `plaintext` is longer than `media_max_plaintext_len()`.
+ */
+public func sealMedia(plaintext: Data)throws  -> SealedMedia  {
+    return try  FfiConverterTypeSealedMedia_lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_func_seal_media(
+        FfiConverterData.lower(plaintext),$0
     )
 })
 }
@@ -11432,6 +11522,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_func_knst_parse() != 40094) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_construct_core_checksum_func_media_max_plaintext_len() != 42441) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_construct_core_checksum_func_mldsa65_keygen() != 58411) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -11445,6 +11538,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_func_mnemonic_to_seed() != 49697) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_func_open_media() != 63953) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_func_plan_initiation() != 61324) {
@@ -11481,6 +11577,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_func_registration_bundle_fields_from_keys() != 32194) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_func_seal_media() != 21220) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_func_seal_to_device_key() != 27604) {

@@ -7,7 +7,6 @@
 //
 
 import Foundation
-import CryptoKit
 #if canImport(UIKit)
 import UIKit
 #endif
@@ -77,18 +76,13 @@ struct MediaMessageData: Codable {
 
 // MARK: - CryptoManager Media Extension
 extension CryptoManager {
-    /// Decrypt media data using raw 32-byte AES-256-GCM key
-    /// Format: [12 bytes nonce][ciphertext][16 bytes tag]
+    /// The file in a media blob — the padded format or the pre-0.33 one; the core tells them
+    /// apart (construct-core `media.rs`).
     func decryptMediaData(_ encryptedData: Data, with keyData: Data) throws -> Data {
-        guard keyData.count == 32 else {
-            Log.error("Invalid key size: \(keyData.count) (expected 32)", category: "MediaUpload")
-            throw MediaUploadError.encryptionFailed
-        }
         do {
-            let sealedBox = try AES.GCM.SealedBox(combined: encryptedData)
-            return try AES.GCM.open(sealedBox, using: SymmetricKey(data: keyData))
+            return try openMedia(key: keyData, blob: encryptedData)
         } catch {
-            Log.error("AES-GCM decryption failed: \(error)", category: "MediaUpload")
+            Log.error("Media blob did not open: \(error)", category: "MediaUpload")
             throw MediaUploadError.encryptionFailed
         }
     }

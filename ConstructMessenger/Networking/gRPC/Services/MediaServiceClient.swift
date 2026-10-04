@@ -11,7 +11,6 @@ import UIKit
 #else
 import AppKit
 #endif
-import CryptoKit
 import GRPCCore
 import GRPCNIOTransportHTTP2
 
@@ -101,24 +100,13 @@ extension MediaServiceClient {
         mimeType: String = "application/octet-stream",
         onProgress: (@Sendable (Double) -> Void)? = nil
     ) async throws -> UploadedMedia {
-        // 1. Generate encryption key
-        var keyBytes = [UInt8](repeating: 0, count: 32)
-        guard SecRandomCopyBytes(kSecRandomDefault, keyBytes.count, &keyBytes) == errSecSuccess else {
-            throw NetworkError.serverError(message: "Failed to generate encryption key", responseBody: nil)
-        }
-        let encryptionKey = Data(keyBytes)
-
-        // 2. Encrypt (AES-256-GCM: 12-byte nonce + ciphertext + 16-byte tag)
-        let symmetricKey = SymmetricKey(data: encryptionKey)
-        let sealedBox = try AES.GCM.seal(data, using: symmetricKey)
-        var encryptedData = Data()
-        encryptedData.append(sealedBox.nonce.withUnsafeBytes { Data($0) })
-        encryptedData.append(sealedBox.ciphertext)
-        encryptedData.append(sealedBox.tag)
+        // 1–2. Seal: the core makes the key and the blob — padded to a size bucket, so the
+        // server sees a size class rather than the file's size (construct-core `media.rs`).
+        let sealed = try sealMedia(plaintext: data)
+        let encryptionKey = sealed.key
+        let encryptedData = sealed.blob
         let encryptedSize = encryptedData.count
-
-        let hash = SHA256.hash(data: encryptedData)
-        let hashHex = hash.map { String(format: "%02x", $0) }.joined()
+        let hashHex = sealed.sha256.map { String(format: "%02x", $0) }.joined()
 
         // 3. Get token + upload on the SAME channel to prevent CANCELLED errors.
         // Upload tokens are tied to the connection that generated them — using two
@@ -132,7 +120,8 @@ extension MediaServiceClient {
             // 3a. Generate upload token
             var tokenRequest = Shared_Proto_Services_V1_GenerateUploadTokenRequest()
             tokenRequest.expectedSize = Int64(capturedEncryptedData.count)
-            tokenRequest.contentType = mimeType
+            // `contentType` left unset on purpose: the server stores an opaque blob and never
+            // read it, and a MIME type beside a padded size would name what the padding hides.
             let tokenResponse = try await client.generateUploadToken(
                 request: .init(message: tokenRequest)
             )
@@ -180,28 +169,5 @@ extension MediaServiceClient {
             hash: hashHex,
             mimeType: mimeType
         )
-    }
-
-    // MARK: - High-Level: Download & Decrypt Image
-
-    func downloadAndDecryptImage(from mediaUrl: String, encryptionKey: Data) async throws -> PlatformImage {
-        let mediaId = URL(string: mediaUrl)?.lastPathComponent ?? mediaUrl
-        let encryptedData = try await downloadEncryptedFile(mediaId: mediaId)
-
-        let nonceSize = 12
-        let tagSize = 16
-        guard encryptedData.count >= nonceSize + tagSize else {
-            throw NetworkError.serverError(message: "Invalid encrypted data", responseBody: nil)
-        }
-        let nonce = try AES.GCM.Nonce(data: encryptedData.prefix(nonceSize))
-        let ciphertext = encryptedData.dropFirst(nonceSize).dropLast(tagSize)
-        let tag = encryptedData.suffix(tagSize)
-        let sealedBox = try AES.GCM.SealedBox(nonce: nonce, ciphertext: ciphertext, tag: tag)
-        let decryptedData = try AES.GCM.open(sealedBox, using: SymmetricKey(data: encryptionKey))
-
-        guard let image = PlatformImage(data: decryptedData) else {
-            throw NetworkError.serverError(message: "Failed to decode image", responseBody: nil)
-        }
-        return image
     }
 }
