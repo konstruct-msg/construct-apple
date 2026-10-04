@@ -208,6 +208,18 @@ enum ChatUIConstants {
         static let chipVerticalPadding: CGFloat = 3
         static let downloadIconSize: CGFloat = 30
         static let blurDecodeSize = CGSize(width: 24, height: 32)
+
+        // Recording (`VideoNoteRecordingView`)
+        /// The chat stays readable behind the viewfinder — you see whom you are recording for.
+        static let recordingDim: Double = 0.6
+        static let viewfinderMaxWidth: CGFloat = 320
+        static let recordDotSize: CGFloat = 8
+
+        // The mic ↔ camera switch on a long press (`MicModeButton`)
+        static let switchPressDelay: Duration = .milliseconds(350)
+        static let switchSegmentWidth: CGFloat = 52
+        /// How far past the switch a finger may drift and still choose; beyond it, release cancels.
+        static let switchCancelMargin: CGFloat = 44
     }
 
     // MARK: - Reply focus (soft dim, not Apple-style isolation)

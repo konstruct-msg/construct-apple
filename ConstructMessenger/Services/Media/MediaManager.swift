@@ -479,7 +479,7 @@ class MediaManager {
         let transcodedURL = try await Self.transcodeVideo(
             asset: asset,
             to: outputURL,
-            quality: attachment.videoQuality,
+            render: attachment.presentation == .videoNote ? Self.videoNoteRender : attachment.videoQuality.render,
             onProgress: onProgress.map { cb in { @Sendable v in cb(v * 0.5) } }
         )
         defer {
@@ -521,7 +521,8 @@ class MediaManager {
             thumbnail: thumbnail,
             hash: uploadResult.hash,
             filename: nil,
-            blurhash: blurhash
+            blurhash: blurhash,
+            presentation: attachment.presentation
         )
     }
 
@@ -538,6 +539,21 @@ class MediaManager {
         quality: VideoQuality,
         onProgress: (@Sendable (Double) -> Void)?
     ) async throws -> URL {
+        try await transcodeVideo(asset: asset, to: outputURL, render: quality.render, onProgress: onProgress)
+    }
+
+    /// A video note: the centre 3:4 of the frame — what the viewfinder showed — at 720×960.
+    static let videoNoteRender = VideoRender(
+        bounds: (960, 720), cropAspect: 3.0 / 4.0, h264Preset: AVAssetExportPreset1280x720
+    )
+
+    /// `render` nil is passthrough.
+    static func transcodeVideo(
+        asset: AVAsset,
+        to outputURL: URL,
+        render: VideoRender?,
+        onProgress: (@Sendable (Double) -> Void)?
+    ) async throws -> URL {
         try? FileManager.default.removeItem(at: outputURL)
 
         // The picture and nothing about where or when it was shot. Exported directly, the session
@@ -548,9 +564,9 @@ class MediaManager {
         let source = try await metadataFreeComposition(of: asset)
 
         let export: AVAssetExportSession
-        if let bounds = quality.bounds {
+        if let render {
             var chosen: AVAssetExportSession?
-            for preset in [AVAssetExportPresetHEVC1920x1080, quality.h264Preset]
+            for preset in [AVAssetExportPresetHEVC1920x1080, render.h264Preset]
             where await AVAssetExportSession.compatibility(ofExportPreset: preset, with: source, outputFileType: .mp4) {
                 chosen = AVAssetExportSession(asset: source, presetName: preset)
                 if chosen != nil { break }
@@ -558,7 +574,7 @@ class MediaManager {
             guard let chosen else {
                 throw MediaUploadError.uploadFailed("Cannot create video export session")
             }
-            chosen.videoComposition = try await sdrVideoComposition(for: source, fitting: bounds)
+            chosen.videoComposition = try await sdrVideoComposition(for: source, render: render)
             export = chosen
         } else {
             guard let passthrough = AVAssetExportSession(asset: source, presetName: AVAssetExportPresetPassthrough) else {
@@ -587,8 +603,9 @@ class MediaManager {
     /// is mostly bytes nobody sees in a chat.
     static let maxSentFrameRate: Float = 30
 
-    /// How the picture is rendered for `.p720` / `.p1080`: upright, scaled to fit `bounds` (never
-    /// up), in Rec. 709 SDR, at most `maxSentFrameRate`. The rotation is applied to the pixels, so
+    /// How the picture is rendered for `.p720` / `.p1080` and video notes: upright, centre-cropped
+    /// to `render.cropAspect` if it names one, scaled to fit `render.bounds` (never up), in Rec. 709
+    /// SDR, at most `maxSentFrameRate`. The rotation is applied to the pixels, so
     /// the exported track's transform is identity.
     ///
     /// SDR because an iPhone films HDR (HLG / Dolby Vision) by default: it costs bits, and on a
@@ -597,15 +614,22 @@ class MediaManager {
     /// Nil for a source with no video track — the preset then exports the audio as it would.
     private static func sdrVideoComposition(
         for source: AVComposition,
-        fitting bounds: (long: CGFloat, short: CGFloat)
+        render: VideoRender
     ) async throws -> AVVideoComposition? {
+        let bounds = render.bounds
         guard let track = try await source.loadTracks(withMediaType: .video).first else { return nil }
         let (natural, transform, fps) = try await track.load(.naturalSize, .preferredTransform, .nominalFrameRate)
         // Where the transform puts the picture. A camera's transform carries the translation
         // that brings it back to the origin; one that does not would render off the canvas.
         let placed = CGRect(origin: .zero, size: natural).applying(transform)
-        let width = placed.width, height = placed.height
-        guard width > 0, height > 0 else { return nil }
+        guard placed.width > 0, placed.height > 0 else { return nil }
+
+        // The centre of the upright picture at `cropAspect`, or all of it.
+        var width = placed.width, height = placed.height
+        if let aspect = render.cropAspect {
+            if width / height > aspect { width = height * aspect } else { height = width / aspect }
+        }
+        let cropX = (placed.width - width) / 2, cropY = (placed.height - height) / 2
 
         let scale = min(1, bounds.long / max(width, height), bounds.short / min(width, height))
         // Encoders want even dimensions; rounding down keeps the picture inside the box.
@@ -620,9 +644,9 @@ class MediaManager {
         composition.colorYCbCrMatrix = AVVideoYCbCrMatrix_ITU_R_709_2
 
         let layer = AVMutableVideoCompositionLayerInstruction(assetTrack: track)
-        // Turn the picture upright, move it to the origin, then shrink it there.
+        // Turn the picture upright, move the kept part to the origin, then shrink it there.
         let upright = transform
-            .concatenating(CGAffineTransform(translationX: -placed.minX, y: -placed.minY))
+            .concatenating(CGAffineTransform(translationX: -placed.minX - cropX, y: -placed.minY - cropY))
             .concatenating(CGAffineTransform(scaleX: scale, y: scale))
         layer.setTransform(upright, at: .zero)
         let instruction = AVMutableVideoCompositionInstruction()
@@ -634,7 +658,7 @@ class MediaManager {
 
     /// The video and audio tracks of `asset`, whole, in a composition that carries none of its
     /// metadata. See `transcodeVideo`.
-    private static func metadataFreeComposition(of asset: AVURLAsset) async throws -> AVComposition {
+    private static func metadataFreeComposition(of asset: AVAsset) async throws -> AVComposition {
         let composition = AVMutableComposition()
         let range = CMTimeRange(start: .zero, duration: try await asset.load(.duration))
         for track in try await asset.load(.tracks) where track.mediaType == .video || track.mediaType == .audio {

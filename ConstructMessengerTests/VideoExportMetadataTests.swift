@@ -69,6 +69,24 @@ final class VideoExportMetadataTests: XCTestCase {
         }
     }
 
+    /// A video note keeps the centre 3:4 of the frame — what the viewfinder showed — at 720×960.
+    func testVideoNoteIsTheCentreThreeByFourAt720x960() async throws {
+        let source = try await Self.writeSourceVideo(width: 1920, height: 1080, fps: 30)
+        let out = FileManager.default.temporaryDirectory
+            .appendingPathComponent("note-\(UUID().uuidString).mp4")
+        defer { try? FileManager.default.removeItem(at: out) }
+        _ = try await MediaManager.transcodeVideo(
+            asset: AVURLAsset(url: source), to: out, render: MediaManager.videoNoteRender, onProgress: nil)
+
+        let (width, height) = try await Self.uprightSize(of: AVURLAsset(url: out))
+        XCTAssertEqual(width, 720)
+        XCTAssertEqual(height, 960)
+        let tracks = try await AVURLAsset(url: out).loadTracks(withMediaType: .video)
+        let formats = try await XCTUnwrap(tracks.first).load(.formatDescriptions)
+        let format = try XCTUnwrap(formats.first)
+        XCTAssertEqual(CMFormatDescriptionGetMediaSubType(format), kCMVideoCodecType_HEVC)
+    }
+
     /// The displayed size: the track's natural size through its transform.
     private static func uprightSize(of asset: AVURLAsset) async throws -> (Int, Int) {
         let tracks = try await asset.loadTracks(withMediaType: .video)

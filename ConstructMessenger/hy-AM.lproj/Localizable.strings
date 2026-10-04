@@ -603,6 +603,13 @@
 "photo" = "Լուսանկար";
 "video" = "Տեսանյութ";
 "video_note" = "Տեսահաղորդագրություն";
+"video_note_record" = "Տեսագրել տեսահաղորդագրություն";
+"video_note_pause" = "Դադար";
+"video_note_resume" = "Շարունակել տեսագրումը";
+"video_note_switch_camera" = "Փոխել տեսախցիկը";
+"video_note_send" = "Ուղարկել տեսահաղորդագրությունը";
+"video_note_paused" = "Դադար";
+"video_note_camera_unavailable" = "Տեսախցիկը կամ խոսափողը հասանելի չէ";
 "file_attachment" = "Ֆայլ";
 "sticker" = "Կպչուն";
 "media_picker_tab_stickers" = "Կպչուններ";

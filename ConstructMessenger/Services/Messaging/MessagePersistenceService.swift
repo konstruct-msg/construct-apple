@@ -183,10 +183,13 @@ class MessagePersistenceService {
     struct UploadPlaceholderItem {
         let thumbnail: Data?
         let mimeType: String?
+        /// So a video note's placeholder is already the note bubble, not a photo-sized cell.
+        let presentation: MediaPresentation?
 
-        init(thumbnail: Data? = nil, mimeType: String? = nil) {
+        init(thumbnail: Data? = nil, mimeType: String? = nil, presentation: MediaPresentation? = nil) {
             self.thumbnail = thumbnail
             self.mimeType = mimeType
+            self.presentation = presentation
         }
     }
 
@@ -216,7 +219,10 @@ class MessagePersistenceService {
         // is what keeps the retry path from sending this JSON as a text message.
         let entries = (items.isEmpty ? [UploadPlaceholderItem()] : items).map { item -> String in
             guard let mime = item.mimeType, !mime.isEmpty else { return #"{"_placeholder":true}"# }
-            return #"{"_placeholder":true,"mediaType":\#(jsonStringLiteral(mime))}"#
+            let presentation = item.presentation.map {
+                #","\#(MediaPresentation.jsonKey)":\#(jsonStringLiteral($0.rawValue))"#
+            } ?? ""
+            return #"{"_placeholder":true,"mediaType":\#(jsonStringLiteral(mime))\#(presentation)}"#
         }
         let placeholderJson = """
         {"type":"media","caption":\(jsonStringLiteral(caption)),"media":[\(entries.joined(separator: ","))]}

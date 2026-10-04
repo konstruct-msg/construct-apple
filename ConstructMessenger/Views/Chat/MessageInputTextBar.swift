@@ -16,6 +16,8 @@ struct MessageInputTextBar: View {
     let sendOnReturn: Bool
     let onSend: () -> Void
     let onStartVoice: (() -> Void)?     // nil on macOS
+    /// A long press on the mic offers the camera; nil leaves the mic a plain button.
+    let onStartVideoNote: (() -> Void)?
 
     @FocusState private var focused: Bool
 
@@ -28,13 +30,15 @@ struct MessageInputTextBar: View {
         canSend: Bool,
         sendOnReturn: Bool = true,
         onSend: @escaping () -> Void,
-        onStartVoice: (() -> Void)? = nil
+        onStartVoice: (() -> Void)? = nil,
+        onStartVideoNote: (() -> Void)? = nil
     ) {
         self._text = text
         self.canSend = canSend
         self.sendOnReturn = sendOnReturn
         self.onSend = onSend
         self.onStartVoice = onStartVoice
+        self.onStartVideoNote = onStartVideoNote
     }
 
     var body: some View {
@@ -142,7 +146,11 @@ struct MessageInputTextBar: View {
 
     @ViewBuilder
     private var voiceButton: some View {
-        if !canSend, let onStartVoice {
+        if !canSend, let onStartVoice, let onStartVideoNote {
+            MicModeButton(size: Self.controlSize, onVoice: onStartVoice, onVideoNote: onStartVideoNote)
+                .accessibilityIdentifier(A11y.Chat.voice)
+                .transition(.scale.combined(with: .opacity))
+        } else if !canSend, let onStartVoice {
             Button(action: onStartVoice) {
                 Image(systemName: "mic.fill")
                     .font(.system(size: CTLayout.navIconSize))
@@ -166,7 +174,8 @@ struct MessageInputTextBar: View {
             text: .constant(""),
             canSend: false,
             onSend: {},
-            onStartVoice: {}
+            onStartVoice: {},
+            onStartVideoNote: {}
         )
         .padding(.horizontal)
     }
@@ -185,4 +194,115 @@ struct MessageInputTextBar: View {
         .padding(.horizontal)
     }
     .background(Color.platformBackground)
+}
+
+// MARK: - Mic ↔ camera
+
+/// The mic button, which also offers the camera. A tap records a voice message, as it always
+/// has. Held, it opens a two-segment switch — camera | mic, the mic under the finger — and the
+/// finger, without lifting, slides to the one it wants; releasing on a segment starts that
+/// recording, releasing away from the switch starts nothing.
+///
+/// Both choices are on screen at the moment of choosing and nothing is remembered between
+/// presses: a tap is always the voice message, so the camera never comes on unasked.
+/// `decisions/video-notes-are-uncropped-and-expand.md`.
+struct MicModeButton: View {
+    enum Mode { case voice, videoNote }
+
+    let size: CGFloat
+    let onVoice: () -> Void
+    let onVideoNote: () -> Void
+
+    @State private var pressTask: Task<Void, Never>?
+    @State private var isOpen = false
+    @State private var choice: Mode?
+
+    private static let segment = ChatUIConstants.VideoNote.switchSegmentWidth
+    private static let margin = ChatUIConstants.VideoNote.switchCancelMargin
+
+    var body: some View {
+        Image(systemName: "mic.fill")
+            .font(.system(size: CTLayout.navIconSize))
+            .foregroundColor(Color.CT.textDim)
+            .opacity(isOpen ? 0 : 1)
+            .frame(width: size, height: size)
+            .contentShape(Circle())
+            .overlay(alignment: .trailing) {
+                if isOpen { modeSwitch.allowsHitTesting(false).transition(.opacity.combined(with: .scale(scale: 0.9, anchor: .trailing))) }
+            }
+            .animation(.easeOut(duration: 0.15), value: isOpen)
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { pressChanged(at: $0.location) }
+                    .onEnded { pressEnded(at: $0.location) }
+            )
+            .sensoryFeedback(.impact(weight: .light), trigger: isOpen) { _, open in open }
+            .sensoryFeedback(.selection, trigger: choice) { old, new in old != nil && new != nil }
+            .accessibilityElement()
+            .accessibilityLabel(Text(LocalizedStringKey("voice_message")))
+            .accessibilityAddTraits(.isButton)
+            .accessibilityAction { onVoice() }
+            .accessibilityAction(named: Text(LocalizedStringKey("video_note_record"))) { onVideoNote() }
+    }
+
+    private var modeSwitch: some View {
+        HStack(spacing: 0) {
+            segment(.videoNote, symbol: "video.fill", label: "video_note")
+            segment(.voice, symbol: "mic.fill", label: "voice_message")
+        }
+        .frame(height: size)
+        .background(.regularMaterial, in: Capsule())
+    }
+
+    private func segment(_ mode: Mode, symbol: String, label: String) -> some View {
+        Image(systemName: symbol)
+            .font(.system(size: CTLayout.navIconSize))
+            .foregroundStyle(choice == mode ? Color.CT.bg : Color.CT.textDim)
+            .frame(width: Self.segment, height: size)
+            .background {
+                if choice == mode { Capsule().fill(Color.CT.accent).padding(2) }
+            }
+            .accessibilityLabel(Text(LocalizedStringKey(label)))
+    }
+
+    /// Which segment is under `point` (the button's own coordinates; the switch grows leftwards
+    /// from its trailing edge), or nil when the finger has left it.
+    static func mode(at point: CGPoint, buttonSize size: CGFloat) -> Mode? {
+        let right = size, left = size - 2 * segment
+        guard point.x > left - margin, point.x < right + margin,
+              point.y > -margin, point.y < size + margin else { return nil }
+        return point.x < right - segment ? .videoNote : .voice
+    }
+
+    private func mode(at point: CGPoint) -> Mode? { Self.mode(at: point, buttonSize: size) }
+
+    private func pressChanged(at point: CGPoint) {
+        if isOpen {
+            choice = mode(at: point)
+        } else if pressTask == nil {
+            pressTask = Task { @MainActor in
+                try? await Task.sleep(for: ChatUIConstants.VideoNote.switchPressDelay)
+                guard !Task.isCancelled else { return }
+                choice = .voice
+                isOpen = true
+            }
+        }
+    }
+
+    private func pressEnded(at point: CGPoint) {
+        pressTask?.cancel()
+        pressTask = nil
+        guard isOpen else {
+            onVoice()
+            return
+        }
+        isOpen = false
+        let chosen = mode(at: point)
+        choice = nil
+        switch chosen {
+        case .voice: onVoice()
+        case .videoNote: onVideoNote()
+        case nil: break
+        }
+    }
 }
