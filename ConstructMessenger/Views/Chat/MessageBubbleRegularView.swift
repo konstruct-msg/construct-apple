@@ -38,10 +38,7 @@ struct MessageBubbleRegularView: View {
     @GestureState private var swipeOffset: CGFloat = 0
     @State private var isTranscribingVoice = false
     @State private var reactionBadges: [ReactionBadge] = []
-    @State private var showReactionCapsule = false
     @State private var showFullEmojiPicker = false
-    @State private var capsulePlacement: ReactionCapsulePlacement = .below
-    @State private var bubbleGlobalFrame: CGRect = .zero
 
     #if os(macOS)
     @AppStorage("desktopShowTimestamps") private var showDesktopTimestamps = true
@@ -110,19 +107,6 @@ struct MessageBubbleRegularView: View {
             }
 
             VStack(alignment: message.isSentByMe ? .trailing : .leading, spacing: ChatUIConstants.Bubble.stackSpacing) {
-                // The capsule is a row of this stack, not an overlay on the bubble.
-                //
-                // As an overlay it drew outside the bubble's bounds and covered whatever was there —
-                // which, for any message that is not the last one, is the next message. Reported
-                // from device 2026-08-22 with the capsule sitting across the message below it. The
-                // placement decision could not have prevented that: it asks which side has room *on
-                // screen*, and screen room is not room free of other messages.
-                //
-                // Taking space is what makes covering impossible. The transcript grows by the
-                // capsule's height while it is open, and the viewport holds the reader through it —
-                // opening below the anchor row leaves the anchor still, opening above shifts it and
-                // the hold rule moves the offset by exactly that. This is the case that rule is for.
-                if capsulePlacement == .above { reactionCapsuleRow }
                 Group {
                 if let sticker {
                     VStack(alignment: .leading, spacing: 0) {
@@ -256,16 +240,6 @@ struct MessageBubbleRegularView: View {
                 .overlay(alignment: ChatUIConstants.Reaction.badgeAlignment(isSentByMe: message.isSentByMe)) {
                     reactionBadgeRow
                 }
-                .background {
-                    GeometryReader { geo in
-                        Color.clear
-                            .onAppear { bubbleGlobalFrame = geo.frame(in: .global) }
-                            .onChange(of: geo.frame(in: .global).minY) { _, _ in
-                                bubbleGlobalFrame = geo.frame(in: .global)
-                                if showReactionCapsule { updateCapsulePlacement() }
-                        }
-                    }
-                }
                 .padding(
                     .bottom,
                     ReactionBadgeLayout.reservedOverflow(hasBadges: !reactionBadges.isEmpty)
@@ -300,9 +274,6 @@ struct MessageBubbleRegularView: View {
                     }
                     .padding(.horizontal, ChatUIConstants.Bubble.metaHorizontalPadding)
                 }
-
-                // After the timestamp, so the bubble keeps its own meta line adjacent to it.
-                if capsulePlacement == .below { reactionCapsuleRow }
             }
             // Guard non-finite / tiny container widths from mid-layout geometry passes
             // (they produce "Invalid frame dimension" in the layout engine).
@@ -323,8 +294,6 @@ struct MessageBubbleRegularView: View {
             .onTapGesture {
                 if isEditMode {
                     onSelect?(message)
-                } else if showReactionCapsule {
-                    showReactionCapsule = false
                 }
             }
             #if os(iOS)
@@ -341,12 +310,12 @@ struct MessageBubbleRegularView: View {
             }
             .contextMenu {
                 if !isEditMode {
-                    if onReact != nil {
-                        Button {
-                            openReactionCapsule()
-                        } label: {
-                            Label(NSLocalizedString("react", comment: ""), systemImage: "face.smiling")
-                        }
+                    if let onReact {
+                        ReactionMenuRow(
+                            currentEmoji: ownReactionEmoji,
+                            onPick: { emoji in onReact(message, emoji) },
+                            onPickMore: { showFullEmojiPicker = true }
+                        )
                     }
 
                     if let onReply {
@@ -416,13 +385,7 @@ struct MessageBubbleRegularView: View {
             // `@GestureState` resets instantly, so the animation has to live here.
             .animation(.interactiveSpring(response: 0.28, dampingFraction: 0.8), value: swipeOffset)
             .gesture(swipeToReplyGesture)
-            .onChange(of: swipeOffset) { _, offset in
-                if offset > 0 { showReactionCapsule = false }
-            }
             #endif
-            .onChange(of: isEditMode) { _, editing in
-                if editing { showReactionCapsule = false }
-            }
             .sheet(isPresented: $showFullEmojiPicker) {
                 ReactionEmojiPickerSheet { emoji in
                     onReact?(message, emoji)
@@ -565,71 +528,6 @@ struct MessageBubbleRegularView: View {
         return reactionBadges.first {
             $0.reactorUserId.caseInsensitiveCompare(me) == .orderedSame
         }?.emoji
-    }
-
-    @ViewBuilder
-    private var reactionCapsuleRow: some View {
-        if showReactionCapsule, !isEditMode, onReact != nil {
-            MessageReactionCapsule(
-                currentEmoji: ownReactionEmoji,
-                onPick: { emoji in
-                    onReact?(message, emoji)
-                    showReactionCapsule = false
-                },
-                onPickMore: {
-                    showReactionCapsule = false
-                    showFullEmojiPicker = true
-                }
-            )
-            // The gap the alignment guide used to open by hand. A row in a stack only needs
-            // padding on the side facing the bubble.
-            .padding(capsulePlacement == .above ? .bottom : .top, ChatUIConstants.Reaction.capsuleGap)
-            .fixedSize(horizontal: true, vertical: true)
-            // The system context-menu dismissal supplies its own animation transaction after the
-            // action returns. Reject it at the inserted subtree as well as at the state mutation.
-            .transaction { transaction in
-                transaction.animation = nil
-                transaction.disablesAnimations = true
-            }
-        }
-    }
-
-    private func openReactionCapsule() {
-        updateCapsulePlacement()
-        // Appear at full size. `animation = nil` alone does not veto the native context menu's
-        // dismissal transaction; `disablesAnimations` does.
-        withTransaction(ReactionCapsulePresentation.immediateInsertion) {
-            showReactionCapsule = true
-        }
-    }
-
-    private func updateCapsulePlacement() {
-        let reservedTop = CTLayout.navBarHeight + CTLayout.sectionGap
-        let composerHeight = CTLayout.controlHeight + CTLayout.edgePad
-        capsulePlacement = ReactionCapsulePlacement.decide(
-            spaceAbove: bubbleGlobalFrame.minY - reservedTop,
-            spaceBelow: ReactionCapsulePlacement.spaceBelow(
-                bubbleMaxY: bubbleGlobalFrame.maxY,
-                visibleBottom: capsuleVisibleBottom,
-                composerHeight: composerHeight
-            ),
-            capsuleHeight: ChatUIConstants.Reaction.capsuleHeight
-                + ChatUIConstants.Reaction.capsuleGap
-        )
-    }
-
-    private var capsuleVisibleBottom: CGFloat {
-        #if canImport(UIKit)
-        let windows = UIApplication.shared.connectedScenes
-            .compactMap { $0 as? UIWindowScene }
-            .flatMap(\.windows)
-        if let window = windows.first(where: \.isKeyWindow) ?? windows.first {
-            return window.keyboardLayoutGuide.layoutFrame.minY
-        }
-        return UIScreen.main.bounds.height
-        #else
-        return bubbleGlobalFrame.maxY + CTLayout.controlHeight + CTLayout.edgePad
-        #endif
     }
 
     /// How far the bubble should trail the finger, or nil when this drag is not a reply

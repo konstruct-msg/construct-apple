@@ -187,7 +187,7 @@ final class ReactionReducerTests: XCTestCase {
     ///
     /// Mutation: require `isEmojiPresentation` unconditionally.
     func testEveryShapeOfRealEmojiIsAccepted() {
-        for emoji in ReactionReducer.quickSet {
+        for emoji in ReactionQuickSet.defaults {
             XCTAssertTrue(ReactionReducer.isValidEmoji(emoji), "\(emoji) is in the quick set")
         }
         XCTAssertTrue(ReactionReducer.isValidEmoji("👍🏽"), "skin tone modifier")
@@ -216,10 +216,10 @@ final class ReactionReducerTests: XCTestCase {
         XCTAssertEqual(ReactionReducer.localToggle(currentEmoji: nil, tapped: "😂"), .add(emoji: "😂"))
     }
 
-    func testQuickSet_IsTheInstagramSix() {
-        XCTAssertEqual(ReactionReducer.quickSet, ["❤️", "😂", "😮", "😢", "😠", "🔥"])
+    func testQuickSet_StartsWithTheLike() {
+        XCTAssertEqual(ReactionQuickSet.defaults, ["❤️", "😂", "😮", "😢", "🔥"])
         XCTAssertEqual(ReactionReducer.likeEmoji, "❤️")
-        XCTAssertEqual(ReactionReducer.quickSet.first, ReactionReducer.likeEmoji)
+        XCTAssertEqual(ReactionQuickSet.defaults.first, ReactionReducer.likeEmoji)
     }
 
     func testDoubleTapLike_AddsHeart() {

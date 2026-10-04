@@ -914,6 +914,10 @@ final class ChatSendCoordinator {
             tapped: emoji,
             nowMs: nowMs
         ) else { return }
+        // What the menu row learns from. Taking a reaction off is not a use of it.
+        if case .add(let added) = plan.incoming {
+            ReactionQuickSetStore.shared.record(added)
+        }
         guard let payload = ReactionWire.encode(plan) else {
             ErrorRouter.shared.report(.unknown(NSLocalizedString("reaction_failed", comment: "")))
             return
