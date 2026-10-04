@@ -480,6 +480,7 @@ class MediaManager {
             asset: asset,
             to: outputURL,
             render: attachment.presentation == .videoNote ? Self.videoNoteRender : attachment.videoQuality.render,
+            timeRange: attachment.timeRange,
             onProgress: onProgress.map { cb in { @Sendable v in cb(v * 0.5) } }
         )
         defer {
@@ -547,11 +548,12 @@ class MediaManager {
         bounds: (960, 720), cropAspect: 3.0 / 4.0, h264Preset: AVAssetExportPreset1280x720
     )
 
-    /// `render` nil is passthrough.
+    /// `render` nil is passthrough; `timeRange` nil sends the whole asset.
     static func transcodeVideo(
         asset: AVAsset,
         to outputURL: URL,
         render: VideoRender?,
+        timeRange: CMTimeRange? = nil,
         onProgress: (@Sendable (Double) -> Void)?
     ) async throws -> URL {
         try? FileManager.default.removeItem(at: outputURL)
@@ -561,7 +563,7 @@ class MediaManager {
         // video until 2026-09-30, at every quality — and neither `metadata = []` (read as "unset")
         // nor `.forSharing()` (keeps the date) stops it. A composition of the source's tracks has
         // no metadata to copy; the orientation is the track's transform and is carried over.
-        let source = try await metadataFreeComposition(of: asset)
+        let source = try await metadataFreeComposition(of: asset, range: timeRange)
 
         let export: AVAssetExportSession
         if let render {
@@ -658,9 +660,12 @@ class MediaManager {
 
     /// The video and audio tracks of `asset`, whole, in a composition that carries none of its
     /// metadata. See `transcodeVideo`.
-    private static func metadataFreeComposition(of asset: AVAsset) async throws -> AVComposition {
+    /// `range` nil is the whole asset; a range keeps that stretch, starting at zero — a trim made
+    /// here is exact to the frame, since every export but passthrough re-encodes.
+    private static func metadataFreeComposition(of asset: AVAsset, range: CMTimeRange? = nil) async throws -> AVComposition {
         let composition = AVMutableComposition()
-        let range = CMTimeRange(start: .zero, duration: try await asset.load(.duration))
+        let whole = CMTimeRange(start: .zero, duration: try await asset.load(.duration))
+        let range = range.map { $0.intersection(whole) } ?? whole
         for track in try await asset.load(.tracks) where track.mediaType == .video || track.mediaType == .audio {
             guard let copy = composition.addMutableTrack(
                 withMediaType: track.mediaType, preferredTrackID: kCMPersistentTrackID_Invalid

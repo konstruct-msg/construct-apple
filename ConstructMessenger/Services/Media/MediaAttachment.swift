@@ -104,6 +104,8 @@ struct MediaAttachment: Identifiable, @unchecked Sendable {
     /// How the recipient shows it; nil is the ordinary bubble. A video note is recorded in the
     /// chat and rendered differently (`MediaManager.videoNoteRender`), not chosen in the picker.
     let presentation: MediaPresentation?
+    /// The stretch of `videoURL` to send — a trim; nil is all of it.
+    let timeRange: CMTimeRange?
 
     // MARK: - Image initializers
 
@@ -117,6 +119,7 @@ struct MediaAttachment: Identifiable, @unchecked Sendable {
         self.videoURL = nil
         self.duration = nil
         self.presentation = nil
+        self.timeRange = nil
     }
 
     /// Wrap an in-memory image (camera capture, drag-drop, or the crop editor's output) —
@@ -145,7 +148,8 @@ struct MediaAttachment: Identifiable, @unchecked Sendable {
         duration: TimeInterval?,
         mimeType: String = "video/mp4",
         videoQuality: VideoQuality = .p1080,
-        presentation: MediaPresentation? = nil
+        presentation: MediaPresentation? = nil,
+        timeRange: CMTimeRange? = nil
     ) {
         self.kind = .video
         self.originalData = Data()
@@ -156,5 +160,6 @@ struct MediaAttachment: Identifiable, @unchecked Sendable {
         self.videoURL = videoURL
         self.duration = duration
         self.presentation = presentation
+        self.timeRange = timeRange
     }
 }

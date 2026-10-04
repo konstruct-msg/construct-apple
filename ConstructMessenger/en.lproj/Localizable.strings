@@ -610,6 +610,8 @@
 "video_note_send" = "Send video note";
 "video_note_paused" = "Paused";
 "video_note_camera_unavailable" = "Camera or microphone unavailable";
+"video_note_trim_start" = "Trim start";
+"video_note_trim_end" = "Trim end";
 "file_attachment" = "File";
 "sticker" = "Sticker";
 "media_picker_tab_stickers" = "Stickers";

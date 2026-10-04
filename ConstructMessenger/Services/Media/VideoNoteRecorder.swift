@@ -7,7 +7,8 @@
 //
 //  A recording is a list of segments, one per uninterrupted stretch. `AVCaptureMovieFileOutput`
 //  cannot pause on iOS and cannot change its input mid-file, so pausing ends a segment and
-//  resuming — or switching camera — starts the next. `finish()` joins them without re-encoding;
+//  resuming — or switching camera — starts the next. `recording()` joins them without
+//  re-encoding, for the review while paused and for the send;
 //  the one encode is the send's (`MediaManager.videoNoteRender`: the centre 3:4 at 720×960, HEVC,
 //  SDR), which also strips metadata.
 //
@@ -52,6 +53,8 @@ final class VideoNoteRecorder: NSObject {
     @ObservationIgnored private let queue = DispatchQueue(label: "VideoNoteRecorder.session")
 
     @ObservationIgnored private var segments: [URL] = []
+    /// The segments joined by `recording()`, and how many there were then.
+    @ObservationIgnored private var joined: (segments: Int, url: URL)?
     @ObservationIgnored private var finishedDuration: TimeInterval = 0
     @ObservationIgnored private var segmentStart: Date?
     @ObservationIgnored private var ticker: Timer?
@@ -96,26 +99,35 @@ final class VideoNoteRecorder: NSObject {
         if wasRecording { startSegment() }
     }
 
-    /// Stop and join the segments into one file; nil when nothing was recorded.
-    func finish() async throws -> (url: URL, duration: TimeInterval, poster: UIImage?) {
+    /// What has been recorded so far, as one file — for the review while paused. Rebuilt only
+    /// when a segment has been added since the last call.
+    func recording() async throws -> URL {
+        if let joined, joined.segments == segments.count { return joined.url }
+        if let joined { try? FileManager.default.removeItem(at: joined.url) }
+        guard !segments.isEmpty, finishedDuration > 0 else { throw RecorderError.nothingRecorded }
+        let url = try await Self.join(segments)
+        joined = (segments.count, url)
+        return url
+    }
+
+    /// Stop, and hand over the recording as one file — the caller owns it from here.
+    func finish() async throws -> URL {
         if phase == .recording { await endSegment() }
         phase = .finishing
         stopSession()
-        defer { discardSegments() }
-        guard !segments.isEmpty, finishedDuration > 0 else {
+        defer {
+            joined = nil
+            discardSegments()
             phase = .idle
-            throw RecorderError.nothingRecorded
         }
-        let url = try await Self.join(segments)
-        let poster = await Self.poster(of: url)
-        let duration = finishedDuration
-        phase = .idle
-        return (url, duration, poster)
+        return try await recording()
     }
 
     func cancel() async {
         if phase == .recording { await endSegment() }
         stopSession()
+        if let joined { try? FileManager.default.removeItem(at: joined.url) }
+        joined = nil
         discardSegments()
         phase = .idle
     }
@@ -135,6 +147,13 @@ final class VideoNoteRecorder: NSObject {
               let micInput = try? AVCaptureDeviceInput(device: mic),
               session.canAddInput(micInput) else { throw RecorderError.configurationFailed }
         session.addInput(micInput)
+
+        // The capture session would set the app's audio session itself, to play-and-record with
+        // the earpiece as the output — and the review while paused would then play at a whisper.
+        session.automaticallyConfiguresApplicationAudioSession = false
+        let audio = AVAudioSession.sharedInstance()
+        try audio.setCategory(.playAndRecord, mode: .videoRecording, options: [.defaultToSpeaker, .allowBluetoothHFP])
+        try audio.setActive(true)
 
         guard session.canAddOutput(output) else { throw RecorderError.configurationFailed }
         session.addOutput(output)
@@ -164,7 +183,10 @@ final class VideoNoteRecorder: NSObject {
     private func stopSession() {
         ticker?.invalidate()
         ticker = nil
-        queue.async { [session] in session.stopRunning() }
+        queue.async { [session] in
+            session.stopRunning()
+            try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        }
     }
 
     // MARK: Segments
@@ -232,13 +254,6 @@ final class VideoNoteRecorder: NSObject {
         }
         try await export.export(to: url, as: .mov)
         return url
-    }
-
-    private static func poster(of url: URL) async -> UIImage? {
-        let generator = AVAssetImageGenerator(asset: AVURLAsset(url: url))
-        generator.appliesPreferredTrackTransform = true
-        guard let image = try? await generator.image(at: .zero).image else { return nil }
-        return UIImage(cgImage: image)
     }
 }
 

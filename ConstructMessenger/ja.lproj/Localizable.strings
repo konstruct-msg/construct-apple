@@ -548,6 +548,8 @@
 "video_note_send" = "ビデオメモを送信";
 "video_note_paused" = "一時停止中";
 "video_note_camera_unavailable" = "カメラまたはマイクを使用できません";
+"video_note_trim_start" = "開始位置";
+"video_note_trim_end" = "終了位置";
 "file_attachment" = "ファイル";
 "sticker" = "ステッカー";
 "media_picker_tab_stickers" = "ステッカー";

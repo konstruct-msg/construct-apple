@@ -250,7 +250,7 @@ struct LoopingVideoView: View {
 }
 
 #if canImport(UIKit)
-private struct PlayerLayerView: UIViewRepresentable {
+struct PlayerLayerView: UIViewRepresentable {
     let player: AVPlayer
 
     final class LayerView: UIView {
@@ -270,7 +270,7 @@ private struct PlayerLayerView: UIViewRepresentable {
     }
 }
 #else
-private struct PlayerLayerView: NSViewRepresentable {
+struct PlayerLayerView: NSViewRepresentable {
     let player: AVPlayer
 
     func makeNSView(context: Context) -> NSView {

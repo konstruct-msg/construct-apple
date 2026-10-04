@@ -611,6 +611,8 @@
 "video_note_send" = "Отправить видеозаметку";
 "video_note_paused" = "Пауза";
 "video_note_camera_unavailable" = "Камера или микрофон недоступны";
+"video_note_trim_start" = "Начало";
+"video_note_trim_end" = "Конец";
 "file_attachment" = "Файл";
 "sticker" = "Стикер";
 "media_picker_tab_stickers" = "Стикеры";

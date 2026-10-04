@@ -19,13 +19,26 @@ struct VideoNoteRecordingView: View {
 
     @State private var recorder = VideoNoteRecorder()
     @State private var failure: VideoNoteRecorder.RecorderError?
+    /// While paused: the recording so far, its length, and the stretch to keep.
+    @State private var review: (url: URL, duration: Double)?
+    @State private var trim: ClosedRange<Double> = 0...0
 
     var body: some View {
         VStack(spacing: CTLayout.edgePad) {
             Spacer(minLength: 0)
-            viewfinder
+            if let review {
+                TrimmedLoopPlayer(url: review.url, range: trim)
+                    .modifier(NoteCard())
+                VideoTrimBar(url: review.url, duration: review.duration, range: $trim)
+                    .frame(maxWidth: ChatUIConstants.VideoNote.viewfinderMaxWidth)
+            } else {
+                viewfinder
+            }
             Spacer(minLength: 0)
             controls
+        }
+        .onChange(of: recorder.phase) { _, phase in
+            if phase == .paused { Task { await loadReview() } } else { review = nil }
         }
         .padding(.horizontal, ChatUIConstants.InputBar.rowOuterPad)
         .padding(.bottom, CTLayout.inlinePad)
@@ -49,10 +62,7 @@ struct VideoNoteRecordingView: View {
 
     private var viewfinder: some View {
         CameraPreviewView(session: recorder.session)
-            .aspectRatio(ChatUIConstants.VideoNote.aspectRatio, contentMode: .fit)
-            .frame(maxWidth: ChatUIConstants.VideoNote.viewfinderMaxWidth)
-            .background(Color.CT.bgMsg)
-            .clipShape(RoundedRectangle(cornerRadius: ChatUIConstants.Media.cornerRadius, style: .continuous))
+            .modifier(NoteCard())
             .overlay(alignment: .top) {
                 if recorder.phase == .paused {
                     Text(LocalizedStringKey("video_note_paused"))
@@ -78,7 +88,7 @@ struct VideoNoteRecordingView: View {
                 Circle()
                     .fill(recorder.phase == .recording ? Color.CT.danger : Color.CT.textDim)
                     .frame(width: ChatUIConstants.VideoNote.recordDotSize, height: ChatUIConstants.VideoNote.recordDotSize)
-                Text(VoiceUIDurationFormatter.string(recorder.elapsed))
+                Text(VoiceUIDurationFormatter.string(review != nil ? trim.upperBound - trim.lowerBound : recorder.elapsed))
                     .font(CTFont.ui(14, weight: .medium))
                     .monospacedDigit()
                     .foregroundStyle(Color.CT.text)
@@ -132,21 +142,59 @@ struct VideoNoteRecordingView: View {
         }
     }
 
+    private func loadReview() async {
+        guard let url = try? await recorder.recording(),
+              let duration = try? await AVURLAsset(url: url).load(.duration).seconds, duration > 0 else { return }
+        // A trim made before is kept only if it still fits — resuming drops it.
+        trim = review == nil || trim.upperBound > duration ? 0...duration : trim
+        review = (url, duration)
+    }
+
     private func send() async {
+        // The stretch to send: the trim when reviewing, all of it when sent straight from recording.
+        let kept = review.map { _ in trim }
         do {
-            let note = try await recorder.finish()
+            let url = try await recorder.finish()
+            let duration = try await AVURLAsset(url: url).load(.duration).seconds
+            let range = kept.flatMap { k -> CMTimeRange? in
+                k.lowerBound <= 0 && k.upperBound >= duration ? nil : CMTimeRange(
+                    start: CMTime(seconds: k.lowerBound, preferredTimescale: 600),
+                    end: CMTime(seconds: k.upperBound, preferredTimescale: 600))
+            }
+            let start = range?.start ?? .zero
             onSend(MediaAttachment(
-                videoURL: note.url,
-                poster: note.poster,
-                duration: note.duration,
+                videoURL: url,
+                poster: await Self.frame(of: url, at: start),
+                duration: range?.duration.seconds ?? duration,
                 mimeType: "video/mp4",
-                presentation: .videoNote
+                presentation: .videoNote,
+                timeRange: range
             ))
             onClose()
         } catch {
             Log.error("Video note not sent: \(error)", category: "VideoNoteRecording")
             onClose()
         }
+    }
+}
+
+private struct NoteCard: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .aspectRatio(ChatUIConstants.VideoNote.aspectRatio, contentMode: .fit)
+            .frame(maxWidth: ChatUIConstants.VideoNote.viewfinderMaxWidth)
+            .background(Color.CT.bgMsg)
+            .clipShape(RoundedRectangle(cornerRadius: ChatUIConstants.Media.cornerRadius, style: .continuous))
+    }
+}
+
+extension VideoNoteRecordingView {
+    static func frame(of url: URL, at time: CMTime) async -> UIImage? {
+        let generator = AVAssetImageGenerator(asset: AVURLAsset(url: url))
+        generator.appliesPreferredTrackTransform = true
+        generator.requestedTimeToleranceBefore = .zero
+        guard let image = try? await generator.image(at: time).image else { return nil }
+        return UIImage(cgImage: image)
     }
 }
 

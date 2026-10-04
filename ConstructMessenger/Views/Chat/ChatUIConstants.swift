@@ -215,6 +215,16 @@ enum ChatUIConstants {
         static let viewfinderMaxWidth: CGFloat = 320
         static let recordDotSize: CGFloat = 8
 
+        // Review and trim while paused (`VideoNoteReviewView`)
+        static let trimBarHeight: CGFloat = 44
+        static let trimHandleWidth: CGFloat = 14
+        static let trimFrameCount = 8
+        static let trimFrameSize = CGSize(width: 96, height: 96)
+        /// A note shorter than this is not worth sending; the handles stop here.
+        static let trimMinimumDuration: Double = 1
+        static let trimCutDim: Double = 0.6
+        static let trimGripInset: CGFloat = 10
+
         // The mic ↔ camera switch on a long press (`MicModeButton`)
         static let switchPressDelay: Duration = .milliseconds(350)
         static let switchSegmentWidth: CGFloat = 52

@@ -567,6 +567,8 @@
 "video_note_send" = "Envoyer la note vidéo";
 "video_note_paused" = "En pause";
 "video_note_camera_unavailable" = "Caméra ou micro indisponible";
+"video_note_trim_start" = "Début du découpage";
+"video_note_trim_end" = "Fin du découpage";
 "file_attachment" = "Pièce jointe";
 "sticker" = "Sticker";
 "media_picker_tab_stickers" = "Stickers";
