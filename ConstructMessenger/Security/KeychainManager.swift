@@ -224,6 +224,12 @@ class KeychainManager {
         return load(forKey: "construct.accountAddress")
     }
 
+    /// Forget the stored address: it is not this account's (`AccountAddress.confirmedOwn()`), or
+    /// this device just joined an account whose phrase it has never seen.
+    func deleteOwnAccountAddress() {
+        delete(forKey: "construct.accountAddress")
+    }
+
     /// Check if device is registered: a device id and the key record the core loads from.
     func isDeviceRegistered() -> Bool {
         let deviceId = loadDeviceID()
