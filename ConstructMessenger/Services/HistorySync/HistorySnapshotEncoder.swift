@@ -228,7 +228,7 @@ final class HistorySnapshotEncoder {
         if let edited = message.editedAt {
             wire.editedAtUnixMs = Int64((edited.timeIntervalSince1970 * 1000).rounded())
         }
-        if let transcript = message.transcriptText, !transcript.isEmpty {
+        if let transcript = message.transcript, !transcript.isEmpty {
             wire.transcriptText = transcript
         }
         if let lang = message.transcriptLanguage, !lang.isEmpty {
