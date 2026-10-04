@@ -328,7 +328,7 @@
 "change_avatar" = "Փոխել լուսանկարը";
 
 // Onboarding (identity gate — create / restore / link)
-"onboarding_tagline" = "ինտերնետը ազատ մտքի տարածք է։";
+"onboarding_tagline" = "Ինտերնետը ազատ մտքի տարածք է։";
 "onboarding_username_placeholder" = "ընտրեք հանրային կեղծանուն (ոչ պարտադիր)";
 "onboarding_create_identity" = "Ստեղծել ինքնություն";
 "onboarding_already_have" = "Արդեն ունե՞ք ինքնություն։";
