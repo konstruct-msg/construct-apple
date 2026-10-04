@@ -382,11 +382,12 @@ final class OutboundSessionService {
         let owed = IntakeCredentialService.shared.devicesNeedingOurKey(among: Self.sessionDevices(of: contactId))
         guard !owed.isEmpty else { return }
 
+        let ownAddress = await AccountAddress.confirmedOwn()
         let card: Data
         do {
             card = try ContactCardPayload(
                 intakeKey: IntakeCredentialService.shared.ownIntakeKey(),
-                accountAddress: AccountAddress.own()
+                accountAddress: ownAddress
             ).encoded()
         } catch {
             Log.error("Contact card did not encode: \(error)", category: "Intake")

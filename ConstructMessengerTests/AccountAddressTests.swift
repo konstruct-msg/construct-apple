@@ -16,6 +16,32 @@ final class AccountAddressTests: XCTestCase {
 
     private let key = Data((0..<32).map { UInt8($0) })
 
+    // MARK: - Own address against the server's fingerprint
+
+    private var keyFingerprint: String {
+        InviteBinaryCodec.hex(key)
+    }
+
+    func testAStoredAddressTheServerConfirmsIsOurs() {
+        XCTAssertEqual(AccountAddress.verdict(stored: key, serverFingerprint: keyFingerprint), .confirmed)
+    }
+
+    /// The Mac that had been its own account: its Keychain held that account's key, the server
+    /// named the account it had since joined. The card carried the old key.
+    func testAStoredAddressOfAnotherAccountIsForeign() {
+        let other = Data((0..<32).map { UInt8(255 - $0) })
+        XCTAssertEqual(
+            AccountAddress.verdict(stored: other, serverFingerprint: keyFingerprint),
+            .foreign
+        )
+    }
+
+    func testNothingToCompareWithIsNeitherConfirmedNorForeign() {
+        XCTAssertEqual(AccountAddress.verdict(stored: key, serverFingerprint: nil), .unconfirmed)
+        XCTAssertEqual(AccountAddress.verdict(stored: nil, serverFingerprint: keyFingerprint), .absent)
+        XCTAssertEqual(AccountAddress.verdict(stored: Data([1, 2]), serverFingerprint: keyFingerprint), .absent)
+    }
+
     /// The form the server's `UserId::parse` reads. A different prefix or case is a recipient the
     /// server rejects as malformed.
     func testTheWireFormIsEd25519ColonLowercaseHex() {

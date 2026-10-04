@@ -44,6 +44,53 @@ enum AccountAddress {
         return key
     }
 
+    /// What the server's fingerprint says about the address this device holds.
+    enum OwnVerdict: Equatable {
+        /// Nothing stored.
+        case absent
+        /// Stored, and the server's key for the account is its prefix.
+        case confirmed
+        /// Stored, and the server names another key: it came from a different account's phrase.
+        case foreign
+        /// Stored, and the server reports no key to compare with.
+        case unconfirmed
+    }
+
+    /// Pure, so the rule is testable apart from the keychain and the network.
+    static func verdict(stored: Data?, serverFingerprint: String?) -> OwnVerdict {
+        guard let stored, stored.count == length else { return .absent }
+        guard let fingerprint = serverFingerprint else { return .unconfirmed }
+        return matchesServerFingerprint(stored, fingerprint: fingerprint) ? .confirmed : .foreign
+    }
+
+    /// Our address, only when the server agrees it is this account's. A device can hold the
+    /// address of an account it used to be: a Keychain item outlives a sign-out that was not a
+    /// wipe. Handed to contacts in a card, that key is pinned there and every later message to
+    /// us is addressed to the old account, accepted by the server and delivered to its mailbox
+    /// (2026-10-03: a Mac that had been its own account before it joined another one).
+    /// A foreign key is deleted here; an unreachable server or an unconfirmed one sends nothing,
+    /// and the contact keeps writing to our account id, which is never wrong.
+    static func confirmedOwn() async -> Data? {
+        guard let stored = own() else { return nil }
+        let fingerprint: String?
+        do {
+            fingerprint = try await AuthServiceClient.shared.getRecoveryStatus().fingerprint
+        } catch {
+            Log.info("Own address not confirmed (\(error.localizedDescription)) — left out", category: "ContactLink")
+            return nil
+        }
+        switch verdict(stored: stored, serverFingerprint: fingerprint) {
+        case .confirmed:
+            return stored
+        case .foreign:
+            Log.error("ADDRESS: the stored own address is not this account's — deleted", category: "ContactLink")
+            KeychainManager.shared.deleteOwnAccountAddress()
+            return nil
+        case .absent, .unconfirmed:
+            return nil
+        }
+    }
+
     /// Keep our address. Only ever called with a key derived from the phrase on this device.
     static func rememberOwn(_ recoveryPublicKey: Data) {
         guard recoveryPublicKey.count == length else { return }

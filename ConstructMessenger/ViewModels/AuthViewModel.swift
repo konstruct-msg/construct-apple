@@ -589,6 +589,12 @@ class AuthViewModel {
         isAuthenticated = true
         hasRegisteredDeviceKeys = true
 
+        if outcome.role == .linkedNewDevice {
+            // A device that joins an account has not seen its phrase, so it holds no address for
+            // it. One left from an earlier account on this device would go into the cards.
+            KeychainManager.shared.deleteOwnAccountAddress()
+        }
+
         if outcome.role == .linkedNewDevice, !CryptoManager.shared.isInitialized {
             CryptoManager.shared.resetOrchestratorStateForDeviceLink()
             CryptoManager.shared.setLocalUserId(outcome.userId)
