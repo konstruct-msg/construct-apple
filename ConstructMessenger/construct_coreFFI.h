@@ -1433,11 +1433,6 @@ RustBuffer uniffi_construct_core_fn_func_open_media(RustBuffer key, RustBuffer b
 RustBuffer uniffi_construct_core_fn_func_plan_initiation(RustBuffer context, RustCallStatus *_Nonnull out_status
 );
 #endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_PLAN_RECEIVING_DECRYPT
-#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_PLAN_RECEIVING_DECRYPT
-RustBuffer uniffi_construct_core_fn_func_plan_receiving_decrypt(RustBuffer session_device_ids, RustBuffer preferred_device_id, RustCallStatus *_Nonnull out_status
-);
-#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_PLAN_SEND
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_PLAN_SEND
 RustBuffer uniffi_construct_core_fn_func_plan_send(RustBuffer recipient_device_ids, RustBuffer own_device_ids, RustBuffer our_device_id, int8_t recipient_is_self, RustCallStatus *_Nonnull out_status
@@ -2066,12 +2061,6 @@ uint16_t uniffi_construct_core_checksum_func_open_media(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_PLAN_INITIATION
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_PLAN_INITIATION
 uint16_t uniffi_construct_core_checksum_func_plan_initiation(void
-    
-);
-#endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_PLAN_RECEIVING_DECRYPT
-#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_PLAN_RECEIVING_DECRYPT
-uint16_t uniffi_construct_core_checksum_func_plan_receiving_decrypt(void
     
 );
 #endif

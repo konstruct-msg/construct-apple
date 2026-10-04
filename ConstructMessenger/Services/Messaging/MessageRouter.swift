@@ -707,10 +707,15 @@ final class MessageRouter {
             if namedSenderDevice == nil {
                 PerformanceMetrics.shared.record(.firstContactUnattributed, label: sessionOwner == nil ? "none" : "pinned")
             }
+            // Only the named device, never the pinned one: the core opens a session from the
+            // sender certificate alone (`decisions/first-message-opens-without-the-server.md`), so
+            // a message that names no device has nothing to open with whichever device it is
+            // filed under. Until 2026-10-04 it was filed under the pinned device and the core then
+            // refused it with SENDER_CERTIFICATE_MISSING.
             if let outcome = preflightWithoutSession(
                 message,
                 from: otherUserId,
-                claimed: sessionOwner,
+                claimed: namedSenderDevice,
                 chat: chat,
                 isNewChat: isNewChat,
                 in: context
@@ -738,77 +743,35 @@ final class MessageRouter {
             streamOutcome = .deferred
             return
         }
-        // An account is a set of devices and each has its own ratchet, so "which session decrypts
-        // this" has as many answers as the peer has devices. Until now it had exactly one —
-        // `pinnedDevice(ofPeer:)` — and a message from the peer's second device was fed to the first
-        // device's session, failed AEAD on keys that were entirely valid, and was treated as a
-        // broken session: heal, and a teardown of the healthy one.
-        //
-        // The order is the core's (`plan_receiving_decrypt`); the account → devices translation is
-        // ours, because `ServerUserId` does not exist there. The pinned device goes first, so a
-        // single-device peer runs this loop exactly once against exactly the session it uses
-        // today — this must cost that case nothing, and it is the property the tests pin.
-        // With no session there is nothing to walk: the core queues the message under the one
-        // device it is claimed by (`preflightWithoutSession` guarantees there is one).
-        let decryptCandidates = hasSession
-            ? receivingDecryptCandidates(for: otherUserId, namedSender: namedSenderDevice, in: context)
-            : sessionOwner.map { [$0] } ?? []
-
-        var actions: [CfeAction] = []
-        var decryptedAs: String?
-        var attempted = 0
-        for candidate in decryptCandidates {
-            guard let event = buildIncomingEvent(
-                message: message, otherUserId: otherUserId, asDevice: candidate
-            ) else { continue }
-            attempted += 1
-            let attemptActions: [CfeAction]
-            do {
-                PerformanceMetrics.shared.messageDecryptStart(messageId: message.id)
-                attemptActions = try CryptoManager.shared.handleOrchestratorEvent(event, tag: "incoming_message")
-                PerformanceMetrics.shared.messageDecryptEnd(messageId: message.id)
-            } catch {
-                // A throw is the core refusing the event, not this session failing to open it, so
-                // the next device would refuse it identically. Kept as the original hard failure.
-                Log.error("handleEvent threw for \(message.id.prefix(8))…: \(error) — dropped", category: "MessageRouter")
-                // Mark as processed so BackgroundFetch does not re-process this undecryptable
-                // message on every background cycle (which would recreate ghost contacts and cause
-                // Core Data validation errors). A throw is the core refusing the event, not a
-                // session failing to read it, so there is no state to name in a decryption error.
-                PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId, in: context)
-                if isNewChat { context.delete(chat) }
-                return
-            }
-            actions = attemptActions
-            // Only "this session could not open it" is worth another device. Every other verdict —
-            // decrypted, duplicate, queued behind an init, a suppression the core just decided —
-            // is an answer about the *message*, and re-asking a different session would either
-            // repeat it or, worse, act on it twice.
-            if !Self.worthAnotherDevice(attemptActions) {
-                decryptedAs = candidate
-                break
-            }
-        }
-
-        if attempted == 0 {
+        // One session reads this: the one the message names. The sender certificate or the
+        // session envelope names the writing device on every sealed delivery, so there is nothing
+        // to search. Until 2026-10-04 an unnamed message was tried against each of the peer's
+        // device sessions in an order the core planned (`plan_receiving_decrypt`, removed in core
+        // 0.34.0); only an unsealed message from a peer — TUI, a DEBUG build with sealing off —
+        // still names nobody, and it goes to the pinned device alone. With no session the core
+        // queues it under the named device (`preflightWithoutSession` refused it otherwise).
+        guard let device = sessionOwner,
+              let event = buildIncomingEvent(message: message, otherUserId: otherUserId, asDevice: device)
+        else {
             Log.error("Cannot build incoming event for \(message.id.prefix(8))… — skipping", category: "MessageRouter")
             if isNewChat { context.delete(chat) }
             return
         }
-        if attempted > 1 {
-            // Worth a line: it is the measurement that says whether the walk earns its cost, and
-            // the shape §D would remove by naming the sending device on the wire.
-            Log.info(
-                "SESSION_STATE[decrypt_walk]: \(otherUserId.prefix(8))… tried \(attempted)/\(decryptCandidates.count) device session(s) — " +
-                (decryptedAs.map { "opened on \($0.prefix(8))…" } ?? "none opened"),
-                category: "MessageRouter"
-            )
-            PerformanceMetrics.shared.record(
-                .decryptDeviceWalk,
-                label: decryptedAs == nil ? "exhausted" : "attempt\(attempted)"
-            )
+        var actions: [CfeAction]
+        do {
+            PerformanceMetrics.shared.messageDecryptStart(messageId: message.id)
+            actions = try CryptoManager.shared.handleOrchestratorEvent(event, tag: "incoming_message")
+            PerformanceMetrics.shared.messageDecryptEnd(messageId: message.id)
+        } catch {
+            Log.error("handleEvent threw for \(message.id.prefix(8))…: \(error) — dropped", category: "MessageRouter")
+            // Mark as processed so BackgroundFetch does not re-process this undecryptable
+            // message on every background cycle (which would recreate ghost contacts and cause
+            // Core Data validation errors). A throw is the core refusing the event, not a
+            // session failing to read it, so there is no state to name in a decryption error.
+            PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId, in: context)
+            if isNewChat { context.delete(chat) }
+            return
         }
-        if let decryptedAs { lastDecryptingDevice[otherUserId] = decryptedAs }
 
         // The action list is a set, not a single verdict — read it by name, never by position or
         // length. See OrchestratorActionPlan for what `actions.count == 1` used to cost us here.
@@ -1065,75 +1028,6 @@ final class MessageRouter {
             .controlCarrierReachedWirePath,
             label: "ct=\(message.contentType)"
         )
-    }
-
-    /// The device that last decrypted for a peer, per account. A hint for ordering only — never a
-    /// filter, and never persisted: after a relaunch the pinned device leads again, which is the
-    /// behaviour that has always shipped.
-    private var lastDecryptingDevice: [String: String] = [:]
-
-    /// The peer's device sessions to try, in the order the core chose.
-    ///
-    /// Two sets intersected, and the intersection is the point. `PeerDevice` says which devices the
-    /// account has; the core says which of them we hold a ratchet with. A device in the first and
-    /// not the second has nothing to decrypt with — reaching for it would be a session init, a
-    /// different operation with a different cost, and it is what the queue and
-    /// `plan_receiving_init` are for.
-    ///
-    /// The pinned device is the preference, so the first attempt is exactly the session this code
-    /// used before there was a walk at all.
-    private func receivingDecryptCandidates(
-        for otherUserId: String,
-        namedSender: String?,
-        in context: NSManagedObjectContext
-    ) -> [String] {
-        let pinned = SessionAddressing.pinnedDevice(ofPeer: otherUserId)
-        guard let core = CryptoManager.shared.orchestratorCore else {
-            return pinned.map { [$0] } ?? []
-        }
-        let held = Set(core.getAllSessionContactIds())
-
-        // §D. The tag named the device that wrote this message, so there is nothing to search: one
-        // ratchet can open it and the others provably cannot. Returned alone rather than merely
-        // preferred — a walk past a known answer is not caution, it is N−1 decrypt attempts whose
-        // only possible outcome is failure, and after §B (sealed fan-out) an attempt is no longer
-        // a free one.
-        //
-        // Only when we actually hold that session. A named device we have no ratchet with falls
-        // through to the ordinary list, where the miss takes the init path and names it correctly.
-        if let namedSender, held.contains(namedSender) {
-            return [namedSender]
-        }
-
-        let known = SessionAddressing.deviceIds(ofPeer: otherUserId).filter(held.contains)
-        // Nothing on record is not the same as nothing to try: a peer we have never enumerated
-        // still has the pinned session, and that is the state every single-device account is in.
-        let sessions = known.isEmpty ? (pinned.map { [$0] } ?? []) : known
-        return planReceivingDecrypt(
-            sessionDeviceIds: sessions,
-            // A named sender we hold no session with is still the best preference: the plan puts
-            // it first, and the actions that come back then name it rather than the pinned device.
-            preferredDeviceId: namedSender ?? lastDecryptingDevice[otherUserId] ?? pinned ?? ""
-        )
-    }
-
-    /// Whether this verdict means "this session could not open the message", and so another of the
-    /// peer's devices is worth trying.
-    ///
-    /// Deliberately a small allowlist rather than "anything that is not `.decrypted`". Every other
-    /// verdict is an answer about the **message** — a duplicate, a message queued behind an init, a
-    /// suppression the core just decided — and re-asking a different session would repeat it or act
-    /// on it twice. Only the teardown verdict describes the *session*. A message carrying the
-    /// handshake header that no state opened is queued under the device tried (`.openReceiving`)
-    /// — an answer about the message, like the heal verdict that stood beside this one until
-    /// 2026-09-27.
-    static func worthAnotherDevice(_ actions: [CfeAction]) -> Bool {
-        switch OrchestratorActionPlan.routingVerdict(from: actions) {
-        case .unreadable:
-            return true
-        default:
-            return false
-        }
     }
 
     /// Build a typed `CfeIncomingEvent.messageReceived` from a server message.
@@ -1546,13 +1440,13 @@ final class MessageRouter {
             return .durable
         }
 
-        // No device to key the core's queue by: neither a sender certificate nor a pinned device.
+        // No sender certificate, so no device to key the core's queue by and no key to open with.
         // Refused rather than guessed — Android's guess (`discoverPeerDevices().first`) is the
         // defect the decision names. From current clients this is only TUI and a DEBUG build
         // with sealed sending switched off. Nothing tells the sender: a decryption error is
         // addressed to a device and sealed to its certificate key, and this message has neither.
         guard claimed != nil else {
-            Log.info("SESSION_STATE[first_contact_unattributed]: \(message.id.prefix(8))… from \(userId.prefix(8))… names no device and none is pinned — refused", category: "SessionInit")
+            Log.info("SESSION_STATE[first_contact_unattributed]: \(message.id.prefix(8))… from \(userId.prefix(8))… names no device — refused", category: "SessionInit")
             PersistentACKStore.shared.markProcessed(message.id, senderId: userId, in: context)
             PerformanceMetrics.shared.record(.undeliveredNoReceipt, label: "first_contact_unattributed")
             if isNewChat { context.delete(chat) }
