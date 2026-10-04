@@ -66,6 +66,7 @@ enum MediaWireCodec {
             }
             if let d = item.duration, d > 0 { m.durationMs = UInt32(d * 1000) }
             if let bh = item.blurhash, !bh.isEmpty { m.blurhash = bh }
+            if item.presentation == .videoNote { m.presentation = .videoNote }
             return m
         }
         if !caption.isEmpty { album.caption = caption }
@@ -117,7 +118,8 @@ enum MediaWireCodec {
                 thumbnail: nil,
                 hash: d["hash"] as? String ?? "",
                 filename: d["filename"] as? String,
-                blurhash: d["blurhash"] as? String
+                blurhash: d["blurhash"] as? String,
+                presentation: MediaPresentation.of(d)
             )
         }
         let wire = albumContent(mediaList: mediaList, caption: newCaption, quoted: nil)
@@ -142,6 +144,9 @@ enum MediaWireCodec {
             }
             if m.hasDurationMs { dict["duration"] = Double(m.durationMs) / 1000.0 }
             if m.hasBlurhash, !m.blurhash.isEmpty { dict["blurhash"] = m.blurhash }
+            if m.presentation == .videoNote {
+                dict[MediaPresentation.jsonKey] = MediaPresentation.videoNote.rawValue
+            }
             return dict
         }
         let obj: [String: Any] = [

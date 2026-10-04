@@ -54,9 +54,25 @@ struct MediaMessageView: View {
 
     private var itemCount: Int { mediaContent.mediaItems.count }
 
+    /// A video note is one video; the presentation on anything else is ignored — the ordinary
+    /// bubble for what the item is.
+    private var isVideoNote: Bool {
+        MediaPresentation.of(mediaContent.media) == .videoNote
+            && (mediaContent.media["mediaType"] as? String)?.hasPrefix("video/") == true
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            if itemCount <= 1 {
+            if itemCount <= 1, isVideoNote {
+                VideoNoteBubbleView(
+                    item: mediaContent.media,
+                    message: message,
+                    itemIndex: 0,
+                    isPlaceholder: isPlaceholder,
+                    isSelected: isSelected,
+                    onTap: { if !isPlaceholder { onTapFullScreen?(0) } }
+                )
+            } else if itemCount <= 1 {
                 SingleMediaCell(
                     mediaContent: mediaContent,
                     message: message,
@@ -581,15 +597,11 @@ private struct SingleMediaCell: View {
             return
         }
         guard !isDownloadingVideo else { return }
-        guard let mediaId = itemDict["mediaId"] as? String,
-              let mediaUrl = itemDict["mediaUrl"] as? String,
-              let mediaKeyStr = itemDict["mediaKey"] as? String,
-              let mediaKey = Data(base64Encoded: mediaKeyStr) else { return }
+        guard let mediaId = itemDict["mediaId"] as? String else { return }
 
         isDownloadingVideo = true
         videoDownloadProgress = 0
         let total = Double((itemDict["size"] as? Int) ?? 0)
-        let fileExtension = mediaFileExtension(for: itemDict["mediaType"] as? String)
         let onProgress: @Sendable (Int64) -> Void = { received in
             let fraction = total > 0 ? min(0.99, Double(received) / total) : 0
             Task { @MainActor in
@@ -599,24 +611,15 @@ private struct SingleMediaCell: View {
 
         Task {
             do {
-                let data = try await MediaManager.shared.downloadAndDecryptMedia(
-                    mediaId: mediaId,
-                    mediaUrl: mediaUrl,
-                    mediaKey: mediaKey,
-                    onProgress: onProgress
+                let url = try await MediaVideoFile.fetch(
+                    item: itemDict, messageId: message.id, itemIndex: itemIndex, onProgress: onProgress
                 )
-                let url = FileManager.default.temporaryDirectory
-                    .appendingPathComponent(UUID().uuidString)
-                    .appendingPathExtension(fileExtension)
-                try data.write(to: url)
                 await MainActor.run {
-                    MediaVideoCache.shared.store(url, for: message.id, at: itemIndex)
                     downloadedVideoURL = url
                     isDownloadingVideo = false
                     videoDownloadProgress = 1
                     onTap()
                 }
-                await GalleryVideoPage.cacheFirstFramePoster(from: url, messageId: message.id, itemIndex: itemIndex)
             } catch {
                 let disposition = MediaLoadFailurePolicy.disposition(for: error)
                 if disposition == .permanentlyUnavailable {
@@ -1076,15 +1079,11 @@ private struct GridCell: View {
             return
         }
         guard !isDownloadingVideo else { return }
-        guard let mediaId = itemDict["mediaId"] as? String,
-              let mediaUrl = itemDict["mediaUrl"] as? String,
-              let mediaKeyStr = itemDict["mediaKey"] as? String,
-              let mediaKey = Data(base64Encoded: mediaKeyStr) else { return }
+        guard let mediaId = itemDict["mediaId"] as? String else { return }
 
         isDownloadingVideo = true
         videoDownloadProgress = 0
         let total = Double((itemDict["size"] as? Int) ?? 0)
-        let fileExtension = mediaFileExtension(for: itemDict["mediaType"] as? String)
         let onProgress: @Sendable (Int64) -> Void = { received in
             let fraction = total > 0 ? min(0.99, Double(received) / total) : 0
             Task { @MainActor in
@@ -1094,24 +1093,15 @@ private struct GridCell: View {
 
         Task {
             do {
-                let data = try await MediaManager.shared.downloadAndDecryptMedia(
-                    mediaId: mediaId,
-                    mediaUrl: mediaUrl,
-                    mediaKey: mediaKey,
-                    onProgress: onProgress
+                let url = try await MediaVideoFile.fetch(
+                    item: itemDict, messageId: message.id, itemIndex: itemIndex, onProgress: onProgress
                 )
-                let url = FileManager.default.temporaryDirectory
-                    .appendingPathComponent(UUID().uuidString)
-                    .appendingPathExtension(fileExtension)
-                try data.write(to: url)
                 await MainActor.run {
-                    MediaVideoCache.shared.store(url, for: message.id, at: itemIndex)
                     downloadedVideoURL = url
                     isDownloadingVideo = false
                     videoDownloadProgress = 1
                     onTap()
                 }
-                await GalleryVideoPage.cacheFirstFramePoster(from: url, messageId: message.id, itemIndex: itemIndex)
             } catch {
                 let disposition = MediaLoadFailurePolicy.disposition(for: error)
                 if disposition == .permanentlyUnavailable {
@@ -1135,7 +1125,7 @@ func formatMediaDuration(_ seconds: Double) -> String {
     return String(format: "%d:%02d", total / 60, total % 60)
 }
 
-private func mediaFileExtension(for mediaType: String?) -> String {
+func mediaFileExtension(for mediaType: String?) -> String {
     switch mediaType {
     case "video/quicktime":
         return "mov"

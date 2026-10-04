@@ -559,6 +559,17 @@
 "reply_with_selection" = "Répondre à la sélection";
 "photo" = "Photo";
 "video" = "Vidéo";
+"video_note" = "Note vidéo";
+"video_note_record" = "Enregistrer une note vidéo";
+"video_note_pause" = "Pause";
+"video_note_resume" = "Reprendre l’enregistrement";
+"video_note_switch_camera" = "Changer de caméra";
+"video_note_send" = "Envoyer la note vidéo";
+"video_note_paused" = "En pause";
+"video_note_camera_unavailable" = "Caméra ou micro indisponible";
+"video_note_trim_start" = "Début du découpage";
+"video_note_trim_end" = "Fin du découpage";
+"playback_speed" = "Vitesse de lecture";
 "file_attachment" = "Pièce jointe";
 "sticker" = "Sticker";
 "media_picker_tab_stickers" = "Stickers";

@@ -221,14 +221,14 @@ final class HistorySnapshotEncoder {
         if let reply = message.replyToMessageId, !reply.isEmpty {
             wire.replyToMessageID = HistorySnapshotDisposition.lowercaseMessageId(reply)
         }
-        if let replyContent = message.replyToContent, !replyContent.isEmpty {
+        if let replyContent = message.replyQuote, !replyContent.isEmpty {
             wire.replyToContent = replyContent
         }
         wire.isEdited = message.isEdited
         if let edited = message.editedAt {
             wire.editedAtUnixMs = Int64((edited.timeIntervalSince1970 * 1000).rounded())
         }
-        if let transcript = message.transcriptText, !transcript.isEmpty {
+        if let transcript = message.transcript, !transcript.isEmpty {
             wire.transcriptText = transcript
         }
         if let lang = message.transcriptLanguage, !lang.isEmpty {

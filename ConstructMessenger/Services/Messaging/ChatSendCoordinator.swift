@@ -709,7 +709,8 @@ final class ChatSendCoordinator {
         let placeholderItems = attachments.map { attachment in
             MessagePersistenceService.UploadPlaceholderItem(
                 thumbnail: attachment.displayImage.flatMap { MediaManager.shared.generateThumbnail(from: $0) },
-                mimeType: attachment.mimeType
+                mimeType: attachment.mimeType,
+                presentation: attachment.presentation
             )
         }
         persistenceService.savePlaceholderMessage(

@@ -30,6 +30,7 @@ struct IOSMessageInputView: View {
     @StateObject private var audioRecorder = AudioRecorderService.shared
     @StateObject private var attachments = MessageInputAttachmentStore()
     @State private var showMicPermissionAlert = false
+    @State private var isRecordingVideoNote = false
     /// Which queued attachment was tapped, and what it opened. Nil means closed — one piece of
     /// state rather than a bool plus an index that can disagree about which item is showing.
     @State private var attachmentTap: AttachmentTapTarget?
@@ -253,11 +254,21 @@ struct IOSMessageInputView: View {
                 text: $text,
                 canSend: canSend,
                 onSend: sendMessage,
-                onStartVoice: startVoiceRecording
+                onStartVoice: startVoiceRecording,
+                onStartVideoNote: { isRecordingVideoNote = true }
             )
         }
         // No collective capsule — separate floating glass elements (same pill radius).
         .padding(.horizontal, ChatUIConstants.InputBar.rowOuterPad)
+        // Its own cover, on the row: the composer's other cover (`attachmentTap`) sits on the
+        // stack above, and two covers on one view do not both present.
+        .fullScreenCover(isPresented: $isRecordingVideoNote) {
+            VideoNoteRecordingView(
+                onSend: { note in onSend([note], []) },
+                onClose: { isRecordingVideoNote = false }
+            )
+            .presentationBackground(.clear)
+        }
     }
 
     private var attachmentButton: some View {

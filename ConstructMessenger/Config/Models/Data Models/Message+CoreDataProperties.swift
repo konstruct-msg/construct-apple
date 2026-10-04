@@ -153,13 +153,21 @@ extension Message {
     @NSManaged public var deliveryStatusRaw: Int16
     @NSManaged public var retryCount: Int16
     @NSManaged public var replyToMessageId: String?
+    /// Legacy plaintext column — read and write `replyQuote` instead. Emptied at launch
+    /// (`StorageMigrationService`), removed in the next model (TODO 115).
     @NSManaged public var replyToContent: String?
+    /// `replyQuote`, sealed with the row's storage key.
+    @NSManaged public var encryptedReplyQuote: Data?
     @NSManaged public var isEdited: Bool
     @NSManaged public var editedAt: Date?
     @NSManaged public var chat: Chat?
 
     // Voice message transcript (on-device STT via WhisperKit)
+    /// Legacy plaintext column — read and write `transcript` instead. Emptied at launch
+    /// (`StorageMigrationService`), removed in the next model (TODO 115).
     @NSManaged public var transcriptText: String?
+    /// `transcript`, sealed with the row's storage key.
+    @NSManaged public var encryptedTranscript: Data?
     @NSManaged public var transcriptLanguage: String?
     @NSManaged public var transcriptGeneratedAt: Date?
 

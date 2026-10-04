@@ -603,6 +603,17 @@
 "reply_with_selection" = "Ответить на выделенное";
 "photo" = "Фото";
 "video" = "Видео";
+"video_note" = "Видеозаметка";
+"video_note_record" = "Записать видеозаметку";
+"video_note_pause" = "Пауза";
+"video_note_resume" = "Продолжить запись";
+"video_note_switch_camera" = "Сменить камеру";
+"video_note_send" = "Отправить видеозаметку";
+"video_note_paused" = "Пауза";
+"video_note_camera_unavailable" = "Камера или микрофон недоступны";
+"video_note_trim_start" = "Начало";
+"video_note_trim_end" = "Конец";
+"playback_speed" = "Скорость воспроизведения";
 "file_attachment" = "Файл";
 "sticker" = "Стикер";
 "media_picker_tab_stickers" = "Стикеры";

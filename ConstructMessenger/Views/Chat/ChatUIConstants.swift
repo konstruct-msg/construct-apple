@@ -195,6 +195,45 @@ enum ChatUIConstants {
         static let selectionStrokeWidth: CGFloat = 2
     }
 
+    /// A video note in the transcript (`VideoNoteBubbleView`).
+    enum VideoNote {
+        /// Narrower than a photo (`MediaPreviewLayout.maxWidth` 260): it is a message, not a
+        /// picture to look at, and at 3:4 it already stands taller than a photo row.
+        static let width: CGFloat = 200
+        /// The recorded shape. A note from a client that did not record 3:4 keeps its own.
+        static let aspectRatio: CGFloat = 3.0 / 4.0
+        static let chipIconSize: CGFloat = 10
+        static let transcriptIconSize: CGFloat = 14
+        static let chipSpacing: CGFloat = 4
+        static let chipHorizontalPadding: CGFloat = 6
+        static let chipVerticalPadding: CGFloat = 3
+        static let downloadIconSize: CGFloat = 30
+        static let blurDecodeSize = CGSize(width: 24, height: 32)
+
+        // Recording (`VideoNoteRecordingView`)
+        /// The chat stays readable behind the viewfinder — you see whom you are recording for.
+        static let recordingDim: Double = 0.6
+        static let viewfinderMaxWidth: CGFloat = 320
+        static let recordDotSize: CGFloat = 8
+
+        // Review and trim while paused (`VideoNoteReviewView`)
+        static let trimBarHeight: CGFloat = 44
+        static let trimHandleWidth: CGFloat = 14
+        static let trimFrameCount = 8
+        static let trimFrameSize = CGSize(width: 96, height: 96)
+        /// A note shorter than this is not worth sending; the handles stop here.
+        static let trimMinimumDuration: Double = 1
+        static let trimCutDim: Double = 0.6
+        static let trimGripInset: CGFloat = 10
+
+        // The mic ↔ camera switch on a long press (`MicModeButton`)
+        static let switchPressDelay: Duration = .milliseconds(350)
+        /// Height of each segment; the switch is two of them, upwards from the mic.
+        static let switchSegmentLength: CGFloat = 52
+        /// How far past the switch a finger may drift and still choose; beyond it, release cancels.
+        static let switchCancelMargin: CGFloat = 44
+    }
+
     // MARK: - Reply focus (soft dim, not Apple-style isolation)
 
     /// When the user is composing a reply or peeks a reply chain, non-focused

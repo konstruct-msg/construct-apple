@@ -540,6 +540,17 @@
 "reply_with_selection" = "選択範囲に返信";
 "photo" = "写真";
 "video" = "動画";
+"video_note" = "ビデオメモ";
+"video_note_record" = "ビデオメモを録画";
+"video_note_pause" = "一時停止";
+"video_note_resume" = "録画を再開";
+"video_note_switch_camera" = "カメラを切り替え";
+"video_note_send" = "ビデオメモを送信";
+"video_note_paused" = "一時停止中";
+"video_note_camera_unavailable" = "カメラまたはマイクを使用できません";
+"video_note_trim_start" = "開始位置";
+"video_note_trim_end" = "終了位置";
+"playback_speed" = "再生速度";
 "file_attachment" = "ファイル";
 "sticker" = "ステッカー";
 "media_picker_tab_stickers" = "ステッカー";

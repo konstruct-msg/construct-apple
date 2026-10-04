@@ -16,7 +16,7 @@ private enum ReplyPreviewLayout {
 }
 
 struct ReplyPreviewContent: View {
-    /// The content string — `replyToContent` stored on the replying message,
+    /// The content string — `replyQuote` stored on the replying message,
     /// or `decryptedContent` of the original message when composing.
     let content: String?
     /// Message ID used to look up a local thumbnail via MediaManager.
@@ -35,7 +35,7 @@ struct ReplyPreviewContent: View {
 
     @ViewBuilder
     var body: some View {
-        if let preview, preview.kind == .image || preview.kind == .video || preview.kind == .animated {
+        if let preview, [.image, .video, .videoNote, .animated].contains(preview.kind) {
             HStack(spacing: ReplyPreviewLayout.spacing) {
                 thumbnailView
                 Text(preview.localizedDisplayText)
@@ -73,7 +73,7 @@ struct ReplyPreviewContent: View {
             } else {
                 Color.CT.bgMsg
                     .overlay(
-                        Image(systemName: preview?.kind == .video ? "video" : "photo")
+                        Image(systemName: preview?.kind == .video || preview?.kind == .videoNote ? "video" : "photo")
                             .font(.system(size: ReplyPreviewLayout.iconSize, weight: .regular))
                             .foregroundColor(Color.CT.textDim)
                             .lineLimit(1).fixedSize()
@@ -92,7 +92,7 @@ struct ReplyPreviewContent: View {
         case .sticker: return "face.smiling"
         case .unknownAttachment: return "paperclip"
         case .image, .animated: return "photo"
-        case .video: return "video"
+        case .video, .videoNote: return "video"
         case .text: return "text.alignleft"
         }
     }
