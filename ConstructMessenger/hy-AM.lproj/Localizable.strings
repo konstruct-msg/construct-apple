@@ -612,6 +612,7 @@
 "video_note_camera_unavailable" = "Տեսախցիկը կամ խոսափողը հասանելի չէ";
 "video_note_trim_start" = "Սկիզբ";
 "video_note_trim_end" = "Վերջ";
+"playback_speed" = "Նվագարկման արագություն";
 "file_attachment" = "Ֆայլ";
 "sticker" = "Կպչուն";
 "media_picker_tab_stickers" = "Կպչուններ";

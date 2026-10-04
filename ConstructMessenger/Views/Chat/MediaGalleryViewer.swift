@@ -244,6 +244,9 @@ struct MediaGalleryViewer: View {
     enum SaveStatus { case idle, saving, saved, failed }
 
     @State private var dismissOffset: CGFloat = 0
+    /// Video playback speed, remembered across videos and launches — a viewer's preference,
+    /// like the system players keep it.
+    @AppStorage("gallery.videoPlaybackRate") private var videoRate: Double = 1
 
     private var entries: [GalleryEntry] { GalleryEntry.expand(messages) }
 
@@ -284,6 +287,7 @@ struct MediaGalleryViewer: View {
                                 message: entry.message,
                                 itemIndex: entry.itemIndex,
                                 mediaItem: entry.mediaItem,
+                                rate: videoRate,
                                 dismissOffset: $dismissOffset,
                                 onDismiss: performDismiss
                             )
@@ -326,6 +330,8 @@ struct MediaGalleryViewer: View {
 
                 Spacer()
 
+                if currentIsVideo { speedMenu }
+
                 Button { shareCurrentImage() } label: {
                     Image(systemName: "ellipsis.circle.fill")
                         .font(CTFont.ui(20))
@@ -351,6 +357,32 @@ struct MediaGalleryViewer: View {
         .opacity(Double(1.0 - dismissOffset / 350))
         // Drag-to-dismiss is driven per-page (only when not zoomed, vertical-dominant) so
         // it never competes with TabView horizontal paging or pinch-pan. See MediaGalleryPage.
+    }
+
+    private var currentIsVideo: Bool {
+        entries.first { $0.id == currentEntryId }.map(Self.isVideoEntry) ?? false
+    }
+
+    /// 1× / 1.5× / 2×. A native menu: the system player's own controls offer no speed here.
+    private var speedMenu: some View {
+        Menu {
+            Picker(selection: $videoRate) {
+                ForEach(GalleryVideoPage.rates, id: \.self) { rate in
+                    Text(GalleryVideoPage.label(for: rate)).tag(rate)
+                }
+            } label: {
+                Text(LocalizedStringKey("playback_speed"))
+            }
+        } label: {
+            Text(GalleryVideoPage.label(for: videoRate))
+                .font(CTFont.ui(14, weight: .semibold))
+                .monospacedDigit()
+                .foregroundColor(.white.opacity(0.9))
+                .frame(minWidth: CTLayout.hitTarget, minHeight: CTLayout.hitTarget)
+                .contentShape(Rectangle())
+        }
+        .accessibilityLabel(Text(LocalizedStringKey("playback_speed")))
+        .accessibilityValue(Text(GalleryVideoPage.label(for: videoRate)))
     }
 
     /// Animate the whole gallery off-screen, then dismiss. Called by a page's
@@ -633,6 +665,15 @@ struct GalleryVideoPage: View {
     let message: Message
     let itemIndex: Int
     let mediaItem: [String: Any]
+    /// Playback speed; applied to the player whenever it changes.
+    var rate: Double = 1
+
+    static let rates: [Double] = [1, 1.5, 2]
+
+    /// "1×", "1.5×" — the number in the reader's locale.
+    static func label(for rate: Double) -> String {
+        rate.formatted(.number.precision(.fractionLength(0...1))) + "×"
+    }
     @Binding var dismissOffset: CGFloat
     let onDismiss: () -> Void
 
@@ -673,10 +714,18 @@ struct GalleryVideoPage: View {
             }
             .modifier(DragToDismiss(dismissOffset: $dismissOffset, isEnabled: true, onDismiss: onDismiss))
             .onAppear { load() }
+            .onChange(of: rate) { _, rate in apply(rate) }
             .onDisappear {
                 player?.pause()
             }
         )
+    }
+
+    /// `defaultRate` is what `play()` starts at; a playing player also moves now.
+    private func apply(_ rate: Double) {
+        guard let player else { return }
+        player.defaultRate = Float(rate)
+        if player.rate != 0 { player.rate = Float(rate) }
     }
 
     private func load(forceRetry: Bool = false) {
@@ -688,6 +737,7 @@ struct GalleryVideoPage: View {
             let cachedPlayer = AVPlayer(url: cachedURL)
             tempURL = cachedURL
             player = cachedPlayer
+            apply(rate)
             cachedPlayer.play()
             return
         }
@@ -727,6 +777,7 @@ struct GalleryVideoPage: View {
                     tempURL = url
                     player = p
                     isLoading = false
+                    apply(rate)
                     p.play()
                 }
                 await Self.cacheFirstFramePoster(from: url, messageId: message.id, itemIndex: itemIndex)

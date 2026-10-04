@@ -613,6 +613,7 @@
 "video_note_camera_unavailable" = "Камера или микрофон недоступны";
 "video_note_trim_start" = "Начало";
 "video_note_trim_end" = "Конец";
+"playback_speed" = "Скорость воспроизведения";
 "file_attachment" = "Файл";
 "sticker" = "Стикер";
 "media_picker_tab_stickers" = "Стикеры";

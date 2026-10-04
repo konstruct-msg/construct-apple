@@ -569,6 +569,7 @@
 "video_note_camera_unavailable" = "Caméra ou micro indisponible";
 "video_note_trim_start" = "Début du découpage";
 "video_note_trim_end" = "Fin du découpage";
+"playback_speed" = "Vitesse de lecture";
 "file_attachment" = "Pièce jointe";
 "sticker" = "Sticker";
 "media_picker_tab_stickers" = "Stickers";
