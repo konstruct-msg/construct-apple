@@ -162,8 +162,12 @@ struct AccountSettingsView: View {
             Text(LocalizedStringKey("logout_all_confirm_message"))
         }
         // No backup warning
-        .alert(LocalizedStringKey("logout_no_backup_title"), isPresented: $showingNoBackupWarning) {
-            Button(LocalizedStringKey("logout_no_backup_setup_action")) {
+        // Since 2026-10-04 the common case is a key made silently and not yet copied: the phrase
+        // is on this device and the sign-out wipe deletes it. Saying "set up recovery" there
+        // would be wrong — it is set up; what is missing is the copy.
+        .alert(LocalizedStringKey(recoveryVM.backupPending ? "recovery_backup_pending_title" : "logout_no_backup_title"),
+               isPresented: $showingNoBackupWarning) {
+            Button(LocalizedStringKey(recoveryVM.backupPending ? "recovery_backup_show" : "logout_no_backup_setup_action")) {
                 showingRecoverySetup = true
             }
             Button(LocalizedStringKey("logout_no_backup_proceed_action"), role: .destructive) {
@@ -172,7 +176,7 @@ struct AccountSettingsView: View {
             }
             Button(LocalizedStringKey("cancel"), role: .cancel) { }
         } message: {
-            Text(LocalizedStringKey("logout_no_backup_message"))
+            Text(LocalizedStringKey(recoveryVM.backupPending ? "logout_backup_pending_message" : "logout_no_backup_message"))
         }
         .sheet(isPresented: $showingRecoverySetup) {
             RecoverySetupView()

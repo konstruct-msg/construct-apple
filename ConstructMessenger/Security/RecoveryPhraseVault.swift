@@ -36,6 +36,8 @@ protocol RecoveryPhraseStore: AnyObject {
     /// Pending → held. False leaves the pending item where it is.
     func promotePending(account: String) -> Bool
     func hasHeld(account: String) -> Bool
+    /// Whether this account's phrase is on the device at all, pending or held, without a prompt.
+    func phrasePresence(account: String) -> RecoveryPhrasePresence
     /// Asks for authentication. Nil when the person cancelled or nothing is held.
     func readHeld(account: String, reason: String) async -> String?
     func forgetPending()
@@ -91,6 +93,15 @@ final class RecoveryPhraseVault: RecoveryPhraseStore {
     }
 
     func hasHeld(account: String) -> Bool {
+        heldPresence(account: account) == .present
+    }
+
+    func phrasePresence(account: String) -> RecoveryPhrasePresence {
+        if pendingPhrase(account: account) != nil { return .present }
+        return heldPresence(account: account)
+    }
+
+    private func heldPresence(account: String) -> RecoveryPhrasePresence {
         var query = base(Self.heldItem)
         query[kSecReturnAttributes as String] = true
         // Attributes only: this must never put up the Face ID prompt.
@@ -98,9 +109,18 @@ final class RecoveryPhraseVault: RecoveryPhraseStore {
         context.interactionNotAllowed = true
         query[kSecUseAuthenticationContext as String] = context
         var result: CFTypeRef?
-        let status = SecItemCopyMatching(query as CFDictionary, &result)
-        guard status == errSecSuccess, let item = result as? [String: Any] else { return false }
-        return Self.account(of: item) == account
+        switch SecItemCopyMatching(query as CFDictionary, &result) {
+        case errSecSuccess:
+            guard let item = result as? [String: Any] else { return .unknown }
+            return Self.account(of: item) == account ? .present : .absent
+        case errSecItemNotFound:
+            return .absent
+        case errSecInteractionNotAllowed:
+            // The item is there; the system would want the person to see it.
+            return .present
+        default:
+            return .unknown
+        }
     }
 
     func readHeld(account: String, reason: String) async -> String? {

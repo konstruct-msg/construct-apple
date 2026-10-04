@@ -1340,3 +1340,6 @@
 "recovery_backup_pending_title" = "リカバリーキーが未保存です";
 "recovery_backup_pending_subtitle" = "リカバリーキーを書き留めてください。すべての端末を失ったときに戻れる唯一の方法です。";
 "recovery_backup_pending" = "未保存";
+"recovery_reminder_lost_title" = "リカバリーキーを表示できなくなりました";
+"recovery_reminder_lost_body" = "キーを保存する前にデバイスのパスコードがオフにされたため、iOSがキーを削除しました。この端末ではアカウントを使えますが、端末を失うかサインアウトすると、アカウントは復元できません。";
+"logout_backup_pending_message" = "リカバリーキーはこの端末にあり、まだ保存されていません。サインアウトするとキーは削除され、キーがないとアカウントは復元できません。";

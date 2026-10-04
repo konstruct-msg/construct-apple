@@ -1259,3 +1259,6 @@
 "recovery_backup_pending_title" = "Clé de récupération non enregistrée";
 "recovery_backup_pending_subtitle" = "Notez votre clé de récupération : c’est le seul moyen de revenir si vous perdez tous vos appareils.";
 "recovery_backup_pending" = "Pas encore enregistrée";
+"recovery_reminder_lost_title" = "La clé de récupération ne peut plus être affichée";
+"recovery_reminder_lost_body" = "Le code de l’appareil a été désactivé avant l’enregistrement de la clé, et iOS l’a supprimée. Votre compte fonctionne sur cet appareil, mais si vous le perdez ou vous déconnectez, il ne pourra pas être récupéré.";
+"logout_backup_pending_message" = "Votre clé de récupération se trouve sur cet appareil et n’a pas été enregistrée. La déconnexion la supprime, et sans elle le compte ne peut pas être récupéré.";

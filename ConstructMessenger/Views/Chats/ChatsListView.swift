@@ -20,6 +20,8 @@ struct ChatsListView: View {
     private var chats: FetchedResults<Chat>
 
     @Environment(ChatsViewModel.self) private var chatsViewModel
+    @Environment(AccountRecoveryViewModel.self) private var recoveryViewModel
+    @State private var showingRecoveryBackup = false
     @State private var showingQRScanner = false
     @State private var showingMyQR = false
     @State private var navigationPath = NavigationPath()
@@ -84,6 +86,11 @@ struct ChatsListView: View {
             .sheet(isPresented: $showingQRScanner) {
                     RecoveryGated { QRScannerView { contactURL in handleScannedContact(contactURL) } }
             }
+            .sheet(isPresented: $showingRecoveryBackup, onDismiss: {
+                recoveryViewModel.refreshBackupPending()
+            }) {
+                RecoverySetupView()
+            }
             .sheet(isPresented: $showingMyQR) {
                 ContactQRCodeView(
                     userId: authViewModel.currentUserId
@@ -93,6 +100,7 @@ struct ChatsListView: View {
                 )
             }
             .onAppear {
+                    recoveryViewModel.refreshBackupPending()
                     chatsViewModel.setContext(viewContext)
                     LocalNotificationManager.shared.clearBadge()
                     reconcileStalePreviews(from: nil)
@@ -190,6 +198,16 @@ struct ChatsListView: View {
                 .frame(height: CTLayout.navBarHeight + CTLayout.controlHeight + 12)
                 .listRowBackground(Color.clear)
                 .listRowSeparator(.hidden)
+
+            if recoveryViewModel.reminder != .none {
+                RecoveryReminderRow(
+                    reminder: recoveryViewModel.reminder,
+                    onOpen: { showingRecoveryBackup = true },
+                    onDismiss: { recoveryViewModel.snoozeReminder() }
+                )
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
+            }
 
             if renderedChats.isEmpty {
                 streamsEmptyState
