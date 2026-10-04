@@ -602,6 +602,17 @@
 "reply_with_selection" = "Reply to Selection";
 "photo" = "Photo";
 "video" = "Video";
+"video_note" = "Video note";
+"video_note_record" = "Record video note";
+"video_note_pause" = "Pause";
+"video_note_resume" = "Resume recording";
+"video_note_switch_camera" = "Switch camera";
+"video_note_send" = "Send video note";
+"video_note_paused" = "Paused";
+"video_note_camera_unavailable" = "Camera or microphone unavailable";
+"video_note_trim_start" = "Trim start";
+"video_note_trim_end" = "Trim end";
+"playback_speed" = "Playback speed";
 "file_attachment" = "File";
 "sticker" = "Sticker";
 "media_picker_tab_stickers" = "Stickers";

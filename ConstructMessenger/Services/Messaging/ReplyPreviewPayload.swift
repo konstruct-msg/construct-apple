@@ -14,6 +14,8 @@ struct ReplyPreviewPayload: Codable, Equatable {
         case text
         case image
         case video
+        /// Local only: the wire reply names it a video (`QuotedMessage` has no presentation).
+        case videoNote
         case audio
         case file
         case animated
@@ -52,8 +54,9 @@ struct ReplyPreviewPayload: Codable, Equatable {
     private static func projectOriginalContent(_ content: String) -> Self {
         if let media = parseMediaContent(from: content) {
             let mime = media.mediaItems.first?["mediaType"] as? String ?? ""
+            let isNote = MediaPresentation.of(media.media) == .videoNote && mime.hasPrefix("video/")
             return Self(
-                kind: kind(for: MediaWireCodec.protoMediaType(for: mime)),
+                kind: isNote ? .videoNote : kind(for: MediaWireCodec.protoMediaType(for: mime)),
                 text: media.caption.nilIfEmpty
             )
         }
@@ -124,7 +127,7 @@ struct ReplyPreviewPayload: Codable, Equatable {
     var protoMediaType: Shared_Proto_Messaging_V1_MediaType? {
         switch kind {
         case .image: return .image
-        case .video: return .video
+        case .video, .videoNote: return .video
         case .audio: return .audio
         case .file: return .file
         case .animated: return .animated
@@ -145,6 +148,8 @@ struct ReplyPreviewPayload: Codable, Equatable {
             return NSLocalizedString("photo", comment: "")
         case .video:
             return NSLocalizedString("video", comment: "")
+        case .videoNote:
+            return NSLocalizedString("video_note", comment: "")
         case .audio:
             return NSLocalizedString("voice_message", comment: "")
         case .file:

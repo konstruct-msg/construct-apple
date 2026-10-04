@@ -44,6 +44,9 @@ struct MediaMessageData: Codable {
     let hash: String        // SHA-256 of encrypted file
     let filename: String?   // Original filename for document attachments
     let blurhash: String?   // Compact blurred-preview string (shown before full download)
+    /// How the item is shown; nil is the ordinary bubble for `mediaType`. Optional so a value
+    /// encoded before it existed still decodes.
+    let presentation: MediaPresentation?
 
     init(
         mediaId: String,
@@ -57,7 +60,8 @@ struct MediaMessageData: Codable {
         thumbnail: Data?,
         hash: String,
         filename: String?,
-        blurhash: String? = nil
+        blurhash: String? = nil,
+        presentation: MediaPresentation? = nil
     ) {
         self.mediaId = mediaId
         self.mediaUrl = mediaUrl
@@ -71,6 +75,7 @@ struct MediaMessageData: Codable {
         self.hash = hash
         self.filename = filename
         self.blurhash = blurhash
+        self.presentation = presentation
     }
 }
 

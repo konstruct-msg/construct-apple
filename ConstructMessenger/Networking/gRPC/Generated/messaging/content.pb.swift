@@ -25,6 +25,46 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
+/// MediaPresentation - how a media item is shown, beyond what its media_type implies.
+public nonisolated enum Shared_Proto_Messaging_V1_MediaPresentation: SwiftProtobuf.Enum, Swift.CaseIterable {
+  public typealias RawValue = Int
+
+  /// Not set: the ordinary bubble for the media_type (must be 0).
+  case unspecified // = 0
+
+  /// A video note: a short video recorded in the chat, 3:4, shown uncropped, playing muted in
+  /// the transcript and opening full screen with sound. media_type is VIDEO.
+  case videoNote // = 1
+  case UNRECOGNIZED(Int)
+
+  public init() {
+    self = .unspecified
+  }
+
+  public init?(rawValue: Int) {
+    switch rawValue {
+    case 0: self = .unspecified
+    case 1: self = .videoNote
+    default: self = .UNRECOGNIZED(rawValue)
+    }
+  }
+
+  public var rawValue: Int {
+    switch self {
+    case .unspecified: return 0
+    case .videoNote: return 1
+    case .UNRECOGNIZED(let i): return i
+    }
+  }
+
+  // The compiler won't synthesize support with the UNRECOGNIZED case.
+  public static let allCases: [Shared_Proto_Messaging_V1_MediaPresentation] = [
+    .unspecified,
+    .videoNote,
+  ]
+
+}
+
 /// MediaType - Type of media attachment
 public nonisolated enum Shared_Proto_Messaging_V1_MediaType: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
@@ -634,6 +674,12 @@ public nonisolated struct Shared_Proto_Messaging_V1_MediaMessage: Sendable {
   /// host part of file_url). Carried explicitly so it survives the wire round-trip.
   public var mediaID: String = String()
 
+  /// How the item is shown. A client that does not know a value shows the item as its
+  /// media_type says, so a new presentation degrades to the ordinary bubble rather than to
+  /// nothing — that is why this is a field of the item and not a separate MessageContent.
+  /// construct-docs/decisions/video-notes-are-uncropped-and-expand.md
+  public var presentation: Shared_Proto_Messaging_V1_MediaPresentation = .unspecified
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -1189,6 +1235,10 @@ public nonisolated struct Shared_Proto_Messaging_V1_SessionControl: Sendable {
 
 fileprivate nonisolated let _protobuf_package = "shared.proto.messaging.v1"
 
+nonisolated extension Shared_Proto_Messaging_V1_MediaPresentation: SwiftProtobuf._ProtoNameProviding {
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0MEDIA_PRESENTATION_UNSPECIFIED\0\u{1}MEDIA_PRESENTATION_VIDEO_NOTE\0")
+}
+
 nonisolated extension Shared_Proto_Messaging_V1_MediaType: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0MEDIA_TYPE_UNSPECIFIED\0\u{1}MEDIA_TYPE_IMAGE\0\u{1}MEDIA_TYPE_VIDEO\0\u{1}MEDIA_TYPE_AUDIO\0\u{1}MEDIA_TYPE_FILE\0\u{1}MEDIA_TYPE_ANIMATED\0\u{1}MEDIA_TYPE_STICKER\0")
 }
@@ -1565,7 +1615,7 @@ nonisolated extension Shared_Proto_Messaging_V1_TextMessage: SwiftProtobuf.Messa
 
 nonisolated extension Shared_Proto_Messaging_V1_MediaMessage: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".MediaMessage"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}media_type\0\u{3}file_url\0\u{3}encryption_key\0\u{3}file_hash\0\u{3}file_size\0\u{3}mime_type\0\u{1}filename\0\u{1}thumbnail\0\u{1}dimensions\0\u{3}duration_ms\0\u{1}caption\0\u{1}blurhash\0\u{3}media_id\0\u{c}\u{e}\u{7}")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}media_type\0\u{3}file_url\0\u{3}encryption_key\0\u{3}file_hash\0\u{3}file_size\0\u{3}mime_type\0\u{1}filename\0\u{1}thumbnail\0\u{1}dimensions\0\u{3}duration_ms\0\u{1}caption\0\u{1}blurhash\0\u{3}media_id\0\u{1}presentation\0\u{c}\u{f}\u{6}")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -1586,6 +1636,7 @@ nonisolated extension Shared_Proto_Messaging_V1_MediaMessage: SwiftProtobuf.Mess
       case 11: try { try decoder.decodeSingularStringField(value: &self._caption) }()
       case 12: try { try decoder.decodeSingularStringField(value: &self._blurhash) }()
       case 13: try { try decoder.decodeSingularStringField(value: &self.mediaID) }()
+      case 14: try { try decoder.decodeSingularEnumField(value: &self.presentation) }()
       default: break
       }
     }
@@ -1635,6 +1686,9 @@ nonisolated extension Shared_Proto_Messaging_V1_MediaMessage: SwiftProtobuf.Mess
     if !self.mediaID.isEmpty {
       try visitor.visitSingularStringField(value: self.mediaID, fieldNumber: 13)
     }
+    if self.presentation != .unspecified {
+      try visitor.visitSingularEnumField(value: self.presentation, fieldNumber: 14)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -1652,6 +1706,7 @@ nonisolated extension Shared_Proto_Messaging_V1_MediaMessage: SwiftProtobuf.Mess
     if lhs._caption != rhs._caption {return false}
     if lhs._blurhash != rhs._blurhash {return false}
     if lhs.mediaID != rhs.mediaID {return false}
+    if lhs.presentation != rhs.presentation {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
