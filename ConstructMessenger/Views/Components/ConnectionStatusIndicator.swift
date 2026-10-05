@@ -8,8 +8,8 @@ import SwiftUI
 /// Compact connection indicator for the chat-list header — a single dot, no text.
 ///
 /// - **Connecting** (incl. cold start / unknown): a soft pulsing dot.
-/// - **Connected**: a brief accent glow that then fades away, so a healthy connection adds no
-///   permanent chrome (the calm the old dot had).
+/// - **Connected**: a steady accent dot with a soft glow. It stays — the dot is how the person
+///   sees they are online and everything works; a dot that faded out read as "something went".
 /// - **Disconnected**: a steady danger dot — but only *after* a first successful connect, so a
 ///   cold start reads as "connecting", never a scary "Disconnected" flash.
 ///
@@ -18,11 +18,9 @@ import SwiftUI
 struct ConnectionStatusIndicator: View {
     var connectionManager = ConnectionStatusManager.shared
 
-    @State private var visible = true
     @State private var dotScale: CGFloat = 1
     @State private var dotOpacity: Double = 1
     @State private var hasConnectedOnce = false
-    @State private var hideTask: Task<Void, Never>? = nil
 
     private enum DisplayState { case connecting, connected, disconnected, paused }
 
@@ -50,7 +48,7 @@ struct ConnectionStatusIndicator: View {
             .fill(dotColor)
             .frame(width: 8, height: 8)
             .scaleEffect(dotScale)
-            .opacity(visible ? dotOpacity : 0)
+            .opacity(dotOpacity)
             .shadow(color: displayState == .connected ? Color.CT.accent.opacity(0.7) : .clear, radius: 4)
             .animation(.easeInOut(duration: 0.4), value: dotColor)
             .onAppear { apply(displayState) }
@@ -62,10 +60,6 @@ struct ConnectionStatusIndicator: View {
     }
 
     private func apply(_ state: DisplayState) {
-        hideTask?.cancel()
-        hideTask = nil
-        visible = true
-
         switch state {
         case .connecting:
             dotOpacity = 1
@@ -76,18 +70,10 @@ struct ConnectionStatusIndicator: View {
             }
 
         case .connected:
-            // Stop the pulse, settle to a full accent dot, glow, then fade out.
+            // Stop the pulse and settle to a full accent dot.
             withAnimation(.easeOut(duration: 0.35)) {
                 dotScale = 1
                 dotOpacity = 1
-            }
-            hideTask = Task { @MainActor in
-                try? await Task.sleep(nanoseconds: 3_000_000_000)
-                guard !Task.isCancelled else { return }
-                withAnimation(.easeIn(duration: 0.8)) { dotOpacity = 0 }
-                try? await Task.sleep(nanoseconds: 850_000_000)
-                guard !Task.isCancelled else { return }
-                visible = false
             }
 
         case .disconnected:
