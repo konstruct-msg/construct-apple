@@ -256,19 +256,24 @@ final class WebRTCSession: NSObject, WebRTCSessionProtocol {
             return
         }
         let formats = RTCCameraVideoCapturer.supportedFormats(for: device)
-        let dimensions = formats.map { format -> (width: Int32, height: Int32) in
+        let preferred = capturer.preferredOutputPixelFormat()
+        let candidates = formats.map { format -> CallVideoCapture.Candidate in
             let d = CMVideoFormatDescriptionGetDimensions(format.formatDescription)
-            return (d.width, d.height)
+            return CallVideoCapture.Candidate(
+                width: d.width,
+                height: d.height,
+                rateRanges: format.videoSupportedFrameRateRanges.map { $0.minFrameRate...$0.maxFrameRate },
+                isPreferredPixelFormat: CMFormatDescriptionGetMediaSubType(format.formatDescription) == preferred
+            )
         }
-        guard let index = CallVideoCapture.bestFormatIndex(dimensions) else {
-            Log.error("Camera \(facing) reports no capture formats", category: "Calls")
+        guard let (index, fps) = CallVideoCapture.choose(candidates) else {
+            Log.error("Camera \(facing): no format can run at \(CallVideoCapture.maxFps) fps or below", category: "Calls")
             return
         }
         let format = formats[index]
-        let maxRate = format.videoSupportedFrameRateRanges.map(\.maxFrameRate).max() ?? Double(CallVideoCapture.maxFps)
-        let fps = CallVideoCapture.fps(maxSupported: maxRate)
         capturer.startCapture(with: device, format: format, fps: fps)
-        Log.info("Camera \(facing) capturing \(dimensions[index].width)x\(dimensions[index].height)@\(fps)", category: "Calls")
+        let c = candidates[index]
+        Log.info("Camera \(facing) capturing \(c.width)x\(c.height)@\(fps) (ranges \(c.rateRanges))", category: "Calls")
     }
 
     /// Take up the video section of an offer as `sendrecv`, so the camera can be turned on later

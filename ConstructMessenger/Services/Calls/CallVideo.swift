@@ -78,19 +78,42 @@ enum CallVideoCapture {
     static let maxHeight: Int32 = 720
     static let maxFps = 30
 
-    /// The largest format within 1280×720, by pixel count; the smallest one if the camera has
-    /// nothing that small. Dimensions are the sensor's, landscape.
-    static func bestFormatIndex(_ dimensions: [(width: Int32, height: Int32)]) -> Int? {
-        guard !dimensions.isEmpty else { return nil }
-        let area = { (i: Int) in Int(dimensions[i].width) * Int(dimensions[i].height) }
-        let fitting = dimensions.indices.filter {
-            dimensions[$0].width <= maxWidth && dimensions[$0].height <= maxHeight
-        }
-        if let best = fitting.max(by: { area($0) < area($1) }) { return best }
-        return dimensions.indices.min(by: { area($0) < area($1) })
+    /// One capture format as the camera reports it. Dimensions are the sensor's, landscape.
+    struct Candidate: Equatable {
+        let width: Int32
+        let height: Int32
+        /// The frame-rate ranges the format supports, as AVFoundation lists them.
+        let rateRanges: [ClosedRange<Double>]
+        /// The pixel format WebRTC's capturer prefers, so it need not convert every frame.
+        let isPreferredPixelFormat: Bool
+
+        var area: Int { Int(width) * Int(height) }
+        /// The rate we would ask of this format: 30, or its own maximum if lower.
+        var fps: Int { max(1, min(CallVideoCapture.maxFps, Int(maxFps))) }
+        var maxFps: Double { rateRanges.map(\.upperBound).max() ?? 0 }
+        /// Whether it can run at that rate. A slow-motion format's range can start above 30, and
+        /// asking it for 30 raises inside AVFoundation, on WebRTC's capture queue, where nothing
+        /// catches it — the flip-to-back-camera crash of build 716 (2026-10-05).
+        var canRun: Bool { rateRanges.contains { $0.contains(Double(fps)) } }
     }
 
-    static func fps(maxSupported: Double) -> Int {
-        max(1, min(maxFps, Int(maxSupported)))
+    /// The format to capture with and the rate to ask of it: the largest that fits 1280×720 and can
+    /// run at our rate; the smallest usable one if nothing fits. Of equals, the preferred pixel
+    /// format, then the lowest maximum rate — the ordinary format over its slow-motion twins.
+    ///
+    /// Until 2026-10-05 this compared area alone, and of several 1280×720 formats `max(by:)` took
+    /// the last: on a back camera, a high-speed one.
+    static func choose(_ candidates: [Candidate]) -> (index: Int, fps: Int)? {
+        let usable = candidates.indices.filter { candidates[$0].canRun }
+        let fitting = usable.filter { candidates[$0].width <= maxWidth && candidates[$0].height <= maxHeight }
+        let better: (Int, Int) -> Bool = { a, b in
+            let x = candidates[a], y = candidates[b]
+            if x.area != y.area { return x.area > y.area }
+            if x.isPreferredPixelFormat != y.isPreferredPixelFormat { return x.isPreferredPixelFormat }
+            return x.maxFps < y.maxFps
+        }
+        let pick = fitting.min(by: better)
+            ?? usable.min { candidates[$0].area < candidates[$1].area }
+        return pick.map { ($0, candidates[$0].fps) }
     }
 }
