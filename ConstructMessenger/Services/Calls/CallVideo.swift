@@ -72,6 +72,14 @@ enum CallVideoSignal {
         return update
     }
 
+    /// Whether answering this offer turns our camera on: a video call is answered with video, as
+    /// in FaceTime; "answer without video" is the other button (owner, 2026-10-03). Until
+    /// 2026-10-05 the callee always answered with the camera off, and the caller of a video call
+    /// saw an avatar.
+    static func answersWithCamera(offerCallType: Shared_Proto_Signaling_V1_CallType, videoEnabled: Bool) -> Bool {
+        videoEnabled && offerCallType == .video
+    }
+
     /// Whether the peer's camera is on after this update, or nil when it is not about the camera.
     static func remoteCameraOn(after update: Shared_Proto_Signaling_V1_MediaUpdate) -> Bool? {
         guard update.mediaType == .video else { return nil }

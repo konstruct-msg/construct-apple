@@ -52,6 +52,14 @@ final class CallVideoTests: XCTestCase {
         XCTAssertEqual(state.apply({ _ in }, canSend: true), true)
     }
 
+    /// A video call is answered with the camera on; an audio call, or video calls off, without.
+    /// Mutation: return false — the caller of a video call sees the callee's avatar (2026-10-05).
+    func testAVideoCallIsAnsweredWithTheCamera() {
+        XCTAssertTrue(CallVideoSignal.answersWithCamera(offerCallType: .video, videoEnabled: true))
+        XCTAssertFalse(CallVideoSignal.answersWithCamera(offerCallType: .audio, videoEnabled: true))
+        XCTAssertFalse(CallVideoSignal.answersWithCamera(offerCallType: .video, videoEnabled: false))
+    }
+
     /// An older client never sends `MediaUpdate`; its avatar is what it is sending.
     func testThePeerStartsWithTheCameraOff() {
         XCTAssertFalse(CallVideoState().remoteCameraOn)
