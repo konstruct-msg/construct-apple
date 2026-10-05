@@ -1,0 +1,79 @@
+//
+//  PushBannerTests.swift
+//  ConstructMessengerTests
+//
+//  The message push is an alert since 2026-10-05: the server names keys from this app's strings,
+//  and a wake the system grants posts our own banner in its place. Each test names the mutation
+//  that reddens it.
+//
+
+import XCTest
+@testable import Construct_Messenger
+
+final class PushBannerTests: XCTestCase {
+
+    private let now = Date(timeIntervalSince1970: 1_000_000)
+
+    private func delivered(
+        _ id: String,
+        secondsAgo: TimeInterval = 5,
+        fromPush: Bool = true,
+        activity: String? = "new_message"
+    ) -> PushBannerReplacement.Delivered {
+        .init(identifier: id, date: now.addingTimeInterval(-secondsAgo), fromPush: fromPush, activity: activity)
+    }
+
+    /// Mutation: return [] — every woken message shows two banners and rings twice.
+    func testThisWakesPushBannerIsReplaced() {
+        let replaced = PushBannerReplacement.identifiersToReplace(
+            among: [delivered("push-1")], activity: "new_message", now: now
+        )
+        XCTAssertEqual(replaced, ["push-1"])
+    }
+
+    /// Mutation: drop the `fromPush` term — our own banner for another chat is removed.
+    func testOurOwnBannersAreNeverReplaced() {
+        let replaced = PushBannerReplacement.identifiersToReplace(
+            among: [delivered("msg-chat-A", fromPush: false)], activity: "new_message", now: now
+        )
+        XCTAssertTrue(replaced.isEmpty)
+    }
+
+    /// Mutation: drop the window — an unread banner from an hour ago disappears, and the new
+    /// banner is posted without sound although nothing else just rang.
+    func testAnOlderPushBannerKeepsItsPlace() {
+        let replaced = PushBannerReplacement.identifiersToReplace(
+            among: [delivered("push-old", secondsAgo: 3600)], activity: "new_message", now: now
+        )
+        XCTAssertTrue(replaced.isEmpty)
+    }
+
+    /// A contact-request banner does not take the place of a message push, nor the reverse.
+    func testOnlyTheSameKindIsReplaced() {
+        let replaced = PushBannerReplacement.identifiersToReplace(
+            among: [delivered("push-msg"), delivered("push-cr", activity: "contact_request_received")],
+            activity: "contact_request_received",
+            now: now
+        )
+        XCTAssertEqual(replaced, ["push-cr"])
+    }
+
+    /// The server (`messaging-service` `blind_alert`) puts these keys in the alert, and iOS looks
+    /// them up in this app's `Localizable.strings`. A key renamed or missing in one locale shows
+    /// its raw name on that locale's lock screen, and nothing else would notice.
+    ///
+    /// Mutation: rename `construct_new_message` in any one locale.
+    func testTheKeysTheServerNamesExistInEveryLocale() throws {
+        let keys = ["construct_app_name", "construct_new_message", "contact_request_received_body"]
+        let app = Bundle(for: AuthViewModel.self)
+        for locale in ["en", "ru", "ja", "fr", "hy-AM"] {
+            let path = try XCTUnwrap(app.path(forResource: locale, ofType: "lproj"), locale)
+            let bundle = try XCTUnwrap(Bundle(path: path), locale)
+            for key in keys {
+                let value = bundle.localizedString(forKey: key, value: "\u{0}missing", table: nil)
+                XCTAssertNotEqual(value, "\u{0}missing", "\(locale): \(key)")
+                XCTAssertFalse(value.isEmpty, "\(locale): \(key)")
+            }
+        }
+    }
+}

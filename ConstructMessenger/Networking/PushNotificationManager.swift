@@ -321,13 +321,11 @@ extension PushNotificationManager: UNUserNotificationCenterDelegate {
     
     /// Handle notification when app is in foreground.
     ///
-    /// The server sends APNs *alert* pushes whose body contains the raw
-    /// encrypted message payload (KNST1:… format). We must never display
-    /// that raw ciphertext to the user. Instead:
-    ///   - Silent push (content-available only)  → suppress (app handles it)
-    ///   - APNs alert push with encrypted body   → cancel raw push,
-    ///                                             schedule a clean local banner
-    ///   - Local notification (from our own code) → show as-is
+    ///   - Silent push (content-available only)   → suppress (app handles it)
+    ///   - APNs alert push ("New message" by key) → suppress; the same push's content-available
+    ///                                              fetch, or the live stream, delivers the
+    ///                                              message and decides on a banner itself
+    ///   - Local notification (from our own code)  → show as-is
     nonisolated func userNotificationCenter(
         _ center: UNUserNotificationCenter,
         willPresent notification: UNNotification,
@@ -346,13 +344,12 @@ extension PushNotificationManager: UNUserNotificationCenterDelegate {
             return
         }
 
-        // APNs alert push (UNPushNotificationTrigger) — the server body may
-        // contain raw ciphertext. Replace with a privacy-safe local notification.
+        // APNs alert push (UNPushNotificationTrigger). On screen the app knows better than the
+        // generic banner: the message reaches MessageRouter, which skips the banner when its
+        // chat is open. Posting one here as well gave two for every message.
         if notification.request.trigger is UNPushNotificationTrigger {
-            Log.debug("APNs alert push in foreground — replacing with local banner", category: "Push")
-            let chatId = construct?["conversation_id"] as? String
-            LocalNotificationManager.shared.showNewMessageNotification(chatId: chatId)
-            completionHandler([])   // suppress the raw push
+            Log.debug("APNs alert push in foreground (\(construct?["type"] as? String ?? "?")) — suppressed", category: "Push")
+            completionHandler([])
             return
         }
 
