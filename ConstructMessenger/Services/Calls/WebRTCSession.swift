@@ -157,6 +157,11 @@ final class WebRTCSession: NSObject, WebRTCSessionProtocol {
     private var captureCounter: VideoFrameCounter?
     private var captureWatcher: CaptureSessionWatcher?
     private let receiveCounter = VideoFrameCounter(label: "received")
+    /// The track the counter is attached through. `receiver.track` makes a new wrapper on every
+    /// read, and a wrapper takes its renderers off the track when it goes away — attached through
+    /// a temporary, the counter saw nothing while the screen, holding its own, showed the video
+    /// ("0 frames — none arrived" over a working picture, 2026-10-05).
+    private var countedTrack: RTCVideoTrack?
     /// The camera's track, kept across off/on so the preview and the sender reuse one source.
     private(set) var localVideoTrack: RTCVideoTrack?
     var remoteVideoTrack: RTCVideoTrack? { videoTransceiver?.receiver.track as? RTCVideoTrack }
@@ -217,7 +222,7 @@ final class WebRTCSession: NSObject, WebRTCSessionProtocol {
             initValue.direction = .sendRecv
             initValue.streamIds = ["video"]
             videoTransceiver = peerConnection.addTransceiver(of: .video, init: initValue)
-            remoteVideoTrack?.add(receiveCounter)
+            countReceivedFrames()
             Log.info("WebRTC video transceiver added (sendrecv, no track)", category: "Calls")
         }
         Self.dumpAudioState(label: "session-init role=\(role)")
@@ -264,6 +269,11 @@ final class WebRTCSession: NSObject, WebRTCSessionProtocol {
         videoSource = source
         localVideoTrack = track
         return track
+    }
+
+    private func countReceivedFrames() {
+        countedTrack = remoteVideoTrack
+        countedTrack?.add(receiveCounter)
     }
 
     private func stopCapture() {
@@ -341,7 +351,7 @@ final class WebRTCSession: NSObject, WebRTCSessionProtocol {
             return
         }
         videoTransceiver = offered
-        remoteVideoTrack?.add(receiveCounter)
+        countReceivedFrames()
         Log.info("WebRTC offered video section taken up (sendrecv)", category: "Calls")
     }
 

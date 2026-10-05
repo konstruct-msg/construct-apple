@@ -759,6 +759,17 @@ final class CallManager: CallUIManaging {
         #endif
     }
 
+    /// An incoming video call is answered with the camera on (`CallVideoSignal.answersWithCamera`).
+    /// When the offer comes after the answer — the push can beat it by seconds — the session is
+    /// already there, and the camera comes on now.
+    private func takeUpVideoCall(_ offer: Shared_Proto_Signaling_V1_CallOffer, for call: ActiveCall) {
+        guard case .incoming = call.session.direction, !call.startsWithCamera,
+              CallVideoSignal.answersWithCamera(offerCallType: offer.callType, videoEnabled: CallsFeature.isVideoEnabled)
+        else { return }
+        call.startsWithCamera = true
+        if call.webrtc != nil { setCameraOn(true) }
+    }
+
     /// The session the video views draw from. Nothing else outside this class needs it.
     var activeWebRTC: (any WebRTCSessionProtocol)? { active?.webrtc }
 
@@ -1683,6 +1694,7 @@ final class CallManager: CallUIManaging {
                     hasAnswered: active.answeredAt != nil
                 ) {
                 case .holdUntilAnswered:
+                    takeUpVideoCall(offer, for: active)
                     holdRemoteOffer(offer, for: active)
                 case .renegotiate:
                     Task { @MainActor [weak self] in
@@ -1696,7 +1708,9 @@ final class CallManager: CallUIManaging {
                 handleIncomingCallOffer(callId: signal.callID, callerUserId: senderUserId,
                                         callerName: nil,
                                         sdp: offer.sdp)
-                _ = offer  // currently unused; reserved for future video-flag etc.
+                if let active, active.session.id == signal.callID {
+                    takeUpVideoCall(offer, for: active)
+                }
             }
         case .answer(let answer):
             guard active?.session.id == signal.callID else { return }
