@@ -393,11 +393,14 @@ protocol CallUIManaging: AnyObject {
     var state: CallState { get }
     var lastError: String? { get }
     var callQuality: CallQuality { get }
+    var video: CallVideoState { get }
 
     func clearLastError()
     func startOutgoingCall(to userId: String, displayName: String, hasVideo: Bool) async
     func endCall()
     func setMuted(_ muted: Bool)
+    func setCameraOn(_ on: Bool)
+    func switchCamera()
 }
 
 enum CallRuntimeProvider {

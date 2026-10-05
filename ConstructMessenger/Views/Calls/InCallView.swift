@@ -28,17 +28,37 @@ struct InCallView: View {
     /// cover without ending the call. `MainTabView` then shows a top-of-screen
     /// `InCallMiniBar` and lets the user keep using the rest of the app.
     var onMinimize: (() -> Void)? = nil
+    /// The camera on both sides. With video calls off it stays the default, and so does the
+    /// screen: no video, no camera buttons.
+    var video = CallVideoState()
+    var onCameraChanged: (Bool) -> Void = { _ in }
+    var onSwitchCamera: () -> Void = {}
 
     @State private var isMuted = false
     @State private var elapsed: Int = 0
     @State private var timer: Timer? = nil
 
     private var isEnded: Bool { endReason != nil }
+    private var showsRemoteVideo: Bool { video.remoteCameraOn && !isEnded }
+    private var showsLocalPreview: Bool { video.announcedCameraOn && !isEnded }
+
+    private enum VideoLayout {
+        /// About a quarter of a phone's width, 3:4 like the camera.
+        static let previewWidth: CGFloat = 104
+        static let previewAspect: CGFloat = 3.0 / 4.0
+    }
 
     var body: some View {
         ZStack {
             Color.CT.bg
                 .ignoresSafeArea()
+
+            #if os(iOS) && canImport(WebRTC)
+            if showsRemoteVideo {
+                CallVideoView(side: .remote)
+                    .ignoresSafeArea()
+            }
+            #endif
 
             VStack(spacing: 0) {
                 // Minimise button — chevron-down in the top-left. Hidden once
@@ -65,14 +85,17 @@ struct InCallView: View {
 
                 // Avatar + name
                 VStack(spacing: 16) {
-                    ZStack {
-                        ContactMainAvatarView(userId: session.peerUserId, displayName: session.peerName, size: 96)
-                        // Pulse appears in two distinct UX moments:
-                        // 1. While the call is dialling / ringing (connecting=true)
-                        // 2. While ICE has transiently dropped (.reconnecting)
-                        // Static avatar otherwise = "everything's fine".
-                        if !isEnded && (isConnecting || quality == .reconnecting) {
-                            PulseRingView(size: 96)
+                    // The peer's face is the focal point while their camera is on.
+                    if !showsRemoteVideo {
+                        ZStack {
+                            ContactMainAvatarView(userId: session.peerUserId, displayName: session.peerName, size: 96)
+                            // Pulse appears in two distinct UX moments:
+                            // 1. While the call is dialling / ringing (connecting=true)
+                            // 2. While ICE has transiently dropped (.reconnecting)
+                            // Static avatar otherwise = "everything's fine".
+                            if !isEnded && (isConnecting || quality == .reconnecting) {
+                                PulseRingView(size: 96)
+                            }
                         }
                     }
 
@@ -115,10 +138,33 @@ struct InCallView: View {
                         #if os(iOS)
                         AudioRouteControl()
                         #endif
+                        if video.canSend {
+                            CallControlButton(config: cameraConfig)
+                        }
+                        if showsLocalPreview {
+                            CallControlButton(config: flipConfig)
+                        }
                     }
                     .padding(.bottom, 52)
                 }
             }
+        }
+        .overlay(alignment: .topTrailing) {
+            #if os(iOS) && canImport(WebRTC)
+            if showsLocalPreview {
+                CallVideoView(side: .local)
+                    // The front camera is shown as a mirror, as every camera app does.
+                    .scaleEffect(x: video.facing == .front ? -1 : 1)
+                    .frame(
+                        width: VideoLayout.previewWidth,
+                        height: VideoLayout.previewWidth / VideoLayout.previewAspect
+                    )
+                    .clipShape(CTShape.card())
+                    .padding(.horizontal, CTLayout.edgePad)
+                    .padding(.top, CTLayout.inlinePad)
+                    .accessibilityHidden(true)
+            }
+            #endif
         }
         .onAppear {
             guard !isConnecting && !isEnded else { return }
@@ -144,6 +190,24 @@ struct InCallView: View {
                 isMuted.toggle()
                 onMuteChanged(isMuted)
             }
+        )
+    }
+
+    private var cameraConfig: CallControlConfig {
+        CallControlConfig(
+            systemImage: video.localCameraOn ? "video.fill" : "video.slash.fill",
+            label: NSLocalizedString("call_camera", comment: ""),
+            tint: video.localCameraOn ? Color.CT.accent : Color.CT.textDim,
+            action: { onCameraChanged(!video.localCameraOn) }
+        )
+    }
+
+    private var flipConfig: CallControlConfig {
+        CallControlConfig(
+            systemImage: "arrow.triangle.2.circlepath.camera",
+            label: NSLocalizedString("call_flip_camera", comment: ""),
+            tint: Color.CT.textDim,
+            action: onSwitchCamera
         )
     }
 

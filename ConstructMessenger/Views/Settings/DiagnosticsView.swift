@@ -32,6 +32,7 @@ struct DiagnosticsView: View {
     /// The transcript path. Sampled once per chat push, so this lands on the *next* chat you open,
     /// not on the one behind this screen.
     @State private var ownedInsetStackEnabled = ChatViewportConfiguration.ownedInsetStackEnabled
+    @AppStorage(CallsFeature.videoSwitchKey) private var videoCallsEnabled = false
 
     /// What is holding the stream cursor back right now, sampled when the screen appears.
     @State private var heldEntry: (messageId: String, state: String, age: TimeInterval)?
@@ -203,6 +204,19 @@ struct DiagnosticsView: View {
                             .onChange(of: ownedInsetStackEnabled) { _, on in
                                 ChatViewportConfiguration.ownedInsetStackEnabled = on
                             }
+                            Toggle(isOn: $videoCallsEnabled) {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(LocalizedStringKey("diagnostics_video_calls_title"))
+                                        .font(CTFont.mono(14))
+                                        .foregroundStyle(.orange)
+                                    Text(LocalizedStringKey("diagnostics_video_calls_hint"))
+                                        .font(CTFont.mono(11))
+                                        .foregroundStyle(Color.CT.textDim)
+                                }
+                            }
+                            .tint(.orange)
+                            .padding(.horizontal, SettingsLayout.rowHorizontalPadding)
+                            .padding(.vertical, SettingsLayout.rowVerticalPadding)
                             Toggle(isOn: $stealthOverrideEnabled) {
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(LocalizedStringKey("diagnostics_stealth_override_title"))

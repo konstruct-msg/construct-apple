@@ -4,7 +4,7 @@
    seven prompts until 2026-08-16. */
 
 "CFBundleDisplayName" = "Կոնստրուկտ";
-"NSCameraUsageDescription" = "Konstruct uses the camera to scan invite QR codes and to capture photos and videos for your messages.";
+"NSCameraUsageDescription" = "Konstruct uses the camera to scan invite QR codes, to capture photos and videos for your messages, and for video calls.";
 "NSPhotoLibraryUsageDescription" = "Konstruct needs access to your photo library so you can attach photos and videos to messages.";
 "NSPhotoLibraryAddUsageDescription" = "Konstruct saves photos and videos to your library when you choose to save them from a chat.";
 "NSMicrophoneUsageDescription" = "Konstruct uses the microphone to record voice messages and make encrypted calls.";
