@@ -236,9 +236,8 @@ enum ChatUIConstants {
         static let switchCancelMargin = HoldSwitch.cancelMargin
     }
 
-    /// Hold a button, slide to the second choice, let go: the composer's mic ↔ camera
-    /// (`MicModeButton`, upwards) and the header's call ↔ video call (`CallModeButton`,
-    /// downwards). One gesture, so one set of numbers.
+    /// Hold a button, slide to a choice, let go: the composer's mic ↔ camera (`MicModeButton`)
+    /// and the header's action palette (`ChatActionButton`). One gesture, so one hold delay.
     enum HoldSwitch {
         static let pressDelay: Duration = .milliseconds(350)
         /// Length of each segment along the direction the switch opens; it is two of them.

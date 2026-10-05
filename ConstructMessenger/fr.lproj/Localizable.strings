@@ -253,6 +253,10 @@
 "user_not_found" = "Utilisateur introuvable";
 "failed_to_encode_profile" = "Échec de l'encodage du profil";
 "search_messages" = "Rechercher des messages";
+"chat_actions" = "Actions";
+"chat_action_search" = "Rechercher";
+"chat_action_call" = "Appeler";
+"chat_action_video" = "Vidéo";
 "select" = "Sélectionner";
 "select_messages" = "Sélectionner des messages";
 "delete_selected" = "Supprimer la sélection";

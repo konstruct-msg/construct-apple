@@ -253,6 +253,10 @@
 "user_not_found" = "Օգտատերը չի գտնվել";
 "failed_to_encode_profile" = "Չհաջողվեց կոդավորել պրոֆիլը";
 "search_messages" = "Որոնել հաղորդագրություններում";
+"chat_actions" = "Գործողություններ";
+"chat_action_search" = "Որոնում";
+"chat_action_call" = "Զանգ";
+"chat_action_video" = "Տեսազանգ";
 "select" = "Ընտրել";
 "select_messages" = "Ընտրել հաղորդագրություններ";
 "delete_selected" = "Ջնջել ընտրվածները";
