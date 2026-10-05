@@ -56,6 +56,13 @@ final class ContactLinkService {
     ) throws -> User {
         guard !userId.isEmpty else { throw ContactLinkError.emptyUserId }
 
+        // Making someone a contact is the user's own act (scan, accept, our invite redeemed), so
+        // an earlier prune stops shielding. The inviter side used to leave the flag set: it
+        // opened the session itself, the peer answered with mid-ratchet traffic only, and
+        // `MessageRouter` dropped all of it as "from deleted contact" — no handshake ever
+        // arrived to clear it (2026-10-05, one-way chat after delete and re-add).
+        DeletedContactsStore.shared.remove(userId)
+
         let fetchRequest = User.fetchRequest()
         fetchRequest.predicate = NSPredicate(format: "id == %@", userId)
         fetchRequest.fetchLimit = 1
