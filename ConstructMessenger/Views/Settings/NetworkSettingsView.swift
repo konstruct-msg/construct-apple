@@ -616,7 +616,7 @@ struct NetworkSettingsView: View {
 
     private var statusColor: Color {
         switch connectionManager.connectionStatus {
-        case .connected:    return Color.CT.accent
+        case .connected:    return Color.CT.online
         case .disconnected: return Color.CT.danger
         case .connecting:   return .orange
         case .unknown:      return Color.CT.textDim

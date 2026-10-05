@@ -65,6 +65,8 @@ final class AudioPlayerService: NSObject, ObservableObject {
     // MARK: - Private playback
 
     private func play(mediaId: String, data: Data) {
+        // One sound at a time: a video note playing in place folds back.
+        VideoNotePlayback.shared.collapse()
         do {
             activateSession()
             let p = try AVAudioPlayer(data: data)

@@ -560,6 +560,7 @@
 "photo" = "Photo";
 "video" = "Vidéo";
 "video_note" = "Note vidéo";
+"video_note_full_screen" = "Plein écran";
 "video_note_record" = "Enregistrer une note vidéo";
 "video_note_pause" = "Pause";
 "video_note_resume" = "Reprendre l’enregistrement";

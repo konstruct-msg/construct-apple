@@ -278,13 +278,16 @@ struct MessageBubbleRegularView: View {
             // Guard non-finite / tiny container widths from mid-layout geometry passes
             // (they produce "Invalid frame dimension" in the layout engine).
             .frame(
-                maxWidth: max(
-                    ChatUIConstants.Bubble.minColumnWidth,
-                    (containerWidth.isFinite
-                        ? containerWidth
-                        : ChatUIConstants.Bubble.defaultContainerWidth)
-                        * ChatUIConstants.Bubble.maxWidthFraction
-                ),
+                maxWidth: VideoNotePlayback.shared.expanded?.messageId == message.id
+                    // A video note playing in place is wider than any other bubble on purpose.
+                    ? ChatUIConstants.VideoNote.expandedWidth(in: containerWidth)
+                    : max(
+                        ChatUIConstants.Bubble.minColumnWidth,
+                        (containerWidth.isFinite
+                            ? containerWidth
+                            : ChatUIConstants.Bubble.defaultContainerWidth)
+                            * ChatUIConstants.Bubble.maxWidthFraction
+                    ),
                 alignment: message.isSentByMe ? .trailing : .leading
             )
             .contentShape(.interaction, Rectangle())

@@ -193,6 +193,16 @@ enum ChatUIConstants {
         /// Narrower than a photo (`MediaPreviewLayout.maxWidth` 260): it is a message, not a
         /// picture to look at, and at 3:4 it already stands taller than a photo row.
         static let width: CGFloat = 200
+        /// Expanded in place while it plays with sound: the row less the opposite side's gutter
+        /// and the edge padding, so the chat stays visible beside and around it.
+        static func expandedWidth(in containerWidth: CGFloat) -> CGFloat {
+            let container = containerWidth.isFinite && containerWidth > 0
+                ? containerWidth : Bubble.defaultContainerWidth
+            return min(maxExpandedWidth, max(width, container - Bubble.sideGutter - 2 * CTLayout.edgePad))
+        }
+        /// An iPad row is wide; past this the note is a poster, not a message.
+        static let maxExpandedWidth: CGFloat = 480
+        static let expandDuration: TimeInterval = 0.35
         /// The recorded shape. A note from a client that did not record 3:4 keeps its own.
         static let aspectRatio: CGFloat = 3.0 / 4.0
         static let chipIconSize: CGFloat = 10

@@ -325,6 +325,15 @@ struct ChatView: View {
             }
         }
         .onDisappear(perform: handleViewDisappear)
+        // A video note expanding in place grows downward; bring the whole of it into view.
+        .onChange(of: VideoNotePlayback.shared.expanded) { _, key in
+            guard let key else { return }
+            Task { @MainActor in
+                try? await Task.sleep(for: .seconds(ChatUIConstants.VideoNote.expandDuration))
+                guard VideoNotePlayback.shared.expanded == key else { return }
+                viewport.scrollTo(messageId: key.messageId, anchor: .center, animated: true)
+            }
+        }
         // Messages that arrive while the chat is open behind a locked or backgrounded app are
         // counted unread, rightly. Coming back shows them in this chat, and appear does not fire
         // again — so without this the count outlived the reading and showed on the list.
@@ -1179,6 +1188,7 @@ struct ChatView: View {
         replyFocusPeekTask?.cancel()
         replyFocusPeekTask = nil
         isOnScreen = false
+        VideoNotePlayback.shared.collapse()
         guard !isPreviewRuntime else { return }
         // Whatever arrived while this chat was on screen has been seen.
         markChatAsRead()

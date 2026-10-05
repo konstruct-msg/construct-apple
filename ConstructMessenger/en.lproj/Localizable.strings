@@ -603,6 +603,7 @@
 "photo" = "Photo";
 "video" = "Video";
 "video_note" = "Video note";
+"video_note_full_screen" = "Full screen";
 "video_note_record" = "Record video note";
 "video_note_pause" = "Pause";
 "video_note_resume" = "Resume recording";

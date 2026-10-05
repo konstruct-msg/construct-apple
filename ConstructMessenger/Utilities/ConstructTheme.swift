@@ -70,6 +70,13 @@ extension Color {
         static let noise      = Color(dark: 0x1E1E1E, light: 0xC8C8C8)
         /// Destructive actions: #DC3C3C (unchanged)
         static let danger     = Color(hex: 0xDC3C3C)
+
+        // MARK: Status
+        /// Connected and holding: the connection dot and the network status. Dark: #30D158 /
+        /// Light: #248A3D — the platform's green and its high-contrast variant, since a status is
+        /// the platform's to colour. The light value is the accessible one because a dot on #F2F2F2
+        /// needs 3:1 and #34C759 gives about 2.0 (#248A3D: 3.9). **Status only — never a control or text.**
+        static let online     = Color(dark: 0x30D158, light: 0x248A3D)
     }
 }
 

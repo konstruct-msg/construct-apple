@@ -8,7 +8,7 @@ import SwiftUI
 /// Compact connection indicator for the chat-list header — a single dot, no text.
 ///
 /// - **Connecting** (incl. cold start / unknown): a soft pulsing dot.
-/// - **Connected**: a steady accent dot with a soft glow. It stays — the dot is how the person
+/// - **Connected**: a steady green dot (`Color.CT.online`) with a soft glow. It stays — the dot is how the person
 ///   sees they are online and everything works; a dot that faded out read as "something went".
 /// - **Disconnected**: a steady danger dot — but only *after* a first successful connect, so a
 ///   cold start reads as "connecting", never a scary "Disconnected" flash.
@@ -36,7 +36,7 @@ struct ConnectionStatusIndicator: View {
 
     private var dotColor: Color {
         switch displayState {
-        case .connected:    return Color.CT.accent
+        case .connected:    return Color.CT.online
         case .connecting:   return Color.CT.textDim
         case .disconnected: return Color.CT.danger.opacity(0.8)
         case .paused:       return Color.CT.textDim.opacity(0.45)
@@ -49,7 +49,7 @@ struct ConnectionStatusIndicator: View {
             .frame(width: 8, height: 8)
             .scaleEffect(dotScale)
             .opacity(dotOpacity)
-            .shadow(color: displayState == .connected ? Color.CT.accent.opacity(0.7) : .clear, radius: 4)
+            .shadow(color: displayState == .connected ? Color.CT.online.opacity(0.7) : .clear, radius: 4)
             .animation(.easeInOut(duration: 0.4), value: dotColor)
             .onAppear { apply(displayState) }
             .onChange(of: connectionManager.connectionStatus) { _, newStatus in
@@ -70,7 +70,7 @@ struct ConnectionStatusIndicator: View {
             }
 
         case .connected:
-            // Stop the pulse and settle to a full accent dot.
+            // Stop the pulse and settle to a full green dot.
             withAnimation(.easeOut(duration: 0.35)) {
                 dotScale = 1
                 dotOpacity = 1

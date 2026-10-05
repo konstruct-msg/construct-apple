@@ -70,7 +70,7 @@ struct MediaMessageView: View {
                     itemIndex: 0,
                     isPlaceholder: isPlaceholder,
                     isSelected: isSelected,
-                    onTap: { if !isPlaceholder { onTapFullScreen?(0) } }
+                    onOpenFullScreen: { if !isPlaceholder { onTapFullScreen?(0) } }
                 )
             } else if itemCount <= 1 {
                 SingleMediaCell(
