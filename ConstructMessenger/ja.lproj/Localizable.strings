@@ -234,6 +234,10 @@
 "user_not_found" = "ユーザーが見つかりません";
 "failed_to_encode_profile" = "アイデンティティ情報のエンコードに失敗しました";
 "search_messages" = "メッセージを検索";
+"chat_actions" = "アクション";
+"chat_action_search" = "検索";
+"chat_action_call" = "通話";
+"chat_action_video" = "ビデオ";
 "select" = "選択";
 "select_messages" = "メッセージを選択";
 "delete_selected" = "選択した項目を削除";
