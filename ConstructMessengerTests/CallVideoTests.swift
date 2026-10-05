@@ -29,6 +29,29 @@ final class CallVideoTests: XCTestCase {
         XCTAssertFalse(state.announcedCameraOn)
     }
 
+    /// The build 716 desync: the callee turns the camera on and the caller must hear of it.
+    /// Mutation: read "before" after the change in `apply` — this returns nil and the caller keeps
+    /// showing the callee's avatar.
+    func testTurningTheCameraOnIsAnnounced() {
+        var state = CallVideoState(canSend: true)
+        XCTAssertEqual(state.apply({ $0.localCameraOn = true }, canSend: true), true)
+        XCTAssertEqual(state.apply({ $0.localCameraOn = false }, canSend: true), false)
+    }
+
+    /// A flip changes nothing the peer shows; nothing is sent.
+    func testAFlipIsNotAnnounced() {
+        var state = CallVideoState(canSend: true, localCameraOn: true)
+        XCTAssertNil(state.apply({ $0.facing = $0.facing.flipped }, canSend: true))
+    }
+
+    /// The callee's sender appears with the offer: a camera asked for before then is announced
+    /// when the sender arrives.
+    func testASenderArrivingWithTheCameraOnIsAnnounced() {
+        var state = CallVideoState(canSend: false)
+        XCTAssertNil(state.apply({ $0.localCameraOn = true }, canSend: false))
+        XCTAssertEqual(state.apply({ _ in }, canSend: true), true)
+    }
+
     /// An older client never sends `MediaUpdate`; its avatar is what it is sending.
     func testThePeerStartsWithTheCameraOff() {
         XCTAssertFalse(CallVideoState().remoteCameraOn)

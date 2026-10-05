@@ -44,6 +44,20 @@ struct CallVideoState: Equatable {
     /// What the peer is told. The camera the person turned on but the system took away counts as
     /// off — otherwise the peer watches a frozen frame for as long as we are in the background.
     var announcedCameraOn: Bool { canSend && localCameraOn && !isInBackground }
+
+    /// Apply a change to our side, with `canSend` as the session now has it, and return what the
+    /// peer must be told — the new announced state — or nil when that did not change.
+    ///
+    /// "Before" is read here, before the change, and nowhere else. Until 2026-10-05 the button
+    /// changed the state first and a helper read "before" afterwards, so the two always matched:
+    /// a callee who turned the camera on was never announced, and the caller saw their avatar
+    /// while they saw themselves (two devices, build 716).
+    mutating func apply(_ change: (inout CallVideoState) -> Void, canSend: Bool?) -> Bool? {
+        let before = announcedCameraOn
+        change(&self)
+        if let canSend { self.canSend = canSend }
+        return announcedCameraOn == before ? nil : announcedCameraOn
+    }
 }
 
 /// The camera half of `MediaUpdate`. The proto has room for audio and screen too; neither is sent
