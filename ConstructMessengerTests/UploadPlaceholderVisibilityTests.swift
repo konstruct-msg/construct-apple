@@ -105,7 +105,7 @@ final class UploadPlaceholderVisibilityTests: XCTestCase {
         )
 
         guard let message = visibleMessages(in: chat).first,
-              let parsed = parseMediaContent(from: message.displayText) else {
+              let parsed = parseMediaContent(from: message.legacyBody) else {
             return XCTFail("Placeholder did not parse as media content")
         }
         XCTAssertEqual(parsed.caption, "album")
@@ -130,7 +130,7 @@ final class UploadPlaceholderVisibilityTests: XCTestCase {
             in: context
         )
 
-        let parsed = visibleMessages(in: chat).first.flatMap { parseMediaContent(from: $0.displayText) }
+        let parsed = visibleMessages(in: chat).first.flatMap { parseMediaContent(from: $0.legacyBody) }
         XCTAssertEqual(parsed?.caption, #"say "hi" \ ok"#)
     }
 
@@ -164,7 +164,7 @@ final class UploadPlaceholderVisibilityTests: XCTestCase {
         let rows = visibleMessages(in: chat)
         XCTAssertEqual(rows.count, 2)
         for row in rows {
-            XCTAssertTrue(UploadPlaceholderBody.isSentinel(row.displayText), row.displayText)
+            XCTAssertTrue(UploadPlaceholderBody.isSentinel(row.legacyBody), row.legacyBody)
             XCTAssertNil(
                 MessageRetryManager.recoverWirePlaintext(for: row),
                 "retry would send this JSON as the message text"

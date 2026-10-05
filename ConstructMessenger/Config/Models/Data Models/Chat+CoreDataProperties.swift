@@ -117,7 +117,7 @@ extension Chat {
 
         let rows = (try? ctx.fetch(req)) ?? []
         let newest = rows.first { msg in
-            // Cheap type check first; displayText decrypt only for tip candidates.
+            // Cheap type check first; legacyBody decrypt only for tip candidates.
             if msg.contentType.isEphemeral { return false }
             if msg.isServiceArtifact || msg.isControlArtifact { return false }
             return true

@@ -206,7 +206,7 @@ struct GalleryEntry: Identifiable {
     /// Expand each message into per-item entries. Images and videos are shown; audio is skipped.
     static func expand(_ messages: [Message]) -> [GalleryEntry] {
         messages.flatMap { msg -> [GalleryEntry] in
-            guard let mc = parseMediaContent(from: msg.displayText), !mc.mediaItems.isEmpty else {
+            guard let mc = parseMediaContent(from: msg.legacyBody), !mc.mediaItems.isEmpty else {
                 return [GalleryEntry(id: "\(msg.id)_0", message: msg, itemIndex: 0, mediaItem: [:])]
             }
             return mc.mediaItems.enumerated().compactMap { idx, item in
@@ -215,7 +215,7 @@ struct GalleryEntry: Identifiable {
                    !mimeType.hasPrefix("image/"), !mimeType.hasPrefix("video/") { return nil }
                 return GalleryEntry(id: "\(msg.id)_\(idx)", message: msg, itemIndex: idx, mediaItem: item)
             }
-        }.filter { !$0.mediaItem.isEmpty || parseMediaContent(from: $0.message.displayText) == nil }
+        }.filter { !$0.mediaItem.isEmpty || parseMediaContent(from: $0.message.legacyBody) == nil }
     }
 
     var isVideo: Bool { (mediaItem["mediaType"] as? String)?.hasPrefix("video/") == true }
@@ -583,8 +583,8 @@ struct MediaGalleryPage: View {
         // Download using mediaItem dict (already extracted from JSON by caller); for our own sends
         // this resolves from cache without touching the network.
         let item = mediaItem.isEmpty
-            ? (parseMediaContent(from: message.displayText)?.mediaItems.indices.contains(itemIndex) == true
-               ? parseMediaContent(from: message.displayText)!.mediaItems[itemIndex]
+            ? (parseMediaContent(from: message.legacyBody)?.mediaItems.indices.contains(itemIndex) == true
+               ? parseMediaContent(from: message.legacyBody)!.mediaItems[itemIndex]
                : [:])
             : mediaItem
 
@@ -743,8 +743,8 @@ struct GalleryVideoPage: View {
         }
 
         let item = mediaItem.isEmpty
-            ? (parseMediaContent(from: message.displayText)?.mediaItems.indices.contains(itemIndex) == true
-               ? parseMediaContent(from: message.displayText)!.mediaItems[itemIndex]
+            ? (parseMediaContent(from: message.legacyBody)?.mediaItems.indices.contains(itemIndex) == true
+               ? parseMediaContent(from: message.legacyBody)!.mediaItems[itemIndex]
                : [:])
             : mediaItem
 

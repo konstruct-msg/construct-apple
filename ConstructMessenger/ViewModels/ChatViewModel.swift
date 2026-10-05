@@ -171,19 +171,19 @@ class ChatViewModel {
     func playNextVoiceIfContinuous(after finishedMediaId: String) {
         guard UserDefaults.standard.bool(forKey: Self.continuousVoicePlaybackKey) else { return }
         guard let idx = messages.firstIndex(where: {
-            parseVoiceContent(from: $0.displayText)?.mediaId == finishedMediaId
+            parseVoiceContent(from: $0.legacyBody)?.mediaId == finishedMediaId
         }) else { return }
 
         // First voice message strictly after the one that just finished.
         var nextMessage: Message?
         for message in messages[messages.index(after: idx)...] {
-            if parseVoiceContent(from: message.displayText) != nil {
+            if parseVoiceContent(from: message.legacyBody) != nil {
                 nextMessage = message
                 break
             }
         }
         guard let nextMessage,
-              let next = parseVoiceContent(from: nextMessage.displayText) else { return }  // last voice → stop.
+              let next = parseVoiceContent(from: nextMessage.legacyBody) else { return }  // last voice → stop.
 
         // Follow playback: ask the view to scroll the now-playing message into view.
         voicePlaybackScrollTarget = nextMessage.id

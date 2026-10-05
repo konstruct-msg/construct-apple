@@ -419,7 +419,7 @@ class MessageRetryManager {
             .filter {
                 OutgoingWirePayloadStore.shared.loadChunks(baseMessageId: $0.id) == nil
                     && $0.hasDecryptedContent
-                    && !UploadPlaceholderBody.isSentinel($0.displayText)
+                    && !UploadPlaceholderBody.isSentinel($0.legacyBody)
             }
             .map { $0.id }
 
@@ -609,7 +609,7 @@ class MessageRetryManager {
     /// object on the main thread.
     nonisolated static func recoverWirePlaintext(for message: Message) -> Data? {
         guard message.contentType != .media else { return nil }
-        let text = message.displayText
+        let text = message.legacyBody
         guard !text.isEmpty, !MessageContentType.isControlPayload(text) else { return nil }
         // An upload placeholder is `.regular` and its decrypted body is non-empty, so without
         // this it is a text message whose text is the sentinel JSON.
@@ -769,7 +769,7 @@ class MessageRetryManager {
         sendable.reserveCapacity(messages.count)
         var retired = 0
         for message in messages {
-            if UploadPlaceholderBody.isSentinel(message.displayText),
+            if UploadPlaceholderBody.isSentinel(message.legacyBody),
                let stored = StuckSend.write(
                    disposition: .retirePlaceholder,
                    retryCount: message.retryCount,
@@ -796,7 +796,7 @@ class MessageRetryManager {
         var pendingIds: [String] = []
         pendingIds.reserveCapacity(messages.count)
 
-        for message in messages where message.hasDecryptedContent && !UploadPlaceholderBody.isSentinel(message.displayText) {
+        for message in messages where message.hasDecryptedContent && !UploadPlaceholderBody.isSentinel(message.legacyBody) {
             guard OutgoingWirePayloadStore.shared.loadChunks(baseMessageId: message.id) != nil else {
                 switch message.deliveryStatus {
                 case .queued:

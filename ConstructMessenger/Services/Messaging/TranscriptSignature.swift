@@ -42,7 +42,7 @@ enum TranscriptSignature {
     /// - `serverOrderKey` — a changed order key re-sorts the fetch, which changes the id order,
     ///   which this signature does capture. `timestamp` remains display metadata only.
     ///
-    /// Known gap, stated rather than hidden: `ChatView.filteredMessages` filters on `displayText`
+    /// Known gap, stated rather than hidden: `ChatView.filteredMessages` filters on `legacyBody`
     /// while a search is active. An edit that changes text without changing the row set will not
     /// re-run that filter until the next structural change. That is a stale search result on an
     /// edited message, against four full-array rebuilds per message on every long chat.

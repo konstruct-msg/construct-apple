@@ -21,7 +21,7 @@ struct QuoteSelectionSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var selectedText: String = ""
 
-    private var fullText: String { message.displayText }
+    private var fullText: String { message.readableText }
 
     var body: some View {
         VStack(spacing: 0) {

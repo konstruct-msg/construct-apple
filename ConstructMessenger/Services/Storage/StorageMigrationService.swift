@@ -80,7 +80,7 @@ final class StorageMigrationService {
     /// `binary_init`, …) that leaked into the transcript and were persisted *encrypted at
     /// rest* (`contentKeyRef != nil`, `decryptedContent == nil`). The legacy `migrateBatch`
     /// pass cannot see these — its predicate matches only unencrypted rows — so a delivery
-    /// like `session_ready_<UUID>` would render as a bubble forever. We decrypt `displayText`
+    /// like `session_ready_<UUID>` would render as a bubble forever. We decrypt `legacyBody`
     /// for already-migrated, regular-typed rows and delete any control artifact.
     /// Guarded by a UserDefaults flag so the (decrypt-per-row) scan runs only once.
     nonisolated private func cleanupLeakedControlRows(in context: NSManagedObjectContext) {
@@ -98,7 +98,7 @@ final class StorageMigrationService {
         }
 
         var deleted = 0
-        for message in messages where MessageContentType.isControlPayload(message.displayText) {
+        for message in messages where MessageContentType.isControlPayload(message.legacyBody) {
             context.delete(message)
             deleted += 1
         }

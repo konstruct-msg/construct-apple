@@ -1755,7 +1755,7 @@ final class MessageRouter {
         ]
         fetch.fetchLimit = 1
         guard let last = try? context.fetch(fetch).first else { return false }
-        return last.fromUserId == "SYSTEM" && last.displayText == text
+        return last.fromUserId == "SYSTEM" && last.legacyBody == text
     }
 
     #if DEBUG
@@ -1886,7 +1886,7 @@ final class MessageRouter {
             do {
                 if let replyMsg = try context.fetch(replyFetch).first {
                     message.replyQuote = ReplyPreviewPayload.projecting(
-                        originalContent: replyMsg.displayText
+                        originalContent: replyMsg.legacyBody
                     )?.storedContent
                 }
             } catch {

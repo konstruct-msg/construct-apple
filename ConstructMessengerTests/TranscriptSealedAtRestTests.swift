@@ -124,6 +124,6 @@ final class TranscriptSealedAtRestTests: XCTestCase {
         XCTAssertEqual(key, keyBefore, "one key for the row's life")
         XCTAssertEqual(String(data: try MessageStorageCrypto.decrypt(ciphertext: try XCTUnwrap(message.encryptedTranscript), key: key), encoding: .utf8), said)
         XCTAssertEqual(String(data: try MessageStorageCrypto.decrypt(ciphertext: try XCTUnwrap(message.encryptedReplyQuote), key: key), encoding: .utf8), "the question")
-        XCTAssertEqual(message.displayText, "an edited body")
+        XCTAssertEqual(message.legacyBody, "an edited body")
     }
 }

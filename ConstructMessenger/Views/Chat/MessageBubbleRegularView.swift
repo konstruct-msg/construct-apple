@@ -68,18 +68,18 @@ struct MessageBubbleRegularView: View {
     var body: some View {
         // Parse once per body pass to avoid repeated JSON decode attempts.
         // The sticker is asked first and typed: it has no text form, so no parser below would
-        // find it, and `displayText` is empty for it on purpose.
+        // find it, and `legacyBody` is empty for it on purpose.
         let sticker = message.stickerReference
-        let profileData = sticker == nil ? MessageBubbleContentParsing.parseProfileMessage(message.displayText) : nil
-        let mediaContent = (sticker == nil && profileData == nil) ? MessageBubbleContentParsing.parseMediaMessage(message.displayText) : nil
-        let fileContent = (profileData == nil && mediaContent == nil) ? MessageBubbleContentParsing.parseFileMessage(message.displayText) : nil
-        let voiceContent = (profileData == nil && mediaContent == nil && fileContent == nil) ? MessageBubbleContentParsing.parseVoiceMessage(message.displayText) : nil
+        let profileData = sticker == nil ? MessageBubbleContentParsing.parseProfileMessage(message.legacyBody) : nil
+        let mediaContent = (sticker == nil && profileData == nil) ? MessageBubbleContentParsing.parseMediaMessage(message.legacyBody) : nil
+        let fileContent = (profileData == nil && mediaContent == nil) ? MessageBubbleContentParsing.parseFileMessage(message.legacyBody) : nil
+        let voiceContent = (profileData == nil && mediaContent == nil && fileContent == nil) ? MessageBubbleContentParsing.parseVoiceMessage(message.legacyBody) : nil
         let hasActionableText = MessageBubbleContentParsing.carriesActionableText(
             isProfile: profileData != nil,
             isMedia: mediaContent != nil,
             isFile: fileContent != nil,
             isVoice: voiceContent != nil,
-            text: message.displayText
+            text: message.legacyBody  // parser input: decides, never shown
         )
 
         HStack(spacing: ChatUIConstants.Bubble.rowSpacing) {
@@ -189,7 +189,7 @@ struct MessageBubbleRegularView: View {
                         replyIndicatorView
 
                         VStack(alignment: .leading, spacing: ChatUIConstants.Bubble.stackSpacing) {
-                            let text = message.displayText
+                            let text = message.readableText
                             if text.isEmpty {
                                 Text((NSLocalizedString("message_unavailable", comment: "")))
                                     .font(CTFont.message(ChatUIConstants.Typography.messageTextSize))
@@ -328,7 +328,7 @@ struct MessageBubbleRegularView: View {
                     }
 
                     if let onReplyWithQuote, hasActionableText {
-                        Button { onReplyWithQuote(message, message.displayText) } label: {
+                        Button { onReplyWithQuote(message, message.readableText) } label: {
                             Label(NSLocalizedString("quote_reply", comment: ""), systemImage: "text.quote")
                         }
                     }
@@ -352,7 +352,7 @@ struct MessageBubbleRegularView: View {
                     }
 
                     if hasActionableText {
-                        Button { PlatformClipboard.copy(message.displayText) } label: {
+                        Button { PlatformClipboard.copy(message.readableText) } label: {
                             Label("copy", systemImage: "doc.on.doc")
                         }
                     }
