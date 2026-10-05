@@ -435,7 +435,7 @@ final class ChatSendCoordinator {
             "\($0.emoji) \(NSLocalizedString("sticker", comment: ""))"
         }
         ReplyPreviewPayload.projecting(
-            originalContent: reply.displayText,
+            originalContent: reply.legacyBody,
             textOverride: replyToContentOverride ?? stickerLine
         )?.apply(to: &quoted)
         return quoted
@@ -990,7 +990,7 @@ final class ChatSendCoordinator {
               let currentUserId = AuthSessionManager.shared.currentUserId else { return }
         // For a media message, editing the caption must rebuild the album (binary wire +
         // local JSON) — sending plain text would replace the descriptor and destroy the media.
-        // Read displayText here (current actor) before hopping onto the Task.
+        // Read legacyBody here (current actor) before hopping onto the Task.
         let storedPayload = MessageDisplayCache.shared.payloadData(for: message)
         let mediaEdit = MediaWireCodec.editedCaptionPayload(storedPlaintext: storedPayload, newCaption: newText)
         Task { [weak self] in
@@ -1074,8 +1074,8 @@ final class ChatSendCoordinator {
             onError: { [weak self] error in
                 guard let self else { return }
                 if error == "payload_expired" {
-                    let text = message.displayText
-                    guard !text.isEmpty else { return }
+                    // Text only: a media row's body would go out as a bubble of JSON.
+                    guard let text = message.plainText, !text.isEmpty else { return }
                     Log.info("Retry: payload expired — sending '\(text.prefix(20))…' as fresh message", category: "ChatViewModel")
                     // Remove the orphaned failed placeholder before re-sending under a new
                     // message ID — otherwise the original lingers and the chat shows two

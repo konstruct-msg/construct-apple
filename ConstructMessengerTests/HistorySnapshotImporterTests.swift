@@ -256,6 +256,6 @@ final class HistorySnapshotImporterTests: XCTestCase {
     }
 
     private func payloadString(of id: String) throws -> String {
-        try XCTUnwrap(fetchMessage(id)).displayText
+        try XCTUnwrap(fetchMessage(id)).legacyBody
     }
 }

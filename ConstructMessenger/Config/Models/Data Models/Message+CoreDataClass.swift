@@ -14,17 +14,31 @@ public class Message: NSManagedObject {
 
     // MARK: - Display
 
-    /// Decrypted message text, suitable for UI display.
+    /// The stored body as the bubble parsers read it: text as is, media, voice and files as the
+    /// legacy JSON (`LocalMessagePayload.displayString`). **Not for a person to read** — this was
+    /// `displayText` until 2026-10-05, and the name sent that JSON to the edit banner, copy, quote
+    /// and search. A person reads `readableText`; a resend sends `plainText`.
     ///
     /// Resolution order:
     /// 1. In-memory `MessageDisplayCache` (O(1))
     /// 2. Legacy `decryptedContent` field (unmigrated rows)
     /// 3. On-demand decrypt via `MessageKeyStore` + `MessageStorageCrypto`
-    var displayText: String {
+    var legacyBody: String {
         MessageDisplayCache.shared.plaintext(for: self)
     }
 
-    /// What the chat list shows for this row. From the stored payload, not from `displayText`:
+    /// The words in this message: its text, or a media message's caption; empty for voice,
+    /// stickers and profiles. What is shown, copied, quoted, edited and searched.
+    var readableText: String {
+        MessageDisplayCache.shared.payload(for: self).readableText
+    }
+
+    /// The text of a text message, or nil. The only thing that may be sent again as text.
+    var plainText: String? {
+        MessageDisplayCache.shared.payload(for: self).plainText
+    }
+
+    /// What the chat list shows for this row. From the stored payload, not from `legacyBody`:
     /// a sticker's text form is empty on purpose, and a preview recomputed from it read as a row
     /// with no last message. Every writer of `Chat.lastMessageText` that looks at a row goes
     /// through this, so the send path, the receive path and the reconcilers agree.
@@ -33,7 +47,7 @@ public class Message: NSManagedObject {
     }
 
     /// The sticker this row carries, or nil. The bubble asks this before it parses anything —
-    /// a sticker has no text form, and `displayText` is empty for it on purpose.
+    /// a sticker has no text form, and `legacyBody` is empty for it on purpose.
     var stickerReference: StickerReference? {
         MessageDisplayCache.shared.payload(for: self).stickerReference
     }
@@ -50,7 +64,7 @@ public class Message: NSManagedObject {
     /// never render as a chat bubble. Cheap string pre-check gates the JSON parse so
     /// normal messages cost almost nothing.
     var isServiceArtifact: Bool {
-        let text = displayText
+        let text = legacyBody
         guard text.hasPrefix("{"), text.contains("\"delivery_receipt\"") else { return false }
         guard let data = text.data(using: .utf8),
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
@@ -63,10 +77,10 @@ public class Message: NSManagedObject {
     /// `session_ping`, `binary_init`, `END_SESSION`, …) that leaked into the transcript.
     /// Such rows must never render as a chat bubble. Because messages are encrypted at
     /// rest (`decryptedContent == nil`), Core Data prefix predicates cannot catch these —
-    /// detection runs on the decrypted `displayText`. This is the last-line display guard
+    /// detection runs on the decrypted `legacyBody`. This is the last-line display guard
     /// backing the persist-time `contentTypeRaw` stamping in `applyStoredEncryption`.
     var isControlArtifact: Bool {
-        contentType.isEphemeral || MessageContentType.isControlPayload(displayText)
+        contentType.isEphemeral || MessageContentType.isControlPayload(legacyBody)
     }
 
     // MARK: - Storage Encryption

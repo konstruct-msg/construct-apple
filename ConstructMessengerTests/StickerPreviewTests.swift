@@ -21,7 +21,7 @@ final class StickerPreviewTests: XCTestCase {
         return LocalMessagePayload.storagePayload(forWireContent: c)
     }
 
-    /// Mutation: point `reconcilePreviewFromTranscript` back at `displayText` — the line
+    /// Mutation: point `reconcilePreviewFromTranscript` back at `legacyBody` — the line
     /// becomes "" and this reddens.
     func testReconcileFromTranscriptKeepsTheStickerLine() throws {
         let container = PersistenceController(inMemory: true).container
@@ -40,7 +40,7 @@ final class StickerPreviewTests: XCTestCase {
         row.applyStoredEncryption(plaintextData: stickerPayload(), contactId: "peer")
         try ctx.save()
 
-        XCTAssertEqual(row.displayText, "", "a sticker has no text form")
+        XCTAssertEqual(row.legacyBody, "", "a sticker has no text form")
         XCTAssertEqual(row.previewText, "🟥 \(NSLocalizedString("sticker", comment: ""))")
 
         chat.clearPreview()

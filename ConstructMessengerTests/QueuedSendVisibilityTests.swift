@@ -78,7 +78,7 @@ final class QueuedSendVisibilityTests: XCTestCase {
         let written = rows(in: chat)
         XCTAssertEqual(written.count, 1, "the send must be on screen while it waits for a session")
         XCTAssertEqual(written.first?.deliveryStatus, .queued)
-        XCTAssertEqual(written.first?.displayText, "погоди, сейчас")
+        XCTAssertEqual(written.first?.legacyBody, "погоди, сейчас")
         XCTAssertEqual(written.first?.isSentByMe, true)
     }
 
@@ -169,7 +169,7 @@ final class QueuedSendVisibilityTests: XCTestCase {
         XCTAssertEqual(coordinator.inMemoryQueueCountForTesting, 0,
                        "text belongs to the Core Data queue only — held in both, the peer gets it twice")
         XCTAssertEqual(rows(in: chat).count, 1)
-        XCTAssertEqual(rows(in: chat).first?.displayText, "single")
+        XCTAssertEqual(rows(in: chat).first?.legacyBody, "single")
     }
 
     /// The converse: media MUST be in memory, because the Core Data flush cannot carry it

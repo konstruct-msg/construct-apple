@@ -106,11 +106,8 @@ struct DesktopChatView: View {
                 }
                 .onChange(of: viewModel.editingMessage) { _, editMsg in
                     if let editMsg {
-                        if let mc = parseMediaContent(from: editMsg.displayText) {
-                            messageText = mc.caption
-                        } else {
-                            messageText = editMsg.displayText
-                        }
+                        // A media message edits its caption.
+                        messageText = editMsg.readableText
                     }
                 }
         
@@ -477,13 +474,14 @@ struct DesktopChatView: View {
     private var filteredMessages: [Message] {
         let valid = viewModel.messages.filter { !$0.isDeleted && $0.managedObjectContext != nil }
         guard !searchText.isEmpty else { return valid }
-        return valid.filter { $0.displayText.localizedCaseInsensitiveContains(searchText) }
+        // The words, not the stored body: "mediaId" would match every photo.
+        return valid.filter { $0.readableText.localizedCaseInsensitiveContains(searchText) }
     }
 
     private var mediaMessages: [Message] {
         viewModel.messages.filter {
             guard !$0.isDeleted, $0.managedObjectContext != nil else { return false }
-            if let mc = parseMediaContent(from: $0.displayText) {
+            if let mc = parseMediaContent(from: $0.legacyBody) {
                 return (mc.media["_placeholder"] as? Bool) != true
             }
             return false

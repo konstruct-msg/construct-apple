@@ -224,12 +224,8 @@ struct ChatView: View {
                 }
                 .onChange(of: viewModel.editingMessage) { _, editMsg in
                     if let editMsg {
-                        // For media messages pre-fill with caption, not the raw JSON payload
-                        if let mc = parseMediaContent(from: editMsg.displayText) {
-                            messageText = mc.caption
-                        } else {
-                            messageText = editMsg.displayText
-                        }
+                        // A media message edits its caption.
+                        messageText = editMsg.readableText
                     }
                 }
 
@@ -1042,15 +1038,16 @@ struct ChatView: View {
         if searchText.isEmpty {
             return valid
         }
+        // The words, not the stored body: "mediaId" would match every photo.
         return valid.filter { message in
-            message.displayText.localizedCaseInsensitiveContains(searchText)
+            message.readableText.localizedCaseInsensitiveContains(searchText)
         }
     }
 
     /// All media messages in display order. Upload placeholders are excluded.
     private func mediaMessages(in messages: [Message]) -> [Message] {
         messages.filter {
-            guard let mc = parseMediaContent(from: $0.displayText) else { return false }
+            guard let mc = parseMediaContent(from: $0.legacyBody) else { return false }
             return (mc.media["_placeholder"] as? Bool) != true
         }
     }

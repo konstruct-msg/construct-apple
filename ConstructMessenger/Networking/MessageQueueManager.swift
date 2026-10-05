@@ -60,7 +60,7 @@ class MessageQueueManager {
                 let disposition = StuckSend.disposition(
                     statusIsSending: message.deliveryStatus == .sending,
                     ownedByThisProcess: owned.contains(message.id),
-                    bodyIsUploadSentinel: UploadPlaceholderBody.isSentinel(message.displayText)
+                    bodyIsUploadSentinel: UploadPlaceholderBody.isSentinel(message.legacyBody)
                 )
                 guard let stored = StuckSend.write(
                     disposition: disposition,

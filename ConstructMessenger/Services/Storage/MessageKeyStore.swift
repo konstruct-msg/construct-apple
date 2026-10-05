@@ -73,7 +73,7 @@ final class MessageKeyStore {
     /// Must be used when the caller is about to save a Core Data context that
     /// will persist `contentKeyRef`. If the key write is deferred (async) and
     /// the process is killed before it runs, the message becomes permanently
-    /// unreadable — `hasDecryptedContent` is true but `displayText` returns "".
+    /// unreadable — `hasDecryptedContent` is true but `legacyBody` returns "".
     func storeSync(messageId: String, key: Data, contactId: String) {
         guard !key.isEmpty else { return }
         queue.sync { self.executeStore(messageId: messageId, key: key, contactId: contactId) }

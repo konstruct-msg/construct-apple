@@ -26,14 +26,14 @@ extension MessageBubble {
                 // nothing instead of a literal "System message" placeholder. These
                 // appeared when an ephemeral control message leaked into the transcript
                 // or its at-rest content key was briefly unreadable (see MessageKeyStore).
-                if message.displayText.isEmpty {
+                if message.readableText.isEmpty {
                     EmptyView()
                 } else {
-                    MessageBubbleSystemView(content: message.displayText)
+                    MessageBubbleSystemView(content: message.readableText)
                 }
-            } else if message.displayText.hasPrefix("[SYSTEM]") {
+            } else if message.readableText.hasPrefix("[SYSTEM]") {
                 MessageBubbleSystemView(
-                    content: message.displayText
+                    content: message.readableText
                         .replacingOccurrences(of: "[SYSTEM]", with: "")
                         .trimmingCharacters(in: .whitespaces)
                 )

@@ -669,8 +669,9 @@ final class SessionCoordinator: MessageRouterDelegate {
             Log.info("Resend: \(messageId.prefix(8))… for \(peer) is no message of ours here — not resent", category: "SessionInit")
             return
         }
-        let plaintext = msg.displayText
-        guard !plaintext.isEmpty else {
+        // Text only, and the type says so: a media row's body is the parsers' JSON, and resent
+        // as text it arrives as a bubble of JSON.
+        guard let plaintext = msg.plainText, !plaintext.isEmpty else {
             Log.info("Resend: \(messageId.prefix(8))… has no text to resend", category: "SessionInit")
             return
         }

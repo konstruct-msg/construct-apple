@@ -59,7 +59,7 @@ final class ChatMessageStore: NSObject {
     /// (`decryptedContent == nil`), so the `BEGINSWITH` clauses only catch legacy
     /// unencrypted rows. The authoritative guard is `contentTypeRaw == 0` (stamped at
     /// save time by `applyStoredEncryption`) plus the in-Swift `isControlArtifact` /
-    /// `isServiceArtifact` filter applied to fetched rows, which decrypts `displayText`.
+    /// `isServiceArtifact` filter applied to fetched rows, which decrypts `legacyBody`.
     static let controlMessageFilterPredicate = NSCompoundPredicate(andPredicateWithSubpredicates: [
         NSPredicate(format: "contentTypeRaw == 0"),
         NSPredicate(format: "NOT (decryptedContent BEGINSWITH '__session_ready')"),

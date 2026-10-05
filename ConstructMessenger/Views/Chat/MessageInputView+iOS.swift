@@ -126,13 +126,13 @@ struct IOSMessageInputView: View {
     private var replyOrEditBars: some View {
         if let msg = replyingTo {
             MessageReplyBar(
-                content: quoteOverride ?? (msg.displayText.isEmpty ? nil : msg.displayText),
+                content: quoteOverride ?? (msg.legacyBody.isEmpty ? nil : msg.legacyBody),  // parser input: ReplyPreviewContent reads the shapes
                 messageId: msg.id,
                 onCancel: onCancelReply
             )
         }
         if let msg = editingMessage {
-            MessageEditBar(content: msg.displayText, onCancel: onCancelEdit)
+            MessageEditBar(content: msg.readableText, onCancel: onCancelEdit)
         }
     }
 

@@ -88,7 +88,7 @@ enum MessageContentType: Int16 {
     ///
     /// Prefix-on-`decryptedContent` Core Data predicates cannot enforce this: messages
     /// are encrypted at rest (`decryptedContent == nil`), so filtering must run on the
-    /// decrypted `displayText` in Swift. Keep this list aligned with the discard checks
+    /// decrypted `legacyBody` in Swift. Keep this list aligned with the discard checks
     /// in `MessageRouter` and `SessionCoordinator`.
     static func isControlPayload(_ plaintext: String) -> Bool {
         plaintext.hasPrefix("__session_ping")
