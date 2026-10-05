@@ -37,6 +37,8 @@ final class CallManager: CallUIManaging {
     /// .disconnected` (transient network blip). Resets to `good` on every
     /// new call so a stale value from a previous call never leaks into the UI.
     private(set) var callQuality: CallQuality = .good
+    /// The camera on both sides of the current call. Fresh for every call, like `callQuality`.
+    private(set) var video = CallVideoState()
 
     func clearLastError() { lastError = nil }
 
@@ -156,6 +158,8 @@ final class CallManager: CallUIManaging {
         var stream: SignalStream?
         var turn: Shared_Proto_Signaling_V1_TurnCredentials?
         var webrtc: (any WebRTCSessionProtocol)?
+        /// Asked for with the video button: the camera comes on as soon as there is a sender.
+        var startsWithCamera = false
         var keepaliveTask: Task<Void, Never>?
         var receiveTask: Task<Void, Never>?
         var acceptTask: Task<Void, Never>?
@@ -266,6 +270,16 @@ final class CallManager: CallUIManaging {
         }
         // Audio session lifecycle is owned by CallAudioController; CallKit's
         // didActivate/didDeactivate forward to it directly (see CallKitProvider).
+        NotificationCenter.default.addObserver(
+            forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.setInBackground(true) }
+        }
+        NotificationCenter.default.addObserver(
+            forName: UIApplication.willEnterForegroundNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.setInBackground(false) }
+        }
         #endif
     }
 
@@ -320,6 +334,7 @@ final class CallManager: CallUIManaging {
         )
         begin(session: session, initialState: .dialing(session))
         guard let call = active else { return }
+        call.startsWithCamera = hasVideo && CallsFeature.isVideoEnabled
         #if os(iOS)
         // Arm the ringback tone; it starts once CallKit activates audio.
         CallAudioController.shared.notifyDialing()
@@ -599,6 +614,7 @@ final class CallManager: CallUIManaging {
             throw WebRTCSessionError.invalidState("WebRTC not ready after ensureWebRTC")
         }
         try await webrtc.setRemoteOffer(sdp: sdp)
+        applyCamera()
         active?.pendingRemoteOfferSdp = nil
         active?.awaitingOfferAfterAnswer = false
         active?.offerWaitTimeout?.cancel()
@@ -706,6 +722,76 @@ final class CallManager: CallUIManaging {
         active?.webrtc?.setMuted(muted)
     }
 
+    // MARK: - Camera
+
+    /// Turn the camera on or off. Asks for camera access the first time; a refusal leaves the
+    /// camera off and says why.
+    func setCameraOn(_ on: Bool) {
+        guard CallsFeature.isVideoEnabled, active != nil else { return }
+        #if os(iOS)
+        if on {
+            switch AVCaptureDevice.authorizationStatus(for: .video) {
+            case .authorized:
+                break
+            case .notDetermined:
+                Task { @MainActor [weak self] in
+                    let granted = await AVCaptureDevice.requestAccess(for: .video)
+                    if granted { self?.setCameraOn(true) } else { self?.lastError = NSLocalizedString("call_error_camera_denied", comment: "") }
+                }
+                return
+            default:
+                lastError = NSLocalizedString("call_error_camera_denied", comment: "")
+                return
+            }
+        }
+        #endif
+        video.localCameraOn = on
+        applyCamera()
+    }
+
+    /// The session the video views draw from. Nothing else outside this class needs it.
+    var activeWebRTC: (any WebRTCSessionProtocol)? { active?.webrtc }
+
+    func switchCamera() {
+        guard video.localCameraOn else { return }
+        video.facing = video.facing.flipped
+        active?.webrtc?.setCameraOn(true, facing: video.facing)
+    }
+
+    private func setInBackground(_ background: Bool) {
+        guard active != nil, video.isInBackground != background else { return }
+        let before = video.announcedCameraOn
+        video.isInBackground = background
+        announceCameraIfChanged(from: before)
+    }
+
+    /// Bring the sender in line with `video` and tell the peer if what it should show changed.
+    private func applyCamera() {
+        guard let webrtc = active?.webrtc else { return }
+        let before = video.announcedCameraOn
+        video.canSend = webrtc.canSendVideo
+        webrtc.setCameraOn(video.canSend && video.localCameraOn, facing: video.facing)
+        announceCameraIfChanged(from: before)
+    }
+
+    /// Send `MediaUpdate` when the announced camera state is no longer `previous`. Before media
+    /// connects nothing is sent: `onConnected` says it then.
+    private func announceCameraIfChanged(from previous: Bool) {
+        guard let active, active.mediaConnected, video.announcedCameraOn != previous else { return }
+        sendMediaUpdate(cameraOn: video.announcedCameraOn)
+    }
+
+    private func sendMediaUpdate(cameraOn: Bool) {
+        guard let active else { return }
+        var sig = Shared_Proto_Signaling_V1_WebRTCSignal()
+        sig.callID = active.session.id
+        sig.senderDeviceID = Self.currentDeviceId()
+        sig.timestamp = Self.nowMs()
+        sig.signal = .mediaUpdate(CallVideoSignal.mediaUpdate(cameraOn: cameraOn, atMs: sig.timestamp))
+        sendCallSignalProto(sig, to: active.session.peerUserId)
+        Log.info("Camera \(cameraOn ? "on" : "off") announced (call_id=\(active.session.id.prefix(8))…)", category: "Calls")
+    }
+
     /// End the call identified by `callUUID`.
     ///
     /// - Parameter source: Origin of the end request. Logged so postmortems can
@@ -759,6 +845,7 @@ final class CallManager: CallUIManaging {
         // Nil (don't cancel) so any still-in-flight send from the old call can finish.
         callSignalSendChain = nil
         active = ActiveCall(session: session)
+        video = CallVideoState()
         state = initialState
         if case .incoming = initialState, let active { startUnansweredTimeout(for: active) }
         PerformanceMetrics.shared.start(.callSetupStart, label: String(session.id.prefix(8)))
@@ -1000,6 +1087,7 @@ final class CallManager: CallUIManaging {
 
         active.close()
         self.active = nil
+        video = CallVideoState()
         rememberEnded(callId: session.id)
         clearIdentityKeyCache()
         // Return the signal-send chain to idle. sendHangup() above already chained this
@@ -1167,7 +1255,7 @@ final class CallManager: CallUIManaging {
         guard let active else { throw RPCError(code: .failedPrecondition, message: "No active call") }
         if active.webrtc != nil { return }
 
-        let webrtc = try WebRTCSession(role: role, turn: active.turn)
+        let webrtc = try WebRTCSession(role: role, turn: active.turn, video: CallsFeature.isVideoEnabled)
         webrtc.onLocalIceCandidate = { [weak self] c in
             Task { @MainActor in
                 self?.sendIceCandidate(c)
@@ -1194,6 +1282,9 @@ final class CallManager: CallUIManaging {
                 // ringing-without-answer reaper stops applying (E2EE answer never reaches
                 // the signaling stream). Non-SDP presence signal; note_connected is idempotent.
                 self.sendConnected()
+                // The peer has assumed the camera is off; say otherwise. Again on every
+                // reconnect, which costs one message and covers one lost on the way.
+                if self.video.announcedCameraOn { self.sendMediaUpdate(cameraOn: true) }
                 // Media is up — stop the ringback tone (its AVAudioEngine otherwise
                 // holds the shared .playAndRecord playback bus and silences WebRTC's
                 // voice-processing unit) and, as a safety net, enable audio if CallKit
@@ -1219,6 +1310,10 @@ final class CallManager: CallUIManaging {
         }
         callQuality = .good   // reset for a fresh call
         active.webrtc = webrtc
+        // The caller's sender exists now; the callee's appears with the offer (`applyCamera`
+        // again after `setRemoteOffer`). Through `setCameraOn`, so a video call asks for camera
+        // access like the button does.
+        if active.startsWithCamera { setCameraOn(true) } else { applyCamera() }
         Log.info("WebRTC session created (role=\(role), turn=\(active.turn != nil ? "yes" : "STUN-only"))", category: "Calls")
     }
 
@@ -1280,6 +1375,7 @@ final class CallManager: CallUIManaging {
                 throw WebRTCSessionError.invalidState("WebRTC nil after ensureWebRTC")
             }
             try await webrtc.setRemoteOffer(sdp: sdp)
+            applyCamera()
             let answerSdp = try await webrtc.createAnswer()
             guard !answerSdp.isEmpty else {
                 throw WebRTCSessionError.invalidState("createAnswer returned empty SDP")
@@ -1676,7 +1772,12 @@ final class CallManager: CallUIManaging {
         case .ringing:
             guard let active, active.session.id == signal.callID else { return }
             if case .dialing = state { state = .ringing(active.session) }
-        case .connected, .mediaUpdate, nil:
+        case .mediaUpdate(let update):
+            guard active?.session.id == signal.callID,
+                  let on = CallVideoSignal.remoteCameraOn(after: update) else { return }
+            video.remoteCameraOn = on
+            Log.info("Peer camera \(on ? "on" : "off") (call_id=\(signal.callID.prefix(8))…)", category: "Calls")
+        case .connected, nil:
             // .connected is a server-side presence marker forwarded over the signaling
             // stream (handled there); nothing to do on the E2EE path.
             break
@@ -1860,7 +1961,7 @@ final class CallManager: CallUIManaging {
         }
         var offer = Shared_Proto_Signaling_V1_CallOffer()
         offer.sdp = plainSdp
-        offer.callType = .audio
+        offer.callType = video.announcedCameraOn || active.startsWithCamera ? .video : .audio
         offer.callerDeviceID = Self.currentDeviceId()
         offer.callerUserID = AuthSessionManager.shared.currentUserId ?? ""
         offer.offeredAt = Self.nowMs()

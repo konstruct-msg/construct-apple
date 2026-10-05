@@ -52,7 +52,10 @@ struct MainTabView: View {
                         quality: callManager?.callQuality ?? .good,
                         onEnd: { callManager?.endCall() },
                         onMuteChanged: { muted in callManager?.setMuted(muted) },
-                        onMinimize: { isCallExpanded = false }
+                        onMinimize: { isCallExpanded = false },
+                        video: callManager?.video ?? CallVideoState(),
+                        onCameraChanged: { on in callManager?.setCameraOn(on) },
+                        onSwitchCamera: { callManager?.switchCamera() }
                     )
                 }
             }

@@ -816,6 +816,8 @@
 "call_mute" = "Անջատել ձայնը";
 "call_unmute" = "Միացնել ձայնը";
 "call_speaker" = "Բարձրախոս";
+"call_camera" = "Տեսախցիկ";
+"call_flip_camera" = "Շրջել";
 "call_end" = "Ավարտել զանգը";
 "call_connecting" = "Միացում…";
 "call_incoming_audio" = "Մուտքային աուդիո զանգ";
@@ -1130,6 +1132,7 @@
 "history_sync_preparing_file" = "Ֆայլի պատրաստում…";
 "call_error_not_contacts" = "Կարող եք զանգել միայն նրանց, ում հետ կապված եք։";
 "call_error_busy" = "Դուք արդեն զանգի մեջ եք։";
+"call_error_camera_denied" = "Տեսախցիկի հասանելիությունն անջատված է։ Միացրեք այն Կարգավորումներում՝ զանգերում տեսանյութի համար։";
 "call_error_peer_offline" = "Նրանք անցանց են։ Փորձեք ավելի ուշ։";
 "call_error_setup_failed" = "Չհաջողվեց սկսել զանգը։ Փորձեք նորից։";
 
@@ -1238,6 +1241,8 @@
 
 "diagnostics_owned_inset_title" = "Owned-inset տառադարձում";
 "diagnostics_owned_inset_hint" = "UIKit գլորման կոնտեյներ։ Կիրառվում է հաջորդ բացվող զրույցին։";
+"diagnostics_video_calls_title" = "Տեսազանգեր (փուլ 1)";
+"diagnostics_video_calls_hint" = "Տեսախցիկ զանգերում։ Յուրաքանչյուր զանգ այդ դեպքում առաջարկում է տեսանյութ, այդ թվում Android-ին։";
 
 "diagnostics_skip_backlog_title" = "Բաց թողնել պահված հերթը";
 "diagnostics_skip_backlog_held" = "Գլուխը կպած է՝ %@… (%@, %d վրկ)։ Բաց թողնելը կարող է կորցնել երբևէ չառաքված հաղորդագրություններ։";

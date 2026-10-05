@@ -818,6 +818,8 @@
 "call_mute" = "Выкл. микрофон";
 "call_unmute" = "Вкл. микрофон";
 "call_speaker" = "Динамик";
+"call_camera" = "Камера";
+"call_flip_camera" = "Сменить";
 "call_end" = "Завершить";
 "call_connecting" = "Соединение…";
 "call_incoming_audio" = "Входящий аудиозвонок";
@@ -1141,6 +1143,7 @@
 "history_sync_preparing_file" = "Готовим файл…";
 "call_error_not_contacts" = "Звонить можно только тем, с кем вы уже связаны.";
 "call_error_busy" = "Вы уже в звонке.";
+"call_error_camera_denied" = "Доступ к камере выключен. Включите его в Настройках, чтобы звонить с видео.";
 "call_error_peer_offline" = "Собеседник не в сети. Попробуйте позже.";
 "call_error_setup_failed" = "Не удалось начать звонок. Попробуйте ещё раз.";
 
@@ -1249,6 +1252,8 @@
 
 "diagnostics_owned_inset_title" = "Своя вставка в ленте";
 "diagnostics_owned_inset_hint" = "Контейнер прокрутки на UIKit. Применится к следующему открытому чату.";
+"diagnostics_video_calls_title" = "Видеозвонки (этап 1)";
+"diagnostics_video_calls_hint" = "Камера в звонках. Каждый звонок тогда предлагает видео, и на Android тоже.";
 
 "diagnostics_skip_backlog_title" = "Пропустить накопившееся";
 "diagnostics_skip_backlog_held" = "Голова застряла: %@… (%@, %d с). Пропуск может потерять недоставленные сообщения.";

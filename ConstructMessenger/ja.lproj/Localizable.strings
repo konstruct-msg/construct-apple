@@ -717,6 +717,8 @@
 "call_mute" = "ミュート";
 "call_unmute" = "ミュート解除";
 "call_speaker" = "スピーカー";
+"call_camera" = "カメラ";
+"call_flip_camera" = "切替";
 "call_end" = "通話を終了";
 "call_connecting" = "接続中...";
 "call_incoming_audio" = "音声着信";
@@ -1004,6 +1006,7 @@
 "call_error_not_contacts" = "つながっている相手にだけ発信できます。";
 "call_error_peer_offline" = "相手はオフラインです。後でもう一度お試しください。";
 "call_error_busy" = "すでに通話中です。";
+"call_error_camera_denied" = "カメラへのアクセスがオフです。ビデオ通話を使うには設定でオンにしてください。";
 "call_error_setup_failed" = "通話を開始できませんでした。もう一度試してください。";
 "call_audio_route" = "音声";
 "call_e2ee_badge" = "エンドツーエンド暗号化";
@@ -1239,6 +1242,8 @@
 
 "diagnostics_owned_inset_title" = "自前インセットの履歴";
 "diagnostics_owned_inset_hint" = "UIKit のスクロールコンテナ。次に開くチャットから適用されます。";
+"diagnostics_video_calls_title" = "ビデオ通話（段階1）";
+"diagnostics_video_calls_hint" = "通話でカメラを使用。すべての通話がビデオを提案します（Android宛ても）。";
 
 "diagnostics_skip_backlog_title" = "保留分をスキップ";
 "diagnostics_skip_backlog_held" = "先頭が停止: %@…（%@、%d秒）。スキップすると未配信のメッセージが失われる可能性があります。";

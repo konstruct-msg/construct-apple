@@ -801,6 +801,8 @@
 "call_mute" = "Couper le micro";
 "call_unmute" = "Réactiver le micro";
 "call_speaker" = "Haut-parleur";
+"call_camera" = "Caméra";
+"call_flip_camera" = "Retourner";
 "call_end" = "Raccrocher";
 "call_connecting" = "Connexion…";
 "call_incoming_audio" = "Appel audio entrant";
@@ -1071,6 +1073,7 @@
 "history_sync_preparing_file" = "Préparation du fichier…";
 "call_error_not_contacts" = "Vous ne pouvez appeler que des personnes avec qui vous êtes connecté.";
 "call_error_busy" = "Vous êtes déjà en appel.";
+"call_error_camera_denied" = "L’accès à la caméra est désactivé. Activez-le dans Réglages pour la vidéo en appel.";
 "call_error_peer_offline" = "La personne est hors ligne. Réessayez plus tard.";
 "call_error_setup_failed" = "Impossible de démarrer l'appel. Réessayez.";
 "notification.new_message.title" = "Nouveau message";
@@ -1158,6 +1161,8 @@
 
 "diagnostics_owned_inset_title" = "Transcription à encart propre";
 "diagnostics_owned_inset_hint" = "Conteneur de défilement UIKit. S'applique au prochain chat ouvert.";
+"diagnostics_video_calls_title" = "Appels vidéo (étape 1)";
+"diagnostics_video_calls_hint" = "Caméra en appel. Chaque appel propose alors la vidéo, y compris vers Android.";
 
 "diagnostics_skip_backlog_title" = "Ignorer l'arriéré retenu";
 "diagnostics_skip_backlog_held" = "Tête bloquée : %@… (%@, %d s). Ignorer peut perdre des messages jamais remis.";
