@@ -138,7 +138,19 @@ final class WebRTCSession: NSObject, WebRTCSessionProtocol {
     private let videoEnabled: Bool
     private var videoTransceiver: RTCRtpTransceiver?
     private var videoSource: RTCVideoSource?
+    /// One capturer — one `AVCaptureSession` — per run of the camera, never restarted.
+    ///
+    /// WebRTC's capturer swaps the camera of a session it already configured by removing the input
+    /// and adding the new one with a hand-made connection (`addInputWithNoConnections:` +
+    /// `addConnection:`), and `-[AVCaptureSession addConnection:]` raises on the second time
+    /// round — an Objective-C exception on WebRTC's capture queue, which nothing catches. Build 716
+    /// died that way on every flip to the back camera (2026-10-05; read from the disassembly at
+    /// the crashing frame). The first run of a session has no connection yet, which is why the
+    /// camera came on and the call worked. So a new run gets a new capturer, after the old one
+    /// has stopped.
     private var capturer: RTCCameraVideoCapturer?
+    /// The camera running now, so asking for it again is not a restart.
+    private var capturingFacing: CameraFacing?
     /// The camera's track, kept across off/on so the preview and the sender reuse one source.
     private(set) var localVideoTrack: RTCVideoTrack?
     var remoteVideoTrack: RTCVideoTrack? { videoTransceiver?.receiver.track as? RTCVideoTrack }
@@ -205,7 +217,7 @@ final class WebRTCSession: NSObject, WebRTCSessionProtocol {
     }
 
     func close() {
-        capturer?.stopCapture()
+        stopCapture()
         peerConnection.close()
         // Do NOT deactivate the audio session here. A raw
         // `AVAudioSession.setActive(false)` bypasses RTCAudioSession and desyncs its
@@ -229,11 +241,12 @@ final class WebRTCSession: NSObject, WebRTCSessionProtocol {
             // No track, no frames; the direction stays sendrecv, so turning it back on is the
             // same swap.
             sender.track = nil
-            capturer?.stopCapture()
+            stopCapture()
             return
         }
         let track = localVideoTrack ?? makeLocalVideoTrack()
-        sender.track = track
+        if sender.track !== track { sender.track = track }
+        guard capturingFacing != facing else { return }
         startCapture(facing: facing)
     }
 
@@ -241,13 +254,21 @@ final class WebRTCSession: NSObject, WebRTCSessionProtocol {
         let source = factory.videoSource()
         let track = factory.videoTrack(with: source, trackId: "video0")
         videoSource = source
-        capturer = RTCCameraVideoCapturer(delegate: source)
         localVideoTrack = track
         return track
     }
 
+    private func stopCapture() {
+        capturer?.stopCapture()
+        capturer = nil
+        capturingFacing = nil
+    }
+
     private func startCapture(facing: CameraFacing) {
-        guard let capturer else { return }
+        guard let videoSource else { return }
+        // A new capturer for this run (see `capturer`). It replaces the old one only once a camera
+        // and a format are found; the old one stops first, and only then does this one start.
+        let capturer = RTCCameraVideoCapturer(delegate: videoSource)
         // By position, for now. The design asks for the camera by the direction it faces, which
         // is what keeps "front" the front on a folded iPhone Duo (TODO 104).
         let position: AVCaptureDevice.Position = facing == .front ? .front : .back
@@ -271,9 +292,23 @@ final class WebRTCSession: NSObject, WebRTCSessionProtocol {
             return
         }
         let format = formats[index]
-        capturer.startCapture(with: device, format: format, fps: fps)
         let c = candidates[index]
-        Log.info("Camera \(facing) capturing \(c.width)x\(c.height)@\(fps) (ranges \(c.rateRanges))", category: "Calls")
+        let previous = self.capturer
+        self.capturer = capturer
+        capturingFacing = facing
+        let start: @MainActor () -> Void = { [weak self] in
+            // A later flip or a hang-up replaced this run while the old one was stopping.
+            guard let self, self.capturer === capturer else { return }
+            capturer.startCapture(with: device, format: format, fps: fps)
+            Log.info("Camera \(facing) capturing \(c.width)x\(c.height)@\(fps) (ranges \(c.rateRanges))", category: "Calls")
+        }
+        guard let previous else {
+            start()
+            return
+        }
+        previous.stopCapture {
+            Task { @MainActor in start() }
+        }
     }
 
     /// Take up the video section of an offer as `sendrecv`, so the camera can be turned on later

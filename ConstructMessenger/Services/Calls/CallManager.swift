@@ -746,8 +746,7 @@ final class CallManager: CallUIManaging {
         }
         #endif
         let wasSending = video.canSend && video.localCameraOn
-        video.localCameraOn = on
-        applyCamera()
+        updateCamera { $0.localCameraOn = on }
         #if os(iOS)
         let earpiece = AVAudioSession.sharedInstance().currentRoute.outputs.contains { $0.portType == .builtInReceiver }
         if CallVideoAudio.movesToSpeaker(
@@ -765,31 +764,28 @@ final class CallManager: CallUIManaging {
 
     func switchCamera() {
         guard video.localCameraOn else { return }
-        video.facing = video.facing.flipped
-        active?.webrtc?.setCameraOn(true, facing: video.facing)
+        updateCamera { $0.facing = $0.facing.flipped }
     }
 
     private func setInBackground(_ background: Bool) {
         guard active != nil, video.isInBackground != background else { return }
-        let before = video.announcedCameraOn
-        video.isInBackground = background
-        announceCameraIfChanged(from: before)
+        updateCamera { $0.isInBackground = background }
     }
 
-    /// Bring the sender in line with `video` and tell the peer if what it should show changed.
+    /// Bring the sender in line with `video` — after an offer, when the sender may have appeared.
     private func applyCamera() {
-        guard let webrtc = active?.webrtc else { return }
-        let before = video.announcedCameraOn
-        video.canSend = webrtc.canSendVideo
-        webrtc.setCameraOn(video.canSend && video.localCameraOn, facing: video.facing)
-        announceCameraIfChanged(from: before)
+        updateCamera { _ in }
     }
 
-    /// Send `MediaUpdate` when the announced camera state is no longer `previous`. Before media
-    /// connects nothing is sent: `onConnected` says it then.
-    private func announceCameraIfChanged(from previous: Bool) {
-        guard let active, active.mediaConnected, video.announcedCameraOn != previous else { return }
-        sendMediaUpdate(cameraOn: video.announcedCameraOn)
+    /// The one way our side of `video` changes: the change (`CallVideoState.apply`, which says
+    /// what the peer must be told), then the sender brought in line, then the peer told.
+    private func updateCamera(_ change: (inout CallVideoState) -> Void) {
+        let webrtc = active?.webrtc
+        let announce = video.apply(change, canSend: webrtc?.canSendVideo)
+        webrtc?.setCameraOn(video.canSend && video.localCameraOn, facing: video.facing)
+        // Before media connects nothing is sent: `onConnected` says it then.
+        guard let announce, let active, active.mediaConnected else { return }
+        sendMediaUpdate(cameraOn: announce)
     }
 
     private func sendMediaUpdate(cameraOn: Bool) {
