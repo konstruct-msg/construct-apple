@@ -88,6 +88,11 @@ struct InCallView: View {
             if ended { stopTimer() }
         }
         .onDisappear { stopTimer() }
+        // What the screen shows, beside what the call says: the two disagreed once without a
+        // trace (`ObservedInCallView`).
+        .onChange(of: videoStage) { _, stage in
+            Log.info("VIDEO[screen] \(stage.map { "big=\($0.big) small=\($0.small.map { "\($0)" } ?? "none")" } ?? "audio")", category: "Calls")
+        }
     }
 
     private var audioScreen: some View {

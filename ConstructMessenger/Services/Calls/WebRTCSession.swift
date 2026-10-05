@@ -151,6 +151,12 @@ final class WebRTCSession: NSObject, WebRTCSessionProtocol {
     private var capturer: RTCCameraVideoCapturer?
     /// The camera running now, so asking for it again is not a restart.
     private var capturingFacing: CameraFacing?
+    /// Whether frames flow, both ways (`VideoFrameCounter`). The capture counter is the
+    /// capturer's delegate — which WebRTC holds weakly, so it lives here — and forwards to the
+    /// source.
+    private var captureCounter: VideoFrameCounter?
+    private var captureWatcher: CaptureSessionWatcher?
+    private let receiveCounter = VideoFrameCounter(label: "received")
     /// The camera's track, kept across off/on so the preview and the sender reuse one source.
     private(set) var localVideoTrack: RTCVideoTrack?
     var remoteVideoTrack: RTCVideoTrack? { videoTransceiver?.receiver.track as? RTCVideoTrack }
@@ -211,6 +217,7 @@ final class WebRTCSession: NSObject, WebRTCSessionProtocol {
             initValue.direction = .sendRecv
             initValue.streamIds = ["video"]
             videoTransceiver = peerConnection.addTransceiver(of: .video, init: initValue)
+            remoteVideoTrack?.add(receiveCounter)
             Log.info("WebRTC video transceiver added (sendrecv, no track)", category: "Calls")
         }
         Self.dumpAudioState(label: "session-init role=\(role)")
@@ -218,6 +225,7 @@ final class WebRTCSession: NSObject, WebRTCSessionProtocol {
 
     func close() {
         stopCapture()
+        if videoTransceiver != nil { Log.info(receiveCounter.summary(), category: "Calls") }
         peerConnection.close()
         // Do NOT deactivate the audio session here. A raw
         // `AVAudioSession.setActive(false)` bypasses RTCAudioSession and desyncs its
@@ -260,15 +268,19 @@ final class WebRTCSession: NSObject, WebRTCSessionProtocol {
 
     private func stopCapture() {
         capturer?.stopCapture()
+        if let captureCounter { Log.info(captureCounter.summary(), category: "Calls") }
         capturer = nil
         capturingFacing = nil
+        captureCounter = nil
+        captureWatcher = nil
     }
 
     private func startCapture(facing: CameraFacing) {
         guard let videoSource else { return }
         // A new capturer for this run (see `capturer`). It replaces the old one only once a camera
         // and a format are found; the old one stops first, and only then does this one start.
-        let capturer = RTCCameraVideoCapturer(delegate: videoSource)
+        let counter = VideoFrameCounter(label: "camera \(facing)", forwardingTo: videoSource)
+        let capturer = RTCCameraVideoCapturer(delegate: counter)
         // By position, for now. The design asks for the camera by the direction it faces, which
         // is what keeps "front" the front on a folded iPhone Duo (TODO 104).
         let position: AVCaptureDevice.Position = facing == .front ? .front : .back
@@ -294,8 +306,11 @@ final class WebRTCSession: NSObject, WebRTCSessionProtocol {
         let format = formats[index]
         let c = candidates[index]
         let previous = self.capturer
+        if let captureCounter { Log.info(captureCounter.summary(), category: "Calls") }
         self.capturer = capturer
         capturingFacing = facing
+        captureCounter = counter
+        captureWatcher = CaptureSessionWatcher(session: capturer.captureSession, label: "camera \(facing)")
         let start: @MainActor () -> Void = { [weak self] in
             // A later flip or a hang-up replaced this run while the old one was stopping.
             guard let self, self.capturer === capturer else { return }
@@ -326,6 +341,7 @@ final class WebRTCSession: NSObject, WebRTCSessionProtocol {
             return
         }
         videoTransceiver = offered
+        remoteVideoTrack?.add(receiveCounter)
         Log.info("WebRTC offered video section taken up (sendrecv)", category: "Calls")
     }
 
