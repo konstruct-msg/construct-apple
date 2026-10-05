@@ -44,18 +44,13 @@ struct MainTabView: View {
                 }
             }
             .fullScreenCover(isPresented: fullScreenCoverBinding) {
-                if let session = activeCallSession {
-                    InCallView(
+                if let session = activeCallSession, let callManager {
+                    ObservedInCallView(
+                        manager: callManager,
                         session: session,
                         isConnecting: isConnectingState,
                         endReason: callEndReason,
-                        quality: callManager?.callQuality ?? .good,
-                        onEnd: { callManager?.endCall() },
-                        onMuteChanged: { muted in callManager?.setMuted(muted) },
-                        onMinimize: { isCallExpanded = false },
-                        video: callManager?.video ?? CallVideoState(),
-                        onCameraChanged: { on in callManager?.setCameraOn(on) },
-                        onSwitchCamera: { callManager?.switchCamera() }
+                        onMinimize: { isCallExpanded = false }
                     )
                 }
             }
@@ -253,3 +248,34 @@ private final class MainTabPreviewState {
 #endif
 
 #endif
+
+/// The call screen, reading the call's live state in a body of its own.
+///
+/// `MainTabView` used to read `callManager.video` and `callQuality` inside the `fullScreenCover`
+/// closure, which is not its body: Observation tracks what a body reads, and a closure run later
+/// is outside it. The cover was rebuilt only when something the tab view did read changed — the
+/// call state — so a `MediaUpdate` from the peer changed `video` and nothing redrew. Two devices,
+/// 2026-10-05: the callee saw the caller's avatar until someone toggled a camera, while the log
+/// said "Peer camera on".
+private struct ObservedInCallView: View {
+    let manager: any CallUIManaging
+    let session: CallSession
+    let isConnecting: Bool
+    let endReason: CallEndReason?
+    let onMinimize: () -> Void
+
+    var body: some View {
+        InCallView(
+            session: session,
+            isConnecting: isConnecting,
+            endReason: endReason,
+            quality: manager.callQuality,
+            onEnd: { manager.endCall() },
+            onMuteChanged: { manager.setMuted($0) },
+            onMinimize: onMinimize,
+            video: manager.video,
+            onCameraChanged: { manager.setCameraOn($0) },
+            onSwitchCamera: { manager.switchCamera() }
+        )
+    }
+}
