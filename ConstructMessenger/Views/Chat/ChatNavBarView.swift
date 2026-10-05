@@ -19,12 +19,16 @@ struct ChatNavBarView: View {
     let onOpenProfile: () -> Void
     let onDoneEdit: () -> Void
     let onStartCall: () -> Void
-    /// Always non-nil so the layout is stable; rendered only when
+    /// Offered by holding the call button (`CallModeButton`) while
     /// `CallsFeature.isVideoEnabled` is true.
     let onStartVideoCall: () -> Void
     let onToggleSearch: () -> Void
     /// Optional: tap the KT warning badge to jump to verify (key-change banner).
     var onKTWarningTap: (() -> Void)? = nil
+
+    /// The call ↔ video switch, drawn over the whole bar: the capsule clips its contents, and
+    /// the switch hangs below it.
+    @State private var callSwitch: CallModeButton.Mode?? = nil
 
     var body: some View {
         HStack(alignment: .center, spacing: CTLayout.chromeGap) {
@@ -35,6 +39,18 @@ struct ChatNavBarView: View {
         .padding(.horizontal, CTLayout.edgePad)
         .frame(height: CTLayout.navBarHeight)
         .glassCapsule()
+        .overlayPreferenceValue(CallButtonBoundsKey.self) { anchor in
+            GeometryReader { geo in
+                if let choice = callSwitch, let anchor {
+                    let frame = geo[anchor]
+                    CallModeSwitch(choice: choice, width: frame.width)
+                        .offset(x: frame.minX, y: frame.minY)
+                        .allowsHitTesting(false)
+                        .transition(.opacity.combined(with: .scale(scale: 0.9, anchor: .top)))
+                }
+            }
+        }
+        .animation(.easeOut(duration: 0.15), value: callSwitch != nil)
     }
 
     // MARK: - Leading
@@ -92,22 +108,14 @@ struct ChatNavBarView: View {
                 )
             } else {
                 if canStartCall {
-                    if CallsFeature.isVideoEnabled {
-                        navIconButton(
-                            systemName: "video.fill",
-                            size: CTLayout.navIconSizeLg,
-                            weight: .medium,
-                            accessibilityKey: "call_video",
-                            action: onStartVideoCall
-                        )
-                    }
-                    navIconButton(
-                        systemName: "phone",
-                        size: CTLayout.navIconSizeLg,
-                        weight: .medium,
-                        accessibilityKey: "call_voice",
-                        action: onStartCall
+                    CallModeButton(
+                        size: CTLayout.hitTarget,
+                        open: $callSwitch,
+                        offersVideo: CallsFeature.isVideoEnabled,
+                        onVoice: onStartCall,
+                        onVideo: onStartVideoCall
                     )
+                    .anchorPreference(key: CallButtonBoundsKey.self, value: .bounds) { $0 }
                 }
                 navIconButton(
                     systemName: "magnifyingglass",
@@ -162,5 +170,12 @@ struct ChatNavBarView: View {
                 .foregroundColor(Color.CT.accent)
                 .accessibilityLabel(Text(LocalizedStringKey("kt_verified")))
         }
+    }
+}
+
+private struct CallButtonBoundsKey: PreferenceKey {
+    static var defaultValue: Anchor<CGRect>? { nil }
+    static func reduce(value: inout Anchor<CGRect>?, nextValue: () -> Anchor<CGRect>?) {
+        value = value ?? nextValue()
     }
 }

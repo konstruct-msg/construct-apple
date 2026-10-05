@@ -820,6 +820,9 @@
 "call_speaker" = "Динамик";
 "call_camera" = "Камера";
 "call_flip_camera" = "Сменить";
+"call_peer_camera_off" = "Камера выключена";
+"call_swap_video" = "Поменять окна местами";
+"call_self_view" = "Ваша камера";
 "call_end" = "Завершить";
 "call_connecting" = "Соединение…";
 "call_incoming_audio" = "Входящий аудиозвонок";

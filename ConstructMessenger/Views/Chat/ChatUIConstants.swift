@@ -229,12 +229,22 @@ enum ChatUIConstants {
         static let trimCutDim: Double = 0.6
         static let trimGripInset: CGFloat = 10
 
-        // The mic ↔ camera switch on a long press (`MicModeButton`)
-        static let switchPressDelay: Duration = .milliseconds(350)
-        /// Height of each segment; the switch is two of them, upwards from the mic.
-        static let switchSegmentLength: CGFloat = 52
+        // The mic ↔ camera switch on a long press (`MicModeButton`) — the one gesture, shared
+        // with the call button (`HoldSwitch`).
+        static let switchPressDelay = HoldSwitch.pressDelay
+        static let switchSegmentLength = HoldSwitch.segmentLength
+        static let switchCancelMargin = HoldSwitch.cancelMargin
+    }
+
+    /// Hold a button, slide to the second choice, let go: the composer's mic ↔ camera
+    /// (`MicModeButton`, upwards) and the header's call ↔ video call (`CallModeButton`,
+    /// downwards). One gesture, so one set of numbers.
+    enum HoldSwitch {
+        static let pressDelay: Duration = .milliseconds(350)
+        /// Length of each segment along the direction the switch opens; it is two of them.
+        static let segmentLength: CGFloat = 52
         /// How far past the switch a finger may drift and still choose; beyond it, release cancels.
-        static let switchCancelMargin: CGFloat = 44
+        static let cancelMargin: CGFloat = 44
     }
 
     // MARK: - Reply focus (soft dim, not Apple-style isolation)

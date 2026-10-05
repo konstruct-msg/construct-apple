@@ -818,6 +818,9 @@
 "call_speaker" = "Speaker";
 "call_camera" = "Camera";
 "call_flip_camera" = "Flip";
+"call_peer_camera_off" = "Camera off";
+"call_swap_video" = "Swap video";
+"call_self_view" = "Your camera";
 "call_end" = "End Call";
 "call_connecting" = "Connecting…";
 "call_incoming_audio" = "Incoming audio call";
