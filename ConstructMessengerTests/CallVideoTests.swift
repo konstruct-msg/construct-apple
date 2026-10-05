@@ -64,22 +64,47 @@ final class CallVideoTests: XCTestCase {
 
     // MARK: - Capture format
 
+    private func format(_ w: Int32, _ h: Int32, _ ranges: [ClosedRange<Double>] = [1...30], preferred: Bool = true) -> CallVideoCapture.Candidate {
+        CallVideoCapture.Candidate(width: w, height: h, rateRanges: ranges, isPreferredPixelFormat: preferred)
+    }
+
     /// Mutation: pick the largest format overall — 1080p goes up the uplink the design budgets
     /// for 720p.
     func testThePickIsTheLargestWithin720p() {
-        let formats: [(width: Int32, height: Int32)] = [(640, 480), (1920, 1080), (1280, 720), (352, 288)]
-        XCTAssertEqual(CallVideoCapture.bestFormatIndex(formats), 2)
+        let formats = [format(640, 480), format(1920, 1080), format(1280, 720), format(352, 288)]
+        XCTAssertEqual(CallVideoCapture.choose(formats)?.index, 2)
     }
 
     func testACameraWithNothingSmallGivesItsSmallest() {
-        let formats: [(width: Int32, height: Int32)] = [(3840, 2160), (1920, 1080)]
-        XCTAssertEqual(CallVideoCapture.bestFormatIndex(formats), 1)
-        XCTAssertNil(CallVideoCapture.bestFormatIndex([]))
+        XCTAssertEqual(CallVideoCapture.choose([format(3840, 2160), format(1920, 1080)])?.index, 1)
+        XCTAssertNil(CallVideoCapture.choose([]).map(\.index))
+    }
+
+    /// The build 716 crash: a back camera lists its 1280×720 formats, slow-motion ones last, and a
+    /// slow-motion format cannot run at 30. Asked to, AVFoundation raises on WebRTC's capture
+    /// queue and the app dies.
+    /// Mutation: drop `canRun` from the filter — the 240 fps format is picked, at 30.
+    func testASlowMotionTwinIsNeverPicked() throws {
+        // The only 1280×720 is the slow-motion one; the largest format that can run is smaller.
+        let formats = [
+            format(640, 480, [1...30]),
+            format(1280, 720, [240...240]),
+        ]
+        let pick = try XCTUnwrap(CallVideoCapture.choose(formats))
+        XCTAssertEqual(pick.index, 0)
+        XCTAssertTrue(formats[pick.index].rateRanges.contains { $0.contains(Double(pick.fps)) })
+    }
+
+    /// Of equals, the ordinary format over the faster one, and the capturer's pixel format over a
+    /// converted one. Mutation: drop the tie-breaks — `min(by:)` returns whichever came first.
+    func testOfEqualsTheOrdinaryPreferredFormatWins() {
+        XCTAssertEqual(CallVideoCapture.choose([format(1280, 720, [1...60]), format(1280, 720, [1...30])])?.index, 1)
+        XCTAssertEqual(CallVideoCapture.choose([format(1280, 720, preferred: false), format(1280, 720)])?.index, 1)
     }
 
     func testTheFrameRateIsCappedAt30() {
-        XCTAssertEqual(CallVideoCapture.fps(maxSupported: 60), 30)
-        XCTAssertEqual(CallVideoCapture.fps(maxSupported: 24), 24)
+        XCTAssertEqual(CallVideoCapture.choose([format(1280, 720, [1...60])])?.fps, 30)
+        XCTAssertEqual(CallVideoCapture.choose([format(1280, 720, [1...24])])?.fps, 24)
     }
 }
 
