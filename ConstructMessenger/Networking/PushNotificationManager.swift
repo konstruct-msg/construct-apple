@@ -39,8 +39,9 @@ class PushNotificationManager: NSObject {
     /// Fires each time a silent push is received (for stream reconnection)
     private(set) var lastSilentPushDate: Date?
 
-    /// Whether the current token has been successfully registered with the server.
-    /// Resets when a new token arrives or when the user logs out.
+    /// Whether the current token has been successfully registered with the server **for the
+    /// account signed in now**. Resets when a new token arrives and when the account leaves this
+    /// device (`forgetServerRegistration`, from `LocalDataWipe`).
     private(set) var isRegisteredWithServer: Bool = false
 
     func signalSilentPush() {
@@ -190,6 +191,18 @@ class PushNotificationManager: NSObject {
         self.isRegisteredWithServer = false
     }
     
+    /// The account went away from this device. The APNs token belongs to the install and stays;
+    /// its registration belonged to that account, and the server deleted the row with it.
+    ///
+    /// Without this the flag stayed true from the previous account, so a new one registered in
+    /// the same process never sent its token — `ensureTokenRegistered` and the session observer
+    /// both skip a registered token — and got no pushes until the app was relaunched. Build 712,
+    /// 2026-10-05: account deleted and registered again, first token registration only after a
+    /// relaunch.
+    func forgetServerRegistration() {
+        isRegisteredWithServer = false
+    }
+
     /// Handle failed registration
     func handleRegistrationError(_ error: Error) {
         Log.error("Failed to register for remote notifications: \(error)", category: "Push")
@@ -398,6 +411,7 @@ final class PushNotificationManager {
     func ensureTokenRegistered() async {}
     func registerDeviceToken(_ tokenData: Data) async {}
     func unregisterDeviceToken() async {}
+    func forgetServerRegistration() {}
     func handleRegistrationError(_ error: Error) {}
     func requestPermission() async -> Bool { true }
     func checkAuthorizationStatus() async {}
