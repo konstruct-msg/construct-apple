@@ -89,7 +89,7 @@ class LocalNotificationManager: NSObject {
         ]
 
         let identifier = requestId.map { "cr-recv-\($0)" } ?? "cr-recv-\(UUID().uuidString)"
-        post(content, identifier: identifier, replacingPushOf: "contact_request_received")
+        post(content, identifier: identifier, coveredByPushOf: "contact_request_received")
     }
 
     /// Show a generic "New Message" notification.
@@ -111,33 +111,35 @@ class LocalNotificationManager: NSObject {
         // Use a stable per-chat identifier so back-to-back messages in the same
         // conversation collapse to a single banner instead of spamming the lock screen.
         let identifier = chatId.map { "msg-chat-\($0)" } ?? "msg-\(UUID().uuidString)"
-        post(content, identifier: identifier, replacingPushOf: "new_message")
+        post(content, identifier: identifier, coveredByPushOf: "new_message")
     }
 
-    /// Posts `content`, taking the place of the banner the server's push already put up.
+    /// Posts `content`, unless the server's push banner for this message is already on screen.
     ///
     /// Since 2026-10-05 a message push is an alert ("Konstruct / New message", from the app's
-    /// own strings) that also carries `content-available`. When iOS grants the wake, the fetch
-    /// lands here and would add a second banner and a second sound for the same message. So
-    /// a push banner of the same kind delivered moments ago is removed and this one is posted
-    /// without sound; ours stays because it carries the chat it belongs to.
-    private func post(_ content: UNMutableNotificationContent, identifier: String, replacingPushOf activity: String) {
+    /// own strings) that also carries `content-available`. iOS shows that banner the moment the
+    /// push lands; when it grants the wake, the fetch arrives here a fraction of a second later.
+    /// Replacing the banner (remove it, post ours silently) put two banners on screen in a row
+    /// for one message — the server's log and the device's agreed on 2026-10-05. So when a push
+    /// banner of the same kind was delivered moments ago, it stays and nothing is posted.
+    /// The cost: that banner opens the app, not the chat — a blind push names no conversation.
+    private func post(_ content: UNMutableNotificationContent, identifier: String, coveredByPushOf activity: String) {
         notificationCenter.getDeliveredNotifications { [notificationCenter] delivered in
-            let replaced = PushBannerReplacement.identifiersToReplace(
+            let covering = PushBannerReplacement.coveringPushBanners(
                 among: delivered.map(PushBannerReplacement.Delivered.init),
                 activity: activity,
                 now: Date()
             )
-            if !replaced.isEmpty {
-                notificationCenter.removeDeliveredNotifications(withIdentifiers: replaced)
-                content.sound = nil
+            if !covering.isEmpty {
+                Log.debug("Notification skipped: \(identifier) (push banner already shown)", category: "LocalNotifications")
+                return
             }
             let request = UNNotificationRequest(identifier: identifier, content: content, trigger: nil)
             notificationCenter.add(request) { error in
                 if let error {
                     Log.error("Failed to show notification: \(error)", category: "LocalNotifications")
                 } else {
-                    Log.debug("Notification shown: \(identifier) (replaced \(replaced.count) push banner(s))", category: "LocalNotifications")
+                    Log.debug("Notification shown: \(identifier)", category: "LocalNotifications")
                 }
             }
         }
@@ -366,13 +368,13 @@ private extension String {
     }
 }
 
-/// Which push banners a banner of our own replaces. Pure, so the window and the kind match are
-/// reachable from tests without a notification center.
+/// Which push banners already cover a banner of our own. Pure, so the window and the kind match
+/// are reachable from tests without a notification center.
 enum PushBannerReplacement {
 
     /// How recent a push banner must be to count as this wake's. A wake runs within ~30 s of
-    /// its push; an older banner belongs to an earlier message and keeps its place (and our
-    /// banner keeps its sound, since nothing else just made one).
+    /// its push; an older banner belongs to an earlier message, so ours is posted (with its
+    /// sound, since nothing else just made one).
     static let window: TimeInterval = 60
 
     struct Delivered: Equatable {
@@ -400,7 +402,7 @@ enum PushBannerReplacement {
         }
     }
 
-    static func identifiersToReplace(among delivered: [Delivered], activity: String, now: Date) -> [String] {
+    static func coveringPushBanners(among delivered: [Delivered], activity: String, now: Date) -> [String] {
         delivered
             .filter { $0.fromPush && $0.activity == activity && now.timeIntervalSince($0.date) <= window }
             .map(\.identifier)

@@ -3,7 +3,7 @@
 //  ConstructMessengerTests
 //
 //  The message push is an alert since 2026-10-05: the server names keys from this app's strings,
-//  and a wake the system grants posts our own banner in its place. Each test names the mutation
+//  and a wake the system grants leaves that banner standing and posts none of our own. Each test names the mutation
 //  that reddens it.
 //
 
@@ -23,39 +23,39 @@ final class PushBannerTests: XCTestCase {
         .init(identifier: id, date: now.addingTimeInterval(-secondsAgo), fromPush: fromPush, activity: activity)
     }
 
-    /// Mutation: return [] — every woken message shows two banners and rings twice.
-    func testThisWakesPushBannerIsReplaced() {
-        let replaced = PushBannerReplacement.identifiersToReplace(
+    /// Mutation: return [] — every woken message shows the push banner and ours after it.
+    func testThisWakesPushBannerIsRecognised() {
+        let covering = PushBannerReplacement.coveringPushBanners(
             among: [delivered("push-1")], activity: "new_message", now: now
         )
-        XCTAssertEqual(replaced, ["push-1"])
+        XCTAssertEqual(covering, ["push-1"])
     }
 
-    /// Mutation: drop the `fromPush` term — our own banner for another chat is removed.
-    func testOurOwnBannersAreNeverReplaced() {
-        let replaced = PushBannerReplacement.identifiersToReplace(
+    /// Mutation: drop the `fromPush` term — our own banner for another chat counts as the push's, and the new message gets no banner.
+    func testOurOwnBannersNeverCount() {
+        let covering = PushBannerReplacement.coveringPushBanners(
             among: [delivered("msg-chat-A", fromPush: false)], activity: "new_message", now: now
         )
-        XCTAssertTrue(replaced.isEmpty)
+        XCTAssertTrue(covering.isEmpty)
     }
 
-    /// Mutation: drop the window — an unread banner from an hour ago disappears, and the new
-    /// banner is posted without sound although nothing else just rang.
-    func testAnOlderPushBannerKeepsItsPlace() {
-        let replaced = PushBannerReplacement.identifiersToReplace(
+    /// Mutation: drop the window — an unread banner from an hour ago swallows the new message's
+    /// banner, which then never appears.
+    func testAnOlderPushBannerDoesNotCoverANewMessage() {
+        let covering = PushBannerReplacement.coveringPushBanners(
             among: [delivered("push-old", secondsAgo: 3600)], activity: "new_message", now: now
         )
-        XCTAssertTrue(replaced.isEmpty)
+        XCTAssertTrue(covering.isEmpty)
     }
 
-    /// A contact-request banner does not take the place of a message push, nor the reverse.
-    func testOnlyTheSameKindIsReplaced() {
-        let replaced = PushBannerReplacement.identifiersToReplace(
+    /// A contact-request banner does not cover a message push, nor the reverse.
+    func testOnlyTheSameKindCovers() {
+        let covering = PushBannerReplacement.coveringPushBanners(
             among: [delivered("push-msg"), delivered("push-cr", activity: "contact_request_received")],
             activity: "contact_request_received",
             now: now
         )
-        XCTAssertEqual(replaced, ["push-cr"])
+        XCTAssertEqual(covering, ["push-cr"])
     }
 
     /// The server (`messaging-service` `blind_alert`) puts these keys in the alert, and iOS looks
