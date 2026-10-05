@@ -17,7 +17,10 @@
 //
 
 #if os(iOS)
-import AVFoundation
+// AVFoundation predates Sendable and does not mark `AVCaptureSession`. Apple asks for
+// `startRunning`/`stopRunning` off the main thread, on a serial queue of the app's — `queue` here —
+// so handing the session to that queue is the documented use, not a race the warning could catch.
+@preconcurrency import AVFoundation
 import UIKit
 
 @MainActor
