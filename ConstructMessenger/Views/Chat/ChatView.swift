@@ -11,6 +11,9 @@ import UniformTypeIdentifiers
 
 struct ChatView: View {
     @Environment(\.managedObjectContext) private var viewContext
+    @Environment(\.scenePhase) private var scenePhase
+    /// Between this chat's appear and disappear — not covered by a pushed profile or the like.
+    @State private var isOnScreen = false
     @Environment(\.dismiss) private var dismiss
     /// Lazy holder — SwiftUI re-runs View.init on parent re-render; we must not
     /// allocate ChatViewModel there or discarded copies spam deinit / waste work.
@@ -322,6 +325,12 @@ struct ChatView: View {
             }
         }
         .onDisappear(perform: handleViewDisappear)
+        // Messages that arrive while the chat is open behind a locked or backgrounded app are
+        // counted unread, rightly. Coming back shows them in this chat, and appear does not fire
+        // again — so without this the count outlived the reading and showed on the list.
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active, isOnScreen { markChatAsRead() }
+        }
         #if os(iOS)
         .fullScreenCover(item: $galleryStartItem) { item in
                 MediaGalleryViewer(
@@ -1144,6 +1153,7 @@ struct ChatView: View {
         if viewModel.editingMessage == nil, messageText.isEmpty {
             messageText = DraftStore.shared.draft(for: viewModel.chat.id)
         }
+        isOnScreen = true
         markChatAsRead()
         viewModel.onViewAppear()
         loadContactKTStatus()
@@ -1168,7 +1178,10 @@ struct ChatView: View {
     private func handleViewDisappear() {
         replyFocusPeekTask?.cancel()
         replyFocusPeekTask = nil
+        isOnScreen = false
         guard !isPreviewRuntime else { return }
+        // Whatever arrived while this chat was on screen has been seen.
+        markChatAsRead()
         // Preserve a half-typed message across navigation. Skip while editing,
         // so the edit buffer never leaks into the new-message draft.
         if viewModel.editingMessage == nil {
