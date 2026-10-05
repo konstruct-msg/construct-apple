@@ -81,7 +81,7 @@ ASCII affordances still in the tree are enumerated debt, not the target state.
 A surface that does not exist yet is built under this rule from the start — it is not written in the
 old language and migrated later. If a token it needs is missing, the token lands first.
 
-`DESIGN_CONCEPT.md` §2.3 in the vault describes brackets as the affordance metaphor; that is
+`client/ios/DESIGN_CONCEPT.md` §2.3 in the vault describes brackets as the affordance metaphor; that is
 **history, superseded 2026-09-20**, and the file says so. Do not implement from it.
 
 Tokens — source of truth `ConstructMessenger/Utilities/ConstructTheme.swift`:
@@ -125,7 +125,7 @@ Tokens — source of truth `ConstructMessenger/Utilities/ConstructTheme.swift`:
 Xcode 27 (JIT executor), with the scheme `ConstructMessenger` (Debug, `-Onone`). Until then this
 paragraph said they could not: the preview process died at launch with `_objc_fatal: Attempt to
 use unknown class` once WebRTC or WhisperKit loaded. Which change ended that is not established —
-the same day WebRTC moved from `stasel/WebRTC` to webrtc-sdk (`Packages/WebRTC`), and the toolchain
+the same day WebRTC moved from stasel's package to webrtc-sdk (`Packages/WebRTC`), and the toolchain
 was Xcode 27 — so if previews break again, check those two first. A preview needs the Debug
 configuration: the `Construct Messenger Beta` scheme runs Beta, built `-O`, which Previews refuse.
 A preview that fails with "ThunkContentMarker … invalidated" lost its file to an edit mid-build;
@@ -270,8 +270,8 @@ Before touching `Networking/gRPC/VEIL/` or `Services/Calls/`, read
   key record (`crypto_private_keys`) the core loads from; the raw copies are deleted at launch.
   The history-file channel key and the social-recovery bundle are made in the core too.
 - **History transfer is the core's protocol; this app moves bytes.** CTH1 framing, record order,
-  the chunk cipher, CTT1 v2 and CTHF frames and every check on them are `construct-core`
-  `src/history/` since 2026-09-29 (`HistorySender` / `HistoryReceiver`). The app reads what
+  the chunk cipher, CTT1 v2 and CTHF frames and every check on them are
+  `construct-core/src/history/` since 2026-09-29 (`HistorySender` / `HistoryReceiver`). The app reads what
   `need()` asks, feeds it, fetches the directory keys at `AwaitKeys`, decodes released records
   into Core Data and writes media pieces to disk (`HistoryCoreStream`). Until then it was ~1 500
   lines of Swift shared with nothing else, which Android would have had to write a second time.
@@ -322,7 +322,7 @@ either wired up or deleted.
    `bytes` is `Data`, one block copy, while `sequence<u8>` is `[UInt8]` copied one byte per call
    (and `List<UByte>`, an object per byte, on Android). This rule prescribed `sequence<u8>` until
    2026-09-29 — it meant "not base64", and 195 fields were the slow kind. The core's
-   `tests/udl_bytes_test.rs` fails on a new one. A value from the core is already `Data`: do not
+   `construct-core/tests/udl_bytes_test.rs` fails on a new one. A value from the core is already `Data`: do not
    wrap it in `Data(…)`, which copies it again.
 4. **Session state persists as CFE envelopes** — every `Action::SaveSessionToSecureStore` data
    field originates from `export_session_bytes_for`, never `export_session_json_for`.
