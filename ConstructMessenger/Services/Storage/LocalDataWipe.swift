@@ -63,6 +63,12 @@ enum LocalDataWipe {
         RecoveryPhraseVault.shared.forgetPending()
         RecoveryPhraseVault.shared.forgetHeld()
         Task { await MediaSendCache.shared.clear() }
+        // The push tokens stay — they belong to the install — but their registration went with
+        // the account; the next account registers them again.
+        PushNotificationManager.shared.forgetServerRegistration()
+        #if os(iOS)
+        VoIPPushManager.shared.forgetServerRegistration()
+        #endif
 
         Log.info("LOCAL_WIPE: done reason=\(reason)", category: "Auth")
     }

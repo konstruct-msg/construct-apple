@@ -21,6 +21,13 @@ struct Construct_MessengerApp: App {
     @State private var securityViewModel: SecurityViewModel
     @State private var recoveryViewModel: AccountRecoveryViewModel
     @State private var socialRecoveryService: SocialRecoveryService
+    /// Bumped when `LocalDataWipe` swaps the store for an empty one. Everything under
+    /// `ContentView` is rebuilt with it, because a `@FetchRequest` that outlives the swap keeps
+    /// objects from the removed store, and the next fetch on the view context throws "persistent
+    /// store is not reachable from this NSManagedObjectContext's coordinator" from inside its
+    /// change observer. Build 712 crashed that way on the first message after deleting the
+    /// account and registering again.
+    @State private var storeGeneration = 0
     private let rootContainer: NSPersistentContainer
 
     init() {
@@ -57,6 +64,10 @@ struct Construct_MessengerApp: App {
                     .environment(\.managedObjectContext, rootContainer.viewContext)
                     .environment(authViewModel)
                     .environment(appDelegate.deepLinkHandler)
+                    .id(storeGeneration)
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .localStoreReplaced).receive(on: DispatchQueue.main)) { _ in
+                storeGeneration &+= 1
             }
             .environment(securityViewModel)
             .environment(authViewModel)   // PinLockView needs AuthViewModel for duress wipe

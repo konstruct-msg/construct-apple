@@ -29,6 +29,12 @@ final class VoIPPushManager: NSObject {
     private var registry: PKPushRegistry?
     private var sessionObserverTask: Task<Void, Never>?
 
+    /// Same as `PushNotificationManager.forgetServerRegistration`: the VoIP token stays with the
+    /// install, its registration went with the account.
+    func forgetServerRegistration() {
+        isRegisteredWithServer = false
+    }
+
     private override init() {
         super.init()
 
