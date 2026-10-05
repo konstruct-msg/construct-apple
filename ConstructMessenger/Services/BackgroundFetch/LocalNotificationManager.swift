@@ -89,18 +89,7 @@ class LocalNotificationManager: NSObject {
         ]
 
         let identifier = requestId.map { "cr-recv-\($0)" } ?? "cr-recv-\(UUID().uuidString)"
-        let request = UNNotificationRequest(
-            identifier: identifier,
-            content: content,
-            trigger: nil
-        )
-        notificationCenter.add(request) { error in
-            if let error = error {
-                Log.error("Failed to show contact-request notification: \(error)", category: "LocalNotifications")
-            } else {
-                Log.debug("Contact-request notification shown: \(identifier)", category: "LocalNotifications")
-            }
-        }
+        post(content, identifier: identifier, replacingPushOf: "contact_request_received")
     }
 
     /// Show a generic "New Message" notification.
@@ -122,17 +111,34 @@ class LocalNotificationManager: NSObject {
         // Use a stable per-chat identifier so back-to-back messages in the same
         // conversation collapse to a single banner instead of spamming the lock screen.
         let identifier = chatId.map { "msg-chat-\($0)" } ?? "msg-\(UUID().uuidString)"
-        let request = UNNotificationRequest(
-            identifier: identifier,
-            content: content,
-            trigger: nil
-        )
+        post(content, identifier: identifier, replacingPushOf: "new_message")
+    }
 
-        notificationCenter.add(request) { error in
-            if let error = error {
-                Log.error("Failed to show notification: \(error)", category: "LocalNotifications")
-            } else {
-                Log.debug("Notification shown: \(identifier)", category: "LocalNotifications")
+    /// Posts `content`, taking the place of the banner the server's push already put up.
+    ///
+    /// Since 2026-10-05 a message push is an alert ("Konstruct / New message", from the app's
+    /// own strings) that also carries `content-available`. When iOS grants the wake, the fetch
+    /// lands here and would add a second banner and a second sound for the same message. So
+    /// a push banner of the same kind delivered moments ago is removed and this one is posted
+    /// without sound; ours stays because it carries the chat it belongs to.
+    private func post(_ content: UNMutableNotificationContent, identifier: String, replacingPushOf activity: String) {
+        notificationCenter.getDeliveredNotifications { [notificationCenter] delivered in
+            let replaced = PushBannerReplacement.identifiersToReplace(
+                among: delivered.map(PushBannerReplacement.Delivered.init),
+                activity: activity,
+                now: Date()
+            )
+            if !replaced.isEmpty {
+                notificationCenter.removeDeliveredNotifications(withIdentifiers: replaced)
+                content.sound = nil
+            }
+            let request = UNNotificationRequest(identifier: identifier, content: content, trigger: nil)
+            notificationCenter.add(request) { error in
+                if let error {
+                    Log.error("Failed to show notification: \(error)", category: "LocalNotifications")
+                } else {
+                    Log.debug("Notification shown: \(identifier) (replaced \(replaced.count) push banner(s))", category: "LocalNotifications")
+                }
             }
         }
     }
@@ -357,5 +363,46 @@ extension Notification.Name {
 private extension String {
     var localized: String {
         return NSLocalizedString(self, comment: "")
+    }
+}
+
+/// Which push banners a banner of our own replaces. Pure, so the window and the kind match are
+/// reachable from tests without a notification center.
+enum PushBannerReplacement {
+
+    /// How recent a push banner must be to count as this wake's. A wake runs within ~30 s of
+    /// its push; an older banner belongs to an earlier message and keeps its place (and our
+    /// banner keeps its sound, since nothing else just made one).
+    static let window: TimeInterval = 60
+
+    struct Delivered: Equatable {
+        let identifier: String
+        let date: Date
+        let fromPush: Bool
+        /// `construct.type` from the push payload.
+        let activity: String?
+
+        init(identifier: String, date: Date, fromPush: Bool, activity: String?) {
+            self.identifier = identifier
+            self.date = date
+            self.fromPush = fromPush
+            self.activity = activity
+        }
+
+        init(_ notification: UNNotification) {
+            let construct = notification.request.content.userInfo["construct"] as? [AnyHashable: Any]
+            self.init(
+                identifier: notification.request.identifier,
+                date: notification.date,
+                fromPush: notification.request.trigger is UNPushNotificationTrigger,
+                activity: construct?["type"] as? String
+            )
+        }
+    }
+
+    static func identifiersToReplace(among delivered: [Delivered], activity: String, now: Date) -> [String] {
+        delivered
+            .filter { $0.fromPush && $0.activity == activity && now.timeIntervalSince($0.date) <= window }
+            .map(\.identifier)
     }
 }
