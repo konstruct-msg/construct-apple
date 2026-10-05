@@ -39,26 +39,61 @@ struct InCallView: View {
     @State private var timer: Timer? = nil
 
     private var isEnded: Bool { endReason != nil }
-    private var showsRemoteVideo: Bool { video.remoteCameraOn && !isEnded }
-    private var showsLocalPreview: Bool { video.announcedCameraOn && !isEnded }
+    /// Which face is on the big screen when both cameras are on.
+    @State private var videoSwapped = false
 
-    private enum VideoLayout {
-        /// About a quarter of a phone's width, 3:4 like the camera.
-        static let previewWidth: CGFloat = 104
-        static let previewAspect: CGFloat = 3.0 / 4.0
+    /// The video screen while a camera is on; nil is this audio screen.
+    private var videoStage: VideoCallStage? {
+        #if os(iOS)
+        VideoCallStage.make(video, isConnecting: isConnecting, isEnded: isEnded, swapped: videoSwapped)
+        #else
+        nil
+        #endif
     }
 
     var body: some View {
+        Group {
+            #if os(iOS)
+            if let videoStage {
+                VideoCallView(
+                    session: session,
+                    stage: videoStage,
+                    video: video,
+                    status: statusText,
+                    quality: quality,
+                    isConnecting: isConnecting,
+                    isMuted: $isMuted,
+                    swapped: $videoSwapped,
+                    onMuteChanged: onMuteChanged,
+                    onEnd: onEnd,
+                    onMinimize: isEnded ? nil : onMinimize,
+                    onCameraChanged: onCameraChanged,
+                    onSwitchCamera: onSwitchCamera
+                )
+            } else {
+                audioScreen
+            }
+            #else
+            audioScreen
+            #endif
+        }
+        .onAppear {
+            guard !isConnecting && !isEnded else { return }
+            startTimer()
+        }
+        .onChange(of: isConnecting) { _, connecting in
+            if !connecting && !isEnded { startTimer() } else { stopTimer() }
+        }
+        .onChange(of: isEnded) { _, ended in
+            if ended { stopTimer() }
+        }
+        .onDisappear { stopTimer() }
+    }
+
+    private var audioScreen: some View {
         ZStack {
             Color.CT.bg
                 .ignoresSafeArea()
-
-            #if os(iOS) && canImport(WebRTC)
-            if showsRemoteVideo {
-                CallVideoView(side: .remote)
-                    .ignoresSafeArea()
-            }
-            #endif
 
             VStack(spacing: 0) {
                 // Minimise button — chevron-down in the top-left. Hidden once
@@ -85,17 +120,14 @@ struct InCallView: View {
 
                 // Avatar + name
                 VStack(spacing: 16) {
-                    // The peer's face is the focal point while their camera is on.
-                    if !showsRemoteVideo {
-                        ZStack {
-                            ContactMainAvatarView(userId: session.peerUserId, displayName: session.peerName, size: 96)
-                            // Pulse appears in two distinct UX moments:
-                            // 1. While the call is dialling / ringing (connecting=true)
-                            // 2. While ICE has transiently dropped (.reconnecting)
-                            // Static avatar otherwise = "everything's fine".
-                            if !isEnded && (isConnecting || quality == .reconnecting) {
-                                PulseRingView(size: 96)
-                            }
+                    ZStack {
+                        ContactMainAvatarView(userId: session.peerUserId, displayName: session.peerName, size: 96)
+                        // Pulse appears in two distinct UX moments:
+                        // 1. While the call is dialling / ringing (connecting=true)
+                        // 2. While ICE has transiently dropped (.reconnecting)
+                        // Static avatar otherwise = "everything's fine".
+                        if !isEnded && (isConnecting || quality == .reconnecting) {
+                            PulseRingView(size: 96)
                         }
                     }
 
@@ -138,45 +170,15 @@ struct InCallView: View {
                         #if os(iOS)
                         AudioRouteControl()
                         #endif
+                        // Turning the camera on here is what moves the call to the video screen.
                         if video.canSend {
                             CallControlButton(config: cameraConfig)
-                        }
-                        if showsLocalPreview {
-                            CallControlButton(config: flipConfig)
                         }
                     }
                     .padding(.bottom, 52)
                 }
             }
         }
-        .overlay(alignment: .topTrailing) {
-            #if os(iOS) && canImport(WebRTC)
-            if showsLocalPreview {
-                CallVideoView(side: .local)
-                    // The front camera is shown as a mirror, as every camera app does.
-                    .scaleEffect(x: video.facing == .front ? -1 : 1)
-                    .frame(
-                        width: VideoLayout.previewWidth,
-                        height: VideoLayout.previewWidth / VideoLayout.previewAspect
-                    )
-                    .clipShape(CTShape.card())
-                    .padding(.horizontal, CTLayout.edgePad)
-                    .padding(.top, CTLayout.inlinePad)
-                    .accessibilityHidden(true)
-            }
-            #endif
-        }
-        .onAppear {
-            guard !isConnecting && !isEnded else { return }
-            startTimer()
-        }
-        .onChange(of: isConnecting) { _, connecting in
-            if !connecting && !isEnded { startTimer() } else { stopTimer() }
-        }
-        .onChange(of: isEnded) { _, ended in
-            if ended { stopTimer() }
-        }
-        .onDisappear { stopTimer() }
     }
 
     // MARK: - Secondary controls
@@ -199,15 +201,6 @@ struct InCallView: View {
             label: NSLocalizedString("call_camera", comment: ""),
             tint: video.localCameraOn ? Color.CT.accent : Color.CT.textDim,
             action: { onCameraChanged(!video.localCameraOn) }
-        )
-    }
-
-    private var flipConfig: CallControlConfig {
-        CallControlConfig(
-            systemImage: "arrow.triangle.2.circlepath.camera",
-            label: NSLocalizedString("call_flip_camera", comment: ""),
-            tint: Color.CT.textDim,
-            action: onSwitchCamera
         )
     }
 
@@ -470,7 +463,7 @@ struct AudioRoutePickerButton: View {
     }
 }
 
-private struct AVRoutePickerViewRepresentable: UIViewRepresentable {
+struct AVRoutePickerViewRepresentable: UIViewRepresentable {
     func makeUIView(context: Context) -> AVRoutePickerView {
         let v = AVRoutePickerView()
         // Render system glyph transparent — our SwiftUI Image underneath is the visible icon.

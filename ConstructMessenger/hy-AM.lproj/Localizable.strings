@@ -818,6 +818,9 @@
 "call_speaker" = "Բարձրախոս";
 "call_camera" = "Տեսախցիկ";
 "call_flip_camera" = "Շրջել";
+"call_peer_camera_off" = "Տեսախցիկն անջատված է";
+"call_swap_video" = "Փոխել տեսանյութերը";
+"call_self_view" = "Ձեր տեսախցիկը";
 "call_end" = "Ավարտել զանգը";
 "call_connecting" = "Միացում…";
 "call_incoming_audio" = "Մուտքային աուդիո զանգ";

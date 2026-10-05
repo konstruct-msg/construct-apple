@@ -803,6 +803,9 @@
 "call_speaker" = "Haut-parleur";
 "call_camera" = "Caméra";
 "call_flip_camera" = "Retourner";
+"call_peer_camera_off" = "Caméra désactivée";
+"call_swap_video" = "Inverser les vidéos";
+"call_self_view" = "Votre caméra";
 "call_end" = "Raccrocher";
 "call_connecting" = "Connexion…";
 "call_incoming_audio" = "Appel audio entrant";

@@ -719,6 +719,9 @@
 "call_speaker" = "スピーカー";
 "call_camera" = "カメラ";
 "call_flip_camera" = "切替";
+"call_peer_camera_off" = "カメラオフ";
+"call_swap_video" = "映像を入れ替え";
+"call_self_view" = "自分のカメラ";
 "call_end" = "通話を終了";
 "call_connecting" = "接続中...";
 "call_incoming_audio" = "音声着信";

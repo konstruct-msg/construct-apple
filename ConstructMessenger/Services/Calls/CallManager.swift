@@ -745,8 +745,19 @@ final class CallManager: CallUIManaging {
             }
         }
         #endif
+        let wasSending = video.canSend && video.localCameraOn
         video.localCameraOn = on
         applyCamera()
+        #if os(iOS)
+        let earpiece = AVAudioSession.sharedInstance().currentRoute.outputs.contains { $0.portType == .builtInReceiver }
+        if CallVideoAudio.movesToSpeaker(
+            wasSending: wasSending,
+            isSending: video.canSend && video.localCameraOn,
+            outputIsEarpiece: earpiece
+        ) {
+            CallAudioController.setSpeaker(true)
+        }
+        #endif
     }
 
     /// The session the video views draw from. Nothing else outside this class needs it.
