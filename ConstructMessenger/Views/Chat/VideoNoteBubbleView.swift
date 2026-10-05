@@ -3,8 +3,9 @@
 //  Construct Messenger
 //
 //  A video note in the transcript: a short video recorded in the chat, shown whole — never
-//  cropped to a circle — playing muted on a loop while it is on screen, and opening full screen
-//  with sound on tap. `decisions/video-notes-are-uncropped-and-expand.md`.
+//  cropped to a circle — playing muted on a loop while it is on screen. A tap expands it in place
+//  and plays it with sound, the chat still around it (`VideoNotePlayback`); full screen is a
+//  button on the expanded note. `decisions/video-notes-are-uncropped-and-expand.md`.
 //
 //  The inline loop plays a composition of the video track alone. A muted player still owns an
 //  audio track, and with it a claim on the audio session; a note scrolling past must not pause
@@ -20,8 +21,11 @@ struct VideoNoteBubbleView: View {
     let itemIndex: Int
     let isPlaceholder: Bool
     let isSelected: Bool
-    /// Opens the note full screen, with sound. Called only once the file is local.
-    let onTap: () -> Void
+    /// Opens the note in the gallery. Only from the expanded note's button, once the file is local.
+    let onOpenFullScreen: () -> Void
+
+    @Environment(\.containerWidth) private var containerWidth
+    private var playback = VideoNotePlayback.shared
 
     @State private var videoURL: URL?
     @State private var poster: PlatformImage?
@@ -34,8 +38,13 @@ struct VideoNoteBubbleView: View {
     @State private var isTranscribing = false
     @State private var showsTranscript = true
 
+    private var key: VideoNotePlayback.Key { .init(messageId: message.id, itemIndex: itemIndex) }
+    private var isExpanded: Bool { playback.expanded == key }
+
     private var size: CGSize {
-        let width = ChatUIConstants.VideoNote.width
+        let width = isExpanded
+            ? ChatUIConstants.VideoNote.expandedWidth(in: containerWidth)
+            : ChatUIConstants.VideoNote.width
         var aspect = ChatUIConstants.VideoNote.aspectRatio
         if let w = item["width"] as? Int, let h = item["height"] as? Int, w > 0, h > 0 {
             aspect = CGFloat(w) / CGFloat(h)
@@ -66,14 +75,19 @@ struct VideoNoteBubbleView: View {
             } else {
                 Rectangle().fill(Color.CT.bgMsg)
             }
-            if let videoURL, isOnScreen {
+            if isExpanded, let player = playback.player {
+                PlayerLayerView(player: player)
+            } else if let videoURL, isOnScreen {
                 LoopingVideoView(url: videoURL)
             }
             centerGlyph
         }
         .frame(width: size.width, height: size.height)
         .clipShape(RoundedRectangle(cornerRadius: ChatUIConstants.Media.cornerRadius, style: .continuous))
-        .overlay(alignment: .bottomLeading) { if !isUploading { chip } }
+        .overlay(alignment: .bottom) { if isExpanded { playingControls } }
+        .overlay(alignment: .bottomLeading) { if !isUploading, !isExpanded { chip } }
+        .overlay(alignment: .topLeading) { if isExpanded { fullScreenButton } }
+        .animation(.spring(duration: ChatUIConstants.VideoNote.expandDuration), value: isExpanded)
         .overlay(
             RoundedRectangle(cornerRadius: ChatUIConstants.Media.cornerRadius, style: .continuous)
                 .stroke(isSelected ? Color.CT.accent : Color.clear,
@@ -85,12 +99,17 @@ struct VideoNoteBubbleView: View {
             isOnScreen = true
             loadPoster()
             videoURL = MediaVideoCache.shared.url(for: message.id, at: itemIndex)
-            if videoURL == nil, shouldFetchWithoutAsking { fetch(thenOpen: false) }
+            if videoURL == nil, shouldFetchWithoutAsking { fetch(thenPlay: false) }
         }
-        .onDisappear { isOnScreen = false }
+        .onDisappear {
+            isOnScreen = false
+            // Scrolled out of view: nobody is watching, so stop and fold back.
+            playback.collapse(ifShowing: key)
+        }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(NSLocalizedString("video_note", comment: "A video note in the transcript"))
         .accessibilityAddTraits(.isButton)
+        .accessibilityAction(named: Text(LocalizedStringKey("video_note_full_screen"))) { openFullScreen() }
         // After the element above, so VoiceOver reaches it on its own.
         .overlay(alignment: .topTrailing) { if !isPlaceholder, !isMissingMedia { transcriptButton } }
     }
@@ -147,7 +166,52 @@ struct VideoNoteBubbleView: View {
 
     // MARK: Overlays
 
-    /// Duration, and that the sound is off here — it plays with sound full screen.
+    /// While expanded: how far along, and the speed. A tap on the card pauses and resumes.
+    private var playingControls: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Spacer()
+                Button { playback.cycleRate() } label: {
+                    Text(Self.rateLabel(playback.rate))
+                        .font(CTFont.badge)
+                        .monospacedDigit()
+                        .foregroundColor(.white)
+                        .padding(.horizontal, ChatUIConstants.VideoNote.chipHorizontalPadding)
+                        .padding(.vertical, ChatUIConstants.VideoNote.chipVerticalPadding)
+                        .background(.black.opacity(0.55),
+                                    in: RoundedRectangle(cornerRadius: ChatUIConstants.Media.badgeCornerRadius, style: .continuous))
+                        .frame(minWidth: CTLayout.hitTarget, minHeight: CTLayout.hitTarget)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(Text(LocalizedStringKey("playback_speed")))
+                .accessibilityValue(Text(Self.rateLabel(playback.rate)))
+            }
+            ProgressView(value: playback.progress)
+                .progressViewStyle(.linear)
+                .tint(.white)
+                .padding(.horizontal, CTLayout.inlinePad)
+                .padding(.bottom, CTLayout.inlinePad)
+        }
+    }
+
+    private var fullScreenButton: some View {
+        Button { openFullScreen() } label: {
+            Image(systemName: "arrow.up.left.and.arrow.down.right")
+                .font(.system(size: ChatUIConstants.VideoNote.transcriptIconSize))
+                .foregroundColor(.white)
+                .frame(width: CTLayout.hitTarget, height: CTLayout.hitTarget)
+                .background(.black.opacity(0.45), in: Circle().inset(by: CTLayout.inlinePad))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(Text(LocalizedStringKey("video_note_full_screen")))
+    }
+
+    static func rateLabel(_ rate: Float) -> String {
+        rate == rate.rounded() ? "\(Int(rate))×" : String(format: "%.1f×", rate)
+    }
+
+    /// Duration, and that the sound is off here — a tap plays it with sound.
     private var chip: some View {
         HStack(spacing: ChatUIConstants.VideoNote.chipSpacing) {
             Image(systemName: "speaker.slash.fill")
@@ -180,6 +244,11 @@ struct VideoNoteBubbleView: View {
             } else {
                 ProgressView().tint(.white)
             }
+        } else if isExpanded, playback.isPaused {
+            Image(systemName: "play.fill")
+                .font(.system(size: ChatUIConstants.VideoNote.downloadIconSize))
+                .foregroundColor(.white)
+                .shadow(color: .black.opacity(0.35), radius: 8, y: 2)
         } else if videoURL == nil {
             Image(systemName: "arrow.down.circle.fill")
                 .font(.system(size: ChatUIConstants.VideoNote.downloadIconSize))
@@ -216,10 +285,17 @@ struct VideoNoteBubbleView: View {
 
     private func open() {
         guard !isPlaceholder, !isMissingMedia else { return }
-        if videoURL != nil { onTap() } else { fetch(thenOpen: true) }
+        if let videoURL { playback.tap(key, url: videoURL) } else { fetch(thenPlay: true) }
     }
 
-    private func fetch(thenOpen: Bool) {
+    private func openFullScreen() {
+        guard !isPlaceholder, !isMissingMedia, videoURL != nil else { return }
+        // The gallery has its own player; two would play over each other.
+        playback.collapse()
+        onOpenFullScreen()
+    }
+
+    private func fetch(thenPlay: Bool) {
         guard !isDownloading else { return }
         isDownloading = true
         downloadProgress = 0
@@ -236,7 +312,7 @@ struct VideoNoteBubbleView: View {
                 await MainActor.run {
                     videoURL = url
                     isDownloading = false
-                    if thenOpen { onTap() }
+                    if thenPlay { playback.tap(key, url: url) }
                 }
             } catch {
                 let disposition = MediaLoadFailurePolicy.disposition(for: error)

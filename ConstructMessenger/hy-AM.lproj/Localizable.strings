@@ -603,6 +603,7 @@
 "photo" = "Լուսանկար";
 "video" = "Տեսանյութ";
 "video_note" = "Տեսահաղորդագրություն";
+"video_note_full_screen" = "Ամբողջ էկրանով";
 "video_note_record" = "Տեսագրել տեսահաղորդագրություն";
 "video_note_pause" = "Դադար";
 "video_note_resume" = "Շարունակել տեսագրումը";

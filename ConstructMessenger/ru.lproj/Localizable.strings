@@ -604,6 +604,7 @@
 "photo" = "Фото";
 "video" = "Видео";
 "video_note" = "Видеозаметка";
+"video_note_full_screen" = "На весь экран";
 "video_note_record" = "Записать видеозаметку";
 "video_note_pause" = "Пауза";
 "video_note_resume" = "Продолжить запись";
