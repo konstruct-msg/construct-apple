@@ -247,6 +247,10 @@
 "user_not_found" = "Пользователь не найден";
 "failed_to_encode_profile" = "Не удалось закодировать профиль";
 "search_messages" = "Поиск сообщений";
+"chat_actions" = "Действия";
+"chat_action_search" = "Поиск";
+"chat_action_call" = "Звонок";
+"chat_action_video" = "Видео";
 "select" = "Выбрать";
 "select_messages" = "Выбрать сообщения";
 "delete_selected" = "Удалить выбранное";

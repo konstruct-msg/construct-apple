@@ -253,6 +253,10 @@
 "user_not_found" = "User not found";
 "failed_to_encode_profile" = "Failed to encode profile";
 "search_messages" = "Search messages";
+"chat_actions" = "Actions";
+"chat_action_search" = "Search";
+"chat_action_call" = "Call";
+"chat_action_video" = "Video";
 "select" = "Select";
 "select_messages" = "Select Messages";
 "delete_selected" = "Delete Selected";

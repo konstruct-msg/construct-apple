@@ -44,6 +44,9 @@ struct ChatView: View {
 
     @State private var searchText = ""
     @State private var isSearchActive = false
+    /// The header's action palette, while open. Drawn here, over the whole chat, so a tap
+    /// anywhere else can close it.
+    @State private var actionPalette: ChatActionPaletteState?
     @State private var isEditMode = false
     @State private var selectedMessages: Set<String> = []
     @State private var galleryStartItem: GalleryStartItem?  // media gallery presenter
@@ -267,6 +270,26 @@ struct ChatView: View {
                 Spacer(minLength: 0)
             }
             .frame(maxHeight: .infinity, alignment: .top)
+            .overlayPreferenceValue(ChatActionButtonAnchorKey.self) { anchor in
+                GeometryReader { geo in
+                    if let actionPalette, let anchor {
+                        let button = geo[anchor]
+                        ChatActionPaletteView(
+                            state: actionPalette,
+                            actions: headerActions,
+                            center: CGPoint(x: button.midX, y: button.midY),
+                            callout: ChatActionPaletteGeometry.calloutPosition(
+                                buttonCenter: CGPoint(x: button.midX, y: button.midY),
+                                containerWidth: geo.size.width
+                            ),
+                            onAction: performHeaderAction,
+                            onDismiss: { self.actionPalette = nil }
+                        )
+                        .transition(.opacity)
+                    }
+                }
+                .animation(.easeOut(duration: 0.15), value: actionPalette == nil)
+            }
 
         }
         #if os(iOS)
@@ -565,7 +588,6 @@ struct ChatView: View {
             contactKTStatus: contactKTStatus,
             contactTrustAlert: contactTrustAlert,
             isEditMode: isEditMode,
-            canStartCall: canStartCall,
             onBack: { dismiss() },
             onOpenProfile: { showingUserProfile = true },
             onDoneEdit: {
@@ -574,13 +596,9 @@ struct ChatView: View {
                     selectedMessages.removeAll()
                 }
             },
-            onStartCall: startCall,
-            onStartVideoCall: startVideoCall,
-            onToggleSearch: {
-                withAnimation {
-                    isSearchActive = true
-                }
-            },
+            actions: headerActions,
+            actionPalette: $actionPalette,
+            onAction: performHeaderAction,
             onKTWarningTap: {
                 if contactTrustAlert != nil {
                     showingSafetyNumbers = true
@@ -989,6 +1007,19 @@ struct ChatView: View {
               viewModel.chat.otherUser != nil,
               case .idle = callManager.state else { return false }
         return true
+    }
+
+    private var headerActions: [ChatAction] {
+        ChatAction.available(canCall: canStartCall, videoEnabled: CallsFeature.isVideoEnabled)
+    }
+
+    private func performHeaderAction(_ action: ChatAction) {
+        actionPalette = nil
+        switch action {
+        case .search: withAnimation { isSearchActive = true }
+        case .call: startCall()
+        case .videoCall: startVideoCall()
+        }
     }
 
     private func startCall() {
