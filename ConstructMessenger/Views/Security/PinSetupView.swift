@@ -44,7 +44,7 @@ struct PinSetupView: View {
                 if let errorKey {
                     Text(LocalizedStringKey(errorKey))
                         .foregroundColor(.red)
-                        .font(.subheadline)
+                        .font(CTFont.ui(15))
                         .multilineTextAlignment(.center)
                         .padding(.top, 12)
                         .padding(.horizontal, 32)
@@ -124,7 +124,7 @@ struct PinSetupView: View {
         case .currentPin:
             VStack(spacing: 16) {
                 Text("enter_pin_code")
-                    .font(.headline)
+                    .font(CTFont.ui(17, weight: .semibold))
                 PinDotsField(
                     length: securityViewModel.pinLength ?? 6,
                     pin: $currentPin,
@@ -136,16 +136,16 @@ struct PinSetupView: View {
         case .enterPin:
             VStack(spacing: 16) {
                 Text("create_pin_code")
-                    .font(.headline)
+                    .font(CTFont.ui(17, weight: .semibold))
                 PinDotsField(length: 6, pin: $newPin, shake: $shake)
                 Text("pin_code_length")
-                    .font(.caption)
+                    .font(CTFont.secondary)
                     .foregroundColor(.secondary)
             }
         case .confirmPin:
             VStack(spacing: 16) {
                 Text("confirm_pin_code")
-                    .font(.headline)
+                    .font(CTFont.ui(17, weight: .semibold))
                 PinDotsField(
                     length: newPin.count,
                     pin: $confirmPin,
@@ -159,7 +159,7 @@ struct PinSetupView: View {
                 if securityViewModel.isBiometricAvailable {
                     let label = String(format: NSLocalizedString("enable_biometric", comment: ""), securityViewModel.biometricDisplayName)
                     Text(label)
-                        .font(.headline)
+                        .font(CTFont.ui(17, weight: .semibold))
                         .multilineTextAlignment(.center)
 
                     Toggle(isOn: $enableBiometrics) {
@@ -182,7 +182,7 @@ struct PinSetupView: View {
                     .padding(.top, 8)
                 } else {
                     Text("biometric_unavailable")
-                        .font(.headline)
+                        .font(CTFont.ui(17, weight: .semibold))
                         .multilineTextAlignment(.center)
                 }
             }

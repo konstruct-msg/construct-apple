@@ -68,6 +68,9 @@ struct QRScannerView: View {
                     Button("cancel") { dismiss() }
                         .foregroundColor(.white)
                 }
+                // The camera debug panel is a developer surface; until 2026-10-06 its button was in
+                // every build, release included.
+                #if DEBUG
                 ToolbarItem(placement: .primaryAction) {
                     Button {
                         showDebugInfo.toggle()
@@ -76,6 +79,7 @@ struct QRScannerView: View {
                             .foregroundColor(.white)
                     }
                 }
+                #endif
             }
             .onAppear { checkCameraPermission() }
             .onDisappear { scanner.stopScanning() }
@@ -100,16 +104,16 @@ struct QRScannerView: View {
     private var bottomPanel: some View {
         VStack(spacing: 14) {
             Text("scan_qr_code")
-                .font(.headline)
+                .font(CTFont.ui(17, weight: .semibold))
                 .foregroundColor(.white)
 
             Text("position_qr_code_within_frame")
-                .font(.subheadline)
+                .font(CTFont.ui(15))
                 .foregroundColor(.white.opacity(0.8))
 
             Button { handleClipboardPaste() } label: {
                 Label("paste_invite_link", systemImage: "doc.on.clipboard")
-                    .font(.subheadline)
+                    .font(CTFont.ui(15))
                     .padding(.horizontal, 16)
                     .padding(.vertical, 10)
                     .background(Color.white.opacity(0.15))
@@ -520,11 +524,11 @@ struct QRScannerView: View {
             Image(systemName: "qrcode.viewfinder")
                 .font(CTIcon.font(CTIcon.hero, weight: .ultraLight))
                 .foregroundStyle(.secondary)
-            Text("QR scanning not available on macOS")
-                .font(.headline)
+            Text(LocalizedStringKey("qr_scanning_unavailable_mac"))
+                .font(CTFont.ui(17, weight: .semibold))
                 .foregroundStyle(.secondary)
-            Text("Ask your contact to share their invite link instead.")
-                .font(.subheadline)
+            Text(LocalizedStringKey("qr_scanning_unavailable_mac_hint"))
+                .font(CTFont.ui(15))
                 .foregroundStyle(.tertiary)
                 .multilineTextAlignment(.center)
         }

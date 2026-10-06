@@ -1277,3 +1277,5 @@
 "recovery_reminder_lost_title" = "La clé de récupération ne peut plus être affichée";
 "recovery_reminder_lost_body" = "Le code de l’appareil a été désactivé avant l’enregistrement de la clé, et iOS l’a supprimée. Votre compte fonctionne sur cet appareil, mais si vous le perdez ou vous déconnectez, il ne pourra pas être récupéré.";
 "logout_backup_pending_message" = "Votre clé de récupération se trouve sur cet appareil et n’a pas été enregistrée. La déconnexion la supprime, et sans elle le compte ne peut pas être récupéré.";
+"qr_scanning_unavailable_mac" = "Le scan de QR code n’est pas disponible sur Mac";
+"qr_scanning_unavailable_mac_hint" = "Demandez à votre contact de vous envoyer son lien d’invitation.";

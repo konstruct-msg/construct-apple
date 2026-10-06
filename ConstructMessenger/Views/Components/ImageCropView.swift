@@ -85,7 +85,7 @@ struct ImageCropView: View {
                         onCancel()
                     } label: {
                         Text("cancel")
-                            .font(.headline)
+                            .font(CTFont.ui(17, weight: .semibold))
                             .foregroundColor(.white)
                             .frame(maxWidth: .infinity)
                             .frame(height: 50)
@@ -98,7 +98,7 @@ struct ImageCropView: View {
                         onConfirm(cropped)
                     } label: {
                         Text("crop_use_photo")
-                            .font(.headline)
+                            .font(CTFont.ui(17, weight: .semibold))
                             #if canImport(UIKit)
                             .foregroundColor(Color(uiColor: .label))
                             #else

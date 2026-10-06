@@ -120,11 +120,11 @@ struct DesktopLinkRequestView: View {
                     .tracking(1)
 
                 Text(LocalizedStringKey("device_link_request_instruction"))
-                    .font(.title3.weight(.semibold))
+                    .font(CTFont.ui(20, weight: .semibold))
                     .multilineTextAlignment(.center)
 
                 Text(LocalizedStringKey("device_link_request_steps"))
-                    .font(.subheadline)
+                    .font(CTFont.ui(15))
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
@@ -153,7 +153,7 @@ struct DesktopLinkRequestView: View {
                         ? "device_link_waiting_approval"
                         : "device_link_scan_on_phone"
                 ))
-                .font(.caption)
+                .font(CTFont.secondary)
                 .foregroundStyle(.secondary)
             }
         }

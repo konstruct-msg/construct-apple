@@ -62,7 +62,7 @@ struct DeviceLinkScanView: View {
                             .tint(.white)
                         Text(LocalizedStringKey("device_link_linking"))
                             .foregroundStyle(.white)
-                            .font(.headline)
+                            .font(CTFont.ui(17, weight: .semibold))
                     }
                 }
             }
