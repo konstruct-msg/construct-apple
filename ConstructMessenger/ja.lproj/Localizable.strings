@@ -729,6 +729,8 @@
 "call_end" = "通話を終了";
 "call_connecting" = "接続中...";
 "call_incoming_audio" = "音声着信";
+"call_incoming_video" = "ビデオ着信";
+"call_answer_without_video" = "ビデオなし";
 "call_answer" = "応答";
 "call_decline" = "拒否";
 

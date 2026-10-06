@@ -830,6 +830,8 @@
 "call_end" = "Завершить";
 "call_connecting" = "Соединение…";
 "call_incoming_audio" = "Входящий аудиозвонок";
+"call_incoming_video" = "Входящий видеозвонок";
+"call_answer_without_video" = "Без видео";
 "call_answer" = "Ответить";
 "call_decline" = "Отклонить";
 

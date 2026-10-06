@@ -160,6 +160,9 @@ final class CallManager: CallUIManaging {
         var webrtc: (any WebRTCSessionProtocol)?
         /// Asked for with the video button: the camera comes on as soon as there is a sender.
         var startsWithCamera = false
+        /// Answered with "without video": a video offer that arrives after the answer does not
+        /// turn the camera on.
+        var answeredWithoutCamera = false
         var keepaliveTask: Task<Void, Never>?
         var receiveTask: Task<Void, Never>?
         var acceptTask: Task<Void, Never>?
@@ -524,6 +527,7 @@ final class CallManager: CallUIManaging {
             direction: .incoming
         )
         begin(session: session, initialState: .incoming(session))
+        video.ringsAsVideo = CallVideoSignal.pushRingsAsVideo(callData, videoEnabled: CallsFeature.isVideoEnabled)
         pullMissedCallSignalsIfNeeded()
 
         #if os(iOS)
@@ -705,9 +709,26 @@ final class CallManager: CallUIManaging {
         if case .ended = state { state = .idle }
     }
 
-    /// Answer the current incoming call from in-app UI (bypasses CallKit transaction).
-    func answerIncomingCall() {
+    /// Answer the current incoming call from the app's own incoming screen. Through CallKit when
+    /// it rings there, so CallKit knows the call is answered and activates the audio session —
+    /// answering past it leaves the call silent. Without the camera, a video offer arriving later
+    /// does not turn it on (`takeUpVideoCall`).
+    func answerIncomingCall(withCamera: Bool) {
         guard let active, case .incoming = state else { return }
+        if !withCamera {
+            active.answeredWithoutCamera = true
+            active.startsWithCamera = false
+        }
+        #if os(iOS)
+        if active.callKitRegistered {
+            let uuid = active.session.uuid
+            Task { @MainActor [weak self] in
+                guard await !CallKitProvider.shared.requestAnswerCall(uuid: uuid) else { return }
+                self?.answer(callUUID: uuid)
+            }
+            return
+        }
+        #endif
         answer(callUUID: active.session.uuid)
     }
 
@@ -764,10 +785,25 @@ final class CallManager: CallUIManaging {
     /// already there, and the camera comes on now.
     private func takeUpVideoCall(_ offer: Shared_Proto_Signaling_V1_CallOffer, for call: ActiveCall) {
         guard case .incoming = call.session.direction, !call.startsWithCamera,
-              CallVideoSignal.answersWithCamera(offerCallType: offer.callType, videoEnabled: CallsFeature.isVideoEnabled)
+              CallVideoSignal.turnsCameraOn(
+                  offerCallType: offer.callType,
+                  videoEnabled: CallsFeature.isVideoEnabled,
+                  answeredWithoutCamera: call.answeredWithoutCamera
+              )
         else { return }
         call.startsWithCamera = true
         if call.webrtc != nil { setCameraOn(true) }
+    }
+
+    /// The push rang the call as its `call_type` said; the offer, from inside the ratchet, has the
+    /// last word on how CallKit shows it.
+    private func ringAsOffered(_ offer: Shared_Proto_Signaling_V1_CallOffer, for call: ActiveCall) {
+        let isVideo = CallVideoSignal.answersWithCamera(offerCallType: offer.callType, videoEnabled: CallsFeature.isVideoEnabled)
+        video.ringsAsVideo = isVideo
+        #if os(iOS)
+        guard call.callKitRegistered else { return }
+        CallKitProvider.shared.updateCallHasVideo(uuid: call.session.uuid, hasVideo: isVideo)
+        #endif
     }
 
     /// The session the video views draw from. Nothing else outside this class needs it.
@@ -1694,6 +1730,7 @@ final class CallManager: CallUIManaging {
                     hasAnswered: active.answeredAt != nil
                 ) {
                 case .holdUntilAnswered:
+                    ringAsOffered(offer, for: active)
                     takeUpVideoCall(offer, for: active)
                     holdRemoteOffer(offer, for: active)
                 case .renegotiate:
@@ -1707,7 +1744,9 @@ final class CallManager: CallUIManaging {
                 // local CoreData like the PushKit path does.
                 handleIncomingCallOffer(callId: signal.callID, callerUserId: senderUserId,
                                         callerName: nil,
-                                        sdp: offer.sdp)
+                                        sdp: offer.sdp,
+                                        hasVideo: CallVideoSignal.answersWithCamera(
+                                            offerCallType: offer.callType, videoEnabled: CallsFeature.isVideoEnabled))
                 if let active, active.session.id == signal.callID {
                     takeUpVideoCall(offer, for: active)
                 }
@@ -1809,7 +1848,7 @@ final class CallManager: CallUIManaging {
     ///
     /// `sdp` is plaintext, like every other writer of `pendingRemoteOfferSdp` — see
     /// `holdRemoteOffer` for what the removed `decryptSdp` hop was hiding.
-    private func handleIncomingCallOffer(callId: String, callerUserId: String, callerName: String?, sdp: String) {
+    private func handleIncomingCallOffer(callId: String, callerUserId: String, callerName: String?, sdp: String, hasVideo: Bool) {
         // Refused here rather than stored: an unusable offer that gets filed rings CallKit for a
         // call that cannot be negotiated, and the caller learns nothing until a human hangs up.
         guard offerSdpIsUsable(sdp) else {
@@ -1910,13 +1949,14 @@ final class CallManager: CallUIManaging {
         // next outgoing CXStartCallAction doesn't fail with maximumCallGroupsReached.
         #if os(iOS)
         let uuid = CallKitProvider.shared.reportIncomingCall(
-            callId: callId, callerId: callerUserId, callerName: name, hasVideo: false
+            callId: callId, callerId: callerUserId, callerName: name, hasVideo: hasVideo
         )
         #else
         let uuid = UUID()
         #endif
         let session = CallSession(id: callId, uuid: uuid, peerUserId: callerUserId, peerName: name, direction: .incoming)
         begin(session: session, initialState: .incoming(session))
+        video.ringsAsVideo = hasVideo
         active?.pendingRemoteOfferSdp = sdp
         #if os(iOS)
         active?.callKitRegistered = true

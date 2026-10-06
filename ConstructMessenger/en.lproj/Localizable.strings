@@ -828,6 +828,8 @@
 "call_end" = "End Call";
 "call_connecting" = "Connecting…";
 "call_incoming_audio" = "Incoming audio call";
+"call_incoming_video" = "Incoming video call";
+"call_answer_without_video" = "Without video";
 "call_answer" = "Answer";
 "call_decline" = "Decline";
 

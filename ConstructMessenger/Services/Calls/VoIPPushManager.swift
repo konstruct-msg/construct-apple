@@ -215,7 +215,7 @@ extension VoIPPushManager: PKPushRegistryDelegate {
             callId: callId,
             callerId: callerId,
             callerName: NSLocalizedString("construct_app_name", comment: ""),
-            hasVideo: false
+            hasVideo: CallVideoSignal.pushRingsAsVideo(callData, videoEnabled: CallsFeature.isVideoEnabled)
         )
 
         Log.info("Incoming VoIP push — CallKit notified sync (uuid=\(reportedUUID.uuidString.prefix(8))…)", category: "Calls")

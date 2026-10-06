@@ -44,7 +44,7 @@ struct MainTabView: View {
                 }
             }
             .fullScreenCover(isPresented: fullScreenCoverBinding) {
-                if let session = activeCallSession, let callManager {
+                if let session = activeCallSession ?? incomingVideoSession, let callManager {
                     ObservedInCallView(
                         manager: callManager,
                         session: session,
@@ -59,6 +59,9 @@ struct MainTabView: View {
                 // ended in the minimised state.
                 if isActive { isCallExpanded = true }
             }
+            .onChange(of: incomingVideoSession != nil) { _, isRinging in
+                if isRinging { isCallExpanded = true }
+            }
             .onReceive(NotificationCenter.default.publisher(for: .openSynapsTab)) { _ in
                 // Compact: TabView selection. Regular: ChatsSplitView also listens and
                 // switches its sidebar tab; keep selectedTab in sync for SynapsView guards.
@@ -72,7 +75,7 @@ struct MainTabView: View {
     /// as a minimise request — the call itself stays alive on `CallManager`.
     private var fullScreenCoverBinding: Binding<Bool> {
         Binding(
-            get: { CallsFeature.isEnabled && callManager != nil && isActiveOrConnecting && isCallExpanded },
+            get: { CallsFeature.isEnabled && callManager != nil && (isActiveOrConnecting || incomingVideoSession != nil) && isCallExpanded },
             set: { newValue in
                 if !newValue { isCallExpanded = false }
             }
@@ -160,6 +163,13 @@ struct MainTabView: View {
         case .ended(let s, _): return s
         default: return nil
         }
+    }
+
+    /// A video call ringing while the app is open gets the app's own screen too
+    /// (`IncomingVideoScreen`); not the mini bar, which is for a call in progress.
+    private var incomingVideoSession: CallSession? {
+        guard let callManager else { return nil }
+        return IncomingVideoScreen.session(for: callManager.state, video: callManager.video)
     }
 
     private var callEndReason: CallEndReason? {
@@ -265,6 +275,22 @@ private struct ObservedInCallView: View {
     let onMinimize: () -> Void
 
     var body: some View {
+        #if os(iOS)
+        if IncomingVideoScreen.session(for: manager.state, video: manager.video) != nil {
+            IncomingVideoCallView(
+                session: session,
+                onAnswer: { manager.answerIncomingCall(withCamera: $0) },
+                onDecline: { manager.declineIncomingCall() }
+            )
+        } else {
+            inCall
+        }
+        #else
+        inCall
+        #endif
+    }
+
+    private var inCall: some View {
         InCallView(
             session: session,
             isConnecting: isConnecting,
