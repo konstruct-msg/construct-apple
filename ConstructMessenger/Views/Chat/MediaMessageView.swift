@@ -309,11 +309,11 @@ private struct SingleMediaCell: View {
                     .tint(.white)
                     .frame(width: 90)
                 Text("\(Int(progress * 100))%")
-                    .font(CTFont.regular(11)).foregroundColor(.white).monospacedDigit()
+                    .font(CTFont.caption).foregroundColor(.white).monospacedDigit()
             } else {
                 ProgressView().scaleEffect(0.75).tint(.white)
                 Text(LocalizedStringKey("uploading"))
-                    .font(CTFont.regular(11)).foregroundColor(.white)
+                    .font(CTFont.caption).foregroundColor(.white)
             }
         }
         .padding(.horizontal, CTLayout.inlinePad).padding(.vertical, ChatUIConstants.Bubble.tightVerticalPadding)
@@ -344,7 +344,7 @@ private struct SingleMediaCell: View {
                 }
                 if videoDownloadProgress > 0 {
                     Text("\(Int(videoDownloadProgress * 100))%")
-                        .font(CTFont.regular(11))
+                        .font(CTFont.caption)
                         .foregroundColor(.white)
                         .monospacedDigit()
                 }
@@ -374,7 +374,7 @@ private struct SingleMediaCell: View {
 
     private func durationBadge(_ seconds: Double) -> some View {
         Text(formatMediaDuration(seconds))
-            .font(CTFont.regular(11)).foregroundColor(.white).monospacedDigit()
+            .font(CTFont.caption).foregroundColor(.white).monospacedDigit()
             .padding(.horizontal, 6).padding(.vertical, 3)
             .background(.black.opacity(0.55))
             .clipShape(Capsule())
@@ -399,7 +399,7 @@ private struct SingleMediaCell: View {
             Group {
                 if hasReceivedBytes && downloadProgress > 0 && downloadProgress < 1 {
                     Text("\(Int(downloadProgress * 100))%")
-                        .font(CTFont.regular(12))
+                        .font(CTFont.secondary)
                         .foregroundColor(.white)
                         .monospacedDigit()
                 } else {
@@ -432,13 +432,13 @@ private struct SingleMediaCell: View {
                         .font(CTIcon.font(CTIcon.overlay, weight: .regular))
                         .foregroundColor(Color.CT.danger)
                         .lineLimit(1).fixedSize()
-                    Text(LocalizedStringKey("failed_to_load")).font(CTFont.regular(11)).foregroundColor(Color.CT.textDim)
+                    Text(LocalizedStringKey("failed_to_load")).font(CTFont.caption).foregroundColor(Color.CT.textDim)
                     Button { loadThumbnail(forceRetry: true) } label: {
                         HStack(spacing: 4) {
                             Image(systemName: "arrow.clockwise").font(CTIcon.font(CTIcon.caption, weight: .regular))
                             Text(LocalizedStringKey("retry"))
                         }
-                        .font(CTFont.regular(11)).foregroundColor(Color.CT.accent)
+                        .font(CTFont.caption).foregroundColor(Color.CT.accent)
                         .padding(.horizontal, 12).padding(.vertical, 6)
                         .background(Color.CT.accent.opacity(0.1))
                         .overlay(Rectangle().stroke(Color.CT.accent.opacity(0.3), lineWidth: 1))
@@ -458,7 +458,7 @@ private struct SingleMediaCell: View {
                         .foregroundColor(Color.CT.danger)
                         .lineLimit(1).fixedSize()
                     Text(LocalizedStringKey("media_unavailable"))
-                        .font(CTFont.regular(11))
+                        .font(CTFont.caption)
                         .foregroundColor(Color.CT.textDim)
                 }
             }
@@ -850,7 +850,7 @@ private struct GridCell: View {
                 let progress = MediaUploadProgressTracker.shared.value(for: message.id)
                 if let progress, progress > 0 {
                     Text("\(Int(progress * 100))%")
-                        .font(CTFont.regular(12)).foregroundColor(.white).monospacedDigit()
+                        .font(CTFont.secondary).foregroundColor(.white).monospacedDigit()
                         .animation(.easeOut(duration: 0.2), value: progress)
                 } else {
                     ProgressView().tint(.white)
@@ -919,7 +919,7 @@ private struct GridCell: View {
             Group {
                 if hasReceivedBytes && downloadProgress > 0 && downloadProgress < 1 {
                     Text("\(Int(downloadProgress * 100))%")
-                        .font(CTFont.regular(11))
+                        .font(CTFont.caption)
                         .foregroundColor(.white)
                         .monospacedDigit()
                 } else {
@@ -952,7 +952,7 @@ private struct GridCell: View {
                 }
                 if videoDownloadProgress > 0 {
                     Text("\(Int(videoDownloadProgress * 100))%")
-                        .font(CTFont.regular(10))
+                        .font(CTFont.micro)
                         .foregroundColor(.white)
                         .monospacedDigit()
                 }

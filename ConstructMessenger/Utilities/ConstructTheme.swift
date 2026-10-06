@@ -159,14 +159,9 @@ private extension NSColor {
 
 /// Thin wrapper around ConstructFont so CT* views need no direct dependency on UIConstants.
 enum CTFont {
-    // Pre-split names: monospace at a fixed size, no Dynamic Type. Every call site that was ours
-    // is on a role, `ui` or `mono` now; the ones left are in files with unrelated work in flight,
-    // and these are not marked deprecated so that work does not build under thirty warnings that
-    // are not its own. When `grep -c 'CTFont\.\(regular\|medium\|bold\)('` reaches zero,
-    // these three lines go. New code: chrome is `ui` or a role, machine output is `mono`.
-    static func regular(_ size: CGFloat) -> Font { ConstructFont.mono(size, weight: .regular) }
-    static func medium(_ size: CGFloat)  -> Font { ConstructFont.mono(size, weight: .medium)  }
-    static func bold(_ size: CGFloat)    -> Font { ConstructFont.mono(size, weight: .bold)    }
+    // The pre-split names `regular` / `medium` / `bold` (fixed size, no Dynamic Type) are gone
+    // since 2026-10-06, when the last call site moved to a role (TODO 122). Chrome is `ui` or a
+    // role, machine output is `mono`.
 
     // MARK: - The chrome / technical split
 
@@ -356,7 +351,7 @@ enum CTShape {
 
 /// Canonical sizing tokens for nav bars, action icons, content rows, and composer chrome.
 ///
-/// All icon sizes are derived from `CTFont.bold(13)` line height (~16 pt) so that
+/// All icon sizes are derived from the line height of 13 pt bold chrome text (~16 pt) so that
 /// a nav bar containing only an SF Symbol is the same height as one containing text.
 enum CTLayout {
     /// Horizontal edge inset shared by nav bars, section headers, and content rows.

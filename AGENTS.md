@@ -89,7 +89,7 @@ Tokens — source of truth `ConstructMessenger/Utilities/ConstructTheme.swift`:
 | Kind | API |
 |------|-----|
 | Colors | `Color.CT.bg`, `.text`, `.textDim`, `.accent`, `.accentDim`, `.danger`, `.online` (status only), `.noise`, `.bgMsg`, `.outMsgBg`, `.outMsgText` |
-| Fonts | Chrome: the roles `CTFont.title/headline/body/bodyEmphasis/secondary/caption/micro/badge`, or `CTFont.ui(size, weight:)` for a size outside them — JetBrains Mono, Dynamic Type via `relativeTo:`. `CTFont.mono(size)` for content that *is* machine output. `CTFont.message(size)` for message text: the one face the reader chooses, system by default. `CTFont.regular/medium/bold` are the pre-split names, alive only until the four in-flight files migrate |
+| Fonts | Chrome: the roles `CTFont.title/headline/body/bodyEmphasis/secondary/caption/micro/badge`, or `CTFont.ui(size, weight:)` for a size outside them — JetBrains Mono, Dynamic Type via `relativeTo:`. `CTFont.mono(size)` for content that *is* machine output. `CTFont.message(size)` for message text: the one face the reader chooses, system by default. The pre-split `CTFont.regular/medium/bold` were removed 2026-10-06 |
 | Radii / Shapes | `CTRadius` (`badge` 6 · `card` 8 · `control` 10 · `pill` 999) via `CTShape.*()` — no magic `cornerRadius: 16\|18\|22` |
 | Layout | `CTLayout` (`edgePad` 12 · `controlHeight` 42 · `hitTarget` 44 · …) |
 | Glass | `.glassCapsule()` — defaults to pill; do not pass 18/22 |

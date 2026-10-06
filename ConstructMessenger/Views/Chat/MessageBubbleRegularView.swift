@@ -90,12 +90,12 @@ struct MessageBubbleRegularView: View {
                 } label: {
                     if isSelected {
                         Image(systemName: "circle")
-                            .font(CTFont.regular(14))
+                            .font(CTFont.ui(14))
                             .foregroundColor(Color.CT.textDim)
                     }
                     else {
                         Image(systemName: "checkmark.circle.fill")
-                            .font(CTFont.regular(14))
+                            .font(CTFont.ui(14))
                             .foregroundColor(Color.CT.accentDim)
                     }
                 }
@@ -262,13 +262,13 @@ struct MessageBubbleRegularView: View {
 
                         if message.isEdited {
                             Text(NSLocalizedString("edited", comment: ""))
-                                .font(CTFont.regular(ChatUIConstants.Typography.metaSize))
+                                .font(CTFont.micro)
                                 .foregroundColor(Color.CT.textDim)
                         }
 
                         if shouldShowTimestamp {
                             Text(message.safeTimestamp, style: .time)
-                                .font(CTFont.regular(ChatUIConstants.Typography.metaSize))
+                                .font(CTFont.micro)
                                 .foregroundColor(Color.CT.textDim)
                         }
                     }
@@ -414,12 +414,12 @@ struct MessageBubbleRegularView: View {
                 } label: {
                     if isSelected {
                         Image(systemName: "circle")
-                            .font(CTFont.regular(14))
+                            .font(CTFont.ui(14))
                             .foregroundColor(Color.CT.textDim)
                     }
                     else {
                         Image(systemName: "checkmark.circle.fill")
-                            .font(CTFont.regular(14))
+                            .font(CTFont.ui(14))
                             .foregroundColor(Color.CT.accentDim)
                     }
                 }
@@ -433,23 +433,23 @@ struct MessageBubbleRegularView: View {
         switch message.deliveryStatus {
         case .sending:
             Image(systemName: "circle")
-                .font(CTFont.regular(ChatUIConstants.Typography.metaSize))
+                .font(CTFont.micro)
                 .foregroundColor(Color.CT.textDim)
 
         case .sent:
             Image(systemName: "circle.fill")
-                .font(CTFont.regular(ChatUIConstants.Typography.metaSize))
+                .font(CTFont.micro)
                 .foregroundColor(Color.CT.textDim)
 
         case .delivered:
             Image(systemName: "checkmark.circle")
-                .font(CTFont.regular(ChatUIConstants.Typography.metaSize))
+                .font(CTFont.micro)
                 .foregroundColor(.green)
 
         case .queued:
             Button { onRetry?(message) } label: {
                 Image(systemName: "arrow.clockwise")
-                    .font(CTFont.regular(ChatUIConstants.Typography.metaSize))
+                    .font(CTFont.micro)
                     .foregroundColor(Color.CT.textDim)
             }
             .buttonStyle(.plain)
@@ -457,7 +457,7 @@ struct MessageBubbleRegularView: View {
         case .failed:
             Button { onRetry?(message) } label: {
                 Image(systemName: "exclamationmark.circle.fill")
-                    .font(CTFont.regular(ChatUIConstants.Typography.metaSize))
+                    .font(CTFont.micro)
                     .foregroundColor(Color.CT.danger)
             }
             .buttonStyle(.plain)
@@ -509,7 +509,7 @@ struct MessageBubbleRegularView: View {
                         onReact?(message, badge.emoji)
                     } label: {
                         Text(badge.emoji)
-                            .font(CTFont.regular(ChatUIConstants.Reaction.badgeFontSize))
+                            .font(CTFont.ui(ChatUIConstants.Reaction.badgeFontSize))
                             .padding(.horizontal, ChatUIConstants.Reaction.badgePadH)
                             .padding(.vertical, ChatUIConstants.Reaction.badgePadV)
                     }
@@ -593,7 +593,7 @@ struct MessageBubbleRegularView: View {
     private var swipeIndicatorOverlay: some View {
         if swipeOffset > ChatUIConstants.ReplySwipe.indicatorThreshold {
             Image(systemName: "arrow.uturn.left")
-                .font(CTFont.regular(14))
+                .font(CTFont.ui(14))
                 .foregroundColor(Color.CT.accent)
                 .opacity(min(max(Double(swipeOffset / ChatUIConstants.ReplySwipe.commitOffset), 0), 1))
                 // The overlay is attached after `.offset(x: -swipeOffset)` and therefore moves
