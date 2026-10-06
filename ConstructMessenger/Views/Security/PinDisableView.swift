@@ -22,7 +22,7 @@ struct PinDisableView: View {
 
                 VStack(spacing: 16) {
                     Text("enter_pin_code")
-                        .font(.headline)
+                        .font(CTFont.ui(17, weight: .semibold))
 
                     PinDotsField(
                         length: securityViewModel.pinLength ?? 6,
@@ -35,7 +35,7 @@ struct PinDisableView: View {
                     if let errorKey {
                         Text(LocalizedStringKey(errorKey))
                             .foregroundColor(.red)
-                            .font(.subheadline)
+                            .font(CTFont.ui(15))
                             .multilineTextAlignment(.center)
                     }
                 }
@@ -47,7 +47,7 @@ struct PinDisableView: View {
                     disablePin()
                 } label: {
                     Text("disable")
-                        .font(.headline)
+                        .font(CTFont.ui(17, weight: .semibold))
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity)
                         .padding()

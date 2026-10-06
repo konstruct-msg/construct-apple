@@ -290,11 +290,8 @@ extension Color {
 struct ConstructFont {
     /// Monospace — the chrome, and technical content inside it.
     ///
-    /// Target: JetBrains Mono. **No font file is bundled** — there is no `UIAppFonts` entry and
-    /// never has been — so every build to date has rendered the fallback, SF Mono, and that is
-    /// the face people have been looking at and calling ours. Bundling the real family is a
-    /// product decision (files + `Info.plist`), not a code one; until it is made, this function
-    /// is SF Mono with a name reserved.
+    /// JetBrains Mono, bundled since 2026-09-21 (`Fonts/`, `UIAppFonts`); SF Mono only if the
+    /// family does not resolve. `ThemeTypographyTests` asserts the four PostScript names do.
     /// - Parameter relativeTo: when given, the face scales with Dynamic Type — on both paths, so
     ///   that the bundled face and the fallback agree. `nil` keeps the fixed size.
     static func mono(_ size: CGFloat, weight: Font.Weight = .regular, relativeTo: Font.TextStyle? = nil) -> Font {

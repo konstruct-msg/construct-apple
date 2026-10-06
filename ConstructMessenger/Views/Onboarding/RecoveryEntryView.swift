@@ -58,14 +58,14 @@ struct RecoveryEntryView: View {
         return ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 Text(NSLocalizedString("recovery_entry_instructions", comment: ""))
-                    .font(.subheadline)
+                    .font(CTFont.ui(15))
                     .foregroundColor(.secondary)
                     .padding(.horizontal)
 
                 // Identifier
                 VStack(alignment: .leading, spacing: 6) {
                     Text(NSLocalizedString("recovery_identifier_label", comment: ""))
-                        .font(.caption)
+                        .font(CTFont.secondary)
                         .foregroundColor(.secondary)
                     TextField(NSLocalizedString("recovery_identifier_placeholder", comment: ""),
                               text: $vm.recoverIdentifier)
@@ -79,7 +79,7 @@ struct RecoveryEntryView: View {
 
                 // 12-word grid
                 Text(NSLocalizedString("recovery_enter_phrase", comment: ""))
-                    .font(.caption)
+                    .font(CTFont.secondary)
                     .foregroundColor(.secondary)
                     .padding(.horizontal)
 
@@ -95,7 +95,7 @@ struct RecoveryEntryView: View {
 
                 if !vm.enteredMnemonic.isEmpty && !vm.enteredMnemonicValid {
                     Text(NSLocalizedString("recovery_invalid_phrase", comment: ""))
-                        .font(.caption)
+                        .font(CTFont.secondary)
                         .foregroundColor(.red)
                         .padding(.horizontal)
                 }
@@ -123,7 +123,7 @@ struct RecoveryEntryView: View {
         @Bindable var vm = vm
         return HStack(spacing: 4) {
             Text("\(index + 1).")
-                .font(.caption)
+                .font(CTFont.mono(12))
                 .foregroundColor(.secondary)
                 .frame(width: 20, alignment: .trailing)
             TextField("", text: $vm.enteredWords[index])

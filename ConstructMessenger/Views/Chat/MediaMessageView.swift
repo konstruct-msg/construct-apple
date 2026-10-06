@@ -842,7 +842,7 @@ private struct GridCell: View {
             if extraCount > 0 {
                 Color.black.opacity(0.5)
                 Text("+\(extraCount)")
-                    .font(.title2.weight(.semibold)).foregroundColor(.white)
+                    .font(CTFont.ui(22, weight: .semibold)).foregroundColor(.white)
             }
 
             if isUploading {

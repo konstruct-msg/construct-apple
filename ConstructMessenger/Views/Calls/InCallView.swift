@@ -137,7 +137,7 @@ struct InCallView: View {
                     }
 
                     Text(session.peerName)
-                        .font(.title2.weight(.semibold))
+                        .font(CTFont.ui(22, weight: .bold))
                         .foregroundStyle(Color.CT.text)
 
                     Text(statusText)

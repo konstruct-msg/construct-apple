@@ -66,7 +66,7 @@ struct DraftsView: View {
                 if drafts.isEmpty {
                     Spacer()
                     Text(LocalizedStringKey("drafts_stored_locally"))
-                        .font(.footnote)
+                        .font(CTFont.body)
                         .foregroundColor(.secondary)
                     Spacer()
                 } else {
@@ -74,10 +74,10 @@ struct DraftsView: View {
                         ForEach(drafts) { draft in
                             VStack(alignment: .leading, spacing: 6) {
                                 Text(draft.text)
-                                    .font(.body)
+                                    .font(CTFont.message(15))
                                     .lineLimit(3)
                                 Text(draft.createdAt, style: .date)
-                                    .font(.caption)
+                                    .font(CTFont.secondary)
                                     .foregroundColor(.secondary)
                             }
                             .padding(.vertical, 6)
