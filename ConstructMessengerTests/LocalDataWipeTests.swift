@@ -8,6 +8,7 @@
 
 import CoreData
 import XCTest
+import GRPCCore
 @testable import Construct_Messenger
 
 @MainActor
@@ -58,24 +59,46 @@ final class LocalDataWipeTests: XCTestCase {
 
     // MARK: - Which rejection wipes
 
-    /// The server's word for a deactivated device, and nothing else. "Device not found" is also
-    /// what an unapproved join request gets — wiping on it would erase a device mid-link.
-    func testOnlyAnInactiveDeviceIsARemovedOne() {
-        let inactive = "RPCError(code: unauthenticated, message: \"Device is inactive\")"
-        XCTAssertTrue(AuthViewModel.isRemovedDevice(inactive, overDirectTLS: true))
-        XCTAssertFalse(AuthViewModel.isRemovedDevice(
-            "RPCError(code: unauthenticated, message: \"Device not found\")", overDirectTLS: true
-        ))
-        XCTAssertFalse(AuthViewModel.isRemovedDevice("GRPCCore.RPCError error 16", overDirectTLS: true))
-        XCTAssertFalse(AuthViewModel.isRemovedDevice("deadline exceeded", overDirectTLS: true))
+    /// The server's number for a deactivated device, and nothing else. `.notFound` is also what an
+    /// unapproved join request gets — wiping on it would erase a device mid-link. Mutation: compare
+    /// with `!= .unspecified` — the join request wipes.
+    func testOnlyARemovedDeviceIsARemovedOne() {
+        XCTAssertTrue(AuthViewModel.isRemovedDevice(.removed, overDirectTLS: true))
+        XCTAssertFalse(AuthViewModel.isRemovedDevice(.notFound, overDirectTLS: true))
+        XCTAssertFalse(AuthViewModel.isRemovedDevice(.unspecified, overDirectTLS: true))
     }
 
     /// Through VEIL the relay sees plaintext gRPC and can forge the answer. Mutation: drop the
     /// path check — any relay can erase the device.
     func testARelayedAnswerNeverWipes() {
-        XCTAssertFalse(AuthViewModel.isRemovedDevice(
-            "RPCError(code: unauthenticated, message: \"Device is inactive\")", overDirectTLS: false
-        ))
+        XCTAssertFalse(AuthViewModel.isRemovedDevice(.removed, overDirectTLS: false))
+    }
+
+    // MARK: - Reading the refusal
+
+    private func refusal(_ code: RPCError.Code, _ message: String, trailer: String?) -> Shared_Proto_Services_V1_DeviceRefusal {
+        var metadata = Metadata()
+        if let trailer { metadata.addString(trailer, forKey: DeviceRefusalReading.metadataKey) }
+        return DeviceRefusalReading.refusal(of: RPCError(code: code, message: message, metadata: metadata))
+    }
+
+    /// The number decides. Mutation: read the key from a different name — every refusal reads
+    /// as unspecified and a removed device keeps its data forever.
+    func testTheRefusalIsReadFromItsNumber() {
+        XCTAssertEqual(refusal(.unauthenticated, "Device is inactive", trailer: "1"), .removed)
+        XCTAssertEqual(refusal(.unauthenticated, "Device not found", trailer: "2"), .notFound)
+    }
+
+    /// The text alone is not a reason: a server older than the number, or anything that only
+    /// words its answer the same way. Mutation: fall back to matching the message.
+    func testTheTextAloneIsNoReason() {
+        XCTAssertEqual(refusal(.unauthenticated, "Device is inactive", trailer: nil), .unspecified)
+        XCTAssertEqual(refusal(.unauthenticated, "Device is inactive", trailer: "removed"), .unspecified)
+    }
+
+    /// Only an UNAUTHENTICATED status refuses a device. Mutation: drop the code check.
+    func testOnlyAnUnauthenticatedStatusCarriesARefusal() {
+        XCTAssertEqual(refusal(.permissionDenied, "Device is inactive", trailer: "1"), .unspecified)
     }
 
     // MARK: - Defaults
