@@ -74,6 +74,13 @@ final class CallKitProvider: NSObject, CXProviderDelegate {
         provider.reportCall(with: uuid, updated: update)
     }
 
+    /// The offer's word on whether the call is video, over the push's.
+    func updateCallHasVideo(uuid: UUID, hasVideo: Bool) {
+        let update = CXCallUpdate()
+        update.hasVideo = hasVideo
+        provider.reportCall(with: uuid, updated: update)
+    }
+
     @MainActor
     func requestEndCall(uuid: UUID) async {
         let action = CXEndCallAction(call: uuid)

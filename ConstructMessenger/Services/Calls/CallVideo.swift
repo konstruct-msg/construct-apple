@@ -80,6 +80,14 @@ enum CallVideoSignal {
         videoEnabled && offerCallType == .video
     }
 
+    /// Whether CallKit rings a pushed call as video. The server writes `call_type` into the push
+    /// (`"audio"`, `"video"`) from `InitiateCall`, and could write anything there, so it decides
+    /// only how the call rings: the camera follows the offer, which comes inside the ratchet, and
+    /// the offer corrects CallKit when it arrives. Until 2026-10-06 every push rang as audio.
+    static func pushRingsAsVideo(_ callData: [AnyHashable: Any], videoEnabled: Bool) -> Bool {
+        videoEnabled && (callData["call_type"] as? String) == "video"
+    }
+
     /// Whether the peer's camera is on after this update, or nil when it is not about the camera.
     static func remoteCameraOn(after update: Shared_Proto_Signaling_V1_MediaUpdate) -> Bool? {
         guard update.mediaType == .video else { return nil }

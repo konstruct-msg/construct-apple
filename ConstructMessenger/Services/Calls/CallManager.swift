@@ -770,6 +770,18 @@ final class CallManager: CallUIManaging {
         if call.webrtc != nil { setCameraOn(true) }
     }
 
+    /// The push rang the call as its `call_type` said; the offer, from inside the ratchet, has the
+    /// last word on how CallKit shows it.
+    private func ringAsOffered(_ offer: Shared_Proto_Signaling_V1_CallOffer, for call: ActiveCall) {
+        #if os(iOS)
+        guard call.callKitRegistered else { return }
+        CallKitProvider.shared.updateCallHasVideo(
+            uuid: call.session.uuid,
+            hasVideo: CallVideoSignal.answersWithCamera(offerCallType: offer.callType, videoEnabled: CallsFeature.isVideoEnabled)
+        )
+        #endif
+    }
+
     /// The session the video views draw from. Nothing else outside this class needs it.
     var activeWebRTC: (any WebRTCSessionProtocol)? { active?.webrtc }
 
@@ -1694,6 +1706,7 @@ final class CallManager: CallUIManaging {
                     hasAnswered: active.answeredAt != nil
                 ) {
                 case .holdUntilAnswered:
+                    ringAsOffered(offer, for: active)
                     takeUpVideoCall(offer, for: active)
                     holdRemoteOffer(offer, for: active)
                 case .renegotiate:
@@ -1707,7 +1720,9 @@ final class CallManager: CallUIManaging {
                 // local CoreData like the PushKit path does.
                 handleIncomingCallOffer(callId: signal.callID, callerUserId: senderUserId,
                                         callerName: nil,
-                                        sdp: offer.sdp)
+                                        sdp: offer.sdp,
+                                        hasVideo: CallVideoSignal.answersWithCamera(
+                                            offerCallType: offer.callType, videoEnabled: CallsFeature.isVideoEnabled))
                 if let active, active.session.id == signal.callID {
                     takeUpVideoCall(offer, for: active)
                 }
@@ -1809,7 +1824,7 @@ final class CallManager: CallUIManaging {
     ///
     /// `sdp` is plaintext, like every other writer of `pendingRemoteOfferSdp` — see
     /// `holdRemoteOffer` for what the removed `decryptSdp` hop was hiding.
-    private func handleIncomingCallOffer(callId: String, callerUserId: String, callerName: String?, sdp: String) {
+    private func handleIncomingCallOffer(callId: String, callerUserId: String, callerName: String?, sdp: String, hasVideo: Bool) {
         // Refused here rather than stored: an unusable offer that gets filed rings CallKit for a
         // call that cannot be negotiated, and the caller learns nothing until a human hangs up.
         guard offerSdpIsUsable(sdp) else {
@@ -1910,7 +1925,7 @@ final class CallManager: CallUIManaging {
         // next outgoing CXStartCallAction doesn't fail with maximumCallGroupsReached.
         #if os(iOS)
         let uuid = CallKitProvider.shared.reportIncomingCall(
-            callId: callId, callerId: callerUserId, callerName: name, hasVideo: false
+            callId: callId, callerId: callerUserId, callerName: name, hasVideo: hasVideo
         )
         #else
         let uuid = UUID()

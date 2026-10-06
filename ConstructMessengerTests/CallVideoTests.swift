@@ -60,6 +60,16 @@ final class CallVideoTests: XCTestCase {
         XCTAssertFalse(CallVideoSignal.answersWithCamera(offerCallType: .video, videoEnabled: false))
     }
 
+    /// The push's `call_type`, as the server writes it (`ApnsPayload::voip_incoming_call`), rings
+    /// the call as video. Mutation: return false — every video call rings as audio, as before
+    /// 2026-10-06. Mutation: drop `videoEnabled` — a build with video off rings video it cannot do.
+    func testAPushedVideoCallRingsAsVideo() {
+        XCTAssertTrue(CallVideoSignal.pushRingsAsVideo(["call_id": "c", "call_type": "video"], videoEnabled: true))
+        XCTAssertFalse(CallVideoSignal.pushRingsAsVideo(["call_type": "audio"], videoEnabled: true))
+        XCTAssertFalse(CallVideoSignal.pushRingsAsVideo(["call_id": "c"], videoEnabled: true), "a server that sends no type rings audio")
+        XCTAssertFalse(CallVideoSignal.pushRingsAsVideo(["call_type": "video"], videoEnabled: false))
+    }
+
     /// An older client never sends `MediaUpdate`; its avatar is what it is sending.
     func testThePeerStartsWithTheCameraOff() {
         XCTAssertFalse(CallVideoState().remoteCameraOn)
