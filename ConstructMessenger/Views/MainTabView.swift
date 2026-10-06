@@ -257,8 +257,6 @@ private final class MainTabPreviewState {
 }
 #endif
 
-#endif
-
 /// The call screen, reading the call's live state in a body of its own.
 ///
 /// `MainTabView` used to read `callManager.video` and `callQuality` inside the `fullScreenCover`
@@ -275,7 +273,6 @@ private struct ObservedInCallView: View {
     let onMinimize: () -> Void
 
     var body: some View {
-        #if os(iOS)
         if IncomingVideoScreen.session(for: manager.state, video: manager.video) != nil {
             IncomingVideoCallView(
                 session: session,
@@ -285,9 +282,6 @@ private struct ObservedInCallView: View {
         } else {
             inCall
         }
-        #else
-        inCall
-        #endif
     }
 
     private var inCall: some View {
@@ -305,3 +299,5 @@ private struct ObservedInCallView: View {
         )
     }
 }
+
+#endif

@@ -47,7 +47,7 @@ struct DesktopIncomingCallView: View {
 
             // Answer
             Button {
-                CallManager.shared.answerIncomingCall()
+                CallManager.shared.answerIncomingCall(withCamera: false)
             } label: {
                 Image(systemName: "phone.fill")
                     .font(CTFont.ui(16, weight: .medium))
