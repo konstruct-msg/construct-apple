@@ -26,14 +26,20 @@ struct PersistenceController {
 
     let container: NSPersistentContainer
 
+    /// The one model every store in the process is built from. iOS 26: `NSPersistentContainer(name:)`
+    /// searches ALL bundles for the momd and may find it twice (main bundle + xcframework),
+    /// registering NSEntityDescriptions twice — "Expected X but found X" casts on CallRecord /
+    /// CTCallRecord. So it is loaded from Bundle.main, and loaded once: until 2026-10-06 each
+    /// `init` loaded its own copy, and with several stores alive (tests make many in-memory ones)
+    /// `User(context:)`, which finds its entity by class across every loaded model, could take
+    /// another store's — a save then failed with Cocoa 133010 or raised on a temporary object id
+    /// (TODO 120).
+    private static let model: NSManagedObjectModel? = Bundle.main
+        .url(forResource: "ConstructMessenger", withExtension: "momd")
+        .flatMap(NSManagedObjectModel.init(contentsOf:))
+
     init(inMemory: Bool = false) {
-        // iOS 26 bug: NSPersistentContainer(name:) searches ALL bundles for the momd
-        // file and may find it in multiple locations (e.g. main bundle + xcframework),
-        // registering NSEntityDescriptions twice. This causes "Expected X but found X"
-        // type-cast crashes when fetching entities like CallRecord/CTCallRecord.
-        // Fix: explicitly load the model from Bundle.main so only one copy is registered.
-        guard let modelURL = Bundle.main.url(forResource: "ConstructMessenger", withExtension: "momd"),
-              let model = NSManagedObjectModel(contentsOf: modelURL) else {
+        guard let model = Self.model else {
             // Bundle is corrupted — fall back to letting CoreData find the model itself.
             // Better to start with a potentially broken container than to crash outright.
             Log.error("Core Data: ConstructMessenger.momd not found in Bundle.main — falling back to default init")
