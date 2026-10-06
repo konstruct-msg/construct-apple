@@ -11,19 +11,20 @@ enum CallsFeature {
         #endif
     }
 
-    /// Video calls — stage 1 of TODO 105 (`client/specs/VIDEO_CALLS_DESIGN.md`): camera, rendering
-    /// and `MediaUpdate`, with a placeholder screen. Off unless switched on in the developer section
-    /// of Diagnostics, and absent from a release build.
+    /// Video calls (TODO 105, `client/specs/VIDEO_CALLS_DESIGN.md`). On by default in Debug and
+    /// TestFlight builds since 2026-10-06 (owner), after an iOS↔iOS video call worked on two
+    /// devices; the switch in the developer section of Diagnostics still turns them off. Absent
+    /// from a release build.
     ///
-    /// A switch rather than `DEBUG` alone: TestFlight builds are the Beta configuration, which
-    /// defines `DEBUG`, and every call made with this on puts a video section into its offer. Until
-    /// that has been seen to leave an audio call to an Android or older iOS build untouched on real
-    /// devices, nobody gets it without turning it on.
+    /// Release stays off on purpose: every call made with this on puts a video section into its
+    /// offer, and that has not yet been seen to leave an audio call to an Android build untouched
+    /// on real devices.
     static let videoSwitchKey = "ff.callsVideo"
+    static let videoDefault = true
 
     static var isVideoEnabled: Bool {
         #if DEBUG && os(iOS)
-        isEnabled && UserDefaults.standard.bool(forKey: videoSwitchKey)
+        isEnabled && (UserDefaults.standard.object(forKey: videoSwitchKey) as? Bool ?? videoDefault)
         #else
         false
         #endif

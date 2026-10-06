@@ -1168,7 +1168,7 @@
 
 "diagnostics_owned_inset_title" = "Transcription à encart propre";
 "diagnostics_owned_inset_hint" = "Conteneur de défilement UIKit. S'applique au prochain chat ouvert.";
-"diagnostics_video_calls_title" = "Appels vidéo (étape 1)";
+"diagnostics_video_calls_title" = "Appels vidéo";
 "diagnostics_video_calls_hint" = "Caméra en appel. Chaque appel propose alors la vidéo, y compris vers Android.";
 
 "diagnostics_skip_backlog_title" = "Ignorer l'arriéré retenu";

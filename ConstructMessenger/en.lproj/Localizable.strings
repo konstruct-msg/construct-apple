@@ -1248,7 +1248,7 @@
 
 "diagnostics_owned_inset_title" = "Owned-inset transcript";
 "diagnostics_owned_inset_hint" = "UIKit scroll container. Applies to the next chat you open.";
-"diagnostics_video_calls_title" = "Video calls (stage 1)";
+"diagnostics_video_calls_title" = "Video calls";
 "diagnostics_video_calls_hint" = "Camera in calls. Every call then offers video, including to Android.";
 
 "diagnostics_skip_backlog_title" = "Skip held backlog";
