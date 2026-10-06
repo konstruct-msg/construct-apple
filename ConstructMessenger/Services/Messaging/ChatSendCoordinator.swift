@@ -830,8 +830,13 @@ final class ChatSendCoordinator {
             id: placeholderId,
             fromUserId: currentUserId,
             toUserId: recipientId,
-            caption: caption.isEmpty ? (fileURLs.first?.lastPathComponent ?? "File") : caption,
-            items: [MessagePersistenceService.UploadPlaceholderItem()],
+            caption: caption,
+            items: fileURLs.map {
+                MessagePersistenceService.UploadPlaceholderItem(
+                    fileName: $0.lastPathComponent,
+                    fileSize: (try? $0.resourceValues(forKeys: [.fileSizeKey]))?.fileSize
+                )
+            },
             replyTo: replyTo,
             replyToContentOverride: replyToContentOverride,
             chat: chat,
