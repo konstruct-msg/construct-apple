@@ -40,6 +40,9 @@ struct CallVideoState: Equatable {
     /// iOS takes the camera from an app in the background, so frames stop although the person
     /// did not turn the camera off.
     var isInBackground = false
+    /// An incoming call rings as a video call: the push's `call_type` until the offer says. It
+    /// chooses the app's own incoming screen and nothing else — the camera follows the offer.
+    var ringsAsVideo = false
 
     /// What the peer is told. The camera the person turned on but the system took away counts as
     /// off — otherwise the peer watches a frozen frame for as long as we are in the background.
@@ -57,6 +60,16 @@ struct CallVideoState: Equatable {
         change(&self)
         if let canSend { self.canSend = canSend }
         return announcedCameraOn == before ? nil : announcedCameraOn
+    }
+}
+
+/// The app's own incoming screen, which carries "answer without video" — CallKit has one answer
+/// button and it answers with the camera (owner, 2026-10-06). Only for a call that rings as
+/// video; an audio call rings in CallKit alone, as it always has.
+enum IncomingVideoScreen {
+    static func session(for state: CallState, video: CallVideoState) -> CallSession? {
+        guard case .incoming(let session) = state, video.ringsAsVideo else { return nil }
+        return session
     }
 }
 
@@ -78,6 +91,12 @@ enum CallVideoSignal {
     /// saw an avatar.
     static func answersWithCamera(offerCallType: Shared_Proto_Signaling_V1_CallType, videoEnabled: Bool) -> Bool {
         videoEnabled && offerCallType == .video
+    }
+
+    /// Whether a video offer turns our camera on once the call is answered: not when the person
+    /// answered "without video", even if the offer comes after the answer.
+    static func turnsCameraOn(offerCallType: Shared_Proto_Signaling_V1_CallType, videoEnabled: Bool, answeredWithoutCamera: Bool) -> Bool {
+        !answeredWithoutCamera && answersWithCamera(offerCallType: offerCallType, videoEnabled: videoEnabled)
     }
 
     /// Whether CallKit rings a pushed call as video. The server writes `call_type` into the push

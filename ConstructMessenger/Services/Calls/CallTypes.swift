@@ -398,6 +398,8 @@ protocol CallUIManaging: AnyObject {
     func clearLastError()
     func startOutgoingCall(to userId: String, displayName: String, hasVideo: Bool) async
     func endCall()
+    func answerIncomingCall(withCamera: Bool)
+    func declineIncomingCall()
     func setMuted(_ muted: Bool)
     func setCameraOn(_ on: Bool)
     func switchCamera()

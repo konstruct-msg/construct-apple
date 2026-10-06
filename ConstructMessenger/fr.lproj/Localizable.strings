@@ -813,6 +813,8 @@
 "call_end" = "Raccrocher";
 "call_connecting" = "Connexion…";
 "call_incoming_audio" = "Appel audio entrant";
+"call_incoming_video" = "Appel vidéo entrant";
+"call_answer_without_video" = "Sans vidéo";
 "call_answer" = "Répondre";
 "call_decline" = "Refuser";
 "calls_recents" = "Récents";

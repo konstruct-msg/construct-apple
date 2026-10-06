@@ -828,6 +828,8 @@
 "call_end" = "Ավարտել զանգը";
 "call_connecting" = "Միացում…";
 "call_incoming_audio" = "Մուտքային աուդիո զանգ";
+"call_incoming_video" = "Մուտքային տեսազանգ";
+"call_answer_without_video" = "Առանց տեսախցիկի";
 "call_answer" = "Պատասխանել";
 "call_decline" = "Մերժել";
 

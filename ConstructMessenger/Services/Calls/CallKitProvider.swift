@@ -81,6 +81,19 @@ final class CallKitProvider: NSObject, CXProviderDelegate {
         provider.reportCall(with: uuid, updated: update)
     }
 
+    /// Answer a ringing call from the app's own screen, as the system's button would. False when
+    /// CallKit refused, and the caller answers past it.
+    @MainActor
+    func requestAnswerCall(uuid: UUID) async -> Bool {
+        do {
+            try await callController.request(CXTransaction(action: CXAnswerCallAction(call: uuid)))
+            return true
+        } catch {
+            Log.error("CallKit answer transaction failed: \(error)", category: "Calls")
+            return false
+        }
+    }
+
     @MainActor
     func requestEndCall(uuid: UUID) async {
         let action = CXEndCallAction(call: uuid)

@@ -70,6 +70,25 @@ final class CallVideoTests: XCTestCase {
         XCTAssertFalse(CallVideoSignal.pushRingsAsVideo(["call_type": "video"], videoEnabled: false))
     }
 
+    /// "Without video" holds when the offer comes after the answer (the push beats it by seconds).
+    /// Mutation: drop `!answeredWithoutCamera` — the camera comes on behind the person's back.
+    func testAnsweringWithoutVideoKeepsTheCameraOff() {
+        XCTAssertFalse(CallVideoSignal.turnsCameraOn(offerCallType: .video, videoEnabled: true, answeredWithoutCamera: true))
+        XCTAssertTrue(CallVideoSignal.turnsCameraOn(offerCallType: .video, videoEnabled: true, answeredWithoutCamera: false))
+        XCTAssertFalse(CallVideoSignal.turnsCameraOn(offerCallType: .audio, videoEnabled: true, answeredWithoutCamera: false))
+    }
+
+    /// The app's own incoming screen is for a call that rings as video, while it rings.
+    /// Mutation: drop `ringsAsVideo` — every audio call gets a screen offering "without video".
+    func testOnlyARingingVideoCallGetsTheIncomingScreen() {
+        let session = CallSession(id: "c", uuid: UUID(), peerUserId: "u", peerName: "p", direction: .incoming)
+        var video = CallVideoState()
+        XCTAssertNil(IncomingVideoScreen.session(for: .incoming(session), video: video))
+        video.ringsAsVideo = true
+        XCTAssertEqual(IncomingVideoScreen.session(for: .incoming(session), video: video)?.id, "c")
+        XCTAssertNil(IncomingVideoScreen.session(for: .connecting(session), video: video), "answered: the call screen")
+    }
+
     /// An older client never sends `MediaUpdate`; its avatar is what it is sending.
     func testThePeerStartsWithTheCameraOff() {
         XCTAssertFalse(CallVideoState().remoteCameraOn)
