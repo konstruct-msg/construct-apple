@@ -417,7 +417,7 @@ class AuthViewModel {
             // `DeviceKeyAvailability`. Send it to the same recovery screen the token-refresh
             // path has always used.
             handleLostDeviceKeys(userId: currentUserId ?? "", reason: "device auth: \(detail)")
-        case .failed(let description, let overDirectTLS):
+        case .failed(let description, let overDirectTLS, let refusal):
             Log.info("Device authentication failed: \(description)", category: "Auth")
 
             // Only wipe device keys when the server explicitly rejects this device
@@ -445,7 +445,7 @@ class AuthViewModel {
                         Log.info("Device not registered yet — routing back to registration (pending bundle found)", category: "Auth")
                         // Keep keys; RegistrationFlowView will pick them up and retry.
                         hasRegisteredDeviceKeys = false
-                    } else if Self.isRemovedDevice(description, overDirectTLS: overDirectTLS) {
+                    } else if Self.isRemovedDevice(refusal, overDirectTLS: overDirectTLS) {
                         // Another device of the account removed this one, or it signed out
                         // elsewhere: the server deactivates the row and never reactivates it.
                         // Everything the account left here goes (`LocalDataWipe`).
@@ -473,17 +473,19 @@ class AuthViewModel {
     
     /// The server's answer for a device whose row it deactivated — `RevokeDevice`, or `Logout` from
     /// this device's own session elsewhere — and nothing else. Deactivation is permanent, so this is
-    /// the one rejection that may wipe. "Device not found" is not it: an unapproved join request
-    /// answers that too, and so would a server that lost its rows.
+    /// the one rejection that may wipe. `.notFound` is not it: an unapproved join request answers
+    /// that too, and so would a server that lost its rows.
     ///
-    /// A message string, because the server sends nothing more typed (construct-server
-    /// `devices.rs`, `AppError::auth("Device is inactive")`); vault TODO 77 asks for a typed reason.
+    /// The number, never the status text (`DeviceRefusalReading`). A server older than the number
+    /// sends none, and then nothing wipes — the safe side of the two.
     ///
     /// Only over a direct TLS connection to our server. Through VEIL the client speaks plaintext
     /// gRPC to the relay, and a relay able to forge this answer would be able to erase the device.
     /// A removed device reached only through VEIL keeps its data until it connects directly.
-    nonisolated static func isRemovedDevice(_ description: String, overDirectTLS: Bool) -> Bool {
-        overDirectTLS && description.lowercased().contains("device is inactive")
+    nonisolated static func isRemovedDevice(
+        _ refusal: Shared_Proto_Services_V1_DeviceRefusal, overDirectTLS: Bool
+    ) -> Bool {
+        overDirectTLS && refusal == .removed
     }
 
     /// Legacy method - kept for backward compatibility

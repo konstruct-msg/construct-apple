@@ -25,6 +25,61 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
+/// DeviceRefusal - why the server refused a device: AuthenticateDevice, RefreshToken, or an open
+/// MessageStream ended under it.
+///
+/// Carried on the UNAUTHENTICATED status, as the decimal number of the value in the trailing
+/// metadata key `construct-device-refusal` (e.g. `construct-device-refusal: 1`). The status message
+/// stays the human-readable text ("Device is inactive", "Device not found") and no client branches
+/// on it: a client deciding anything — above all, whether to erase its data — reads this number.
+/// A status without the key is "unspecified", and a client must not erase on it.
+public nonisolated enum Shared_Proto_Services_V1_DeviceRefusal: SwiftProtobuf.Enum, Swift.CaseIterable {
+  public typealias RawValue = Int
+
+  /// No reason given (must be 0). Not grounds for erasing anything.
+  case unspecified // = 0
+
+  /// The device's row was deactivated: RevokeDevice from another device of the account, or Logout
+  /// of this device's session. Permanent — the server never reactivates a row — so this is the one
+  /// refusal a client may answer by erasing what the account left on it.
+  case removed // = 1
+
+  /// The server has no row for this device. Not removal: an unapproved join request answers this
+  /// too, and so would a server that lost its rows. Not grounds for erasing.
+  case notFound // = 2
+  case UNRECOGNIZED(Int)
+
+  public init() {
+    self = .unspecified
+  }
+
+  public init?(rawValue: Int) {
+    switch rawValue {
+    case 0: self = .unspecified
+    case 1: self = .removed
+    case 2: self = .notFound
+    default: self = .UNRECOGNIZED(rawValue)
+    }
+  }
+
+  public var rawValue: Int {
+    switch self {
+    case .unspecified: return 0
+    case .removed: return 1
+    case .notFound: return 2
+    case .UNRECOGNIZED(let i): return i
+    }
+  }
+
+  // The compiler won't synthesize support with the UNRECOGNIZED case.
+  public static let allCases: [Shared_Proto_Services_V1_DeviceRefusal] = [
+    .unspecified,
+    .removed,
+    .notFound,
+  ]
+
+}
+
 /// PushProvider - Push notification provider
 public nonisolated enum Shared_Proto_Services_V1_PushProvider: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
@@ -1671,6 +1726,10 @@ public nonisolated struct Shared_Proto_Services_V1_IssueTokensResponse: Sendable
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
 
 fileprivate nonisolated let _protobuf_package = "shared.proto.services.v1"
+
+nonisolated extension Shared_Proto_Services_V1_DeviceRefusal: SwiftProtobuf._ProtoNameProviding {
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0DEVICE_REFUSAL_UNSPECIFIED\0\u{1}DEVICE_REFUSAL_REMOVED\0\u{1}DEVICE_REFUSAL_NOT_FOUND\0")
+}
 
 nonisolated extension Shared_Proto_Services_V1_PushProvider: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0PUSH_PROVIDER_UNSPECIFIED\0\u{1}PUSH_PROVIDER_APNS\0\u{1}PUSH_PROVIDER_FCM\0\u{1}PUSH_PROVIDER_HMS\0\u{1}PUSH_PROVIDER_WEBPUSH\0")
