@@ -1248,7 +1248,7 @@
 
 "diagnostics_owned_inset_title" = "Owned-inset տառադարձում";
 "diagnostics_owned_inset_hint" = "UIKit գլորման կոնտեյներ։ Կիրառվում է հաջորդ բացվող զրույցին։";
-"diagnostics_video_calls_title" = "Տեսազանգեր (փուլ 1)";
+"diagnostics_video_calls_title" = "Տեսազանգեր";
 "diagnostics_video_calls_hint" = "Տեսախցիկ զանգերում։ Յուրաքանչյուր զանգ այդ դեպքում առաջարկում է տեսանյութ, այդ թվում Android-ին։";
 
 "diagnostics_skip_backlog_title" = "Բաց թողնել պահված հերթը";

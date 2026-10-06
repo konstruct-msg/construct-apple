@@ -1259,7 +1259,7 @@
 
 "diagnostics_owned_inset_title" = "Своя вставка в ленте";
 "diagnostics_owned_inset_hint" = "Контейнер прокрутки на UIKit. Применится к следующему открытому чату.";
-"diagnostics_video_calls_title" = "Видеозвонки (этап 1)";
+"diagnostics_video_calls_title" = "Видеозвонки";
 "diagnostics_video_calls_hint" = "Камера в звонках. Каждый звонок тогда предлагает видео, и на Android тоже.";
 
 "diagnostics_skip_backlog_title" = "Пропустить накопившееся";

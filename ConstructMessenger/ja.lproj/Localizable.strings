@@ -1249,7 +1249,7 @@
 
 "diagnostics_owned_inset_title" = "自前インセットの履歴";
 "diagnostics_owned_inset_hint" = "UIKit のスクロールコンテナ。次に開くチャットから適用されます。";
-"diagnostics_video_calls_title" = "ビデオ通話（段階1）";
+"diagnostics_video_calls_title" = "ビデオ通話";
 "diagnostics_video_calls_hint" = "通話でカメラを使用。すべての通話がビデオを提案します（Android宛ても）。";
 
 "diagnostics_skip_backlog_title" = "保留分をスキップ";

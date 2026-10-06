@@ -32,7 +32,7 @@ struct DiagnosticsView: View {
     /// The transcript path. Sampled once per chat push, so this lands on the *next* chat you open,
     /// not on the one behind this screen.
     @State private var ownedInsetStackEnabled = ChatViewportConfiguration.ownedInsetStackEnabled
-    @AppStorage(CallsFeature.videoSwitchKey) private var videoCallsEnabled = false
+    @AppStorage(CallsFeature.videoSwitchKey) private var videoCallsEnabled = CallsFeature.videoDefault
 
     /// What is holding the stream cursor back right now, sampled when the screen appears.
     @State private var heldEntry: (messageId: String, state: String, age: TimeInterval)?
