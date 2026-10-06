@@ -198,7 +198,7 @@ struct InCallMiniBar: View {
         Button(action: onTap) {
             HStack(spacing: 8) {
                 Image(systemName: "chevron.up")
-                    .font(.system(size: 11, weight: .bold))
+                    .font(CTIcon.font(CTIcon.caption, weight: .bold))
                     .foregroundStyle(Color.CT.bg)
                 Text("> \(peerName)")
                     .font(CTFont.ui(12, weight: .bold))

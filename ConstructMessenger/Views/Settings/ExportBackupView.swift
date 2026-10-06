@@ -36,7 +36,7 @@ struct ExportBackupView: View {
             } trailing: {
                 Button(action: { dismiss() }) {
                     Image(systemName: "xmark")
-                        .font(.system(size: 18))
+                        .font(CTIcon.font(CTIcon.nav, weight: .regular))
                         .foregroundColor(Color.CT.accent)
                 }
                 .buttonStyle(.plain)
@@ -167,7 +167,7 @@ struct ExportBackupView: View {
                 Button { confirmedSaved.toggle() } label: {
                     HStack(spacing: 10) {
                         Image(systemName: confirmedSaved ? "checkmark.square.fill" : "square")
-                            .font(.system(size: 16, weight: .regular))
+                            .font(CTIcon.font(CTIcon.row, weight: .regular))
                             .foregroundStyle(confirmedSaved ? Color.CT.accent : Color.CT.textDim)
                         Text(NSLocalizedString("backup_confirm_saved", comment: ""))
                             .font(CTFont.body)

@@ -75,7 +75,7 @@ struct SocialRecoverySetupView: View {
         VStack(spacing: 24) {
             Spacer()
             Image(systemName: "person.2.wave.2.fill")
-                .font(.system(size: 48, weight: .regular))
+                .font(CTIcon.font(CTIcon.hero, weight: .regular))
                 .foregroundStyle(Color.CT.accent)
                 .accessibilityHidden(true)
             Text(NSLocalizedString("social_recovery_intro_title", comment: "").uppercased())
@@ -145,7 +145,7 @@ struct SocialRecoverySetupView: View {
                 // Selection state. Was `[●]` / `[○]` in accent, which read as a label
                 // rather than as the radio it is.
                 Image(systemName: selected ? "checkmark.circle.fill" : "circle")
-                    .font(.system(size: 20, weight: .regular))
+                    .font(CTIcon.font(CTIcon.nav, weight: .regular))
                     .foregroundStyle(selected ? Color.CT.accent : Color.CT.textDim)
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 4) {
@@ -293,7 +293,7 @@ struct SocialRecoverySetupView: View {
         VStack(spacing: 24) {
             Spacer()
             Image(systemName: "checkmark.circle.fill")
-                .font(.system(size: 48, weight: .regular))
+                .font(CTIcon.font(CTIcon.hero, weight: .regular))
                 .foregroundStyle(Color.CT.accent)
                 .accessibilityHidden(true)
             Text(NSLocalizedString("social_recovery_done_title", comment: ""))

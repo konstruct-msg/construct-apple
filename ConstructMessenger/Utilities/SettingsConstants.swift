@@ -212,15 +212,11 @@ enum SettingsRootLayout {
     static let recoveryBannerStrokeWidth: CGFloat = 0.5
     static let recoveryBannerHorizontalPadding: CGFloat = CTLayout.edgePad
     static let recoveryBannerVerticalPadding: CGFloat = CTLayout.inlinePad
-    static let recoveryBannerIconSize: CGFloat = 15
-    static let recoveryBannerChevronSize: CGFloat = 9
-    static let recoveryBannerDismissIconSize: CGFloat = 11
 }
 
 /// Compact invite card on Settings root (QR | Copy + several).
 enum SettingsShareLayout {
     static let actionMinHeight: CGFloat = CTLayout.hitTarget
-    static let actionIconSize: CGFloat = 16
     static let actionSpacing: CGFloat = CTLayout.inlinePad
     static let dividerWidth: CGFloat = 0.5
     static let dividerVerticalPadding: CGFloat = CTLayout.inlinePad
@@ -289,7 +285,6 @@ enum VeilVoucherLayout {
     static let contentBottomPadding: CGFloat = 32
     static let textHorizontalPadding: CGFloat = 24
     static let messageSpacing: CGFloat = CTLayout.sectionGap
-    static let statusIconSize: CGFloat = 36
     static let qrSize: CGFloat = 220
     static let qrPadding: CGFloat = CTLayout.sectionGap
 }

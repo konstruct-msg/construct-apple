@@ -393,7 +393,7 @@ struct SynapsView: View {
             if showsScanAction {
                 Button { showingQRScanner = true } label: {
                     Image(systemName: "qrcode.viewfinder")
-                        .font(.system(size: CTLayout.navIconSize, weight: .medium))
+                        .font(CTIcon.font(CTIcon.nav))
                         .foregroundColor(Color.CT.accent)
                 }
             }
@@ -431,7 +431,7 @@ struct SynapsView: View {
     private var emptyState: some View {
         VStack(spacing: CTLayout.sectionGap) {
             Image(systemName: "circle.grid.cross")
-                .font(.system(size: 32, weight: .light))
+                .font(CTIcon.font(CTIcon.overlay, weight: .light))
                 .foregroundStyle(Color.CT.textDim)
                 .padding(.bottom, 4)
 
@@ -493,7 +493,7 @@ struct SynapsView: View {
 
                 HStack(spacing: 12) {
                     Image(systemName: "person.crop.circle")
-                        .font(.system(size: 28, weight: .regular))
+                        .font(CTIcon.font(CTIcon.overlay, weight: .regular))
                         .foregroundStyle(Color.CT.accent)
                         .frame(width: 32, height: 32)
 
@@ -523,7 +523,7 @@ struct SynapsView: View {
                     if alreadySent {
                         HStack(spacing: 5) {
                             Image(systemName: "checkmark.circle.fill")
-                                .font(.system(size: 14, weight: .semibold))
+                                .font(CTIcon.font(CTIcon.row, weight: .semibold))
                             Text(NSLocalizedString("contact_request_sent", comment: ""))
                                 .font(CTFont.secondary)
                         }
@@ -539,7 +539,7 @@ struct SynapsView: View {
                         } label: {
                             HStack(spacing: 5) {
                                 Image(systemName: "person.badge.plus")
-                                    .font(.system(size: 13, weight: .semibold))
+                                    .font(CTIcon.font(CTIcon.caption, weight: .semibold))
                                 Text(NSLocalizedString("contact_request_send_action", comment: ""))
                                     .font(CTFont.ui(12, weight: .medium))
                             }
@@ -669,7 +669,7 @@ struct SynapsView: View {
                         }
                         Spacer()
                         Image(systemName: "chevron.right")
-                            .font(.system(size: 12, weight: .semibold))
+                            .font(CTIcon.font(CTIcon.caption, weight: .semibold))
                             .foregroundStyle(Color.CT.textDim)
                     }
                     .padding(.horizontal, 14)

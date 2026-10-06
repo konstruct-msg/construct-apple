@@ -61,7 +61,7 @@ struct AppearanceSettingsView: View {
                                                 )
                                         } else if appTheme == theme {
                                             Image(systemName: "checkmark")
-                                                .font(.system(size: 14, weight: .semibold))
+                                                .font(CTIcon.font(CTIcon.row, weight: .semibold))
                                                 .foregroundStyle(Color.CT.accent)
                                         }
                                     }
@@ -108,7 +108,7 @@ struct AppearanceSettingsView: View {
                                     Spacer()
                                     if chatFace == face {
                                         Image(systemName: "checkmark")
-                                            .font(.system(size: 14, weight: .semibold))
+                                            .font(CTIcon.font(CTIcon.row, weight: .semibold))
                                             .foregroundStyle(Color.CT.accent)
                                     }
                                 }
@@ -141,7 +141,7 @@ struct AppearanceSettingsView: View {
                                     Spacer()
                                     if textSize == size {
                                         Image(systemName: "checkmark")
-                                            .font(.system(size: 14, weight: .semibold))
+                                            .font(CTIcon.font(CTIcon.row, weight: .semibold))
                                             .foregroundStyle(Color.CT.accent)
                                     }
                                 }

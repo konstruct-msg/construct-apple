@@ -211,7 +211,7 @@ struct AccountSettingsView: View {
             if isEditingProfile {
                 Button(action: { handleProfileEditCancelTap() }) {
                     Image(systemName: "xmark")
-                        .font(.system(size: 18))
+                        .font(CTIcon.font(CTIcon.nav, weight: .regular))
                         .foregroundColor(Color.CT.accent)
                 }
                 .buttonStyle(.plain)
@@ -228,7 +228,7 @@ struct AccountSettingsView: View {
             } else {
                 Button(action: { handleProfileEditActionTap() }) {
                     Image(systemName: "square.and.pencil")
-                        .font(.system(size: 18))
+                        .font(CTIcon.font(CTIcon.nav, weight: .regular))
                         .foregroundColor(Color.CT.accent)
                 }
                 .buttonStyle(.plain)

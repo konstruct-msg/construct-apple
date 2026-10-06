@@ -62,7 +62,7 @@ struct LiquidLogoShowcaseView: View {
                     } label: {
                         HStack(spacing: 8) {
                             Image(systemName: "arrow.clockwise.circle.fill")
-                                .font(.system(size: 18))
+                                .font(CTIcon.font(CTIcon.nav, weight: .regular))
                             Text(NSLocalizedString("liquid_logo.replay", comment: ""))
                                 .font(CTFont.body)
                         }

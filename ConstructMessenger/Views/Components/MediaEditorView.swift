@@ -84,7 +84,7 @@ struct MediaEditorView: View {
         HStack {
             Button(action: onCancel) {
                 Image(systemName: "xmark")
-                    .font(.system(size: CTLayout.navIconSize, weight: .medium))
+                    .font(CTIcon.font(CTIcon.nav))
                     .foregroundColor(Color.CT.text)
                     .frame(width: CTLayout.hitTarget, height: CTLayout.hitTarget)
                     .contentShape(Rectangle())
@@ -206,7 +206,7 @@ struct MediaEditorView: View {
     private func iconButton(_ system: String, label: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: system)
-                .font(.system(size: 17, weight: .medium))
+                .font(CTIcon.font(CTIcon.row))
                 .foregroundColor(Color.CT.text)
                 .frame(width: CTLayout.hitTarget, height: 30)
                 .contentShape(Rectangle())

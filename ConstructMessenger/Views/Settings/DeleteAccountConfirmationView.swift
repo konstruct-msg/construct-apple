@@ -42,7 +42,7 @@ struct DeleteAccountConfirmationView: View {
                 Spacer()
                 Button(action: dismissWithoutDeleting) {
                     Image(systemName: "xmark.circle")
-                        .font(.system(size: 18))
+                        .font(CTIcon.font(CTIcon.nav, weight: .regular))
                         .foregroundStyle(Color.CT.textDim)
                 }
                 .buttonStyle(.plain)

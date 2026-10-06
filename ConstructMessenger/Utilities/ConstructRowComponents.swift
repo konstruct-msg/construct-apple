@@ -44,7 +44,7 @@ struct ConstructActionRow: View {
         } label: {
             HStack(spacing: 12) {
                 Image(systemName: systemImage)
-                    .font(.system(size: 16, weight: .medium))
+                    .font(CTIcon.font(CTIcon.row))
                     .foregroundStyle(rowForeground)
                     .frame(minWidth: 20, alignment: .center)
 
@@ -157,7 +157,7 @@ struct ConstructNavRow<Destination: View>: View {
                 .fixedSize()
         } else {
             Image(systemName: icon)
-                .font(.system(size: 16))
+                .font(CTIcon.font(CTIcon.row, weight: .regular))
                 .foregroundStyle(color)
         }
     }
@@ -178,7 +178,7 @@ struct ConstructButtonRow: View {
         Button(action: action) {
             HStack(spacing: 14) {
                 Image(systemName: systemImage)
-                    .font(.system(size: 16, weight: .medium))
+                    .font(CTIcon.font(CTIcon.row))
                     .foregroundStyle(iconColor)
                     .frame(minWidth: 22, alignment: .center)
 
@@ -190,7 +190,7 @@ struct ConstructButtonRow: View {
 
                 if showChevron {
                     Image(systemName: "chevron.right")
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(CTIcon.font(CTIcon.caption, weight: .semibold))
                         .foregroundStyle(Color.CT.textDim)
                 }
             }
