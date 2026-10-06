@@ -77,6 +77,23 @@ extension Color {
         /// the platform's to colour. The light value is the accessible one because a dot on #F2F2F2
         /// needs 3:1 and #34C759 gives about 2.0 (#248A3D: 3.9). **Status only — never a control or text.**
         static let online     = Color(dark: 0x30D158, light: 0x248A3D)
+
+        // MARK: Over media
+        /// On a camera picture or a photo the theme's ground is not underneath, so these do not
+        /// follow dark/light: they are for whatever the picture is. Call screens, the media
+        /// viewer, play and download overlays (TODO 122).
+        /// Text and symbols over a picture.
+        static let onMedia        = Color.white
+        /// Secondary text over a picture (a status under a name).
+        static let onMediaDim     = Color.white.opacity(0.8)
+        /// The gradient or veil that keeps text over a picture readable.
+        static let mediaScrim     = Color.black.opacity(0.45)
+        /// A round control's fill over a picture, off state.
+        static let mediaControl   = Color.white.opacity(0.14)
+        /// The same control on — inverted, as in FaceTime: the unusual state stands out.
+        static let mediaControlOn = Color.white
+        /// The answer button of an incoming call: the platform's green, a control by convention.
+        static let answer         = Color(hex: 0x30D158)
     }
 }
 
@@ -343,7 +360,7 @@ enum CTShape {
 /// a nav bar containing only an SF Symbol is the same height as one containing text.
 enum CTLayout {
     /// Horizontal edge inset shared by nav bars, section headers, and content rows.
-    static let edgePad: CGFloat = 12
+    static let edgePad: CGFloat = CTSpace.m
 
     /// Vertical padding for navigation bar rows.
     static let navVPad: CGFloat = 11
@@ -353,14 +370,10 @@ enum CTLayout {
     /// regardless of whether the bar has a back button, trailing icon, or text only.
     static let navBarHeight: CGFloat = 44
 
-    /// SF Symbol size for standard nav-bar action buttons (QR scan, search, dismiss).
-    static let navIconSize: CGFloat = 20
-
-    /// Slightly larger icon for elevated primary-action buttons (e.g., phone call in chat).
-    static let navIconSizeLg: CGFloat = 22
-
-    /// Large icon for full-screen call UI (accept / decline / mute buttons).
-    static let callIconSize: CGFloat = 24
+    /// The pre-`CTIcon` names of three icon sizes; `CTIcon` is the authority (TODO 122).
+    static let navIconSize: CGFloat = CTIcon.nav
+    static let navIconSizeLg: CGFloat = CTIcon.navLg
+    static let callIconSize: CGFloat = CTIcon.control
 
     /// Circular call control (mute / speaker / secondary).
     static let callControlSize: CGFloat = 56
@@ -384,10 +397,46 @@ enum CTLayout {
     static let chromeGap: CGFloat = 10
 
     /// Vertical gap before a settings section header / between major blocks.
-    static let sectionGap: CGFloat = 16
+    static let sectionGap: CGFloat = CTSpace.l
 
     /// Tight inset inside cards / preview chips.
-    static let inlinePad: CGFloat = 8
+    static let inlinePad: CGFloat = CTSpace.s
+}
+
+/// SF Symbol sizes (TODO 122). Before this scale existed, 157 call sites wrote
+/// `.font(.system(size: n))` beside an `Image(systemName:)`, with twenty different values from
+/// 9 to 64. A symbol takes its size from here, through `CTIcon.font(_:weight:)`; a size between two
+/// steps rounds to the nearer one.
+enum CTIcon {
+    /// Beside caption text: badges, inline status, a lock on a row (was 9–13).
+    static let caption: CGFloat = 12
+    /// In a list row or beside body text (was 14–17).
+    static let row: CGFloat = 16
+    /// Nav-bar actions: QR, search, dismiss (was 18–20).
+    static let nav: CGFloat = 20
+    /// An elevated nav action, the chat header's button (22).
+    static let navLg: CGFloat = 22
+    /// Inside a round control: call buttons, the media viewer's bar (24–26).
+    static let control: CGFloat = 24
+    /// Over media: play, download, retry on a bubble (28–34).
+    static let overlay: CGFloat = 32
+    /// An empty state or a screen's one symbol (48–64).
+    static let hero: CGFloat = 48
+
+    static func font(_ size: CGFloat, weight: Font.Weight = .medium) -> Font {
+        .system(size: size, weight: weight)
+    }
+}
+
+/// Spacing (TODO 122): padding and stack spacing take a step, not a number. Six steps cover what
+/// the layout uses; the `CTLayout` insets are named members of this scale.
+enum CTSpace {
+    static let xs: CGFloat = 4
+    static let s: CGFloat = 8
+    static let m: CGFloat = 12
+    static let l: CGFloat = 16
+    static let xl: CGFloat = 24
+    static let xxl: CGFloat = 32
 }
 
 // MARK: - Cross-platform helpers

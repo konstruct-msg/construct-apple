@@ -40,7 +40,6 @@ struct VideoCallView: View {
         static let controlSpacing: CGFloat = 14
         static let capsulePadding: CGFloat = 10
         static let capsuleBottom: CGFloat = 42
-        static let controlIcon: CGFloat = 22
         /// Room the header and the capsule take, so a window in their corner moves clear of them
         /// while they are shown.
         static let headerClearance: CGFloat = CTLayout.hitTarget + CTLayout.inlinePad * 2
@@ -99,7 +98,7 @@ struct VideoCallView: View {
                 VStack(spacing: CTLayout.edgePad) {
                     ContactMainAvatarView(userId: session.peerUserId, displayName: session.peerName, size: 96)
                     Image(systemName: "video.slash.fill")
-                        .font(.system(size: 16, weight: .medium))
+                        .font(CTIcon.font(CTIcon.row))
                         .foregroundStyle(Color.CT.textDim)
                         .accessibilityLabel(NSLocalizedString("call_peer_camera_off", comment: ""))
                 }
@@ -108,7 +107,7 @@ struct VideoCallView: View {
             ZStack {
                 Color.CT.bgMsg
                 Image(systemName: "video.slash.fill")
-                    .font(.system(size: Layout.controlIcon, weight: .medium))
+                    .font(CTIcon.font(CTIcon.control))
                     .foregroundStyle(Color.CT.textDim)
             }
         }
@@ -130,8 +129,8 @@ struct VideoCallView: View {
             .id(pane)
             .frame(width: Layout.previewWidth, height: Layout.previewHeight)
             .clipShape(CTShape.card())
-            .overlay(CTShape.card().stroke(.white.opacity(0.18), lineWidth: 1))
-            .shadow(color: .black.opacity(0.45), radius: 12, y: 6)
+            .overlay(CTShape.card().stroke(Color.CT.mediaControl, lineWidth: 1))
+            .shadow(color: Color.CT.mediaScrim, radius: 12, y: 6)
             .offset(dragOffset)
             .gesture(
                 DragGesture()
@@ -181,8 +180,8 @@ struct VideoCallView: View {
             if let onMinimize {
                 Button(action: onMinimize) {
                     Image(systemName: "chevron.down")
-                        .font(.system(size: CTLayout.navIconSizeLg, weight: .medium))
-                        .foregroundStyle(.white)
+                        .font(CTIcon.font(CTIcon.navLg))
+                        .foregroundStyle(Color.CT.onMedia)
                         .frame(width: CTLayout.hitTarget, height: CTLayout.hitTarget)
                         .glassCapsule()
                 }
@@ -194,19 +193,19 @@ struct VideoCallView: View {
                     .font(CTFont.title)
                 HStack(spacing: 5) {
                     Image(systemName: "lock.fill")
-                        .font(.system(size: 10, weight: .medium))
+                        .font(CTIcon.font(CTIcon.caption))
                         .accessibilityLabel(NSLocalizedString("call_e2ee_badge", comment: ""))
                     Text(status)
                         .font(CTFont.mono(13))
                     if quality == .reconnecting {
                         Image(systemName: "wifi.exclamationmark")
-                            .font(.system(size: 12, weight: .medium))
+                            .font(CTIcon.font(CTIcon.caption))
                             .accessibilityLabel(NSLocalizedString("call_reconnecting", comment: ""))
                     }
                 }
             }
-            .foregroundStyle(.white)
-            .shadow(color: .black.opacity(0.6), radius: 6, y: 1)
+            .foregroundStyle(Color.CT.onMedia)
+            .shadow(color: Color.CT.mediaScrim, radius: 6, y: 1)
             .accessibilityElement(children: .combine)
             Spacer(minLength: 0)
         }
@@ -244,7 +243,7 @@ struct VideoCallView: View {
             VideoCallRouteButton()
             Button(action: onEnd) {
                 Image(systemName: "phone.down.fill")
-                    .font(.system(size: Layout.controlIcon, weight: .medium))
+                    .font(CTIcon.font(CTIcon.control))
                     .foregroundStyle(.white)
                     .frame(width: CTLayout.callControlSize, height: CTLayout.callControlSize)
                     .background(Color.CT.danger, in: Circle())
@@ -264,10 +263,10 @@ struct VideoCallView: View {
     private func control(systemImage: String, label: String, isOff: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: systemImage)
-                .font(.system(size: Layout.controlIcon, weight: .medium))
-                .foregroundStyle(isOff ? Color.black : Color.white)
+                .font(CTIcon.font(CTIcon.control))
+                .foregroundStyle(isOff ? Color.black : Color.CT.onMedia)
                 .frame(width: CTLayout.callControlSize, height: CTLayout.callControlSize)
-                .background(isOff ? Color.white : Color.white.opacity(0.14), in: Circle())
+                .background(isOff ? Color.CT.mediaControlOn : Color.CT.mediaControl, in: Circle())
         }
         .buttonStyle(.plain)
         .accessibilityLabel(label)
@@ -305,10 +304,10 @@ private struct VideoCallRouteButton: View {
             if hasChoice {
                 ZStack {
                     Image(systemName: "airplayaudio")
-                        .font(.system(size: 22, weight: .medium))
-                        .foregroundStyle(.white)
+                        .font(CTIcon.font(CTIcon.control))
+                        .foregroundStyle(Color.CT.onMedia)
                         .frame(width: CTLayout.callControlSize, height: CTLayout.callControlSize)
-                        .background(Color.white.opacity(0.14), in: Circle())
+                        .background(Color.CT.mediaControl, in: Circle())
                     AVRoutePickerViewRepresentable()
                         .frame(width: CTLayout.callControlSize, height: CTLayout.callControlSize)
                         .opacity(0.02) // non-zero, or the picker stops taking taps

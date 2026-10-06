@@ -283,7 +283,7 @@ private struct CallHistoryRow: View {
                 }
 
                 Image(systemName: "arrow.up.right")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(CTIcon.font(CTIcon.caption, weight: .semibold))
                     .foregroundStyle(Color.CT.accent)
             }
             .padding(.horizontal, CTLayout.sectionGap)
