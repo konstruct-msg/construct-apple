@@ -92,7 +92,7 @@ struct MessagePhotoPreviewBar: View {
             ZStack {
                 Color.CT.bgMsg
                 Image(systemName: attachment.kind == .video ? "film" : "photo")
-                    .font(.system(size: CTLayout.navIconSize, weight: .regular))
+                    .font(CTIcon.font(CTIcon.nav, weight: .regular))
                     .foregroundColor(Color.CT.textDim)
             }
         }
@@ -167,7 +167,7 @@ struct MessageFilePreviewBar: View {
                 ForEach(Array(fileURLs.enumerated()), id: \.offset) { index, url in
                     HStack(spacing: CTLayout.inlinePad) {
                         Image(systemName: fileSystemIcon(for: url.pathExtension))
-                            .font(.system(size: CTLayout.navIconSize, weight: .medium))
+                            .font(CTIcon.font(CTIcon.nav))
                             .foregroundColor(Color.CT.accent)
                             .frame(width: 24, height: 24)
 
@@ -234,7 +234,7 @@ struct MessageFilePreviewBar: View {
 private func removeButton(action: @escaping () -> Void) -> some View {
     Button(action: action) {
         Image(systemName: "xmark.circle.fill")
-            .font(.system(size: 18, weight: .regular))
+            .font(CTIcon.font(CTIcon.nav, weight: .regular))
             .symbolRenderingMode(.palette)
             .foregroundStyle(Color.CT.text, Color.CT.bgMsg.opacity(0.92))
             .frame(width: CTLayout.hitTarget * 0.7, height: CTLayout.hitTarget * 0.7)

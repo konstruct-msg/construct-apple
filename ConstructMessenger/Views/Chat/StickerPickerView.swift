@@ -132,7 +132,7 @@ struct StickerPickerView: View {
         VStack(spacing: CTLayout.sectionGap) {
             Spacer()
             Image(systemName: "face.smiling")
-                .font(.system(size: 34))
+                .font(CTIcon.font(CTIcon.overlay, weight: .regular))
                 .foregroundStyle(Color.CT.textDim)
             Text(LocalizedStringKey("sticker_catalog_empty"))
                 .font(CTFont.body)

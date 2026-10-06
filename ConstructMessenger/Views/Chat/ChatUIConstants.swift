@@ -163,8 +163,6 @@ enum ChatUIConstants {
         static let playerSpacing: CGFloat = CTLayout.inlinePad
         static let horizontalPadding: CGFloat = CTLayout.chromeGap
         static let verticalPadding: CGFloat = CTLayout.inlinePad
-        static let playIconSize: CGFloat = 14
-        static let toggleIconSize: CGFloat = 13
         static let strokeWidth: CGFloat = 0.5
 
         static var shape: RoundedRectangle {
@@ -179,8 +177,6 @@ enum ChatUIConstants {
         static let badgeCornerRadius: CGFloat = CTRadius.badge
         static let captionTopPadding: CGFloat = 2
         static let failureStackSpacing: CGFloat = CTLayout.edgePad
-        static let failureIconSize: CGFloat = 36
-        static let statusOverlayIconSize: CGFloat = 20
         /// Progress chip over a video poster while downloading.
         static let overlayChipRadius: CGFloat = CTLayout.edgePad
         static let playButtonSize: CGFloat = 54
@@ -205,12 +201,9 @@ enum ChatUIConstants {
         static let expandDuration: TimeInterval = 0.35
         /// The recorded shape. A note from a client that did not record 3:4 keeps its own.
         static let aspectRatio: CGFloat = 3.0 / 4.0
-        static let chipIconSize: CGFloat = 10
-        static let transcriptIconSize: CGFloat = 14
         static let chipSpacing: CGFloat = 4
         static let chipHorizontalPadding: CGFloat = 6
         static let chipVerticalPadding: CGFloat = 3
-        static let downloadIconSize: CGFloat = 30
         static let blurDecodeSize = CGSize(width: 24, height: 32)
 
         // Recording (`VideoNoteRecordingView`)
@@ -281,7 +274,6 @@ enum ChatUIConstants {
         /// Leading inset inside the text field capsule.
         static let textLeadingPad: CGFloat = CTLayout.sectionGap
         static let textVerticalPad: CGFloat = 11
-        static let trailingIconSize: CGFloat = 28
         /// Spacing between attach circle and text capsule.
         static let attachFieldGap: CGFloat = CTLayout.chromeGap
         /// Outer horizontal pad of the attach+field row.
@@ -290,6 +282,5 @@ enum ChatUIConstants {
         static let auxBarGap: CGFloat = CTLayout.inlinePad
         /// Voice bar height is `height` — see the note there. No separate constant: the two are
         /// the same measurement, and while they were two values one of them was free to drift.
-        static let voiceChromeIconSize: CGFloat = 22
     }
 }

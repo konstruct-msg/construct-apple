@@ -122,7 +122,7 @@ struct VideoNoteRecordingView: View {
     private func control(_ symbol: String, label: String, tint: Color, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: symbol)
-                .font(.system(size: ChatUIConstants.InputBar.voiceChromeIconSize))
+                .font(CTIcon.font(CTIcon.navLg, weight: .regular))
                 .foregroundStyle(tint)
                 .frame(width: CTLayout.hitTarget, height: CTLayout.hitTarget)
         }

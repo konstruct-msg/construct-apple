@@ -130,7 +130,7 @@ private struct ChatRowLayout: View {
                             .lineLimit(1)
                         if user.trustAlert != nil {
                             Image(systemName: "exclamationmark.shield.fill")
-                                .font(.system(size: 11, weight: .semibold))
+                                .font(CTIcon.font(CTIcon.caption, weight: .semibold))
                                 .foregroundStyle(Color.CT.danger)
                                 .accessibilityLabel(Text(LocalizedStringKey("kt_warning")))
                         }
@@ -145,7 +145,7 @@ private struct ChatRowLayout: View {
                     }
                     if chat.isPinned && chat.unreadCount == 0 {
                         Image(systemName: "pin.fill")
-                            .font(.system(size: 10, weight: .regular))
+                            .font(CTIcon.font(CTIcon.caption, weight: .regular))
                             .foregroundColor(Color.CT.textDim)
                     }
                 }

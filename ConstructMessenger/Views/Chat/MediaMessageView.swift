@@ -327,7 +327,7 @@ private struct SingleMediaCell: View {
     private var videoOverlayGlyph: some View {
         if isMissingMedia {
             Image(systemName: "exclamationmark.triangle.fill")
-                .font(.system(size: ChatUIConstants.Media.statusOverlayIconSize, weight: .semibold))
+                .font(CTIcon.font(CTIcon.nav, weight: .semibold))
                 .foregroundColor(Color.CT.danger)
                 .accessibilityLabel(NSLocalizedString("media_unavailable", comment: ""))
         } else if isDownloadingVideo {
@@ -357,7 +357,7 @@ private struct SingleMediaCell: View {
             )
         } else if downloadedVideoURL != nil {
             Image(systemName: "play.fill")
-                .font(.system(size: CTLayout.navIconSizeLg))
+                .font(CTIcon.font(CTIcon.navLg, weight: .regular))
                 .foregroundColor(.white)
                 .frame(
                     width: ChatUIConstants.Media.playButtonSize,
@@ -366,7 +366,7 @@ private struct SingleMediaCell: View {
                 .background(.black.opacity(0.45), in: Circle())
         } else {
             Image(systemName: "arrow.down.circle.fill")
-                .font(.system(size: 30))
+                .font(CTIcon.font(CTIcon.overlay, weight: .regular))
                 .foregroundColor(.white)
                 .shadow(color: .black.opacity(0.35), radius: 8, y: 2)
         }
@@ -429,13 +429,13 @@ private struct SingleMediaCell: View {
             .overlay {
                 VStack(spacing: ChatUIConstants.Media.failureStackSpacing) {
                     Image(systemName: "exclamationmark.triangle.fill")
-                        .font(.system(size: ChatUIConstants.Media.failureIconSize, weight: .regular))
+                        .font(CTIcon.font(CTIcon.overlay, weight: .regular))
                         .foregroundColor(Color.CT.danger)
                         .lineLimit(1).fixedSize()
                     Text(LocalizedStringKey("failed_to_load")).font(CTFont.regular(11)).foregroundColor(Color.CT.textDim)
                     Button { loadThumbnail(forceRetry: true) } label: {
                         HStack(spacing: 4) {
-                            Image(systemName: "arrow.clockwise").font(.system(size: 11, weight: .regular))
+                            Image(systemName: "arrow.clockwise").font(CTIcon.font(CTIcon.caption, weight: .regular))
                             Text(LocalizedStringKey("retry"))
                         }
                         .font(CTFont.regular(11)).foregroundColor(Color.CT.accent)
@@ -454,7 +454,7 @@ private struct SingleMediaCell: View {
             .overlay {
                 VStack(spacing: ChatUIConstants.Media.failureStackSpacing) {
                     Image(systemName: "exclamationmark.triangle.fill")
-                        .font(.system(size: ChatUIConstants.Media.failureIconSize, weight: .regular))
+                        .font(CTIcon.font(CTIcon.overlay, weight: .regular))
                         .foregroundColor(Color.CT.danger)
                         .lineLimit(1).fixedSize()
                     Text(LocalizedStringKey("media_unavailable"))
@@ -470,7 +470,7 @@ private struct SingleMediaCell: View {
             .fill(Color.CT.bgMsg).frame(width: previewSize.width, height: previewSize.height)
             .overlay {
                 Image(systemName: "photo")
-                    .font(.system(size: 28))
+                    .font(CTIcon.font(CTIcon.overlay, weight: .regular))
                     .foregroundColor(Color.CT.textDim)
             }
             .overlay(Rectangle().stroke(isSelected ? Color.CT.accent : Color.clear, lineWidth: 2))
@@ -902,7 +902,7 @@ private struct GridCell: View {
     private var idlePlaceholder: some View {
         Color.CT.bgMsg
         Image(systemName: placeholderSymbolName)
-            .font(.system(size: 22, weight: loadFailed ? .semibold : .regular))
+            .font(CTIcon.font(CTIcon.navLg, weight: loadFailed ? .semibold : .regular))
             .foregroundColor(loadFailed ? Color.CT.danger : Color.CT.textDim)
     }
 
@@ -935,7 +935,7 @@ private struct GridCell: View {
     private var videoOverlayGlyph: some View {
         if isMissingMedia {
             Image(systemName: "exclamationmark.triangle.fill")
-                .font(.system(size: ChatUIConstants.Media.statusOverlayIconSize, weight: .semibold))
+                .font(CTIcon.font(CTIcon.nav, weight: .semibold))
                 .foregroundColor(Color.CT.danger)
                 .accessibilityLabel(NSLocalizedString("media_unavailable", comment: ""))
         } else if isDownloadingVideo {
@@ -965,7 +965,7 @@ private struct GridCell: View {
             )
         } else if downloadedVideoURL != nil {
             Image(systemName: "play.fill")
-                .font(.system(size: CTLayout.sectionGap))
+                .font(CTIcon.font(CTIcon.row, weight: .regular))
                 .foregroundColor(.white)
                 .frame(
                     width: ChatUIConstants.Voice.controlWidth,
@@ -974,7 +974,7 @@ private struct GridCell: View {
                 .background(.black.opacity(0.45), in: Circle())
         } else {
             Image(systemName: "arrow.down.circle.fill")
-                .font(.system(size: 20))
+                .font(CTIcon.font(CTIcon.nav, weight: .regular))
                 .foregroundColor(.white)
                 .shadow(color: .black.opacity(0.35), radius: 6, y: 2)
         }

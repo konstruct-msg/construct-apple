@@ -11,7 +11,6 @@ import Combine
 
 private enum ReplyPreviewLayout {
     static let spacing: CGFloat = 6
-    static let iconSize: CGFloat = 14
     static let labelSize: CGFloat = 12
 }
 
@@ -47,7 +46,7 @@ struct ReplyPreviewContent: View {
         } else if let preview, preview.kind != .text {
             HStack(spacing: ReplyPreviewLayout.spacing) {
                 Image(systemName: symbolName(for: preview.kind))
-                    .font(.system(size: ReplyPreviewLayout.iconSize, weight: .regular))
+                    .font(CTIcon.font(CTIcon.row, weight: .regular))
                     .foregroundColor(Color.CT.textDim)
                     .lineLimit(1).fixedSize()
                 Text(preview.localizedDisplayText)
@@ -74,7 +73,7 @@ struct ReplyPreviewContent: View {
                 Color.CT.bgMsg
                     .overlay(
                         Image(systemName: preview?.kind == .video || preview?.kind == .videoNote ? "video" : "photo")
-                            .font(.system(size: ReplyPreviewLayout.iconSize, weight: .regular))
+                            .font(CTIcon.font(CTIcon.row, weight: .regular))
                             .foregroundColor(Color.CT.textDim)
                             .lineLimit(1).fixedSize()
                     )

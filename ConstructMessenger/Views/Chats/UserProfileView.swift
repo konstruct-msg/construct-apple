@@ -158,7 +158,7 @@ struct UserProfileView: View {
             if user.isBlocked {
                 HStack(spacing: 5) {
                     Image(systemName: "nosign")
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(CTIcon.font(CTIcon.caption, weight: .semibold))
                         .accessibilityHidden(true)
                     Text(NSLocalizedString("profile_blocked_badge", comment: ""))
                         .font(CTFont.ui(11, weight: .semibold, relativeTo: .caption2))
@@ -212,7 +212,7 @@ struct UserProfileView: View {
                             .font(CTFont.ui(14))
                             .foregroundStyle(hasAlias ? Color.CT.text : Color.CT.textDim)
                         Image(systemName: "pencil")
-                            .font(.system(size: 12, weight: .semibold))
+                            .font(CTIcon.font(CTIcon.caption, weight: .semibold))
                             .foregroundStyle(Color.CT.accent.opacity(0.7))
                     }
                 }
@@ -233,7 +233,7 @@ struct UserProfileView: View {
                                 .lineLimit(1)
                                 .minimumScaleFactor(0.7)
                             Image(systemName: "doc.on.doc")
-                                .font(.system(size: 11, weight: .regular))
+                                .font(CTIcon.font(CTIcon.caption, weight: .regular))
                                 .foregroundStyle(Color.CT.textDim)
                         }
                     }
@@ -371,7 +371,7 @@ struct UserProfileView: View {
             } label: {
                 profileRow(label: NSLocalizedString("safety_numbers", comment: "")) {
                     Image(systemName: "chevron.right")
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(CTIcon.font(CTIcon.caption, weight: .semibold))
                         .foregroundStyle(Color.CT.textDim)
                 }
             }

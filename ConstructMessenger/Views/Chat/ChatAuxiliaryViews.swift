@@ -85,7 +85,7 @@ struct ChatSearchChromeView: View {
 
                 Button(action: onClose) {
                     Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: CTLayout.navIconSize, weight: .regular))
+                        .font(CTIcon.font(CTIcon.nav, weight: .regular))
                         .foregroundStyle(Color.CT.accentDim)
                         .frame(width: CTLayout.hitTarget, height: CTLayout.hitTarget)
                         .contentShape(Rectangle())
