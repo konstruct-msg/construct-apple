@@ -11,10 +11,22 @@ import SwiftProtobuf
 import XCTest
 @testable import Construct_Messenger
 
+/// `@MainActor` because every test here works on `container.viewContext`, which belongs to the
+/// main queue. Without it the `async` test bodies ran on a cooperative-pool thread and fetched and
+/// saved that context off its queue; Core Data answers that with whatever the main queue happens
+/// to be doing at the moment — Cocoa 133010 "references outside of their own stores", or
+/// "_referenceData64 only defined for abstract class" on a temporary object id. That was TODO 120:
+/// it failed in full runs, where the main queue was busy, and passed alone.
+@MainActor
 final class HistorySnapshotEncoderTests: XCTestCase {
 
     private var container: NSPersistentContainer!
-    private var context: NSManagedObjectContext { container.viewContext }
+    /// Mutation: drop `@MainActor` from the class — every test fails here instead of one in
+    /// several full runs failing somewhere inside Core Data.
+    private var context: NSManagedObjectContext {
+        XCTAssertTrue(Thread.isMainThread, "viewContext used off the main queue — see the class comment")
+        return container.viewContext
+    }
 
     private let local = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee"
     private let peer = "11111111-2222-4333-8444-555555555555"
