@@ -86,7 +86,7 @@ struct PinLockView: View {
     private var biometricContent: some View {
         VStack(spacing: 20) {
             Image(systemName: securityViewModel.biometricIconName)
-                .font(.system(size: 64))
+                .font(CTIcon.font(CTIcon.hero, weight: .regular))
                 .foregroundStyle(Color.CT.accent)
 
             Text(String(format: NSLocalizedString("use_biometric", comment: ""),
@@ -211,7 +211,7 @@ struct PinLockView: View {
                     authenticateWithBiometrics()
                 } label: {
                     Image(systemName: securityViewModel.biometricIconName)
-                        .font(.system(size: 26))
+                        .font(CTIcon.font(CTIcon.control, weight: .regular))
                         .foregroundStyle(Color.CT.accent)
                         .frame(width: keySize, height: keySize)
                 }
@@ -225,7 +225,7 @@ struct PinLockView: View {
                 if !pin.isEmpty { pin.removeLast() }
             } label: {
                 Image(systemName: "delete.left")
-                    .font(.system(size: 24))
+                    .font(CTIcon.font(CTIcon.control, weight: .regular))
                     .foregroundStyle(pin.isEmpty ? Color.CT.textDim.opacity(0.4) : Color.CT.text)
                     .frame(width: keySize, height: keySize)
             }

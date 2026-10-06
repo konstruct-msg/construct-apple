@@ -70,7 +70,7 @@ struct VeilVoucherQRSheet: View {
     private var intro: some View {
         VStack(spacing: VeilVoucherLayout.messageSpacing) {
             Image(systemName: "qrcode")
-                .font(.system(size: VeilVoucherLayout.statusIconSize))
+                .font(CTIcon.font(CTIcon.overlay, weight: .regular))
                 .foregroundColor(Color.CT.textDim)
             Text(NSLocalizedString("veil_voucher_intro", comment: ""))
                 .font(CTFont.body)
@@ -156,7 +156,7 @@ struct VeilVoucherQRSheet: View {
     private func message(icon: String, text: String, retry: Bool) -> some View {
         VStack(spacing: VeilVoucherLayout.messageSpacing) {
             Image(systemName: icon)
-                .font(.system(size: VeilVoucherLayout.statusIconSize))
+                .font(CTIcon.font(CTIcon.overlay, weight: .regular))
                 .foregroundColor(Color.CT.textDim)
             Text(text)
                 .font(CTFont.body)

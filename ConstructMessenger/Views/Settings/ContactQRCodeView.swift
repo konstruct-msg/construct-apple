@@ -229,7 +229,7 @@ struct ContactQRCodeView: View {
         Button { copyLink() } label: {
             HStack(spacing: SettingsShareLayout.actionSpacing) {
                 Image(systemName: copyFeedback == .idle ? "link" : "checkmark")
-                    .font(.system(size: SettingsShareLayout.actionIconSize, weight: .regular))
+                    .font(CTIcon.font(CTIcon.row, weight: .regular))
                 Text(copyLabel.uppercased())
                     .font(CTFont.caption)
                     .lineLimit(1)

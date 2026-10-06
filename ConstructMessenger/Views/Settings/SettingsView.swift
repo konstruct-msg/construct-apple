@@ -381,7 +381,7 @@ struct SettingsView: View {
     private var recoveryBanner: some View {
         HStack(alignment: .top, spacing: SettingsRootLayout.recoveryBannerContentSpacing) {
             Image(systemName: "exclamationmark.circle.fill")
-                .font(.system(size: SettingsRootLayout.recoveryBannerIconSize, weight: .semibold))
+                .font(CTIcon.font(CTIcon.row, weight: .semibold))
                 .foregroundColor(Color.CT.danger)
             VStack(alignment: .leading, spacing: SettingsRootLayout.recoveryBannerTextSpacing) {
                 // A key made silently and not yet copied is the common case since 2026-10-04;
@@ -405,7 +405,7 @@ struct SettingsView: View {
                         Text(NSLocalizedString("recovery_setup_action", comment: ""))
                             .font(CTFont.badge)
                         Image(systemName: "chevron.right")
-                            .font(.system(size: SettingsRootLayout.recoveryBannerChevronSize, weight: .semibold))
+                            .font(CTIcon.font(CTIcon.caption, weight: .semibold))
                     }
                     .foregroundColor(Color.CT.accent)
                 }
@@ -416,7 +416,7 @@ struct SettingsView: View {
                 UserDefaults.standard.set(true, forKey: "recovery_banner_dismissed")
             } label: {
                 Image(systemName: "xmark")
-                    .font(.system(size: SettingsRootLayout.recoveryBannerDismissIconSize))
+                    .font(CTIcon.font(CTIcon.caption, weight: .regular))
                     .foregroundColor(Color.CT.textDim)
             }
         }

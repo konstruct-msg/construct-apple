@@ -112,7 +112,7 @@ struct DesktopLinkRequestView: View {
             // Header
             VStack(spacing: 10) {
                 Image(systemName: "iphone")
-                    .font(.system(size: 48, weight: .light))
+                    .font(CTIcon.font(CTIcon.hero, weight: .light))
                     .foregroundStyle(Color.CT.textDim)
                 Text("SCAN ON YOUR PHONE")
                     .font(CTFont.headline)

@@ -98,7 +98,7 @@ struct ExistingIdentityChooserView: View {
         Button(action: action) {
             HStack(spacing: CTLayout.chromeGap) {
                 Image(systemName: icon)
-                    .font(.system(size: 22, weight: .medium))
+                    .font(CTIcon.font(CTIcon.navLg))
                     .foregroundStyle(Color.CT.accent)
                     .frame(width: 32)
                 VStack(alignment: .leading, spacing: 3) {
@@ -113,7 +113,7 @@ struct ExistingIdentityChooserView: View {
                 }
                 Spacer(minLength: 0)
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(CTIcon.font(CTIcon.caption, weight: .semibold))
                     .foregroundStyle(Color.CT.textDim)
             }
             .padding(.horizontal, CTLayout.edgePad)

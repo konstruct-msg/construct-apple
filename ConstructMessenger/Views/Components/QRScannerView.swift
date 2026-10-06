@@ -518,7 +518,7 @@ struct QRScannerView: View {
     var body: some View {
         VStack(spacing: 20) {
             Image(systemName: "qrcode.viewfinder")
-                .font(.system(size: 64, weight: .ultraLight))
+                .font(CTIcon.font(CTIcon.hero, weight: .ultraLight))
                 .foregroundStyle(.secondary)
             Text("QR scanning not available on macOS")
                 .font(.headline)

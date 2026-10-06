@@ -22,7 +22,7 @@ count() {
 
 # name | pattern | baseline
 CHECKS=(
-  "SF Symbol sized by hand — use CTIcon.font(_:)|\.font\(\.system\(size|80"
+  "SF Symbol sized by hand — use CTIcon.font(_:)|\.font\(\.system\(size|6"
   "text style past CTFont — use a CTFont role|\.font\(\.(largeTitle|title|title2|title3|headline|subheadline|body|callout|footnote|caption|caption2)\b|41"
   "pre-split CTFont name — use a role|CTFont\.(regular|medium|bold)\(|29"
   "colour literal — use Color.CT|(foregroundStyle|foregroundColor|background|fill|stroke|tint)\(\.?(Color\.)?(white|black|gray|red|green|blue|orange|yellow)\b|169"

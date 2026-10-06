@@ -55,7 +55,7 @@ struct HistoryTransferSendView: View {
                                 ShareLink(item: file) {
                                     HStack(spacing: 14) {
                                         Image(systemName: "square.and.arrow.up")
-                                            .font(.system(size: 16, weight: .medium))
+                                            .font(CTIcon.font(CTIcon.row))
                                             .foregroundStyle(Color.CT.accent)
                                             .frame(minWidth: 22, alignment: .center)
                                         Text(NSLocalizedString("history_sync_share_file", comment: ""))

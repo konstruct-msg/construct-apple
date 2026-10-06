@@ -142,7 +142,7 @@ struct IssuedInvitesView: View {
     private func row(for act: InviteIssuance) -> some View {
         HStack(spacing: SecuritySettingsLayout.rowContentSpacing) {
             Image(systemName: act.kind == .link ? "link" : "qrcode")
-                .font(.system(size: SettingsShareLayout.actionIconSize, weight: .regular))
+                .font(CTIcon.font(CTIcon.row, weight: .regular))
                 .foregroundStyle(Color.CT.text)
                 .frame(width: IssuedInvitesLayout.iconColumnWidth)
 

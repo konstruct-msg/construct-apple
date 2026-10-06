@@ -216,12 +216,12 @@ struct OrientationView: View {
                     .fill(Color.CT.bgMsg)
                     .frame(width: 72, height: 72)
                 Image(systemName: "key.fill")
-                    .font(.system(size: 28, weight: .medium))
+                    .font(CTIcon.font(CTIcon.overlay))
                     .foregroundColor(Color.CT.accent)
             }
             HStack(spacing: 6) {
                 Image(systemName: "iphone")
-                    .font(.system(size: 12, weight: .medium))
+                    .font(CTIcon.font(CTIcon.caption))
                 Text(NSLocalizedString("orientation_page1_visual_label", comment: "").uppercased())
                     .font(CTFont.micro)
                     .tracking(1)
@@ -252,7 +252,7 @@ struct OrientationView: View {
     private func orientationPathCard(icon: String, titleKey: String, subtitleKey: String) -> some View {
         VStack(spacing: 10) {
             Image(systemName: icon)
-                .font(.system(size: 22, weight: .medium))
+                .font(CTIcon.font(CTIcon.navLg))
                 .foregroundColor(Color.CT.accent)
                 .frame(height: 28)
             Text(NSLocalizedString(titleKey, comment: "").uppercased())
@@ -294,7 +294,7 @@ struct OrientationView: View {
     private func mapRow(icon: String, titleKey: String, subKey: String) -> some View {
         HStack(spacing: 14) {
             Image(systemName: icon)
-                .font(.system(size: 16, weight: .medium))
+                .font(CTIcon.font(CTIcon.row))
                 .foregroundColor(Color.CT.accent)
                 .frame(width: 24)
             VStack(alignment: .leading, spacing: 2) {
