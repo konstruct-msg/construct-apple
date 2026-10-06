@@ -259,7 +259,7 @@ struct STTSettingsSection: View {
             } label: {
                 HStack(spacing: 4) {
                     Image(systemName: "arrow.down.circle.fill")
-                        .font(.system(size: 13))
+                        .font(CTIcon.font(CTIcon.caption, weight: .regular))
                     Text(NSLocalizedString("stt_download", comment: ""))
                         .font(CTFont.secondary)
                 }
@@ -283,13 +283,13 @@ struct STTSettingsSection: View {
                 if preferredModel == model {
                     Image(systemName: "checkmark.circle.fill")
                         .foregroundColor(Color.CT.accent)
-                        .font(.system(size: 14))
+                        .font(CTIcon.font(CTIcon.row, weight: .regular))
                 }
                 Button {
                     showDeleteConfirm = model
                 } label: {
                     Image(systemName: "trash")
-                        .font(.system(size: 13))
+                        .font(CTIcon.font(CTIcon.caption, weight: .regular))
                         .foregroundColor(Color.CT.textDim)
                 }
                 .buttonStyle(.plain)
@@ -309,7 +309,7 @@ struct STTSettingsSection: View {
             } label: {
                 HStack(spacing: 4) {
                     Image(systemName: "exclamationmark.arrow.circlepath")
-                        .font(.system(size: 13))
+                        .font(CTIcon.font(CTIcon.caption, weight: .regular))
                     Text(NSLocalizedString("stt_retry_download", comment: ""))
                         .font(CTFont.secondary)
                 }

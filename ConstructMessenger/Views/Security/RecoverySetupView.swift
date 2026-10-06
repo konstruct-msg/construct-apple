@@ -70,7 +70,7 @@ struct RecoverySetupView: View {
         VStack(spacing: 24) {
             Spacer()
             Image(systemName: "key.fill")
-                .font(.system(size: 48, weight: .regular))
+                .font(CTIcon.font(CTIcon.hero, weight: .regular))
                 .foregroundStyle(Color.CT.accent)
                 .accessibilityHidden(true)
             Text(NSLocalizedString(
@@ -243,7 +243,7 @@ struct RecoverySetupView: View {
         VStack(spacing: 24) {
             Spacer()
             Image(systemName: "checkmark.circle.fill")
-                .font(.system(size: 48, weight: .regular))
+                .font(CTIcon.font(CTIcon.hero, weight: .regular))
                 .foregroundStyle(Color.CT.accent)
                 .accessibilityHidden(true)
             Text(NSLocalizedString("recovery_done_title", comment: ""))

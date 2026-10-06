@@ -178,7 +178,7 @@ struct ChatsSplitView: View {
             selectTab(tab, clearChatSelection: tab != .chats)
         } label: {
             Image(systemName: tab.systemImage)
-                .font(.system(size: 18, weight: selected ? .semibold : .regular))
+                .font(CTIcon.font(CTIcon.nav, weight: selected ? .semibold : .regular))
                 .foregroundStyle(selected ? Color.CT.bg : Color.CT.textDim)
                 .frame(width: CTLayout.hitTarget, height: CTLayout.hitTarget)
                 .background {
@@ -210,7 +210,7 @@ struct ChatsSplitView: View {
             }
         } label: {
             Image(systemName: listToggleSystemImage)
-                .font(.system(size: 17, weight: .regular))
+                .font(CTIcon.font(CTIcon.row, weight: .regular))
                 .foregroundStyle(listToggleForeground)
                 .frame(width: CTLayout.hitTarget, height: CTLayout.hitTarget)
                 .contentShape(Circle())

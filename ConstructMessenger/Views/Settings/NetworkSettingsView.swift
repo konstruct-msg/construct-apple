@@ -79,7 +79,7 @@ struct NetworkSettingsView: View {
                 CTSectionGroup {
                     HStack(spacing: NetworkSettingsLayout.statusRowSpacing) {
                         Image(systemName: connectionStatus)
-                            .font(.system(size: 14, weight: .medium))
+                            .font(CTIcon.font(CTIcon.row))
                             .foregroundColor(statusColor)
                         VStack(alignment: .leading, spacing: NetworkSettingsLayout.statusDetailSpacing) {
                             Text(connectionManager.connectionStatus.text(localized: true))
@@ -124,7 +124,7 @@ struct NetworkSettingsView: View {
                             #endif
                             HStack(spacing: 4) {
                                 if obfuscated {
-                                    Image(systemName: "lock.fill").font(.system(size: 10))
+                                    Image(systemName: "lock.fill").font(CTIcon.font(CTIcon.caption, weight: .regular))
                                 }
                                 Text(isQUIC ? NetworkSettingsLabels.quic : NetworkSettingsLabels.h2)
                                     .font(CTFont.body)
@@ -218,7 +218,7 @@ struct NetworkSettingsView: View {
                                     .foregroundColor(Color.CT.textDim)
                                 Spacer()
                                 Image(systemName: "arrow.clockwise")
-                                    .font(.system(size: 13, weight: .regular))
+                                    .font(CTIcon.font(CTIcon.caption, weight: .regular))
                                     .foregroundColor(Color.CT.textDim)
                             }
                             .padding(.horizontal, NetworkSettingsLayout.rowHorizontalPadding)
@@ -227,7 +227,7 @@ struct NetworkSettingsView: View {
                             CTSep(style: .thin)
                             HStack {
                                 Image(systemName: pathSymbol(veilManager.currentTrafficPath))
-                                    .font(.system(size: 13, weight: .semibold))
+                                    .font(CTIcon.font(CTIcon.caption, weight: .semibold))
                                     .foregroundStyle(pathColor(veilManager.currentTrafficPath))
                                     .accessibilityHidden(true)
                                 Text(relay.address)
@@ -336,7 +336,7 @@ struct NetworkSettingsView: View {
                                 .foregroundStyle(.orange)
                             Spacer()
                             Image(systemName: "chevron.right")
-                                .font(.system(size: 12, weight: .semibold))
+                                .font(CTIcon.font(CTIcon.caption, weight: .semibold))
                                 .foregroundStyle(.orange)
                         }
                         .padding(.horizontal, NetworkSettingsLayout.rowHorizontalPadding)
@@ -546,14 +546,14 @@ struct NetworkSettingsView: View {
     private func veilAccessRow(icon: String, title: String) -> some View {
         HStack {
             Image(systemName: icon)
-                .font(.system(size: 14))
+                .font(CTIcon.font(CTIcon.row, weight: .regular))
                 .foregroundColor(Color.CT.accent)
             Text(title)
                 .font(CTFont.body)
                 .foregroundColor(Color.CT.text)
             Spacer()
             Image(systemName: "chevron.right")
-                .font(.system(size: 12, weight: .semibold))
+                .font(CTIcon.font(CTIcon.caption, weight: .semibold))
                 .foregroundColor(Color.CT.textDim)
         }
         .padding(.horizontal, NetworkSettingsLayout.rowHorizontalPadding)

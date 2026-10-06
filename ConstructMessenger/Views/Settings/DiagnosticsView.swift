@@ -294,7 +294,7 @@ struct DiagnosticsView: View {
                 CTSectionGroup {
                     HStack(spacing: SettingsLayout.rowContentSpacing) {
                         Image(systemName: "doc.text")
-                            .font(.system(size: 14, weight: .semibold))
+                            .font(CTIcon.font(CTIcon.row, weight: .semibold))
                             .foregroundStyle(isLogCollectionEnabled ? Color.CT.accent : Color.CT.textDim)
                             .lineLimit(1)
                             .fixedSize()
@@ -316,7 +316,7 @@ struct DiagnosticsView: View {
                         ConstructRowDivider(indent: SettingsLayout.rowDividerIndent)
                         HStack(spacing: SettingsLayout.rowContentSpacing) {
                             Image(systemName: "externaldrive")
-                                .font(.system(size: 14, weight: .semibold))
+                                .font(CTIcon.font(CTIcon.row, weight: .semibold))
                                 .foregroundStyle(Color.CT.textDim)
                                 .lineLimit(1)
                                 .fixedSize()

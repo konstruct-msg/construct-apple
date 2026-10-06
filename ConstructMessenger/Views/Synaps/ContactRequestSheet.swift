@@ -39,7 +39,7 @@ struct ContactRequestSheet: View {
             } trailing: {
                 Button(action: { dismiss() }) {
                     Image(systemName: "xmark.circle")
-                        .font(.system(size: 18, weight: .medium))
+                        .font(CTIcon.font(CTIcon.nav))
                         .foregroundColor(Color.CT.accent)
                 }
                 .buttonStyle(.plain)
@@ -130,7 +130,7 @@ struct ContactRequestSheet: View {
                                         .scaleEffect(0.8)
                                 } else {
                                     Image(systemName: "exclamationmark.bubble")
-                                        .font(.system(size: 13, weight: .semibold))
+                                        .font(CTIcon.font(CTIcon.caption, weight: .semibold))
                                 }
                                 Text(NSLocalizedString("contact_request_spam_block", comment: ""))
                                     .font(CTFont.body)
@@ -178,7 +178,7 @@ struct ContactRequestSheet: View {
                         .scaleEffect(0.85)
                 } else {
                     Image(systemName: systemImage)
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(CTIcon.font(CTIcon.row, weight: .semibold))
                 }
                 Text(title)
                     .font(CTFont.ui(14, weight: .medium))

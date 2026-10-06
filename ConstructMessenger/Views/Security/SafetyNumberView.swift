@@ -139,7 +139,7 @@ struct SafetyNumberView: View {
                 Spacer()
                 // The copy action's own affordance. `[C]` needed a legend.
                 Image(systemName: copied ? "checkmark" : "doc.on.doc")
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(CTIcon.font(CTIcon.row, weight: .semibold))
                     .foregroundStyle(copied ? Color.CT.accent : Color.CT.textDim)
                     .accessibilityHidden(true)
             }

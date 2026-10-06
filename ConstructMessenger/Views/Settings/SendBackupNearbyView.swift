@@ -169,7 +169,7 @@ struct SendBackupNearbyView: View {
     private var completeView: some View {
         VStack(spacing: 16) {
             Image(systemName: "checkmark.circle.fill")
-                .font(.system(size: 32, weight: .bold))
+                .font(CTIcon.font(CTIcon.overlay, weight: .bold))
                 .foregroundColor(Color.CT.accent)
             Text(NSLocalizedString("transfer_complete", comment: ""))
                 .font(CTFont.ui(15, weight: .bold))
@@ -185,7 +185,7 @@ struct SendBackupNearbyView: View {
     private func statusView(systemImage: String, label: String) -> some View {
         VStack(spacing: 16) {
             Image(systemName: systemImage)
-                .font(.system(size: 28, weight: .semibold))
+                .font(CTIcon.font(CTIcon.overlay, weight: .semibold))
                 .foregroundColor(Color.CT.accent)
             Text(label)
                 .font(CTFont.body)

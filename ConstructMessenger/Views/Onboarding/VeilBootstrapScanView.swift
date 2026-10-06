@@ -95,7 +95,7 @@ struct VeilBootstrapScanView: View {
     private var configuredCard: some View {
         VStack(spacing: CTLayout.chromeGap) {
             Image(systemName: "checkmark.shield")
-                .font(.system(size: 28, weight: .medium))
+                .font(CTIcon.font(CTIcon.overlay))
                 .foregroundStyle(Color.CT.accent)
             Text(NSLocalizedString("veil_bootstrap_ok", comment: ""))
                 .font(CTFont.bodyEmphasis)
@@ -125,7 +125,7 @@ struct VeilBootstrapScanView: View {
         Button(action: action) {
             HStack(spacing: CTLayout.chromeGap) {
                 Image(systemName: icon)
-                    .font(.system(size: 22, weight: .medium))
+                    .font(CTIcon.font(CTIcon.navLg))
                     .foregroundStyle(Color.CT.accent)
                     .frame(width: 32)
                 VStack(alignment: .leading, spacing: 3) {
@@ -140,7 +140,7 @@ struct VeilBootstrapScanView: View {
                 }
                 Spacer(minLength: 0)
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(CTIcon.font(CTIcon.caption, weight: .semibold))
                     .foregroundStyle(Color.CT.textDim)
             }
             .padding(.horizontal, CTLayout.edgePad)
