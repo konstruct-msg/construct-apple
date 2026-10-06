@@ -58,6 +58,37 @@ final class PushBannerTests: XCTestCase {
         XCTAssertEqual(covering, ["push-cr"])
     }
 
+    // MARK: - Taking a banner back (TODO 123)
+
+    /// A push for a delivery receipt woke a fetch that found nothing to read: its banner goes.
+    /// Mutation: return [] — "New message" stays, and opening it shows nothing (2026-10-06).
+    func testABannerWithNothingToReadIsWithdrawn() {
+        let ids = PushBannerReplacement.bannersToWithdraw(
+            among: [delivered("push-receipt"), delivered("push-older", secondsAgo: 3600)], unreadChats: 0
+        )
+        XCTAssertEqual(ids, ["push-receipt", "push-older"])
+    }
+
+    /// Anything unread keeps every banner: a receipt landing just after a real message must not
+    /// take that message's banner with it. Mutation: drop the `unreadChats` guard.
+    func testAnythingUnreadKeepsTheBanners() {
+        XCTAssertTrue(PushBannerReplacement.bannersToWithdraw(among: [delivered("push-msg")], unreadChats: 1).isEmpty)
+    }
+
+    /// Only push banners for messages: our own banners and other kinds stay.
+    /// Mutation: drop the `fromPush` or the activity term.
+    func testOnlyMessagePushBannersAreWithdrawn() {
+        let ids = PushBannerReplacement.bannersToWithdraw(
+            among: [
+                delivered("msg-chat-A", fromPush: false),
+                delivered("push-cr", activity: "contact_request_received"),
+                delivered("push-msg")
+            ],
+            unreadChats: 0
+        )
+        XCTAssertEqual(ids, ["push-msg"])
+    }
+
     /// The server (`messaging-service` `blind_alert`) puts these keys in the alert, and iOS looks
     /// them up in this app's `Localizable.strings`. A key renamed or missing in one locale shows
     /// its raw name on that locale's lock screen, and nothing else would notice.

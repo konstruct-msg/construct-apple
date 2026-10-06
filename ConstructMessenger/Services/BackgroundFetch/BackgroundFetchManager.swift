@@ -427,9 +427,13 @@ class BackgroundFetchManager: NSObject {
     /// Enable background fetch
     /// Call this when user enables background refresh in settings
     /// Manual pull-to-refresh: fetches pending messages immediately via gRPC.
-    func fetchPendingMessages() async {
+    /// True when the server was reached and the backlog processed — a skip or an error is false.
+    @discardableResult
+    func fetchPendingMessages() async -> Bool {
         await withCheckedContinuation { continuation in
-            performQuickMessageFetch { _ in continuation.resume() }
+            performQuickMessageFetch { result in
+                if case .success = result { continuation.resume(returning: true) } else { continuation.resume(returning: false) }
+            }
         }
     }
 
@@ -463,13 +467,26 @@ class BackgroundFetchManager: NSObject {
 
         // Loop rather than recurse: every push that arrived during a fetch is answered by the
         // next iteration, and any number of them collapses into that one fetch.
+        var fetched = false
         repeat {
             followUpRequested = false
             fetchStartedAt = Date()
             isFetchInFlight = true
-            await fetchPendingMessages()
+            fetched = await fetchPendingMessages()
             isFetchInFlight = false
         } while followUpRequested
+
+        // A push for a delivery receipt shows the same banner as one for a message (TODO 123).
+        // Only after a fetch that reached the server: one that failed found nothing because it
+        // fetched nothing, and the banner may be a real message's.
+        guard fetched else { return }
+        await MainActor.run {
+            let request = Chat.fetchRequest()
+            request.predicate = NSPredicate(format: "unreadCount > 0")
+            let context = PersistenceController.shared.container.viewContext
+            guard let unread = try? context.count(for: request) else { return }
+            LocalNotificationManager.shared.withdrawPushBannersIfNothingUnread(unreadChats: unread)
+        }
     }
 
     func enableBackgroundFetch() {
