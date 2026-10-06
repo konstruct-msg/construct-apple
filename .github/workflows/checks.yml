@@ -28,6 +28,14 @@ jobs:
       - name: Locale parity, duplicates, unresolved keys, format specifiers
         run: ./scripts/check_localization.sh
 
+  ui-tokens:
+    # The design-token debt may shrink, never grow (vault TODO 122). Pure grep.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: No new hand-sized symbols, text styles or colour literals past the tokens
+        run: ./scripts/check_ui_tokens.sh
+
   appstore-metadata:
     # Apple reports an over-length field at upload, once the copy has already been
     # written, reviewed and translated four times. Counting characters here costs a

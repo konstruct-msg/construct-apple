@@ -108,7 +108,7 @@ struct InCallView: View {
                     if let onMinimize, !isEnded {
                         Button(action: onMinimize) {
                             Image(systemName: "chevron.down")
-                                .font(.system(size: CTLayout.navIconSizeLg, weight: .medium))
+                                .font(CTIcon.font(CTIcon.navLg))
                                 .foregroundStyle(Color.CT.textDim)
                                 .frame(width: CTLayout.hitTarget, height: CTLayout.hitTarget, alignment: .leading)
                                 .contentShape(Rectangle())
@@ -150,7 +150,7 @@ struct InCallView: View {
                     if !isEnded {
                         HStack(spacing: 4) {
                             Image(systemName: "lock.fill")
-                                .font(.system(size: 10, weight: .medium))
+                                .font(CTIcon.font(CTIcon.caption))
                             Text(NSLocalizedString("call_e2ee_badge", comment: ""))
                                 .font(CTFont.caption)
                         }
@@ -303,7 +303,7 @@ private struct CallControlsBar<Secondary: View>: View {
 
             Button(action: onEnd) {
                 Image(systemName: "phone.down.fill")
-                    .font(.system(size: CTLayout.callIconSize, weight: .medium))
+                    .font(CTIcon.font(CTIcon.control))
                     .foregroundStyle(.white)
                     .frame(width: CTLayout.callEndSize, height: CTLayout.callEndSize)
                     .background(Color.CT.danger)
@@ -329,7 +329,7 @@ struct CallControlButton: View {
         Button(action: config.action) {
             VStack(spacing: 6) {
                 Image(systemName: config.systemImage)
-                    .font(.system(size: CTLayout.callIconSize, weight: .medium))
+                    .font(CTIcon.font(CTIcon.control))
                     .foregroundStyle(config.tint)
                     .frame(width: CTLayout.callControlSize, height: CTLayout.callControlSize)
                     .background(Color.CT.bgMsg)
@@ -423,7 +423,7 @@ struct AudioRoutePickerButton: View {
         VStack(spacing: 6) {
             ZStack {
                 Image(systemName: routeSymbol)
-                    .font(.system(size: CTLayout.callIconSize, weight: .medium))
+                    .font(CTIcon.font(CTIcon.control))
                     .foregroundStyle(Color.CT.textDim)
                     .frame(width: CTLayout.callControlSize, height: CTLayout.callControlSize)
                     .background(Color.CT.bgMsg)

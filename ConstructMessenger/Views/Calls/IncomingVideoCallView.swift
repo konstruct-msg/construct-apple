@@ -20,11 +20,9 @@ struct IncomingVideoCallView: View {
     @State private var preview = IncomingCameraPreview()
 
     private enum Layout {
-        static let actionSpacing: CGFloat = 36
-        static let actionsBottom: CGFloat = 56
-        static let controlIcon: CGFloat = 24
+        static let actionSpacing: CGFloat = CTSpace.xxl
+        static let actionsBottom: CGFloat = CTSpace.xxl + CTSpace.xl
         static let avatarSize: CGFloat = 96
-        static let scrimOpacity: Double = 0.45
     }
 
     var body: some View {
@@ -54,17 +52,17 @@ struct IncomingVideoCallView: View {
         VStack(spacing: CTLayout.inlinePad) {
             Text(session.peerName)
                 .font(CTFont.title)
-                .foregroundStyle(.white)
+                .foregroundStyle(Color.CT.onMedia)
                 .lineLimit(1)
             Text(NSLocalizedString("call_incoming_video", comment: ""))
                 .font(CTFont.secondary)
-                .foregroundStyle(.white.opacity(0.8))
+                .foregroundStyle(Color.CT.onMediaDim)
         }
         .padding(.top, CTLayout.hitTarget)
         .padding(.bottom, CTLayout.edgePad)
         .frame(maxWidth: .infinity)
         .background(
-            LinearGradient(colors: [.black.opacity(Layout.scrimOpacity), .clear], startPoint: .top, endPoint: .bottom)
+            LinearGradient(colors: [Color.CT.mediaScrim, .clear], startPoint: .top, endPoint: .bottom)
                 .ignoresSafeArea()
         )
         .accessibilityElement(children: .combine)
@@ -75,10 +73,10 @@ struct IncomingVideoCallView: View {
             action(systemImage: "phone.down.fill", label: "call_decline", background: Color.CT.danger) {
                 preview.stop(then: onDecline)
             }
-            action(systemImage: "video.slash.fill", label: "call_answer_without_video", background: .white.opacity(0.18)) {
+            action(systemImage: "video.slash.fill", label: "call_answer_without_video", background: Color.CT.mediaControl) {
                 preview.stop { onAnswer(false) }
             }
-            action(systemImage: "video.fill", label: "call_answer", background: .green) {
+            action(systemImage: "video.fill", label: "call_answer", background: Color.CT.answer) {
                 preview.stop { onAnswer(true) }
             }
         }
@@ -88,13 +86,13 @@ struct IncomingVideoCallView: View {
         Button(action: perform) {
             VStack(spacing: CTLayout.inlinePad) {
                 Image(systemName: systemImage)
-                    .font(.system(size: Layout.controlIcon, weight: .medium))
-                    .foregroundStyle(.white)
+                    .font(CTIcon.font(CTIcon.control))
+                    .foregroundStyle(Color.CT.onMedia)
                     .frame(width: CTLayout.callControlSize, height: CTLayout.callControlSize)
                     .background(background, in: Circle())
                 Text(NSLocalizedString(label, comment: ""))
                     .font(CTFont.caption)
-                    .foregroundStyle(.white)
+                    .foregroundStyle(Color.CT.onMedia)
                     .fixedSize()
             }
         }
