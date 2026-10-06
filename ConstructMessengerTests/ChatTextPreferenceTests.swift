@@ -99,15 +99,15 @@ final class ChatTextPreferenceTests: XCTestCase {
 
     // MARK: - Scope
 
-    /// The chrome is not the reader's to change. `regular` sets nav bars, `> TITLE` headers,
+    /// The chrome is not the reader's to change. `ui` sets nav bars, `> TITLE` headers,
     /// badges and separators; if the preference reached it, choosing a comfortable message font
     /// would turn the product into a different product.
     func testTheChromeIgnoresThePreference() {
+        UserDefaults.standard.set("mono", forKey: ChatTextPreference.faceKey)
+        let underMono = (CTFont.ui(15), CTFont.body)
         UserDefaults.standard.set("system", forKey: ChatTextPreference.faceKey)
-        XCTAssertEqual(
-            CTFont.regular(15), ConstructFont.mono(15, weight: .regular),
-            "CTFont.regular must stay monospaced whatever the message preference says"
-        )
+        XCTAssertEqual(CTFont.ui(15), underMono.0, "CTFont.ui must not follow the message preference")
+        XCTAssertEqual(CTFont.body, underMono.1, "the chrome roles must not follow the message preference")
     }
 
     /// And the message font does move with it — otherwise the test above passes for the wrong

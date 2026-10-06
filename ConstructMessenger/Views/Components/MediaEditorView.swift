@@ -102,7 +102,7 @@ struct MediaEditorView: View {
                 onConfirm(result)
             } label: {
                 Text(NSLocalizedString("done", comment: ""))
-                    .font(CTFont.medium(13))
+                    .font(CTFont.ui(13, weight: .medium))
                     .tracking(2)
                     .foregroundColor(Color.CT.accent)
                     .frame(height: CTLayout.hitTarget)
@@ -185,7 +185,7 @@ struct MediaEditorView: View {
                 ForEach(CropAspect.allCases) { option in
                     Button { aspect = option } label: {
                         Text(option.label)
-                            .font(CTFont.regular(12))
+                            .font(CTFont.secondary)
                             .foregroundColor(aspect == option ? Color.CT.bg : Color.CT.textDim)
                             .padding(.horizontal, 10)
                             .frame(height: 30)

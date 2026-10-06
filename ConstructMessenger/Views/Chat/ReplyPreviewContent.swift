@@ -11,7 +11,6 @@ import Combine
 
 private enum ReplyPreviewLayout {
     static let spacing: CGFloat = 6
-    static let labelSize: CGFloat = 12
 }
 
 struct ReplyPreviewContent: View {
@@ -38,7 +37,7 @@ struct ReplyPreviewContent: View {
             HStack(spacing: ReplyPreviewLayout.spacing) {
                 thumbnailView
                 Text(preview.localizedDisplayText)
-                    .font(CTFont.regular(ReplyPreviewLayout.labelSize))
+                    .font(CTFont.secondary)
                     .foregroundColor(Color.CT.textDim)
                     .lineLimit(lineLimit)
             }
@@ -50,13 +49,13 @@ struct ReplyPreviewContent: View {
                     .foregroundColor(Color.CT.textDim)
                     .lineLimit(1).fixedSize()
                 Text(preview.localizedDisplayText)
-                    .font(CTFont.regular(ReplyPreviewLayout.labelSize))
+                    .font(CTFont.secondary)
                     .foregroundColor(Color.CT.textDim)
                     .lineLimit(lineLimit)
             }
         } else {
             Text(preview?.localizedDisplayText ?? "")
-                .font(CTFont.regular(ReplyPreviewLayout.labelSize))
+                .font(CTFont.secondary)
                 .foregroundColor(Color.CT.textDim)
                 .lineLimit(lineLimit)
         }

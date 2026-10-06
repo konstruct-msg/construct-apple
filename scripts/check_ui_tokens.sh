@@ -17,14 +17,16 @@ cd "$(dirname "$0")/../ConstructMessenger"
 THEME="Utilities/ConstructTheme.swift"
 
 count() {
-  grep -rE "$1" --include='*.swift' . | grep -v "$THEME" | wc -l | tr -d ' '
+  # A count of zero is the goal, and grep exits 1 on no match; under pipefail that ended the
+  # script at the first category to reach it.
+  { grep -rE "$1" --include='*.swift' . || true; } | { grep -v "$THEME" || true; } | wc -l | tr -d ' '
 }
 
 # name | pattern | baseline
 CHECKS=(
   "SF Symbol sized by hand — use CTIcon.font(_:)|\.font\(\.system\(size|6"
   "text style past CTFont — use a CTFont role|\.font\(\.(largeTitle|title|title2|title3|headline|subheadline|body|callout|footnote|caption|caption2)\b|41"
-  "pre-split CTFont name — use a role|CTFont\.(regular|medium|bold)\(|29"
+  "pre-split CTFont name — use a role|CTFont\.(regular|medium|bold)\(|0"
   "colour literal — use Color.CT|(foregroundStyle|foregroundColor|background|fill|stroke|tint)\(\.?(Color\.)?(white|black|gray|red|green|blue|orange|yellow)\b|169"
 )
 
