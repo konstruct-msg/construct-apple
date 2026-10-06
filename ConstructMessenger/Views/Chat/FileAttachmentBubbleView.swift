@@ -309,7 +309,10 @@ struct FileAttachmentBubbleView: View {
     /// The file type as a symbol. This was a bracketed word (`[pdf]`, `[♪]`) drawn in the
     /// accent colour, which is the same treatment the tappable download button had — so a
     /// type label and a control looked identical.
-    private func symbolName(for filename: String) -> String {
+    private func symbolName(for filename: String) -> String { Self.symbolName(for: filename) }
+
+    /// The symbol for a file by its extension; the upload placeholder draws the same one.
+    static func symbolName(for filename: String) -> String {
         let ext = (filename as NSString).pathExtension.lowercased()
         switch ext {
         case "pdf":                          return "doc.richtext"

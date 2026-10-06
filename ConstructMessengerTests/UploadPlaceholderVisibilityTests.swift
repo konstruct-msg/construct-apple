@@ -115,6 +115,36 @@ final class UploadPlaceholderVisibilityTests: XCTestCase {
         XCTAssertEqual(parsed.mediaItems[1]["mediaType"] as? String, "video/mp4")
     }
 
+    /// Files being sent are one row each, by name and size, as the file bubble will be — not one
+    /// empty photo cell captioned with the first name (TODO 10). A name with a tab or quotes
+    /// still parses: a body that does not parse is drawn as text.
+    /// Mutation: pass a single empty item again — one cell, no names.
+    /// Mutation: escape by hand without control characters — the tab breaks the JSON.
+    func testAFilePlaceholderHasOneNamedRowPerFile() {
+        let chat = makeChat()
+        let odd = "notes\tv2 \"final\".txt"
+
+        service.savePlaceholderMessage(
+            id: UUID().uuidString,
+            fromUserId: UUID().uuidString,
+            toUserId: UUID().uuidString,
+            caption: "",
+            items: [.init(fileName: "report.pdf", fileSize: 2048), .init(fileName: odd, fileSize: nil)],
+            replyTo: nil,
+            chat: chat,
+            in: context
+        )
+
+        guard let message = visibleMessages(in: chat).first,
+              let parsed = parseMediaContent(from: message.legacyBody) else {
+            return XCTFail("File placeholder did not parse as media content")
+        }
+        XCTAssertEqual(parsed.mediaItems.map { $0["fileName"] as? String }, ["report.pdf", odd])
+        XCTAssertEqual(parsed.mediaItems[0]["size"] as? Int, 2048)
+        XCTAssertEqual(parsed.caption, "", "the caption is the person's, not a file name")
+        XCTAssertTrue(UploadPlaceholderBody.isSentinel(message.legacyBody ?? ""))
+    }
+
     /// A caption containing quotes/backslashes must not break the hand-built sentinel JSON.
     func testPlaceholderCaptionIsEscaped() {
         let chat = makeChat()

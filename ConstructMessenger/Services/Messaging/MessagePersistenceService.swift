@@ -185,12 +185,46 @@ class MessagePersistenceService {
         let mimeType: String?
         /// So a video note's placeholder is already the note bubble, not a photo-sized cell.
         let presentation: MediaPresentation?
+        /// A file being sent: its row in the placeholder, by name and size, as the file bubble
+        /// will show it. Until 2026-10-06 a set of files was one empty photo cell (TODO 10).
+        let fileName: String?
+        let fileSize: Int?
 
         init(thumbnail: Data? = nil, mimeType: String? = nil, presentation: MediaPresentation? = nil) {
             self.thumbnail = thumbnail
             self.mimeType = mimeType
             self.presentation = presentation
+            self.fileName = nil
+            self.fileSize = nil
         }
+
+        init(fileName: String, fileSize: Int?) {
+            self.thumbnail = nil
+            self.mimeType = nil
+            self.presentation = nil
+            self.fileName = fileName
+            self.fileSize = fileSize
+        }
+    }
+
+    /// The sentinel a placeholder row stores: every entry flagged `_placeholder`, so
+    /// `parseMediaContent` returns it, `MediaMessageView` draws the upload state, and
+    /// `UploadPlaceholderBody.isSentinel` keeps the retry path from sending it as text.
+    nonisolated static func placeholderBody(caption: String, items: [UploadPlaceholderItem]) -> String {
+        let entries = (items.isEmpty ? [UploadPlaceholderItem()] : items).map { item -> String in
+            if let name = item.fileName {
+                let size = item.fileSize.map { #","size":\#($0)"# } ?? ""
+                return #"{"_placeholder":true,"fileName":\#(Self.jsonStringLiteral(name))\#(size)}"#
+            }
+            guard let mime = item.mimeType, !mime.isEmpty else { return #"{"_placeholder":true}"# }
+            let presentation = item.presentation.map {
+                #","\#(MediaPresentation.jsonKey)":\#(Self.jsonStringLiteral($0.rawValue))"#
+            } ?? ""
+            return #"{"_placeholder":true,"mediaType":\#(Self.jsonStringLiteral(mime))\#(presentation)}"#
+        }
+        return """
+        {"type":"media","caption":\(Self.jsonStringLiteral(caption)),"media":[\(entries.joined(separator: ","))]}
+        """
     }
 
     /// Save a "pending upload" placeholder that shows the local thumbnail while media is
@@ -200,8 +234,8 @@ class MessagePersistenceService {
     /// on failure so the existing retry flow can kick in.
     ///
     /// - Parameter items: one entry per attachment being uploaded, so an album shows the
-    ///   grid it will become instead of a single cell that then multiplies. Pass a single
-    ///   empty item for sources with no local preview (files).
+    ///   grid it will become instead of a single cell that then multiplies. Files pass one
+    ///   `init(fileName:fileSize:)` item each.
     func savePlaceholderMessage(
         id: String,
         fromUserId: String,
@@ -213,20 +247,8 @@ class MessagePersistenceService {
         chat: Chat,
         in context: NSManagedObjectContext
     ) {
-        // Sentinel JSON — every entry is flagged `_placeholder` so parseMediaContent()
-        // returns non-nil, MediaMessageView renders the upload badge, and the gallery
-        // (`ChatView.mediaMessages`) skips the row. `UploadPlaceholderBody.isSentinel`
-        // is what keeps the retry path from sending this JSON as a text message.
-        let entries = (items.isEmpty ? [UploadPlaceholderItem()] : items).map { item -> String in
-            guard let mime = item.mimeType, !mime.isEmpty else { return #"{"_placeholder":true}"# }
-            let presentation = item.presentation.map {
-                #","\#(MediaPresentation.jsonKey)":\#(jsonStringLiteral($0.rawValue))"#
-            } ?? ""
-            return #"{"_placeholder":true,"mediaType":\#(jsonStringLiteral(mime))\#(presentation)}"#
-        }
-        let placeholderJson = """
-        {"type":"media","caption":\(jsonStringLiteral(caption)),"media":[\(entries.joined(separator: ","))]}
-        """
+        // The gallery (`ChatView.mediaMessages`) skips this row too, by the same flag.
+        let placeholderJson = Self.placeholderBody(caption: caption, items: items)
 
         let now = Date()
         let newMessage = Message(context: context)
@@ -265,7 +287,7 @@ class MessagePersistenceService {
         context.saveAndLog()
 
         // Update chat metadata so the preview row shows something sensible.
-        let preview = caption.isEmpty ? "📷 Photo" : caption
+        let preview = !caption.isEmpty ? caption : (items.first?.fileName.map { "📎 \($0)" } ?? "📷 Photo")
         try? updateChatMetadata(chat: chat, lastMessageText: preview, lastMessageTime: now, in: context)
 
         Log.debug("Saved upload placeholder \(id.prefix(8))…", category: "MessagePersistence")
@@ -497,12 +519,12 @@ class MessagePersistenceService {
 
     // MARK: - Private Helpers
 
-    private func jsonStringLiteral(_ s: String) -> String {
-        let escaped = s
-            .replacingOccurrences(of: "\\", with: "\\\\")
-            .replacingOccurrences(of: "\"", with: "\\\"")
-            .replacingOccurrences(of: "\n", with: "\\n")
-            .replacingOccurrences(of: "\r", with: "\\r")
-        return "\"\(escaped)\""
+    /// A JSON string literal for `s`, by the JSON encoder — every control character escaped. The
+    /// hand-rolled version escaped four characters; a file name with a tab broke the placeholder's
+    /// JSON, and a body that does not parse is drawn as text.
+    nonisolated private static func jsonStringLiteral(_ s: String) -> String {
+        guard let data = try? JSONSerialization.data(withJSONObject: s, options: .fragmentsAllowed),
+              let literal = String(data: data, encoding: .utf8) else { return "\"\"" }
+        return literal
     }
 }
