@@ -92,6 +92,20 @@ class LocalNotificationManager: NSObject {
         post(content, identifier: identifier, coveredByPushOf: "contact_request_received")
     }
 
+    /// Takes back the "New message" push banners when the fetch they woke found nothing to read
+    /// (`PushBannerReplacement.bannersToWithdraw`).
+    func withdrawPushBannersIfNothingUnread(unreadChats: Int) {
+        notificationCenter.getDeliveredNotifications { [notificationCenter] delivered in
+            let ids = PushBannerReplacement.bannersToWithdraw(
+                among: delivered.map(PushBannerReplacement.Delivered.init),
+                unreadChats: unreadChats
+            )
+            guard !ids.isEmpty else { return }
+            notificationCenter.removeDeliveredNotifications(withIdentifiers: ids)
+            Log.info("Withdrew \(ids.count) push banner(s): the push brought nothing to read", category: "LocalNotifications")
+        }
+    }
+
     /// Show a generic "New Message" notification.
     /// No sender name or content is included to preserve E2E privacy.
     /// - Parameter chatId: Used to collapse repeat notifications for the same chat.
@@ -400,6 +414,19 @@ enum PushBannerReplacement {
                 activity: construct?["type"] as? String
             )
         }
+    }
+
+    /// The push banners to take back after a push-woken fetch: every "New message" push banner,
+    /// when nothing is unread. The server cannot tell a delivery receipt from a message — on
+    /// purpose, `decisions/sealed-content-type-inside-the-plaintext-frame` — so a receipt arrives
+    /// with the same banner, and opening it found nothing (TODO 123, 2026-10-06). With anything
+    /// unread none is taken back: a receipt that lands just after a real message must not
+    /// withdraw that message's banner, and a blind banner names no chat to match it by.
+    static func bannersToWithdraw(among delivered: [Delivered], unreadChats: Int) -> [String] {
+        guard unreadChats == 0 else { return [] }
+        return delivered
+            .filter { $0.fromPush && $0.activity == "new_message" }
+            .map(\.identifier)
     }
 
     static func coveringPushBanners(among delivered: [Delivered], activity: String, now: Date) -> [String] {
