@@ -1183,7 +1183,7 @@ private struct UploadingFilesView: View {
             ForEach(Array(files.enumerated()), id: \.offset) { _, file in
                 HStack(spacing: CTLayout.chromeGap) {
                     Image(systemName: FileAttachmentBubbleView.symbolName(for: file.name))
-                        .font(.system(size: CTLayout.navIconSizeLg, weight: .regular))
+                        .font(CTIcon.font(CTIcon.navLg, weight: .regular))
                         .foregroundStyle(Color.CT.outMsgText)
                         .frame(width: 32)
                         .accessibilityHidden(true)
