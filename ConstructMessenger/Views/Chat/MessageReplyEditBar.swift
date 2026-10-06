@@ -12,8 +12,6 @@ import Combine
 
 private enum ComposerAuxBarLayout {
     static let accentBarWidth: CGFloat = 2
-    /// Compact cancel glyph (full hit target still applied via contentShape padding).
-    static let cancelIconSize: CGFloat = 18
     static let cancelHit: CGFloat = 32
     static let verticalPadding: CGFloat = 6
     static let labelPreviewSpacing: CGFloat = 1
@@ -104,7 +102,7 @@ struct MessageEditBar: View {
 private func cancelButton(action: @escaping () -> Void) -> some View {
     Button(action: action) {
         Image(systemName: "xmark.circle.fill")
-            .font(.system(size: ComposerAuxBarLayout.cancelIconSize, weight: .regular))
+            .font(CTIcon.font(CTIcon.nav, weight: .regular))
             .foregroundColor(Color.CT.textDim)
             .frame(
                 width: ComposerAuxBarLayout.cancelHit,

@@ -158,7 +158,7 @@ struct ChatsListView: View {
             Spacer()
             Button { showingQRScanner = true } label: {
                 Image(systemName: "qrcode.viewfinder")
-                    .font(.system(size: CTLayout.navIconSize, weight: .medium))
+                    .font(CTIcon.font(CTIcon.nav))
                     .foregroundColor(Color.CT.accent)
                     .frame(width: CTLayout.hitTarget, height: CTLayout.hitTarget)
                     .contentShape(Rectangle())
@@ -286,7 +286,7 @@ struct ChatsListView: View {
     private var streamsEmptyState: some View {
         VStack(spacing: CTLayout.sectionGap) {
             Image(systemName: "bubble.left.and.bubble.right")
-                .font(.system(size: 32, weight: .light))
+                .font(CTIcon.font(CTIcon.overlay, weight: .light))
                 .foregroundStyle(Color.CT.textDim)
                 .padding(.bottom, 4)
 
@@ -341,13 +341,13 @@ struct ChatsListView: View {
         Button(action: action) {
             HStack(spacing: CTLayout.chromeGap) {
                 Image(systemName: systemImage)
-                    .font(.system(size: CTLayout.navIconSize, weight: .medium))
+                    .font(CTIcon.font(CTIcon.nav))
                 Text(NSLocalizedString(titleKey, comment: "").uppercased())
                     .font(CTFont.ui(12, weight: .bold))
                     .tracking(1)
                 Spacer(minLength: 0)
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(CTIcon.font(CTIcon.caption, weight: .semibold))
                     .foregroundStyle(Color.CT.textDim)
             }
             .foregroundStyle(Color.CT.accent)

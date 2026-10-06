@@ -130,7 +130,7 @@ struct VideoNoteBubbleView: View {
                         ProgressView().tint(.white)
                     } else {
                         Image(systemName: has && showsTranscript ? "captions.bubble.fill" : "captions.bubble")
-                            .font(.system(size: ChatUIConstants.VideoNote.transcriptIconSize))
+                            .font(CTIcon.font(CTIcon.row, weight: .regular))
                             .foregroundColor(.white)
                     }
                 }
@@ -198,7 +198,7 @@ struct VideoNoteBubbleView: View {
     private var fullScreenButton: some View {
         Button { openFullScreen() } label: {
             Image(systemName: "arrow.up.left.and.arrow.down.right")
-                .font(.system(size: ChatUIConstants.VideoNote.transcriptIconSize))
+                .font(CTIcon.font(CTIcon.row, weight: .regular))
                 .foregroundColor(.white)
                 .frame(width: CTLayout.hitTarget, height: CTLayout.hitTarget)
                 .background(.black.opacity(0.45), in: Circle().inset(by: CTLayout.inlinePad))
@@ -215,7 +215,7 @@ struct VideoNoteBubbleView: View {
     private var chip: some View {
         HStack(spacing: ChatUIConstants.VideoNote.chipSpacing) {
             Image(systemName: "speaker.slash.fill")
-                .font(.system(size: ChatUIConstants.VideoNote.chipIconSize))
+                .font(CTIcon.font(CTIcon.caption, weight: .regular))
             if let d = item["duration"] as? Double, d > 0 {
                 Text(formatMediaDuration(d)).monospacedDigit()
             }
@@ -235,7 +235,7 @@ struct VideoNoteBubbleView: View {
             ProgressView().tint(.white)
         } else if isMissingMedia {
             Image(systemName: "exclamationmark.triangle.fill")
-                .font(.system(size: ChatUIConstants.Media.statusOverlayIconSize, weight: .semibold))
+                .font(CTIcon.font(CTIcon.nav, weight: .semibold))
                 .foregroundColor(Color.CT.danger)
                 .accessibilityLabel(NSLocalizedString("media_unavailable", comment: ""))
         } else if isDownloading {
@@ -246,12 +246,12 @@ struct VideoNoteBubbleView: View {
             }
         } else if isExpanded, playback.isPaused {
             Image(systemName: "play.fill")
-                .font(.system(size: ChatUIConstants.VideoNote.downloadIconSize))
+                .font(CTIcon.font(CTIcon.overlay, weight: .regular))
                 .foregroundColor(.white)
                 .shadow(color: .black.opacity(0.35), radius: 8, y: 2)
         } else if videoURL == nil {
             Image(systemName: "arrow.down.circle.fill")
-                .font(.system(size: ChatUIConstants.VideoNote.downloadIconSize))
+                .font(CTIcon.font(CTIcon.overlay, weight: .regular))
                 .foregroundColor(.white)
                 .shadow(color: .black.opacity(0.35), radius: 8, y: 2)
         }

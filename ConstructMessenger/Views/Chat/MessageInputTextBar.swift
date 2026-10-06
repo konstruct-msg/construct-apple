@@ -26,7 +26,6 @@ struct MessageInputTextBar: View {
 
     /// Matches the attach `plus.circle` control (``CTLayout.controlHeight`` + pill).
     private static let controlSize: CGFloat = ChatUIConstants.InputBar.height
-    private static let trailingIconSize: CGFloat = ChatUIConstants.InputBar.trailingIconSize
 
     init(
         text: Binding<String>,
@@ -139,7 +138,7 @@ struct MessageInputTextBar: View {
         if canSend {
             Button(action: onSend) {
                 Image(systemName: "arrow.up.circle.fill")
-                    .font(.system(size: Self.trailingIconSize, weight: .regular))
+                    .font(CTIcon.font(CTIcon.overlay, weight: .regular))
                     .foregroundColor(Color.CT.accent)
                     .frame(width: Self.controlSize, height: Self.controlSize)
                     .contentShape(Circle())
@@ -164,7 +163,7 @@ struct MessageInputTextBar: View {
         } else if !canSend, let onStartVoice {
             Button(action: onStartVoice) {
                 Image(systemName: "mic.fill")
-                    .font(.system(size: CTLayout.navIconSize))
+                    .font(CTIcon.font(CTIcon.nav, weight: .regular))
                     .foregroundColor(Color.CT.textDim)
                     .frame(width: Self.controlSize, height: Self.controlSize)
                     .contentShape(Circle())
@@ -234,7 +233,7 @@ struct MicModeButton: View {
 
     var body: some View {
         Image(systemName: "mic.fill")
-            .font(.system(size: CTLayout.navIconSize))
+            .font(CTIcon.font(CTIcon.nav, weight: .regular))
             .foregroundColor(Color.CT.textDim)
             .opacity(open != nil ? 0 : 1)
             .frame(width: size, height: size)
@@ -307,7 +306,7 @@ struct MicModeSwitch: View {
 
     private func segment(_ mode: MicModeButton.Mode, symbol: String, label: String) -> some View {
         Image(systemName: symbol)
-            .font(.system(size: CTLayout.navIconSize))
+            .font(CTIcon.font(CTIcon.nav, weight: .regular))
             .foregroundStyle(choice == mode ? Color.CT.bg : Color.CT.textDim)
             .frame(width: width, height: ChatUIConstants.VideoNote.switchSegmentLength)
             .background {

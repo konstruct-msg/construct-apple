@@ -274,7 +274,7 @@ struct IOSMessageInputView: View {
     private var attachmentButton: some View {
         Button { showMediaPicker = true } label: {
             Image(systemName: "plus.circle")
-                .font(.system(size: CTLayout.navIconSize))
+                .font(CTIcon.font(CTIcon.nav, weight: .regular))
                 .foregroundColor(Color.CT.textDim)
                 .frame(width: CTLayout.controlHeight, height: CTLayout.controlHeight)
                 .glassCapsule()

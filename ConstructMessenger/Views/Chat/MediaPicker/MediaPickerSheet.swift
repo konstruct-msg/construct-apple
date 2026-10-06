@@ -161,7 +161,7 @@ struct MediaPickerSheet: View {
                 dismiss()
             } label: {
                 Image(systemName: "xmark.circle.fill")
-                    .font(.system(size: 22))
+                    .font(CTIcon.font(CTIcon.navLg, weight: .regular))
                     .foregroundStyle(Color.CT.textDim)
             }
             .buttonStyle(.plain)
@@ -306,7 +306,7 @@ struct MediaPickerSheet: View {
                 Task { await confirmSelection() }
             } label: {
                 Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: 34, weight: .regular))
+                    .font(CTIcon.font(CTIcon.overlay, weight: .regular))
                     .foregroundStyle(Color.CT.accent)
                     .symbolRenderingMode(.hierarchical)
             }
@@ -395,7 +395,7 @@ struct MediaPickerSheet: View {
         } label: {
             VStack(spacing: 4) {
                 Image(systemName: systemImage)
-                    .font(.system(size: 18, weight: .medium))
+                    .font(CTIcon.font(CTIcon.nav))
                 Text(LocalizedStringKey(titleKey))
                     .font(CTFont.micro)
             }

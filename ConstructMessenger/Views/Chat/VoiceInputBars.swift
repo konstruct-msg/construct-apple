@@ -23,7 +23,7 @@ struct VoiceRecordingBar: View {
         HStack(spacing: 0) {
             Button(action: onCancel) {
                 Image(systemName: "xmark.circle.fill")
-                    .font(.system(size: ChatUIConstants.InputBar.voiceChromeIconSize))
+                    .font(CTIcon.font(CTIcon.navLg, weight: .regular))
                     .foregroundStyle(Color.CT.danger)
             }
             .buttonStyle(.plain)
@@ -41,7 +41,7 @@ struct VoiceRecordingBar: View {
             // Stop
             Button(action: onStop) {
                 Image(systemName: "stop.circle.fill")
-                    .font(.system(size: ChatUIConstants.InputBar.voiceChromeIconSize))
+                    .font(CTIcon.font(CTIcon.navLg, weight: .regular))
                     .foregroundStyle(Color.CT.accent)
             }
             .buttonStyle(.plain)
@@ -65,7 +65,7 @@ struct VoicePreviewBar: View {
             // Discard
             Button(action: onDiscard) {
                 Image(systemName: "trash.circle.fill")
-                    .font(.system(size: ChatUIConstants.InputBar.voiceChromeIconSize))
+                    .font(CTIcon.font(CTIcon.navLg, weight: .regular))
                     .foregroundStyle(Color.CT.danger)
             }
             .buttonStyle(.plain)
@@ -83,7 +83,7 @@ struct VoicePreviewBar: View {
             // Send
             Button(action: onSend) {
                 Image(systemName: "arrow.up.circle.fill")
-                    .font(.system(size: CTLayout.callIconSize))
+                    .font(CTIcon.font(CTIcon.control, weight: .regular))
                     .foregroundStyle(Color.CT.accent)
             }
             .buttonStyle(.plain)

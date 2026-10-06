@@ -156,7 +156,7 @@ struct ChatActionButton: View {
 
     private func glyph(_ symbol: String) -> some View {
         Image(systemName: symbol)
-            .font(.system(size: CTLayout.navIconSizeLg, weight: .medium))
+            .font(CTIcon.font(CTIcon.navLg))
             .foregroundColor(Color.CT.accent)
             .frame(width: size, height: size)
             .contentShape(Rectangle())
@@ -277,7 +277,7 @@ struct ChatActionPaletteView: View {
         } label: {
             VStack(spacing: 4) {
                 Image(systemName: action.symbol)
-                    .font(.system(size: CTLayout.navIconSize, weight: .medium))
+                    .font(CTIcon.font(CTIcon.nav))
                     .foregroundStyle(isSelected ? Color.CT.bg : Color.CT.accent)
                     .frame(width: ChatActionPaletteGeometry.itemSize, height: ChatActionPaletteGeometry.itemSize)
                     .background(isSelected ? AnyShapeStyle(Color.CT.accent) : AnyShapeStyle(.regularMaterial), in: Circle())

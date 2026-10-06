@@ -89,7 +89,7 @@ struct VoiceMessageBubbleView: View {
                             .frame(minWidth: ChatUIConstants.Voice.controlWidth)
                     } else {
                         Image(systemName: isPlaying ? "pause.fill" : "play.fill")
-                            .font(.system(size: ChatUIConstants.Voice.playIconSize, weight: .regular))
+                            .font(CTIcon.font(CTIcon.row, weight: .regular))
                             .foregroundColor(isSentByMe ? Color.CT.outMsgText : Color.CT.accent)
                             .frame(minWidth: ChatUIConstants.Voice.controlWidth)
                     }
@@ -160,7 +160,7 @@ struct VoiceMessageBubbleView: View {
                         .frame(width: ChatUIConstants.Voice.toggleSize, height: ChatUIConstants.Voice.toggleSize)
                 } else {
                     Image(systemName: "textformat")
-                        .font(.system(size: ChatUIConstants.Voice.toggleIconSize, weight: .regular))
+                        .font(CTIcon.font(CTIcon.caption, weight: .regular))
                         .foregroundColor(toggleTint(hasTranscript: hasTranscript))
                         .frame(width: ChatUIConstants.Voice.toggleSize, height: ChatUIConstants.Voice.toggleSize)
                 }
@@ -246,7 +246,7 @@ struct VoiceMessageBubbleView: View {
         HStack(spacing: ChatUIConstants.Voice.playerSpacing) {
             Button { onRetry?() } label: {
                 Image(systemName: "arrow.clockwise")
-                    .font(.system(size: ChatUIConstants.Voice.playIconSize, weight: .regular))
+                    .font(CTIcon.font(CTIcon.row, weight: .regular))
                     .foregroundColor(Color(hex: 0xE05555))
                     .frame(width: ChatUIConstants.Voice.controlWidth)
             }
@@ -282,7 +282,7 @@ struct VoiceMessageBubbleView: View {
     private var unavailableBody: some View {
         HStack(spacing: ChatUIConstants.Voice.playerSpacing) {
             Image(systemName: "waveform.slash")
-                .font(.system(size: ChatUIConstants.Voice.playIconSize, weight: .regular))
+                .font(CTIcon.font(CTIcon.row, weight: .regular))
                 .foregroundColor(Color.CT.textDim)
                 .frame(width: ChatUIConstants.Voice.controlWidth)
 

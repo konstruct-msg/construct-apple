@@ -112,7 +112,7 @@ struct FileAttachmentBubbleView: View {
                         Image(systemName: downloadedURLs[file.mediaId] != nil
                               ? "play.circle.fill"
                               : "arrow.down.circle.fill")
-                            .font(.system(size: ChatUIConstants.Media.playButtonSize * 0.6, weight: .semibold))
+                            .font(CTIcon.font(CTIcon.overlay, weight: .semibold))
                             .foregroundStyle(.white)
                             .accessibilityHidden(true)
                     }
@@ -148,7 +148,7 @@ struct FileAttachmentBubbleView: View {
         } label: {
             HStack(spacing: CTLayout.chromeGap) {
                 Image(systemName: symbolName(for: file.filename))
-                    .font(.system(size: 22, weight: .regular))
+                    .font(CTIcon.font(CTIcon.navLg, weight: .regular))
                     .foregroundStyle(isSentByMe ? Color.CT.outMsgText : Color.CT.accent)
                     .frame(width: 32)
                     .accessibilityHidden(true)

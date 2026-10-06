@@ -499,7 +499,7 @@ struct MediaGalleryPage: View {
                         .scaleEffect(1.5)
                 } else {
                     Image(systemName: "photo")
-                        .font(.system(size: 34, weight: .light))
+                        .font(CTIcon.font(CTIcon.overlay, weight: .light))
                         .foregroundStyle(.white.opacity(0.3))
                         .accessibilityHidden(true)
                 }
@@ -696,7 +696,7 @@ struct GalleryVideoPage: View {
                 } else if failed {
                     Button { load(forceRetry: true) } label: {
                         VStack(spacing: 10) {
-                            Image(systemName: "arrow.clockwise").font(.system(size: 28))
+                            Image(systemName: "arrow.clockwise").font(CTIcon.font(CTIcon.overlay, weight: .regular))
                             Text(LocalizedStringKey("retry")).font(CTFont.body)
                         }
                         .foregroundColor(.white.opacity(0.85))

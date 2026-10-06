@@ -537,7 +537,7 @@ struct ChatView: View {
                     }
                 } label: {
                     Image(systemName: "chevron.down")
-                        .font(.system(size: CTLayout.callIconSize))
+                        .font(CTIcon.font(CTIcon.control, weight: .regular))
                         .foregroundColor(Color.CT.accent)
                         .frame(width: CTLayout.controlHeight, height: CTLayout.controlHeight)
                         .glassCapsule()
