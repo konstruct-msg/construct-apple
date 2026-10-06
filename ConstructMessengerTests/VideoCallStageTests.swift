@@ -110,4 +110,20 @@ final class VideoCallStageTests: XCTestCase {
         XCTAssertFalse(CallVideoAudio.movesToSpeaker(wasSending: true, isSending: true, outputIsEarpiece: true))
         XCTAssertFalse(CallVideoAudio.movesToSpeaker(wasSending: true, isSending: false, outputIsEarpiece: true))
     }
+
+    /// A call started with the camera: the camera came on while the route still read as the
+    /// loudspeaker, and connecting put it on the earpiece. Mutation: return false — the video
+    /// call plays at the ear (2026-10-06).
+    func testAVideoCallLeavesTheEarpieceOnceMediaConnects() {
+        XCTAssertTrue(CallVideoAudio.movesToSpeakerWhenMediaConnects(firstConnect: true, isSending: true, outputIsEarpiece: true))
+    }
+
+    /// Mutation: drop `firstConnect` — a reconnect takes back the earpiece the person chose.
+    /// Drop `isSending` — a voice call goes to the loudspeaker. Drop `outputIsEarpiece` — AirPods
+    /// are overridden.
+    func testOnlyTheFirstConnectOfACameraCallOnTheEarpieceMoves() {
+        XCTAssertFalse(CallVideoAudio.movesToSpeakerWhenMediaConnects(firstConnect: false, isSending: true, outputIsEarpiece: true))
+        XCTAssertFalse(CallVideoAudio.movesToSpeakerWhenMediaConnects(firstConnect: true, isSending: false, outputIsEarpiece: true))
+        XCTAssertFalse(CallVideoAudio.movesToSpeakerWhenMediaConnects(firstConnect: true, isSending: true, outputIsEarpiece: false))
+    }
 }

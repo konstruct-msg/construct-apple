@@ -769,16 +769,21 @@ final class CallManager: CallUIManaging {
         let wasSending = video.canSend && video.localCameraOn
         updateCamera { $0.localCameraOn = on }
         #if os(iOS)
-        let earpiece = AVAudioSession.sharedInstance().currentRoute.outputs.contains { $0.portType == .builtInReceiver }
         if CallVideoAudio.movesToSpeaker(
             wasSending: wasSending,
             isSending: video.canSend && video.localCameraOn,
-            outputIsEarpiece: earpiece
+            outputIsEarpiece: Self.outputIsEarpiece()
         ) {
             CallAudioController.setSpeaker(true)
         }
         #endif
     }
+
+    #if os(iOS)
+    private static func outputIsEarpiece() -> Bool {
+        AVAudioSession.sharedInstance().currentRoute.outputs.contains { $0.portType == .builtInReceiver }
+    }
+    #endif
 
     /// An incoming video call is answered with the camera on (`CallVideoSignal.answersWithCamera`).
     /// When the offer comes after the answer — the push can beat it by seconds — the session is
@@ -1327,6 +1332,7 @@ final class CallManager: CallUIManaging {
                 guard let self else { return }
                 // Media path is up — from now on the call survives signaling-stream drops
                 // (see receive-loop close handler in openStreamIfNeeded).
+                let firstConnect = self.active?.mediaConnected == false
                 self.active?.mediaConnected = true
                 self.active?.iceRestartTask?.cancel()
                 self.active?.iceRestartTask = nil
@@ -1346,6 +1352,13 @@ final class CallManager: CallUIManaging {
                 // bounce through .connected on reconnects.
                 #if os(iOS)
                 CallAudioController.shared.notifyMediaConnected(hasAnswered: self.active?.answeredAt != nil)
+                if CallVideoAudio.movesToSpeakerWhenMediaConnects(
+                    firstConnect: firstConnect,
+                    isSending: self.video.canSend && self.video.localCameraOn,
+                    outputIsEarpiece: Self.outputIsEarpiece()
+                ) {
+                    CallAudioController.setSpeaker(true)
+                }
                 #endif
             }
         }

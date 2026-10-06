@@ -94,4 +94,13 @@ enum CallVideoAudio {
     static func movesToSpeaker(wasSending: Bool, isSending: Bool, outputIsEarpiece: Bool) -> Bool {
         !wasSending && isSending && outputIsEarpiece
     }
+
+    /// A call that starts with the camera turns it on before the route has settled: at that
+    /// moment the output still reads as the loudspeaker, and only once media connects does the
+    /// `.voiceChat` mode take it to the earpiece (device logs 2026-10-05: `session-init`
+    /// out=Speaker, `peer-connected` out=Receiver). So the camera's move is made again there —
+    /// on the first connect only, so a reconnect does not undo an earpiece chosen by hand.
+    static func movesToSpeakerWhenMediaConnects(firstConnect: Bool, isSending: Bool, outputIsEarpiece: Bool) -> Bool {
+        firstConnect && isSending && outputIsEarpiece
+    }
 }
