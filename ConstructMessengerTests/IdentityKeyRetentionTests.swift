@@ -61,15 +61,13 @@ final class IdentityKeyRetentionTests: XCTestCase {
         user.addedAt = Date()
         user.applyServerUsername(nil, userId: id)
         user.knownIdentityKey = key
-        try? context.save()
+        try! context.save()
         return user
     }
 
+    /// As saved: the writes land on a background context, so the row in `context` lags them.
     private func storedKey(for id: String) -> Data? {
-        let fetch = User.fetchRequest()
-        fetch.predicate = NSPredicate(format: "id == %@", id)
-        fetch.fetchLimit = 1
-        return (try? context.fetch(fetch))?.first?.knownIdentityKey
+        (try? LocalRepositories.contacts.contact(id))?.knownIdentityKey
     }
 
     // MARK: - The regression: a fetched key must not be dropped
@@ -81,8 +79,7 @@ final class IdentityKeyRetentionTests: XCTestCase {
         XCTAssertNil(storedKey(for: peerId))
 
         ContactLinkService.shared.rememberIdentityKeyIfUnknown(
-            userId: peerId, identityKey: fetchedKey, source: "test", createIfMissing: true, context: context
-        )
+            userId: peerId, identityKey: fetchedKey, source: "test", createIfMissing: true)
 
         XCTAssertEqual(storedKey(for: peerId), fetchedKey)
         XCTAssertNotNil(
@@ -97,8 +94,7 @@ final class IdentityKeyRetentionTests: XCTestCase {
         XCTAssertNil(storedKey(for: peerId))
 
         ContactLinkService.shared.rememberIdentityKeyIfUnknown(
-            userId: peerId, identityKey: fetchedKey, source: "test", createIfMissing: true, context: context
-        )
+            userId: peerId, identityKey: fetchedKey, source: "test", createIfMissing: true)
 
         XCTAssertEqual(storedKey(for: peerId), fetchedKey)
     }
@@ -106,8 +102,7 @@ final class IdentityKeyRetentionTests: XCTestCase {
     /// A row created to hold a key is not the user adding a contact. It must not appear as one.
     func testCreatedRowIsNotMarkedAsAContact() {
         ContactLinkService.shared.rememberIdentityKeyIfUnknown(
-            userId: peerId, identityKey: fetchedKey, source: "test", createIfMissing: true, context: context
-        )
+            userId: peerId, identityKey: fetchedKey, source: "test", createIfMissing: true)
 
         let fetch = User.fetchRequest()
         fetch.predicate = NSPredicate(format: "id == %@", peerId)
@@ -131,8 +126,7 @@ final class IdentityKeyRetentionTests: XCTestCase {
 
         ContactLinkService.shared.rememberIdentityKeyIfUnknown(
             userId: peerId, identityKey: fetchedKey, source: "sealed_cert",
-            createIfMissing: false, context: context
-        )
+            createIfMissing: false)
 
         let fetch = User.fetchRequest()
         fetch.predicate = NSPredicate(format: "id == %@", peerId)
@@ -147,8 +141,7 @@ final class IdentityKeyRetentionTests: XCTestCase {
 
         ContactLinkService.shared.rememberIdentityKeyIfUnknown(
             userId: peerId, identityKey: fetchedKey, source: "sealed_cert",
-            createIfMissing: false, context: context
-        )
+            createIfMissing: false)
 
         XCTAssertEqual(storedKey(for: peerId), fetchedKey)
         XCTAssertNotNil(StealthSenderService.recipientIdentityKey(recipientId: peerId))
@@ -165,8 +158,7 @@ final class IdentityKeyRetentionTests: XCTestCase {
         makeUser(id: peerId, key: pinnedKey)
 
         ContactLinkService.shared.rememberIdentityKeyIfUnknown(
-            userId: peerId, identityKey: fetchedKey, source: "test", createIfMissing: true, context: context
-        )
+            userId: peerId, identityKey: fetchedKey, source: "test", createIfMissing: true)
 
         XCTAssertEqual(
             storedKey(for: peerId), pinnedKey,
@@ -179,8 +171,7 @@ final class IdentityKeyRetentionTests: XCTestCase {
         makeUser(id: peerId, key: fetchedKey)
 
         ContactLinkService.shared.rememberIdentityKeyIfUnknown(
-            userId: peerId, identityKey: fetchedKey, source: "test", createIfMissing: true, context: context
-        )
+            userId: peerId, identityKey: fetchedKey, source: "test", createIfMissing: true)
 
         XCTAssertEqual(storedKey(for: peerId), fetchedKey)
     }
@@ -192,8 +183,7 @@ final class IdentityKeyRetentionTests: XCTestCase {
         makeUser(id: peerId)
 
         ContactLinkService.shared.rememberIdentityKeyIfUnknown(
-            userId: peerId, identityKey: Data(), source: "test", createIfMissing: true, context: context
-        )
+            userId: peerId, identityKey: Data(), source: "test", createIfMissing: true)
 
         XCTAssertNil(storedKey(for: peerId))
     }
@@ -201,8 +191,7 @@ final class IdentityKeyRetentionTests: XCTestCase {
     /// An empty user id must not mint a row keyed on nothing.
     func testAnEmptyUserIdCreatesNoRow() {
         ContactLinkService.shared.rememberIdentityKeyIfUnknown(
-            userId: "", identityKey: fetchedKey, source: "test", createIfMissing: true, context: context
-        )
+            userId: "", identityKey: fetchedKey, source: "test", createIfMissing: true)
 
         let fetch = User.fetchRequest()
         XCTAssertEqual((try? context.count(for: fetch)) ?? -1, 0)
@@ -215,8 +204,7 @@ final class IdentityKeyRetentionTests: XCTestCase {
         makeUser(id: otherId)
 
         ContactLinkService.shared.rememberIdentityKeyIfUnknown(
-            userId: peerId, identityKey: fetchedKey, source: "test", createIfMissing: true, context: context
-        )
+            userId: peerId, identityKey: fetchedKey, source: "test", createIfMissing: true)
 
         XCTAssertEqual(storedKey(for: peerId), fetchedKey)
         XCTAssertNil(storedKey(for: otherId))
@@ -271,7 +259,7 @@ final class IdentityKeyRetentionTests: XCTestCase {
             .unvouched(.expired),
             "expiry still governs delivery trust — we are only pinning the key"
         )
-        StealthSenderService.shared.rememberIdentityFromCertificate(cert, context: context)
+        StealthSenderService.shared.rememberIdentityFromCertificate(cert)
 
         XCTAssertEqual(storedKey(for: peerId), fetchedKey)
         XCTAssertNotNil(StealthSenderService.recipientIdentityKey(recipientId: peerId))
@@ -284,7 +272,7 @@ final class IdentityKeyRetentionTests: XCTestCase {
         cert.senderUserID = peerId
         cert.senderIdentityKey = fetchedKey
 
-        StealthSenderService.shared.rememberIdentityFromCertificate(cert, context: context)
+        StealthSenderService.shared.rememberIdentityFromCertificate(cert)
 
         XCTAssertNil(storedKey(for: peerId), "an unvouched identity key is not TOFU")
     }
@@ -318,7 +306,7 @@ final class IdentityKeyRetentionTests: XCTestCase {
         // The precondition of the shortcut in `resolveSender`.
         XCTAssertEqual(StealthSenderService.shared.attest(cert), .vouched(.signature))
 
-        StealthSenderService.shared.rememberIdentityFromCertificate(cert, context: context)
+        StealthSenderService.shared.rememberIdentityFromCertificate(cert)
 
         XCTAssertEqual(storedKey(for: peerId), fetchedKey)
     }
@@ -352,11 +340,11 @@ final class IdentityKeyRetentionTests: XCTestCase {
             return cert
         }
 
-        StealthSenderService.shared.rememberIdentityFromCertificate(signedCert(identityKey: fetchedKey), context: context)
+        StealthSenderService.shared.rememberIdentityFromCertificate(signedCert(identityKey: fetchedKey))
         XCTAssertEqual(storedKey(for: peerId), fetchedKey)
 
         let impostor = Data(repeating: 0xAB, count: 32)
-        StealthSenderService.shared.rememberIdentityFromCertificate(signedCert(identityKey: impostor), context: context)
+        StealthSenderService.shared.rememberIdentityFromCertificate(signedCert(identityKey: impostor))
 
         XCTAssertEqual(storedKey(for: peerId), fetchedKey, "first key wins — this is TOFU, not TOEU")
     }

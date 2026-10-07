@@ -55,43 +55,43 @@ class ChatManagementService {
         // from them are no longer silently discarded.
         DeletedContactsStore.shared.remove(user.id)
 
-        // Check if User already exists before creating a new one
-        let userFetchRequest = User.fetchRequest()
-        let idPredicate = NSPredicate(format: "id == %@", user.id)
-        var userPredicates: [NSPredicate] = [idPredicate]
-        if let userOwnerPredicate = userFetchRequest.predicate {
-            userPredicates.insert(userOwnerPredicate, at: 0)
-        }
-        userFetchRequest.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: userPredicates)
-
+        // The contact row, through the repository: created as a contact, or marked one, with the
+        // names the server username leaves.
+        let contacts = LocalRepositories.contacts
         let dbUser: User
-        if let existingUser = try? context.fetch(userFetchRequest).first {
-            existingUser.applyServerUsername(user.username, userId: user.id)
-            if !existingUser.isContact {
-                existingUser.isContact = true
-                existingUser.addedAt = existingUser.addedAt ?? Date()
+        do {
+            let now = Date()
+            if let existing = try contacts.contact(user.id) {
+                let names = ContactName.applyingServerUsername(
+                    user.username, username: existing.username, displayName: existing.displayName,
+                    isSharingWithMe: existing.isSharingWithMe, id: user.id
+                )
+                try contacts.setNames(user.id, username: names.username, displayName: names.displayName)
+                if !existing.isContact { try contacts.markContact(user.id, addedAt: now) }
+                Log.debug("Using existing user: id=\(user.id), username=\(user.username), displayName=\(names.displayName)", category: "ChatManagementService")
+            } else {
+                var row = ContactRecord.new(id: user.id, isContact: true, addedAt: now)
+                let names = ContactName.applyingServerUsername(
+                    user.username, username: "", displayName: "", isSharingWithMe: false, id: user.id
+                )
+                row.username = names.username
+                row.displayName = names.displayName
+                try contacts.insert(row)
+                Log.debug("Created new user: id=\(user.id), username=\(user.username), displayName=\(names.displayName)", category: "ChatManagementService")
             }
-            dbUser = existingUser
-            Log.debug("Using existing user: id=\(user.id), username=\(user.username), displayName=\(existingUser.displayName)", category: "ChatManagementService")
-        } else {
-            dbUser = User(context: context)
-            dbUser.id = user.id
-            dbUser.isSharingWithMe = false
-            dbUser.isBlocked = false
-            dbUser.amISharingWith = false
-            dbUser.isContact = true
-            dbUser.addedAt = Date()
-            dbUser.applyServerUsername(user.username, userId: user.id)
-            Log.debug("Created new user: id=\(user.id), username=\(user.username), displayName=\(dbUser.displayName)", category: "ChatManagementService")
-        }
 
-        if let key = identityPublicKey, !key.isEmpty {
-            ContactLinkService.shared.pinKnownIdentityKey(on: dbUser, identityKey: key)
-        }
-        // From the signed invite, already checked by the server against the account's recovery
-        // key — it outranks a card, and a different one is a security event either way.
-        if let address = accountAddress {
-            AccountAddress.pin(address, on: dbUser, source: .invite)
+            if let key = identityPublicKey, !key.isEmpty {
+                ContactLinkService.shared.pinKnownIdentityKey(contactId: user.id, identityKey: key)
+            }
+            // From the signed invite, already checked by the server against the account's recovery
+            // key — it outranks a card, and a different one is a security event either way.
+            if let address = accountAddress {
+                AccountAddress.pin(address, contactId: user.id, source: .invite)
+            }
+            dbUser = try User.row(user.id, in: context)
+        } catch {
+            Log.error("ChatManagementService: contact \(user.id.prefix(8))… not written: \(error)", category: "ChatManagementService")
+            return nil
         }
 
         // 1:1 Chat per User — shared finder (also collapses accidental duplicates).

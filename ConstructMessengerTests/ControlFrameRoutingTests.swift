@@ -43,7 +43,7 @@ final class ControlFrameRoutingTests: XCTestCase {
     /// Mutation: pass the action's contact id instead of `otherUserId` — this reddens.
     func testAProfileFrameIsAppliedToTheAccount() throws {
         MessageRouter().handleControlFrames(in: [try profileFrame("Alice One", editedAt: 10)], messageId: "m-10", from: contact.id, in: context)
-        XCTAssertEqual(contact.displayName, "Alice One")
+        XCTAssertEqual(try LocalRepositories.contacts.contact(contact.id)?.displayName, "Alice One")
     }
 
     /// Mutation: drop the block check in `handleControlFrames` — this reddens.

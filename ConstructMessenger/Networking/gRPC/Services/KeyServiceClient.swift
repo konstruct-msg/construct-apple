@@ -289,8 +289,7 @@ final class KeyServiceClient: Sendable {
                 identityKey: fetched.data.identityPublic,
                 source: "bundle_fetch",
                 // We asked for this user; a session with them is being established either way.
-                createIfMissing: true,
-                context: PersistenceController.shared.container.viewContext
+                createIfMissing: true
             )
         }
 
@@ -576,18 +575,14 @@ final class KeyServiceClient: Sendable {
         identityKey: Data,
         newStatus: KTStatus
     ) {
-        let context = PersistenceController.shared.container.viewContext
-        let fetch = User.fetchRequest()
-        fetch.predicate = NSPredicate(format: "id == %@", userId)
-        fetch.fetchLimit = 1
-        guard let user = try? context.fetch(fetch).first else { return }
-
-        user.ktStatus = newStatus
-        if newStatus == .verified {
-            user.knownIdentityKey = identityKey
-        }
-        if context.hasChanges {
-            try? context.save()
+        let contacts = LocalRepositories.contacts
+        do {
+            guard try contacts.setKTStatus(userId, newStatus) else { return }
+            if newStatus == .verified {
+                try contacts.setIdentityKey(userId, identityKey)
+            }
+        } catch {
+            Log.error("KT: verdict for \(userId.prefix(8))… not saved: \(error)", category: "KT")
         }
     }
 }

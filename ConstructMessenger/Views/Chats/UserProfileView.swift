@@ -409,7 +409,7 @@ struct UserProfileView: View {
                 .buttonStyle(.plain)
 
                 Button {
-                    if KeyChangeUX.acknowledgeKeyChange(userId: user.id, context: viewContext) {
+                    if KeyChangeUX.acknowledgeKeyChange(userId: user.id) {
                         // @ObservedObject user refreshes from the Core Data object
                     }
                 } label: {

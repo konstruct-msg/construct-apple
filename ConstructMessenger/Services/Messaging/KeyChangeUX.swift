@@ -28,29 +28,18 @@ enum KeyChangeUX {
     /// Our own account is never the subject: a row for us is residue (`SelfAddressedResidue`). No row means no contact to warn about — the
     /// event exists to protect a conversation.
     @discardableResult
-    static func raise(_ notice: SecurityNotice, userId: String, context: NSManagedObjectContext) -> Bool {
-        guard !userId.isEmpty else { return false }
-        let fetch = User.fetchRequest()
-        fetch.predicate = NSPredicate(format: "id == %@", userId)
-        fetch.fetchLimit = 1
-        guard let user = try? context.fetch(fetch).first, raise(notice, on: user) else { return false }
+    static func raise(_ notice: SecurityNotice, userId: String) -> Bool {
+        guard notice != .none, !userId.isEmpty, !SessionAddressing.isOurOwnAccount(userId) else { return false }
+        let contacts = LocalRepositories.contacts
+        guard let contact = try? contacts.contact(userId) else { return false }
         do {
-            try context.save()
+            try contacts.setSecurityNotice(userId, notice)
         } catch {
             Log.error("SECURITY_NOTICE[\(notice)]: not saved for \(userId.prefix(8))…: \(error)", category: "KeyChangeUX")
         }
-        return true
-    }
-
-    /// The same, on a row the caller holds and saves.
-    @discardableResult
-    static func raise(_ notice: SecurityNotice, on user: User) -> Bool {
-        let userId = user.id
-        guard notice != .none, !userId.isEmpty, !SessionAddressing.isOurOwnAccount(userId) else { return false }
-        user.securityNotice = notice
         Log.error("SECURITY_NOTICE[\(notice)]: \(userId.prefix(8))…", category: "KeyChangeUX")
         NotificationCenter.default.post(name: .contactKeyChanged, object: nil, userInfo: ["userId": userId])
-        announce(notice, userId: userId, displayName: user.resolvedDisplayName)
+        announce(notice, userId: userId, displayName: contact.resolvedDisplayName)
         return true
     }
 
@@ -81,19 +70,12 @@ enum KeyChangeUX {
     /// The user has looked: the pending event is cleared, and a failed proof is accepted as a
     /// risk (`.failed` → `.verified`) — the next fetch that fails raises it again.
     @discardableResult
-    static func acknowledgeKeyChange(
-        userId: String,
-        context: NSManagedObjectContext
-    ) -> Bool {
-        let fetch = User.fetchRequest()
-        fetch.predicate = NSPredicate(format: "id == %@", userId)
-        fetch.fetchLimit = 1
-        guard let user = try? context.fetch(fetch).first, user.trustAlert != nil else { return false }
-
-        user.securityNotice = .none
-        if user.ktStatus == .failed { user.ktStatus = .verified }
+    static func acknowledgeKeyChange(userId: String) -> Bool {
+        let contacts = LocalRepositories.contacts
+        guard let contact = try? contacts.contact(userId), contact.trustAlert != nil else { return false }
         do {
-            try context.save()
+            try contacts.setSecurityNotice(userId, .none)
+            if contact.ktStatus == .failed { try contacts.setKTStatus(userId, .verified) }
             Log.info("Security notice acknowledged for \(userId.prefix(8))…", category: "KeyChangeUX")
             NotificationCenter.default.post(
                 name: .contactKeyChangeAcknowledged,

@@ -94,29 +94,24 @@ class ProfileShareViewModel {
     /// `self` gone and returned without a word. A changed name or avatar reached no contact at
     /// all; before April, the `isSharingProfile` guard let it reach the first one only.
     func prepareProfile() async -> OutgoingProfile? {
-        guard let context = viewContext,
-              let currentUserId = AuthSessionManager.shared.currentUserId else { return nil }
-
-        let userFetchRequest: NSFetchRequest<User> = User.fetchRequest()
-        userFetchRequest.predicate = NSPredicate(format: "id == %@", currentUserId)
-        guard let currentUser = try? context.fetch(userFetchRequest).first else { return nil }
+        guard viewContext != nil,
+              let currentUserId = AuthSessionManager.shared.currentUserId,
+              var me = try? LocalRepositories.ownProfile.profile(accountId: currentUserId) else { return nil }
 
         // A profile that has never been stamped (edited before the stamp existed) gets one now,
         // once, and keeps it: what makes it a version is that sending again does not change it.
-        if currentUser.profileEditedAtMs == 0 {
-            currentUser.markProfileEdited()
-            try? context.save()
+        if me.profileEditedAtMs == 0 {
+            me.markEdited()
+            try? LocalRepositories.ownProfile.save(me)
         }
 
-        // Snapshot values we need before any await — NSManagedObject must not be
-        // read off MainActor after suspension points.
         // Only a name we chose, or our username: never the generated one, which a contact
         // computes for itself and would take for a name we picked (`ProfileShare.chosenName`).
-        let displayName = DisplayNameGenerator.isGenerated(currentUser.displayName, for: currentUserId)
-            ? currentUser.username
-            : (currentUser.displayName.isEmpty ? currentUser.username : currentUser.displayName)
-        let editedAtMs = UInt64(currentUser.profileEditedAtMs)
-        let avatarImage = currentUser.avatarData.flatMap { ImageHelper.imageFromData($0) }
+        let displayName = DisplayNameGenerator.isGenerated(me.displayName, for: currentUserId)
+            ? me.username
+            : (me.displayName.isEmpty ? me.username : me.displayName)
+        let editedAtMs = UInt64(me.profileEditedAtMs)
+        let avatarImage = me.avatar.flatMap { ImageHelper.imageFromData($0) }
 
         let avatar: ProfileShare.Avatar
         if let avatarImage {

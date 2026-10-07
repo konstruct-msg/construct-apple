@@ -1095,58 +1095,40 @@ class AuthViewModel {
             return
         }
         
-        // No more multi-account filtering
-        let fetchRequest = User.fetchRequest()
-        fetchRequest.predicate = NSPredicate(format: "id == %@", userId)
-        
         Log.info("loadUserFromCoreData: Searching for userId: \(userId)")
         if let username = username {
             Log.info("   Username from parameter: \(username)")
         }
-        
+
         do {
-            let user: User
-            var needsSave = false
-            
-            if let existingUser = try viewContext.fetch(fetchRequest).first {
-                user = existingUser
-                Log.info("Found existing user in Core Data: \(user.displayName)")
-                
+            let profiles = LocalRepositories.ownProfile
+            if var me = try profiles.profile(accountId: userId) {
+                Log.info("Found existing user in Core Data: \(me.displayName)")
                 // Update username if provided and different
-                if let newUsername = username, !newUsername.isEmpty {
-                    if user.username.isEmpty || user.username != newUsername {
-                        Log.info("Updating username: '\(user.username)' -> '\(newUsername)'")
-                        let oldUsername = user.username
-                        user.username = newUsername
-                        // Also update displayName if it's empty or was same as old username
-                        if user.displayName.isEmpty || user.displayName == oldUsername {
-                            user.displayName = newUsername
-                            user.markProfileEdited()
-                        }
-                        needsSave = true
+                if let newUsername = username, !newUsername.isEmpty, me.username != newUsername {
+                    Log.info("Updating username: '\(me.username)' -> '\(newUsername)'")
+                    let oldUsername = me.username
+                    me.username = newUsername
+                    // Also update displayName if it's empty or was same as old username
+                    if me.displayName.isEmpty || me.displayName == oldUsername {
+                        me.displayName = newUsername
+                        me.markEdited()
                     }
+                    try profiles.save(me)
+                    Log.info("Saved user changes to Core Data")
                 }
             } else {
                 Log.info("No user found, creating new user...")
-                // First login on this device, create a new User entity
-                user = User(context: viewContext)
-                user.id = userId
-                user.username = username ?? ""
-                user.displayName = username ?? ""
-                user.isSharingWithMe = false
-                user.isBlocked = false
-                user.amISharingWith = false
-                needsSave = true
+                // First login on this device: our row.
+                try profiles.save(OwnProfileRecord(
+                    accountId: userId, username: username ?? "", displayName: username ?? "",
+                    avatar: nil, profileEditedAtMs: 0
+                ))
                 Log.info("Created new user in Core Data for ID: \(userId)")
-                Log.info("   username: \(user.username)")
+                Log.info("   username: \(username ?? "")")
             }
-            
-            // Save if needed
-            if needsSave {
-                try viewContext.save()
-                Log.info("Saved user changes to Core Data")
-            }
-            
+            let user = try User.row(userId, in: viewContext)
+
             // Set currentUser - single source of truth!
             self.currentUserId = user.id
             self.currentUser = user

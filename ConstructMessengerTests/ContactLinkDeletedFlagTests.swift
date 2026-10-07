@@ -21,12 +21,15 @@ final class ContactLinkDeletedFlagTests: XCTestCase {
 
     override func setUp() {
         super.setUp()
-        context = PersistenceController(inMemory: true).container.viewContext
+        let container = PersistenceController(inMemory: true).container
+        LocalRepositories.useContactsForTesting(container)
+        context = container.viewContext
         DeletedContactsStore.shared.remove(peer)
     }
 
     override func tearDown() {
         DeletedContactsStore.shared.remove(peer)
+        LocalRepositories.useContactsForTesting(nil)
         context = nil
         super.tearDown()
     }

@@ -413,7 +413,7 @@ struct ChatView: View {
 
     private func acknowledgeContactKeyChange() {
         guard let userId = viewModel.chat.otherUser?.id else { return }
-        if KeyChangeUX.acknowledgeKeyChange(userId: userId, context: viewContext) {
+        if KeyChangeUX.acknowledgeKeyChange(userId: userId) {
             loadContactKTStatus()
         }
     }

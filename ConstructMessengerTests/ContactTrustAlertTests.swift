@@ -18,11 +18,13 @@ final class ContactTrustAlertTests: XCTestCase {
         super.setUp()
         container = PersistenceController(inMemory: true).container
         LocalRepositories.usePeerDevicesForTesting(CoreDataPeerDeviceStore(container: container))
+        LocalRepositories.useContactsForTesting(container)
         SessionAddressing.ownAccountOverrideForTesting = me
     }
 
     override func tearDown() {
         LocalRepositories.usePeerDevicesForTesting(nil)
+        LocalRepositories.useContactsForTesting(nil)
         SessionAddressing.ownAccountOverrideForTesting = nil
         KeyChangeUX.setActiveChatContact(nil)
         container = nil
@@ -77,8 +79,9 @@ final class ContactTrustAlertTests: XCTestCase {
     /// `.keyChanged`; it is a device of the account.
     func testASecondInviteKeyIsNotAKeyChange() {
         let user = makeContact(peer)
-        ContactLinkService.shared.pinKnownIdentityKey(on: user, identityKey: device(0x11).identityKey)
-        ContactLinkService.shared.pinKnownIdentityKey(on: user, identityKey: device(0x22).identityKey)
+        ContactLinkService.shared.pinKnownIdentityKey(contactId: user.id, identityKey: device(0x11).identityKey)
+        ContactLinkService.shared.pinKnownIdentityKey(contactId: user.id, identityKey: device(0x22).identityKey)
+        context.refresh(user, mergeChanges: false)
 
         XCTAssertNotEqual(user.ktStatus, .keyChanged)
         XCTAssertEqual(Set(SessionAddressing.deviceIds(ofPeer: peer)),
@@ -89,30 +92,31 @@ final class ContactTrustAlertTests: XCTestCase {
     // MARK: - Raising and acknowledging
 
     /// Mutation: drop the `securityNotice` write — the banner has nothing to read.
-    func testRaiseKeepsTheNoticeUntilAcknowledged() {
+    func testRaiseKeepsTheNoticeUntilAcknowledged() throws {
         makeContact(peer)
-        XCTAssertTrue(KeyChangeUX.raise(.addressChanged, userId: peer, context: context))
-        let user = try! context.fetch(User.fetchRequest()).first { $0.id == peer }!
-        XCTAssertEqual(user.trustAlert, .addressChanged)
+        let contacts = LocalRepositories.contacts
+        XCTAssertTrue(KeyChangeUX.raise(.addressChanged, userId: peer))
+        XCTAssertEqual(try contacts.contact(peer)?.trustAlert, .addressChanged)
 
-        user.ktStatus = .verified   // a later fetch's verdict does not clear it
-        XCTAssertEqual(user.trustAlert, .addressChanged)
+        try contacts.setKTStatus(peer, .verified)   // a later fetch's verdict does not clear it
+        XCTAssertEqual(try contacts.contact(peer)?.trustAlert, .addressChanged)
 
-        XCTAssertTrue(KeyChangeUX.acknowledgeKeyChange(userId: peer, context: context))
-        XCTAssertNil(user.trustAlert)
+        XCTAssertTrue(KeyChangeUX.acknowledgeKeyChange(userId: peer))
+        XCTAssertNil(try contacts.contact(peer)?.trustAlert)
     }
 
     func testOurOwnAccountIsNeverTheSubject() {
         makeContact(me)
-        XCTAssertFalse(KeyChangeUX.raise(.addressChanged, userId: me, context: context))
+        XCTAssertFalse(KeyChangeUX.raise(.addressChanged, userId: me))
     }
 
-    func testAFailedProofIsAnAlertAndAcknowledgingAcceptsIt() {
-        let user = makeContact(peer)
-        user.ktStatus = .failed
-        XCTAssertEqual(user.trustAlert, .verificationFailed)
-        XCTAssertTrue(KeyChangeUX.acknowledgeKeyChange(userId: peer, context: context))
-        XCTAssertEqual(user.ktStatus, .verified)
+    func testAFailedProofIsAnAlertAndAcknowledgingAcceptsIt() throws {
+        makeContact(peer)
+        let contacts = LocalRepositories.contacts
+        try contacts.setKTStatus(peer, .failed)
+        XCTAssertEqual(try contacts.contact(peer)?.trustAlert, .verificationFailed)
+        XCTAssertTrue(KeyChangeUX.acknowledgeKeyChange(userId: peer))
+        XCTAssertEqual(try contacts.contact(peer)?.ktStatus, .verified)
     }
 
     /// The legacy value is not an alert: nearly every stored one was a second device.

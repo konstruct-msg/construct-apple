@@ -126,4 +126,90 @@ final class ContactStoreTests: XCTestCase {
         }
         wait(for: [done], timeout: 5)
     }
+
+    // MARK: - Writes
+
+    private func record(_ id: String) -> ContactRecord {
+        var r = ContactRecord.new(id: id, isContact: true, addedAt: Date(timeIntervalSince1970: 50))
+        r.username = "ada"; r.displayName = "Ada"; r.localAlias = "A"; r.avatar = Data([1])
+        r.knownIdentityKey = Data([2]); r.accountAddress = Data([3]); r.amISharingWith = true
+        r.pendingAvatarRef = Data([4]); r.pendingAvatarSince = Date(timeIntervalSince1970: 60)
+        return r
+    }
+
+    /// An insert adds a row whole and never replaces one. Mutation: drop the existence check —
+    /// a second insert overwrites what the field writes put there.
+    func testInsertAddsWholeAndNeverReplaces() throws {
+        XCTAssertTrue(try store.insert(record("a")))
+        XCTAssertEqual(try store.contact("a"), record("a"))
+        var other = record("a")
+        other.displayName = "Someone else"
+        XCTAssertFalse(try store.insert(other))
+        XCTAssertEqual(try store.contact("a")?.displayName, "Ada")
+    }
+
+    /// Each write changes its fields and nothing else. Mutation: write a field outside the named
+    /// set in any of them — the row reads back different.
+    func testEachWriteChangesOnlyItsFields() throws {
+        try store.insert(record("a"))
+        var expected = record("a")
+        try store.setBlocked("a", true); expected.isBlocked = true
+        try store.setAlias("a", nil); expected.localAlias = nil
+        try store.setSharingWith("a", false); expected.amISharingWith = false
+        try store.setIdentityKey("a", Data([5])); expected.knownIdentityKey = Data([5])
+        try store.setKTStatus("a", .failed); expected.ktStatus = .failed
+        try store.setAccountAddress("a", nil); expected.accountAddress = nil
+        try store.setSecurityNotice("a", .addressChanged); expected.securityNotice = .addressChanged
+        try store.setNames("a", username: "ada2", displayName: "Ada Two")
+        expected.username = "ada2"; expected.displayName = "Ada Two"
+        try store.setAvatar("a", Data([6]), pendingRef: nil, pendingSince: nil)
+        expected.avatar = Data([6]); expected.pendingAvatarRef = nil; expected.pendingAvatarSince = nil
+        XCTAssertEqual(try store.contact("a"), expected)
+    }
+
+    func testASharedProfileIsAppliedWhole() throws {
+        try store.insert(.new(id: "a", isContact: true, addedAt: nil))
+        let at = Date(timeIntervalSince1970: 100)
+        try store.applySharedProfile("a", displayName: "Ada", sharedWithMeAt: at, profileEditedAtMs: 200)
+        let read = try XCTUnwrap(store.contact("a"))
+        XCTAssertTrue(read.isSharingWithMe)
+        XCTAssertEqual(read.displayName, "Ada")
+        XCTAssertEqual(read.sharedWithMeAt, at)
+        XCTAssertEqual(read.profileEditedAtMs, 200)
+    }
+
+    /// Marking keeps the date first added. Mutation: assign `addedAt` unconditionally.
+    func testMarkingAContactKeepsWhenItWasAdded() throws {
+        try store.insert(.new(id: "kept", isContact: false, addedAt: Date(timeIntervalSince1970: 5)))
+        try store.insert(.new(id: "fresh", isContact: false, addedAt: nil))
+        try store.markContact("kept", addedAt: Date(timeIntervalSince1970: 99))
+        try store.markContact("fresh", addedAt: Date(timeIntervalSince1970: 99))
+        XCTAssertEqual(try store.contact("kept")?.addedAt, Date(timeIntervalSince1970: 5))
+        XCTAssertEqual(try store.contact("kept")?.isContact, true)
+        XCTAssertEqual(try store.contact("fresh")?.addedAt, Date(timeIntervalSince1970: 99))
+    }
+
+    /// A write to no row says so and creates none. Mutation: create the row in `update`.
+    func testAWriteToNoRowIsReportedAndCreatesNothing() throws {
+        XCTAssertFalse(try store.setBlocked("nobody", true))
+        XCTAssertNil(try store.contact("nobody"))
+    }
+
+    func testPendingAvatarsAreTheRowsWaitingForOne() throws {
+        try store.insert(record("p"))
+        try store.insert(.new(id: "n", isContact: true, addedAt: nil))
+        XCTAssertEqual(try store.contactsWithPendingAvatar().map(\.id), ["p"])
+    }
+
+    /// Our profile: created when absent, replaced when present, and never a contact.
+    func testOurProfileIsSavedAsOneRow() throws {
+        var me = OwnProfileRecord(accountId: "me", username: "max", displayName: "Max", avatar: nil, profileEditedAtMs: 1)
+        try store.save(me)
+        me.displayName = "Maxim"
+        me.markEdited(now: Date(timeIntervalSince1970: 2))
+        try store.save(me)
+        XCTAssertEqual(try store.profile(accountId: "me"), me)
+        XCTAssertEqual(try store.profile(accountId: "me")?.profileEditedAtMs, 2000)
+        XCTAssertEqual(try store.contact("me")?.isContact, false)
+    }
 }

@@ -14,7 +14,6 @@
 //
 
 import Foundation
-import CoreData
 
 final class AvatarRetryService {
     static let shared = AvatarRetryService()
@@ -33,15 +32,11 @@ final class AvatarRetryService {
         isRetrying = true
         defer { isRetrying = false }
 
-        let pending = await MainActor.run { () -> [NSManagedObjectID] in
-            let request = User.fetchRequest()
-            request.predicate = NSPredicate(format: "pendingAvatarRef != nil")
-            return ((try? PersistenceController.shared.container.viewContext.fetch(request)) ?? []).map(\.objectID)
-        }
+        let pending = ((try? LocalRepositories.contacts.contactsWithPendingAvatar()) ?? []).map(\.id)
         guard !pending.isEmpty else { return }
         Log.info("AvatarRetry: \(pending.count) avatar(s) pending", category: "AvatarRetry")
-        for objectID in pending {
-            await ProfileSharingManager.fetchPendingAvatar(of: objectID)
+        for contactId in pending {
+            await ProfileSharingManager.fetchPendingAvatar(of: contactId)
         }
     }
 }
