@@ -6,7 +6,6 @@
 //
 
 import Foundation
-import CoreData
 
 /// Who a Double Ratchet session is with, in the only terms the ratchet understands.
 ///
@@ -164,23 +163,22 @@ enum SessionAddressing {
     /// value the first one already determines. The list is the contact list, and this runs on a
     /// control path, not per message.
     ///
-    /// Runs on `context`'s queue, like its caller — for the `User` scan; the device set is read
-    /// from `LocalRepositories.peerDevices`.
-    static func identityKey(ofDevice deviceId: String, in context: NSManagedObjectContext) -> Data? {
+    /// Reads `LocalRepositories.peerDevices`, then the contacts' pins — saved state, from any
+    /// thread.
+    static func identityKey(ofDevice deviceId: String) -> Data? {
         guard isCryptoIdentity(deviceId) else { return nil }
         if let row = try? LocalRepositories.peerDevices.device(deviceId) { return row.identityKey }
         // The pre-`PeerDevice` answer, kept as the fallback rather than deleted: `knownIdentityKey`
         // is still written by the bundle-verify path and is the only pin a device carries before
         // its first `recordDevices`. It answers for exactly one device per account — which is the
         // limitation `PeerDevice` exists to remove, so the set is asked first.
-        let req = User.fetchRequest()
-        req.predicate = NSPredicate(format: "knownIdentityKey != nil")
-        guard let users = try? context.fetch(req) else { return nil }
-        for user in users {
-            guard let key = user.knownIdentityKey, !key.isEmpty else { continue }
-            if deriveDeviceId(identityPublicKey: key) == deviceId { return key }
-        }
-        return nil
+        return pinnedKey(derivingTo: deviceId)?.key
+    }
+
+    /// The contact pin whose key derives to `deviceId` — the scan both reverse lookups fall back on.
+    private static func pinnedKey(derivingTo deviceId: String) -> IdentityKeyPin? {
+        let pins = (try? LocalRepositories.contacts.identityKeyPins()) ?? []
+        return pins.first { deriveDeviceId(identityPublicKey: $0.key) == deviceId }
     }
 
     // MARK: - The peer's device set
@@ -391,10 +389,8 @@ enum SessionAddressing {
     /// parses a UUID, gets nothing, and writes the envelope to a stream keyed by 32 hex characters
     /// that no reader subscribes to. Accepted, acknowledged, delivered nowhere.
     ///
-    /// Runs on `context`'s queue, like its caller.
-    static func peer(
-        ofDevice deviceId: String, in context: NSManagedObjectContext
-    ) -> (accountId: String, identityKey: Data)? {
+    /// Reads saved state, from any thread.
+    static func peer(ofDevice deviceId: String) -> (accountId: String, identityKey: Data)? {
         // An early exit, not the correctness rule: an account id fails the key comparison below
         // anyway, and a mutation replacing this guard with an emptiness check left every test
         // green. It is here so an obviously-wrong id does not walk the contact list, and that is
@@ -409,16 +405,8 @@ enum SessionAddressing {
         if let row = try? LocalRepositories.peerDevices.device(deviceId), !row.accountId.isEmpty {
             return (row.accountId, row.identityKey)
         }
-        let req = User.fetchRequest()
-        req.predicate = NSPredicate(format: "knownIdentityKey != nil")
-        guard let users = try? context.fetch(req) else { return nil }
-        for user in users {
-            guard let key = user.knownIdentityKey, !key.isEmpty, !user.id.isEmpty else { continue }
-            if deriveDeviceId(identityPublicKey: key) == deviceId {
-                return (user.id, key)
-            }
-        }
-        return nil
+        guard let pin = pinnedKey(derivingTo: deviceId) else { return nil }
+        return (pin.contactId, pin.key)
     }
 
     /// True when `id` is already a crypto identity rather than an account id.
@@ -503,14 +491,6 @@ enum SessionAddressing {
         #if DEBUG
         if let override = pinnedIdentityKeyOverrideForTesting { return override(userId) }
         #endif
-        let ctx = PersistenceController.shared.container.newBackgroundContext()
-        var key: Data?
-        ctx.performAndWait {
-            let req = User.fetchRequest()
-            req.predicate = NSPredicate(format: "id == %@", userId)
-            req.fetchLimit = 1
-            key = (try? ctx.fetch(req).first)?.knownIdentityKey
-        }
-        return key
+        return (try? LocalRepositories.contacts.contact(userId))?.knownIdentityKey
     }
 }

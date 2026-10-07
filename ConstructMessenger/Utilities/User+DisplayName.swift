@@ -25,12 +25,7 @@ extension User {
     /// name", and showing it hid a username the contact did have. Until 2026-10-02 a profile from
     /// Android carrying its generated name replaced the username taken from the invite.
     var resolvedDisplayName: String {
-        if let alias = localAlias?.trimmingCharacters(in: .whitespacesAndNewlines), !alias.isEmpty {
-            return alias
-        }
-        if !displayName.isEmpty, !DisplayNameGenerator.isGenerated(displayName, for: id) { return displayName }
-        if !username.isEmpty { return username }
-        return DisplayNameGenerator.generate(from: id)
+        ContactName.resolved(alias: localAlias, displayName: displayName, username: username, id: id)
     }
 
     // MARK: - Write
@@ -88,6 +83,20 @@ extension User {
             }
             // isSharingWithMe == true → keep existing displayName (profile-shared name)
         }
+    }
+}
+
+/// The name shown for a person — one rule for a `User` row and a `ContactRecord`, so the two cannot
+/// show the same contact under different names while both exist (`User.resolvedDisplayName` says
+/// why each step is where it is).
+enum ContactName {
+    static func resolved(alias: String?, displayName: String, username: String, id: String) -> String {
+        if let alias = alias?.trimmingCharacters(in: .whitespacesAndNewlines), !alias.isEmpty {
+            return alias
+        }
+        if !displayName.isEmpty, !DisplayNameGenerator.isGenerated(displayName, for: id) { return displayName }
+        if !username.isEmpty { return username }
+        return DisplayNameGenerator.generate(from: id)
     }
 }
 

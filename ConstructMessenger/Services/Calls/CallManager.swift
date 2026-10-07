@@ -297,7 +297,7 @@ final class CallManager: CallUIManaging {
         // Client-authoritative mutuality (sealed-sender future): only local contacts.
         // Server reciprocity cannot survive when the server does not see the caller.
         let ctx = PersistenceController.shared.container.viewContext
-        if !ContactPolicy.isCallableContact(userId, in: ctx) {
+        if !ContactPolicy.isCallableContact(userId) {
             Log.info(
                 "SECURITY[call_gate]: outgoing call blocked — not a local contact \(userId.prefix(8))…",
                 category: "Calls"
@@ -461,8 +461,8 @@ final class CallManager: CallUIManaging {
         // we cannot simply drop it — instead report it ended immediately so a blocked /
         // non-contact never actually rings. See sealed-sender-authenticated-transitional.
         let pushCtx = PersistenceController.shared.container.viewContext
-        if BlockedContacts.isBlocked(callerId, in: pushCtx)
-            || !ContactPolicy.isCallableContact(callerId, in: pushCtx) {
+        if BlockedContacts.isBlocked(callerId)
+            || !ContactPolicy.isCallableContact(callerId) {
             Log.info(
                 "SECURITY[call_gate]: incoming push from non-callable \(callerId.prefix(8))… — reporting ended (callId=\(callId.prefix(8))…)",
                 category: "Calls"
@@ -1726,8 +1726,8 @@ final class CallManager: CallUIManaging {
         // Client-side block + mutuality. Under sealed sender the server can't see the caller,
         // so it does not stop a non-contact from ringing you — drop every call signal here.
         let signalCtx = PersistenceController.shared.container.viewContext
-        if BlockedContacts.isBlocked(senderUserId, in: signalCtx)
-            || !ContactPolicy.isCallableContact(senderUserId, in: signalCtx) {
+        if BlockedContacts.isBlocked(senderUserId)
+            || !ContactPolicy.isCallableContact(senderUserId) {
             Log.info(
                 "SECURITY[call_gate]: dropped call signal from non-callable \(senderUserId.prefix(8))… (callId=\(signal.callID.prefix(8))…)",
                 category: "Calls"
@@ -2162,11 +2162,7 @@ final class CallManager: CallUIManaging {
     /// deterministic generated fallback). Returns `nil` when the contact is
     /// completely unknown to this device.
     private static func resolveContactDisplayName(userId: String) -> String? {
-        let ctx = PersistenceController.shared.container.viewContext
-        let req = User.fetchRequest()
-        req.predicate = NSPredicate(format: "id == %@", userId)
-        req.fetchLimit = 1
-        return (try? ctx.fetch(req))?.first?.resolvedDisplayName
+        (try? LocalRepositories.contacts.contact(userId))?.resolvedDisplayName
     }
 
     private func describeEndContext(active: ActiveCall) -> String {

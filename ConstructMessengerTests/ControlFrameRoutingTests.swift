@@ -19,12 +19,19 @@ final class ControlFrameRoutingTests: XCTestCase {
 
     override func setUp() {
         super.setUp()
-        context = PersistenceController(inMemory: true).container.viewContext
+        let container = PersistenceController(inMemory: true).container
+        LocalRepositories.useContactsForTesting(container)
+        context = container.viewContext
         contact = User(context: context)
         contact.id = UUID().uuidString
         contact.username = "alice"
         contact.displayName = "Mystic Parrot"
-        try? context.save()
+        try! context.save()
+    }
+
+    override func tearDown() {
+        LocalRepositories.useContactsForTesting(nil)
+        super.tearDown()
     }
 
     private func profileFrame(_ name: String, editedAt: UInt64) throws -> CfeAction {

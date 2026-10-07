@@ -21,9 +21,11 @@ final class InviteSystemCompletionTests: XCTestCase {
     override func setUp() {
         super.setUp()
         container = PersistenceController(inMemory: true).container
+        LocalRepositories.useContactsForTesting(container)
     }
 
     override func tearDown() {
+        LocalRepositories.useContactsForTesting(nil)
         container = nil
         super.tearDown()
     }
@@ -260,7 +262,7 @@ final class InviteSystemCompletionTests: XCTestCase {
             accountAddress: nil
         )
         _ = try ContactLinkService.shared.applyInviteRedeem(info, context: ctx)
-        XCTAssertTrue(ContactPolicy.isCallableContact(id, in: ctx))
+        XCTAssertTrue(ContactPolicy.isCallableContact(id))
     }
 
     // MARK: - Latin-1 QR recovery + magic

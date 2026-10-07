@@ -176,25 +176,19 @@ final class StealthSenderService: SealedSenderResolving {
     /// The account address a sealed envelope names its recipient by. Injected so a test can build
     /// an envelope without a store — but read on every send, so it exists in every build.
     var accountAddressLookup: (String) -> Data? = { accountId in
-        AccountAddress.of(
-            accountId: accountId,
-            context: PersistenceController.shared.container.viewContext
-        )
+        AccountAddress.of(accountId: accountId)
     }
 
     /// The recipient's locally stored, previously-KT-verified identity key for `userId`
-    /// (plus its status), read from the `User` Core Data record. `nil` for a first contact
+    /// (plus its status), read from their contact row. `nil` for a first contact
     /// (no bundle fetched / verified yet). sealed-sender-resilience lever C source.
     private func ktVerifiedIdentity(for userId: String) -> (key: Data, status: KTStatus)? {
         #if DEBUG
         if let override = ktLookupOverrideForTesting { return override(userId) }
         #endif
-        let ctx = PersistenceController.shared.container.viewContext
-        let req = User.fetchRequest()
-        req.predicate = NSPredicate(format: "id == %@", userId)
-        req.fetchLimit = 1
-        guard let user = try? ctx.fetch(req).first, let key = user.knownIdentityKey else { return nil }
-        return (key, user.ktStatus)
+        guard let contact = try? LocalRepositories.contacts.contact(userId),
+              let key = contact.knownIdentityKey else { return nil }
+        return (key, contact.ktStatus)
     }
 
     /// The full attestation verdict for an unsealed certificate. Never gates delivery —
@@ -402,8 +396,7 @@ final class StealthSenderService: SealedSenderResolving {
     /// The account a session envelope's writer belongs to: a peer device from the device set or
     /// the pinned key, or one of our own devices (SENDER_SYNC).
     private static func account(ofEnvelopeWriter deviceId: String) -> String? {
-        let context = PersistenceController.shared.container.viewContext
-        if let peer = SessionAddressing.peer(ofDevice: deviceId, in: context) {
+        if let peer = SessionAddressing.peer(ofDevice: deviceId) {
             return peer.accountId
         }
         guard let me = AuthSessionManager.shared.currentUserId, !me.isEmpty else { return nil }
@@ -678,12 +671,10 @@ final class StealthSenderService: SealedSenderResolving {
     /// row, or nil if not known yet. Keyed strictly by `recipientId` so it is unambiguous from any
     /// send path (the shared source used by both the live-send and retry paths). Callers gate on
     /// `StealthPolicy.shared.shouldUseSealedSender()` and, when this returns nil under stealth-on,
-    /// MUST queue rather than send identified (see `StealthDowngradeBlocked`). Call on `context`'s queue.
-    static func recipientIdentityKey(recipientId: String, context: NSManagedObjectContext) -> Data? {
-        let req = User.fetchRequest()
-        req.predicate = NSPredicate(format: "id == %@", recipientId)
-        req.fetchLimit = 1
-        let user = (try? context.fetch(req))?.first
+    /// MUST queue rather than send identified (see `StealthDowngradeBlocked`). Reads saved state,
+    /// from any thread.
+    static func recipientIdentityKey(recipientId: String) -> Data? {
+        let user = try? LocalRepositories.contacts.contact(recipientId)
         if let key = user?.knownIdentityKey { return key }
 
         // `recipientId` may be a **device id**: the core names contacts that way, and the paths
@@ -694,7 +685,7 @@ final class StealthSenderService: SealedSenderResolving {
         // This is not a fallback for a missing pin; it is the same pin, reached from the other
         // space. If it also finds nothing, the two misses below are the real diagnosis.
         if SessionAddressing.isCryptoIdentity(recipientId),
-           let key = SessionAddressing.identityKey(ofDevice: recipientId, in: context) {
+           let key = SessionAddressing.identityKey(ofDevice: recipientId) {
             return key
         }
         // A miss here fails every sealed send to this peer closed, permanently, and the thrown

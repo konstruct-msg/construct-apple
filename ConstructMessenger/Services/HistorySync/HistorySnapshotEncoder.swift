@@ -123,7 +123,7 @@ final class HistorySnapshotEncoder {
         let mediaPlan = mediaPlan(from: lifted)
 
         if phase == 1 || phase == 3 {
-            let contacts = try fetchContacts(context: context)
+            let contacts = try fetchContacts()
             let chats = try fetchChats(context: context)
             let hints = try fetchHints()
             let calls = try fetchCalls(context: context)
@@ -277,11 +277,8 @@ final class HistorySnapshotEncoder {
 
     // MARK: - Fetches
 
-    private func fetchContacts(context: NSManagedObjectContext) throws -> [User] {
-        let req = User.fetchRequest()
-        req.predicate = NSPredicate(format: "id != %@", identity.userId)
-        req.sortDescriptors = [NSSortDescriptor(key: "id", ascending: true)]
-        return try context.fetch(req)
+    private func fetchContacts() throws -> [ContactRecord] {
+        try LocalRepositories.contacts.everyContact(except: identity.userId)
     }
 
     private func fetchChats(context: NSManagedObjectContext) throws -> [Chat] {
@@ -308,13 +305,13 @@ final class HistorySnapshotEncoder {
 
     // MARK: - Encode rows
 
-    private func encodeContact(_ user: User) -> Construct_Client_History_V1_HistoryContact {
+    private func encodeContact(_ user: ContactRecord) -> Construct_Client_History_V1_HistoryContact {
         var c = Construct_Client_History_V1_HistoryContact()
         if let raw = HistoryAccountID.raw(user.id) { c.userID = raw }
         c.username = user.username
         c.displayName = user.displayName
         c.localAlias = user.localAlias ?? ""
-        c.avatar = user.avatarData ?? Data()
+        c.avatar = user.avatar ?? Data()
         c.isContact = user.isContact
         c.isBlocked = user.isBlocked
         c.amISharingWith = user.amISharingWith

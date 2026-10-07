@@ -48,11 +48,13 @@ final class HistorySnapshotEncoderTests: XCTestCase {
         super.setUp()
         container = PersistenceController(inMemory: true).container
         LocalRepositories.usePeerDevicesForTesting(CoreDataPeerDeviceStore(container: container))
+        LocalRepositories.useContactsForTesting(container)
         MessageDisplayCache.shared.evictAll()
     }
 
     override func tearDown() {
         LocalRepositories.usePeerDevicesForTesting(nil)
+        LocalRepositories.useContactsForTesting(nil)
         MessageDisplayCache.shared.evictAll()
         container = nil
         super.tearDown()
@@ -147,6 +149,7 @@ final class HistorySnapshotEncoderTests: XCTestCase {
         let contextB = storeB.viewContext
         // Device B's own peer-device table, or B would re-encode A's hints and prove nothing.
         LocalRepositories.usePeerDevicesForTesting(CoreDataPeerDeviceStore(container: storeB))
+        LocalRepositories.useContactsForTesting(storeB)
         _ = try HistorySnapshotImporter().importRecords(fromA.records, expectedUserId: local, in: contextB)
 
         let encoderB = HistorySnapshotEncoder(identity: identity)

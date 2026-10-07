@@ -185,18 +185,12 @@ final class ContactRequestsViewModel {
 
     private func resolveDisplayName(for userId: String) -> String? {
         guard !userId.isEmpty else { return nil }
-        let request = NSFetchRequest<User>(entityName: "User")
-        request.predicate = NSPredicate(format: "id == %@", userId)
-        request.fetchLimit = 1
-        return try? viewContext.fetch(request).first?.displayName
+        return (try? LocalRepositories.contacts.contact(userId))?.displayName
     }
 
     private func resolveUsername(for userId: String) -> String? {
         guard !userId.isEmpty else { return nil }
-        let request = NSFetchRequest<User>(entityName: "User")
-        request.predicate = NSPredicate(format: "id == %@", userId)
-        request.fetchLimit = 1
-        return try? viewContext.fetch(request).first?.username
+        return (try? LocalRepositories.contacts.contact(userId))?.username
     }
 
     private func normalizedValue(_ value: String) -> String? {

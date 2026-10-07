@@ -598,12 +598,9 @@ final class StreamLifecycleCoordinator {
     // MARK: - Contact helpers
 
     private func currentContactIds() -> [String] {
-        guard let context = viewContext else { return Array(ephemeralSubscriptionUserIds) }
-        let fetchRequest = User.fetchRequest()
-        fetchRequest.predicate = NSPredicate(format: "id != %@", AuthSessionManager.shared.currentUserId ?? "")
-        let users = (try? context.fetch(fetchRequest)) ?? []
-        let coreDataIds = Set(users.compactMap { $0.id })
-        return Array(coreDataIds.union(ephemeralSubscriptionUserIds)).sorted()
+        guard viewContext != nil else { return Array(ephemeralSubscriptionUserIds) }
+        let rows = (try? LocalRepositories.contacts.everyContact(except: AuthSessionManager.shared.currentUserId)) ?? []
+        return Array(Set(rows.map(\.id)).union(ephemeralSubscriptionUserIds)).sorted()
     }
 
     private func prewarmEligibleContactIds() -> [String] {

@@ -66,8 +66,7 @@ final class SessionCoordinator: MessageRouterDelegate {
         // account, so a device-scoped caller must see it. Splitting one coarse lock into per-device
         // locks without this would let a walk and a prewarm run at once and collide on the ratchet
         // the walk opens — a race the account-keyed version prevented by being too broad.
-        let context = viewContext ?? PersistenceController.shared.container.viewContext
-        let resolve: (String) -> String? = { PeerAddress.resolving(device: $0, in: context)?.account }
+        let resolve: (String) -> String? = { PeerAddress.resolving(device: $0)?.account }
         for (held, phase) in sessionPhases {
             guard case .initializing = phase else { continue }
             if held.contains(scope, resolveAccount: resolve) { return true }
@@ -119,8 +118,7 @@ final class SessionCoordinator: MessageRouterDelegate {
         // backwards.
         SessionActionExecutor.shared.onOpenSession = { [weak self] deviceId in
             guard let self else { return }
-            let ctx = self.viewContext ?? PersistenceController.shared.container.viewContext
-            guard let peer = PeerAddress.resolving(device: deviceId, in: ctx) else {
+            guard let peer = PeerAddress.resolving(device: deviceId) else {
                 Log.info(
                     "Requested reopen unanswerable: device \(deviceId.prefix(8))… belongs to no known contact",
                     category: "SessionCoordinator"
@@ -146,8 +144,7 @@ final class SessionCoordinator: MessageRouterDelegate {
         // next send opens a new one; this only carries the core's advice about how.
         SessionActionExecutor.shared.onSessionRetired = { [weak self] deviceId, withoutOneTimePrekey in
             guard let self else { return }
-            let ctx = self.viewContext ?? PersistenceController.shared.container.viewContext
-            guard let peer = PeerAddress.resolving(device: deviceId, in: ctx) else {
+            guard let peer = PeerAddress.resolving(device: deviceId) else {
                 Log.info("SessionRetired for device \(deviceId.prefix(8))… of no known contact", category: "SessionCoordinator")
                 return
             }
@@ -162,8 +159,7 @@ final class SessionCoordinator: MessageRouterDelegate {
         // The peer could not read one message we sent it: send that message again, to that device.
         SessionActionExecutor.shared.onResendMessage = { [weak self] deviceId, messageId in
             guard let self else { return }
-            let ctx = self.viewContext ?? PersistenceController.shared.container.viewContext
-            guard let peer = PeerAddress.resolving(device: deviceId, in: ctx) else {
+            guard let peer = PeerAddress.resolving(device: deviceId) else {
                 Log.info("ResendMessage \(messageId.prefix(8))… for device \(deviceId.prefix(8))… of no known contact — not resent", category: "SessionCoordinator")
                 return
             }

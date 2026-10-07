@@ -210,19 +210,16 @@ class ProfileShareViewModel {
     /// `Task` keeps this view model alive until the last one is sent. Failures are logged and do
     /// not stop the others.
     func rebroadcastProfileToSharedContacts() async {
-        guard let context = viewContext,
+        guard viewContext != nil,
               let currentUserId = AuthSessionManager.shared.currentUserId else { return }
 
-        // Fetch all contacts we have chosen to share our profile with
-        let fetchRequest: NSFetchRequest<User> = User.fetchRequest()
-        fetchRequest.predicate = NSPredicate(format: "amISharingWith == YES AND id != %@", currentUserId)
-
-        guard let contacts = try? context.fetch(fetchRequest), !contacts.isEmpty else {
+        // The contacts we have chosen to share our profile with
+        let contactIds = (try? LocalRepositories.contacts.sharingWith(except: currentUserId)) ?? []
+        guard !contactIds.isEmpty else {
             Log.info("No contacts to rebroadcast profile to", category: "ProfileShare")
             return
         }
 
-        let contactIds = contacts.map(\.id)
         Log.info("Rebroadcasting profile to \(contactIds.count) contact(s)", category: "ProfileShare")
 
         guard let profile = await prepareProfile() else {

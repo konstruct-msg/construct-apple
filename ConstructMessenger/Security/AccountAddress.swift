@@ -120,15 +120,12 @@ enum AccountAddress {
     }
 
     /// The address this device holds for `accountId` — ours from the Keychain, a contact's from
-    /// their row — or nil. Call on `context`'s queue.
-    static func of(accountId: String, context: NSManagedObjectContext) -> Data? {
+    /// their row — or nil. Reads saved state, from any thread.
+    static func of(accountId: String) -> Data? {
         if accountId == KeychainManager.shared.loadUserID() {
             return own()
         }
-        let request = User.fetchRequest()
-        request.predicate = NSPredicate(format: "id == %@", accountId)
-        request.fetchLimit = 1
-        guard let address = (try? context.fetch(request))?.first?.accountAddress,
+        guard let address = (try? LocalRepositories.contacts.contact(accountId))?.accountAddress,
               address.count == length else { return nil }
         return address
     }

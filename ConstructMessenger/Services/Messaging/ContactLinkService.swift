@@ -19,13 +19,9 @@ enum ContactPolicy {
     /// True when the peer is a local contact and not blocked.
     /// Call permission under sealed sender is **client-authoritative** —
     /// server reciprocity cannot survive when the server does not see the caller.
-    static func isCallableContact(_ userId: String, in context: NSManagedObjectContext) -> Bool {
-        guard !userId.isEmpty else { return false }
-        if BlockedContacts.isBlocked(userId, in: context) { return false }
-        let fetch = User.fetchRequest()
-        fetch.predicate = NSPredicate(format: "id == %@ AND isContact == YES", userId)
-        fetch.fetchLimit = 1
-        return ((try? context.count(for: fetch)) ?? 0) > 0
+    static func isCallableContact(_ userId: String) -> Bool {
+        guard !userId.isEmpty, let contact = try? LocalRepositories.contacts.contact(userId) else { return false }
+        return contact.isContact && !contact.isBlocked
     }
 }
 

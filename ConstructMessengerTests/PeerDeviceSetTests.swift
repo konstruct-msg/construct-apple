@@ -20,10 +20,12 @@ final class PeerDeviceSetTests: XCTestCase {
         let container = PersistenceController(inMemory: true).container
         context = container.viewContext
         LocalRepositories.usePeerDevicesForTesting(CoreDataPeerDeviceStore(container: container))
+        LocalRepositories.useContactsForTesting(container)
     }
 
     override func tearDown() {
         LocalRepositories.usePeerDevicesForTesting(nil)
+        LocalRepositories.useContactsForTesting(nil)
         SessionAddressing.pinnedIdentityKeyOverrideForTesting = nil
         context = nil
         super.tearDown()
@@ -43,7 +45,9 @@ final class PeerDeviceSetTests: XCTestCase {
         let user = User(context: context)
         user.id = id
         user.knownIdentityKey = key
-        try? context.save()
+        user.username = ""
+        user.displayName = ""
+        try! context.save()
         return user
     }
 
@@ -64,17 +68,17 @@ final class PeerDeviceSetTests: XCTestCase {
         makeContact(id: accountA, key: pinned.identityKey)
 
         XCTAssertNotNil(
-            SessionAddressing.peer(ofDevice: pinned.deviceId, in: context),
+            SessionAddressing.peer(ofDevice: pinned.deviceId),
             "the pinned device was always resolvable — the scan finds it"
         )
         XCTAssertNil(
-            SessionAddressing.peer(ofDevice: second.deviceId, in: context),
+            SessionAddressing.peer(ofDevice: second.deviceId),
             "before recording, a second device has no row and no pinned key: this is the defect"
         )
 
         SessionAddressing.recordDevices([pinned, second], ofPeer: accountA)
 
-        let resolved = try XCTUnwrap(SessionAddressing.peer(ofDevice: second.deviceId, in: context))
+        let resolved = try XCTUnwrap(SessionAddressing.peer(ofDevice: second.deviceId))
         XCTAssertEqual(resolved.accountId, accountA)
         XCTAssertEqual(resolved.identityKey, second.identityKey)
     }
@@ -201,7 +205,7 @@ final class PeerDeviceSetTests: XCTestCase {
         SessionAddressing.recordDevices([mismatched], ofPeer: accountA)
 
         XCTAssertTrue(SessionAddressing.devices(ofPeer: accountA).isEmpty)
-        XCTAssertNil(SessionAddressing.peer(ofDevice: mismatched.deviceId, in: context))
+        XCTAssertNil(SessionAddressing.peer(ofDevice: mismatched.deviceId))
     }
 
     /// One bad pair in an answer must not cost the good ones: the loop refuses the row, not the
@@ -245,7 +249,7 @@ final class PeerDeviceSetTests: XCTestCase {
 
         XCTAssertEqual(SessionAddressing.devices(ofPeer: accountA).map(\.deviceId), [one.deviceId])
         XCTAssertTrue(SessionAddressing.devices(ofPeer: accountB).isEmpty)
-        XCTAssertEqual(SessionAddressing.peer(ofDevice: one.deviceId, in: context)?.accountId, accountA)
+        XCTAssertEqual(SessionAddressing.peer(ofDevice: one.deviceId)?.accountId, accountA)
     }
 }
 
@@ -378,9 +382,13 @@ extension PeerDeviceSetTests {
         SessionAddressing.reconcileDevices(
             [], activeSet: ["ffffffffffffffffffffffffffffffff"], ofPeer: accountC)
 
-        XCTAssertTrue(SessionAddressing.deviceIds(ofPeer: accountC).isEmpty)
+        // The set, not `deviceIds(ofPeer:)`: with the set empty that falls back to the contact's
+        // pinned key, which still names `mine`. Until 2026-10-07 the fallback read the app's store
+        // rather than this test's, found nothing, and this line asserted an emptiness production
+        // never had.
+        XCTAssertTrue(SessionAddressing.devices(ofPeer: accountC).isEmpty)
         XCTAssertEqual(
-            SessionAddressing.deviceIds(ofPeer: accountB), [theirs.deviceId],
+            SessionAddressing.devices(ofPeer: accountB).map(\.deviceId), [theirs.deviceId],
             "another account's set is not this account's business"
         )
     }

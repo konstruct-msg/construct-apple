@@ -38,12 +38,14 @@ final class IdentityKeyRetentionTests: XCTestCase {
     override func setUpWithError() throws {
         try super.setUpWithError()
         container = PersistenceController(inMemory: true).container
+        LocalRepositories.useContactsForTesting(container)
         // The certificate verdict is the core's; unit tests do not start CryptoManager's.
         StealthSenderService.shared.verdictCoreForTesting = try makeTestDevice().core
     }
 
     override func tearDown() {
         StealthSenderService.shared.verdictCoreForTesting = nil
+        LocalRepositories.useContactsForTesting(nil)
         container = nil
         super.tearDown()
     }
@@ -84,7 +86,7 @@ final class IdentityKeyRetentionTests: XCTestCase {
 
         XCTAssertEqual(storedKey(for: peerId), fetchedKey)
         XCTAssertNotNil(
-            StealthSenderService.recipientIdentityKey(recipientId: peerId, context: context),
+            StealthSenderService.recipientIdentityKey(recipientId: peerId),
             "the send path must now be able to seal — that is the whole point"
         )
     }
@@ -149,7 +151,7 @@ final class IdentityKeyRetentionTests: XCTestCase {
         )
 
         XCTAssertEqual(storedKey(for: peerId), fetchedKey)
-        XCTAssertNotNil(StealthSenderService.recipientIdentityKey(recipientId: peerId, context: context))
+        XCTAssertNotNil(StealthSenderService.recipientIdentityKey(recipientId: peerId))
     }
 
     // MARK: - What it must never do
@@ -225,12 +227,12 @@ final class IdentityKeyRetentionTests: XCTestCase {
     /// The resolver must keep returning nil rather than inventing a key — the sealed paths depend
     /// on that to fail closed instead of sending identified.
     func testResolverStillReturnsNilWithNoRow() {
-        XCTAssertNil(StealthSenderService.recipientIdentityKey(recipientId: peerId, context: context))
+        XCTAssertNil(StealthSenderService.recipientIdentityKey(recipientId: peerId))
     }
 
     func testResolverStillReturnsNilForARowWithoutAKey() {
         makeUser(id: peerId)
-        XCTAssertNil(StealthSenderService.recipientIdentityKey(recipientId: peerId, context: context))
+        XCTAssertNil(StealthSenderService.recipientIdentityKey(recipientId: peerId))
     }
 
     // MARK: - Sealed-cert TOFU (IK_MISS[no_key])
@@ -272,7 +274,7 @@ final class IdentityKeyRetentionTests: XCTestCase {
         StealthSenderService.shared.rememberIdentityFromCertificate(cert, context: context)
 
         XCTAssertEqual(storedKey(for: peerId), fetchedKey)
-        XCTAssertNotNil(StealthSenderService.recipientIdentityKey(recipientId: peerId, context: context))
+        XCTAssertNotNil(StealthSenderService.recipientIdentityKey(recipientId: peerId))
     }
 
     func testUnsignedCert_DoesNotPin() {

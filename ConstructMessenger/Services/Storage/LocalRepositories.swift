@@ -9,6 +9,7 @@
 //
 
 import Foundation
+import CoreData
 
 enum LocalRepositories {
     private(set) nonisolated(unsafe) static var peerDevices: any PeerDeviceStore =
@@ -17,10 +18,23 @@ enum LocalRepositories {
     private(set) nonisolated(unsafe) static var serverMessageIds: any ServerMessageIdStore =
         CoreDataServerMessageIdStore(container: PersistenceController.shared.container)
 
+    private(set) nonisolated(unsafe) static var contacts: any ContactStore =
+        CoreDataContactStore(container: PersistenceController.shared.container)
+
+    private(set) nonisolated(unsafe) static var ownProfile: any OwnProfileStore =
+        CoreDataContactStore(container: PersistenceController.shared.container)
+
     #if DEBUG
     /// A test's own store (an in-memory container); `nil` restores the app's.
     static func usePeerDevicesForTesting(_ store: (any PeerDeviceStore)?) {
         peerDevices = store ?? CoreDataPeerDeviceStore(container: PersistenceController.shared.container)
+    }
+
+    /// Both contact repositories over one test container; `nil` restores the app's.
+    static func useContactsForTesting(_ container: NSPersistentContainer?) {
+        let store = CoreDataContactStore(container: container ?? PersistenceController.shared.container)
+        contacts = store
+        ownProfile = store
     }
 
     static func useServerMessageIdsForTesting(_ store: (any ServerMessageIdStore)?) {

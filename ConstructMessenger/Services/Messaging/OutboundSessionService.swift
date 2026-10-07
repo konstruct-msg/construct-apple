@@ -198,8 +198,7 @@ final class OutboundSessionService {
         // hex characters that nothing subscribes to. Accepted, acknowledged, delivered nowhere —
         // and invisible, because a liveness probe that never arrives looks exactly like a peer
         // that is quiet.
-        let context = PersistenceController.shared.container.viewContext
-        guard let peer = SessionAddressing.peer(ofDevice: contactId, in: context) else {
+        guard let peer = SessionAddressing.peer(ofDevice: contactId) else {
             Log.debug(
                 "Heartbeat skip for \(contactId.prefix(8))… — no contact holds this device's pinned key",
                 category: "OutboundSession"
