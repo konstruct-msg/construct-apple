@@ -11,6 +11,8 @@ extension View {
 
     /// Hide the system navigation bar so the screen can draw its own `CTNavBar`.
     ///
+    /// Retiring with `CTNavBar` — no new call site (`decisions/navigation-bars-are-the-systems.md`).
+    ///
     /// `ToolbarPlacement.navigationBar` is unavailable on macOS, and every pushed settings screen
     /// in this app uses it — without hiding the system bar, the screen shows two back buttons.
     /// macOS has no such bar to hide, so there the correct behaviour is to do nothing.
@@ -42,6 +44,13 @@ extension View {
         #endif
     }
 
+    /// A sheet's own navigation: a `NavigationStack` and a close item, so the screen inside
+    /// declares only its title and actions and reads the same pushed or presented.
+    /// `decisions/navigation-bars-are-the-systems.md`.
+    func sheetNavigation() -> some View {
+        SheetNavigation(content: self)
+    }
+
     /// `navigationBarTitleDisplayMode(.inline)`, which does not exist on macOS.
     @ViewBuilder
     func inlineNavTitle() -> some View {
@@ -50,5 +59,35 @@ extension View {
         #else
         self
         #endif
+    }
+}
+
+private struct SheetNavigation<Content: View>: View {
+    @Environment(\.dismiss) private var dismiss
+    let content: Content
+
+    var body: some View {
+        NavigationStack {
+            content.toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    CloseButton { dismiss() }
+                }
+            }
+        }
+    }
+}
+
+/// The platform's close: the system's own button where it has one, else a symbol with a title.
+struct CloseButton: View {
+    let action: () -> Void
+
+    var body: some View {
+        if #available(iOS 26.0, macOS 26.0, *) {
+            Button(role: .close, action: action)
+        } else {
+            Button(action: action) {
+                Label(NSLocalizedString("close", comment: ""), systemImage: "xmark")
+            }
+        }
     }
 }

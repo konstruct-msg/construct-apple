@@ -114,7 +114,14 @@ Tokens — source of truth `ConstructMessenger/Utilities/ConstructTheme.swift`:
   the JetBrains name, for eight months, with nothing to say so. The synchronized group flattens
   resources into the bundle root, so `UIAppFonts` lists bare file names — a `Fonts/` prefix is
   ignored silently. `ThemeTypographyTests` asserts the four PostScript names resolve at runtime.
-- **No `NavigationStack` inside sheets** — `CTNavBar(showBack: true, backAction: { dismiss() })`.
+- **Bars are the system's** (`decisions/navigation-bars-are-the-systems.md`, 2026-10-07):
+  `.navigationTitle` + `inlineNavTitle()` and `.toolbar` items, each a symbol *and* a title. A
+  sheet with a title or an action is wrapped at the presenting site in `.sheetNavigation()` (its
+  own `NavigationStack` and a close item). Until then this file banned `NavigationStack` in sheets
+  and prescribed `CTNavBar`; the ban's one recorded reason was the terminal look of the bar, which
+  2026-09-20 withdrew, and on iPhone Duo only system bars stand vertically. `CTNavBar` and
+  `hideSystemNavBar()` are retiring: no new call site. Our part of the bar is set once, app-wide —
+  tint and title face — never per screen.
 - Background always `Color.CT.bg` (`#090909`) via `.ctBackground()`.
 - New UI must use tokens; when editing a file with a literal `8`/`10`/`18`, migrate that call site.
 - Debug-only UI: `.orange`, `#if DEBUG`.

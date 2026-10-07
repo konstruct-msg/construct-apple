@@ -101,7 +101,6 @@ struct Construct_MessengerApp: App {
     // MARK: - Global UIKit appearance
 
     private func applyGlobalAppearance() {
-        let bg2     = UIColor(Color.CT.bgMsg)
         let accent  = UIColor(Color.CT.accent)
         let dim     = UIColor(Color.CT.textDim)
         let bright  = UIColor(Color.CT.text)
@@ -121,20 +120,18 @@ struct Construct_MessengerApp: App {
         UITabBar.appearance().scrollEdgeAppearance  = tabApp
 
         // ── Navigation bar ───────────────────────────────────────────────────
-        let titleAttrs: [NSAttributedString.Key: Any] = [
+        // The bar is the system's; ours are the tint and the title face, nothing else
+        // (`decisions/navigation-bars-are-the-systems.md`). No `standardAppearance`: an
+        // appearance of our own with a background turns the iOS 26 glass off. The title is the
+        // chrome's monospace at `CTNavBar`'s size, on the headline curve.
+        let titleSize = UIFontMetrics(forTextStyle: .headline).scaledValue(for: 17)
+        let titleFont = UIFont(name: "JetBrainsMono-SemiBold", size: titleSize)
+            ?? .monospacedSystemFont(ofSize: titleSize, weight: .semibold)
+        UINavigationBar.appearance().titleTextAttributes = [
             .foregroundColor: bright,
-            .font: UIFont.monospacedSystemFont(ofSize: 14, weight: .semibold)
+            .font: titleFont
         ]
-        let navApp = UINavigationBarAppearance()
-        navApp.configureWithOpaqueBackground()
-        navApp.backgroundColor              = bg2
-        navApp.titleTextAttributes          = titleAttrs
-        navApp.largeTitleTextAttributes     = [.foregroundColor: bright]
-        navApp.shadowColor                  = UIColor(Color.CT.noise)
-        UINavigationBar.appearance().standardAppearance   = navApp
-        UINavigationBar.appearance().scrollEdgeAppearance = navApp
-        UINavigationBar.appearance().compactAppearance    = navApp
-        UINavigationBar.appearance().tintColor            = accent
+        UINavigationBar.appearance().tintColor = accent
 
         // ── Lists / Table views ──────────────────────────────────────────────
         UITableView.appearance().backgroundColor     = UIColor(Color.CT.bg)
