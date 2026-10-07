@@ -1156,12 +1156,12 @@ final class MessageRouter {
                 // Profile from a build before content type 29: recognised by its layout, as it
                 // always was. Read for one release; ignored once a typed profile is held.
                 if let profile = ProfileShareData.fromBinaryData(plaintext) {
-                    ProfileSharingManager.shared.handleProfileMessage(profile, from: otherUserId, in: context)
+                    ProfileSharingManager.shared.handleProfileMessage(profile, from: otherUserId)
                     PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId, in: context)
                     continue
                 } else if let str = String(data: plaintext, encoding: .utf8),
                           let profile = ProfileSharingManager.shared.parseProfileMessage(str) {
-                    ProfileSharingManager.shared.handleProfileMessage(profile, from: otherUserId, in: context)
+                    ProfileSharingManager.shared.handleProfileMessage(profile, from: otherUserId)
                     PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId, in: context)
                     continue
                 }
@@ -1194,7 +1194,7 @@ final class MessageRouter {
                     // Chunked binary profile share (large profiles with avatars arrive here, not via
                     // the pre-reassembler check above). Render as a profile, never as text.
                     if let profile = ProfileShareData.fromBinaryData(profileData) {
-                        ProfileSharingManager.shared.handleProfileMessage(profile, from: otherUserId, in: context)
+                        ProfileSharingManager.shared.handleProfileMessage(profile, from: otherUserId)
                     }
                     PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId, in: context)
                     continue
@@ -1598,7 +1598,7 @@ final class MessageRouter {
                 if let profileData = ProfileSharingManager.shared.parseProfileMessage(decryptedContent) ??
                                      (decryptedContent.data(using: .utf8).flatMap { ProfileSharingManager.shared.parseProfileMessage(from: $0) }) {
                     Log.info("Received profile message from \(userId)", category: "MessageRouter")
-                    ProfileSharingManager.shared.handleProfileMessage(profileData, from: userId, in: context)
+                    ProfileSharingManager.shared.handleProfileMessage(profileData, from: userId)
                     return true
                 } else {
                     Log.info("Failed to parse profile message from \(userId), skipping", category: "MessageRouter")
@@ -1694,7 +1694,7 @@ final class MessageRouter {
                     IntakeCredentialService.shared.recordPeerIntakeKey(key, from: otherUserId)
                 }
                 if let address = card.accountAddress {
-                    Self.pinCardAddress(address, of: otherUserId, in: context)
+                    Self.pinCardAddress(address, of: otherUserId)
                 }
             } else {
                 Log.error("Contact card from \(otherUserId.prefix(8))… did not decode", category: "MessageRouter")
@@ -1703,7 +1703,7 @@ final class MessageRouter {
             // Applied only if newer than the one held — the version makes a resend or a
             // reordered queue harmless.
             if let profile = ProfileShare.read(body) {
-                ProfileSharingManager.shared.apply(profile, from: otherUserId, in: context)
+                ProfileSharingManager.shared.apply(profile, from: otherUserId)
             } else {
                 Log.error("Profile from \(otherUserId.prefix(8))… did not decode", category: "MessageRouter")
             }
@@ -1727,14 +1727,9 @@ final class MessageRouter {
 
     /// A contact's address from their card, pinned by `AccountAddressPin`. Only onto a row that
     /// exists: a sender must not be able to put a contact in our store by sending to us.
-    private static func pinCardAddress(_ address: Data, of accountId: String, in context: NSManagedObjectContext) {
-        let request = User.fetchRequest()
-        request.predicate = NSPredicate(format: "id == %@", accountId)
-        request.fetchLimit = 1
-        guard let user = try? context.fetch(request).first else { return }
-        if AccountAddress.pin(address, on: user, source: .card) != .unchanged {
-            try? context.save()
-        }
+    @MainActor
+    private static func pinCardAddress(_ address: Data, of accountId: String) {
+        AccountAddress.pin(address, contactId: accountId, source: .card)
     }
 
     /// True when the newest row in `chat` is a system row carrying exactly `text`.

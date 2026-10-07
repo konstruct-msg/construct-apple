@@ -235,27 +235,35 @@ final class AccountAddressPinRowTests: XCTestCase {
 
     /// Held for the test's life: a managed object outliving its context reads as nil.
     private let container = PersistenceController(inMemory: true).container
+    private let id = "14f28d31-0000-0000-0000-000000000009"
 
-    private func user() -> User {
+    override func setUp() {
+        super.setUp()
+        LocalRepositories.useContactsForTesting(container)
         let ctx = container.viewContext
         let user = User(context: ctx)
-        user.id = "14f28d31-0000-0000-0000-000000000009"
+        user.id = id
         user.username = ""
         user.displayName = "T"
-        return user
+        try! ctx.save()
     }
 
+    override func tearDown() {
+        LocalRepositories.useContactsForTesting(nil)
+        super.tearDown()
+    }
+
+    private var address: Data? { try! LocalRepositories.contacts.contact(id)?.accountAddress }
+
     func testACardConflictLeavesTheRowAlone() {
-        let row = user()
         let pinned = Data(repeating: 0xA1, count: 32)
-        AccountAddress.pin(pinned, on: row, source: .invite)
-        AccountAddress.pin(Data(repeating: 0xB2, count: 32), on: row, source: .card)
-        XCTAssertEqual(row.accountAddress, pinned)
+        AccountAddress.pin(pinned, contactId: id, source: .invite)
+        AccountAddress.pin(Data(repeating: 0xB2, count: 32), contactId: id, source: .card)
+        XCTAssertEqual(address, pinned)
     }
 
     func testAnAddressThatIsNotAKeyIsIgnored() {
-        let row = user()
-        AccountAddress.pin(Data(repeating: 1, count: 31), on: row, source: .card)
-        XCTAssertNil(row.accountAddress)
+        AccountAddress.pin(Data(repeating: 1, count: 31), contactId: id, source: .card)
+        XCTAssertNil(address)
     }
 }

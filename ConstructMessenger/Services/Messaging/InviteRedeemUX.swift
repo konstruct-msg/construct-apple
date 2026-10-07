@@ -58,13 +58,10 @@ enum InviteRedeemUX {
     // MARK: - Block
 
     private static func blockPeer(userId: String) async {
-        let context = PersistenceController.shared.container.viewContext
-        let fetch = User.fetchRequest()
-        fetch.predicate = NSPredicate(format: "id == %@", userId)
-        fetch.fetchLimit = 1
-        if let user = try? context.fetch(fetch).first {
-            user.isBlocked = true
-            try? context.save()
+        do {
+            try LocalRepositories.contacts.setBlocked(userId, true)
+        } catch {
+            Log.error("Post-redeem block not saved locally for \(userId.prefix(8))…: \(error)", category: "InviteRedeemUX")
         }
         do {
             _ = try await UserServiceClient.shared.blockUser(userId: userId, reason: "invite_undo")

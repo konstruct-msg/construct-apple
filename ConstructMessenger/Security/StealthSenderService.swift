@@ -413,12 +413,9 @@ final class StealthSenderService: SealedSenderResolving {
     ///
     /// Verifies the signature itself. The one caller that has already verified it takes
     /// `pinIdentity` instead — see there for why that shortcut is not a parameter on this method.
-    func rememberIdentityFromCertificate(
-        _ cert: Shared_Proto_Core_V1_SenderCertificate,
-        context: NSManagedObjectContext = PersistenceController.shared.container.viewContext
-    ) {
+    func rememberIdentityFromCertificate(_ cert: Shared_Proto_Core_V1_SenderCertificate) {
         guard case .vouched = attestSignature(cert) else { return }
-        pinIdentity(cert, context: context)
+        pinIdentity(cert)
     }
 
     /// Pin without verifying. **Only reachable from a branch that has just verified.**
@@ -428,10 +425,7 @@ final class StealthSenderService: SealedSenderResolving {
     /// code establishes — in the one method whose entire job is deciding whether to trust a key.
     /// A private function whose proof is three lines above its only call site cannot be handed a
     /// lie by a future caller; a defaulted parameter can.
-    private func pinIdentity(
-        _ cert: Shared_Proto_Core_V1_SenderCertificate,
-        context: NSManagedObjectContext = PersistenceController.shared.container.viewContext
-    ) {
+    private func pinIdentity(_ cert: Shared_Proto_Core_V1_SenderCertificate) {
         guard !cert.senderUserID.isEmpty, !cert.senderIdentityKey.isEmpty else { return }
         ContactLinkService.shared.rememberIdentityKeyIfUnknown(
             userId: cert.senderUserID,
@@ -440,8 +434,7 @@ final class StealthSenderService: SealedSenderResolving {
             // Driven by an incoming envelope. A sender must not be able to put a row in our
             // store by sending to us — that is how a deleted contact kept coming back while
             // the server replayed their backlog (device logs 2026-08-19).
-            createIfMissing: false,
-            context: context
+            createIfMissing: false
         )
     }
 

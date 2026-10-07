@@ -122,6 +122,7 @@ final class ProfileRebroadcastTests: XCTestCase {
         settings.setContext(context)
         settings.userId = me
         settings.removeAvatar()
+        context.refresh(self_, mergeChanges: false)
 
         XCTAssertNil(self_.avatarData)
         XCTAssertGreaterThan(self_.profileEditedAtMs, 1, "a removal is a newer version, or contacts would ignore it")

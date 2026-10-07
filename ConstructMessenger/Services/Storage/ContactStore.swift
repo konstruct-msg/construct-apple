@@ -8,8 +8,9 @@
 //  (construct-store schema 2, construct-core 0.35.0) takes over on macOS in step 3, with
 //  `contact`, `every_contact`, `sharing_with`, `identity_key_pins` and `own_profile`.
 //
-//  Reads first. The writes — the field-by-field operations the crate already has — come in the
-//  next step, with their callers.
+//  Writes are field by field, as the crate's are: each changes its named fields of one row and
+//  nothing else, so two writers of different fields cannot undo each other. `false` means there
+//  is no such row.
 //
 
 import Foundation
@@ -57,6 +58,14 @@ struct OwnProfileRecord: Equatable, Sendable {
     var profileEditedAtMs: Int64
 }
 
+extension OwnProfileRecord {
+    /// Our name or avatar changed: the profile we send carries this as its version
+    /// (`ProfileShare.editedAtMs`), so contacts apply it over the one they hold and ignore older ones.
+    mutating func markEdited(now: Date = Date()) {
+        profileEditedAtMs = Int64((now.timeIntervalSince1970 * 1000).rounded())
+    }
+}
+
 struct IdentityKeyPin: Equatable, Sendable {
     let contactId: String
     let key: Data
@@ -82,11 +91,43 @@ protocol ContactStore: Sendable {
 
     /// Every pinned identity key, by contact id.
     func identityKeyPins() throws -> [IdentityKeyPin]
+
+    /// Rows with an avatar announced and not yet downloaded, by id.
+    func contactsWithPendingAvatar() throws -> [ContactRecord]
+
+    // MARK: Writes
+
+    /// Adds the row unless one with its id exists; true when added. A row that exists is left as it
+    /// is — changing it is the field writes' job.
+    @discardableResult func insert(_ contact: ContactRecord) throws -> Bool
+
+    /// A contact from now on; `addedAt` is kept if it was set.
+    @discardableResult func markContact(_ id: String, addedAt: Date) throws -> Bool
+    @discardableResult func setBlocked(_ id: String, _ blocked: Bool) throws -> Bool
+    /// `nil` shows their own name again.
+    @discardableResult func setAlias(_ id: String, _ alias: String?) throws -> Bool
+    /// Whether we share our profile with them.
+    @discardableResult func setSharingWith(_ id: String, _ sharing: Bool) throws -> Bool
+    @discardableResult func setIdentityKey(_ id: String, _ key: Data?) throws -> Bool
+    @discardableResult func setKTStatus(_ id: String, _ status: KTStatus) throws -> Bool
+    @discardableResult func setAccountAddress(_ id: String, _ address: Data?) throws -> Bool
+    @discardableResult func setSecurityNotice(_ id: String, _ notice: SecurityNotice) throws -> Bool
+    @discardableResult func setNames(_ id: String, username: String, displayName: String) throws -> Bool
+    /// A profile they shared: sharing on, with the name and times the caller chose.
+    @discardableResult func applySharedProfile(
+        _ id: String, displayName: String, sharedWithMeAt: Date, profileEditedAtMs: Int64
+    ) throws -> Bool
+    /// The avatar and the one still to download, set together.
+    @discardableResult func setAvatar(
+        _ id: String, _ avatar: Data?, pendingRef: Data?, pendingSince: Date?
+    ) throws -> Bool
 }
 
-/// Reading our own profile. `accountId` as for `ContactStore`.
+/// Our own profile. `accountId` as for `ContactStore`.
 protocol OwnProfileStore: Sendable {
     func profile(accountId: String) throws -> OwnProfileRecord?
+    /// Replaces our profile — there is one.
+    func save(_ profile: OwnProfileRecord) throws
 }
 
 /// `User` rows. Each call runs on a fresh background context, for the reason
@@ -133,6 +174,93 @@ final class CoreDataContactStore: ContactStore, OwnProfileStore, @unchecked Send
         }
     }
 
+    func contactsWithPendingAvatar() throws -> [ContactRecord] {
+        try fetch(NSPredicate(format: "pendingAvatarRef != nil"))
+    }
+
+    // MARK: Writes
+
+    func insert(_ contact: ContactRecord) throws -> Bool {
+        try run { context in
+            let req = User.fetchRequest()
+            req.predicate = NSPredicate(format: "id == %@", contact.id)
+            req.fetchLimit = 1
+            guard try context.count(for: req) == 0 else { return false }
+            let user = User(context: context)
+            user.id = contact.id
+            contact.write(to: user)
+            try context.saveOrThrow(category: "Contacts")
+            return true
+        }
+    }
+
+    func markContact(_ id: String, addedAt: Date) throws -> Bool {
+        try update(id) { $0.isContact = true; $0.addedAt = $0.addedAt ?? addedAt }
+    }
+    func setBlocked(_ id: String, _ blocked: Bool) throws -> Bool { try update(id) { $0.isBlocked = blocked } }
+    func setAlias(_ id: String, _ alias: String?) throws -> Bool { try update(id) { $0.localAlias = alias } }
+    func setSharingWith(_ id: String, _ sharing: Bool) throws -> Bool { try update(id) { $0.amISharingWith = sharing } }
+    func setIdentityKey(_ id: String, _ key: Data?) throws -> Bool { try update(id) { $0.knownIdentityKey = key } }
+    func setKTStatus(_ id: String, _ status: KTStatus) throws -> Bool { try update(id) { $0.ktStatus = status } }
+    func setAccountAddress(_ id: String, _ address: Data?) throws -> Bool { try update(id) { $0.accountAddress = address } }
+    func setSecurityNotice(_ id: String, _ notice: SecurityNotice) throws -> Bool { try update(id) { $0.securityNotice = notice } }
+    func setNames(_ id: String, username: String, displayName: String) throws -> Bool {
+        try update(id) { $0.username = username; $0.displayName = displayName }
+    }
+    func applySharedProfile(
+        _ id: String, displayName: String, sharedWithMeAt: Date, profileEditedAtMs: Int64
+    ) throws -> Bool {
+        try update(id) {
+            $0.isSharingWithMe = true
+            $0.displayName = displayName
+            $0.sharedWithMeAt = sharedWithMeAt
+            $0.profileEditedAtMs = profileEditedAtMs
+        }
+    }
+    func setAvatar(_ id: String, _ avatar: Data?, pendingRef: Data?, pendingSince: Date?) throws -> Bool {
+        try update(id) {
+            $0.avatarData = avatar
+            $0.pendingAvatarRef = pendingRef
+            $0.pendingAvatarSince = pendingSince
+        }
+    }
+
+    /// The fields named in `change` and nothing else; saved only when something did change.
+    private func update(_ id: String, _ change: (User) -> Void) throws -> Bool {
+        try run { context in
+            let req = User.fetchRequest()
+            req.predicate = NSPredicate(format: "id == %@", id)
+            req.fetchLimit = 1
+            guard let user = try context.fetch(req).first else { return false }
+            change(user)
+            if context.hasChanges { try context.saveOrThrow(category: "Contacts") }
+            return true
+        }
+    }
+
+    func save(_ profile: OwnProfileRecord) throws {
+        try run { context in
+            let req = User.fetchRequest()
+            req.predicate = NSPredicate(format: "id == %@", profile.accountId)
+            req.fetchLimit = 1
+            let user = try context.fetch(req).first ?? {
+                // Our row in the contacts table, as the app has always created it: no sharing,
+                // no block, not a contact.
+                let row = User(context: context)
+                row.id = profile.accountId
+                row.isSharingWithMe = false
+                row.isBlocked = false
+                row.amISharingWith = false
+                return row
+            }()
+            user.username = profile.username
+            user.displayName = profile.displayName
+            user.avatarData = profile.avatar
+            user.profileEditedAtMs = profile.profileEditedAtMs
+            if context.hasChanges { try context.saveOrThrow(category: "Contacts") }
+        }
+    }
+
     func profile(accountId: String) throws -> OwnProfileRecord? {
         guard !accountId.isEmpty else { return nil }
         return try run { context in
@@ -165,6 +293,38 @@ final class CoreDataContactStore: ContactStore, OwnProfileStore, @unchecked Send
 }
 
 extension ContactRecord {
+    /// A new contact as the app creates one: nothing shared, nothing blocked, nothing pinned.
+    static func new(id: String, isContact: Bool, addedAt: Date?) -> ContactRecord {
+        ContactRecord(
+            id: id, username: "", displayName: "", localAlias: nil, avatar: nil,
+            knownIdentityKey: nil, accountAddress: nil, isContact: isContact, isBlocked: false,
+            isSharingWithMe: false, amISharingWith: false, sharedWithMeAt: nil, addedAt: addedAt,
+            ktStatus: .unverified, securityNotice: .none, profileEditedAtMs: 0,
+            pendingAvatarRef: nil, pendingAvatarSince: nil
+        )
+    }
+
+    /// Every field but the id onto a row. `publicKey` and `hybridCapable` are left out on purpose.
+    fileprivate func write(to user: User) {
+        user.username = username
+        user.displayName = displayName
+        user.localAlias = localAlias
+        user.avatarData = avatar
+        user.knownIdentityKey = knownIdentityKey
+        user.accountAddress = accountAddress
+        user.isContact = isContact
+        user.isBlocked = isBlocked
+        user.isSharingWithMe = isSharingWithMe
+        user.amISharingWith = amISharingWith
+        user.sharedWithMeAt = sharedWithMeAt
+        user.addedAt = addedAt
+        user.ktStatus = ktStatus
+        user.securityNotice = securityNotice
+        user.profileEditedAtMs = profileEditedAtMs
+        user.pendingAvatarRef = pendingAvatarRef
+        user.pendingAvatarSince = pendingAvatarSince
+    }
+
     /// `publicKey` and `hybridCapable` are left out on purpose: nothing writes or reads them.
     init(row user: User) {
         self.init(
@@ -178,5 +338,22 @@ extension ContactRecord {
             profileEditedAtMs: user.profileEditedAtMs,
             pendingAvatarRef: user.pendingAvatarRef, pendingAvatarSince: user.pendingAvatarSince
         )
+    }
+}
+
+extension User {
+    /// The row `id` in `context`, as last saved — for a caller that still needs the managed object
+    /// (a chat to link, a screen to open) after writing through `ContactStore`. Refreshed, since
+    /// the write landed in another context and `context` may hold the row from before it; the
+    /// merge into the view context comes later, on its queue. Disappears with step 3 of the plan.
+    static func row(_ id: String, in context: NSManagedObjectContext) throws -> User {
+        let req = User.fetchRequest()
+        req.predicate = NSPredicate(format: "id == %@", id)
+        req.fetchLimit = 1
+        req.shouldRefreshRefetchedObjects = true
+        guard let user = try context.fetch(req).first else {
+            throw NSError(domain: "ContactStore", code: 1, userInfo: [NSLocalizedDescriptionKey: "no User row \(id.prefix(8))…"])
+        }
+        return user
     }
 }

@@ -17,10 +17,12 @@ final class KeyChangeUXTests: XCTestCase {
     override func setUp() {
         super.setUp()
         container = PersistenceController(inMemory: true).container
+        LocalRepositories.useContactsForTesting(container)
     }
 
     override func tearDown() {
         KeyChangeUX.setActiveChatContact(nil)
+        LocalRepositories.useContactsForTesting(nil)
         container = nil
         super.tearDown()
     }
@@ -46,11 +48,12 @@ final class KeyChangeUXTests: XCTestCase {
         let key = Data(repeating: 0xAB, count: 32)
         makeUser(id: id, kt: .failed, key: key)
 
-        let ok = KeyChangeUX.acknowledgeKeyChange(userId: id, context: container.viewContext)
+        let ok = KeyChangeUX.acknowledgeKeyChange(userId: id)
         XCTAssertTrue(ok)
 
         let fetch = User.fetchRequest()
         fetch.predicate = NSPredicate(format: "id == %@", id)
+        container.viewContext.refreshAllObjects()
         let user = try! container.viewContext.fetch(fetch).first!
         XCTAssertEqual(user.ktStatus, .verified)
         XCTAssertEqual(user.knownIdentityKey, key)
@@ -59,7 +62,7 @@ final class KeyChangeUXTests: XCTestCase {
     func testAcknowledgeNoOpWhenUnverified() {
         let id = "14f28d31-1234-4abc-8def-bbbbbbbbbbbb"
         makeUser(id: id, kt: .unverified, key: nil)
-        XCTAssertFalse(KeyChangeUX.acknowledgeKeyChange(userId: id, context: container.viewContext))
+        XCTAssertFalse(KeyChangeUX.acknowledgeKeyChange(userId: id))
     }
 
     func testGlobalNoticeSuppressedWhenChatActive() {
@@ -67,7 +70,7 @@ final class KeyChangeUXTests: XCTestCase {
         KeyChangeUX.setActiveChatContact(id)
         // Should not crash / not clear active contact
         makeUser(id: id, kt: .verified, key: nil)
-        XCTAssertTrue(KeyChangeUX.raise(.addressChanged, userId: id, context: container.viewContext))
+        XCTAssertTrue(KeyChangeUX.raise(.addressChanged, userId: id))
         XCTAssertEqual(KeyChangeUX.activeChatContactId, id)
     }
 }

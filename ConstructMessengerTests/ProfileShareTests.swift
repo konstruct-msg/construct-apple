@@ -160,22 +160,34 @@ final class ProfileShareTests: XCTestCase {
     // MARK: - Applying to a contact
 
     private var context: NSManagedObjectContext!
-    private var contact: User!
+    /// The seeded row; what the writes left is `contact`, read back through the repository.
+    private var row: User!
+
+    /// The contact as saved now. The writes land on a background context, so the row object in
+    /// this test's context would still show what it held before them.
+    private var contact: ContactRecord { try! LocalRepositories.contacts.contact(row.id)! }
 
     override func setUp() {
         super.setUp()
-        context = PersistenceController(inMemory: true).container.viewContext
-        contact = User(context: context)
-        contact.id = UUID().uuidString
-        contact.username = "alice"
-        contact.displayName = "Mystic Parrot"
-        contact.avatarData = Data([1, 2, 3])
-        try? context.save()
+        let container = PersistenceController(inMemory: true).container
+        LocalRepositories.useContactsForTesting(container)
+        context = container.viewContext
+        row = User(context: context)
+        row.id = UUID().uuidString
+        row.username = "alice"
+        row.displayName = "Mystic Parrot"
+        row.avatarData = Data([1, 2, 3])
+        try! context.save()
     }
 
-    private func apply(_ profile: ProfileShare) -> [NSManagedObjectID] {
-        var started: [NSManagedObjectID] = []
-        ProfileSharingManager.shared.apply(profile, from: contact.id, in: context) { started.append($0) }
+    override func tearDown() {
+        LocalRepositories.useContactsForTesting(nil)
+        super.tearDown()
+    }
+
+    private func apply(_ profile: ProfileShare) -> [String] {
+        var started: [String] = []
+        ProfileSharingManager.shared.apply(profile, from: row.id) { started.append($0) }
         return started
     }
 
@@ -187,7 +199,7 @@ final class ProfileShareTests: XCTestCase {
         XCTAssertEqual(contact.profileEditedAtMs, 100)
         XCTAssertEqual(contact.pendingAvatarRef.flatMap(ProfileShare.AvatarRef.init(stored:)), ref,
                        "the reference is kept until the avatar arrives — that is what a retry reads")
-        XCTAssertEqual(started, [contact.objectID])
+        XCTAssertEqual(started, [row.id])
     }
 
     /// The defect the version exists for: a resent or reordered older profile put the old name back.
@@ -196,20 +208,20 @@ final class ProfileShareTests: XCTestCase {
         let started = apply(ProfileShare(displayName: "Alice One", editedAtMs: 100, avatar: .removed))
         XCTAssertEqual(contact.displayName, "Alice Two")
         XCTAssertEqual(contact.profileEditedAtMs, 200)
-        XCTAssertEqual(contact.avatarData, Data([1, 2, 3]), "an ignored profile does not clear the avatar either")
+        XCTAssertEqual(contact.avatar, Data([1, 2, 3]), "an ignored profile does not clear the avatar either")
         XCTAssertTrue(started.isEmpty)
     }
 
     func testRemovedClearsTheAvatarAndAnythingPending() {
         _ = apply(ProfileShare(displayName: "Alice", editedAtMs: 100, avatar: .set(ref)))
         _ = apply(ProfileShare(displayName: "Alice", editedAtMs: 101, avatar: .removed))
-        XCTAssertNil(contact.avatarData)
+        XCTAssertNil(contact.avatar)
         XCTAssertNil(contact.pendingAvatarRef, "a removed avatar must not arrive later from an old reference")
     }
 
     func testUnchangedKeepsTheAvatar() {
         _ = apply(ProfileShare(displayName: "Alice", editedAtMs: 100, avatar: .unchanged))
-        XCTAssertEqual(contact.avatarData, Data([1, 2, 3]))
+        XCTAssertEqual(contact.avatar, Data([1, 2, 3]))
         XCTAssertNil(contact.pendingAvatarRef)
     }
 
@@ -219,14 +231,14 @@ final class ProfileShareTests: XCTestCase {
         _ = apply(ProfileShare(displayName: "Alice Two", editedAtMs: 200, avatar: .unchanged))
         let legacy = ProfileShareData(displayName: "Alice Old", avatarMediaId: nil, avatarMediaUrl: nil,
                                       avatarMediaKey: nil, avatarMediaType: nil, timestamp: Int64(Date().timeIntervalSince1970))
-        ProfileSharingManager.shared.handleProfileMessage(legacy, from: contact.id, in: context)
+        ProfileSharingManager.shared.handleProfileMessage(legacy, from: contact.id)
         XCTAssertEqual(contact.displayName, "Alice Two")
     }
 
     func testAnUntypedProfileStillAppliesToAContactWithoutATypedOne() {
         let legacy = ProfileShareData(displayName: "Alice Old", avatarMediaId: nil, avatarMediaUrl: nil,
                                       avatarMediaKey: nil, avatarMediaType: nil, timestamp: 1)
-        ProfileSharingManager.shared.handleProfileMessage(legacy, from: contact.id, in: context)
+        ProfileSharingManager.shared.handleProfileMessage(legacy, from: contact.id)
         XCTAssertEqual(contact.displayName, "Alice Old")
     }
 
@@ -234,8 +246,8 @@ final class ProfileShareTests: XCTestCase {
 
     /// The defect of 2026-10-02: Android sends its generated name when its user set none, and it
     /// replaced the username the invite gave us.
-    func testAGeneratedNameDoesNotReplaceTheUsername() {
-        contact.displayName = "alice"
+    func testAGeneratedNameDoesNotReplaceTheUsername() throws {
+        try LocalRepositories.contacts.setNames(row.id, username: "alice", displayName: "alice")
         let generated = DisplayNameGenerator.generate(from: contact.id).lowercased()
         _ = apply(ProfileShare(displayName: generated, editedAtMs: 100, avatar: .unchanged))
         XCTAssertEqual(contact.resolvedDisplayName, "alice")
@@ -248,19 +260,19 @@ final class ProfileShareTests: XCTestCase {
         XCTAssertEqual(contact.resolvedDisplayName, "alice", "a newer profile with no name drops the old one")
     }
 
-    func testAnUntypedGeneratedNameDoesNotReplaceTheUsername() {
-        contact.displayName = "alice"
+    func testAnUntypedGeneratedNameDoesNotReplaceTheUsername() throws {
+        try LocalRepositories.contacts.setNames(row.id, username: "alice", displayName: "alice")
         let legacy = ProfileShareData(displayName: DisplayNameGenerator.generate(from: contact.id), avatarMediaId: nil,
                                       avatarMediaUrl: nil, avatarMediaKey: nil, avatarMediaType: nil, timestamp: 1)
-        ProfileSharingManager.shared.handleProfileMessage(legacy, from: contact.id, in: context)
+        ProfileSharingManager.shared.handleProfileMessage(legacy, from: contact.id)
         XCTAssertEqual(contact.resolvedDisplayName, "alice")
     }
 
     /// Rows already overwritten before the fix: the generated name held is skipped for the username.
     func testAGeneratedNameAlreadyHeldShowsTheUsername() {
-        contact.displayName = DisplayNameGenerator.generate(from: contact.id)
-        XCTAssertEqual(contact.resolvedDisplayName, "alice")
-        contact.username = ""
-        XCTAssertEqual(contact.resolvedDisplayName, DisplayNameGenerator.generate(from: contact.id))
+        row.displayName = DisplayNameGenerator.generate(from: row.id)
+        XCTAssertEqual(row.resolvedDisplayName, "alice")
+        row.username = ""
+        XCTAssertEqual(row.resolvedDisplayName, DisplayNameGenerator.generate(from: row.id))
     }
 }

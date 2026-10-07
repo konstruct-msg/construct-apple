@@ -199,25 +199,31 @@ enum AccountAddressPin: Equatable {
 
 extension AccountAddress {
 
-    /// Apply `address` to a contact row by the rule in `AccountAddressPin.decide`, and raise the
-    /// security event on a conflict. The caller saves the context.
+    /// Apply `address` to the contact `contactId` by the rule in `AccountAddressPin.decide`, and
+    /// raise the security event on a conflict. Written through `LocalRepositories.contacts`; no
+    /// row, nothing pinned.
     @MainActor
     @discardableResult
-    static func pin(_ address: Data, on user: User, source: AccountAddressSource) -> AccountAddressPin {
-        guard address.count == length else { return .unchanged }
-        let outcome = AccountAddressPin.decide(existing: user.accountAddress, incoming: address, source: source)
+    static func pin(_ address: Data, contactId: String, source: AccountAddressSource) -> AccountAddressPin {
+        guard address.count == length,
+              let contact = try? LocalRepositories.contacts.contact(contactId) else { return .unchanged }
+        let outcome = AccountAddressPin.decide(existing: contact.accountAddress, incoming: address, source: source)
         switch outcome {
         case .pinned, .conflictReplaced:
-            user.accountAddress = address
+            do {
+                try LocalRepositories.contacts.setAccountAddress(contactId, address)
+            } catch {
+                Log.error("ADDRESS: not saved for \(contactId.prefix(8))…: \(error)", category: "ContactLink")
+            }
         case .unchanged, .conflictKept:
             break
         }
         if outcome.isSecurityEvent {
             Log.error(
-                "ADDRESS: \(user.id.prefix(8))… named a different account address (\(source)) — \(outcome == .conflictKept ? "kept the pinned one" : "replaced by the invite's")",
+                "ADDRESS: \(contactId.prefix(8))… named a different account address (\(source)) — \(outcome == .conflictKept ? "kept the pinned one" : "replaced by the invite's")",
                 category: "ContactLink"
             )
-            KeyChangeUX.raise(.addressChanged, on: user)
+            KeyChangeUX.raise(.addressChanged, userId: contactId)
         }
         return outcome
     }

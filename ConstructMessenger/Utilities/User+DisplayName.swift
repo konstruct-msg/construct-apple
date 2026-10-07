@@ -48,41 +48,12 @@ extension User {
     ///   - serverUsername: Raw username string returned by the server (may be nil/empty/UUID).
     ///   - userId: The user's ID used to generate a fallback name; defaults to `self.id`.
     func applyServerUsername(_ serverUsername: String?, userId: String? = nil) {
-        let resolvedId = userId ?? id
-        let trimmed = (serverUsername ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-        let isReal = !trimmed.isEmpty
-            && trimmed.lowercased() != "anonymous"
-            && UUID(uuidString: trimmed) == nil
-
-        if isReal {
-            username = trimmed
-            if !isSharingWithMe {
-                // Only overwrite displayName when we don't have a profile-shared name.
-                // isSharingWithMe == true → contact sent us their real name; keep it.
-                displayName = trimmed
-            }
-        } else {
-            // Server has no real username for this contact.
-            // Only reset username/displayName if current value is a placeholder
-            // (empty, UUID, or "anonymous") — never discard a name that arrived
-            // from an invite payload or a previous server update.
-            let currentUsernameIsPlaceholder = username.isEmpty
-                || username.lowercased() == "anonymous"
-                || UUID(uuidString: username) != nil
-
-            if currentUsernameIsPlaceholder {
-                username = ""
-            }
-
-            if !isSharingWithMe {
-                let currentDisplayIsPlaceholder = displayName.isEmpty
-                    || UUID(uuidString: displayName) != nil
-                if currentDisplayIsPlaceholder {
-                    displayName = DisplayNameGenerator.generate(from: resolvedId)
-                }
-            }
-            // isSharingWithMe == true → keep existing displayName (profile-shared name)
-        }
+        let names = ContactName.applyingServerUsername(
+            serverUsername, username: username, displayName: displayName,
+            isSharingWithMe: isSharingWithMe, id: userId ?? id
+        )
+        username = names.username
+        displayName = names.displayName
     }
 }
 
@@ -97,6 +68,42 @@ enum ContactName {
         if !displayName.isEmpty, !DisplayNameGenerator.isGenerated(displayName, for: id) { return displayName }
         if !username.isEmpty { return username }
         return DisplayNameGenerator.generate(from: id)
+    }
+
+    /// The names a server-provided username leaves a person with — the rule
+    /// `User.applyServerUsername` documents, as values, so a write through `ContactStore.setNames`
+    /// follows it too.
+    static func applyingServerUsername(
+        _ serverUsername: String?, username: String, displayName: String,
+        isSharingWithMe: Bool, id: String
+    ) -> (username: String, displayName: String) {
+        var username = username
+        var displayName = displayName
+        let trimmed = (serverUsername ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let isReal = !trimmed.isEmpty
+            && trimmed.lowercased() != "anonymous"
+            && UUID(uuidString: trimmed) == nil
+
+        if isReal {
+            username = trimmed
+            if !isSharingWithMe {
+                // Only overwrite displayName when we don't have a profile-shared name.
+                displayName = trimmed
+            }
+        } else {
+            // No real username: reset only placeholders — never discard a name that arrived
+            // from an invite payload or a previous server update.
+            let usernameIsPlaceholder = username.isEmpty
+                || username.lowercased() == "anonymous"
+                || UUID(uuidString: username) != nil
+            if usernameIsPlaceholder { username = "" }
+
+            if !isSharingWithMe {
+                let displayIsPlaceholder = displayName.isEmpty || UUID(uuidString: displayName) != nil
+                if displayIsPlaceholder { displayName = DisplayNameGenerator.generate(from: id) }
+            }
+        }
+        return (username, displayName)
     }
 }
 

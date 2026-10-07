@@ -101,15 +101,12 @@ class SettingsViewModel {
     /// goes out with the avatar "removed" (`ProfileShare.Avatar.removed`). Until 2026-10-02 there
     /// was no way to remove a photo once set — and had there been, no contact would have noticed.
     func removeAvatar() {
-        guard let context = viewContext, !userId.isEmpty else { return }
-        let fetchRequest = User.fetchRequest()
-        fetchRequest.predicate = NSPredicate(format: "id == %@", userId)
-        fetchRequest.fetchLimit = 1
-        guard let user = try? context.fetch(fetchRequest).first, user.avatarData != nil else { return }
-        user.avatarData = nil
-        user.markProfileEdited()
+        guard let context = viewContext, !userId.isEmpty,
+              var me = try? LocalRepositories.ownProfile.profile(accountId: userId), me.avatar != nil else { return }
+        me.avatar = nil
+        me.markEdited()
         do {
-            try context.save()
+            try LocalRepositories.ownProfile.save(me)
         } catch {
             Log.error("Failed to remove avatar: \(error)")
             return
@@ -141,16 +138,11 @@ class SettingsViewModel {
             return
         }
 
-        // Find current user in Core Data
-        let fetchRequest = User.fetchRequest()
-        fetchRequest.predicate = NSPredicate(format: "id == %@", userId)
-        fetchRequest.fetchLimit = 1
-
         do {
-            if let user = try context.fetch(fetchRequest).first {
-                user.avatarData = processedData
-                user.markProfileEdited()
-                try context.save()
+            if var me = try LocalRepositories.ownProfile.profile(accountId: userId) {
+                me.avatar = processedData
+                me.markEdited()
+                try LocalRepositories.ownProfile.save(me)
 
                 // Update UI
                 profileImage = ImageHelper.imageFromData(processedData)
@@ -198,13 +190,12 @@ class SettingsViewModel {
             try await UserServiceClient.shared.updateUsername(userId: userId, username: trimmed)
 
             // Persist locally
-            if let context = viewContext {
-                let fetchRequest = User.fetchRequest()
-                fetchRequest.predicate = NSPredicate(format: "id == %@", userId)
-                fetchRequest.fetchLimit = 1
-                if let user = try? context.fetch(fetchRequest).first {
-                    user.username = trimmed
-                    context.saveAndLog()
+            if var me = try? LocalRepositories.ownProfile.profile(accountId: userId) {
+                me.username = trimmed
+                do {
+                    try LocalRepositories.ownProfile.save(me)
+                } catch {
+                    Log.error("Username not saved locally: \(error)")
                 }
             }
             username = trimmed
@@ -229,15 +220,11 @@ class SettingsViewModel {
         let trimmed = name.trimmingCharacters(in: .whitespaces)
         guard trimmed.count <= MessageSizeLimits.maxDisplayNameCharacters else { return }
 
-        let fetchRequest = User.fetchRequest()
-        fetchRequest.predicate = NSPredicate(format: "id == %@", userId)
-        fetchRequest.fetchLimit = 1
-
         do {
-            if let user = try context.fetch(fetchRequest).first {
-                user.displayName = trimmed
-                user.markProfileEdited()
-                try context.save()
+            if var me = try LocalRepositories.ownProfile.profile(accountId: userId) {
+                me.displayName = trimmed
+                me.markEdited()
+                try LocalRepositories.ownProfile.save(me)
                 
                 // Update local state
                 displayName = trimmed
