@@ -18,10 +18,11 @@ final class LocalStoreBindingTests: XCTestCase {
 
     private func contact(_ id: String, name: String) -> LocalContact {
         LocalContact(
-            id: id, username: "", displayName: name, localAlias: nil, avatar: nil, publicKey: nil,
+            id: id, username: "", displayName: name, localAlias: nil, avatar: nil,
             knownIdentityKey: nil, accountAddress: nil, isContact: true, isBlocked: false,
             isSharingWithMe: false, amISharingWith: false, sharedWithMeAt: nil, addedAt: nil,
-            ktStatus: 0, hybridCapable: false, securityNotice: 0
+            ktStatus: 0, securityNotice: 0, profileEditedAtMs: 0, pendingAvatarRef: nil,
+            pendingAvatarSince: nil
         )
     }
 

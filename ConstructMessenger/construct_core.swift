@@ -1320,6 +1320,11 @@ public protocol LocalStoreProtocol: AnyObject, Sendable {
     
     func allPeerDevices() throws  -> [LocalPeerDevice]
     
+    /**
+     * Sharing on, with the name and both times the client chose.
+     */
+    func applySharedProfile(id: String, displayName: String, sharedWithMeAt: Int64, profileEditedAtMs: Int64) throws  -> Bool
+    
     func calls(limit: UInt32) throws  -> [LocalCall]
     
     func chat(id: String) throws  -> LocalChat?
@@ -1336,6 +1341,8 @@ public protocol LocalStoreProtocol: AnyObject, Sendable {
      */
     func contacts() throws  -> [LocalContact]
     
+    func contactsWithPendingAvatar() throws  -> [LocalContact]
+    
     func deleteChat(id: String) throws 
     
     /**
@@ -1349,9 +1356,16 @@ public protocol LocalStoreProtocol: AnyObject, Sendable {
     
     func editMessage(id: String, body: Data, searchText: String?, editedAt: Int64) throws  -> Bool
     
+    /**
+     * Every row, contacts or not, by id.
+     */
+    func everyContact() throws  -> [LocalContact]
+    
     func forgetServerMessageIdsBefore(cutoff: Int64) throws  -> UInt64
     
     func get(key: String) throws  -> Data?
+    
+    func identityKeyPins() throws  -> [LocalIdentityKeyPin]
     
     /**
      * `search_text` is what the message says, for the full-text index; null for media/control.
@@ -1360,6 +1374,12 @@ public protocol LocalStoreProtocol: AnyObject, Sendable {
     
     func localMessageId(serverId: String) throws  -> String?
     
+    /**
+     * Each write below changes its named fields of one row in one statement; false: no such row.
+     * A contact from now on; `added_at` is kept if it was set.
+     */
+    func markContact(id: String, addedAt: Int64) throws  -> Bool
+    
     func message(id: String) throws  -> LocalMessage?
     
     /**
@@ -1367,6 +1387,8 @@ public protocol LocalStoreProtocol: AnyObject, Sendable {
      * newest page — oldest first.
      */
     func messagesBefore(chatId: String, beforeOrderKey: String?, beforeId: String?, limit: UInt32) throws  -> [LocalMessage]
+    
+    func ownProfile() throws  -> LocalOwnProfile?
     
     func peerDevice(deviceId: String) throws  -> LocalPeerDevice?
     
@@ -1401,9 +1423,40 @@ public protocol LocalStoreProtocol: AnyObject, Sendable {
      */
     func search(query: String, limit: UInt32) throws  -> [LocalSearchHit]
     
+    func setAccountAddress(id: String, address: Data?) throws  -> Bool
+    
+    func setContactAlias(id: String, alias: String?) throws  -> Bool
+    
+    /**
+     * The avatar and the one still to download, set together.
+     */
+    func setContactAvatar(id: String, avatar: Data?, pendingRef: Data?, pendingSince: Int64?) throws  -> Bool
+    
+    func setContactBlocked(id: String, blocked: Bool) throws  -> Bool
+    
+    func setContactNames(id: String, username: String, displayName: String) throws  -> Bool
+    
     func setDeliveryStatus(id: String, status: Int16) throws  -> Bool
     
+    func setIdentityKey(id: String, key: Data?) throws  -> Bool
+    
+    func setKtStatus(id: String, status: Int16) throws  -> Bool
+    
     func setObserver(observer: LocalStoreObserver?) 
+    
+    /**
+     * Replaces our profile — there is one.
+     */
+    func setOwnProfile(profile: LocalOwnProfile) throws 
+    
+    func setSecurityNotice(id: String, notice: Int16) throws  -> Bool
+    
+    func setSharingWith(id: String, sharing: Bool) throws  -> Bool
+    
+    /**
+     * The ids we share our profile with.
+     */
+    func sharingWith() throws  -> [String]
     
     func upsertCall(call: LocalCall) throws 
     
@@ -1500,6 +1553,21 @@ open func allPeerDevices()throws  -> [LocalPeerDevice]  {
 })
 }
     
+    /**
+     * Sharing on, with the name and both times the client chose.
+     */
+open func applySharedProfile(id: String, displayName: String, sharedWithMeAt: Int64, profileEditedAtMs: Int64)throws  -> Bool  {
+    return try  FfiConverterBool.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_apply_shared_profile(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(id),
+        FfiConverterString.lower(displayName),
+        FfiConverterInt64.lower(sharedWithMeAt),
+        FfiConverterInt64.lower(profileEditedAtMs),$0
+    )
+})
+}
+    
 open func calls(limit: UInt32)throws  -> [LocalCall]  {
     return try  FfiConverterSequenceTypeLocalCall.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
     uniffi_construct_core_fn_method_localstore_calls(
@@ -1544,6 +1612,14 @@ open func contact(id: String)throws  -> LocalContact?  {
 open func contacts()throws  -> [LocalContact]  {
     return try  FfiConverterSequenceTypeLocalContact.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
     uniffi_construct_core_fn_method_localstore_contacts(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+open func contactsWithPendingAvatar()throws  -> [LocalContact]  {
+    return try  FfiConverterSequenceTypeLocalContact.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_contacts_with_pending_avatar(
             self.uniffiCloneHandle(),$0
     )
 })
@@ -1597,6 +1673,17 @@ open func editMessage(id: String, body: Data, searchText: String?, editedAt: Int
 })
 }
     
+    /**
+     * Every row, contacts or not, by id.
+     */
+open func everyContact()throws  -> [LocalContact]  {
+    return try  FfiConverterSequenceTypeLocalContact.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_every_contact(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
 open func forgetServerMessageIdsBefore(cutoff: Int64)throws  -> UInt64  {
     return try  FfiConverterUInt64.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
     uniffi_construct_core_fn_method_localstore_forget_server_message_ids_before(
@@ -1611,6 +1698,14 @@ open func get(key: String)throws  -> Data?  {
     uniffi_construct_core_fn_method_localstore_get(
             self.uniffiCloneHandle(),
         FfiConverterString.lower(key),$0
+    )
+})
+}
+    
+open func identityKeyPins()throws  -> [LocalIdentityKeyPin]  {
+    return try  FfiConverterSequenceTypeLocalIdentityKeyPin.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_identity_key_pins(
+            self.uniffiCloneHandle(),$0
     )
 })
 }
@@ -1637,6 +1732,20 @@ open func localMessageId(serverId: String)throws  -> String?  {
 })
 }
     
+    /**
+     * Each write below changes its named fields of one row in one statement; false: no such row.
+     * A contact from now on; `added_at` is kept if it was set.
+     */
+open func markContact(id: String, addedAt: Int64)throws  -> Bool  {
+    return try  FfiConverterBool.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_mark_contact(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(id),
+        FfiConverterInt64.lower(addedAt),$0
+    )
+})
+}
+    
 open func message(id: String)throws  -> LocalMessage?  {
     return try  FfiConverterOptionTypeLocalMessage.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
     uniffi_construct_core_fn_method_localstore_message(
@@ -1658,6 +1767,14 @@ open func messagesBefore(chatId: String, beforeOrderKey: String?, beforeId: Stri
         FfiConverterOptionString.lower(beforeOrderKey),
         FfiConverterOptionString.lower(beforeId),
         FfiConverterUInt32.lower(limit),$0
+    )
+})
+}
+    
+open func ownProfile()throws  -> LocalOwnProfile?  {
+    return try  FfiConverterOptionTypeLocalOwnProfile.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_own_profile(
+            self.uniffiCloneHandle(),$0
     )
 })
 }
@@ -1760,9 +1877,85 @@ open func search(query: String, limit: UInt32)throws  -> [LocalSearchHit]  {
 })
 }
     
+open func setAccountAddress(id: String, address: Data?)throws  -> Bool  {
+    return try  FfiConverterBool.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_set_account_address(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(id),
+        FfiConverterOptionData.lower(address),$0
+    )
+})
+}
+    
+open func setContactAlias(id: String, alias: String?)throws  -> Bool  {
+    return try  FfiConverterBool.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_set_contact_alias(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(id),
+        FfiConverterOptionString.lower(alias),$0
+    )
+})
+}
+    
+    /**
+     * The avatar and the one still to download, set together.
+     */
+open func setContactAvatar(id: String, avatar: Data?, pendingRef: Data?, pendingSince: Int64?)throws  -> Bool  {
+    return try  FfiConverterBool.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_set_contact_avatar(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(id),
+        FfiConverterOptionData.lower(avatar),
+        FfiConverterOptionData.lower(pendingRef),
+        FfiConverterOptionInt64.lower(pendingSince),$0
+    )
+})
+}
+    
+open func setContactBlocked(id: String, blocked: Bool)throws  -> Bool  {
+    return try  FfiConverterBool.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_set_contact_blocked(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(id),
+        FfiConverterBool.lower(blocked),$0
+    )
+})
+}
+    
+open func setContactNames(id: String, username: String, displayName: String)throws  -> Bool  {
+    return try  FfiConverterBool.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_set_contact_names(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(id),
+        FfiConverterString.lower(username),
+        FfiConverterString.lower(displayName),$0
+    )
+})
+}
+    
 open func setDeliveryStatus(id: String, status: Int16)throws  -> Bool  {
     return try  FfiConverterBool.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
     uniffi_construct_core_fn_method_localstore_set_delivery_status(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(id),
+        FfiConverterInt16.lower(status),$0
+    )
+})
+}
+    
+open func setIdentityKey(id: String, key: Data?)throws  -> Bool  {
+    return try  FfiConverterBool.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_set_identity_key(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(id),
+        FfiConverterOptionData.lower(key),$0
+    )
+})
+}
+    
+open func setKtStatus(id: String, status: Int16)throws  -> Bool  {
+    return try  FfiConverterBool.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_set_kt_status(
             self.uniffiCloneHandle(),
         FfiConverterString.lower(id),
         FfiConverterInt16.lower(status),$0
@@ -1776,6 +1969,48 @@ open func setObserver(observer: LocalStoreObserver?)  {try! rustCall() {
         FfiConverterOptionCallbackInterfaceLocalStoreObserver.lower(observer),$0
     )
 }
+}
+    
+    /**
+     * Replaces our profile — there is one.
+     */
+open func setOwnProfile(profile: LocalOwnProfile)throws   {try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_set_own_profile(
+            self.uniffiCloneHandle(),
+        FfiConverterTypeLocalOwnProfile_lower(profile),$0
+    )
+}
+}
+    
+open func setSecurityNotice(id: String, notice: Int16)throws  -> Bool  {
+    return try  FfiConverterBool.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_set_security_notice(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(id),
+        FfiConverterInt16.lower(notice),$0
+    )
+})
+}
+    
+open func setSharingWith(id: String, sharing: Bool)throws  -> Bool  {
+    return try  FfiConverterBool.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_set_sharing_with(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(id),
+        FfiConverterBool.lower(sharing),$0
+    )
+})
+}
+    
+    /**
+     * The ids we share our profile with.
+     */
+open func sharingWith()throws  -> [String]  {
+    return try  FfiConverterSequenceString.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_sharing_with(
+            self.uniffiCloneHandle(),$0
+    )
+})
 }
     
 open func upsertCall(call: LocalCall)throws   {try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
@@ -5183,7 +5418,6 @@ public struct LocalContact: Equatable, Hashable {
     public var displayName: String
     public var localAlias: String?
     public var avatar: Data?
-    public var publicKey: String?
     public var knownIdentityKey: Data?
     public var accountAddress: Data?
     public var isContact: Bool
@@ -5193,18 +5427,31 @@ public struct LocalContact: Equatable, Hashable {
     public var sharedWithMeAt: Int64?
     public var addedAt: Int64?
     public var ktStatus: Int16
-    public var hybridCapable: Bool
     public var securityNotice: Int16
+    /**
+     * When the peer last edited the profile they share; 0 when never told.
+     */
+    public var profileEditedAtMs: Int64
+    /**
+     * An announced avatar not yet downloaded, and since when.
+     */
+    public var pendingAvatarRef: Data?
+    public var pendingAvatarSince: Int64?
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(id: String, username: String, displayName: String, localAlias: String?, avatar: Data?, publicKey: String?, knownIdentityKey: Data?, accountAddress: Data?, isContact: Bool, isBlocked: Bool, isSharingWithMe: Bool, amISharingWith: Bool, sharedWithMeAt: Int64?, addedAt: Int64?, ktStatus: Int16, hybridCapable: Bool, securityNotice: Int16) {
+    public init(id: String, username: String, displayName: String, localAlias: String?, avatar: Data?, knownIdentityKey: Data?, accountAddress: Data?, isContact: Bool, isBlocked: Bool, isSharingWithMe: Bool, amISharingWith: Bool, sharedWithMeAt: Int64?, addedAt: Int64?, ktStatus: Int16, securityNotice: Int16, 
+        /**
+         * When the peer last edited the profile they share; 0 when never told.
+         */profileEditedAtMs: Int64, 
+        /**
+         * An announced avatar not yet downloaded, and since when.
+         */pendingAvatarRef: Data?, pendingAvatarSince: Int64?) {
         self.id = id
         self.username = username
         self.displayName = displayName
         self.localAlias = localAlias
         self.avatar = avatar
-        self.publicKey = publicKey
         self.knownIdentityKey = knownIdentityKey
         self.accountAddress = accountAddress
         self.isContact = isContact
@@ -5214,8 +5461,10 @@ public struct LocalContact: Equatable, Hashable {
         self.sharedWithMeAt = sharedWithMeAt
         self.addedAt = addedAt
         self.ktStatus = ktStatus
-        self.hybridCapable = hybridCapable
         self.securityNotice = securityNotice
+        self.profileEditedAtMs = profileEditedAtMs
+        self.pendingAvatarRef = pendingAvatarRef
+        self.pendingAvatarSince = pendingAvatarSince
     }
 
     
@@ -5237,7 +5486,6 @@ public struct FfiConverterTypeLocalContact: FfiConverterRustBuffer {
                 displayName: FfiConverterString.read(from: &buf), 
                 localAlias: FfiConverterOptionString.read(from: &buf), 
                 avatar: FfiConverterOptionData.read(from: &buf), 
-                publicKey: FfiConverterOptionString.read(from: &buf), 
                 knownIdentityKey: FfiConverterOptionData.read(from: &buf), 
                 accountAddress: FfiConverterOptionData.read(from: &buf), 
                 isContact: FfiConverterBool.read(from: &buf), 
@@ -5247,8 +5495,10 @@ public struct FfiConverterTypeLocalContact: FfiConverterRustBuffer {
                 sharedWithMeAt: FfiConverterOptionInt64.read(from: &buf), 
                 addedAt: FfiConverterOptionInt64.read(from: &buf), 
                 ktStatus: FfiConverterInt16.read(from: &buf), 
-                hybridCapable: FfiConverterBool.read(from: &buf), 
-                securityNotice: FfiConverterInt16.read(from: &buf)
+                securityNotice: FfiConverterInt16.read(from: &buf), 
+                profileEditedAtMs: FfiConverterInt64.read(from: &buf), 
+                pendingAvatarRef: FfiConverterOptionData.read(from: &buf), 
+                pendingAvatarSince: FfiConverterOptionInt64.read(from: &buf)
         )
     }
 
@@ -5258,7 +5508,6 @@ public struct FfiConverterTypeLocalContact: FfiConverterRustBuffer {
         FfiConverterString.write(value.displayName, into: &buf)
         FfiConverterOptionString.write(value.localAlias, into: &buf)
         FfiConverterOptionData.write(value.avatar, into: &buf)
-        FfiConverterOptionString.write(value.publicKey, into: &buf)
         FfiConverterOptionData.write(value.knownIdentityKey, into: &buf)
         FfiConverterOptionData.write(value.accountAddress, into: &buf)
         FfiConverterBool.write(value.isContact, into: &buf)
@@ -5268,8 +5517,10 @@ public struct FfiConverterTypeLocalContact: FfiConverterRustBuffer {
         FfiConverterOptionInt64.write(value.sharedWithMeAt, into: &buf)
         FfiConverterOptionInt64.write(value.addedAt, into: &buf)
         FfiConverterInt16.write(value.ktStatus, into: &buf)
-        FfiConverterBool.write(value.hybridCapable, into: &buf)
         FfiConverterInt16.write(value.securityNotice, into: &buf)
+        FfiConverterInt64.write(value.profileEditedAtMs, into: &buf)
+        FfiConverterOptionData.write(value.pendingAvatarRef, into: &buf)
+        FfiConverterOptionInt64.write(value.pendingAvatarSince, into: &buf)
     }
 }
 
@@ -5286,6 +5537,58 @@ public func FfiConverterTypeLocalContact_lift(_ buf: RustBuffer) throws -> Local
 #endif
 public func FfiConverterTypeLocalContact_lower(_ value: LocalContact) -> RustBuffer {
     return FfiConverterTypeLocalContact.lower(value)
+}
+
+
+public struct LocalIdentityKeyPin: Equatable, Hashable {
+    public var contactId: String
+    public var key: Data
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(contactId: String, key: Data) {
+        self.contactId = contactId
+        self.key = key
+    }
+
+    
+}
+
+#if compiler(>=6)
+extension LocalIdentityKeyPin: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeLocalIdentityKeyPin: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> LocalIdentityKeyPin {
+        return
+            try LocalIdentityKeyPin(
+                contactId: FfiConverterString.read(from: &buf), 
+                key: FfiConverterData.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: LocalIdentityKeyPin, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.contactId, into: &buf)
+        FfiConverterData.write(value.key, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLocalIdentityKeyPin_lift(_ buf: RustBuffer) throws -> LocalIdentityKeyPin {
+    return try FfiConverterTypeLocalIdentityKeyPin.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLocalIdentityKeyPin_lower(_ value: LocalIdentityKeyPin) -> RustBuffer {
+    return FfiConverterTypeLocalIdentityKeyPin.lower(value)
 }
 
 
@@ -5406,6 +5709,73 @@ public func FfiConverterTypeLocalMessage_lift(_ buf: RustBuffer) throws -> Local
 #endif
 public func FfiConverterTypeLocalMessage_lower(_ value: LocalMessage) -> RustBuffer {
     return FfiConverterTypeLocalMessage.lower(value)
+}
+
+
+/**
+ * Our own profile — one row, not a contact.
+ */
+public struct LocalOwnProfile: Equatable, Hashable {
+    public var accountId: String
+    public var username: String
+    public var displayName: String
+    public var avatar: Data?
+    public var profileEditedAtMs: Int64
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(accountId: String, username: String, displayName: String, avatar: Data?, profileEditedAtMs: Int64) {
+        self.accountId = accountId
+        self.username = username
+        self.displayName = displayName
+        self.avatar = avatar
+        self.profileEditedAtMs = profileEditedAtMs
+    }
+
+    
+}
+
+#if compiler(>=6)
+extension LocalOwnProfile: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeLocalOwnProfile: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> LocalOwnProfile {
+        return
+            try LocalOwnProfile(
+                accountId: FfiConverterString.read(from: &buf), 
+                username: FfiConverterString.read(from: &buf), 
+                displayName: FfiConverterString.read(from: &buf), 
+                avatar: FfiConverterOptionData.read(from: &buf), 
+                profileEditedAtMs: FfiConverterInt64.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: LocalOwnProfile, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.accountId, into: &buf)
+        FfiConverterString.write(value.username, into: &buf)
+        FfiConverterString.write(value.displayName, into: &buf)
+        FfiConverterOptionData.write(value.avatar, into: &buf)
+        FfiConverterInt64.write(value.profileEditedAtMs, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLocalOwnProfile_lift(_ buf: RustBuffer) throws -> LocalOwnProfile {
+    return try FfiConverterTypeLocalOwnProfile.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLocalOwnProfile_lower(_ value: LocalOwnProfile) -> RustBuffer {
+    return FfiConverterTypeLocalOwnProfile.lower(value)
 }
 
 
@@ -8903,6 +9273,7 @@ public enum LocalStoreTable: Equatable, Hashable {
     case reactions
     case calls
     case peerDevices
+    case ownProfile
 
 
 
@@ -8934,6 +9305,8 @@ public struct FfiConverterTypeLocalStoreTable: FfiConverterRustBuffer {
         
         case 6: return .peerDevices
         
+        case 7: return .ownProfile
+        
         default: throw UniffiInternalError.unexpectedEnumCase
         }
     }
@@ -8964,6 +9337,10 @@ public struct FfiConverterTypeLocalStoreTable: FfiConverterRustBuffer {
         
         case .peerDevices:
             writeInt(&buf, Int32(6))
+        
+        
+        case .ownProfile:
+            writeInt(&buf, Int32(7))
         
         }
     }
@@ -10187,6 +10564,30 @@ fileprivate struct FfiConverterOptionTypeLocalMessage: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterOptionTypeLocalOwnProfile: FfiConverterRustBuffer {
+    typealias SwiftType = LocalOwnProfile?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeLocalOwnProfile.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeLocalOwnProfile.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterOptionTypeLocalPeerDevice: FfiConverterRustBuffer {
     typealias SwiftType = LocalPeerDevice?
 
@@ -10547,6 +10948,31 @@ fileprivate struct FfiConverterSequenceTypeLocalContact: FfiConverterRustBuffer 
         seq.reserveCapacity(Int(len))
         for _ in 0 ..< len {
             seq.append(try FfiConverterTypeLocalContact.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeLocalIdentityKeyPin: FfiConverterRustBuffer {
+    typealias SwiftType = [LocalIdentityKeyPin]
+
+    public static func write(_ value: [LocalIdentityKeyPin], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeLocalIdentityKeyPin.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [LocalIdentityKeyPin] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [LocalIdentityKeyPin]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeLocalIdentityKeyPin.read(from: &buf))
         }
         return seq
     }
@@ -11706,6 +12132,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_method_localstore_all_peer_devices() != 59848) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_construct_core_checksum_method_localstore_apply_shared_profile() != 40422) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_construct_core_checksum_method_localstore_calls() != 50631) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -11719,6 +12148,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_localstore_contacts() != 43939) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_contacts_with_pending_avatar() != 30938) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_localstore_delete_chat() != 62753) {
@@ -11736,10 +12168,16 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_method_localstore_edit_message() != 48649) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_construct_core_checksum_method_localstore_every_contact() != 24186) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_construct_core_checksum_method_localstore_forget_server_message_ids_before() != 29537) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_localstore_get() != 50579) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_identity_key_pins() != 6243) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_localstore_insert_message() != 2107) {
@@ -11748,10 +12186,16 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_method_localstore_local_message_id() != 42048) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_construct_core_checksum_method_localstore_mark_contact() != 13229) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_construct_core_checksum_method_localstore_message() != 63926) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_localstore_messages_before() != 61408) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_own_profile() != 283) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_localstore_peer_device() != 48056) {
@@ -11781,10 +12225,43 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_method_localstore_search() != 46550) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_construct_core_checksum_method_localstore_set_account_address() != 23284) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_set_contact_alias() != 31575) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_set_contact_avatar() != 42614) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_set_contact_blocked() != 21924) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_set_contact_names() != 43680) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_construct_core_checksum_method_localstore_set_delivery_status() != 61504) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_construct_core_checksum_method_localstore_set_identity_key() != 39466) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_set_kt_status() != 19632) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_construct_core_checksum_method_localstore_set_observer() != 60987) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_set_own_profile() != 60092) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_set_security_notice() != 29437) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_set_sharing_with() != 40928) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_sharing_with() != 63075) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_localstore_upsert_call() != 6097) {
