@@ -11,21 +11,11 @@ struct AppearanceSettingsView: View {
     @AppStorage("appTheme") private var appTheme: AppTheme = .dark
     @AppStorage("textSize") private var textSize: TextSize = .standard
     @AppStorage(ChatTextPreference.faceKey) private var chatFace: ChatTextPreference.Face = ChatTextPreference.defaultFace
-    @Environment(\.dismiss) private var dismiss
     private let allThemes = AppTheme.allCases
 
     var body: some View {
         ScrollView {
             LazyVStack(spacing: SettingsLayout.sectionSpacing) {
-                CTNavBar(
-                    title: NSLocalizedString("appearance", comment: ""),
-                    showBack: true,
-                    backAction: { dismiss() }
-                ) {
-                    EmptyView()
-                } trailing: {
-                    EmptyView()
-                }
                 
                 VStack(alignment: .leading, spacing: SettingsLayout.sectionHeaderSpacing) {
                     VStack(alignment: .leading, spacing: 0) {
@@ -162,7 +152,7 @@ struct AppearanceSettingsView: View {
         }
         .background(Color.CT.bg.ignoresSafeArea())
         #if os(iOS)
-        .hideSystemNavBar()
+        .screenTitle(NSLocalizedString("appearance", comment: ""))
         #endif
         .onAppear {
             // If user previously selected an unavailable theme, reset to dark

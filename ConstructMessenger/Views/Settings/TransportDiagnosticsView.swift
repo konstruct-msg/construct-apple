@@ -13,7 +13,6 @@ import SwiftUI
 import Combine
 
 struct TransportDiagnosticsView: View {
-    @Environment(\.dismiss) private var dismiss
     @State private var mirror = TransportRouterMirror.shared
     @State private var now = Date()
     @State private var nativeTLS = VeilProxyStore.veilFrontNativeTLS
@@ -22,15 +21,6 @@ struct TransportDiagnosticsView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            CTNavBar(
-                title: "TRANSPORT DIAGNOSTICS",
-                showBack: true,
-                backAction: { dismiss() }
-            ) {
-                EmptyView()
-            } trailing: {
-                EmptyView()
-            }
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 16) {
                     stateSection
@@ -44,7 +34,7 @@ struct TransportDiagnosticsView: View {
         }
         .ctBackground()
         #if os(iOS)
-        .hideSystemNavBar()
+        .screenTitle("TRANSPORT DIAGNOSTICS")
         #endif
         .onReceive(timer) { now = $0 }
     }

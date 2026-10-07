@@ -44,6 +44,17 @@ extension View {
         #endif
     }
 
+    /// A screen's title on the system bar, inline. `shown: false` where the screen is embedded in
+    /// a host that names it (the Desktop settings pane).
+    @ViewBuilder
+    func screenTitle(_ title: String, shown: Bool = true) -> some View {
+        if shown {
+            self.navigationTitle(title).inlineNavTitle()
+        } else {
+            self
+        }
+    }
+
     /// A sheet's own navigation: a `NavigationStack` and a close item, so the screen inside
     /// declares only its title and actions and reads the same pushed or presented.
     /// `decisions/navigation-bars-are-the-systems.md`.

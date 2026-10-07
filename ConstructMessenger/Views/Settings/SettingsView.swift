@@ -43,18 +43,6 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack(path: $navigationPath) {
             VStack(spacing: SettingsRootLayout.rootSpacing) {
-                
-                // Section title as plain left-aligned label (not a capsule)
-                HStack {
-                    Text(NSLocalizedString("settings", comment: "").uppercased())
-                        .font(CTFont.headline)
-                        .foregroundColor(Color.CT.text)
-                        .tracking(4)
-                    Spacer()
-                }
-                .padding(.horizontal, CTLayout.edgePad)
-                .frame(height: CTLayout.navBarHeight)
-
                 ScrollView {
                     LazyVStack(spacing: SettingsRootLayout.listSpacing) {
                         // MARK: Recovery warning (full width in both layouts)
@@ -104,7 +92,7 @@ struct SettingsView: View {
             .frame(maxWidth: settingsContentMaxWidth)
             .frame(maxWidth: .infinity)
             .ctBackground()
-            .hideSystemNavBar()
+            .screenTitle(NSLocalizedString("settings", comment: ""))
             .onAppear {
                 viewModel.setContext(viewContext)
                 if viewModel.needsUserInfoRefresh(from: authViewModel) {

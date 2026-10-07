@@ -155,16 +155,7 @@ struct OnboardingView: View {
                 VeilBootstrapScanView()
             }
             .sheet(isPresented: $showingNetworkSettings) {
-                NavigationStack {
-                    NetworkSettingsView()
-                        .toolbar {
-                            ToolbarItem(placement: .cancellationAction) {
-                                Button(LocalizedStringKey("done")) {
-                                    showingNetworkSettings = false
-                                }
-                            }
-                        }
-                }
+                NetworkSettingsView().sheetNavigation()
             }
         }
     }

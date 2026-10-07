@@ -85,8 +85,7 @@ struct DraftsView: View {
             }
         }
         .background(Color.CT.bg.ignoresSafeArea())
-        .navigationTitle(NSLocalizedString("drafts", comment: ""))
-        .inlineNavTitle()
+        .screenTitle(NSLocalizedString("drafts", comment: ""))
     }
 
     private func addDraft() {

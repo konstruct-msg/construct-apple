@@ -14,7 +14,6 @@ struct SecurityView: View {
     @Environment(AccountRecoveryViewModel.self) private var recoveryVM
     @Environment(AuthViewModel.self) private var authVM
     @Environment(\.managedObjectContext) private var viewContext
-    @Environment(\.dismiss) private var dismiss
 
     @State private var showingPinSetup = false
     @State private var showingDisablePinSheet = false
@@ -28,15 +27,6 @@ struct SecurityView: View {
     var body: some View {
         @Bindable var securityViewModel = securityViewModel
         VStack(spacing: 0) {
-            CTNavBar(
-                title: NSLocalizedString("security", comment: ""),
-                showBack: true,
-                backAction: { dismiss() }
-            ) {
-                EmptyView()
-            } trailing: {
-                EmptyView()
-            }
             ScrollView {
             LazyVStack(spacing: 0) {
 
@@ -381,7 +371,7 @@ struct SecurityView: View {
         .task { await recoveryVM.loadStatus() }
         .onAppear { securityViewModel.refreshPinState() }
         }
-        .hideSystemNavBar()
+        .screenTitle(NSLocalizedString("security", comment: ""))
         .background(Color.CT.bg.ignoresSafeArea())
     }
 
