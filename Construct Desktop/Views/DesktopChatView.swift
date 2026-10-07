@@ -148,7 +148,7 @@ struct DesktopChatView: View {
             }
             .sheet(isPresented: $showingUserProfile) {
                 if let user = viewModel.chat.otherUser {
-                    UserProfileView(user: user, showMessageButton: false)
+                    UserProfileView(userId: user.id, showMessageButton: false)
                         .environment(\.managedObjectContext, viewContext)
                         .frame(minWidth: 420, minHeight: 480)
                 }

@@ -273,6 +273,13 @@ class ChatsViewModel {
         streamLifecycle.reconnectIfSubscriptionsChanged()
     }
 
+    /// The chat with the contact `contactId` — for screens that hold a `ContactRecord`. The chats
+    /// domain still links a chat to the managed row, so the row is fetched here.
+    func openOrCreateChat(withContact contactId: String) {
+        guard let context = viewContext, let user = try? User.row(contactId, in: context) else { return }
+        openOrCreateChat(with: user)
+    }
+
     func openOrCreateChat(with user: User) {
         selectedTab = 0
         guard let context = viewContext else { return }

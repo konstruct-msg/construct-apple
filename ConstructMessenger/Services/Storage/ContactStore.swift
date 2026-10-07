@@ -18,7 +18,7 @@ import CoreData
 
 /// One person we hold a row for: a contact, or someone we only hold a key or a blocked flag for.
 /// Never our own account — that is `OwnProfileRecord`.
-struct ContactRecord: Equatable, Sendable {
+struct ContactRecord: Equatable, Sendable, Identifiable {
     let id: String
     var username: String
     var displayName: String
@@ -85,6 +85,10 @@ protocol ContactStore: Sendable {
 
     /// Everyone we hold a row for, contacts or not, by id.
     func everyContact(except ownAccountId: String?) throws -> [ContactRecord]
+
+    /// People marked as contacts, by id. Shown in an order the screen picks for the reader's
+    /// language (`ContactsLive.contacts`), which a store collation cannot.
+    func contacts() throws -> [ContactRecord]
 
     /// The ids we share our profile with, sorted.
     func sharingWith(except ownAccountId: String?) throws -> [String]
@@ -165,6 +169,10 @@ final class CoreDataContactStore: ContactStore, OwnProfileStore, @unchecked Send
 
     func everyContact(except ownAccountId: String?) throws -> [ContactRecord] {
         try fetch(NSPredicate(format: "id != %@", ownAccountId ?? ""))
+    }
+
+    func contacts() throws -> [ContactRecord] {
+        try fetch(NSPredicate(format: "isContact == YES"))
     }
 
     func sharingWith(except ownAccountId: String?) throws -> [String] {

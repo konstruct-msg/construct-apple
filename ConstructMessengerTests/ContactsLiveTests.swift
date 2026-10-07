@@ -111,4 +111,49 @@ final class ContactsLiveTests: XCTestCase {
         await eventually { live.revision > before }
         XCTAssertNil(live.contact("a"))
     }
+
+    // MARK: - The list
+
+    private func contact(_ id: String, _ name: String, alias: String? = nil) throws {
+        var row = ContactRecord.new(id: id, isContact: true, addedAt: nil)
+        row.displayName = name
+        row.localAlias = alias
+        try store.insert(row)
+    }
+
+    /// The order a reader expects within a script: case folded beyond ASCII, numbers by value,
+    /// the alias where one is set. Which script comes first is the reader's locale's to decide,
+    /// so it is not asserted. Mutation: sort by raw `displayName` with `<` — "борис" falls after
+    /// "Мама" (lowercase Cyrillic sorts after uppercase by code point), "item 10" before
+    /// "item 9", and "Мама" sits where "Ольга" would.
+    func testTheListIsInTheOrderTheReaderExpects() throws {
+        try contact("1", "яна")
+        try contact("2", "Анна")
+        try contact("3", "борис")
+        try contact("4", "Ольга", alias: "Мама")
+        try contact("5", "item 10")
+        try contact("6", "item 9")
+        try contact("7", "Bob")
+        let shown = ContactsLive(store: store).contacts().map(\.resolvedDisplayName)
+        XCTAssertEqual(shown.filter { $0.first!.isASCII },
+                       ["Bob", "item 9", "item 10"])
+        XCTAssertEqual(shown.filter { !$0.first!.isASCII }, ["Анна", "борис", "Мама", "яна"])
+    }
+
+    /// A contact added after the list was read joins it. Mutation: refresh only rows already
+    /// held — the list never learns of a new one.
+    func testANewContactJoinsTheList() async throws {
+        try contact("a", "Ada")
+        let live = ContactsLive(store: store)
+        XCTAssertEqual(live.contacts().map(\.id), ["a"])
+        try contact("b", "Bea")
+        await eventually { live.contacts().map(\.id) == ["a", "b"] }
+    }
+
+    /// Someone we only hold a key for is not in the list.
+    func testOnlyContactsAreListed() throws {
+        try store.insert(.new(id: "stranger", isContact: false, addedAt: nil))
+        try contact("a", "Ada")
+        XCTAssertEqual(try store.contacts().map(\.id), ["a"])
+    }
 }

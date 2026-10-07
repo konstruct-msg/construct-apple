@@ -154,13 +154,7 @@ struct ContentView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .openChatForKeyChange)) { note in
             guard let userId = note.userInfo?["userId"] as? String, !userId.isEmpty else { return }
-            let ctx = viewContext
-            let fetch = User.fetchRequest()
-            fetch.predicate = NSPredicate(format: "id == %@", userId)
-            fetch.fetchLimit = 1
-            if let user = try? ctx.fetch(fetch).first {
-                chatsViewModel.openOrCreateChat(with: user)
-            }
+            chatsViewModel.openOrCreateChat(withContact: userId)
         }
         .onOpenURL { url in
             // Handle Universal Links in SwiftUI (iOS 13+)

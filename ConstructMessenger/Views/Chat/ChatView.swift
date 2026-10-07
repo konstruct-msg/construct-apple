@@ -308,7 +308,7 @@ struct ChatView: View {
         .sheet(isPresented: $showingUserProfile) {
             if let user = viewModel.chat.otherUser {
                 UserProfileView(
-                    user: user,
+                    userId: user.id,
                     showMessageButton: false   // already inside this chat — no loop
                 )
                 .environment(\.managedObjectContext, viewContext)
@@ -319,7 +319,7 @@ struct ChatView: View {
         .sheet(isPresented: $showingSafetyNumbers) {
             if let user = viewModel.chat.otherUser {
                 SafetyNumberView(
-                    theirDeviceIds: KeyChangeUX.safetyDeviceIds(for: user, context: viewContext),
+                    theirDeviceIds: KeyChangeUX.safetyDeviceIds(ofContact: user.id),
                     theirDisplayName: user.resolvedDisplayName
                 )
             }
