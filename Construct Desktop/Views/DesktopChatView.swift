@@ -214,7 +214,7 @@ struct DesktopChatView: View {
             }
         }
         .modifier(DesktopChatWindowTitle(
-            user: viewModel.chat.otherUser,
+            userId: viewModel.chat.otherUser?.id,
             fallback: NSLocalizedString("chat", comment: ""),
             subtitle: navigationStatusSubtitle
         ))
@@ -275,9 +275,8 @@ struct DesktopChatView: View {
                 .buttonStyle(.plain)
 
                 Button {
-                    if let user = viewModel.chat.otherUser {
-                        user.isBlocked = true
-                        try? user.managedObjectContext?.save()
+                    if let userId = viewModel.chat.otherUser?.id, !userId.isEmpty {
+                        try? LocalRepositories.contacts.setBlocked(userId, true)
                     }
                     IncomingFloodGuard.shared.unsuppress(senderId: senderId)
                 } label: {
@@ -683,12 +682,9 @@ struct DesktopChatView: View {
 
     private func loadContactKTStatus() {
         guard let userId = viewModel.chat.otherUser?.id, !userId.isEmpty else { return }
-        let req = User.fetchRequest()
-        req.predicate = NSPredicate(format: "id == %@", userId)
-        req.fetchLimit = 1
-        if let user = (try? viewContext.fetch(req))?.first {
-            contactKTStatus = user.ktStatus
-            contactTrustAlert = user.trustAlert
+        if let contact = try? LocalRepositories.contacts.contact(userId) {
+            contactKTStatus = contact.ktStatus
+            contactTrustAlert = contact.trustAlert
         }
     }
 
@@ -729,31 +725,22 @@ struct DesktopChatView: View {
     }
 }
 
-/// Pushes the peer's live display name into the window title. Chat does not
-/// publish User attribute changes (profile share), so this observes User itself.
+/// Pushes the peer's live display name into the window title. Chat does not change when the
+/// contact's profile does, so the name is read from `ContactsLive`, whose changes redraw it.
 private struct DesktopChatWindowTitle: ViewModifier {
-    var user: User?
+    var userId: String?
     let fallback: String
     let subtitle: String?
 
     func body(content: Content) -> some View {
-        if let user {
-            Observing(content: content, user: user, subtitle: subtitle)
+        if let userId, !userId.isEmpty {
+            content
+                .navigationTitle(ContactsLive.shared.contact(userId)?.resolvedDisplayName
+                    ?? DisplayNameGenerator.generate(from: userId))
+                .navigationSubtitle(subtitle ?? "")
         } else {
             content
                 .navigationTitle(fallback)
-        }
-    }
-
-    private struct Observing: View {
-        let content: Content
-        @ObservedObject var user: User
-        let subtitle: String?
-
-        var body: some View {
-            content
-                .navigationTitle(user.resolvedDisplayName)
-                .navigationSubtitle(subtitle ?? "")
         }
     }
 }

@@ -440,10 +440,12 @@ struct ChatView: View {
     }
 
     private func blockAndUnsuppressFloodSender() {
-        if let user = viewModel.chat.otherUser {
-            user.isBlocked = true
-            try? user.managedObjectContext?.save()
-            let userId = user.id
+        if let userId = viewModel.chat.otherUser?.id, !userId.isEmpty {
+            do {
+                try LocalRepositories.contacts.setBlocked(userId, true)
+            } catch {
+                Log.error("Flood block not saved locally for \(userId.prefix(8))…: \(error)", category: "ChatView")
+            }
             // Durable server-side block (best-effort; local isBlocked already drives the drop).
             Task {
                 do { _ = try await UserServiceClient.shared.blockUser(userId: userId) }
@@ -574,8 +576,8 @@ struct ChatView: View {
 
     @ViewBuilder
     private var chatNavBar: some View {
-        if let user = viewModel.chat.otherUser {
-            ObservedPeerName(user: user) { chatNavBar(title: $0) }
+        if let userId = viewModel.chat.otherUser?.id, !userId.isEmpty {
+            ObservedPeerName(userId: userId) { chatNavBar(title: $0) }
         } else {
             chatNavBar(title: NSLocalizedString("chat", comment: ""))
         }
@@ -607,16 +609,13 @@ struct ChatView: View {
         )
     }
 
-    /// Load KT status for the contact from Core Data.
+    /// Load KT status for the contact — as saved, since this runs on the notification a write
+    /// posts.
     private func loadContactKTStatus() {
         guard let userId = viewModel.chat.otherUser?.id, !userId.isEmpty else { return }
-        let ctx = viewContext
-        let req = User.fetchRequest()
-        req.predicate = NSPredicate(format: "id == %@", userId)
-        req.fetchLimit = 1
-        if let user = (try? ctx.fetch(req))?.first {
-            contactKTStatus = user.ktStatus
-            contactTrustAlert = user.trustAlert
+        if let contact = try? LocalRepositories.contacts.contact(userId) {
+            contactKTStatus = contact.ktStatus
+            contactTrustAlert = contact.trustAlert
         }
     }
 
@@ -1335,10 +1334,11 @@ struct ChatView: View {
 /// reopened. `@ObservedObject` re-renders on the object's `objectWillChange`, which a save or a
 /// merge into the view context fires.
 private struct ObservedPeerName<Content: View>: View {
-    @ObservedObject var user: User
+    let userId: String
     let content: (String) -> Content
 
     var body: some View {
-        content(user.resolvedDisplayName)
+        content(ContactsLive.shared.contact(userId)?.resolvedDisplayName
+            ?? DisplayNameGenerator.generate(from: userId))
     }
 }
