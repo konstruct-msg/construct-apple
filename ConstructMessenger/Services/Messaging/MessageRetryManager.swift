@@ -200,7 +200,7 @@ class MessageRetryManager {
             } else {
                 copies.append(StoredCopy(
                     device: device,
-                    identityKey: StealthSenderService.recipientIdentityKey(recipientId: device, context: context),
+                    identityKey: StealthSenderService.recipientIdentityKey(recipientId: device),
                     chunks: [chunk]
                 ))
             }

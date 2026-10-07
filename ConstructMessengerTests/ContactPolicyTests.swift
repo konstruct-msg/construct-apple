@@ -16,9 +16,11 @@ final class ContactPolicyTests: XCTestCase {
     override func setUp() {
         super.setUp()
         container = PersistenceController(inMemory: true).container
+        LocalRepositories.useContactsForTesting(container)
     }
 
     override func tearDown() {
+        LocalRepositories.useContactsForTesting(nil)
         container = nil
         super.tearDown()
     }
@@ -41,29 +43,29 @@ final class ContactPolicyTests: XCTestCase {
         let ctx = container.viewContext
         let id = "14f28d31-1234-4abc-8def-0123456789ab"
         makeUser(id: id, isContact: false)
-        XCTAssertFalse(ContactPolicy.isCallableContact(id, in: ctx))
+        XCTAssertFalse(ContactPolicy.isCallableContact(id))
 
         let fetch = User.fetchRequest()
         fetch.predicate = NSPredicate(format: "id == %@", id)
         let user = try! ctx.fetch(fetch).first!
         user.isContact = true
         try! ctx.save()
-        XCTAssertTrue(ContactPolicy.isCallableContact(id, in: ctx))
+        XCTAssertTrue(ContactPolicy.isCallableContact(id))
     }
 
     func testBlockedIsNotCallable() {
         let ctx = container.viewContext
         let id = "24f28d31-1234-4abc-8def-0123456789ab"
         makeUser(id: id, isContact: true, isBlocked: true)
-        XCTAssertFalse(ContactPolicy.isCallableContact(id, in: ctx))
+        XCTAssertFalse(ContactPolicy.isCallableContact(id))
     }
 
     func testUnknownUserNotCallable() {
         let ctx = container.viewContext
-        XCTAssertFalse(ContactPolicy.isCallableContact("34f28d31-1234-4abc-8def-0123456789ab", in: ctx))
+        XCTAssertFalse(ContactPolicy.isCallableContact("34f28d31-1234-4abc-8def-0123456789ab"))
     }
 
     func testEmptyIdNotCallable() {
-        XCTAssertFalse(ContactPolicy.isCallableContact("", in: container.viewContext))
+        XCTAssertFalse(ContactPolicy.isCallableContact(""))
     }
 }

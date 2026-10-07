@@ -1111,7 +1111,7 @@ final class MessageRouter {
                 // client drop is the load-bearing block. The server stream cursor still advances
                 // (.durable) + markProcessed dedups, so the queue drains and there is no redelivery.
                 // See decisions/sealed-sender-authenticated-transitional.md.
-                if BlockedContacts.isBlocked(otherUserId, in: context) {
+                if BlockedContacts.isBlocked(otherUserId) {
                     PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId, in: context)
                     Log.info("SECURITY[block_drop]: suppressed message \(message.id.prefix(8))… from blocked \(otherUserId.prefix(8))… (ratchet advanced; no store/notify/receipt)", category: "MessageRouter")
                     continue
@@ -1664,7 +1664,7 @@ final class MessageRouter {
         in context: NSManagedObjectContext
     ) {
         defer { PersistentACKStore.shared.markProcessed(messageId, senderId: otherUserId, in: context) }
-        if BlockedContacts.isBlocked(otherUserId, in: context) {
+        if BlockedContacts.isBlocked(otherUserId) {
             Log.info("SECURITY[block_drop]: suppressed control frame \(messageId.prefix(8))… from blocked \(otherUserId.prefix(8))…", category: "MessageRouter")
             return
         }
@@ -2393,16 +2393,13 @@ final class MessageRouter {
 ///
 /// See: construct-docs/decisions/sealed-sender-authenticated-transitional.md
 enum BlockedContacts {
-    /// Whether `userId` is a blocked contact in the given context. Cheap indexed count on the
-    /// `User` entity; safe on the incoming-message hot path. Empty/unknown ids → not blocked
-    /// (fail-open: a block is a user-initiated suppression, not a boundary whose lookup failure
-    /// should drop legitimate traffic).
-    static func isBlocked(_ userId: String, in context: NSManagedObjectContext) -> Bool {
+    /// Whether `userId` is a blocked contact. One indexed read of saved state; safe on the
+    /// incoming-message hot path. Empty/unknown ids → not blocked (fail-open: a block is a
+    /// user-initiated suppression, not a boundary whose lookup failure should drop legitimate
+    /// traffic).
+    static func isBlocked(_ userId: String) -> Bool {
         guard !userId.isEmpty else { return false }
-        let fetch = User.fetchRequest()
-        fetch.predicate = NSPredicate(format: "id == %@ AND isBlocked == YES", userId)
-        fetch.fetchLimit = 1
-        return ((try? context.count(for: fetch)) ?? 0) > 0
+        return (try? LocalRepositories.contacts.isBlocked(userId)) ?? false
     }
 }
 

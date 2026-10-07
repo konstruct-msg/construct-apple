@@ -353,12 +353,7 @@ final class MessagingServiceClient: Sendable {
         let myUserId = await MainActor.run { AuthSessionManager.shared.currentUserId } ?? ""
         let messageId = UUID().uuidString
 
-        guard let peer = await MainActor.run(resultType: (accountId: String, identityKey: Data)?.self, body: {
-            SessionAddressing.peer(
-                ofDevice: deviceId,
-                in: PersistenceController.shared.container.viewContext
-            )
-        }) else {
+        guard let peer = SessionAddressing.peer(ofDevice: deviceId) else {
             throw StealthDowngradeBlocked(
                 reason: "no pinned key for device \(deviceId.prefix(8))… — DECRYPTION_ERROR cannot be addressed"
             )

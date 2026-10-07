@@ -765,10 +765,8 @@ class SessionInitializationService {
     func upgradeAllAtRiskSessionsOnForeground() async {
         guard AuthSessionManager.shared.isSessionValid, CryptoManager.shared.isInitialized else { return }
 
-        let ctx = PersistenceController.shared.container.viewContext
-        let req = User.fetchRequest()
-        req.predicate = NSPredicate(format: "isContact == YES")
-        let contactIds: [String] = ((try? ctx.fetch(req)) ?? []).map { $0.id }.filter { !$0.isEmpty }
+        let rows = (try? LocalRepositories.contacts.everyContact(except: AuthSessionManager.shared.currentUserId)) ?? []
+        let contactIds = rows.filter(\.isContact).map(\.id).filter { !$0.isEmpty }
 
         let atRisk = contactIds.filter { KeychainManager.shared.loadSessionAtRiskFlag(for: $0) }
         guard !atRisk.isEmpty else { return }

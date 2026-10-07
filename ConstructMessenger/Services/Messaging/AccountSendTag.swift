@@ -63,14 +63,7 @@ enum AccountSendTag {
             ourTagger: { SenderSyncDeviceTag.Tagger.current },
             pinnedIdentityPublic: { SessionAddressing.pinnedIdentityKey(ofUser: $0) },
             pinnedDevice: { SessionAddressing.pinnedDevice(ofPeer: $0) },
-            deviceIdentityPublic: { deviceId in
-                // A private context: `sendMessage` runs off the main actor, and the view
-                // context read from another thread returns an empty result rather than an error.
-                let ctx = PersistenceController.shared.container.newBackgroundContext()
-                var key: Data?
-                ctx.performAndWait { key = SessionAddressing.identityKey(ofDevice: deviceId, in: ctx) }
-                return key
-            }
+            deviceIdentityPublic: { SessionAddressing.identityKey(ofDevice: $0) }
         )
     }
 

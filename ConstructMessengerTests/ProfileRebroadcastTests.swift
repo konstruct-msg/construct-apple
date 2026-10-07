@@ -23,6 +23,7 @@ final class ProfileRebroadcastTests: XCTestCase {
     }
 
     override func tearDown() {
+        LocalRepositories.useContactsForTesting(nil)
         if let savedUserId, !savedUserId.isEmpty {
             AuthSessionManager.shared.updateUserId(savedUserId)
         }
@@ -30,7 +31,9 @@ final class ProfileRebroadcastTests: XCTestCase {
     }
 
     func testRebroadcastReachesEverySharedContactFromAThrowawayViewModel() async {
-        let context = PersistenceController(inMemory: true).container.viewContext
+        let container = PersistenceController(inMemory: true).container
+        LocalRepositories.useContactsForTesting(container)
+        let context = container.viewContext
         let self_ = User(context: context)
         self_.id = me
         self_.username = "me"
@@ -40,12 +43,14 @@ final class ProfileRebroadcastTests: XCTestCase {
             let contact = User(context: context)
             contact.id = UUID().uuidString
             contact.username = "c\(i)"
+            contact.displayName = ""
             contact.amISharingWith = true
             shared.append(contact.id)
         }
         let notShared = User(context: context)
         notShared.id = UUID().uuidString
         notShared.username = "other"
+        notShared.displayName = ""
         notShared.amISharingWith = false
         try? context.save()
 
@@ -65,7 +70,9 @@ final class ProfileRebroadcastTests: XCTestCase {
     /// unchanged profile carry the same version, so a contact applies the first and ignores the
     /// second. With no avatar it says "removed" — the state that lets a contact clear one.
     func testTheVersionIsTheEditNotTheSendAndNoAvatarIsRemoved() async {
-        let context = PersistenceController(inMemory: true).container.viewContext
+        let container = PersistenceController(inMemory: true).container
+        LocalRepositories.useContactsForTesting(container)
+        let context = container.viewContext
         let self_ = User(context: context)
         self_.id = me
         self_.username = "me"
@@ -73,6 +80,7 @@ final class ProfileRebroadcastTests: XCTestCase {
         let contact = User(context: context)
         contact.id = UUID().uuidString
         contact.username = "c"
+        contact.displayName = ""
         contact.amISharingWith = true
         try? context.save()
 
@@ -99,7 +107,9 @@ final class ProfileRebroadcastTests: XCTestCase {
     /// Removing our photo is an edit: the avatar goes, the version moves, and the profile that
     /// follows says "removed" — the state a contact needs to clear the one it holds.
     func testRemovingOurAvatarIsAnEditThatTravelsAsRemoved() async {
-        let context = PersistenceController(inMemory: true).container.viewContext
+        let container = PersistenceController(inMemory: true).container
+        LocalRepositories.useContactsForTesting(container)
+        let context = container.viewContext
         let self_ = User(context: context)
         self_.id = me
         self_.username = "me"

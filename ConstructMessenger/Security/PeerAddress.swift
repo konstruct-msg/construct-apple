@@ -81,8 +81,8 @@ struct PeerAddress: Equatable, Sendable, CustomStringConvertible {
     /// we hold no `PeerDevice` row and no pinned key for cannot be attributed to an account. `nil`
     /// is the same state as "no session can exist with this peer"; it is never an invitation to
     /// substitute the device id for the account.
-    static func resolving(device deviceId: String, in context: NSManagedObjectContext) -> PeerAddress? {
-        guard let peer = SessionAddressing.peer(ofDevice: deviceId, in: context) else { return nil }
+    static func resolving(device deviceId: String) -> PeerAddress? {
+        guard let peer = SessionAddressing.peer(ofDevice: deviceId) else { return nil }
         return PeerAddress(account: peer.accountId, device: deviceId)
     }
 

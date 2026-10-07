@@ -92,12 +92,7 @@ class SettingsViewModel {
             return
         }
 
-        let fetchRequest = User.fetchRequest()
-        fetchRequest.predicate = NSPredicate(format: "id == %@", userId)
-        fetchRequest.fetchLimit = 1
-
-        if let user = try? context.fetch(fetchRequest).first,
-           let avatarData = user.avatarData {
+        if let avatarData = (try? LocalRepositories.ownProfile.profile(accountId: userId))?.avatar {
             profileImage = ImageHelper.imageFromData(avatarData)
         }
     }

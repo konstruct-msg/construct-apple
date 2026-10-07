@@ -87,10 +87,7 @@ final class ChatSessionManager {
             // (`StealthDowngradeBlocked` → queue + retry), so silently skipping would stall
             // sends for a contact we only ever responded to. Otherwise fall through to a
             // NON-consuming fetch: same long-lived material, no OTPK burned.
-            if recipientBundle != nil || StealthSenderService.recipientIdentityKey(
-                recipientId: userId,
-                context: PersistenceController.shared.container.viewContext
-            ) != nil {
+            if recipientBundle != nil || StealthSenderService.recipientIdentityKey(recipientId: userId) != nil {
                 return
             }
             Log.debug("Session exists but no cached identity key for \(userId.prefix(8))… — non-consuming bundle fetch", category: "ChatViewModel")
