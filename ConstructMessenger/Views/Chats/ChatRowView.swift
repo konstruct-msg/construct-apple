@@ -11,9 +11,8 @@ struct ChatRowView: View {
     @ObservedObject var chat: Chat
 
     var body: some View {
-        // Profile shares update `User` (displayName, avatarData), not `Chat`.
-        // Observing Chat alone does not refresh when a related User changes.
-        // Fetch the peer by id so Core Data attribute updates drive the row.
+        // Profile shares update the contact (name, avatar), not `Chat`, so observing Chat alone
+        // does not refresh the row. The contact is read from `ContactsLive`, whose changes do.
         if let userId = chat.otherUser?.id, !userId.isEmpty {
             ChatRowBody(chat: chat, userId: userId)
         } else {
@@ -56,22 +55,16 @@ struct ChatRowView: View {
 
 private struct ChatRowBody: View {
     @ObservedObject var chat: Chat
-    @FetchRequest private var users: FetchedResults<User>
+    let userId: String
 
     init(chat: Chat, userId: String) {
         self.chat = chat
-        _users = FetchRequest(
-            sortDescriptors: [],
-            predicate: NSPredicate(format: "id == %@", userId),
-            animation: .default
-        )
+        self.userId = userId
     }
 
     var body: some View {
-        if let user = users.first {
-            ChatRowWithUser(chat: chat, user: user)
-        } else if let fallback = chat.otherUser {
-            ChatRowWithUser(chat: chat, user: fallback)
+        if let contact = ContactsLive.shared.contact(userId) {
+            ChatRowWithUser(chat: chat, user: contact)
         } else {
             ChatRowOrphanBody(chat: chat)
         }
@@ -80,7 +73,7 @@ private struct ChatRowBody: View {
 
 private struct ChatRowWithUser: View {
     @ObservedObject var chat: Chat
-    @ObservedObject var user: User
+    let user: ContactRecord
 
     var body: some View {
         ChatRowLayout(chat: chat, user: user)
@@ -92,11 +85,11 @@ private struct ChatRowWithUser: View {
 
     private var rowIdentity: String {
         let previewTs = chat.lastMessageTime.map { String($0.timeIntervalSince1970) } ?? "nil"
-        return "\(chat.id)|\(user.resolvedDisplayName)|\(user.avatarData?.count ?? 0)|\(user.isSharingWithMe)|\(chat.unreadCount)|\(chat.isPinned)|\(chat.lastMessageText ?? "")|\(previewTs)"
+        return "\(chat.id)|\(user.resolvedDisplayName)|\(user.avatar?.count ?? 0)|\(user.isSharingWithMe)|\(chat.unreadCount)|\(chat.isPinned)|\(chat.lastMessageText ?? "")|\(previewTs)"
     }
 }
 
-/// Rare fallback when `chat.otherUser` is nil — observes Chat only.
+/// Rare fallback when we hold no row for the peer — observes Chat only.
 private struct ChatRowOrphanBody: View {
     @ObservedObject var chat: Chat
 
@@ -117,7 +110,7 @@ private struct ChatRowLayout: View {
     /// Must observe Chat: preview/pin/unread land on this object. A plain `let` + stable
     /// `.id` without preview fields left the subtitle stuck after local sends.
     @ObservedObject var chat: Chat
-    var user: User?
+    var user: ContactRecord?
 
     var body: some View {
         HStack(alignment: .center, spacing: CTLayout.chromeGap) {
@@ -183,7 +176,7 @@ private struct ChatRowLayout: View {
     }
 
     @ViewBuilder
-    private func displayNameView(for user: User) -> some View {
+    private func displayNameView(for user: ContactRecord) -> some View {
         let alias = user.localAlias?.trimmingCharacters(in: .whitespacesAndNewlines)
         if let alias, !alias.isEmpty {
             Text(alias)
@@ -201,7 +194,7 @@ private struct ChatRowLayout: View {
     private var avatarView: some View {
         let seed = user?.id ?? "?"
         let initials = initials(for: user)
-        if let data = user?.avatarData,
+        if let data = user?.avatar,
            let platformImg = ImageHelper.imageFromData(data) {
             CTHexAvatar(initials: initials, image: Image(platformImage: platformImg), size: .medium, colorSeed: seed)
         } else {
@@ -238,7 +231,7 @@ private struct ChatRowLayout: View {
         }
     }
 
-    private func initials(for user: User?) -> String {
+    private func initials(for user: ContactRecord?) -> String {
         guard let name = user?.resolvedDisplayName else { return "?" }
         let parts = name.split(separator: " ")
         if parts.count >= 2 {

@@ -218,7 +218,7 @@ struct MainAvatarView: View {
 
 // MARK: - Contact-resolved avatar
 
-/// Looks up `User.avatarData` for `userId` and renders `MainAvatarView` with it.
+/// Looks up the contact's avatar for `userId` (`ContactsLive`) and renders `MainAvatarView` with it.
 /// Falls back to the deterministic identicon when no stored avatar exists.
 /// Use this anywhere you only have a peer user id (calls, history) rather than a
 /// live `User` object — chat rows already observe `User` and pass `image` directly.
@@ -229,8 +229,6 @@ struct ContactMainAvatarView: View {
     var isActive: Bool = false
     var isOnline: Bool = false
     var strokeWidth: CGFloat = 1.5
-
-    @FetchRequest private var users: FetchedResults<User>
 
     init(
         userId: String,
@@ -246,16 +244,11 @@ struct ContactMainAvatarView: View {
         self.isActive = isActive
         self.isOnline = isOnline
         self.strokeWidth = strokeWidth
-        _users = FetchRequest(
-            sortDescriptors: [],
-            predicate: NSPredicate(format: "id == %@", userId),
-            animation: nil
-        )
     }
 
     var body: some View {
-        let user = users.first
-        let image: PlatformImage? = user?.avatarData.flatMap { PlatformImage(data: $0) }
+        let user = ContactsLive.shared.contact(userId)
+        let image: PlatformImage? = user?.avatar.flatMap { PlatformImage(data: $0) }
         let resolvedName = displayName.isEmpty
             ? (user?.resolvedDisplayName ?? "")
             : displayName

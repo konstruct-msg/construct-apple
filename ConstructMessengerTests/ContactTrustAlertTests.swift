@@ -129,7 +129,7 @@ final class ContactTrustAlertTests: XCTestCase {
     func testSafetyNumbersCoverEveryDevice() {
         let user = makeContact(peer)
         SessionAddressing.recordDevices([device(0x11), device(0x22)], ofPeer: peer)
-        XCTAssertEqual(Set(KeyChangeUX.safetyDeviceIds(for: user, context: context)),
+        XCTAssertEqual(Set(KeyChangeUX.safetyDeviceIds(ofContact: user.id)),
                        [device(0x11).deviceId, device(0x22).deviceId])
     }
 }

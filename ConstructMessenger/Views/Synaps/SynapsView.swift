@@ -26,17 +26,13 @@ struct SynapsView: View {
     @Environment(\.managedObjectContext) private var context
     @Environment(ChatsViewModel.self) private var chatsViewModel
 
-    @FetchRequest(
-        sortDescriptors: [NSSortDescriptor(keyPath: \User.displayName, ascending: true)],
-        predicate: NSPredicate(format: "isContact == YES"),
-        animation: .default
-    )
-    private var contacts: FetchedResults<User>
+    /// People marked as contacts, in the order shown (`ContactsLive.contacts`).
+    private var contacts: [ContactRecord] { ContactsLive.shared.contacts() }
 
     @State private var searchText      = ""
     @FocusState private var isSearchFocused: Bool
-    @State private var selectedContact: User? = nil
-    @State private var pruneTarget:     User? = nil
+    @State private var selectedContact: ContactRecord? = nil
+    @State private var pruneTarget:     ContactRecord? = nil
     @State private var showPruneConfirm = false
     // Shared canvas transform — owned here so HoneycombCloud can read them for
     // the proximity effect while ZoomableCloud drives them via gestures.
@@ -70,9 +66,9 @@ struct SynapsView: View {
     /// from rapid tab re-entries (native TabView re-runs `.task` on every appear).
     private static let contactRequestsRefreshInterval: TimeInterval = 8
 
-    private var filtered: [User] {
+    private var filtered: [ContactRecord] {
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !query.isEmpty else { return Array(contacts) }
+        guard !query.isEmpty else { return contacts }
         return contacts.filter { userMatchesQuery($0, query: query) }
     }
 
@@ -212,12 +208,7 @@ struct SynapsView: View {
                 Task {
                     let pendingIds = ContactRequestService.shared.consumePendingNavigationUserIds()
                     guard let userId = pendingIds.first, !userId.isEmpty else { return }
-                    let req = NSFetchRequest<User>(entityName: "User")
-                    req.predicate = NSPredicate(format: "id == %@", userId)
-                    req.fetchLimit = 1
-                    if let user = try? context.fetch(req).first {
-                        await MainActor.run { chatsViewModel.openOrCreateChat(with: user) }
-                    }
+                    await MainActor.run { chatsViewModel.openOrCreateChat(withContact: userId) }
                 }
             }
             .onReceive(NotificationCenter.default.publisher(for: .contactRequestReceived)) { _ in
@@ -234,9 +225,9 @@ struct SynapsView: View {
             }
             .sheet(item: $selectedContact) { user in
                 UserProfileView(
-                    user: user,
+                    userId: user.id,
                     showMessageButton: true,
-                    onOpenChat: { chatsViewModel.openOrCreateChat(with: user) },
+                    onOpenChat: { chatsViewModel.openOrCreateChat(withContact: user.id) },
                     onPrune: {
                         pruneTarget = user
                         showPruneConfirm = true
@@ -284,49 +275,14 @@ struct SynapsView: View {
     // MARK: - Initial scale
 
     /// Compute a zoom level that fits all contacts with ~12% breathing room.
-    private func fitScale(contacts: [User], screenSize: CGSize) -> CGFloat {
+    private func fitScale(contacts: [ContactRecord], screenSize: CGSize) -> CGFloat {
         guard !contacts.isEmpty else { return 1.0 }
         let engine = HoneycombLayoutEngine(contacts: contacts, canvasSize: screenSize)
         return engine.initialScale
     }
 
     private func rebuildContactMetrics() {
-        let users = Array(contacts)
-        guard !users.isEmpty else {
-            contactMetricsByUser = [:]
-            return
-        }
-
-        var drafts: [(id: String, count: Int, lastMessage: Date?, unread: Int)] = []
-        var maxCount = 0
-
-        for user in users {
-            let userChats = (user.chats?.allObjects as? [Chat]) ?? []
-            let count = userChats.map { $0.messages?.count ?? 0 }.max() ?? 0
-            maxCount = max(maxCount, count)
-            let lastMessage = userChats.compactMap { $0.lastMessageTime }.max()
-            let unread = userChats.reduce(0) { $0 + Int($1.unreadCount) }
-            drafts.append((id: user.id, count: count, lastMessage: lastMessage, unread: unread))
-        }
-
-        let now = Date()
-        var nextMap: [String: ContactMetrics] = [:]
-        for draft in drafts {
-            let score: CGFloat = maxCount > 0 ? CGFloat(draft.count) / CGFloat(maxCount) : 0
-            let recency: ContactMetrics.Recency
-            if let t = draft.lastMessage {
-                let age = now.timeIntervalSince(t)
-                recency = age < 86_400 ? .fresh : age < 604_800 ? .recent : .none
-            } else {
-                recency = .none
-            }
-            nextMap[draft.id] = ContactMetrics(
-                frequencyScore: score,
-                recency: recency,
-                unreadCount: draft.unread
-            )
-        }
-        contactMetricsByUser = nextMap
+        contactMetricsByUser = ContactMetrics.byContact(contacts.map(\.id), in: context)
     }
 
     private func notificationContainsSynapsesMetricChanges(_ note: Notification) -> Bool {
@@ -365,18 +321,13 @@ struct SynapsView: View {
         Log.info("Refreshing contact requests (\(reason))", category: "SynapsView")
         await vm.load()
 
-        let pendingIds = ContactRequestService.shared.consumePendingNavigationUserIds()
-        let pendingUser: User? = pendingIds.first.flatMap { userId in
-            guard !userId.isEmpty else { return nil }
-            let req = NSFetchRequest<User>(entityName: "User")
-            req.predicate = NSPredicate(format: "id == %@", userId)
-            req.fetchLimit = 1
-            return try? context.fetch(req).first
-        }
+        let pendingId = ContactRequestService.shared.consumePendingNavigationUserIds().first { !$0.isEmpty }
 
         let accepted = await vm.checkAcceptedRequests(context: context)
-        if let first = accepted.first ?? pendingUser {
+        if let first = accepted.first {
             chatsViewModel.openOrCreateChat(with: first)
+        } else if let pendingId {
+            chatsViewModel.openOrCreateChat(withContact: pendingId)
         }
     }
 
@@ -589,7 +540,7 @@ struct SynapsView: View {
         }
     }
 
-    private func userMatchesQuery(_ user: User, query: String) -> Bool {
+    private func userMatchesQuery(_ user: ContactRecord, query: String) -> Bool {
         user.displayName.localizedCaseInsensitiveContains(query)
             || user.username.localizedCaseInsensitiveContains(query)
     }
@@ -751,9 +702,9 @@ struct SynapsView: View {
 // MARK: - Honeycomb Cloud
 
 private struct HoneycombCloud: View {
-    let contacts:     [User]
+    let contacts:     [ContactRecord]
     let metricsByUser: [String: ContactMetrics]
-    @Binding var selected: User?
+    @Binding var selected: ContactRecord?
     let canvasScale:  CGFloat
     let canvasOffset: CGSize
     let screenSize:   CGSize
@@ -792,7 +743,7 @@ private struct HoneycombCloud: View {
 // MARK: - Contact Circle
 
 private struct ContactCircle: View {
-    @ObservedObject var user: User
+    let user: ContactRecord
     /// Base cell size from the layout engine (cellWidth × 0.74).
     let cellSize:     CGFloat
     let metrics:      ContactMetrics
@@ -833,7 +784,7 @@ private struct ContactCircle: View {
                 }
 
                 ZStack {
-                    if let data = user.avatarData, let img = PlatformImage(data: data) {
+                    if let data = user.avatar, let img = PlatformImage(data: data) {
                         Image(platformImage: img)
                             .resizable()
                             .scaledToFill()
@@ -960,6 +911,7 @@ private struct ContactCircle: View {
 
 #Preview("Honeycomb") {
     let container = PreviewHelpers.createPreviewContainer()
+    ContactsLive.useForPreview(container)
     let context = container.viewContext
 
     let users: [(String, String, String)] = [
@@ -996,6 +948,7 @@ private struct ContactCircle: View {
 
 #Preview("Empty") {
     let container = PreviewHelpers.createPreviewContainer()
+    ContactsLive.useForPreview(container)
     let context = container.viewContext
     let chatsVM = ChatsViewModel()
     chatsVM.setContext(context)

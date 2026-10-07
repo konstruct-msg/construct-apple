@@ -6,7 +6,6 @@
 //
 
 import Foundation
-import CoreData
 
 /// Coordinates the prominence of a security event about a contact: in-chat banner (ChatView) +
 /// global toast when the affected chat is not open. The events are `SecurityNotice`s.
@@ -96,8 +95,8 @@ enum KeyChangeUX {
     /// substituted key is a device of its own. Comparing them is the only check on a device the
     /// server added, until device sets are cross-signed
     /// (`decisions/new-device-alarm-waits-for-cross-signing.md`).
-    static func safetyDeviceIds(for user: User, context: NSManagedObjectContext) -> [String] {
-        SessionAddressing.deviceIds(ofPeer: user.id)
+    static func safetyDeviceIds(ofContact contactId: String) -> [String] {
+        SessionAddressing.deviceIds(ofPeer: contactId)
     }
 
     // MARK: - Helpers

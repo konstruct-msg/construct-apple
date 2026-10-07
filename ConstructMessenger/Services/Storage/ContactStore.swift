@@ -18,7 +18,7 @@ import CoreData
 
 /// One person we hold a row for: a contact, or someone we only hold a key or a blocked flag for.
 /// Never our own account — that is `OwnProfileRecord`.
-struct ContactRecord: Equatable, Sendable {
+struct ContactRecord: Equatable, Sendable, Identifiable {
     let id: String
     var username: String
     var displayName: String
@@ -86,6 +86,10 @@ protocol ContactStore: Sendable {
     /// Everyone we hold a row for, contacts or not, by id.
     func everyContact(except ownAccountId: String?) throws -> [ContactRecord]
 
+    /// People marked as contacts, by id. Shown in an order the screen picks for the reader's
+    /// language (`ContactsLive.contacts`), which a store collation cannot.
+    func contacts() throws -> [ContactRecord]
+
     /// The ids we share our profile with, sorted.
     func sharingWith(except ownAccountId: String?) throws -> [String]
 
@@ -94,6 +98,11 @@ protocol ContactStore: Sendable {
 
     /// Rows with an avatar announced and not yet downloaded, by id.
     func contactsWithPendingAvatar() throws -> [ContactRecord]
+
+    /// The ids of rows written or deleted, once per save — the replacement for `@FetchRequest` and
+    /// `@ObservedObject User` on the screens (`ContactsLive`). Subscribe before the first read, or
+    /// a write between the two is missed.
+    func changes() -> AsyncStream<Set<String>>
 
     // MARK: Writes
 
@@ -136,10 +145,14 @@ protocol OwnProfileStore: Sendable {
 final class CoreDataContactStore: ContactStore, OwnProfileStore, @unchecked Sendable {
 
     private let container: NSPersistentContainer
+    private let feed: ContactChangeFeed
 
     init(container: NSPersistentContainer) {
         self.container = container
+        self.feed = ContactChangeFeed(coordinator: container.persistentStoreCoordinator)
     }
+
+    func changes() -> AsyncStream<Set<String>> { feed.stream() }
 
     func contact(_ id: String) throws -> ContactRecord? {
         try fetch(NSPredicate(format: "id == %@", id), limit: 1).first
@@ -156,6 +169,10 @@ final class CoreDataContactStore: ContactStore, OwnProfileStore, @unchecked Send
 
     func everyContact(except ownAccountId: String?) throws -> [ContactRecord] {
         try fetch(NSPredicate(format: "id != %@", ownAccountId ?? ""))
+    }
+
+    func contacts() throws -> [ContactRecord] {
+        try fetch(NSPredicate(format: "isContact == YES"))
     }
 
     func sharingWith(except ownAccountId: String?) throws -> [String] {
@@ -355,5 +372,56 @@ extension User {
             throw NSError(domain: "ContactStore", code: 1, userInfo: [NSLocalizedDescriptionKey: "no User row \(id.prefix(8))…"])
         }
         return user
+    }
+}
+
+/// Every save on `coordinator` that touched a `User` row, as the row ids — whichever context saved,
+/// so a write that still goes around the repository (the chats domain, until it moves) is seen too.
+final class ContactChangeFeed: @unchecked Sendable {
+
+    private let lock = NSLock()
+    private var subscribers: [UUID: AsyncStream<Set<String>>.Continuation] = [:]
+    private var token: NSObjectProtocol?
+
+    init(coordinator: NSPersistentStoreCoordinator) {
+        token = NotificationCenter.default.addObserver(
+            forName: .NSManagedObjectContextDidSave, object: nil, queue: nil
+        ) { [weak self] note in
+            // Posted on the saving context's queue, so its objects may be read here.
+            guard let context = note.object as? NSManagedObjectContext,
+                  context.persistentStoreCoordinator === coordinator else { return }
+            let ids = Self.userIds(in: note)
+            if !ids.isEmpty { self?.send(ids) }
+        }
+    }
+
+    deinit {
+        if let token { NotificationCenter.default.removeObserver(token) }
+        lock.withLock { subscribers.values.forEach { $0.finish() } }
+    }
+
+    func stream() -> AsyncStream<Set<String>> {
+        AsyncStream { continuation in
+            let key = UUID()
+            lock.withLock { subscribers[key] = continuation }
+            continuation.onTermination = { [weak self] _ in
+                self?.lock.withLock { _ = self?.subscribers.removeValue(forKey: key) }
+            }
+        }
+    }
+
+    private func send(_ ids: Set<String>) {
+        let targets = lock.withLock { Array(subscribers.values) }
+        targets.forEach { $0.yield(ids) }
+    }
+
+    private static func userIds(in note: Notification) -> Set<String> {
+        var ids = Set<String>()
+        for key in [NSInsertedObjectsKey, NSUpdatedObjectsKey, NSDeletedObjectsKey] {
+            for object in (note.userInfo?[key] as? Set<NSManagedObject>) ?? [] {
+                if let user = object as? User, !user.id.isEmpty { ids.insert(user.id) }
+            }
+        }
+        return ids
     }
 }

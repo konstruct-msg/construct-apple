@@ -35,7 +35,13 @@ struct UserProfileView: View {
         return formatter
     }()
 
-    @ObservedObject var user: User
+    let userId: String
+
+    /// The contact as last saved (`ContactsLive`). A row that is gone — pruned while the card was
+    /// open — reads as an empty one rather than taking the card down mid-gesture.
+    private var user: ContactRecord {
+        ContactsLive.shared.contact(userId) ?? .new(id: userId, isContact: false, addedAt: nil)
+    }
 
     /// Hide "Message" when the card is already opened from inside the chat.
     var showMessageButton: Bool = true
@@ -123,7 +129,7 @@ struct UserProfileView: View {
         .sheet(isPresented: $showingSafetyNumbers) {
             // Empty when no device is pinned yet: the view says the number is unavailable.
             SafetyNumberView(
-                theirDeviceIds: KeyChangeUX.safetyDeviceIds(for: user, context: viewContext),
+                theirDeviceIds: KeyChangeUX.safetyDeviceIds(ofContact: userId),
                 theirDisplayName: user.resolvedDisplayName
             )
         }
@@ -142,7 +148,7 @@ struct UserProfileView: View {
     // MARK: - Avatar header
 
     private var avatarHeader: some View {
-        let avatarImage: PlatformImage? = user.avatarData.flatMap { PlatformImage(data: $0) }
+        let avatarImage: PlatformImage? = user.avatar.flatMap { PlatformImage(data: $0) }
         return VStack(spacing: 14) {
             MainAvatarView(
                 userId: user.id,
@@ -581,8 +587,7 @@ struct UserProfileView: View {
             viewModel.shareProfile(with: user.id) { success, error in
                 isSharingInProgress = false
                 if success {
-                    user.amISharingWith = true
-                    viewContext.saveAndLog(category: "UserProfileView")
+                    write { try $0.setSharingWith(userId, true) }
                     shareAlertMessage = NSLocalizedString("profile_shared_successfully", comment: "")
                 } else {
                     shareAlertMessage = error ?? NSLocalizedString("failed_to_share_profile", comment: "")
@@ -590,8 +595,7 @@ struct UserProfileView: View {
                 showingShareAlert = true
             }
         } else {
-            user.amISharingWith = false
-            viewContext.saveAndLog(category: "UserProfileView")
+            write { try $0.setSharingWith(userId, false) }
             shareAlertMessage = NSLocalizedString("profile_sharing_stopped", comment: "")
             showingShareAlert = true
         }
@@ -603,12 +607,10 @@ struct UserProfileView: View {
     /// is derived locally from the peer's identity key (`SHA256(identity_public)[0..16]`, the same
     /// value the server keys sentinel on), so it works even under sealed sender.
     private func handleReportSpam() {
-        let userId = user.id
         let reportedDeviceId: String? = user.knownIdentityKey.map { deriveDeviceId(identityPublicKey: $0) }
 
         // Block immediately (local drop + durable server-side); report best-effort alongside.
-        user.isBlocked = true
-        viewContext.saveAndLog(category: "UserProfileView")
+        write { try $0.setBlocked(userId, true) }
 
         Task {
             var reported = false
@@ -632,10 +634,8 @@ struct UserProfileView: View {
     }
 
     private func handleBlockToggle() {
-        user.isBlocked.toggle()
-        let nowBlocked = user.isBlocked
-        let userId = user.id
-        viewContext.saveAndLog(category: "UserProfileView")
+        let nowBlocked = !user.isBlocked
+        write { try $0.setBlocked(userId, nowBlocked) }
         // Persist the block server-side (durable across reinstall; the authoritative
         // `user_blocks` row used on the identified path). The local `isBlocked` already drives
         // the client-side drop, so a failed RPC must NOT revert the local state — best-effort sync.
@@ -655,13 +655,19 @@ struct UserProfileView: View {
     /// Persist the local alias. Empty/whitespace clears it (falls back to the resolved name).
     private func saveLocalName() {
         let trimmed = draftLocalName.trimmingCharacters(in: .whitespacesAndNewlines)
-        user.localAlias = trimmed.isEmpty ? nil : trimmed
-        viewContext.saveAndLog(category: "UserProfileView")
+        write { try $0.setAlias(userId, trimmed.isEmpty ? nil : trimmed) }
     }
 
     private func clearLocalName() {
-        user.localAlias = nil
-        viewContext.saveAndLog(category: "UserProfileView")
+        write { try $0.setAlias(userId, nil) }
+    }
+
+    private func write(_ change: (any ContactStore) throws -> Bool) {
+        do {
+            _ = try change(LocalRepositories.contacts)
+        } catch {
+            Log.error("Contact \(userId.prefix(8))… not saved: \(error)", category: "UserProfileView")
+        }
     }
 }
 
@@ -669,13 +675,14 @@ struct UserProfileView: View {
 
 #Preview {
     let container = PreviewHelpers.createPreviewContainer()
+    ContactsLive.useForPreview(container)
     let context = container.viewContext
     let user = PreviewHelpers.createSampleUser(context: context, id: "user1", username: "alice", displayName: "Alice Wonderland")
     user.isContact = true
     try? context.save()
 
     return UserProfileView(
-        user: user,
+        userId: user.id,
         showMessageButton: true,
         onOpenChat: {},
         onPrune: {}
@@ -685,9 +692,10 @@ struct UserProfileView: View {
 
 #Preview {
     let container = PreviewHelpers.createPreviewContainer()
+    ContactsLive.useForPreview(container)
     let context = container.viewContext
     let user = PreviewHelpers.createSampleUser(context: context, id: "user1", username: "alice", displayName: "Alice")
     try? context.save()
-    return UserProfileView(user: user)
+    return UserProfileView(userId: user.id)
         .environment(\.managedObjectContext, context)
 }

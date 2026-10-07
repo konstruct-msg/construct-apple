@@ -12,15 +12,8 @@ struct DesktopPeopleListView: View {
     @Environment(\.managedObjectContext) private var viewContext
     @Environment(ChatsViewModel.self) private var chatsViewModel
 
-    @FetchRequest(
-        sortDescriptors: [
-            NSSortDescriptor(keyPath: \User.displayName, ascending: true),
-            NSSortDescriptor(keyPath: \User.username, ascending: true)
-        ],
-        predicate: NSPredicate(format: "isContact == YES"),
-        animation: .default
-    )
-    private var contacts: FetchedResults<User>
+    /// People marked as contacts, in the order shown (`ContactsLive.contacts`).
+    private var contacts: [ContactRecord] { ContactsLive.shared.contacts() }
 
     @State private var searchQuery = ""
     @FocusState private var searchFocused: Bool
@@ -44,8 +37,8 @@ struct DesktopPeopleListView: View {
             .ctBorderBottom()
     }
 
-    private var filteredContacts: [User] {
-        guard !searchQuery.isEmpty else { return Array(contacts) }
+    private var filteredContacts: [ContactRecord] {
+        guard !searchQuery.isEmpty else { return contacts }
         let q = searchQuery.lowercased()
         return contacts.filter { user in
             user.resolvedDisplayName.lowercased().contains(q)
@@ -62,7 +55,7 @@ struct DesktopPeopleListView: View {
             List {
                 ForEach(filteredContacts) { user in
                     Button {
-                        chatsViewModel.openOrCreateChat(with: user)
+                        chatsViewModel.openOrCreateChat(withContact: user.id)
                     } label: {
                         DesktopPeopleRow(user: user)
                     }
@@ -100,7 +93,7 @@ struct DesktopPeopleListView: View {
 }
 
 private struct DesktopPeopleRow: View {
-    @ObservedObject var user: User
+    let user: ContactRecord
 
     var body: some View {
         HStack(alignment: .center, spacing: CTLayout.chromeGap) {
@@ -139,7 +132,7 @@ private struct DesktopPeopleRow: View {
     private var avatarView: some View {
         let seed = user.id
         let initials = initials(for: user)
-        if let data = user.avatarData,
+        if let data = user.avatar,
            let platformImg = ImageHelper.imageFromData(data) {
             CTHexAvatar(initials: initials, image: Image(platformImage: platformImg), size: .medium, colorSeed: seed)
         } else {
@@ -147,7 +140,7 @@ private struct DesktopPeopleRow: View {
         }
     }
 
-    private func initials(for user: User) -> String {
+    private func initials(for user: ContactRecord) -> String {
         let parts = user.resolvedDisplayName.split(separator: " ")
         if parts.count >= 2 {
             return String(parts[0].prefix(1) + parts[1].prefix(1)).uppercased()
@@ -158,6 +151,7 @@ private struct DesktopPeopleRow: View {
 
 #Preview {
     let container = PreviewHelpers.createPreviewContainer()
+    ContactsLive.useForPreview(container)
     let context = container.viewContext
     _ = PreviewHelpers.createSampleUser(context: context, id: "user1", username: "alice", displayName: "Alice")
     _ = PreviewHelpers.createSampleUser(context: context, id: "user2", username: "bob", displayName: "Bob")

@@ -7,6 +7,7 @@
 //
 
 import SwiftUI
+import CoreData
 
 // MARK: - Layout engine
 
@@ -14,7 +15,7 @@ import SwiftUI
 /// Even rows: `wideCols` circles. Odd rows: `wideCols - 1` circles, offset right
 /// by half a cell — classic hex packing.
 struct HoneycombLayoutEngine {
-    let contacts:   [User]
+    let contacts:   [ContactRecord]
     let canvasSize: CGSize
     let wideCols = 4
 
@@ -34,7 +35,7 @@ struct HoneycombLayoutEngine {
 
     struct Item: Identifiable {
         let id: String
-        let user: User
+        let user: ContactRecord
         let position: CGPoint
     }
 
@@ -66,8 +67,8 @@ struct HoneycombLayoutEngine {
         return result
     }
 
-    private var rawRows: [[User]] {
-        var result: [[User]] = []
+    private var rawRows: [[ContactRecord]] {
+        var result: [[ContactRecord]] = []
         var idx = 0, rowIdx = 0
         while idx < contacts.count {
             let n = rowIdx % 2 == 0 ? wideCols : wideCols - 1
@@ -200,5 +201,44 @@ struct ZoomableCloud<Content: View>: View {
             width:  min(max(offset.width,  -maxX), maxX),
             height: min(max(offset.height, -maxY), maxY)
         )
+    }
+}
+
+extension ContactMetrics {
+    /// Each contact's metrics from their chats, found by the peer id each chat names — one fetch
+    /// for all of them. Shared by Synapses on iOS and on the Desktop, which each kept a copy
+    /// walking `User.chats`; the chats are still Core Data, the contacts no longer are.
+    @MainActor
+    static func byContact(_ ids: [String], in context: NSManagedObjectContext, now: Date = Date()) -> [String: ContactMetrics] {
+        guard !ids.isEmpty else { return [:] }
+        let req = Chat.fetchRequest()
+        req.predicate = NSPredicate(format: "otherUser.id IN %@", ids)
+        var chatsByPeer: [String: [Chat]] = [:]
+        for chat in (try? context.fetch(req)) ?? [] {
+            guard let peer = chat.otherUser?.id else { continue }
+            chatsByPeer[peer, default: []].append(chat)
+        }
+        let counts = Dictionary(uniqueKeysWithValues: ids.map { id in
+            (id, (chatsByPeer[id] ?? []).map { $0.messages?.count ?? 0 }.max() ?? 0)
+        })
+        let maxCount = counts.values.max() ?? 0
+        var map: [String: ContactMetrics] = [:]
+        for id in ids {
+            let chats = chatsByPeer[id] ?? []
+            let count = counts[id] ?? 0
+            let recency: Recency
+            if let last = chats.compactMap(\.lastMessageTime).max() {
+                let age = now.timeIntervalSince(last)
+                recency = age < 86_400 ? .fresh : age < 604_800 ? .recent : .none
+            } else {
+                recency = .none
+            }
+            map[id] = ContactMetrics(
+                frequencyScore: maxCount > 0 ? CGFloat(count) / CGFloat(maxCount) : 0,
+                recency: recency,
+                unreadCount: chats.reduce(0) { $0 + Int($1.unreadCount) }
+            )
+        }
+        return map
     }
 }
