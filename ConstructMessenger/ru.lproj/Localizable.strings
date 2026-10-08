@@ -293,7 +293,7 @@
 
 // Onboarding (identity gate — create / restore / link)
 "onboarding_tagline" = "Интернет — это пространство свободы выражения мысли";
-"onboarding_username_placeholder" = "публичный псевдоним (опционально)";
+"onboarding_username_placeholder" = "Публичный псевдоним (необязательно)";
 "onboarding_create_identity" = "Создать идентичность";
 "onboarding_already_have" = "Уже есть идентичность?";
 "onboarding_existing_title" = "Существующая идентичность";
@@ -1011,43 +1011,26 @@
 // Social Recovery (SLIP-39)
 "social_recovery_title" = "Социальное восстановление";
 "social_recovery_active" = "Включено";
-"social_recovery_intro_title" = "социальное восстановление";
-"social_recovery_intro_body" = "ваши ключи будут разделены между доверенными контактами с помощью разделения секрета Шамира. любые M из N смогут восстановить ваш аккаунт.";
-"social_recovery_begin" = "НАЧАТЬ НАСТРОЙКУ [→]";
-"social_recovery_scheme_title" = "СХЕМА ВОССТАНОВЛЕНИЯ";
+"social_recovery_intro_title" = "Социальное восстановление";
+"social_recovery_intro_body" = "Ваши ключи будут разделены между доверенными контактами с помощью разделения секрета Шамира. Любые M из N смогут восстановить ваш аккаунт.";
+"social_recovery_begin" = "Начать настройку";
+"social_recovery_scheme_title" = "Схема восстановления";
 "social_recovery_2of3" = "2 из 3";
 "social_recovery_3of5" = "3 из 5";
 "social_recovery_2of3_hint" = "нужно 2 контакта для восстановления";
 "social_recovery_3of5_hint" = "нужно 3 контакта для восстановления";
-"social_recovery_generate" = "СОЗДАТЬ ШАРЫ [→]";
-"social_recovery_share_title" = "ШАР %d ИЗ %d";
-"social_recovery_share_warning" = "отправьте эти слова доверенному контакту. НЕ передавайте несколько шаров одному человеку.";
-"social_recovery_share_label_caption" = "метка";
-"social_recovery_share_label_placeholder" = "метка (например: отправлено Ане)";
-"social_recovery_share_next" = "СЛЕДУЮЩИЙ ШАР [→]";
-"social_recovery_share_done" = "ЗАВЕРШИТЬ [→]";
-"social_recovery_share_unlabeled" = "шар %d";
-"social_recovery_uploading" = "шифрование бандла...";
-"social_recovery_done_title" = "ВОССТАНОВЛЕНИЕ НАСТРОЕНО";
-"social_recovery_done_body" = "ваша идентичность теперь защищена.";
-"social_recovery_enter_title" = "ВОССТАНОВЛЕНИЕ";
-"social_recovery_enter_subtitle" = "свяжитесь с каждым доверенным лицом и попросите его слова шара.";
-"social_recovery_entered_header" = "ВВЕДЁННЫЕ ШАРЫ (%d/%d нужно)";
-"social_recovery_no_shares_yet" = "шары ещё не введены";
-"social_recovery_add_share" = "+ ДОБАВИТЬ ШАР";
-"social_recovery_shares_needed" = "нужно ещё %d шар(ов)";
-"social_recovery_restore" = "ВОССТАНОВИТЬ ИДЕНТИЧНОСТЬ [→]";
-"social_recovery_enter_words_title" = "ВВЕДИТЕ СЛОВА ШАРА";
-"social_recovery_enter_words_hint" = "вставьте или введите 28 слов через пробел";
-"social_recovery_add_share_confirm" = "ДОБАВИТЬ ШАР [→]";
-"social_recovery_share_n" = "шар %d";
-"social_recovery_word_count" = "%d слов";
-"social_recovery_reconstructing" = "восстановление ключа хранилища...";
-"social_recovery_restored_title" = "ИДЕНТИЧНОСТЬ ВОССТАНОВЛЕНА";
-"social_recovery_restored_body" = "ваши ключи идентичности успешно восстановлены.";
+"social_recovery_generate" = "Создать части";
+"social_recovery_share_title" = "Часть %d из %d";
+"social_recovery_share_warning" = "Отправьте эти слова одному доверенному человеку. Не отдавайте одному человеку больше одной части.";
+"social_recovery_share_label_caption" = "Метка";
+"social_recovery_share_label_placeholder" = "Метка (например: отправлено Ане)";
+"social_recovery_share_next" = "Следующая часть";
+"social_recovery_share_done" = "Завершить";
+"social_recovery_share_unlabeled" = "Часть %d";
+"social_recovery_uploading" = "Шифрование…";
+"social_recovery_done_title" = "Восстановление настроено";
+"social_recovery_done_body" = "Ваша идентичность теперь защищена.";
 
-"social_recovery_identity_header" = "ИДЕНТИФИКАТОР";
-"social_recovery_username_label" = "Имя пользователя";
 
 // MARK: - Local Backup
 "backup_section" = "резервная копия";
@@ -1058,25 +1041,25 @@
 "backup_warning_header" = "ПЕРЕД НАЧАЛОМ";
 "backup_export_warning" = "Создаётся зашифрованная резервная копия всех ваших сообщений и ключей. Файл защищён фразой из 12 слов, которую необходимо записать и хранить в безопасном месте.\n\nХраните файл резервной копии и фразу в разных местах.";
 "backup_mnemonic_warning" = "⚠ Если вы потеряете фразу восстановления, резервную копию невозможно будет расшифровать. Альтернативного способа восстановления нет.";
-"backup_generate_button" = "СОЗДАТЬ ФРАЗУ ВОССТАНОВЛЕНИЯ [→]";
+"backup_generate_button" = "Создать фразу восстановления";
 "backup_mnemonic_title" = "ФРАЗА ВОССТАНОВЛЕНИЯ";
 "backup_mnemonic_subtitle" = "Запишите все 12 слов по порядку. Не делайте скриншот.";
-"backup_copy_words" = "[ СКОПИРОВАТЬ ВСЕ СЛОВА ]";
+"backup_copy_words" = "Скопировать все слова";
 "backup_confirm_saved" = "Я записал(а) все 12 слов";
-"backup_next_button" = "ДАЛЕЕ [→]";
+"backup_next_button" = "Далее";
 "backup_export_step_header" = "СОХРАНИТЬ ФАЙЛ";
 "backup_export_step_subtitle" = "Сохраните файл .ctbackup в надёжном месте за пределами устройства (например, на зашифрованном USB-накопителе). Не храните его в незашифрованном облачном сервисе.";
-"backup_create_file" = "СОЗДАТЬ ФАЙЛ .ctbackup [→]";
-"backup_share_file" = "ПОДЕЛИТЬСЯ ФАЙЛОМ .ctbackup [→]";
+"backup_create_file" = "Создать файл .ctbackup";
+"backup_share_file" = "Поделиться файлом .ctbackup";
 "backup_export_generating" = "создание резервной копии…";
 
 "backup_import_title" = "Восстановление";
 "backup_import_words_header" = "ФРАЗА ВОССТАНОВЛЕНИЯ";
 "backup_import_words_subtitle" = "Введите 12 слов из вашей резервной копии через пробел.";
 "backup_import_file_header" = "ФАЙЛ РЕЗЕРВНОЙ КОПИИ";
-"backup_import_select_file" = "выбрать файл .ctbackup [→]";
+"backup_import_select_file" = "Выбрать файл .ctbackup";
 "backup_restore_warning" = "⚠ Это заменит ВСЕ текущие сообщения и ключи. Действие необратимо.";
-"backup_restore_button" = "ВОССТАНОВИТЬ [→]";
+"backup_restore_button" = "Восстановить";
 "backup_restore_success_title" = "Готово к восстановлению";
 "backup_restore_success_message" = "Резервная копия проверена и подготовлена. Закройте и откройте приложение снова, чтобы завершить восстановление.";
 

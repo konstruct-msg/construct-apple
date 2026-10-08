@@ -82,7 +82,7 @@ struct SocialRecoverySetupView: View {
                 .font(CTIcon.font(CTIcon.hero, weight: .regular))
                 .foregroundStyle(Color.CT.accent)
                 .accessibilityHidden(true)
-            Text(NSLocalizedString("social_recovery_intro_title", comment: "").uppercased())
+            Text(NSLocalizedString("social_recovery_intro_title", comment: ""))
                 .font(CTFont.title)
                 .foregroundColor(Color.CT.text)
                 .multilineTextAlignment(.center)
@@ -359,7 +359,7 @@ struct SocialRecoverySetupView: View {
                 .multilineTextAlignment(.center)
                 .padding(.horizontal)
             Spacer()
-            actionButton(label: NSLocalizedString("try_again", comment: ""), enabled: true) {
+            actionButton(label: NSLocalizedString("try_again", comment: ""), enabled: true, role: .secondary) {
                 service.reset()
             }
         }
@@ -367,59 +367,32 @@ struct SocialRecoverySetupView: View {
 
     // MARK: - Shared button
 
-    private func actionButton(label: String, enabled: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Text(label)
-                .font(CTFont.body)
-                .foregroundColor(enabled ? Color.CT.text : Color.CT.textDim)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 12)
-                .background(Color.CT.bg)
-                .overlay(
-                    Rectangle().stroke(
-                        enabled ? Color.CT.accent : Color.CT.noise,
-                        lineWidth: 1
-                    )
-                )
-        }
-        .disabled(!enabled)
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+    private func actionButton(
+        label: String,
+        enabled: Bool,
+        role: CTButtonRole = .primary,
+        action: @escaping () -> Void
+    ) -> some View {
+        CTButton(label: label, role: role, isEnabled: enabled, action: action)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
     }
 }
 
 // MARK: - Animated loading block
 
+/// Work under way, said in words under the system's spinner. It was a ten-frame ASCII bar on a
+/// timer — a status drawn in glyphs, which the design rules retired.
 private struct AnimatedLoadingBlock: View {
     let label: String
-    @State private var frame: Int = 0
-
-    private let frames = [
-        "[■□□□□□□□□□]",
-        "[■■□□□□□□□□]",
-        "[■■■□□□□□□□]",
-        "[■■■■□□□□□□]",
-        "[■■■■■□□□□□]",
-        "[■■■■■■□□□□]",
-        "[■■■■■■■□□□]",
-        "[■■■■■■■■□□]",
-        "[■■■■■■■■■□]",
-        "[■■■■■■■■■■]",
-    ]
 
     var body: some View {
         VStack(spacing: 16) {
-            Text(frames[frame])
-                .font(CTFont.headline)
-                .foregroundColor(Color.CT.accent)
+            ProgressView()
+                .tint(Color.CT.accent)
             Text(label)
                 .font(CTFont.secondary)
                 .foregroundColor(Color.CT.textDim)
-        }
-        .onAppear {
-            Timer.scheduledTimer(withTimeInterval: 0.18, repeats: true) { timer in
-                frame = (frame + 1) % frames.count
-            }
         }
     }
 }

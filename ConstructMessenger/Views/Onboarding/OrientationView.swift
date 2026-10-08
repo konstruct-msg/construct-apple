@@ -119,7 +119,7 @@ struct OrientationView: View {
                 label: NSLocalizedString(
                     isLastPage ? "orientation_enter" : "orientation_next",
                     comment: ""
-                ).uppercased()
+                )
             ) {
                 if isLastPage {
                     finish()

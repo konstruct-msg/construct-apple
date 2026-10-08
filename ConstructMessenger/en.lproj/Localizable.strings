@@ -333,7 +333,7 @@
 
 // Onboarding (identity gate — create / restore / link)
 "onboarding_tagline" = "The internet is a space of free thought";
-"onboarding_username_placeholder" = "choose a public alias (optional)";
+"onboarding_username_placeholder" = "Choose a public alias (optional)";
 "onboarding_create_identity" = "Create identity";
 "onboarding_already_have" = "Already have an identity?";
 "onboarding_existing_title" = "Use existing identity";
@@ -385,7 +385,7 @@
 "reg_mode_anonymous" = "Anonymous";
 "reg_error_title" = "Something went wrong";
 "reg_continue" = "Continue";
-"reg_try_again" = "Try Again";
+"reg_try_again" = "Try again";
 "reg_cancel" = "Cancel";
 "reg_phase_entropy" = "randomness collected";
 "reg_phase_nonce" = "anti-spam proof in progress";
@@ -1000,72 +1000,55 @@
 // Social Recovery (SLIP-39)
 "social_recovery_title" = "Social recovery";
 "social_recovery_active" = "Active";
-"social_recovery_intro_title" = "social recovery";
+"social_recovery_intro_title" = "Social recovery";
 "social_recovery_intro_body" = "Your identity keys will be split across people you trust. Any M of N of them can help restore your identity if you lose access.";
-"social_recovery_begin" = "BEGIN SETUP [→]";
-"social_recovery_scheme_title" = "RECOVERY SCHEME";
+"social_recovery_begin" = "Begin setup";
+"social_recovery_scheme_title" = "Recovery scheme";
 "social_recovery_2of3" = "2 of 3";
 "social_recovery_3of5" = "3 of 5";
 "social_recovery_2of3_hint" = "2 contacts needed to restore";
 "social_recovery_3of5_hint" = "3 contacts needed to restore";
-"social_recovery_generate" = "GENERATE SHARES [→]";
-"social_recovery_share_title" = "SHARE %d OF %d";
-"social_recovery_share_warning" = "send these words to a trusted contact. do NOT share multiple shares with the same person.";
-"social_recovery_share_label_caption" = "label";
-"social_recovery_share_label_placeholder" = "label (e.g. sent to Anna)";
-"social_recovery_share_next" = "NEXT SHARE [→]";
-"social_recovery_share_done" = "FINISH SETUP [→]";
-"social_recovery_share_unlabeled" = "share %d";
-"social_recovery_uploading" = "encrypting bundle...";
-"social_recovery_done_title" = "RECOVERY CONFIGURED";
-"social_recovery_done_body" = "your identity is now protected.";
-"social_recovery_enter_title" = "SOCIAL RECOVERY";
-"social_recovery_enter_subtitle" = "contact each trustee and ask for their share words.";
-"social_recovery_entered_header" = "ENTERED SHARES (%d/%d needed)";
-"social_recovery_no_shares_yet" = "no shares entered yet";
-"social_recovery_add_share" = "+ ADD SHARE";
-"social_recovery_shares_needed" = "need %d more share(s) to restore";
-"social_recovery_restore" = "RESTORE IDENTITY [→]";
-"social_recovery_enter_words_title" = "ENTER SHARE WORDS";
-"social_recovery_enter_words_hint" = "paste or type the 28 words separated by spaces";
-"social_recovery_add_share_confirm" = "ADD SHARE [→]";
-"social_recovery_share_n" = "share %d";
-"social_recovery_word_count" = "%d words";
-"social_recovery_reconstructing" = "reconstructing vault key...";
-"social_recovery_restored_title" = "IDENTITY RESTORED";
-"social_recovery_restored_body" = "your identity keys have been restored successfully.";
+"social_recovery_generate" = "Generate shares";
+"social_recovery_share_title" = "Share %d of %d";
+"social_recovery_share_warning" = "Send these words to one trusted contact. Do not give more than one share to the same person.";
+"social_recovery_share_label_caption" = "Label";
+"social_recovery_share_label_placeholder" = "Label (e.g. sent to Anna)";
+"social_recovery_share_next" = "Next share";
+"social_recovery_share_done" = "Finish setup";
+"social_recovery_share_unlabeled" = "Share %d";
+"social_recovery_uploading" = "Encrypting…";
+"social_recovery_done_title" = "Recovery set up";
+"social_recovery_done_body" = "Your identity is now protected.";
 
-"social_recovery_identity_header" = "IDENTITY";
-"social_recovery_username_label" = "Username";
 
 // MARK: - Local Backup
 "backup_section" = "backup";
 "export_backup" = "Export backup";
 "import_backup" = "Import backup";
 
-"backup_export_title" = "Export Backup";
+"backup_export_title" = "Export backup";
 "backup_warning_header" = "BEFORE YOU PROCEED";
 "backup_export_warning" = "This creates an encrypted backup of all your messages and keys. The file is protected by a 12-word recovery phrase that you must write down and keep safe.\n\nStore the backup file and the recovery phrase separately.";
 "backup_mnemonic_warning" = "⚠ If you lose the recovery phrase, the backup cannot be decrypted. There is no recovery option.";
-"backup_generate_button" = "GENERATE RECOVERY PHRASE [→]";
+"backup_generate_button" = "Generate recovery phrase";
 "backup_mnemonic_title" = "RECOVERY PHRASE";
 "backup_mnemonic_subtitle" = "Write down all 12 words in order. Do not take a screenshot.";
-"backup_copy_words" = "[ COPY ALL WORDS ]";
+"backup_copy_words" = "Copy all words";
 "backup_confirm_saved" = "I have written down all 12 words";
-"backup_next_button" = "NEXT [→]";
+"backup_next_button" = "Next";
 "backup_export_step_header" = "SAVE BACKUP FILE";
 "backup_export_step_subtitle" = "Save the .ctbackup file to a secure location outside this device (e.g. an encrypted USB drive). Do not store it in an unencrypted cloud service.";
-"backup_create_file" = "CREATE .ctbackup FILE [→]";
-"backup_share_file" = "SHARE .ctbackup FILE [→]";
+"backup_create_file" = "Create .ctbackup file";
+"backup_share_file" = "Share .ctbackup file";
 "backup_export_generating" = "generating backup…";
 
-"backup_import_title" = "Import Backup";
+"backup_import_title" = "Import backup";
 "backup_import_words_header" = "RECOVERY PHRASE";
 "backup_import_words_subtitle" = "Enter the 12 words from your backup, separated by spaces.";
 "backup_import_file_header" = "BACKUP FILE";
-"backup_import_select_file" = "select .ctbackup file [→]";
+"backup_import_select_file" = "Select a .ctbackup file";
 "backup_restore_warning" = "⚠ This will replace ALL your current messages and keys. This cannot be undone.";
-"backup_restore_button" = "RESTORE BACKUP [→]";
+"backup_restore_button" = "Restore backup";
 "backup_restore_success_title" = "Backup Ready";
 "backup_restore_success_message" = "Your backup has been verified and staged. Close and reopen the app to complete the restore.";
 

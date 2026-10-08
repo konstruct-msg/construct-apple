@@ -134,12 +134,12 @@ struct RegistrationStageView: View {
     private var actionButton: some View {
         switch step {
         case .complete:
-            CTButton(label: NSLocalizedString("reg_continue", comment: "").uppercased()) {
+            CTButton(label: NSLocalizedString("reg_continue", comment: "")) {
                 onComplete?()
             }
             .accessibilityIdentifier(A11y.Registration.continue)
         case .error:
-            CTButton(label: NSLocalizedString("reg_try_again", comment: "").uppercased(), isDestructive: true) {
+            CTButton(label: NSLocalizedString("reg_try_again", comment: ""), isDestructive: true) {
                 onDismiss?()
             }
             .accessibilityIdentifier(A11y.Registration.retry)
