@@ -231,9 +231,9 @@
 "profile_sharing_info" = "Profile Sharing Info";
 "profile_sharing_info_footer" = "This user can choose to share their profile data (display name and avatar) with you via encrypted messages. Profile data is not stored on the server.";
 "share_my_data" = "Share My Data";
-"block_user" = "Block User";
-"unblock_user" = "Unblock User";
-"report_spam" = "Report Spam";
+"block_user" = "Block user";
+"unblock_user" = "Unblock user";
+"report_spam" = "Report spam";
 "report_spam_confirmation" = "Report Spam?";
 "report_spam_confirmation_message" = "This person will be reported and blocked. Reports help us stop abuse — we never see your messages.";
 "report_spam_success" = "Report sent. This person is now blocked.";
@@ -876,7 +876,6 @@
 "call_voice" = "voice call";
 "call_video" = "video call";
 "call_audio_route" = "audio";
-"end_to_end_encrypted" = "changes are end-to-end encrypted";
 "invite" = "Invite";
 "qr_caption_trust" = "this code is an invitation to connect.";
 "qr_scan_hint" = "show to someone nearby or take a screenshot";
@@ -954,7 +953,7 @@
 "contact_request_empty_inbox" = "no pending requests";
 
 // Safety Numbers
-"safety_numbers" = "safety numbers";
+"safety_numbers" = "Safety numbers";
 "safety_numbers_verify_title" = "verify identity";
 "safety_numbers_instruction" = "Compare these numbers with %@ verbally or in person. If the numbers match, your connection is secure and has not been intercepted.";
 "safety_numbers_copy" = "copy to clipboard";
@@ -1333,6 +1332,4 @@
 "qr_scanning_unavailable_mac" = "QR scanning is not available on Mac";
 "qr_scanning_unavailable_mac_hint" = "Ask your contact to share their invite link instead.";
 
-// The safety numbers screen's bar title; the profile row keeps "safety_numbers".
-"safety_numbers_title" = "Safety numbers";
 "delete_action" = "delete";

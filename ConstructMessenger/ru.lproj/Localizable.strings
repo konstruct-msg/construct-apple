@@ -879,7 +879,6 @@
 "call_voice" = "голосовой звонок";
 "call_video" = "видеозвонок";
 "call_audio_route" = "звук";
-"end_to_end_encrypted" = "изменения защищены сквозным шифрованием";
 
 // MARK: - QR / Invite
 "invite" = "Пригласить";
@@ -964,7 +963,7 @@
 "contact_request_empty_inbox" = "нет входящих запросов";
 
 // Safety Numbers
-"safety_numbers" = "защитные числа";
+"safety_numbers" = "Защитные числа";
 "safety_numbers_verify_title" = "проверить личность";
 "safety_numbers_instruction" = "Сравните эти числа с %@ устно или при личной встрече. Если числа совпадают, ваш канал безопасен и не перехвачен.";
 "safety_numbers_copy" = "скопировать в буфер";
@@ -1344,6 +1343,4 @@
 "qr_scanning_unavailable_mac" = "Сканирование QR на Mac недоступно";
 "qr_scanning_unavailable_mac_hint" = "Попросите собеседника прислать ссылку-приглашение.";
 
-// The safety numbers screen's bar title; the profile row keeps "safety_numbers".
-"safety_numbers_title" = "Защитные числа";
 "delete_action" = "удалить";

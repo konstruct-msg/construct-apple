@@ -876,7 +876,6 @@
 "call_voice" = "ձայնային զանգ";
 "call_video" = "տեսազանգ";
 "call_audio_route" = "աուդիո";
-"end_to_end_encrypted" = "փոփոխությունները ծայրից ծայր գաղտնագրված են";
 "invite" = "Հրավիրել";
 "qr_caption_trust" = "այս կոդը հրավեր է կապվելու։";
 "qr_scan_hint" = "ցույց տվեք մոտակա մարդուն կամ նկարեք էկրանը";
@@ -954,7 +953,7 @@
 "contact_request_empty_inbox" = "սպասող հարցումներ չկան";
 
 // Safety Numbers
-"safety_numbers" = "անվտանգության թվեր";
+"safety_numbers" = "Անվտանգության թվեր";
 "safety_numbers_verify_title" = "ստուգել ինքնությունը";
 "safety_numbers_instruction" = "Համեմատեք այս թվերը %@-ի հետ բանավոր կամ անձամբ։ Եթե թվերը համընկնում են, ձեր կապն անվտանգ է և չի գաղտնալսվել։";
 "safety_numbers_copy" = "պատճենել սեղմատախտակ";
@@ -1333,6 +1332,4 @@
 "qr_scanning_unavailable_mac" = "QR սկանավորումը Mac-ում հասանելի չէ";
 "qr_scanning_unavailable_mac_hint" = "Խնդրեք զրուցակցին ուղարկել հրավերի հղումը։";
 
-// The safety numbers screen's bar title; the profile row keeps "safety_numbers".
-"safety_numbers_title" = "Անվտանգության թվեր";
 "delete_action" = "ջնջել";
