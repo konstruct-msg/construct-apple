@@ -296,7 +296,6 @@ final class CallManager: CallUIManaging {
 
         // Client-authoritative mutuality (sealed-sender future): only local contacts.
         // Server reciprocity cannot survive when the server does not see the caller.
-        let ctx = PersistenceController.shared.container.viewContext
         if !ContactPolicy.isCallableContact(userId) {
             Log.info(
                 "SECURITY[call_gate]: outgoing call blocked — not a local contact \(userId.prefix(8))…",
@@ -460,7 +459,6 @@ final class CallManager: CallUIManaging {
         // call to CallKit synchronously in the PushKit delegate (or the app is terminated), so
         // we cannot simply drop it — instead report it ended immediately so a blocked /
         // non-contact never actually rings. See sealed-sender-authenticated-transitional.
-        let pushCtx = PersistenceController.shared.container.viewContext
         if BlockedContacts.isBlocked(callerId)
             || !ContactPolicy.isCallableContact(callerId) {
             Log.info(
@@ -1725,7 +1723,6 @@ final class CallManager: CallUIManaging {
 
         // Client-side block + mutuality. Under sealed sender the server can't see the caller,
         // so it does not stop a non-contact from ringing you — drop every call signal here.
-        let signalCtx = PersistenceController.shared.container.viewContext
         if BlockedContacts.isBlocked(senderUserId)
             || !ContactPolicy.isCallableContact(senderUserId) {
             Log.info(
