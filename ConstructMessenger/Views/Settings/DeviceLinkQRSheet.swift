@@ -46,16 +46,6 @@ struct DeviceLinkQRSheet: View {
 
     var body: some View {
         VStack(spacing: DeviceLinkQRLayout.rootSpacing) {
-            CTNavBar(
-                title: NSLocalizedString("device_link_qr_title", comment: ""),
-                showBack: true,
-                backAction: { dismiss() }
-            ) {
-                EmptyView()
-            } trailing: {
-                EmptyView()
-            }
-            Rectangle().fill(Color.CT.noise).frame(height: 1)
 
             if vm.isGenerating {
                 loadingState
@@ -69,6 +59,7 @@ struct DeviceLinkQRSheet: View {
                 loadingState
             }
         }
+        .screenTitle(NSLocalizedString("device_link_qr_title", comment: ""))
         .background(Color.CT.bg.ignoresSafeArea())
         .task {
             await vm.generateLinkCode()
@@ -100,6 +91,7 @@ struct DeviceLinkQRSheet: View {
         }
         .sheet(item: $activeHistorySyncSender) { sheet in
             SendBackupNearbyView(mode: sheet.mode, autoPairingPIN: historySyncPIN)
+                .sheetNavigation()
                 .environment(\.managedObjectContext, PersistenceController.shared.container.viewContext)
                 .onDisappear { dismiss() }
         }

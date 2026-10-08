@@ -270,36 +270,12 @@ struct BackgroundFetchSettingsContent: View {
     }
 }
 
-/// Standalone screen (preview / legacy deep links). Production settings use NetworkSettingsView.
-struct BackgroundFetchSettingsView: View {
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        VStack(spacing: 0) {
-            CTNavBar(
-                title: NSLocalizedString("background_fetch", comment: ""),
-                showBack: true,
-                backAction: { dismiss() }
-            ) {
-                EmptyView()
-            } trailing: {
-                EmptyView()
-            }
-            ScrollView {
-                LazyVStack(spacing: 0) {
-                    BackgroundFetchSettingsContent()
-                }
-                .padding(.vertical, BackgroundFetchSettingsLayout.sectionVerticalPadding)
-            }
-        }
-        .background(Color.CT.bg.ignoresSafeArea())
-        .hideSystemNavBar()
-    }
-}
-
 #Preview {
-    BackgroundFetchSettingsView()
-        .preferredColorScheme(.dark)
+    ScrollView {
+        LazyVStack(spacing: 0) { BackgroundFetchSettingsContent() }
+    }
+    .background(Color.CT.bg)
+    .preferredColorScheme(.dark)
 }
 
 #endif

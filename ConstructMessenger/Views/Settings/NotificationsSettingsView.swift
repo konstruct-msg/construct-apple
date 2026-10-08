@@ -15,7 +15,6 @@ struct NotificationsSettingsView: View {
     var showNavBar: Bool = true
 
     // MARK: - Notification Settings
-    @Environment(\.dismiss) private var dismiss
     @AppStorage("notificationsEnabled") private var notificationsEnabled: Bool = true
     @AppStorage("showMessageNotifications") private var showMessageNotifications: Bool = true
     @AppStorage("notificationPreviewType") private var notificationPreviewType: NotificationPreviewType = .nameAndMessage
@@ -29,17 +28,6 @@ struct NotificationsSettingsView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            if showNavBar {
-                CTNavBar(
-                    title: NSLocalizedString("notifications", comment: ""),
-                    showBack: true,
-                    backAction: { dismiss() }
-                ) {
-                    EmptyView()
-                } trailing: {
-                    EmptyView()
-                }
-            }
             ScrollView {
             LazyVStack(spacing: NotificationsSettingsLayout.compactSectionSpacing) {
 
@@ -228,7 +216,7 @@ struct NotificationsSettingsView: View {
             }
             .padding(.vertical, NotificationsSettingsLayout.sectionVerticalPadding)
             #if os(iOS)
-            .hideSystemNavBar()
+            .screenTitle(NSLocalizedString("notifications", comment: ""), shown: showNavBar)
             #endif
         }
             .onAppear {

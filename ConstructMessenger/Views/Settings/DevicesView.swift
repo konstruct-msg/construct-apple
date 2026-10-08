@@ -16,7 +16,6 @@ struct DevicesView: View {
     var showNavBar: Bool = true
 
     @Environment(AuthViewModel.self) private var authViewModel
-    @Environment(\.dismiss) private var dismiss
 
     @State private var devices: [AuthServiceClient.LinkedDevice] = []
     @State private var isLoading = false
@@ -33,17 +32,6 @@ struct DevicesView: View {
     var body: some View {
         let otherDevices = devices.filter { !$0.isCurrent }
         VStack(spacing: 0) {
-            if showNavBar {
-                CTNavBar(
-                    title: NSLocalizedString("linked_devices", comment: ""),
-                    showBack: true,
-                    backAction: { dismiss() }
-                ) {
-                    EmptyView()
-                } trailing: {
-                    EmptyView()
-                }
-            }
 
             ScrollView {
             LazyVStack(spacing: DevicesSettingsLayout.listSpacing) {
@@ -168,7 +156,7 @@ struct DevicesView: View {
         } // VStack
         .background(Color.CT.bg.ignoresSafeArea())
         #if os(iOS)
-        .hideSystemNavBar()
+        .screenTitle(NSLocalizedString("linked_devices", comment: ""), shown: showNavBar)
         #endif
         .refreshable { await loadDevices() }
         .task { await loadDevices() }
@@ -179,6 +167,7 @@ struct DevicesView: View {
                 userId: KeychainManager.shared.loadUserID() ?? "",
                 localDeviceId: KeychainManager.shared.loadDeviceID() ?? ""
             )
+            .sheetNavigation(closes: false)
         }
         .sheet(item: $historyRetryKind) { kind in
             HistoryTransferSendView(
@@ -186,9 +175,10 @@ struct DevicesView: View {
                 userId: KeychainManager.shared.loadUserID() ?? "",
                 peerDeviceId: devices.first(where: { !$0.isCurrent })?.id ?? ""
             )
+            .sheetNavigation()
             .environment(\.managedObjectContext, PersistenceController.shared.container.viewContext)
         }
-        .sheet(isPresented: $showingQRSheet) { DeviceLinkQRSheet() }
+        .sheet(isPresented: $showingQRSheet) { DeviceLinkQRSheet().sheetNavigation() }
 
         // MARK: Confirmations — revoke device
         .confirmationDialog(

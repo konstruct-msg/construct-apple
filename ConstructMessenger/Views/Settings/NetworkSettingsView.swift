@@ -12,7 +12,6 @@ struct NetworkSettingsView: View {
         self.showNavBar = showNavBar
     }
 
-    @Environment(\.dismiss) private var dismiss
     @State private var connectionManager = ConnectionStatusManager.shared
     @State private var streamManager = MessageStreamManager.shared
 
@@ -59,17 +58,6 @@ struct NetworkSettingsView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            if showNavBar {
-                CTNavBar(
-                    title: NSLocalizedString("network", comment: ""),
-                    showBack: true,
-                    backAction: { dismiss() }
-                ) {
-                    EmptyView()
-                } trailing: {
-                    EmptyView()
-                }
-            }
             ScrollView {
             LazyVStack(spacing: NetworkSettingsLayout.compactSectionSpacing) {
 
@@ -367,7 +355,7 @@ struct NetworkSettingsView: View {
             }
             .padding(.vertical, NetworkSettingsLayout.sectionVerticalPadding)
             #if os(iOS)
-            .hideSystemNavBar()
+            .screenTitle(NSLocalizedString("network", comment: ""), shown: showNavBar)
             #endif
             }
         .alert("server_applied_title", isPresented: $showingAppliedAlert) {
@@ -534,7 +522,7 @@ struct NetworkSettingsView: View {
             // the row disappears without waiting for the screen to be reopened.
             veilVoucherOffered = VeilVoucherAvailability.isOffered
         }) {
-            VeilVoucherQRSheet()
+            VeilVoucherQRSheet().sheetNavigation()
         }
         .alert(NSLocalizedString("veil_config_paste", comment: ""), isPresented: $showingVeilPaste) {
             TextField(NSLocalizedString("veil_config_paste", comment: ""), text: $veilPasteText)

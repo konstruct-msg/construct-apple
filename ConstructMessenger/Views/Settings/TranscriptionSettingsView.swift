@@ -15,23 +15,10 @@ struct TranscriptionSettingsView: View {
         self.showNavBar = showNavBar
     }
 
-    @Environment(\.dismiss) private var dismiss
-    
     @AppStorage(ChatViewModel.continuousVoicePlaybackKey)
     private var continuousVoicePlayback: Bool = false
     
     var body: some View {
-        if showNavBar {
-            CTNavBar(
-                title: NSLocalizedString("stt_section_title", comment: ""),
-                showBack: true,
-                backAction: { dismiss() }
-            ) {
-                EmptyView()
-            } trailing: {
-                EmptyView()
-            }
-        }
         ScrollView {
             VStack(spacing: 0) {
                 // MARK: Voice messages (playback behaviour)
@@ -59,7 +46,7 @@ struct TranscriptionSettingsView: View {
         }
         .background(Color.CT.bg.ignoresSafeArea())
         #if os(iOS)
-        .hideSystemNavBar()
+        .screenTitle(NSLocalizedString("stt_section_title", comment: ""), shown: showNavBar)
         #endif
     }
 }

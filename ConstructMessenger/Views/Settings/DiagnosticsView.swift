@@ -98,17 +98,6 @@ struct DiagnosticsView: View {
             // preview had loaded, which is the "sometimes".
             VStack(spacing: SettingsLayout.sectionSpacing) {
                 
-                if showNavBar {
-                    CTNavBar(
-                        title: NSLocalizedString("diagnostics", comment: ""),
-                        showBack: true,
-                        backAction: { dismiss() }
-                    ) {
-                        EmptyView()
-                    } trailing: {
-                        EmptyView()
-                    }
-                }
 
                 // MARK: - Push Notifications
                 VStack(alignment: .leading, spacing: DiagnosticsLayout.sectionHintSpacing) {
@@ -370,15 +359,8 @@ struct DiagnosticsView: View {
             .padding(.vertical, SettingsLayout.screenVerticalPadding)
         }
         .background(Color.CT.bg.ignoresSafeArea())
-        .navigationTitle("")
         #if os(iOS)
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbarBackground(Color.CT.bgMsg, for: .navigationBar)
-        .toolbarBackground(.visible, for: .navigationBar)
-        .toolbarColorScheme(.dark, for: .navigationBar)
-        #endif
-        #if os(iOS)
-        .hideSystemNavBar()
+        .screenTitle(NSLocalizedString("diagnostics", comment: ""), shown: showNavBar)
         #endif
         .onAppear {
             // Pull MetricKit's retained window now. Its own delivery fires at most once every

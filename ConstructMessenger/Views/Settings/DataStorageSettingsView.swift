@@ -40,7 +40,6 @@ struct DataStorageSettingsView: View {
     @State private var quotaSliderIndex: Double = 0
     @State private var hasLoadedInitialCacheState = false
 
-    @Environment(\.dismiss) private var dismiss
 
     // MARK: - Options
 
@@ -78,17 +77,6 @@ struct DataStorageSettingsView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 0) {
-                if showNavBar {
-                    CTNavBar(
-                        title: NSLocalizedString("data_and_storage", comment: ""),
-                        showBack: true,
-                        backAction: { dismiss() }
-                    ) {
-                        EmptyView()
-                    } trailing: {
-                        EmptyView()
-                    }
-                }
 
                 VStack(spacing: 0) {
 
@@ -294,7 +282,7 @@ struct DataStorageSettingsView: View {
         .navigationTitle("")
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
-        .hideSystemNavBar()
+        .screenTitle(NSLocalizedString("data_and_storage", comment: ""), shown: showNavBar)
         #endif
         .task {
             guard !hasLoadedInitialCacheState else { return }

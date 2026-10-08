@@ -328,6 +328,7 @@
 "server_applied_title" = "Server Updated";
 "server_applied_message" = "The new gRPC server will be used for all future connections.";
 "close" = "Close";
+"back" = "Back";
 "chat_nav_back" = "Back";
 "change_avatar" = "Change Photo";
 

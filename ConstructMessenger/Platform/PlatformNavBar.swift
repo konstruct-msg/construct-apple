@@ -11,6 +11,8 @@ extension View {
 
     /// Hide the system navigation bar so the screen can draw its own `CTNavBar`.
     ///
+    /// Retiring with `CTNavBar` — no new call site (`decisions/navigation-bars-are-the-systems.md`).
+    ///
     /// `ToolbarPlacement.navigationBar` is unavailable on macOS, and every pushed settings screen
     /// in this app uses it — without hiding the system bar, the screen shows two back buttons.
     /// macOS has no such bar to hide, so there the correct behaviour is to do nothing.
@@ -42,6 +44,25 @@ extension View {
         #endif
     }
 
+    /// A screen's title on the system bar, inline. `shown: false` where the screen is embedded in
+    /// a host that names it (the Desktop settings pane).
+    @ViewBuilder
+    func screenTitle(_ title: String, shown: Bool = true) -> some View {
+        if shown {
+            self.navigationTitle(title).inlineNavTitle()
+        } else {
+            self
+        }
+    }
+
+    /// A sheet's own navigation: a `NavigationStack` and a close item, so the screen inside
+    /// declares only its title and actions and reads the same pushed or presented.
+    /// `decisions/navigation-bars-are-the-systems.md`.
+    /// `closes: false` where the screen has its own close — one that does more than dismiss.
+    func sheetNavigation(closes: Bool = true) -> some View {
+        SheetNavigation(content: self, closes: closes)
+    }
+
     /// `navigationBarTitleDisplayMode(.inline)`, which does not exist on macOS.
     @ViewBuilder
     func inlineNavTitle() -> some View {
@@ -50,5 +71,38 @@ extension View {
         #else
         self
         #endif
+    }
+}
+
+private struct SheetNavigation<Content: View>: View {
+    @Environment(\.dismiss) private var dismiss
+    let content: Content
+    let closes: Bool
+
+    var body: some View {
+        NavigationStack {
+            content.toolbar {
+                if closes {
+                    ToolbarItem(placement: .cancellationAction) {
+                        CloseButton { dismiss() }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// The platform's close: the system's own button where it has one, else a symbol with a title.
+struct CloseButton: View {
+    let action: () -> Void
+
+    var body: some View {
+        if #available(iOS 26.0, macOS 26.0, *) {
+            Button(role: .close, action: action)
+        } else {
+            Button(action: action) {
+                Label(NSLocalizedString("close", comment: ""), systemImage: "xmark")
+            }
+        }
     }
 }

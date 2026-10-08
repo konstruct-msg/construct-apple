@@ -11,7 +11,6 @@ import UIKit
 #endif
 
 struct DraftsView: View {
-    @Environment(\.dismiss) private var dismiss
     @State private var draftText: String = ""
     @State private var drafts: [DraftItem] = []
     @State private var hasLoadedDrafts = false
@@ -26,15 +25,6 @@ struct DraftsView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            CTNavBar(
-                title: NSLocalizedString("drafts", comment: ""),
-                showBack: true,
-                backAction: { dismiss() }
-            ) {
-                EmptyView()
-            } trailing: {
-                EmptyView()
-            }
             VStack(spacing: 16) {
                 VStack(spacing: 8) {
                     TextEditor(text: $draftText)
@@ -95,9 +85,7 @@ struct DraftsView: View {
             }
         }
         .background(Color.CT.bg.ignoresSafeArea())
-        #if os(iOS)
-        .hideSystemNavBar()
-        #endif
+        .screenTitle(NSLocalizedString("drafts", comment: ""))
     }
 
     private func addDraft() {

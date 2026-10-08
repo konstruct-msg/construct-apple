@@ -16,8 +16,6 @@ import SwiftUI
 import Combine
 
 struct IssuedInvitesView: View {
-    @Environment(\.dismiss) private var dismiss
-
     private var journal = InviteJournal.shared
 
     /// Recomputed on a slow tick so a row does not sit there claiming time it no longer
@@ -40,17 +38,6 @@ struct IssuedInvitesView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            CTNavBar(
-                title: NSLocalizedString("issued_invites", comment: ""),
-                showBack: true,
-                backAction: { dismiss() }
-            ) {
-                EmptyView()
-            } trailing: {
-                EmptyView()
-            }
-            Rectangle().fill(Color.CT.noise).frame(height: 1)
-
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: CTLayout.edgePad) {
                     // The scope is in the copy on purpose. This list is per-device by
@@ -99,9 +86,7 @@ struct IssuedInvitesView: View {
             }
         }
         .ctBackground()
-        // Every pushed settings screen hides the system bar and draws its own CTNavBar;
-        // without this the two stack up and the screen shows two back buttons.
-        .hideSystemNavBar()
+        .screenTitle(NSLocalizedString("issued_invites", comment: ""))
         .onReceive(tick) { _ in now = Date() }
         .onAppear { now = Date() }
         .confirmationDialog(

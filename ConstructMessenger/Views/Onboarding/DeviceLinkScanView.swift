@@ -166,6 +166,7 @@ struct DeviceLinkScanView: View {
                     dismiss()
                 }
             )
+            .sheetNavigation(closes: false)
             .environment(\.managedObjectContext, PersistenceController.shared.container.viewContext)
         }
         .sheet(item: $activeHistorySyncSender) { sheet in
@@ -174,6 +175,7 @@ struct DeviceLinkScanView: View {
                 userId: KeychainManager.shared.loadUserID() ?? "",
                 peerDeviceId: vm.approvedJoinPendingId ?? ""
             )
+                .sheetNavigation()
                 .environment(\.managedObjectContext, PersistenceController.shared.container.viewContext)
                 .onDisappear {
                     authViewModel.clearDeviceLinkPhase()

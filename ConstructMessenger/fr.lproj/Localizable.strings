@@ -335,6 +335,7 @@
 "server_applied_title" = "Serveur mis à jour";
 "server_applied_message" = "Le nouveau serveur gRPC sera utilisé pour toutes les connexions futures.";
 "close" = "Fermer";
+"back" = "Retour";
 "change_avatar" = "Changer la photo";
 
 // Onboarding

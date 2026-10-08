@@ -328,6 +328,7 @@
 "server_applied_title" = "Սերվերը թարմացված է";
 "server_applied_message" = "Նոր gRPC սերվերը կօգտագործվի բոլոր հետագա միացումների համար։";
 "close" = "Փակել";
+"back" = "Հետ";
 "chat_nav_back" = "Հետ";
 "change_avatar" = "Փոխել լուսանկարը";
 

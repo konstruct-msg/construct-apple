@@ -46,8 +46,6 @@ struct AccountSettingsView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            navigationBar
-            flatDivider(thick: true)
 
             ScrollView {
                 LazyVStack(spacing: 0) {
@@ -78,7 +76,11 @@ struct AccountSettingsView: View {
             }
         }
         .background(Color.CT.bg.ignoresSafeArea())
-        .hideSystemNavBar()
+        .screenTitle(isEditingProfile
+            ? NSLocalizedString("edit_identity", comment: "")
+            : NSLocalizedString("account", comment: ""))
+        .navigationBarBackButtonHidden(isEditingProfile)
+        .toolbar { toolbarItems }
         .onAppear {
             viewModel.setContext(viewContext)
             if viewModel.needsUserInfoRefresh(from: authViewModel) {
@@ -95,17 +97,19 @@ struct AccountSettingsView: View {
         }
         .sheet(isPresented: $showingExportBackup) {
             ExportBackupView()
+                .sheetNavigation(closes: false)
                 .environment(\.managedObjectContext, viewContext)
         }
         .sheet(isPresented: $showingImportBackup) {
-            ImportBackupView()
+            ImportBackupView().sheetNavigation()
         }
         .sheet(isPresented: $showingSendNearby) {
             SendBackupNearbyView()
+                .sheetNavigation()
                 .environment(\.managedObjectContext, viewContext)
         }
         .sheet(isPresented: $showingReceiveNearby) {
-            ReceiveBackupNearbyView()
+            ReceiveBackupNearbyView().sheetNavigation()
         }
         .sheet(isPresented: $showingDeleteConfirmation) {
             DeleteAccountConfirmationView(onDelete: { authViewModel.deleteAccount() },
@@ -200,38 +204,23 @@ struct AccountSettingsView: View {
         }
     }
 
-    private var navigationBar: some View {
-        CTNavBar(
-            title: isEditingProfile
-                ? NSLocalizedString("edit_identity", comment: "")
-                : NSLocalizedString("account", comment: ""),
-            showBack: !isEditingProfile,
-            backAction: { handleBackTap() }
-        ) {
-            if isEditingProfile {
-                Button(action: { handleProfileEditCancelTap() }) {
-                    Image(systemName: "xmark")
-                        .font(CTIcon.font(CTIcon.nav, weight: .regular))
-                        .foregroundColor(Color.CT.accent)
-                }
-                .buttonStyle(.plain)
+    /// Editing has its own pair of actions and no back: leaving mid-edit goes through cancel,
+    /// which asks before discarding.
+    @ToolbarContentBuilder
+    private var toolbarItems: some ToolbarContent {
+        if isEditingProfile {
+            ToolbarItem(placement: .cancellationAction) {
+                Button(NSLocalizedString("cancel", comment: "")) { handleProfileEditCancelTap() }
             }
-        } trailing: {
-            if isEditingProfile {
-                Button(NSLocalizedString("save", comment: "")) {
-                    handleProfileEditActionTap()
+            ToolbarItem(placement: .confirmationAction) {
+                Button(NSLocalizedString("save", comment: "")) { handleProfileEditActionTap() }
+                    .disabled(viewModel.isSavingUsername)
+            }
+        } else {
+            ToolbarItem(placement: .primaryAction) {
+                Button { handleProfileEditActionTap() } label: {
+                    Label(NSLocalizedString("edit", comment: ""), systemImage: "square.and.pencil")
                 }
-                .font(CTFont.bodyEmphasis)
-                .foregroundColor(viewModel.isSavingUsername ? Color.CT.textDim : Color.CT.accent)
-                .disabled(viewModel.isSavingUsername)
-                .buttonStyle(.plain)
-            } else {
-                Button(action: { handleProfileEditActionTap() }) {
-                    Image(systemName: "square.and.pencil")
-                        .font(CTIcon.font(CTIcon.nav, weight: .regular))
-                        .foregroundColor(Color.CT.accent)
-                }
-                .buttonStyle(.plain)
             }
         }
     }
@@ -704,17 +693,6 @@ struct AccountSettingsView: View {
         let displayNameChanged = draftDisplayName.trimmingCharacters(in: .whitespacesAndNewlines)
             != viewModel.displayName
         return usernameChanged || displayNameChanged
-    }
-
-    private func handleBackTap() {
-        if isEditingProfile {
-            if hasUnsavedProfileChanges {
-                promptDiscardProfileChanges(dismissAfterDiscard: true)
-                return
-            }
-            discardProfileEditingChanges()
-        }
-        dismiss()
     }
 
     private func handleProfileEditActionTap() {

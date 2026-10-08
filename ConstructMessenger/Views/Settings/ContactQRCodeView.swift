@@ -20,7 +20,6 @@ import Combine
 import CoreImage.CIFilterBuiltins
 
 struct ContactQRCodeView: View {
-    @Environment(\.dismiss) private var dismiss
     @Environment(\.containerWidth) private var containerWidth
     let userId: String
     let username: String
@@ -55,21 +54,13 @@ struct ContactQRCodeView: View {
     /// Nothing is minted until this device knows the account's address: an invite without one
     /// cannot be made, and the gate says why rather than showing a failed code.
     var body: some View {
-        RecoveryGated { invitePage }
+        // The navigation wraps the page, not the gate: the gate still draws its own bar
+        // (wave 5.3), and a stack around it would show two closes.
+        RecoveryGated { invitePage.sheetNavigation() }
     }
 
     private var invitePage: some View {
         VStack(spacing: ContactQRCodeLayout.contentSpacing) {
-            CTNavBar(
-                title: NSLocalizedString("invite", comment: ""),
-                showBack: true,
-                backAction: { dismiss() }
-            ) {
-                EmptyView()
-            } trailing: {
-                EmptyView()
-            }
-            Rectangle().fill(Color.CT.noise).frame(height: 1)
 
             ScrollView(showsIndicators: false) {
                 VStack(spacing: ContactQRCodeLayout.contentSpacing) {
@@ -108,6 +99,7 @@ struct ContactQRCodeView: View {
                 }
             }
         }
+        .screenTitle(NSLocalizedString("invite", comment: ""))
         .background(Color.CT.bg.ignoresSafeArea())
         .frame(
             idealWidth: ContactQRCodeLayout.idealWidth,

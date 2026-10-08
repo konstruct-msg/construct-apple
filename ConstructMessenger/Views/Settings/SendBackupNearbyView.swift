@@ -32,17 +32,9 @@ struct SendBackupNearbyView: View {
         ZStack {
             Color.CT.bg.ignoresSafeArea()
             VStack(spacing: 0) {
-                CTNavBar(
-                    title: NSLocalizedString(titleKey, comment: ""),
-                    showBack: true,
-                    backAction: { dismiss() }
-                ) {
-                    EmptyView()
-                } trailing: {
-                    EmptyView()
-                }
                 content
             }
+            .screenTitle(NSLocalizedString(titleKey, comment: ""))
         }
         .task {
             guard !hasPreparedTransfer else { return }

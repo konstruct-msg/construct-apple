@@ -99,7 +99,7 @@ struct ChatsSplitView: View {
             }
         }
         .sheet(isPresented: $showingDrafts) {
-            DraftsView()
+            DraftsView().sheetNavigation()
         }
         .onAppear {
             chatsViewModel.setContext(viewContext)
