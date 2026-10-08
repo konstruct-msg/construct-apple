@@ -861,7 +861,7 @@
 "call_minibar_connecting" = "connecting";
 "call_reconnecting" = "reconnecting…";
 "call_e2ee_badge" = "end-to-end encrypted";
-"edit_identity" = "edit identity";
+"edit_identity" = "Edit identity";
 "delete_account_abort_hint" = "tap to abort · %ds";
 "share" = "Share";
 "recovery_not_configured_title" = "Recovery Not Configured";
@@ -1203,7 +1203,7 @@
 "account_discard_changes_message" = "You have unsaved profile changes. Leave without saving?";
 "account_discard_changes_discard" = "Discard";
 "account_discard_changes_keep_editing" = "Keep Editing";
-"account_editing_profile" = "> Editing profile fields. Tap ✓ to save or x to cancel.";
+"account_editing_profile" = "> Editing profile fields. Save keeps them, Cancel discards them.";
 
 "liquid_logo.title" = "LIQUID LOGO";
 "liquid_logo.size" = "SIZE";

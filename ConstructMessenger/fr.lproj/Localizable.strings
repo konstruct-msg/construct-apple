@@ -844,7 +844,7 @@
 "call_minibar_connecting" = "connexion";
 "call_reconnecting" = "reconnexion…";
 "call_e2ee_badge" = "chiffré de bout en bout";
-"edit_identity" = "modifier l’identité";
+"edit_identity" = "Modifier l’identité";
 "delete_account_abort_hint" = "touchez pour annuler · %ds";
 "share" = "Partager";
 "recovery_not_configured_title" = "Récupération non configurée";
@@ -1134,7 +1134,7 @@
 "account_discard_changes_message" = "Vous avez des modifications de profil non enregistrées. Quitter sans enregistrer ?";
 "account_discard_changes_discard" = "Abandonner";
 "account_discard_changes_keep_editing" = "Continuer l’édition";
-"account_editing_profile" = "> Édition des champs du profil. Touchez ✓ pour enregistrer ou x pour annuler.";
+"account_editing_profile" = "> Édition des champs du profil. Enregistrer les garde, Annuler les abandonne.";
 "liquid_logo.title" = "LOGO LIQUIDE";
 "liquid_logo.size" = "TAILLE";
 "liquid_logo.haptics" = "Retour haptique";

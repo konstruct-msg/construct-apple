@@ -97,12 +97,39 @@ struct CloseButton: View {
     let action: () -> Void
 
     var body: some View {
-        if #available(iOS 26.0, macOS 26.0, *) {
-            Button(role: .close, action: action)
-        } else {
-            Button(action: action) {
-                Label(NSLocalizedString("close", comment: ""), systemImage: "xmark")
+        Group {
+            if #available(iOS 26.0, macOS 26.0, *) {
+                Button(role: .close, action: action)
+            } else {
+                Button(action: action) {
+                    Label(NSLocalizedString("close", comment: ""), systemImage: "xmark")
+                }
             }
         }
+        .barItem()
+    }
+}
+
+/// A confirming bar action (Save, Done): the system's prominent confirm where it has one — the
+/// one item in a bar that takes the accent — else a plain button with the title.
+struct ConfirmButton: View {
+    let title: String
+    let action: () -> Void
+
+    var body: some View {
+        if #available(iOS 26.0, macOS 26.0, *) {
+            Button(title, role: .confirm, action: action)
+        } else {
+            Button(title, action: action)
+        }
+    }
+}
+
+extension View {
+    /// A bar item in the label colour. iOS 26 draws the system back that way and the tab view
+    /// tints everything under it with the accent, so without this a close or an edit beside the
+    /// back would be the only blue in the bar. A confirming action is `ConfirmButton` instead.
+    func barItem() -> some View {
+        tint(Color.CT.text)
     }
 }

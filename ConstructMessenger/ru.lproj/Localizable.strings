@@ -863,7 +863,7 @@
 "call_minibar_connecting" = "соединение";
 "call_reconnecting" = "переподключение…";
 "call_e2ee_badge" = "сквозное шифрование";
-"edit_identity" = "редактирование";
+"edit_identity" = "Редактирование";
 "delete_account_abort_hint" = "нажмите чтобы отменить · %d с";
 
 // MARK: - Account / Identity Settings
@@ -1214,7 +1214,7 @@
 "account_discard_changes_message" = "Есть несохранённые изменения профиля. Выйти без сохранения?";
 "account_discard_changes_discard" = "Не сохранять";
 "account_discard_changes_keep_editing" = "Продолжить редактирование";
-"account_editing_profile" = "> Режим редактирования профиля. Нажмите ✓ для сохранения или x для отмены.";
+"account_editing_profile" = "> Режим редактирования профиля. «Сохранить» — оставить изменения, «Отмена» — отменить.";
 
 "liquid_logo.title" = "ЖИДКИЙ ЛОГОТИП";
 "liquid_logo.size" = "РАЗМЕР";
