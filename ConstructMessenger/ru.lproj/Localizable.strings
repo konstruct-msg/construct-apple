@@ -276,9 +276,9 @@
 "username_available" = "Имя пользователя доступно.";
 "username_unavailable" = "Имя пользователя уже занято.";
 "username_check_failed" = "Не удалось проверить имя пользователя. Попробуйте ещё раз.";
-"username_hint" = "ваш уникальный публичный идентификатор. нажмите чтобы изменить.";
+"username_hint" = "Ваш уникальный публичный идентификатор.";
 "username_length_error" = "username должен быть от 3 до 20 символов";
-"display_name_hint" = "видно вашим контактам. имя пользователя остаётся постоянным.";
+"display_name_hint" = "Видно вашим контактам.";
 "new_messages" = "Новые сообщения";
 "scroll_to_bottom" = "К последнему";
 
@@ -864,17 +864,15 @@
 "delete_account_abort_hint" = "нажмите чтобы отменить · %d с";
 
 // MARK: - Account / Identity Settings
-"change_photo" = "изменить фото";
+"change_photo" = "Изменить фото";
 "choose_photo" = "выбрать фото";
 "identity_section" = "идентичность";
 "account_section" = "аккаунт";
 "bio" = "био";
-"user_id" = "id пользователя";
+"user_id" = "ID пользователя";
 "joined" = "присоединился";
-"changes_encrypted_footer" = "> изменения защищены сквозным шифрованием";
-"delete_account_row" = "удалить аккаунт";
-"delete_action" = "удалить";
-"manage_action" = "управлять";
+"changes_encrypted_footer" = "Изменения защищены сквозным шифрованием.";
+"delete_account_row" = "Удалить аккаунт";
 "add_action" = "добавить";
 
 // MARK: - Profile / User
@@ -922,8 +920,8 @@
 "device_deregistered_retry_hint" = "Отказ может быть временным сбоем сервера. Попробуйте пройти аутентификацию ещё раз.";
 
 // MARK: - Logout
-"logout_row" = "выйти";
-"logout_all_row" = "выйти на всех устройствах";
+"logout_row" = "Выйти";
+"logout_all_row" = "Выйти на всех устройствах";
 "logout_confirm_title" = "Выйти?";
 "logout_confirm_message" = "Вы выйдете с этого устройства, и всё, что на нём есть, — чаты, медиа, контакты — будет стёрто. Войти снова можно по сид-фразе; историю пришлёт другое ваше устройство.";
 "logout_confirm_action" = "Выйти";
@@ -1012,6 +1010,7 @@
 
 // Social Recovery (SLIP-39)
 "social_recovery_title" = "Социальное восстановление";
+"social_recovery_active" = "Включено";
 "social_recovery_intro_title" = "социальное восстановление";
 "social_recovery_intro_body" = "ваши ключи будут разделены между доверенными контактами с помощью разделения секрета Шамира. любые M из N смогут восстановить ваш аккаунт.";
 "social_recovery_begin" = "НАЧАТЬ НАСТРОЙКУ [→]";
@@ -1046,16 +1045,14 @@
 "social_recovery_reconstructing" = "восстановление ключа хранилища...";
 "social_recovery_restored_title" = "ИДЕНТИЧНОСТЬ ВОССТАНОВЛЕНА";
 "social_recovery_restored_body" = "ваши ключи идентичности успешно восстановлены.";
-"social_recovery_row_active" = "■ социальное восстановление — активно";
-"social_recovery_row_inactive" = "○ социальное восстановление — не настроено";
 
 "social_recovery_identity_header" = "ИДЕНТИФИКАТОР";
 "social_recovery_username_label" = "Имя пользователя";
 
 // MARK: - Local Backup
 "backup_section" = "резервная копия";
-"export_backup" = "экспортировать";
-"import_backup" = "восстановить из копии";
+"export_backup" = "Экспортировать копию";
+"import_backup" = "Восстановить из копии";
 
 "backup_export_title" = "Резервная копия";
 "backup_warning_header" = "ПЕРЕД НАЧАЛОМ";
@@ -1087,8 +1084,8 @@
 "backup_error_invalid_file" = "Это не резервная копия Конструкта или фраза восстановления неверна.";
 
 // Transfer (P2P nearby)
-"transfer_send_nearby" = "отправить на соседнее устройство";
-"transfer_receive_nearby" = "получить с соседнего устройства";
+"transfer_send_nearby" = "Отправить на соседнее устройство";
+"transfer_receive_nearby" = "Получить с соседнего устройства";
 "transfer_send_title" = "Отправить резервную копию";
 "transfer_receive_title" = "Получить резервную копию";
 "transfer_preparing" = "Подготовка резервной копии...";
@@ -1366,3 +1363,4 @@
 
 // The safety numbers screen's bar title; the profile row keeps "safety_numbers".
 "safety_numbers_title" = "Защитные числа";
+"delete_action" = "удалить";

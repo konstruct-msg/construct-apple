@@ -297,9 +297,9 @@
 "username_available" = "ユーザー名は使用可能です。";
 "username_unavailable" = "このユーザー名は既に使用されています。";
 "username_check_failed" = "現在ユーザー名を検証できません。もう一度お試しください。";
-"username_hint" = "あなた固有の公開識別子。タップして変更。";
+"username_hint" = "あなた固有の公開識別子。";
 "username_length_error" = "ユーザー名は3〜20文字である必要があります";
-"display_name_hint" = "相手に表示されます。ユーザー名は変更できません。";
+"display_name_hint" = "相手に表示されます。";
 "new_messages" = "新着メッセージ";
 "scroll_to_bottom" = "最新へ戻る";
 
@@ -766,10 +766,9 @@
 "bio" = "自己紹介";
 "user_id" = "ユーザーID";
 "joined" = "参加日";
-"changes_encrypted_footer" = "> 変更はエンドツーエンドで暗号化されます";
+"changes_encrypted_footer" = "変更はエンドツーエンドで暗号化されます。";
 "delete_account_row" = "アイデンティティを削除";
 "delete_action" = "削除";
-"manage_action" = "管理";
 "add_action" = "追加";
 "call_voice" = "音声通話";
 "end_to_end_encrypted" = "変更はエンドツーエンドで暗号化されます";
@@ -876,6 +875,7 @@
 
 // Social Recovery (SLIP-39)
 "social_recovery_title" = "ソーシャル復旧";
+"social_recovery_active" = "有効";
 "social_recovery_intro_title" = "ソーシャル復旧";
 "social_recovery_intro_body" = "あなたのアイデンティティキーは、シャミアの秘密分散法で信頼できる人に分割されます。アクセスを失った場合、N人中M人のシェアでアイデンティティを復元できます。";
 "social_recovery_begin" = "設定を開始 [→]";
@@ -910,8 +910,6 @@
 "social_recovery_reconstructing" = "ヴォルトキーを再構築中...";
 "social_recovery_restored_title" = "アイデンティティを復元しました";
 "social_recovery_restored_body" = "アイデンティティキーが正常に復元されました。";
-"social_recovery_row_active" = "■ ソーシャル復旧 — 有効";
-"social_recovery_row_inactive" = "○ ソーシャル復旧 — 未設定";
 
 "social_recovery_identity_header" = "アイデンティティ";
 "social_recovery_username_label" = "ユーザー名";

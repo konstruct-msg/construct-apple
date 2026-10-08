@@ -316,9 +316,9 @@
 "username_available" = "Օգտանունը հասանելի է։";
 "username_unavailable" = "Օգտանունն արդեն զբաղված է։";
 "username_check_failed" = "Այժմ չհաջողվեց ստուգել օգտանունը։ Փորձեք նորից։";
-"username_hint" = "ձեր եզակի հանրային նույնացուցիչը։ հպեք փոխելու համար։";
+"username_hint" = "Ձեր եզակի հանրային նույնացուցիչը։";
 "username_length_error" = "օգտանունը պետք է լինի 3–20 նիշ";
-"display_name_hint" = "երևում է կոնտակտներին։ օգտանունը մնում է մշտական։";
+"display_name_hint" = "Երևում է կոնտակտներին։";
 "new_messages" = "Նոր հաղորդագրություններ";
 "scroll_to_bottom" = "Վերադառնալ վերջիններին";
 
@@ -863,17 +863,15 @@
 "share" = "Կիսվել";
 "recovery_not_configured_title" = "Վերականգնումը կարգավորված չէ";
 "developer" = "Մշակող";
-"change_photo" = "փոխել լուսանկարը";
+"change_photo" = "Փոխել լուսանկարը";
 "choose_photo" = "ընտրել լուսանկար";
 "identity_section" = "ինքնություն";
 "account_section" = "հաշիվ";
 "bio" = "կենսագրություն";
-"user_id" = "օգտատիրոջ id";
+"user_id" = "Օգտատիրոջ ID";
 "joined" = "միացել է";
-"changes_encrypted_footer" = "> փոփոխությունները ծայրից ծայր գաղտնագրված են";
-"delete_account_row" = "ջնջել հաշիվը";
-"delete_action" = "ջնջել";
-"manage_action" = "կառավարել";
+"changes_encrypted_footer" = "Փոփոխությունները ծայրից ծայր գաղտնագրված են։";
+"delete_account_row" = "Ջնջել հաշիվը";
 "add_action" = "ավելացնել";
 "call_voice" = "ձայնային զանգ";
 "call_video" = "տեսազանգ";
@@ -912,8 +910,8 @@
 "device_deregistered_retry_hint" = "Մերժումը կարող է լինել ժամանակավոր սերվերային խնդիր։ Փորձեք նորից նույնականանալ։";
 
 // MARK: - Logout
-"logout_row" = "դուրս գալ";
-"logout_all_row" = "դուրս գալ բոլոր սարքերից";
+"logout_row" = "Դուրս գալ";
+"logout_all_row" = "Դուրս գալ բոլոր սարքերից";
 "logout_confirm_title" = "Դուրս գա՞լ։";
 "logout_confirm_message" = "Դուք դուրս կգաք այս սարքից, և դրա վրա եղած ամեն ինչ՝ զրույցներ, մեդիա, կոնտակտներ, կջնջվի։ Կրկին մուտք կարող եք գործել վերականգնման արտահայտությամբ, իսկ պատմությունը կարող են ուղարկել ձեր մյուս սարքերը։";
 "logout_confirm_action" = "Դուրս գալ";
@@ -1001,6 +999,7 @@
 
 // Social Recovery (SLIP-39)
 "social_recovery_title" = "Սոցիալական վերականգնում";
+"social_recovery_active" = "Ակտիվ";
 "social_recovery_intro_title" = "սոցիալական վերականգնում";
 "social_recovery_intro_body" = "Ձեր ինքնության բանալիները կբաժանվեն վստահելի մարդկանց միջև։ Նրանցից M-ը N-ից կարող են օգնել վերականգնել ինքնությունը, եթե կորցնեք հասանելիությունը։";
 "social_recovery_begin" = "ՍԿՍԵԼ ԿԱՐԳԱՎՈՐՈՒՄԸ [→]";
@@ -1035,16 +1034,14 @@
 "social_recovery_reconstructing" = "պահոցի բանալու վերակառուցում...";
 "social_recovery_restored_title" = "ԻՆՔՆՈՒԹՅՈՒՆԸ ՎԵՐԱԿԱՆԳՆՎԱԾ Է";
 "social_recovery_restored_body" = "ձեր ինքնության բանալիները հաջողությամբ վերականգնվել են։";
-"social_recovery_row_active" = "■ սոցիալական վերականգնում — ակտիվ";
-"social_recovery_row_inactive" = "○ սոցիալական վերականգնում — կարգավորված չէ";
 
 "social_recovery_identity_header" = "ԻՆՔՆՈՒԹՅՈՒՆ";
 "social_recovery_username_label" = "Օգտանուն";
 
 // MARK: - Local Backup
 "backup_section" = "պահուստ";
-"export_backup" = "արտահանել պահուստը";
-"import_backup" = "ներմուծել պահուստը";
+"export_backup" = "Արտահանել պահուստը";
+"import_backup" = "Ներմուծել պահուստը";
 
 "backup_export_title" = "Արտահանել պահուստը";
 "backup_warning_header" = "ՆԱԽՔԱՆ ՇԱՐՈՒՆԱԿԵԼԸ";
@@ -1076,8 +1073,8 @@
 "backup_error_invalid_file" = "Սա վավեր Կոնստրուկտ պահուստ չէ, կամ վերականգնման արտահայտությունը սխալ է։";
 
 // Transfer (P2P nearby)
-"transfer_send_nearby" = "ուղարկել մոտակա սարքին";
-"transfer_receive_nearby" = "ստանալ մոտակա սարքից";
+"transfer_send_nearby" = "Ուղարկել մոտակա սարքին";
+"transfer_receive_nearby" = "Ստանալ մոտակա սարքից";
 "transfer_send_title" = "Ուղարկել պահուստը";
 "transfer_receive_title" = "Ստանալ պահուստը";
 "transfer_preparing" = "Պահուստի պատրաստում...";
@@ -1355,3 +1352,4 @@
 
 // The safety numbers screen's bar title; the profile row keeps "safety_numbers".
 "safety_numbers_title" = "Անվտանգության թվեր";
+"delete_action" = "ջնջել";

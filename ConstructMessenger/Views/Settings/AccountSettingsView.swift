@@ -48,30 +48,20 @@ struct AccountSettingsView: View {
         VStack(spacing: 0) {
 
             ScrollView {
-                LazyVStack(spacing: 0) {
+                LazyVStack(spacing: SettingsLayout.sectionSpacing) {
                     avatarHeader
-                    flatDivider(thick: true)
                     identitySection
-                    flatDivider(thick: true)
                     accountSection
                         .opacity(isEditingProfile ? AccountSettingsLayout.sectionDisabledOpacity : 1)
                         .disabled(isEditingProfile)
-                    flatDivider(thick: true)
                     backupSection
                         .opacity(isEditingProfile ? AccountSettingsLayout.sectionDisabledOpacity : 1)
                         .disabled(isEditingProfile)
-                    flatDivider(thick: true)
                     dangerSection
                         .opacity(isEditingProfile ? AccountSettingsLayout.sectionDisabledOpacity : 1)
                         .disabled(isEditingProfile)
-                    flatDivider(thick: true)
 
-                    Text(NSLocalizedString("changes_encrypted_footer", comment: ""))
-                        .font(CTFont.caption)
-                        .foregroundStyle(Color.CT.accent.opacity(AccountSettingsLayout.footerTextOpacity))
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, AccountSettingsLayout.footerHorizontalPadding)
-                        .padding(.vertical, AccountSettingsLayout.footerVerticalPadding)
+                    CTSectionFooter("changes_encrypted_footer")
                 }
             }
         }
@@ -280,8 +270,8 @@ struct AccountSettingsView: View {
     }
 
     private var changePhotoLabel: some View {
-        Text("[\(NSLocalizedString("change_photo", comment: ""))]")
-            .font(CTFont.body)
+        Text(NSLocalizedString("change_photo", comment: ""))
+            .font(CTFont.bodyEmphasis)
             .foregroundStyle(isEditingProfile ? Color.CT.textDim : Color.CT.accent)
     }
 
@@ -289,7 +279,7 @@ struct AccountSettingsView: View {
 
     private var identitySection: some View {
         return VStack(alignment: .leading, spacing: 0) {
-            sectionHeader(NSLocalizedString("identity_section", comment: ""))
+            CTSettingsSectionHeader(title: NSLocalizedString("identity_section", comment: ""))
             if isEditingProfile {
                 Text(NSLocalizedString("account_editing_profile", comment: ""))
                     .font(CTFont.caption)
@@ -297,8 +287,8 @@ struct AccountSettingsView: View {
                     .padding(.horizontal, AccountSettingsLayout.sectionHintHorizontalPadding)
                     .padding(.bottom, AccountSettingsLayout.sectionHintBottomPadding)
             }
-            flatRowDivider()
 
+            CTSectionGroup {
             profileEditableRow(
                 label: NSLocalizedString("username", comment: ""),
                 value: $draftUsername,
@@ -309,7 +299,7 @@ struct AccountSettingsView: View {
                 maxLength: MessageSizeLimits.maxUsernameCharacters,
                 lowercased: true
             )
-            flatRowDivider()
+            ConstructRowDivider(indent: AccountSettingsLayout.rowHorizontalPadding)
             HStack(spacing: AccountSettingsLayout.discoverableRowSpacing) {
                 CTStatusBadge(status: viewModel.isDiscoverable ? .on : .off, size: 12)
                 Text(viewModel.isDiscoverable
@@ -318,9 +308,10 @@ struct AccountSettingsView: View {
                     .font(CTFont.secondary)
                     .foregroundStyle(viewModel.isDiscoverable ? Color.CT.accent : Color.CT.textDim)
             }
-            .padding(.horizontal, AccountSettingsLayout.discoverableRowHorizontalPadding)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, AccountSettingsLayout.rowHorizontalPadding)
             .padding(.vertical, AccountSettingsLayout.discoverableRowVerticalPadding)
-            flatRowDivider()
+            ConstructRowDivider(indent: AccountSettingsLayout.rowHorizontalPadding)
 
             profileEditableRow(
                 label: NSLocalizedString("display_name", comment: ""),
@@ -329,7 +320,7 @@ struct AccountSettingsView: View {
                 isEditing: isEditingProfile,
                 maxLength: MessageSizeLimits.maxDisplayNameCharacters
             )
-            flatRowDivider()
+            ConstructRowDivider(indent: AccountSettingsLayout.rowHorizontalPadding)
 
             // External identity = key fingerprint (thread 5.3). Lives on Account,
             // not next to invite actions — it is who you are, not how you add people.
@@ -364,18 +355,6 @@ struct AccountSettingsView: View {
                         .foregroundStyle(Color.CT.textDim)
                 }
             }
-            flatRowDivider()
-
-            // status — placeholder, not yet implemented
-            profileRow(label: NSLocalizedString("status", comment: "")) {
-                HStack(spacing: AccountSettingsLayout.inlineStatusSpacing) {
-                    Text("ONLINE")
-                        .font(CTFont.ui(14))
-                        .foregroundStyle(Color.CT.accent)
-                    Image(systemName: "chevron.right")
-                        .font(CTFont.body)
-                        .foregroundStyle(Color.CT.accent.opacity(AccountSettingsLayout.inlineStatusAccentOpacity))
-                }
             }
         }
     }
@@ -384,8 +363,9 @@ struct AccountSettingsView: View {
 
     private var accountSection: some View {
         VStack(alignment: .leading, spacing: 0) {
-            sectionHeader(NSLocalizedString("account_section", comment: ""))
-            flatRowDivider()
+            CTSettingsSectionHeader(title: NSLocalizedString("account_section", comment: ""))
+
+            CTSectionGroup {
 
             // user ID
             profileRow(label: NSLocalizedString("user_id", comment: "")) {
@@ -397,31 +377,40 @@ struct AccountSettingsView: View {
                     .font(CTFont.mono(14))
                     .foregroundStyle(Color.CT.textDim)
             }
-            flatRowDivider()
+            ConstructRowDivider(indent: AccountSettingsLayout.rowHorizontalPadding)
 
-            navigationRow(
-                label: NSLocalizedString("linked_devices", comment: ""),
-                labelColor: Color.CT.textDim,
-                trailingText: "[\(NSLocalizedString("manage_action", comment: ""))]"
-            ) {
+            navigationRow(label: NSLocalizedString("linked_devices", comment: "")) {
                 DevicesView()
             }
-            flatRowDivider()
+            ConstructRowDivider(indent: AccountSettingsLayout.rowHorizontalPadding)
 
             // social recovery
-            actionRow(
-                label: socialRecoveryService.isConfigured
-                    ? NSLocalizedString("social_recovery_row_active", comment: "")
-                    : NSLocalizedString("social_recovery_row_inactive", comment: ""),
-                labelColor: socialRecoveryService.isConfigured ? Color.CT.accent : Color.CT.textDim
-            ) {
-                showingSocialRecoverySetup = true
+            Button { showingSocialRecoverySetup = true } label: {
+                HStack(spacing: AccountSettingsLayout.inlineStatusSpacing) {
+                    Text(NSLocalizedString("social_recovery_title", comment: ""))
+                        .font(CTFont.ui(14))
+                        .foregroundStyle(Color.CT.text)
+                    Spacer()
+                    CTStatusBadge(status: socialRecoveryService.isConfigured ? .on : .off, size: 12)
+                    Text(NSLocalizedString(
+                        socialRecoveryService.isConfigured ? "social_recovery_active" : "recovery_not_configured",
+                        comment: ""
+                    ))
+                        .font(CTFont.caption)
+                        .foregroundStyle(socialRecoveryService.isConfigured ? Color.CT.accent : Color.CT.textDim)
+                    rowAccessoryView(.chevron, color: Color.CT.textDim)
+                }
+                .padding(.horizontal, AccountSettingsLayout.rowHorizontalPadding)
+                .padding(.vertical, AccountSettingsLayout.rowVerticalPadding)
+                .contentShape(Rectangle())
             }
-            flatRowDivider()
+            .buttonStyle(.plain)
+            ConstructRowDivider(indent: AccountSettingsLayout.rowHorizontalPadding)
 
             // sign out this device
             actionRow(label: NSLocalizedString("logout_row", comment: "")) {
                 handleLogoutTap(allDevices: false)
+            }
             }
         }
     }
@@ -430,19 +419,21 @@ struct AccountSettingsView: View {
 
     private var backupSection: some View {
         VStack(alignment: .leading, spacing: 0) {
-            sectionHeader(NSLocalizedString("backup_section", comment: ""))
-            flatRowDivider()
+            CTSettingsSectionHeader(title: NSLocalizedString("backup_section", comment: ""))
+
+            CTSectionGroup {
 
             actionRow(label: NSLocalizedString("export_backup", comment: "")) { showingExportBackup = true }
-            flatRowDivider()
+            ConstructRowDivider(indent: AccountSettingsLayout.rowHorizontalPadding)
 
             actionRow(label: NSLocalizedString("import_backup", comment: "")) { showingImportBackup = true }
-            flatRowDivider()
+            ConstructRowDivider(indent: AccountSettingsLayout.rowHorizontalPadding)
 
             actionRow(label: NSLocalizedString("transfer_send_nearby", comment: "")) { showingSendNearby = true }
-            flatRowDivider()
+            ConstructRowDivider(indent: AccountSettingsLayout.rowHorizontalPadding)
 
             actionRow(label: NSLocalizedString("transfer_receive_nearby", comment: "")) { showingReceiveNearby = true }
+            }
         }
     }
 
@@ -450,8 +441,9 @@ struct AccountSettingsView: View {
 
     private var dangerSection: some View {
         VStack(alignment: .leading, spacing: 0) {
-            sectionHeader(NSLocalizedString("danger_zone", comment: ""), color: Color.CT.danger)
-            flatRowDivider()
+            CTSettingsSectionHeader(title: NSLocalizedString("danger_zone", comment: ""), color: Color.CT.danger)
+
+            CTSectionGroup {
 
             // sign out ALL devices
             actionRow(
@@ -461,16 +453,16 @@ struct AccountSettingsView: View {
             ) {
                 handleLogoutTap(allDevices: true)
             }
-            flatRowDivider()
+            ConstructRowDivider(indent: AccountSettingsLayout.rowHorizontalPadding)
 
             // delete account
             actionRow(
                 label: NSLocalizedString("delete_account_row", comment: ""),
                 labelColor: Color.CT.danger,
-                accessory: .text("[\(NSLocalizedString("delete_action", comment: ""))]"),
                 accessoryColor: Color.CT.danger.opacity(AccountSettingsLayout.dangerSecondaryOpacity)
             ) {
                 showingDeleteConfirmation = true
+            }
             }
         }
     }
@@ -491,36 +483,9 @@ struct AccountSettingsView: View {
 
     // MARK: - Layout Helpers
 
-    private func flatDivider(thick: Bool = false) -> some View {
-        Rectangle()
-            .fill(thick ? Color.CT.noise : Color.CT.noise.opacity(AccountSettingsLayout.dividerRegularOpacity))
-            .frame(height: AccountSettingsLayout.dividerHeight)
-    }
-
-    private func flatRowDivider() -> some View {
-        Rectangle()
-            .fill(Color.CT.noise.opacity(AccountSettingsLayout.dividerRowOpacity))
-            .frame(height: AccountSettingsLayout.dividerHeight)
-            .padding(.horizontal, AccountSettingsLayout.dividerHorizontalPadding)
-    }
-
-    private func sectionHeader(_ title: String, color: Color = Color.CT.accent) -> some View {
-        HStack(spacing: AccountSettingsLayout.sectionHeaderSpacing) {
-            Text(">")
-                .font(CTFont.ui(12, weight: .bold))
-                .foregroundStyle(color)
-            Text(title.uppercased())
-                .font(CTFont.ui(12, weight: .bold))
-                .foregroundStyle(color)
-                .tracking(AccountSettingsLayout.sectionHeaderTracking)
-        }
-        .padding(.horizontal, AccountSettingsLayout.sectionHeaderHorizontalPadding)
-        .padding(.vertical, AccountSettingsLayout.sectionHeaderVerticalPadding)
-    }
-
     private func profileRow<V: View>(label: String, @ViewBuilder value: () -> V) -> some View {
         HStack {
-            Text(label.lowercased())
+            Text(label)
                 .font(CTFont.ui(14))
                 .foregroundStyle(Color.CT.textDim)
             Spacer()
@@ -539,12 +504,12 @@ struct AccountSettingsView: View {
         label: String,
         labelColor: Color = Color.CT.text,
         accessory: RowAccessory = .chevron,
-        accessoryColor: Color = Color.CT.accent,
+        accessoryColor: Color = Color.CT.textDim,
         action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
             HStack {
-                Text(label.lowercased())
+                Text(label)
                     .font(CTFont.ui(14))
                     .foregroundStyle(labelColor)
                 Spacer()
@@ -560,22 +525,15 @@ struct AccountSettingsView: View {
     private func navigationRow<Destination: View>(
         label: String,
         labelColor: Color = Color.CT.text,
-        trailingText: String? = nil,
         @ViewBuilder destination: @escaping () -> Destination
     ) -> some View {
         NavigationLink(destination: destination()) {
             HStack {
-                Text(label.lowercased())
+                Text(label)
                     .font(CTFont.ui(14))
                     .foregroundStyle(labelColor)
                 Spacer()
-                if let trailingText {
-                    Text(trailingText)
-                        .font(CTFont.body)
-                        .foregroundStyle(Color.CT.accent)
-                } else {
-                    rowAccessoryView(.chevron, color: Color.CT.accent)
-                }
+                rowAccessoryView(.chevron, color: Color.CT.textDim)
             }
             .padding(.horizontal, AccountSettingsLayout.rowHorizontalPadding)
             .padding(.vertical, AccountSettingsLayout.rowVerticalPadding)
@@ -615,7 +573,7 @@ struct AccountSettingsView: View {
                 // unambiguous to the user where input lands.
                 VStack(alignment: .leading, spacing: 6) {
                     HStack(spacing: 8) {
-                        TextField(label.lowercased(), text: value)
+                        TextField(label, text: value)
                             .font(CTFont.ui(15))
                             .foregroundStyle(Color.CT.text)
                             .autocorrectionDisabled()
@@ -650,7 +608,7 @@ struct AccountSettingsView: View {
                 .padding(.vertical, AccountSettingsLayout.rowVerticalPadding)
             } else {
                 HStack {
-                    Text(label.lowercased())
+                    Text(label)
                         .font(CTFont.ui(14))
                         .foregroundStyle(Color.CT.textDim)
                     Spacer()

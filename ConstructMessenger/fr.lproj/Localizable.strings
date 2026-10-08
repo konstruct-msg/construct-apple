@@ -323,9 +323,9 @@
 "username_available" = "Le nom d'utilisateur est disponible.";
 "username_unavailable" = "Le nom d'utilisateur est déjà pris.";
 "username_check_failed" = "Impossible de vérifier le nom d'utilisateur pour l'instant. Réessayez.";
-"username_hint" = "votre identifiant public unique. appuyez pour modifier.";
+"username_hint" = "Votre identifiant public unique.";
 "username_length_error" = "le nom d'utilisateur doit comporter 3 à 20 caractères";
-"display_name_hint" = "affiché à vos contacts. le nom d'utilisateur reste permanent.";
+"display_name_hint" = "Affiché à vos contacts.";
 "new_messages" = "Nouveaux messages";
 "scroll_to_bottom" = "Retour en bas";
 
@@ -846,17 +846,15 @@
 "share" = "Partager";
 "recovery_not_configured_title" = "Récupération non configurée";
 "developer" = "Développeur";
-"change_photo" = "changer la photo";
+"change_photo" = "Changer la photo";
 "choose_photo" = "choisir une photo";
 "identity_section" = "identité";
 "account_section" = "compte";
 "bio" = "présentation";
-"user_id" = "identifiant";
+"user_id" = "Identifiant";
 "joined" = "inscrit le";
-"changes_encrypted_footer" = "> les modifications sont chiffrées de bout en bout";
-"delete_account_row" = "supprimer le compte";
-"delete_action" = "supprimer";
-"manage_action" = "gérer";
+"changes_encrypted_footer" = "Les modifications sont chiffrées de bout en bout.";
+"delete_account_row" = "Supprimer le compte";
 "add_action" = "ajouter";
 "call_voice" = "appel audio";
 "call_video" = "appel vidéo";
@@ -884,8 +882,8 @@
 "keys_recovery_wipe_confirm_title" = "créer un nouveau compte ?";
 "keys_recovery_wipe_confirm_body" = "Cela supprimera définitivement votre identité actuelle et toutes les données locales. Action irréversible.";
 "keys_recovery_wipe_confirm_action" = "supprimer et continuer";
-"logout_row" = "se déconnecter";
-"logout_all_row" = "déconnecter tous les appareils";
+"logout_row" = "Se déconnecter";
+"logout_all_row" = "Déconnecter tous les appareils";
 "logout_confirm_title" = "Se déconnecter ?";
 "logout_confirm_message" = "Vous serez déconnecté de cet appareil et tout ce qu'il contient — discussions, médias, contacts — sera effacé. Reconnectez-vous avec votre phrase de récupération ; vos autres appareils peuvent renvoyer l'historique.";
 "logout_confirm_action" = "Se déconnecter";
@@ -956,6 +954,7 @@
 "kt_failure_hint" = "la vérification de transparence des clés a échoué — altération possible détectée.";
 "kt_last_failure_at" = "dernier échec : %@";
 "social_recovery_title" = "Récupération sociale";
+"social_recovery_active" = "Activée";
 "social_recovery_intro_title" = "récupération sociale";
 "social_recovery_intro_body" = "Vos clés d’identité seront réparties entre des personnes de confiance. M d’entre elles sur N suffisent à restaurer votre identité si vous perdez l’accès.";
 "social_recovery_begin" = "COMMENCER [→]";
@@ -990,13 +989,11 @@
 "social_recovery_reconstructing" = "reconstruction de la clé du coffre...";
 "social_recovery_restored_title" = "IDENTITÉ RESTAURÉE";
 "social_recovery_restored_body" = "vos clés d’identité ont été restaurées avec succès.";
-"social_recovery_row_active" = "■ récupération sociale — active";
-"social_recovery_row_inactive" = "○ récupération sociale — non configurée";
 "social_recovery_identity_header" = "IDENTITÉ";
 "social_recovery_username_label" = "Nom d’utilisateur";
 "backup_section" = "sauvegarde";
-"export_backup" = "exporter la sauvegarde";
-"import_backup" = "importer une sauvegarde";
+"export_backup" = "Exporter la sauvegarde";
+"import_backup" = "Importer une sauvegarde";
 "backup_export_title" = "Exporter la sauvegarde";
 "backup_warning_header" = "AVANT DE CONTINUER";
 "backup_export_warning" = "Ceci crée une sauvegarde chiffrée de tous vos messages et de vos clés. Le fichier est protégé par une phrase de récupération de 12 mots que vous devez noter et conserver en lieu sûr.\n\nRangez le fichier de sauvegarde et la phrase séparément.";
@@ -1023,8 +1020,8 @@
 "backup_restore_success_message" = "Votre sauvegarde a été vérifiée et préparée. Fermez et rouvrez l’app pour terminer la restauration.";
 "backup_error_invalid_mnemonic" = "Phrase de récupération invalide. Vérifiez les 12 mots et réessayez.";
 "backup_error_invalid_file" = "Ce n’est pas une sauvegarde Konstruct valide, ou la phrase de récupération est incorrecte.";
-"transfer_send_nearby" = "envoyer à un appareil proche";
-"transfer_receive_nearby" = "recevoir d’un appareil proche";
+"transfer_send_nearby" = "Envoyer à un appareil proche";
+"transfer_receive_nearby" = "Recevoir d’un appareil proche";
 "transfer_send_title" = "Envoyer la sauvegarde";
 "transfer_receive_title" = "Recevoir la sauvegarde";
 "transfer_preparing" = "Préparation de la sauvegarde...";
@@ -1275,3 +1272,4 @@
 
 // The safety numbers screen's bar title; the profile row keeps "safety_numbers".
 "safety_numbers_title" = "Numéros de sécurité";
+"delete_action" = "supprimer";

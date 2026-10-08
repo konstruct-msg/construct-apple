@@ -96,7 +96,7 @@
 "notifications" = "Notifications";
 
 // MARK: - Settings -> Account
-"display_name" = "Display Name";
+"display_name" = "Display name";
 "local_name" = "Local name";
 "local_name_unset" = "Not set";
 "local_name_placeholder" = "Enter a name";
@@ -316,9 +316,9 @@
 "username_available" = "Username is available.";
 "username_unavailable" = "Username is already taken.";
 "username_check_failed" = "Could not verify username right now. Try again.";
-"username_hint" = "your unique public identifier. tap to change.";
+"username_hint" = "Your unique public identifier.";
 "username_length_error" = "username must be 3–20 characters";
-"display_name_hint" = "shown to your contacts. username stays permanent.";
+"display_name_hint" = "Shown to your contacts.";
 "new_messages" = "New Messages";
 "scroll_to_bottom" = "Back to Latest";
 
@@ -863,17 +863,15 @@
 "share" = "Share";
 "recovery_not_configured_title" = "Recovery not configured";
 "developer" = "Developer";
-"change_photo" = "change photo";
+"change_photo" = "Change photo";
 "choose_photo" = "choose photo";
 "identity_section" = "identity";
 "account_section" = "account";
 "bio" = "bio";
-"user_id" = "user id";
+"user_id" = "User ID";
 "joined" = "joined";
-"changes_encrypted_footer" = "> changes are end-to-end encrypted";
-"delete_account_row" = "delete account";
-"delete_action" = "delete";
-"manage_action" = "manage";
+"changes_encrypted_footer" = "Changes are end-to-end encrypted.";
+"delete_account_row" = "Delete account";
 "add_action" = "add";
 "call_voice" = "voice call";
 "call_video" = "video call";
@@ -912,8 +910,8 @@
 "device_deregistered_retry_hint" = "The rejection may be a temporary server issue. Try authenticating again.";
 
 // MARK: - Logout
-"logout_row" = "sign out";
-"logout_all_row" = "sign out all devices";
+"logout_row" = "Sign out";
+"logout_all_row" = "Sign out all devices";
 "logout_confirm_title" = "Sign Out?";
 "logout_confirm_message" = "You will be signed out on this device, and everything it holds — chats, media, contacts — will be erased. Sign back in with your seed phrase; your other devices can send the history back.";
 "logout_confirm_action" = "Sign Out";
@@ -1001,6 +999,7 @@
 
 // Social Recovery (SLIP-39)
 "social_recovery_title" = "Social recovery";
+"social_recovery_active" = "Active";
 "social_recovery_intro_title" = "social recovery";
 "social_recovery_intro_body" = "Your identity keys will be split across people you trust. Any M of N of them can help restore your identity if you lose access.";
 "social_recovery_begin" = "BEGIN SETUP [→]";
@@ -1035,16 +1034,14 @@
 "social_recovery_reconstructing" = "reconstructing vault key...";
 "social_recovery_restored_title" = "IDENTITY RESTORED";
 "social_recovery_restored_body" = "your identity keys have been restored successfully.";
-"social_recovery_row_active" = "■ social recovery — active";
-"social_recovery_row_inactive" = "○ social recovery — not configured";
 
 "social_recovery_identity_header" = "IDENTITY";
 "social_recovery_username_label" = "Username";
 
 // MARK: - Local Backup
 "backup_section" = "backup";
-"export_backup" = "export backup";
-"import_backup" = "import backup";
+"export_backup" = "Export backup";
+"import_backup" = "Import backup";
 
 "backup_export_title" = "Export Backup";
 "backup_warning_header" = "BEFORE YOU PROCEED";
@@ -1076,8 +1073,8 @@
 "backup_error_invalid_file" = "This is not a valid Konstruct backup, or the recovery phrase is incorrect.";
 
 // Transfer (P2P nearby)
-"transfer_send_nearby" = "send to nearby device";
-"transfer_receive_nearby" = "receive from nearby device";
+"transfer_send_nearby" = "Send to a nearby device";
+"transfer_receive_nearby" = "Receive from a nearby device";
 "transfer_send_title" = "Send Backup";
 "transfer_receive_title" = "Receive Backup";
 "transfer_preparing" = "Preparing backup...";
@@ -1355,3 +1352,4 @@
 
 // The safety numbers screen's bar title; the profile row keeps "safety_numbers".
 "safety_numbers_title" = "Safety numbers";
+"delete_action" = "delete";
