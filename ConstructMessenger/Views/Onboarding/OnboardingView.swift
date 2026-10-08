@@ -90,7 +90,7 @@ struct OnboardingView: View {
                 // and never read as a preselected pair under Create.
                 VStack(spacing: 8) {
                     CTButton(
-                        label: NSLocalizedString("onboarding_create_identity", comment: "").uppercased(),
+                        label: NSLocalizedString("onboarding_create_identity", comment: ""),
                         isEnabled: canProceed
                     ) {
                         showingRegistration = true

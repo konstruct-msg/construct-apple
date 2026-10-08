@@ -99,7 +99,7 @@ struct VeilBootstrapScanView: View {
                 .font(CTFont.caption)
                 .foregroundStyle(Color.CT.textDim)
                 .multilineTextAlignment(.center)
-            CTButton(label: NSLocalizedString("done", comment: "").uppercased()) { dismiss() }
+            CTButton(label: NSLocalizedString("done", comment: "")) { dismiss() }
                 .padding(.top, 4)
         }
         .padding(.horizontal, CTLayout.edgePad)

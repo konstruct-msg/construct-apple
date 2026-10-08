@@ -979,38 +979,97 @@ struct CTTextField: View {
 
 // MARK: - Button
 
-struct CTButton: View {
-    let label: String
-    var isEnabled: Bool    = true
-    var isDestructive: Bool = false
-    let action: () -> Void
+/// The three roles a full-width action button can have — the one set every screen draws from
+/// (TODO 130, owner 2026-10-08), instead of each wizard drawing its own.
+enum CTButtonRole {
+    /// The step forward: accent fill.
+    case primary
+    /// An action beside the step — copy, try again: accent outline, no fill.
+    case secondary
+    /// Something that destroys or replaces data: danger fill.
+    case destructive
+}
 
-    var fgColor: Color {
-        guard isEnabled else { return Color.CT.textDim }
-        return isDestructive ? .white : Color.CT.bg
+/// The look of a `CTButtonRole`, as a `ButtonStyle` so a `ShareLink` or a `Menu` can wear it too.
+struct CTButtonStyle: ButtonStyle {
+    var role: CTButtonRole = .primary
+    @Environment(\.isEnabled) private var isEnabled
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(CTFont.bodyEmphasis)
+            .foregroundColor(foreground)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 14)
+            .background(background)
+            .clipShape(CTShape.control())
+            .overlay(CTShape.control().stroke(stroke, lineWidth: role == .secondary ? 1 : 0.5))
+            .opacity(configuration.isPressed ? 0.7 : 1)
     }
 
-    var bgColor: Color {
-        guard isEnabled else { return Color(dark: 0x1C1C1C, light: 0xD8D8D8) }
-        return isDestructive ? Color.CT.danger : Color.CT.accent
+    private var foreground: Color {
+        guard isEnabled else { return Color.CT.textDim }
+        switch role {
+        case .primary: return Color.CT.bg
+        case .secondary: return Color.CT.accent
+        case .destructive: return .white
+        }
+    }
+
+    private var background: Color {
+        switch (role, isEnabled) {
+        case (.secondary, _): return .clear
+        case (_, false): return Color(dark: 0x1C1C1C, light: 0xD8D8D8)
+        case (.primary, true): return Color.CT.accent
+        case (.destructive, true): return Color.CT.danger
+        }
+    }
+
+    private var stroke: Color {
+        switch (role, isEnabled) {
+        case (.secondary, true): return Color.CT.accent.opacity(0.6)
+        case (_, false): return Color.CT.noise
+        default: return .clear
+        }
+    }
+}
+
+struct CTButton: View {
+    let label: String
+    var role: CTButtonRole = .primary
+    var isEnabled: Bool = true
+    /// Work under way: a spinner beside the label, and the button holds still.
+    var isLoading: Bool = false
+    let action: () -> Void
+
+    init(
+        label: String,
+        role: CTButtonRole = .primary,
+        isEnabled: Bool = true,
+        isLoading: Bool = false,
+        action: @escaping () -> Void
+    ) {
+        self.label = label
+        self.role = role
+        self.isEnabled = isEnabled
+        self.isLoading = isLoading
+        self.action = action
+    }
+
+    /// The pre-role spelling, kept for its call sites.
+    init(label: String, isEnabled: Bool = true, isDestructive: Bool, action: @escaping () -> Void) {
+        self.init(label: label, role: isDestructive ? .destructive : .primary, isEnabled: isEnabled, action: action)
     }
 
     var body: some View {
         Button(action: action) {
-            Text(label)
-                .font(CTFont.bodyEmphasis)
-                .foregroundColor(fgColor)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 14)
-                .background(bgColor)
-                .clipShape(CTShape.control())
-                .overlay(
-                    CTShape.control()
-                        .stroke(isEnabled ? Color.clear : Color.CT.noise, lineWidth: 0.5)
-                )
+            HStack(spacing: CTLayout.inlinePad) {
+                if isLoading { ProgressView().tint(Color.CT.textDim) }
+                Text(label)
+            }
         }
-        .buttonStyle(.plain)
-        .disabled(!isEnabled)
+        .buttonStyle(CTButtonStyle(role: role))
+        .disabled(!isEnabled || isLoading)
     }
 }
 

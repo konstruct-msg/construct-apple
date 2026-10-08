@@ -85,18 +85,10 @@ struct ExportBackupView: View {
                         .padding(.bottom, 12)
                 }
 
-                Button { generateAndAdvance() } label: {
-                    HStack {
-                        if isWorking { ProgressView().tint(Color.CT.bg).padding(.trailing, 6) }
-                        Text(NSLocalizedString("backup_generate_button", comment: ""))
-                            .font(CTFont.headline)
-                            .foregroundStyle(Color.CT.bg)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 14)
-                    .background(isWorking ? Color.CT.accent.opacity(0.5) : Color.CT.accent)
-                }
-                .disabled(isWorking)
+                CTButton(
+                    label: NSLocalizedString("backup_generate_button", comment: ""),
+                    isLoading: isWorking
+                ) { generateAndAdvance() }
                 .padding(.horizontal, 20)
             }
             .padding(.bottom, 32)
@@ -139,15 +131,8 @@ struct ExportBackupView: View {
                 .padding(.horizontal, 20)
                 .padding(.bottom, 16)
 
-                Button {
+                CTButton(label: NSLocalizedString("backup_copy_words", comment: ""), role: .secondary) {
                     PlatformClipboard.copy(mnemonic)
-                } label: {
-                    Text(NSLocalizedString("backup_copy_words", comment: ""))
-                        .font(CTFont.body)
-                        .foregroundStyle(Color.CT.accent)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
-                        .overlay(CTShape.card().stroke(Color.CT.accent.opacity(0.5), lineWidth: 1))
                 }
                 .padding(.horizontal, 20)
                 .padding(.bottom, 16)
@@ -164,31 +149,19 @@ struct ExportBackupView: View {
                 Rectangle().fill(Color.CT.noise).frame(height: 1)
                     .padding(.bottom, 20)
 
-                Button { confirmedSaved.toggle() } label: {
-                    HStack(spacing: 10) {
-                        Image(systemName: confirmedSaved ? "checkmark.square.fill" : "square")
-                            .font(CTIcon.font(CTIcon.row, weight: .regular))
-                            .foregroundStyle(confirmedSaved ? Color.CT.accent : Color.CT.textDim)
-                        Text(NSLocalizedString("backup_confirm_saved", comment: ""))
-                            .font(CTFont.body)
-                            .foregroundStyle(Color.CT.text)
-                        Spacer()
-                    }
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 4)
+                // A state the next step waits on, so a switch — not a drawn checkbox.
+                Toggle(isOn: $confirmedSaved) {
+                    Text(NSLocalizedString("backup_confirm_saved", comment: ""))
+                        .font(CTFont.body)
+                        .foregroundStyle(Color.CT.text)
                 }
-                .buttonStyle(.plain)
+                .tint(Color.CT.accent)
+                .padding(.horizontal, 20)
                 .padding(.bottom, 20)
 
-                Button { step = 2 } label: {
-                    Text(NSLocalizedString("backup_next_button", comment: ""))
-                        .font(CTFont.headline)
-                        .foregroundStyle(Color.CT.bg)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 14)
-                        .background(confirmedSaved ? Color.CT.accent : Color.CT.accent.opacity(0.3))
+                CTButton(label: NSLocalizedString("backup_next_button", comment: ""), isEnabled: confirmedSaved) {
+                    step = 2
                 }
-                .disabled(!confirmedSaved)
                 .padding(.horizontal, 20)
             }
             .padding(.bottom, 32)
@@ -220,12 +193,8 @@ struct ExportBackupView: View {
                 if let url = backupURL {
                     ShareLink(item: url, preview: SharePreview(url.lastPathComponent)) {
                         Text(NSLocalizedString("backup_share_file", comment: ""))
-                            .font(CTFont.headline)
-                            .foregroundStyle(Color.CT.bg)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 14)
-                            .background(Color.CT.accent)
                     }
+                    .buttonStyle(CTButtonStyle(role: .primary))
                     .padding(.horizontal, 20)
 
                     Text(url.lastPathComponent)
@@ -234,20 +203,10 @@ struct ExportBackupView: View {
                         .padding(.horizontal, 20)
                         .padding(.top, 8)
                 } else {
-                    Button { generateBackupFile() } label: {
-                        HStack {
-                            if isWorking { ProgressView().tint(Color.CT.bg).padding(.trailing, 6) }
-                            Text(isWorking
-                                 ? NSLocalizedString("backup_export_generating", comment: "")
-                                 : NSLocalizedString("backup_create_file", comment: ""))
-                                .font(CTFont.headline)
-                                .foregroundStyle(Color.CT.bg)
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 14)
-                        .background(isWorking ? Color.CT.accent.opacity(0.5) : Color.CT.accent)
-                    }
-                    .disabled(isWorking)
+                    CTButton(
+                        label: NSLocalizedString(isWorking ? "backup_export_generating" : "backup_create_file", comment: ""),
+                        isLoading: isWorking
+                    ) { generateBackupFile() }
                     .padding(.horizontal, 20)
                 }
             }

@@ -333,7 +333,7 @@
 
 // Onboarding (identity gate — create / restore / link)
 "onboarding_tagline" = "Ինտերնետը ազատ մտքի տարածք է։";
-"onboarding_username_placeholder" = "ընտրեք հանրային կեղծանուն (ոչ պարտադիր)";
+"onboarding_username_placeholder" = "Ընտրեք հանրային կեղծանուն (ոչ պարտադիր)";
 "onboarding_create_identity" = "Ստեղծել ինքնություն";
 "onboarding_already_have" = "Արդեն ունե՞ք ինքնություն։";
 "onboarding_existing_title" = "Օգտագործել առկա ինքնությունը";
@@ -1000,43 +1000,26 @@
 // Social Recovery (SLIP-39)
 "social_recovery_title" = "Սոցիալական վերականգնում";
 "social_recovery_active" = "Ակտիվ";
-"social_recovery_intro_title" = "սոցիալական վերականգնում";
+"social_recovery_intro_title" = "Սոցիալական վերականգնում";
 "social_recovery_intro_body" = "Ձեր ինքնության բանալիները կբաժանվեն վստահելի մարդկանց միջև։ Նրանցից M-ը N-ից կարող են օգնել վերականգնել ինքնությունը, եթե կորցնեք հասանելիությունը։";
-"social_recovery_begin" = "ՍԿՍԵԼ ԿԱՐԳԱՎՈՐՈՒՄԸ [→]";
-"social_recovery_scheme_title" = "ՎԵՐԱԿԱՆԳՆՄԱՆ ՍԽԵՄԱ";
+"social_recovery_begin" = "Սկսել կարգավորումը";
+"social_recovery_scheme_title" = "Վերականգնման սխեմա";
 "social_recovery_2of3" = "2-ը 3-ից";
 "social_recovery_3of5" = "3-ը 5-ից";
 "social_recovery_2of3_hint" = "վերականգնելու համար պետք է 2 կոնտակտ";
 "social_recovery_3of5_hint" = "վերականգնելու համար պետք է 3 կոնտակտ";
-"social_recovery_generate" = "ՍՏԵՂԾԵԼ ԲԱԺԻՆՆԵՐ [→]";
-"social_recovery_share_title" = "ԲԱԺԻՆ %d՝ %d-ից";
-"social_recovery_share_warning" = "ուղարկեք այս բառերը վստահելի կոնտակտի։ միևնույն մարդուն ՄԻ քանի բաժին մի տվեք։";
-"social_recovery_share_label_caption" = "պիտակ";
-"social_recovery_share_label_placeholder" = "պիտակ (օր. ուղարկված Աննային)";
-"social_recovery_share_next" = "ՀԱՋՈՐԴ ԲԱԺԻՆ [→]";
-"social_recovery_share_done" = "ԱՎԱՐՏԵԼ ԿԱՐԳԱՎՈՐՈՒՄԸ [→]";
-"social_recovery_share_unlabeled" = "բաժին %d";
-"social_recovery_uploading" = "փաթեթի գաղտնագրում...";
-"social_recovery_done_title" = "ՎԵՐԱԿԱՆԳՆՈՒՄԸ ԿԱՐԳԱՎՈՐՎԱԾ Է";
-"social_recovery_done_body" = "ձեր ինքնությունն այժմ պաշտպանված է։";
-"social_recovery_enter_title" = "ՍՈՑԻԱԼԱԿԱՆ ՎԵՐԱԿԱՆԳՆՈՒՄ";
-"social_recovery_enter_subtitle" = "կապվեք յուրաքանչյուր հոգաբարձուի հետ և խնդրեք նրանց բաժնի բառերը։";
-"social_recovery_entered_header" = "ՄՈՒՏՔԱԳՐՎԱԾ ԲԱԺԻՆՆԵՐ (%d/%d անհրաժեշտ)";
-"social_recovery_no_shares_yet" = "դեռ բաժիններ մուտքագրված չեն";
-"social_recovery_add_share" = "+ ԱՎԵԼԱՑՆԵԼ ԲԱԺԻՆ";
-"social_recovery_shares_needed" = "վերականգնելու համար պետք է ևս %d բաժին";
-"social_recovery_restore" = "ՎԵՐԱԿԱՆԳՆԵԼ ԻՆՔՆՈՒԹՅՈՒՆԸ [→]";
-"social_recovery_enter_words_title" = "ՄՈՒՏՔԱԳՐԵԼ ԲԱԺՆԻ ԲԱՌԵՐԸ";
-"social_recovery_enter_words_hint" = "տեղադրեք կամ մուտքագրեք 28 բառը՝ բացատներով առանձնացված";
-"social_recovery_add_share_confirm" = "ԱՎԵԼԱՑՆԵԼ ԲԱԺԻՆ [→]";
-"social_recovery_share_n" = "բաժին %d";
-"social_recovery_word_count" = "%d բառ";
-"social_recovery_reconstructing" = "պահոցի բանալու վերակառուցում...";
-"social_recovery_restored_title" = "ԻՆՔՆՈՒԹՅՈՒՆԸ ՎԵՐԱԿԱՆԳՆՎԱԾ Է";
-"social_recovery_restored_body" = "ձեր ինքնության բանալիները հաջողությամբ վերականգնվել են։";
+"social_recovery_generate" = "Ստեղծել բաժիններ";
+"social_recovery_share_title" = "Բաժին %d՝ %d-ից";
+"social_recovery_share_warning" = "Ուղարկեք այս բառերը մեկ վստահելի կոնտակտի։ Միևնույն մարդուն մեկից ավելի բաժին մի տվեք։";
+"social_recovery_share_label_caption" = "Պիտակ";
+"social_recovery_share_label_placeholder" = "Պիտակ (օր. ուղարկված Աննային)";
+"social_recovery_share_next" = "Հաջորդ բաժին";
+"social_recovery_share_done" = "Ավարտել կարգավորումը";
+"social_recovery_share_unlabeled" = "Բաժին %d";
+"social_recovery_uploading" = "Գաղտնագրում…";
+"social_recovery_done_title" = "Վերականգնումը կարգավորված է";
+"social_recovery_done_body" = "Ձեր ինքնությունն այժմ պաշտպանված է։";
 
-"social_recovery_identity_header" = "ԻՆՔՆՈՒԹՅՈՒՆ";
-"social_recovery_username_label" = "Օգտանուն";
 
 // MARK: - Local Backup
 "backup_section" = "պահուստ";
@@ -1047,25 +1030,25 @@
 "backup_warning_header" = "ՆԱԽՔԱՆ ՇԱՐՈՒՆԱԿԵԼԸ";
 "backup_export_warning" = "Սա ստեղծում է ձեր բոլոր հաղորդագրությունների և բանալիների գաղտնագրված պահուստ։ Ֆայլը պաշտպանված է 12 բառանոց վերականգնման արտահայտությամբ, որը պետք է գրեք և պահեք ապահով։\n\nՊահուստի ֆայլն ու վերականգնման արտահայտությունը պահեք առանձին։";
 "backup_mnemonic_warning" = "⚠ Եթե կորցնեք վերականգնման արտահայտությունը, պահուստը հնարավոր չէ վերծանել։ Վերականգնման այլ տարբերակ չկա։";
-"backup_generate_button" = "ՍՏԵՂԾԵԼ ՎԵՐԱԿԱՆԳՆՄԱՆ ԱՐՏԱՀԱՅՏՈՒԹՅՈՒՆ [→]";
+"backup_generate_button" = "Ստեղծել վերականգնման արտահայտություն";
 "backup_mnemonic_title" = "ՎԵՐԱԿԱՆԳՆՄԱՆ ԱՐՏԱՀԱՅՏՈՒԹՅՈՒՆ";
 "backup_mnemonic_subtitle" = "Գրեք բոլոր 12 բառերը հերթականությամբ։ Էկրանի նկար մի արեք։";
-"backup_copy_words" = "[ ՊԱՏՃԵՆԵԼ ԲՈԼՈՐ ԲԱՌԵՐԸ ]";
+"backup_copy_words" = "Պատճենել բոլոր բառերը";
 "backup_confirm_saved" = "Ես գրել եմ բոլոր 12 բառերը";
-"backup_next_button" = "ՀԱՋՈՐԴ [→]";
+"backup_next_button" = "Հաջորդ";
 "backup_export_step_header" = "ՊԱՀՊԱՆԵԼ ՊԱՀՈՒՍՏԻ ՖԱՅԼԸ";
 "backup_export_step_subtitle" = "Պահպանեք .ctbackup ֆայլը ապահով վայրում՝ այս սարքից դուրս (օր. գաղտնագրված USB)։ Մի պահեք այն չգաղտնագրված ամպային ծառայությունում։";
-"backup_create_file" = "ՍՏԵՂԾԵԼ .ctbackup ՖԱՅԼ [→]";
-"backup_share_file" = "ԿԻՍՎԵԼ .ctbackup ՖԱՅԼՈՎ [→]";
+"backup_create_file" = "Ստեղծել .ctbackup ֆայլ";
+"backup_share_file" = "Կիսվել .ctbackup ֆայլով";
 "backup_export_generating" = "պահուստի ստեղծում…";
 
 "backup_import_title" = "Ներմուծել պահուստը";
 "backup_import_words_header" = "ՎԵՐԱԿԱՆԳՆՄԱՆ ԱՐՏԱՀԱՅՏՈՒԹՅՈՒՆ";
 "backup_import_words_subtitle" = "Մուտքագրեք պահուստի 12 բառերը՝ բացատներով առանձնացված։";
 "backup_import_file_header" = "ՊԱՀՈՒՍՏԻ ՖԱՅԼ";
-"backup_import_select_file" = "ընտրել .ctbackup ֆայլ [→]";
+"backup_import_select_file" = "Ընտրել .ctbackup ֆայլ";
 "backup_restore_warning" = "⚠ Սա կփոխարինի ձեր ԲՈԼՈՐ ընթացիկ հաղորդագրություններն ու բանալիները։ Սա հնարավոր չէ հետարկել։";
-"backup_restore_button" = "ՎԵՐԱԿԱՆԳՆԵԼ ՊԱՀՈՒՍՏԸ [→]";
+"backup_restore_button" = "Վերականգնել պահուստը";
 "backup_restore_success_title" = "Պահուստը պատրաստ է";
 "backup_restore_success_message" = "Ձեր պահուստը ստուգված է և պատրաստված։ Փակեք և նորից բացեք հավելվածը՝ վերականգնումը ավարտելու համար։";
 

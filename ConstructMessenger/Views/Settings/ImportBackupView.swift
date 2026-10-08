@@ -90,8 +90,8 @@ struct ImportBackupView: View {
                             }
                             Spacer()
                             Image(systemName: "chevron.right")
-                                .font(CTFont.body)
-                                .foregroundStyle(Color.CT.accent)
+                                .font(CTIcon.font(CTIcon.caption, weight: .semibold))
+                                .foregroundStyle(Color.CT.textDim)
                         }
                         .padding(.horizontal, 20)
                         .padding(.vertical, 14)
@@ -119,22 +119,12 @@ struct ImportBackupView: View {
                             .padding(.bottom, 16)
                     }
 
-                    Button { startRestore() } label: {
-                        HStack {
-                            if isImporting { ProgressView().tint(Color.CT.bg).padding(.trailing, 6) }
-                            Text(NSLocalizedString("backup_restore_button", comment: ""))
-                                .font(CTFont.headline)
-                                .foregroundStyle(Color.CT.bg)
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 14)
-                        .background(
-                            canRestore && !isImporting
-                                ? Color.CT.danger
-                                : Color.CT.danger.opacity(0.3)
-                        )
-                    }
-                    .disabled(!canRestore || isImporting)
+                    CTButton(
+                        label: NSLocalizedString("backup_restore_button", comment: ""),
+                        role: .destructive,
+                        isEnabled: canRestore,
+                        isLoading: isImporting
+                    ) { startRestore() }
                     .padding(.horizontal, 20)
                 }
                 .padding(.bottom, 32)
