@@ -314,9 +314,9 @@
 "transfer_history_hint" = "Envoyez votre historique de messages à un appareil sur le même réseau WiFi.";
 "this_device" = "Cet appareil";
 "profile_currently_shared" = "Profil actuellement partagé";
-"stop_sharing_profile" = "Arrêter le partage du profil";
 "share_my_profile" = "Partager mon profil";
 "share_profile_explanation" = "Partagez votre nom et votre photo avec ce contact";
+"profile_sharing_section" = "Partage du profil";
 "username_invalid_chars" = "Le nom d'utilisateur ne peut contenir que des lettres, des chiffres et des traits de soulignement.";
 "username_too_short" = "Le nom d'utilisateur doit comporter au moins 3 caractères.";
 "username_checking" = "Vérification de la disponibilité...";

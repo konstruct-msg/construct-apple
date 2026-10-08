@@ -307,9 +307,9 @@
 "transfer_history_hint" = "Ուղարկեք հաղորդագրությունների պատմությունը նույն Wi‑Fi ցանցում գտնվող սարքին։";
 "this_device" = "Այս սարքը";
 "profile_currently_shared" = "Պրոֆիլը այժմ կիսված է";
-"stop_sharing_profile" = "Դադարեցնել պրոֆիլի կիսումը";
 "share_my_profile" = "Կիսվել իմ պրոֆիլով";
 "share_profile_explanation" = "Կիսվեք ձեր անունով և լուսանկարով այս կոնտակտի հետ";
+"profile_sharing_section" = "Պրոֆիլի կիսում";
 "username_invalid_chars" = "Օգտանունը կարող է պարունակել միայն տառեր, թվեր և ընդգծումներ։";
 "username_too_short" = "Օգտանունը պետք է լինի առնվազն 3 նիշ։";
 "username_checking" = "Հասանելիության ստուգում...";
