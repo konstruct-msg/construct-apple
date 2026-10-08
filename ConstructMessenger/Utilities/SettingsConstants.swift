@@ -160,22 +160,9 @@ enum SecuritySettingsLayout {
     static let compactRowVerticalPadding: CGFloat = CTLayout.chromeGap
     static let rowContentSpacing: CGFloat = CTLayout.chromeGap
     static let sectionVerticalPadding: CGFloat = CTLayout.inlinePad
-    static let hintTopPadding: CGFloat = 6
-    static let hintBottomPadding: CGFloat = CTLayout.chromeGap
-    static let hintCompactTopPadding: CGFloat = 2
     static let hintDisabledOpacity: Double = 0.6
     static let lockStatusSpacing: CGFloat = 2
     static let recoveryStatusSpacing: CGFloat = 2
-    static let separatorOpacity: Double = 0.4
-}
-
-enum KeyTransparencySettingsLayout {
-    static let rowHorizontalPadding: CGFloat = CTLayout.sectionGap
-    static let rowVerticalPadding: CGFloat = CTLayout.chromeGap
-    static let hintHorizontalPadding: CGFloat = CTLayout.edgePad
-    static let hintTopPadding: CGFloat = 2
-    static let hintBottomPadding: CGFloat = CTLayout.chromeGap
-    static let statusTrailingPadding: CGFloat = 4
 }
 
 enum DevicesSettingsLayout {
@@ -291,9 +278,6 @@ enum VeilVoucherLayout {
 
 enum AccountSettingsLayout {
     static let sectionDisabledOpacity: Double = 0.5
-    static let footerHorizontalPadding: CGFloat = 20
-    static let footerVerticalPadding: CGFloat = 12
-    static let footerTextOpacity: Double = 0.6
     static let postAvatarPickerDelay: TimeInterval = 0.35
 
     static let avatarSectionSpacing: CGFloat = 14
@@ -304,28 +288,14 @@ enum AccountSettingsLayout {
     static let sectionHintBottomPadding: CGFloat = 8
 
     static let discoverableRowSpacing: CGFloat = 8
-    static let discoverableRowHorizontalPadding: CGFloat = 16
     static let discoverableRowVerticalPadding: CGFloat = 8
-
-    static let dividerHeight: CGFloat = 1
-    static let dividerRegularOpacity: Double = 0.5
-    static let dividerRowOpacity: Double = 0.35
-    static let dividerHorizontalPadding: CGFloat = 20
-
-    static let sectionHeaderSpacing: CGFloat = 6
-    static let sectionHeaderHorizontalPadding: CGFloat = 20
-    static let sectionHeaderVerticalPadding: CGFloat = 10
-    static let sectionHeaderTracking: CGFloat = 2
 
     static let rowHorizontalPadding: CGFloat = 20
     static let rowVerticalPadding: CGFloat = 14
 
     static let inlineStatusSpacing: CGFloat = 8
-    static let inlineStatusAccentOpacity: Double = 0.6
     static let dangerPrimaryOpacity: Double = 0.85
     static let dangerSecondaryOpacity: Double = 0.7
-
-    static let editableFieldMaxWidth: CGFloat = 190
     static let editableSavingIndicatorScale: CGFloat = 0.8
     static let fingerprintCopiedFlashDuration: TimeInterval = 1.5
 }

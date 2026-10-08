@@ -28,307 +28,304 @@ struct SecurityView: View {
         @Bindable var securityViewModel = securityViewModel
         VStack(spacing: 0) {
             ScrollView {
-            LazyVStack(spacing: 0) {
+            LazyVStack(spacing: SettingsLayout.sectionSpacing) {
+                VStack(spacing: 0) {
+                    CTSectionGroup {
 
-                // MARK: - PIN Code
-                Button { showingPinSetup = true } label: {
-                    HStack(spacing: SecuritySettingsLayout.rowContentSpacing) {
-                        Text(securityViewModel.isPinEnabled
-                             ? LocalizedStringKey("change_pin_code")
-                             : LocalizedStringKey("enable_pin_code"))
-                            .font(CTFont.body)
-                            .foregroundStyle(Color.CT.text)
-                        Spacer()
-                        Image(systemName: "chevron.right").font(CTFont.secondary).foregroundStyle(Color.CT.textDim)
+                        // MARK: - PIN Code
+                        Button { showingPinSetup = true } label: {
+                            HStack(spacing: SecuritySettingsLayout.rowContentSpacing) {
+                                Text(securityViewModel.isPinEnabled
+                                     ? LocalizedStringKey("change_pin_code")
+                                     : LocalizedStringKey("enable_pin_code"))
+                                    .font(CTFont.body)
+                                    .foregroundStyle(Color.CT.text)
+                                Spacer()
+                                Image(systemName: "chevron.right").font(CTFont.secondary).foregroundStyle(Color.CT.textDim)
+                            }
+                            .securityRowInsets()
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+
+                        if securityViewModel.isPinEnabled {
+                            ConstructRowDivider(indent: SecuritySettingsLayout.rowHorizontalPadding)
+                            HStack(spacing: SecuritySettingsLayout.rowContentSpacing) {
+                                CTRowIcon(sf: securityViewModel.biometricIconName,
+                                          color: securityViewModel.isBiometricEnabled ? Color.CT.accent : Color.CT.textDim)
+                                Text(String(format: NSLocalizedString("use_biometric", comment: ""),
+                                            securityViewModel.biometricDisplayName))
+                                    .font(CTFont.body)
+                                    .foregroundStyle(Color.CT.text)
+                                Spacer()
+                                Toggle("", isOn: $securityViewModel.isBiometricEnabled)
+                                    .labelsHidden()
+                                    .tint(Color.CT.accent)
+                            }
+                            .securityRowInsets(vertical: SecuritySettingsLayout.compactRowVerticalPadding)
+                            .disabled(!securityViewModel.isBiometricAvailable)
+
+                            ConstructRowDivider(indent: SecuritySettingsLayout.rowHorizontalPadding)
+                            lockDelayRow
+
+                            ConstructRowDivider(indent: SecuritySettingsLayout.rowHorizontalPadding)
+                            Button { showingDisablePinSheet = true } label: {
+                                HStack(spacing: SecuritySettingsLayout.rowContentSpacing) {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .foregroundStyle(Color.CT.danger)
+                                    Text(LocalizedStringKey("disable_pin_code"))
+                                        .font(CTFont.body)
+                                        .foregroundStyle(Color.CT.danger)
+                                    Spacer()
+                                }
+                                .securityRowInsets()
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                        }
                     }
-                    .securityRowInsets()
-                    .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
 
-                if securityViewModel.isPinEnabled {
-                    CTSep(style: .thin)
-                    HStack(spacing: SecuritySettingsLayout.rowContentSpacing) {
-                        CTRowIcon(sf: securityViewModel.biometricIconName,
-                                  color: securityViewModel.isBiometricEnabled ? Color.CT.accent : Color.CT.textDim)
-                        Text(String(format: NSLocalizedString("use_biometric", comment: ""),
-                                    securityViewModel.biometricDisplayName))
-                            .font(CTFont.body)
-                            .foregroundStyle(Color.CT.text)
-                        Spacer()
-                        Toggle("", isOn: $securityViewModel.isBiometricEnabled)
+                VStack(spacing: 0) {
+                    CTSectionGroup {
+
+                        // MARK: - Account Recovery
+                        Button { showingRecoverySetup = true } label: {
+                            HStack(spacing: SecuritySettingsLayout.rowContentSpacing) {
+                                VStack(alignment: .leading, spacing: SecuritySettingsLayout.recoveryStatusSpacing) {
+                                    Text(LocalizedStringKey("account_recovery_seed"))
+                                        .font(CTFont.body)
+                                        .foregroundStyle(Color.CT.text)
+                                    if recoveryVM.phraseLost {
+                                        Text(NSLocalizedString("recovery_reminder_lost_title", comment: ""))
+                                            .font(CTFont.caption)
+                                            .foregroundStyle(Color.CT.danger)
+                                    } else if recoveryVM.isSetup && recoveryVM.backupPending {
+                                        Text(NSLocalizedString("recovery_backup_pending", comment: ""))
+                                            .font(CTFont.caption)
+                                            .foregroundStyle(.orange)
+                                    } else if recoveryVM.isSetup, let fp = recoveryVM.fingerprint {
+                                        Text(fp)
+                                            .font(CTFont.mono(11))
+                                            .foregroundStyle(Color.CT.textDim)
+                                            .lineLimit(1)
+                                            .truncationMode(.middle)
+                                    } else if recoveryVM.statusLoaded && !recoveryVM.isSetup {
+                                        Text(NSLocalizedString("recovery_not_configured", comment: ""))
+                                            .font(CTFont.caption)
+                                            .foregroundStyle(.orange)
+                                    }
+                                }
+                                Spacer()
+                                Image(systemName: "chevron.right").font(CTFont.secondary).foregroundStyle(Color.CT.textDim)
+                            }
+                            .securityRowInsets()
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    CTSectionFooter("account_recovery_seed_hint")
+                }
+
+                VStack(spacing: 0) {
+                    CTSectionGroup {
+
+                        // MARK: - Duress PIN
+                        if securityViewModel.isDuresspinEnabled {
+                            Button { showingDuressPinSetup = true } label: {
+                                HStack(spacing: SecuritySettingsLayout.rowContentSpacing) {
+                                    CTRowIcon(sf: "exclamationmark.lock.fill", color: Color.CT.danger)
+                                    Text(LocalizedStringKey("duress_pin_change"))
+                                        .font(CTFont.body)
+                                        .foregroundStyle(Color.CT.text)
+                                    Spacer()
+                                    Image(systemName: "chevron.right").font(CTFont.secondary).foregroundStyle(Color.CT.textDim)
+                                }
+                                .securityRowInsets()
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+
+                            ConstructRowDivider(indent: SecuritySettingsLayout.rowHorizontalPadding)
+                            Button { showingDisableDuressAlert = true } label: {
+                                HStack(spacing: SecuritySettingsLayout.rowContentSpacing) {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .foregroundStyle(Color.CT.danger)
+                                    Text(LocalizedStringKey("disable_duress_pin"))
+                                        .font(CTFont.body)
+                                        .foregroundStyle(Color.CT.danger)
+                                    Spacer()
+                                }
+                                .securityRowInsets()
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                        } else {
+                            Button { showingDuressPinSetup = true } label: {
+                                HStack(spacing: SecuritySettingsLayout.rowContentSpacing) {
+                                    CTRowIcon(sf: "exclamationmark.lock", color: securityViewModel.isPinEnabled
+                                              ? Color.CT.textDim : Color.CT.textDim.opacity(0.4))
+                                    Text(LocalizedStringKey("enable_duress_pin"))
+                                        .font(CTFont.body)
+                                        .foregroundStyle(securityViewModel.isPinEnabled
+                                                         ? Color.CT.text : Color.CT.text.opacity(0.4))
+                                    Spacer()
+                                    Image(systemName: "chevron.right").font(CTFont.secondary).foregroundStyle(Color.CT.textDim)
+                                }
+                                .securityRowInsets()
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            .disabled(!securityViewModel.isPinEnabled)
+                        }
+                    }
+                    CTSectionFooter(securityViewModel.isPinEnabled ? "duress_pin_hint" : "duress_pin_requires_main_pin")
+                }
+
+                VStack(spacing: 0) {
+                                    let approvedIds = fetchCurrentContactIds()
+                    CTSectionGroup {
+
+                        // MARK: - Lockdown
+                        HStack(spacing: SecuritySettingsLayout.rowContentSpacing) {
+                            CTRowIcon(sf: lockdown.isActive ? "lock.slash.fill" : "lock.fill",
+                                      color: lockdown.isActive ? .orange : Color.CT.textDim)
+                            VStack(alignment: .leading, spacing: SecuritySettingsLayout.lockStatusSpacing) {
+                                Text(LocalizedStringKey("lockdown_mode"))
+                                    .font(CTFont.body)
+                                    .foregroundStyle(Color.CT.text)
+                                if lockdown.isActive, let since = lockdown.activatedAt {
+                                    Text(String(format: NSLocalizedString("lockdown_active_since", comment: ""),
+                                                since.formatted(date: .abbreviated, time: .shortened)))
+                                        .font(CTFont.caption)
+                                        .foregroundStyle(.orange)
+                                }
+                            }
+                            Spacer()
+                            Toggle("", isOn: Binding(
+                                get: { lockdown.isActive },
+                                set: { enabled in
+                                    if enabled {
+                                        lockdown.enable(approvedIds: approvedIds)
+                                    } else {
+                                        lockdown.disable()
+                                    }
+                                }
+                            ))
                             .labelsHidden()
-                            .tint(Color.CT.accent)
-                    }
-                    .securityRowInsets(vertical: SecuritySettingsLayout.compactRowVerticalPadding)
-                    .disabled(!securityViewModel.isBiometricAvailable)
-
-                    CTSep(style: .thin)
-                    lockDelayRow
-
-                    CTSep(style: .thin)
-                    Button { showingDisablePinSheet = true } label: {
-                        HStack(spacing: SecuritySettingsLayout.rowContentSpacing) {
-                            Image(systemName: "xmark.circle.fill")
-                                .foregroundStyle(Color.CT.danger)
-                            Text(LocalizedStringKey("disable_pin_code"))
-                                .font(CTFont.body)
-                                .foregroundStyle(Color.CT.danger)
-                            Spacer()
+                            .tint(.orange)
                         }
-                        .securityRowInsets()
-                        .contentShape(Rectangle())
+                        .securityRowInsets(vertical: SecuritySettingsLayout.compactRowVerticalPadding)
                     }
-                    .buttonStyle(.plain)
+                    CTSectionFooter("lockdown_mode_hint")
                 }
 
-                CTSep()
+                VStack(spacing: 0) {
+                    let stealthOn = StealthPolicy.shared.isEnabled
+                    CTSectionGroup {
 
-                // MARK: - Account Recovery
-                Button { showingRecoverySetup = true } label: {
-                    HStack(spacing: SecuritySettingsLayout.rowContentSpacing) {
-                        VStack(alignment: .leading, spacing: SecuritySettingsLayout.recoveryStatusSpacing) {
-                            Text(LocalizedStringKey("account_recovery_seed"))
-                                .font(CTFont.body)
-                                .foregroundStyle(Color.CT.text)
-                            if recoveryVM.phraseLost {
-                                Text(NSLocalizedString("recovery_reminder_lost_title", comment: ""))
-                                    .font(CTFont.caption)
-                                    .foregroundStyle(Color.CT.danger)
-                            } else if recoveryVM.isSetup && recoveryVM.backupPending {
-                                Text(NSLocalizedString("recovery_backup_pending", comment: ""))
-                                    .font(CTFont.caption)
-                                    .foregroundStyle(.orange)
-                            } else if recoveryVM.isSetup, let fp = recoveryVM.fingerprint {
-                                Text(fp)
-                                    .font(CTFont.mono(11))
-                                    .foregroundStyle(Color.CT.textDim)
-                                    .lineLimit(1)
-                                    .truncationMode(.middle)
-                            } else if recoveryVM.statusLoaded && !recoveryVM.isSetup {
-                                Text(NSLocalizedString("recovery_not_configured", comment: ""))
-                                    .font(CTFont.caption)
-                                    .foregroundStyle(.orange)
-                            }
-                        }
-                        Spacer()
-                        Image(systemName: "chevron.right").font(CTFont.secondary).foregroundStyle(Color.CT.textDim)
-                    }
-                    .securityRowInsets()
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-
-                securityHintText(
-                    LocalizedStringKey("account_recovery_seed_hint"),
-                    color: Color.CT.textDim
-                )
-
-                CTSep()
-
-                // MARK: - Duress PIN
-                if securityViewModel.isDuresspinEnabled {
-                    Button { showingDuressPinSetup = true } label: {
+                        // MARK: - Stealth
+                        //
+                        // A statement, not a setting. stealth-sealed-sender-v2 Phase 4 made this
+                        // always on with no toggle, and the row kept the shape of the switch it used
+                        // to be — a title reading "stealth mode" beside a state nobody chose.
+                        //
+                        // The token wallet balance was removed from here on 2026-08-16. It answered
+                        // a question the user cannot act on: an empty wallet costs them nothing,
+                        // because `StealthSenderService` seals and sends regardless ("anti-abuse
+                        // degraded, anonymity intact — the invariant we deliberately preserve").
+                        // Whether issuance is keeping up is an operator's question, and the operator's
+                        // view of it already exists in Diagnostics, with the two numbers that make it
+                        // legible — token-less sends and the last issuance outcome — which this row
+                        // never had. If server-side enforce ever lands, an unsendable message must
+                        // say so on the message, not as a counter three screens away.
+                        //
+                        // Reads `StealthPolicy.shared.isEnabled` rather than assuming true, so the
+                        // DEBUG developer override shows honestly.
                         HStack(spacing: SecuritySettingsLayout.rowContentSpacing) {
-                            CTRowIcon(sf: "exclamationmark.lock.fill", color: Color.CT.danger)
-                            Text(LocalizedStringKey("duress_pin_change"))
+                            CTRowIcon(sf: "eye.slash.fill", color: stealthOn ? Color.CT.accent : Color.CT.danger)
+                            Text(LocalizedStringKey("stealth_title"))
                                 .font(CTFont.body)
                                 .foregroundStyle(Color.CT.text)
                             Spacer()
-                            Image(systemName: "chevron.right").font(CTFont.secondary).foregroundStyle(Color.CT.textDim)
+                            CTStatusBadge(status: stealthOn ? .on : .error, size: 11)
                         }
-                        .securityRowInsets()
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
+                        .securityRowInsets(vertical: SecuritySettingsLayout.compactRowVerticalPadding)
 
-                    CTSep(style: .thin)
-                    Button { showingDisableDuressAlert = true } label: {
-                        HStack(spacing: SecuritySettingsLayout.rowContentSpacing) {
-                            Image(systemName: "xmark.circle.fill")
-                                .foregroundStyle(Color.CT.danger)
-                            Text(LocalizedStringKey("disable_duress_pin"))
-                                .font(CTFont.body)
-                                .foregroundStyle(Color.CT.danger)
-                            Spacer()
-                        }
-                        .securityRowInsets()
-                        .contentShape(Rectangle())
+                        // The off branch used to show the on copy — it described the protection as
+                        // active while it was overridden away. Reachable only in DEBUG, and still a
+                        // sentence that was false on screen.
                     }
-                    .buttonStyle(.plain)
-                } else {
-                    Button { showingDuressPinSetup = true } label: {
-                        HStack(spacing: SecuritySettingsLayout.rowContentSpacing) {
-                            CTRowIcon(sf: "exclamationmark.lock", color: securityViewModel.isPinEnabled
-                                      ? Color.CT.textDim : Color.CT.textDim.opacity(0.4))
-                            Text(LocalizedStringKey("enable_duress_pin"))
-                                .font(CTFont.body)
-                                .foregroundStyle(securityViewModel.isPinEnabled
-                                                 ? Color.CT.text : Color.CT.text.opacity(0.4))
-                            Spacer()
-                            Image(systemName: "chevron.right").font(CTFont.secondary).foregroundStyle(Color.CT.textDim)
-                        }
-                        .securityRowInsets()
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(!securityViewModel.isPinEnabled)
+                    CTSectionFooter(stealthOn ? "stealth_always_on_hint" : "stealth_off_hint", color: stealthOn ? Color.CT.textDim : Color.CT.danger)
+
+                    // (Scope selector removed 2026-07-15: per-message is the only token model —
+                    // per-stream is incompatible with server-side enforce. See
+                    // decisions/sealed-sender-anti-abuse-economics.md.)
                 }
 
-                securityHintText(
-                    LocalizedStringKey(securityViewModel.isPinEnabled ? "duress_pin_hint" : "duress_pin_requires_main_pin"),
-                    color: Color.CT.textDim
-                )
+                VStack(spacing: 0) {
+                    CTSectionGroup {
 
-                CTSep()
-
-                // MARK: - Lockdown
-                HStack(spacing: SecuritySettingsLayout.rowContentSpacing) {
-                    CTRowIcon(sf: lockdown.isActive ? "lock.slash.fill" : "lock.fill",
-                              color: lockdown.isActive ? .orange : Color.CT.textDim)
-                    VStack(alignment: .leading, spacing: SecuritySettingsLayout.lockStatusSpacing) {
-                        Text(LocalizedStringKey("lockdown_mode"))
-                            .font(CTFont.body)
-                            .foregroundStyle(Color.CT.text)
-                        if lockdown.isActive, let since = lockdown.activatedAt {
-                            Text(String(format: NSLocalizedString("lockdown_active_since", comment: ""),
-                                        since.formatted(date: .abbreviated, time: .shortened)))
-                                .font(CTFont.caption)
-                                .foregroundStyle(.orange)
+                        // MARK: - Issued invites
+                        // Local by construction: the server holds no record of an invite until it
+                        // is redeemed or revoked, so the issuing device is the only party that can
+                        // list what is outstanding.
+                        NavigationLink(destination: IssuedInvitesView()) {
+                            CTSettingsRow(
+                                label: NSLocalizedString("issued_invites", comment: ""),
+                                icon: "person.badge.clock",
+                                disclosure: true
+                            )
                         }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier(A11y.IssuedInvites.row)
                     }
-                    Spacer()
-                    Toggle("", isOn: Binding(
-                        get: { lockdown.isActive },
-                        set: { enabled in
-                            if enabled {
-                                let approvedIds = fetchCurrentContactIds()
-                                lockdown.enable(approvedIds: approvedIds)
-                            } else {
-                                lockdown.disable()
-                            }
-                        }
-                    ))
-                    .labelsHidden()
-                    .tint(.orange)
                 }
-                .securityRowInsets(vertical: SecuritySettingsLayout.compactRowVerticalPadding)
 
-                securityHintText(
-                    LocalizedStringKey("lockdown_mode_hint"),
-                    color: Color.CT.textDim
-                )
-
-                CTSep()
-
-                // MARK: - Stealth
-                //
-                // A statement, not a setting. stealth-sealed-sender-v2 Phase 4 made this
-                // always on with no toggle, and the row kept the shape of the switch it used
-                // to be — a title reading "stealth mode" beside a state nobody chose.
-                //
-                // The token wallet balance was removed from here on 2026-08-16. It answered
-                // a question the user cannot act on: an empty wallet costs them nothing,
-                // because `StealthSenderService` seals and sends regardless ("anti-abuse
-                // degraded, anonymity intact — the invariant we deliberately preserve").
-                // Whether issuance is keeping up is an operator's question, and the operator's
-                // view of it already exists in Diagnostics, with the two numbers that make it
-                // legible — token-less sends and the last issuance outcome — which this row
-                // never had. If server-side enforce ever lands, an unsendable message must
-                // say so on the message, not as a counter three screens away.
-                //
-                // Reads `StealthPolicy.shared.isEnabled` rather than assuming true, so the
-                // DEBUG developer override shows honestly.
-                let stealthOn = StealthPolicy.shared.isEnabled
-                HStack(spacing: SecuritySettingsLayout.rowContentSpacing) {
-                    CTRowIcon(sf: "eye.slash.fill", color: stealthOn ? Color.CT.accent : Color.CT.danger)
-                    Text(LocalizedStringKey("stealth_title"))
-                        .font(CTFont.body)
-                        .foregroundStyle(Color.CT.text)
-                    Spacer()
-                    CTStatusBadge(status: stealthOn ? .on : .error, size: 11)
-                }
-                .securityRowInsets(vertical: SecuritySettingsLayout.compactRowVerticalPadding)
-
-                // The off branch used to show the on copy — it described the protection as
-                // active while it was overridden away. Reachable only in DEBUG, and still a
-                // sentence that was false on screen.
-                securityHintText(
-                    LocalizedStringKey(stealthOn ? "stealth_always_on_hint" : "stealth_off_hint"),
-                    color: stealthOn ? Color.CT.textDim : Color.CT.danger,
-                    top: SecuritySettingsLayout.hintCompactTopPadding
-                )
-
-                // (Scope selector removed 2026-07-15: per-message is the only token model —
-                // per-stream is incompatible with server-side enforce. See
-                // decisions/sealed-sender-anti-abuse-economics.md.)
-
-                CTSep()
-
-                // MARK: - Issued invites
-                // Local by construction: the server holds no record of an invite until it
-                // is redeemed or revoked, so the issuing device is the only party that can
-                // list what is outstanding.
-                NavigationLink(destination: IssuedInvitesView()) {
-                    CTSettingsRow(
-                        label: NSLocalizedString("issued_invites", comment: "").uppercased(),
-                        icon: "person.badge.clock",
-                        disclosure: true
-                    )
-                }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier(A11y.IssuedInvites.row)
-
-                CTSep()
 
                 // MARK: - Key Transparency
                 KTStatusSection()
 
-                CTSep()
+                VStack(spacing: 0) {
+                    let hasUsername = !authVM.currentUsername.isEmpty
+                    CTSectionGroup {
 
-                // MARK: - Discovery
-                let hasUsername = !authVM.currentUsername.isEmpty
-                HStack(spacing: SecuritySettingsLayout.rowContentSpacing) {
-                    CTRowIcon(sf: settingsViewModel.isDiscoverable ? "eye.fill" : "eye.slash", color: settingsViewModel.isDiscoverable ? Color.CT.accent : Color.CT.textDim)
-                    Text(LocalizedStringKey("searchable_toggle_title"))
-                        .font(CTFont.body)
-                        .foregroundStyle(hasUsername ? Color.CT.text : Color.CT.textDim)
-                    Spacer()
-                    if settingsViewModel.isLoadingDiscoverable {
-                        ProgressView()
-                            .tint(Color.CT.accent)
-                            .scaleEffect(0.8)
-                    } else {
-                        Toggle("", isOn: Binding(
-                            get: { settingsViewModel.isDiscoverable },
-                            set: { newValue in
-                                if newValue {
-                                    showingDiscoverableConfirm = true
-                                } else {
-                                    Task { await settingsViewModel.setDiscoverable(false) }
-                                }
+                        // MARK: - Discovery
+                        HStack(spacing: SecuritySettingsLayout.rowContentSpacing) {
+                            CTRowIcon(sf: settingsViewModel.isDiscoverable ? "eye.fill" : "eye.slash", color: settingsViewModel.isDiscoverable ? Color.CT.accent : Color.CT.textDim)
+                            Text(LocalizedStringKey("searchable_toggle_title"))
+                                .font(CTFont.body)
+                                .foregroundStyle(hasUsername ? Color.CT.text : Color.CT.textDim)
+                            Spacer()
+                            if settingsViewModel.isLoadingDiscoverable {
+                                ProgressView()
+                                    .tint(Color.CT.accent)
+                                    .scaleEffect(0.8)
+                            } else {
+                                Toggle("", isOn: Binding(
+                                    get: { settingsViewModel.isDiscoverable },
+                                    set: { newValue in
+                                        if newValue {
+                                            showingDiscoverableConfirm = true
+                                        } else {
+                                            Task { await settingsViewModel.setDiscoverable(false) }
+                                        }
+                                    }
+                                ))
+                                .labelsHidden()
+                                .tint(Color.CT.accent)
+                                .disabled(!hasUsername)
                             }
-                        ))
-                        .labelsHidden()
-                        .tint(Color.CT.accent)
-                        .disabled(!hasUsername)
+                        }
+                        .securityRowInsets(vertical: SecuritySettingsLayout.compactRowVerticalPadding)
+                    }
+                    if !authVM.currentUsername.isEmpty {
+                        CTSectionFooter("searchable_toggle_footer")
+                    } else {
+                        CTSectionFooter("searchable_no_username_hint",
+                                        color: Color.CT.textDim.opacity(SecuritySettingsLayout.hintDisabledOpacity))
                     }
                 }
-                .securityRowInsets(vertical: SecuritySettingsLayout.compactRowVerticalPadding)
-
-                if !authVM.currentUsername.isEmpty {
-                    securityHintText(
-                        LocalizedStringKey("searchable_toggle_footer"),
-                        color: Color.CT.textDim
-                    )
-                } else {
-                    securityHintText(
-                        LocalizedStringKey("searchable_no_username_hint"),
-                        color: Color.CT.textDim.opacity(SecuritySettingsLayout.hintDisabledOpacity)
-                    )
-                }
-
-                CTSep()
             }
             .padding(.vertical, SecuritySettingsLayout.sectionVerticalPadding)
         }
@@ -415,20 +412,6 @@ struct SecurityView: View {
         let chats = (try? viewContext.fetch(req)) ?? []
         return Set(chats.compactMap { $0.otherUser?.id })
     }
-
-    private func securityHintText(
-        _ key: LocalizedStringKey,
-        color: Color,
-        top: CGFloat = SecuritySettingsLayout.hintTopPadding
-    ) -> some View {
-        Text(key)
-            .font(CTFont.caption)
-            .foregroundStyle(color)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, SecuritySettingsLayout.rowHorizontalPadding)
-            .padding(.top, top)
-            .padding(.bottom, SecuritySettingsLayout.hintBottomPadding)
-    }
 }
 
 // MARK: - KT Status Section
@@ -465,49 +448,42 @@ private struct KTStatusSection: View {
     }
 
     var body: some View {
-        CTSettingsSectionHeader(title: NSLocalizedString("kt_section", comment: ""))
+        VStack(spacing: 0) {
+            CTSettingsSectionHeader(title: NSLocalizedString("kt_section", comment: ""))
 
-        HStack(spacing: SecuritySettingsLayout.rowContentSpacing) {
-            CTRowIcon(sf: "number", color: statusColor)
-            Text(LocalizedStringKey("kt_status"))
-                .font(CTFont.body)
-                .foregroundStyle(Color.CT.text)
-            Spacer()
-            CTStatusBadge(status: statusBadge, size: 12)
-            Text(statusText)
-                .font(CTFont.caption)
-                .foregroundStyle(statusColor)
-                .padding(.trailing, KeyTransparencySettingsLayout.statusTrailingPadding)
+            CTSectionGroup {
+                HStack(spacing: SecuritySettingsLayout.rowContentSpacing) {
+                    CTRowIcon(sf: "number", color: statusColor)
+                    Text(LocalizedStringKey("kt_status"))
+                        .font(CTFont.body)
+                        .foregroundStyle(Color.CT.text)
+                    Spacer()
+                    CTStatusBadge(status: statusBadge, size: 12)
+                    Text(statusText)
+                        .font(CTFont.caption)
+                        .foregroundStyle(statusColor)
+                }
+                .securityRowInsets(vertical: SecuritySettingsLayout.compactRowVerticalPadding)
+            }
+
+            if failureCount > 0, let failedAt = lastFailedAt {
+                Text(String(format: NSLocalizedString("kt_last_failure_at", comment: ""),
+                            Self.relativeFormatter.localizedString(for: failedAt, relativeTo: Date())))
+                    .font(CTFont.caption)
+                    .foregroundStyle(Color.CT.danger)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, CTLayout.edgePad + CTLayout.inlinePad)
+                    .padding(.top, CTLayout.inlinePad / 2)
+            }
+
+            CTSectionFooter(failureCount > 0 ? "kt_failure_hint" : "kt_hint",
+                            color: failureCount > 0 ? Color.CT.danger : Color.CT.textDim)
         }
-        .padding(.horizontal, KeyTransparencySettingsLayout.rowHorizontalPadding)
-        .padding(.vertical, KeyTransparencySettingsLayout.rowVerticalPadding)
         .onAppear {
             verifiedCount = KTStore.shared.verifiedCount
             failureCount  = KTStore.shared.failureCount
             lastFailedAt  = KTStore.shared.lastFailedAt
         }
-
-        if failureCount > 0, let failedAt = lastFailedAt {
-                Text(String(format: NSLocalizedString("kt_last_failure_at", comment: ""),
-                        Self.relativeFormatter.localizedString(for: failedAt, relativeTo: Date())))
-                .font(CTFont.micro)
-                .foregroundStyle(Color.CT.danger.opacity(0.8))
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, KeyTransparencySettingsLayout.hintHorizontalPadding)
-                .padding(.top, KeyTransparencySettingsLayout.hintTopPadding)
-        }
-
-        Text(failureCount > 0
-             ? LocalizedStringKey("kt_failure_hint")
-             : LocalizedStringKey("kt_hint"))
-            .font(CTFont.caption)
-            .foregroundStyle(failureCount > 0
-                             ? Color.CT.danger
-                             : Color.CT.textDim.opacity(0.6))
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, KeyTransparencySettingsLayout.hintHorizontalPadding)
-            .padding(.top, KeyTransparencySettingsLayout.hintTopPadding)
-            .padding(.bottom, KeyTransparencySettingsLayout.hintBottomPadding)
     }
 }
 

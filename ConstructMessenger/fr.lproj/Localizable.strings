@@ -279,7 +279,7 @@
 "warning" = "Avertissement";
 "account_recovery" = "Récupération de compte";
 "discovery" = "Découverte";
-"account_recovery_seed" = "Récupération d'identité (phrase de récupération)";
+"account_recovery_seed" = "Phrase de récupération";
 "account_recovery_seed_hint" = "Restaurez l'accès en utilisant votre phrase de récupération.";
 "account_recovery_seed_coming_soon" = "La récupération par phrase de récupération sera disponible dans une future mise à jour.";
 
@@ -323,9 +323,9 @@
 "username_available" = "Le nom d'utilisateur est disponible.";
 "username_unavailable" = "Le nom d'utilisateur est déjà pris.";
 "username_check_failed" = "Impossible de vérifier le nom d'utilisateur pour l'instant. Réessayez.";
-"username_hint" = "votre identifiant public unique. appuyez pour modifier.";
+"username_hint" = "Votre identifiant public unique.";
 "username_length_error" = "le nom d'utilisateur doit comporter 3 à 20 caractères";
-"display_name_hint" = "affiché à vos contacts. le nom d'utilisateur reste permanent.";
+"display_name_hint" = "Affiché à vos contacts.";
 "new_messages" = "Nouveaux messages";
 "scroll_to_bottom" = "Retour en bas";
 
@@ -446,7 +446,7 @@
 "recovery_restored_body" = "Votre compte a été récupéré sur cet appareil. Les sessions précédentes ont été révoquées.";
 "recovery_banner_title" = "Protégez votre compte";
 "recovery_banner_subtitle" = "Configurez votre phrase de récupération pour éviter de perdre l'accès.";
-"recovery_setup_action" = "CONFIGURER";
+"recovery_setup_action" = "Configurer";
 
 // macOS Catalyst — push notifications
 "push_not_available_mac" = "Notifications push indisponibles sur ordinateur";
@@ -846,23 +846,21 @@
 "share" = "Partager";
 "recovery_not_configured_title" = "Récupération non configurée";
 "developer" = "Développeur";
-"change_photo" = "changer la photo";
+"change_photo" = "Changer la photo";
 "choose_photo" = "choisir une photo";
 "identity_section" = "identité";
 "account_section" = "compte";
 "bio" = "présentation";
-"user_id" = "identifiant";
+"user_id" = "Identifiant";
 "joined" = "inscrit le";
-"changes_encrypted_footer" = "> les modifications sont chiffrées de bout en bout";
-"delete_account_row" = "supprimer le compte";
-"delete_action" = "supprimer";
-"manage_action" = "gérer";
+"changes_encrypted_footer" = "Les modifications sont chiffrées de bout en bout.";
+"delete_account_row" = "Supprimer le compte";
 "add_action" = "ajouter";
 "call_voice" = "appel audio";
 "call_video" = "appel vidéo";
 "call_audio_route" = "audio";
 "end_to_end_encrypted" = "les modifications sont chiffrées de bout en bout";
-"invite" = "inviter";
+"invite" = "Inviter";
 "qr_caption_trust" = "ce code est une invitation à se connecter.";
 "qr_scan_hint" = "montrez-le à quelqu’un près de vous ou faites une capture d’écran";
 "device_link_section" = "lier un appareil";
@@ -884,8 +882,8 @@
 "keys_recovery_wipe_confirm_title" = "créer un nouveau compte ?";
 "keys_recovery_wipe_confirm_body" = "Cela supprimera définitivement votre identité actuelle et toutes les données locales. Action irréversible.";
 "keys_recovery_wipe_confirm_action" = "supprimer et continuer";
-"logout_row" = "se déconnecter";
-"logout_all_row" = "déconnecter tous les appareils";
+"logout_row" = "Se déconnecter";
+"logout_all_row" = "Déconnecter tous les appareils";
 "logout_confirm_title" = "Se déconnecter ?";
 "logout_confirm_message" = "Vous serez déconnecté de cet appareil et tout ce qu'il contient — discussions, médias, contacts — sera effacé. Reconnectez-vous avec votre phrase de récupération ; vos autres appareils peuvent renvoyer l'historique.";
 "logout_confirm_action" = "Se déconnecter";
@@ -896,15 +894,15 @@
 "logout_no_backup_message" = "Vous n’avez pas encore noté votre phrase de récupération. Si vous vous déconnectez sans elle, vous risquez de perdre définitivement cette identité et ses messages.";
 "logout_no_backup_setup_action" = "Configurer la récupération d’abord";
 "logout_no_backup_proceed_action" = "Se déconnecter quand même";
-"searchable_toggle_title" = "trouvable par nom d’utilisateur";
+"searchable_toggle_title" = "Trouvable par nom d’utilisateur";
 "searchable_toggle_footer" = "Une fois activé, toute personne qui connaît votre nom d’utilisateur exact peut vous trouver. Cela ne permet pas de deviner ni d’énumérer les noms — seules les correspondances exactes fonctionnent. Désactivé par défaut.";
 "searchable_confirm_title" = "activer la recherche ?";
 "searchable_confirm_message" = "Votre nom d’utilisateur sera trouvable par quiconque le tape exactement. Désactivable à tout moment dans les réglages de Sécurité.";
 "searchable_confirm_action" = "activer";
-"searchable_no_username_hint" = "définissez d’abord un nom d’utilisateur pour activer la recherche";
-"username_not_set" = "aucun nom d’utilisateur";
-"searchable_indicator" = "trouvable";
-"searchable_indicator_off" = "non trouvable";
+"searchable_no_username_hint" = "Définissez d’abord un nom d’utilisateur pour activer la recherche.";
+"username_not_set" = "Aucun nom d’utilisateur";
+"searchable_indicator" = "Trouvable";
+"searchable_indicator_off" = "Non trouvable";
 "synapses_remote_result_header" = "trouvé sur Konstruct";
 "synapses_searching" = "recherche...";
 "synapses_not_found" = "introuvable";
@@ -931,13 +929,13 @@
 "safety_numbers_mismatch_body" = "Cessez de communiquer et vérifiez votre connexion. Une différence peut indiquer que quelqu’un intercepte vos messages.";
 "safety_numbers_unavailable" = "indisponible — identité non initialisée";
 "stealth_section" = "furtivité";
-"stealth_title" = "anonymat de l’expéditeur";
+"stealth_title" = "Anonymat de l’expéditeur";
 "stealth_always_on_hint" = "Konstruct n’apprend jamais qui a envoyé un message. Toujours actif — il n’y a pas d’interrupteur, et rien à recharger.";
 "stealth_off_hint" = "Désactivé — vos envois révèlent qui vous êtes à Konstruct. Surcharge de débogage uniquement.";
-"kt_section" = "transparence des clés";
-"kt_status" = "journal merkle";
-"kt_verified" = "vérifié";
-"kt_warning" = "avertissement";
+"kt_section" = "Transparence des clés";
+"kt_status" = "Journal Merkle";
+"kt_verified" = "Vérifié";
+"kt_warning" = "Avertissement";
 "key_change_banner_title_failed" = "Vérification d’identité échouée";
 "key_change_banner_subtitle_failed" = "Nous n’avons pas pu confirmer la clé de sécurité de cette personne auprès du journal de transparence. Vérifiez en personne si possible.";
 "key_change_verify" = "Vérifier";
@@ -951,11 +949,12 @@
 "identity_fingerprint_unknown" = "Pas encore épinglée";
 "identity_fingerprint_copy_hint" = "Copie l’empreinte dans le presse-papiers";
 "identity_fingerprint_copied" = "Copiée";
-"kt_no_data" = "aucune donnée";
+"kt_no_data" = "Aucune donnée";
 "kt_hint" = "Les clés d’identité publiques sont inscrites dans un journal en ajout seul, ce qui rend toute altération détectable.";
 "kt_failure_hint" = "la vérification de transparence des clés a échoué — altération possible détectée.";
 "kt_last_failure_at" = "dernier échec : %@";
 "social_recovery_title" = "Récupération sociale";
+"social_recovery_active" = "Activée";
 "social_recovery_intro_title" = "récupération sociale";
 "social_recovery_intro_body" = "Vos clés d’identité seront réparties entre des personnes de confiance. M d’entre elles sur N suffisent à restaurer votre identité si vous perdez l’accès.";
 "social_recovery_begin" = "COMMENCER [→]";
@@ -990,13 +989,11 @@
 "social_recovery_reconstructing" = "reconstruction de la clé du coffre...";
 "social_recovery_restored_title" = "IDENTITÉ RESTAURÉE";
 "social_recovery_restored_body" = "vos clés d’identité ont été restaurées avec succès.";
-"social_recovery_row_active" = "■ récupération sociale — active";
-"social_recovery_row_inactive" = "○ récupération sociale — non configurée";
 "social_recovery_identity_header" = "IDENTITÉ";
 "social_recovery_username_label" = "Nom d’utilisateur";
 "backup_section" = "sauvegarde";
-"export_backup" = "exporter la sauvegarde";
-"import_backup" = "importer une sauvegarde";
+"export_backup" = "Exporter la sauvegarde";
+"import_backup" = "Importer une sauvegarde";
 "backup_export_title" = "Exporter la sauvegarde";
 "backup_warning_header" = "AVANT DE CONTINUER";
 "backup_export_warning" = "Ceci crée une sauvegarde chiffrée de tous vos messages et de vos clés. Le fichier est protégé par une phrase de récupération de 12 mots que vous devez noter et conserver en lieu sûr.\n\nRangez le fichier de sauvegarde et la phrase séparément.";
@@ -1023,8 +1020,8 @@
 "backup_restore_success_message" = "Votre sauvegarde a été vérifiée et préparée. Fermez et rouvrez l’app pour terminer la restauration.";
 "backup_error_invalid_mnemonic" = "Phrase de récupération invalide. Vérifiez les 12 mots et réessayez.";
 "backup_error_invalid_file" = "Ce n’est pas une sauvegarde Konstruct valide, ou la phrase de récupération est incorrecte.";
-"transfer_send_nearby" = "envoyer à un appareil proche";
-"transfer_receive_nearby" = "recevoir d’un appareil proche";
+"transfer_send_nearby" = "Envoyer à un appareil proche";
+"transfer_receive_nearby" = "Recevoir d’un appareil proche";
 "transfer_send_title" = "Envoyer la sauvegarde";
 "transfer_receive_title" = "Recevoir la sauvegarde";
 "transfer_preparing" = "Préparation de la sauvegarde...";
@@ -1275,3 +1272,4 @@
 
 // The safety numbers screen's bar title; the profile row keeps "safety_numbers".
 "safety_numbers_title" = "Numéros de sécurité";
+"delete_action" = "supprimer";
