@@ -1318,6 +1318,12 @@ public func FfiConverterTypeHistorySender_lower(_ value: HistorySender) -> UInt6
 
 public protocol LocalStoreProtocol: AnyObject, Sendable {
     
+    /**
+     * Each write below changes its named fields of one chat in one statement; false: no such chat.
+     * Moves the preview unless the one shown is newer; false also when it is.
+     */
+    func advanceChatPreview(id: String, text: String, time: Int64) throws  -> Bool
+    
     func allPeerDevices() throws  -> [LocalPeerDevice]
     
     /**
@@ -1328,6 +1334,8 @@ public protocol LocalStoreProtocol: AnyObject, Sendable {
     func calls(limit: UInt32) throws  -> [LocalCall]
     
     func chat(id: String) throws  -> LocalChat?
+    
+    func chatForPeer(peerId: String) throws  -> LocalChat?
     
     /**
      * Pinned first, then most recent, chats with no message last.
@@ -1366,6 +1374,13 @@ public protocol LocalStoreProtocol: AnyObject, Sendable {
     func get(key: String) throws  -> Data?
     
     func identityKeyPins() throws  -> [LocalIdentityKeyPin]
+    
+    func incrementUnread(id: String) throws  -> Bool
+    
+    /**
+     * `AlreadyPresent` when the id or the peer has a chat — then use `chat_for_peer`.
+     */
+    func insertChat(chat: LocalChat) throws  -> LocalInsert
     
     /**
      * `search_text` is what the message says, for the full-text index; null for media/control.
@@ -1425,6 +1440,13 @@ public protocol LocalStoreProtocol: AnyObject, Sendable {
     
     func setAccountAddress(id: String, address: Data?) throws  -> Bool
     
+    func setChatPinned(id: String, pinned: Bool) throws  -> Bool
+    
+    /**
+     * Sets the preview whatever it was — after a deletion; both null when no message is left.
+     */
+    func setChatPreview(id: String, text: String?, time: Int64?) throws  -> Bool
+    
     func setContactAlias(id: String, alias: String?) throws  -> Bool
     
     /**
@@ -1453,6 +1475,8 @@ public protocol LocalStoreProtocol: AnyObject, Sendable {
     
     func setSharingWith(id: String, sharing: Bool) throws  -> Bool
     
+    func setUnread(id: String, count: Int32) throws  -> Bool
+    
     /**
      * The ids we share our profile with.
      */
@@ -1460,6 +1484,9 @@ public protocol LocalStoreProtocol: AnyObject, Sendable {
     
     func upsertCall(call: LocalCall) throws 
     
+    /**
+     * The whole row; a second chat for a peer that has one is an error.
+     */
     func upsertChat(chat: LocalChat) throws 
     
     func upsertContact(contact: LocalContact) throws 
@@ -1545,6 +1572,21 @@ public static func inMemory(key: Data)throws  -> LocalStore  {
     
 
     
+    /**
+     * Each write below changes its named fields of one chat in one statement; false: no such chat.
+     * Moves the preview unless the one shown is newer; false also when it is.
+     */
+open func advanceChatPreview(id: String, text: String, time: Int64)throws  -> Bool  {
+    return try  FfiConverterBool.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_advance_chat_preview(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(id),
+        FfiConverterString.lower(text),
+        FfiConverterInt64.lower(time),$0
+    )
+})
+}
+    
 open func allPeerDevices()throws  -> [LocalPeerDevice]  {
     return try  FfiConverterSequenceTypeLocalPeerDevice.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
     uniffi_construct_core_fn_method_localstore_all_peer_devices(
@@ -1582,6 +1624,15 @@ open func chat(id: String)throws  -> LocalChat?  {
     uniffi_construct_core_fn_method_localstore_chat(
             self.uniffiCloneHandle(),
         FfiConverterString.lower(id),$0
+    )
+})
+}
+    
+open func chatForPeer(peerId: String)throws  -> LocalChat?  {
+    return try  FfiConverterOptionTypeLocalChat.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_chat_for_peer(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(peerId),$0
     )
 })
 }
@@ -1706,6 +1757,27 @@ open func identityKeyPins()throws  -> [LocalIdentityKeyPin]  {
     return try  FfiConverterSequenceTypeLocalIdentityKeyPin.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
     uniffi_construct_core_fn_method_localstore_identity_key_pins(
             self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+open func incrementUnread(id: String)throws  -> Bool  {
+    return try  FfiConverterBool.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_increment_unread(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(id),$0
+    )
+})
+}
+    
+    /**
+     * `AlreadyPresent` when the id or the peer has a chat — then use `chat_for_peer`.
+     */
+open func insertChat(chat: LocalChat)throws  -> LocalInsert  {
+    return try  FfiConverterTypeLocalInsert_lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_insert_chat(
+            self.uniffiCloneHandle(),
+        FfiConverterTypeLocalChat_lower(chat),$0
     )
 })
 }
@@ -1887,6 +1959,30 @@ open func setAccountAddress(id: String, address: Data?)throws  -> Bool  {
 })
 }
     
+open func setChatPinned(id: String, pinned: Bool)throws  -> Bool  {
+    return try  FfiConverterBool.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_set_chat_pinned(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(id),
+        FfiConverterBool.lower(pinned),$0
+    )
+})
+}
+    
+    /**
+     * Sets the preview whatever it was — after a deletion; both null when no message is left.
+     */
+open func setChatPreview(id: String, text: String?, time: Int64?)throws  -> Bool  {
+    return try  FfiConverterBool.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_set_chat_preview(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(id),
+        FfiConverterOptionString.lower(text),
+        FfiConverterOptionInt64.lower(time),$0
+    )
+})
+}
+    
 open func setContactAlias(id: String, alias: String?)throws  -> Bool  {
     return try  FfiConverterBool.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
     uniffi_construct_core_fn_method_localstore_set_contact_alias(
@@ -2002,6 +2098,16 @@ open func setSharingWith(id: String, sharing: Bool)throws  -> Bool  {
 })
 }
     
+open func setUnread(id: String, count: Int32)throws  -> Bool  {
+    return try  FfiConverterBool.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_set_unread(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(id),
+        FfiConverterInt32.lower(count),$0
+    )
+})
+}
+    
     /**
      * The ids we share our profile with.
      */
@@ -2021,6 +2127,9 @@ open func upsertCall(call: LocalCall)throws   {try rustCallWithError(FfiConverte
 }
 }
     
+    /**
+     * The whole row; a second chat for a peer that has one is an error.
+     */
 open func upsertChat(chat: LocalChat)throws   {try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
     uniffi_construct_core_fn_method_localstore_upsert_chat(
             self.uniffiCloneHandle(),
@@ -5338,24 +5447,38 @@ public func FfiConverterTypeLocalCall_lower(_ value: LocalCall) -> RustBuffer {
 
 public struct LocalChat: Equatable, Hashable {
     public var id: String
+    /**
+     * One chat per peer.
+     */
     public var peerId: String
+    /**
+     * The list's preview, as the client formatted it.
+     */
     public var lastMessageText: String?
+    /**
+     * Milliseconds since the Unix epoch.
+     */
     public var lastMessageTime: Int64?
-    public var sessionId: String?
     public var isPinned: Bool
-    public var isMuted: Bool
     public var unreadCount: Int32
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(id: String, peerId: String, lastMessageText: String?, lastMessageTime: Int64?, sessionId: String?, isPinned: Bool, isMuted: Bool, unreadCount: Int32) {
+    public init(id: String, 
+        /**
+         * One chat per peer.
+         */peerId: String, 
+        /**
+         * The list's preview, as the client formatted it.
+         */lastMessageText: String?, 
+        /**
+         * Milliseconds since the Unix epoch.
+         */lastMessageTime: Int64?, isPinned: Bool, unreadCount: Int32) {
         self.id = id
         self.peerId = peerId
         self.lastMessageText = lastMessageText
         self.lastMessageTime = lastMessageTime
-        self.sessionId = sessionId
         self.isPinned = isPinned
-        self.isMuted = isMuted
         self.unreadCount = unreadCount
     }
 
@@ -5377,9 +5500,7 @@ public struct FfiConverterTypeLocalChat: FfiConverterRustBuffer {
                 peerId: FfiConverterString.read(from: &buf), 
                 lastMessageText: FfiConverterOptionString.read(from: &buf), 
                 lastMessageTime: FfiConverterOptionInt64.read(from: &buf), 
-                sessionId: FfiConverterOptionString.read(from: &buf), 
                 isPinned: FfiConverterBool.read(from: &buf), 
-                isMuted: FfiConverterBool.read(from: &buf), 
                 unreadCount: FfiConverterInt32.read(from: &buf)
         )
     }
@@ -5389,9 +5510,7 @@ public struct FfiConverterTypeLocalChat: FfiConverterRustBuffer {
         FfiConverterString.write(value.peerId, into: &buf)
         FfiConverterOptionString.write(value.lastMessageText, into: &buf)
         FfiConverterOptionInt64.write(value.lastMessageTime, into: &buf)
-        FfiConverterOptionString.write(value.sessionId, into: &buf)
         FfiConverterBool.write(value.isPinned, into: &buf)
-        FfiConverterBool.write(value.isMuted, into: &buf)
         FfiConverterInt32.write(value.unreadCount, into: &buf)
     }
 }
@@ -12129,6 +12248,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_method_historysender_snapshot_id() != 18376) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_construct_core_checksum_method_localstore_advance_chat_preview() != 18597) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_construct_core_checksum_method_localstore_all_peer_devices() != 59848) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -12139,6 +12261,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_localstore_chat() != 45451) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_chat_for_peer() != 26460) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_localstore_chats() != 2703) {
@@ -12178,6 +12303,12 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_localstore_identity_key_pins() != 6243) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_increment_unread() != 19638) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_insert_chat() != 53415) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_localstore_insert_message() != 2107) {
@@ -12228,6 +12359,12 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_method_localstore_set_account_address() != 23284) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_construct_core_checksum_method_localstore_set_chat_pinned() != 63084) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_set_chat_preview() != 13808) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_construct_core_checksum_method_localstore_set_contact_alias() != 31575) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -12259,6 +12396,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_localstore_set_sharing_with() != 40928) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_set_unread() != 48624) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_localstore_sharing_with() != 63075) {
