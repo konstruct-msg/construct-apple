@@ -73,7 +73,7 @@ struct UserProfileView: View {
                     flatDivider(thick: true)
                     identitySection
                     flatDivider(thick: true)
-                    actionsSection
+                    sharingSection
                     flatDivider(thick: true)
                     securitySection
                     flatDivider(thick: true)
@@ -152,6 +152,18 @@ struct UserProfileView: View {
             .contentShape(Rectangle())
             .onTapGesture { if avatarImage != nil { showAvatarViewer = true } }
 
+            VStack(spacing: 4) {
+                Text(user.resolvedDisplayName)
+                    .font(CTFont.title)
+                    .foregroundStyle(Color.CT.text)
+                    .multilineTextAlignment(.center)
+                if !user.username.isEmpty {
+                    Text("@\(user.username)")
+                        .font(CTFont.secondary)
+                        .foregroundStyle(Color.CT.textDim)
+                }
+            }
+
             if user.isBlocked {
                 HStack(spacing: 5) {
                     Image(systemName: "nosign")
@@ -164,6 +176,10 @@ struct UserProfileView: View {
                 .padding(.horizontal, 9)
                 .padding(.vertical, 4)
                 .background(Color.CT.danger.opacity(0.14), in: CTShape.badge())
+            }
+
+            if !actionButtons.isEmpty {
+                actionButtonRow.padding(.top, CTLayout.inlinePad)
             }
         }
         .frame(maxWidth: .infinity)
@@ -180,20 +196,6 @@ struct UserProfileView: View {
     private var identitySection: some View {
         VStack(alignment: .leading, spacing: 0) {
             sectionHeader(NSLocalizedString("identity_section", comment: ""))
-            flatRowDivider()
-
-            profileRow(label: NSLocalizedString("username", comment: "")) {
-                Text("<@\(user.username.isEmpty ? "—" : user.username)>")
-                    .font(CTFont.ui(14))
-                    .foregroundStyle(Color.CT.textDim)
-            }
-            flatRowDivider()
-
-            profileRow(label: NSLocalizedString("display_name", comment: "")) {
-                Text(user.resolvedDisplayName)
-                    .font(CTFont.ui(14))
-                    .foregroundStyle(Color.CT.text)
-            }
             flatRowDivider()
 
             // Local-only alias the user assigns. Never leaves the device; overrides the
@@ -259,64 +261,82 @@ struct UserProfileView: View {
         }
     }
 
-    // MARK: - Actions section
+    // MARK: - Actions
 
-    private var actionsSection: some View {
+    /// What the card can start right away, as the system's contact cards show it: a row of round
+    /// buttons under the name (owner, 2026-10-08, TODO 130). Message only when the card is not
+    /// opened from the chat itself; calls only when a call can start — no greyed-out rows.
+    private enum ContactAction: Hashable { case message, call, video }
+
+    private var actionButtons: [ContactAction] {
+        var actions: [ContactAction] = []
+        if showMessageButton, onOpenChat != nil { actions.append(.message) }
+        if CallsFeature.isEnabled, let callManager, case .idle = callManager.state {
+            actions.append(.call)
+            if CallsFeature.isVideoEnabled { actions.append(.video) }
+        }
+        return actions
+    }
+
+    private var actionButtonRow: some View {
+        HStack(spacing: CTLayout.sectionGap) {
+            ForEach(actionButtons, id: \.self) { action in
+                switch action {
+                case .message:
+                    ContactActionButton(titleKey: "message", systemImage: "message") {
+                        onOpenChat?(); dismiss()
+                    }
+                case .call:
+                    ContactActionButton(titleKey: "chat_action_call", systemImage: "phone") {
+                        startCall(hasVideo: false)
+                    }
+                case .video:
+                    ContactActionButton(titleKey: "chat_action_video", systemImage: "video") {
+                        startCall(hasVideo: true)
+                    }
+                }
+            }
+        }
+    }
+
+    private func startCall(hasVideo: Bool) {
+        guard let callManager else { return }
+        Task {
+            await callManager.startOutgoingCall(
+                to: user.id,
+                displayName: user.resolvedDisplayName,
+                hasVideo: hasVideo
+            )
+        }
+        dismiss()
+    }
+
+    // MARK: - Sharing section
+
+    /// Whether this person gets my name and photo — a state, so a switch, not a button whose
+    /// title flips between "share" and "stop sharing".
+    private var sharingSection: some View {
         VStack(alignment: .leading, spacing: 0) {
-            sectionHeader(NSLocalizedString("actions", comment: ""))
+            sectionHeader(NSLocalizedString("profile_sharing_section", comment: ""))
             flatRowDivider()
 
-            if showMessageButton, let openChat = onOpenChat {
-                actionRow(label: NSLocalizedString("synapses_open_chat", comment: ""), color: Color.CT.accent) {
-                    openChat(); dismiss()
+            Toggle(isOn: Binding(
+                get: { user.amISharingWith },
+                set: { handleShareToggle($0) }
+            )) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(NSLocalizedString("share_my_profile", comment: ""))
+                        .font(CTFont.ui(14))
+                        .foregroundStyle(Color.CT.text)
+                    Text(NSLocalizedString("share_profile_explanation", comment: ""))
+                        .font(CTFont.caption)
+                        .foregroundStyle(Color.CT.textDim)
                 }
-                flatRowDivider()
             }
-
-            if CallsFeature.isEnabled, let callManager, case .idle = callManager.state {
-                actionRow(label: NSLocalizedString("call_voice", comment: "Voice call"), color: Color.CT.accent) {
-                    Task {
-                        await callManager.startOutgoingCall(
-                            to: user.id,
-                            displayName: user.resolvedDisplayName,
-                            hasVideo: false
-                        )
-                    }
-                    dismiss()
-                }
-                flatRowDivider()
-
-                if CallsFeature.isVideoEnabled {
-                    actionRow(label: NSLocalizedString("call_video", comment: "Video call"), color: Color.CT.accent) {
-                        Task {
-                            await callManager.startOutgoingCall(
-                                to: user.id,
-                                displayName: user.resolvedDisplayName,
-                                hasVideo: true
-                            )
-                        }
-                        dismiss()
-                    }
-                    flatRowDivider()
-                }
-            } else if !CallsFeature.isEnabled {
-                disabledRow(label: NSLocalizedString("call_voice", comment: "Voice call"))
-                flatRowDivider()
-            }
-
-            if user.amISharingWith {
-                actionRow(
-                    label: NSLocalizedString("stop_sharing_profile", comment: ""),
-                    color: Color.CT.text,
-                    isLoading: isSharingInProgress
-                ) { handleShareToggle(false) }
-            } else {
-                actionRow(
-                    label: NSLocalizedString("share_my_profile", comment: ""),
-                    color: Color.CT.accent,
-                    isLoading: isSharingInProgress
-                ) { handleShareToggle(true) }
-            }
+            .tint(Color.CT.accent)
+            .disabled(isSharingInProgress)
+            .padding(.horizontal, 20)
+            .padding(.vertical, 12)
 
             if let sharedAt = user.sharedWithMeAt, user.isSharingWithMe {
                 flatRowDivider()
@@ -524,23 +544,6 @@ struct UserProfileView: View {
         .disabled(isLoading)
     }
 
-    private func disabledRow(label: String) -> some View {
-        HStack {
-            Text(label.lowercased())
-                .font(CTFont.ui(14))
-                .foregroundStyle(Color.CT.textDim)
-            Spacer()
-            Text(NSLocalizedString("settings_coming_soon", comment: ""))
-                .font(CTFont.ui(11, relativeTo: .caption2))
-                .foregroundStyle(Color.CT.textDim)
-                .padding(.horizontal, 7)
-                .padding(.vertical, 3)
-                .background(Color.CT.noise, in: CTShape.badge())
-        }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 14)
-    }
-
     // MARK: - Helpers
 
     private func formatDate(_ date: Date) -> String {
@@ -689,4 +692,42 @@ struct UserProfileView: View {
     try? context.save()
     return UserProfileView(userId: user.id)
         .environment(\.managedObjectContext, context)
+}
+
+/// One of the contact card's round actions: the system's glass circle with a symbol, the title
+/// under it — as the iOS 26 contact cards draw them. The title is part of the button.
+private struct ContactActionButton: View {
+    let titleKey: String
+    let systemImage: String
+    let action: () -> Void
+
+    private let diameter: CGFloat = 52
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 6) {
+                circle
+                Text(NSLocalizedString(titleKey, comment: ""))
+                    .font(CTFont.caption)
+                    .foregroundStyle(Color.CT.text)
+                    .lineLimit(1)
+            }
+            .frame(minWidth: CTLayout.hitTarget + CTLayout.sectionGap)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    @ViewBuilder
+    private var circle: some View {
+        let icon = Image(systemName: systemImage)
+            .font(CTIcon.font(CTIcon.nav))
+            .foregroundStyle(Color.CT.accent)
+            .frame(width: diameter, height: diameter)
+        if #available(iOS 26.0, macOS 26.0, *) {
+            icon.glassEffect(.regular.interactive(), in: Circle())
+        } else {
+            icon.background(Color.CT.bgMsg, in: Circle())
+        }
+    }
 }

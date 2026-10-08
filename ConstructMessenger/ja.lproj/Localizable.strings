@@ -288,9 +288,9 @@
 "transfer_history_hint" = "同じWiFiネットワーク上のデバイスにメッセージ履歴を送信します。";
 "this_device" = "このデバイス";
 "profile_currently_shared" = "アイデンティティ情報を共有中";
-"stop_sharing_profile" = "アイデンティティ情報の共有を停止";
 "share_my_profile" = "アイデンティティ情報を共有";
 "share_profile_explanation" = "この相手に表示名とアバターを共有します";
+"profile_sharing_section" = "プロフィールの共有";
 "username_invalid_chars" = "ユーザー名には英数字とアンダースコアのみ使用できます。";
 "username_too_short" = "ユーザー名は3文字以上である必要があります。";
 "username_checking" = "空き状況を確認中...";

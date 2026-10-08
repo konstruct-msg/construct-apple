@@ -267,9 +267,9 @@
 "delete_account" = "Удалить идентичность";
 "warning" = "Предупреждение";
 "profile_currently_shared" = "Профиль доступен для контакта";
-"stop_sharing_profile" = "Прекратить делиться профилем";
 "share_my_profile" = "Поделиться моим профилем";
 "share_profile_explanation" = "Поделитесь своим именем и фотографией с этим контактом";
+"profile_sharing_section" = "Доступ к профилю";
 "username_invalid_chars" = "Имя пользователя может содержать только буквы, цифры и подчёркивание.";
 "username_too_short" = "Имя пользователя должно быть не короче 3 символов.";
 "username_checking" = "Проверяем доступность...";

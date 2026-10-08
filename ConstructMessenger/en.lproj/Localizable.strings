@@ -307,9 +307,9 @@
 "transfer_history_hint" = "Send your message history to a device on the same WiFi network.";
 "this_device" = "This Device";
 "profile_currently_shared" = "Profile currently shared";
-"stop_sharing_profile" = "Stop Sharing Profile";
-"share_my_profile" = "Share My Profile";
+"share_my_profile" = "Share my profile";
 "share_profile_explanation" = "Share your name and photo with this contact";
+"profile_sharing_section" = "Profile sharing";
 "username_invalid_chars" = "Username can only contain letters, numbers, and underscores.";
 "username_too_short" = "Username must be at least 3 characters.";
 "username_checking" = "Checking availability...";
