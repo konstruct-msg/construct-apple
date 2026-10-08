@@ -877,6 +877,8 @@ private struct ContactCircle: View {
 
 // MARK: - Preview
 
+// DEBUG only: the previews seed `ContactsLive.useForPreview`, which a release build does not have.
+#if DEBUG
 #Preview("Honeycomb") {
     let container = PreviewHelpers.createPreviewContainer()
     ContactsLive.useForPreview(container)
@@ -925,3 +927,4 @@ private struct ContactCircle: View {
         .environment(chatsVM)
         .preferredColorScheme(.dark)
 }
+#endif
