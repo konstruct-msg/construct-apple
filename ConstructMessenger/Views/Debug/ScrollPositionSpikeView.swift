@@ -23,7 +23,6 @@ import SwiftUI
 
 /// Reachable from Diagnostics ▸ SCROLL POSITION SPIKE. Orange on purpose (debug-only UI).
 struct ScrollPositionSpikeView: View {
-    @Environment(\.dismiss) private var dismiss
 
     private struct SpikeRow: Identifiable, Equatable {
         let id: Int
@@ -48,16 +47,12 @@ struct ScrollPositionSpikeView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            CTNavBar(
-                title: "SCROLL SPIKE",
-                showBack: true,
-                backAction: { dismiss() }
-            )
             readout
             scroll
             controls
         }
         .ctBackground()
+        .screenTitle("SCROLL SPIKE")
     }
 
     // MARK: - The stack under test

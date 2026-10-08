@@ -123,7 +123,7 @@ struct Construct_MessengerApp: App {
         // The bar is the system's; ours is the title face, nothing else
         // (`decisions/navigation-bars-are-the-systems.md`). No `standardAppearance`: an
         // appearance of our own with a background turns the iOS 26 glass off. The title is the
-        // chrome's monospace at `CTNavBar`'s size, on the headline curve. Bar items are the
+        // chrome's monospace at 17 pt, on the headline curve. Bar items are the
         // label colour (`barItem()`), the accent only on a confirming action.
         let titleSize = UIFontMetrics(forTextStyle: .headline).scaledValue(for: 17)
         let titleFont = UIFont(name: "JetBrainsMono-SemiBold", size: titleSize)

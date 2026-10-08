@@ -1213,11 +1213,6 @@
 "account_discard_changes_keep_editing" = "Продолжить редактирование";
 "account_editing_profile" = "> Режим редактирования профиля. «Сохранить» — оставить изменения, «Отмена» — отменить.";
 
-"liquid_logo.title" = "ЖИДКИЙ ЛОГОТИП";
-"liquid_logo.size" = "РАЗМЕР";
-"liquid_logo.haptics" = "Виброотклик";
-"liquid_logo.replay" = "ПОВТОР";
-"liquid_logo.hint" = "коснитесь экрана для повтора";
 
 /* Silent-transport neutral network indicator (silent-transport-ui decision) */
 "net_status_protected" = "Защищено";

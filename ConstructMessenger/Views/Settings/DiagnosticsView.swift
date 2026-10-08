@@ -384,7 +384,7 @@ struct DiagnosticsView: View {
             Button(LocalizedStringKey("cancel"), role: .cancel) {}
         }
         .sheet(isPresented: $showScrollSpike) {
-            ScrollPositionSpikeView()
+            ScrollPositionSpikeView().sheetNavigation()
         }
         #endif
     }

@@ -1177,11 +1177,6 @@
 "veil_import_err_unknown_relay" = "不明なリレー向けの設定です";
 
 // MARK: - Liquid logo (debug)
-"liquid_logo.title" = "リキッドロゴ";
-"liquid_logo.size" = "サイズ";
-"liquid_logo.haptics" = "触覚";
-"liquid_logo.replay" = "再生";
-"liquid_logo.hint" = "画面をタップして再生";
 
 
 // Synced with en.lproj 2026-08-16.
