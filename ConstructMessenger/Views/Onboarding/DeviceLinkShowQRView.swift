@@ -26,22 +26,14 @@ struct DeviceLinkShowQRView: View {
     @State private var receiveUserId: String = ""
 
     var body: some View {
-        NavigationStack {
-            VStack(spacing: 0) {
-                CTNavBar(
-                    title: NSLocalizedString("device_link_request_title", comment: ""),
-                    showBack: true,
-                    backAction: { vm.cancelPolling(); dismiss() }
-                ) {
-                    EmptyView()
-                } trailing: {
-                    EmptyView()
-                }
-                Rectangle().fill(Color.CT.noise).frame(height: 1)
-
-                content
+        content
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color.CT.bg.ignoresSafeArea())
+        .screenTitle(NSLocalizedString("device_link_request_title", comment: ""))
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                CloseButton { vm.cancelPolling(); dismiss() }
             }
-            .background(Color.CT.bg.ignoresSafeArea())
         }
         .task { await vm.generateJoinRequestQR() }
         // The join request saves keys the server does not know until the phone approves; a

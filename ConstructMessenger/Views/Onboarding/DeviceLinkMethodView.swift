@@ -16,56 +16,43 @@ import SwiftUI
 #if os(iOS)
 struct DeviceLinkMethodView: View {
 
-    @Environment(\.dismiss) private var dismiss
-
     @State private var showScan = false
     @State private var showQR = false
 
     var body: some View {
-        NavigationStack {
-            VStack(spacing: 0) {
-                CTNavBar(
-                    title: NSLocalizedString("link_method_title", comment: ""),
-                    showBack: true,
-                    backAction: { dismiss() }
-                ) {
-                    EmptyView()
-                } trailing: {
-                    EmptyView()
+        VStack(spacing: 0) {
+            ScrollView {
+                VStack(spacing: CTLayout.sectionGap) {
+                    Text(NSLocalizedString("link_method_intro", comment: ""))
+                        .font(CTFont.body)
+                        .foregroundColor(Color.CT.textDim)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, CTLayout.sectionGap)
+                        .padding(.top, CTLayout.sectionGap)
+
+                    methodCard(
+                        icon: "qrcode.viewfinder",
+                        titleKey: "link_method_scan_title",
+                        subtitleKey: "link_method_scan_subtitle"
+                    ) { showScan = true }
+
+                    methodCard(
+                        icon: "qrcode",
+                        titleKey: "link_method_show_title",
+                        subtitleKey: "link_method_show_subtitle"
+                    ) { showQR = true }
                 }
-                Rectangle().fill(Color.CT.noise).frame(height: 1)
-
-                ScrollView {
-                    VStack(spacing: CTLayout.sectionGap) {
-                        Text(NSLocalizedString("link_method_intro", comment: ""))
-                            .font(CTFont.body)
-                            .foregroundColor(Color.CT.textDim)
-                            .multilineTextAlignment(.center)
-                            .padding(.horizontal, CTLayout.sectionGap)
-                            .padding(.top, CTLayout.sectionGap)
-
-                        methodCard(
-                            icon: "qrcode.viewfinder",
-                            titleKey: "link_method_scan_title",
-                            subtitleKey: "link_method_scan_subtitle"
-                        ) { showScan = true }
-
-                        methodCard(
-                            icon: "qrcode",
-                            titleKey: "link_method_show_title",
-                            subtitleKey: "link_method_show_subtitle"
-                        ) { showQR = true }
-                    }
-                    .padding(.horizontal, CTLayout.edgePad)
-                    .padding(.bottom, CTLayout.sectionGap)
-                    .frame(maxWidth: 480)
-                    .frame(maxWidth: .infinity)
-                }
+                .padding(.horizontal, CTLayout.edgePad)
+                .padding(.bottom, CTLayout.sectionGap)
+                .frame(maxWidth: 480)
+                .frame(maxWidth: .infinity)
             }
-            .background(Color.CT.bg.ignoresSafeArea())
         }
+        .background(Color.CT.bg.ignoresSafeArea())
+        .screenTitle(NSLocalizedString("link_method_title", comment: ""))
         .fullScreenCover(isPresented: $showScan) { DeviceLinkScanView() }
-        .fullScreenCover(isPresented: $showQR) { DeviceLinkShowQRView() }
+        // Its own close: leaving stops the poll for the phone's approval.
+        .fullScreenCover(isPresented: $showQR) { DeviceLinkShowQRView().sheetNavigation(closes: false) }
     }
 
     private func methodCard(

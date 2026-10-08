@@ -149,10 +149,11 @@ struct OnboardingView: View {
             }
             .sheet(isPresented: $showingExistingIdentity) {
                 ExistingIdentityChooserView()
+                    .sheetNavigation()
                     .environment(recoveryVM)
             }
             .sheet(isPresented: $showingVeilBootstrap) {
-                VeilBootstrapScanView()
+                VeilBootstrapScanView().sheetNavigation()
             }
             .sheet(isPresented: $showingNetworkSettings) {
                 NetworkSettingsView().sheetNavigation()
