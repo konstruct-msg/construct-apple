@@ -852,7 +852,7 @@
 "call_busy" = "Busy";
 "call_no_relay" = "No connection (relay unavailable)";
 "call_dismiss" = "Dismiss";
-"call_call_back" = "Call Back";
+"call_call_back" = "Call back";
 "call_minimize" = "Minimize";
 "call_minibar_in_call" = "in call";
 "call_minibar_connecting" = "connecting";
