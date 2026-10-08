@@ -685,6 +685,24 @@ struct CTSectionGroup<Content: View>: View {
     }
 }
 
+/// The note under a card: what the rows above it do, in the dim caption face. One component so
+/// every screen sets it the same way (TODO 130) — each used to carry its own copy with its own
+/// padding.
+struct CTSectionFooter: View {
+    let key: String
+
+    init(_ key: String) { self.key = key }
+
+    var body: some View {
+        Text(LocalizedStringKey(key))
+            .font(CTFont.caption)
+            .foregroundStyle(Color.CT.textDim)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, CTLayout.edgePad + CTLayout.inlinePad)
+            .padding(.top, CTLayout.inlinePad / 2)
+    }
+}
+
 // MARK: - System Message  (> text)
 
 // MARK: - Search Bar
@@ -864,6 +882,10 @@ struct CTSettingsSectionHeader: View {
 }
 
 struct CTSettingsRow: View {
+    /// Where the hairline between two rows starts: past the row's leading pad (12) and its icon
+    /// column (28 + 4), so it lines up under the label, as a system list's separator does.
+    static let dividerIndent: CGFloat = 44
+
     let label: String
     /// Optional trailing value text (detail). Empty = no value shown.
     var value: String       = ""

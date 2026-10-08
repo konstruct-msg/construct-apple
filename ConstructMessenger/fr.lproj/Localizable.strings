@@ -446,7 +446,7 @@
 "recovery_restored_body" = "Votre compte a été récupéré sur cet appareil. Les sessions précédentes ont été révoquées.";
 "recovery_banner_title" = "Protégez votre compte";
 "recovery_banner_subtitle" = "Configurez votre phrase de récupération pour éviter de perdre l'accès.";
-"recovery_setup_action" = "CONFIGURER";
+"recovery_setup_action" = "Configurer";
 
 // macOS Catalyst — push notifications
 "push_not_available_mac" = "Notifications push indisponibles sur ordinateur";
@@ -862,7 +862,7 @@
 "call_video" = "appel vidéo";
 "call_audio_route" = "audio";
 "end_to_end_encrypted" = "les modifications sont chiffrées de bout en bout";
-"invite" = "inviter";
+"invite" = "Inviter";
 "qr_caption_trust" = "ce code est une invitation à se connecter.";
 "qr_scan_hint" = "montrez-le à quelqu’un près de vous ou faites une capture d’écran";
 "device_link_section" = "lier un appareil";
@@ -902,9 +902,9 @@
 "searchable_confirm_message" = "Votre nom d’utilisateur sera trouvable par quiconque le tape exactement. Désactivable à tout moment dans les réglages de Sécurité.";
 "searchable_confirm_action" = "activer";
 "searchable_no_username_hint" = "définissez d’abord un nom d’utilisateur pour activer la recherche";
-"username_not_set" = "aucun nom d’utilisateur";
-"searchable_indicator" = "trouvable";
-"searchable_indicator_off" = "non trouvable";
+"username_not_set" = "Aucun nom d’utilisateur";
+"searchable_indicator" = "Trouvable";
+"searchable_indicator_off" = "Non trouvable";
 "synapses_remote_result_header" = "trouvé sur Konstruct";
 "synapses_searching" = "recherche...";
 "synapses_not_found" = "introuvable";

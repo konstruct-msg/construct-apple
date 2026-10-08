@@ -482,7 +482,7 @@
 "recovery_restored_body" = "Ваш аккаунт восстановлен на этом устройстве. Предыдущие сессии отозваны.";
 "recovery_banner_title" = "Защитите свой аккаунт";
 "recovery_banner_subtitle" = "Настройте фразу восстановления, чтобы не потерять доступ.";
-"recovery_setup_action" = "НАСТРОИТЬ";
+"recovery_setup_action" = "Настроить";
 
 // macOS Catalyst — push уведомления
 "push_not_available_mac" = "Push-уведомления недоступны на десктопе";
@@ -884,7 +884,7 @@
 "end_to_end_encrypted" = "изменения защищены сквозным шифрованием";
 
 // MARK: - QR / Invite
-"invite" = "пригласить";
+"invite" = "Пригласить";
 "qr_caption_trust" = "этот код — приглашение связаться.";
 "qr_scan_hint" = "покажи кому-то рядом или сделай скриншот";
 
@@ -942,9 +942,9 @@
 "searchable_confirm_message" = "Ваш username станет доступен для поиска всем, кто введёт его точно. Отключить можно в любой момент в настройках безопасности.";
 "searchable_confirm_action" = "включить";
 "searchable_no_username_hint" = "сначала задайте username";
-"username_not_set" = "username не задан";
-"searchable_indicator" = "в поиске";
-"searchable_indicator_off" = "не в поиске";
+"username_not_set" = "Имя пользователя не задано";
+"searchable_indicator" = "В поиске";
+"searchable_indicator_off" = "Не в поиске";
 "synapses_remote_result_header" = "найдено в Конструкте";
 "synapses_searching" = "поиск...";
 "synapses_not_found" = "не найдено";

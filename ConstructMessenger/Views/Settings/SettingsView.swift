@@ -121,7 +121,7 @@ struct SettingsView: View {
             CTHexAvatar(initials: profileInitials, image: img, size: .large, colorSeed: viewModel.userId)
 
             VStack(alignment: .leading, spacing: SettingsRootLayout.profileMetaSpacing) {
-                Text(profileDisplayName.uppercased())
+                Text(profileDisplayName)
                     .font(CTFont.ui(15, weight: .bold))
                     .foregroundColor(Color.CT.text)
                 Text(viewModel.username.isEmpty ? NSLocalizedString("username_not_set", comment: "") : "@\(viewModel.username)")
@@ -138,8 +138,8 @@ struct SettingsView: View {
             }
             Spacer()
             Image(systemName: "chevron.right")
-                .font(CTFont.headline)
-                .foregroundColor(Color.CT.accent)
+                .font(CTIcon.font(CTIcon.caption, weight: .semibold))
+                .foregroundColor(Color.CT.textDim)
         }
         .padding(.horizontal, SettingsRootLayout.profileRowHorizontalPadding)
         .padding(.vertical, SettingsRootLayout.profileRowVerticalPadding)
@@ -180,7 +180,7 @@ struct SettingsView: View {
                     CTHexAvatar(initials: profileInitials, image: img, size: .large, colorSeed: viewModel.userId)
 
                     VStack(alignment: .leading, spacing: 6) {
-                        Text(profileDisplayName.uppercased())
+                        Text(profileDisplayName)
                             .font(CTFont.ui(22, weight: .bold))
                             .foregroundColor(Color.CT.text)
                         Text(viewModel.username.isEmpty ? NSLocalizedString("username_not_set", comment: "") : "@\(viewModel.username)")
@@ -197,8 +197,8 @@ struct SettingsView: View {
                     }
                     Spacer()
                     Image(systemName: "chevron.right")
-                        .font(CTFont.ui(15, weight: .bold))
-                        .foregroundColor(Color.CT.accent)
+                        .font(CTIcon.font(CTIcon.caption, weight: .semibold))
+                        .foregroundColor(Color.CT.textDim)
                 }
                 .padding(.horizontal, SettingsRootLayout.profileRowHorizontalPadding)
                 .padding(.vertical, 24)
@@ -218,7 +218,7 @@ struct SettingsView: View {
         CTSectionGroup {
             Button { showingQRCode = true } label: {
                 CTSettingsRow(
-                    label: NSLocalizedString("invite", comment: "").uppercased(),
+                    label: NSLocalizedString("invite", comment: ""),
                     icon: "qrcode",
                     disclosure: true
                 )
@@ -231,54 +231,54 @@ struct SettingsView: View {
     private var mainSettingsSection: some View {
         CTSectionGroup {
             NavigationLink(destination: DevicesView()) {
-                CTSettingsRow(label: NSLocalizedString("linked_devices", comment: "").uppercased(), icon: "laptopcomputer", disclosure: true)
+                CTSettingsRow(label: NSLocalizedString("linked_devices", comment: ""), icon: "laptopcomputer", disclosure: true)
             }
             .buttonStyle(.plain)
             // On the link, not on the row inside it: an identifier applied within `CTSettingsRow`
             // is inherited by each of its children, and the tree comes back with the string
             // tripled on the container plus a copy on the icon, the label and the chevron.
             .accessibilityIdentifier(A11y.Settings.devices)
-            CTSep(style: .thin)
+            ConstructRowDivider(indent: CTSettingsRow.dividerIndent)
             NavigationLink(destination: AppearanceSettingsView()) {
-                CTSettingsRow(label: NSLocalizedString("appearance", comment: "").uppercased(), icon: "paintbrush", disclosure: true)
+                CTSettingsRow(label: NSLocalizedString("appearance", comment: ""), icon: "paintbrush", disclosure: true)
             }
             .buttonStyle(.plain)
-            CTSep(style: .thin)
+            ConstructRowDivider(indent: CTSettingsRow.dividerIndent)
             NavigationLink(destination: SecurityView()
                 .environment(viewModel)) {
-                CTSettingsRow(label: NSLocalizedString("security", comment: "").uppercased(), icon: "lock", disclosure: true)
+                CTSettingsRow(label: NSLocalizedString("security", comment: ""), icon: "lock", disclosure: true)
             }
             .buttonStyle(.plain)
-            CTSep(style: .thin)
+            ConstructRowDivider(indent: CTSettingsRow.dividerIndent)
             NavigationLink(destination: DataStorageSettingsView()) {
-                CTSettingsRow(label: NSLocalizedString("data_and_storage", comment: "").uppercased(), icon: "externaldrive", disclosure: true)
+                CTSettingsRow(label: NSLocalizedString("data_and_storage", comment: ""), icon: "externaldrive", disclosure: true)
             }
             .buttonStyle(.plain)
-            CTSep(style: .thin)
+            ConstructRowDivider(indent: CTSettingsRow.dividerIndent)
             NavigationLink(destination: TranscriptionSettingsView()) {
-                CTSettingsRow(label: NSLocalizedString("stt_section_title", comment: "").uppercased(), icon: "mic", disclosure: true)
+                CTSettingsRow(label: NSLocalizedString("stt_section_title", comment: ""), icon: "mic", disclosure: true)
             }
             .buttonStyle(.plain)
-            CTSep(style: .thin)
+            ConstructRowDivider(indent: CTSettingsRow.dividerIndent)
             NavigationLink(destination: NotificationsSettingsView()) {
-                CTSettingsRow(label: NSLocalizedString("notifications", comment: "").uppercased(), icon: "bell", disclosure: true)
+                CTSettingsRow(label: NSLocalizedString("notifications", comment: ""), icon: "bell", disclosure: true)
             }
             .buttonStyle(.plain)
-            CTSep(style: .thin)
+            ConstructRowDivider(indent: CTSettingsRow.dividerIndent)
             // Network + Background Refresh merged (silent-transport-ui left Network nearly empty
             // on production — one Connectivity-style entry with live status + BG controls).
             NavigationLink(destination: NetworkSettingsView()) {
                 CTSettingsRow(
-                    label: NSLocalizedString("network", comment: "").uppercased(),
+                    label: NSLocalizedString("network", comment: ""),
                     status: connectionStatus.isConnected ? .ok : .error,
                     icon: "globe",
                     disclosure: true
                 )
             }
             .buttonStyle(.plain)
-            CTSep(style: .thin)
+            ConstructRowDivider(indent: CTSettingsRow.dividerIndent)
             NavigationLink(destination: DraftsView()) {
-                CTSettingsRow(label: NSLocalizedString("drafts", comment: "").uppercased(), icon: "folder", disclosure: true)
+                CTSettingsRow(label: NSLocalizedString("drafts", comment: ""), icon: "folder", disclosure: true)
             }
             .buttonStyle(.plain)
         }
@@ -303,16 +303,16 @@ struct SettingsView: View {
         CTSectionGroup {
             Button { showingOrientation = true } label: {
                 CTSettingsRow(
-                    label: NSLocalizedString("orientation_settings_replay", comment: "").uppercased(),
+                    label: NSLocalizedString("orientation_settings_replay", comment: ""),
                     icon: "text.book.closed",
                     isAction: true,
                     disclosure: true
                 )
             }
             .buttonStyle(.plain)
-            CTSep(style: .thin)
+            ConstructRowDivider(indent: CTSettingsRow.dividerIndent)
             CTSettingsRow(
-                label: NSLocalizedString("version", comment: "").uppercased(),
+                label: NSLocalizedString("version", comment: ""),
                 value: AppConstants.versionDisplayString,
                 icon: "info.circle",
                 valueColor: AppConstants.isNonProductionBuild ? .orange : Color.CT.textDim
@@ -340,7 +340,7 @@ struct SettingsView: View {
     private var developerSection: some View {
         CTSectionGroup {
             NavigationLink(destination: DiagnosticsView()) {
-                CTSettingsRow(label: NSLocalizedString("diagnostics_logs", comment: "").uppercased(), labelColor: .orange, disclosure: true)
+                CTSettingsRow(label: NSLocalizedString("diagnostics_logs", comment: ""), labelColor: .orange, disclosure: true)
             }
             .buttonStyle(.plain)
         }
@@ -359,8 +359,8 @@ struct SettingsView: View {
                 Text(NSLocalizedString(
                     recoveryVM.isSetup ? "recovery_backup_pending_title" : "recovery_not_configured_title",
                     comment: ""
-                ).uppercased())
-                    .font(CTFont.badge)
+                ))
+                    .font(CTFont.bodyEmphasis)
                     .foregroundColor(Color.CT.danger)
                 Text(NSLocalizedString(
                     recoveryVM.isSetup ? "recovery_backup_pending_subtitle" : "recovery_banner_subtitle",

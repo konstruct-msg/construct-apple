@@ -827,8 +827,8 @@
 "searchable_confirm_action" = "有効にする";
 "searchable_no_username_hint" = "検索を有効にするには、まずユーザー名を設定してください";
 "username_not_set" = "ユーザー名未設定";
-"searchable_indicator" = "[⊙] 検索可能";
-"searchable_indicator_off" = "[ ] 検索可能";
+"searchable_indicator" = "検索可能";
+"searchable_indicator_off" = "検索不可";
 "synapses_remote_result_header" = "コンストラクトで見つかりました";
 "synapses_searching" = "検索中...";
 "synapses_not_found" = "見つかりませんでした";

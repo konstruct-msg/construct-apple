@@ -481,7 +481,7 @@
 "recovery_restored_body" = "Ձեր հաշիվը վերականգնվել է այս սարքում։ Նախորդ նիստերը չեղարկվել են։";
 "recovery_banner_title" = "Պաշտպանեք ձեր հաշիվը";
 "recovery_banner_subtitle" = "Կարգավորեք վերականգնման արտահայտությունը՝ հասանելիությունը չկորցնելու համար։";
-"recovery_setup_action" = "ԿԱՐԳԱՎՈՐԵԼ";
+"recovery_setup_action" = "Կարգավորել";
 
 // macOS Catalyst — push notifications
 "push_not_available_mac" = "Push ծանուցումները հասանելի չեն աշխատասեղանին";
@@ -879,7 +879,7 @@
 "call_video" = "տեսազանգ";
 "call_audio_route" = "աուդիո";
 "end_to_end_encrypted" = "փոփոխությունները ծայրից ծայր գաղտնագրված են";
-"invite" = "հրավիրել";
+"invite" = "Հրավիրել";
 "qr_caption_trust" = "այս կոդը հրավեր է կապվելու։";
 "qr_scan_hint" = "ցույց տվեք մոտակա մարդուն կամ նկարեք էկրանը";
 
@@ -932,9 +932,9 @@
 "searchable_confirm_message" = "Ձեր օգտանունը կգտնվի յուրաքանչյուրի կողմից, ով այն մուտքագրի ճշգրիտ։ Կարող եք անջատել ցանկացած պահի Անվտանգության կարգավորումներում։";
 "searchable_confirm_action" = "միացնել";
 "searchable_no_username_hint" = "նախ սահմանեք օգտանուն՝ որոնումը միացնելու համար";
-"username_not_set" = "օգտանուն չկա";
-"searchable_indicator" = "որոնելի";
-"searchable_indicator_off" = "ոչ որոնելի";
+"username_not_set" = "Օգտանուն չկա";
+"searchable_indicator" = "Որոնելի";
+"searchable_indicator_off" = "Ոչ որոնելի";
 "synapses_remote_result_header" = "գտնվել է Կոնստրուկտում";
 "synapses_searching" = "որոնում...";
 "synapses_not_found" = "չի գտնվել";

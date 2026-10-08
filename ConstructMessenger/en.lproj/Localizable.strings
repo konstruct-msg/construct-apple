@@ -298,7 +298,7 @@
 "duress_pin_requires_main_pin" = "Enable a main PIN first to use the Destruction PIN.";
 
 // Linked Devices
-"linked_devices" = "Linked Devices";
+"linked_devices" = "Linked devices";
 "linked_devices_hint" = "Use the same identity on multiple devices at once.";
 "linked_devices_coming_soon" = "Linking additional devices will be available in a future update.";
 "link_new_device" = "Link New Device";
@@ -481,7 +481,7 @@
 "recovery_restored_body" = "Your account has been recovered on this device. Previous sessions have been revoked.";
 "recovery_banner_title" = "Protect Your Account";
 "recovery_banner_subtitle" = "Set up your recovery phrase to avoid losing access.";
-"recovery_setup_action" = "CONFIGURE";
+"recovery_setup_action" = "Set up";
 
 // macOS Catalyst — push notifications
 "push_not_available_mac" = "Push Notifications Unavailable on Desktop";
@@ -546,7 +546,7 @@
 "veil_direct_probe_blocked" = "Direct: blocked";
 
 // Data & Storage
-"data_and_storage" = "Data & Storage";
+"data_and_storage" = "Data & storage";
 "storage_media_cache" = "Media Cache";
 "storage_media_cache_footer" = "Cached media files let you view photos and files instantly without re-downloading. Stored in the system Caches folder — iOS may clear this automatically when storage is low.";
 "media_cache" = "Media Cache";
@@ -681,7 +681,7 @@
 
 // MARK: - Settings & Diagnostics
 "diagnostics" = "Diagnostics";
-"diagnostics_logs" = "Diagnostics & Logs";
+"diagnostics_logs" = "Diagnostics & logs";
 "tls" = "TLS";
 "interval" = "Interval";
 "preview" = "Preview";
@@ -861,7 +861,7 @@
 "edit_identity" = "Edit identity";
 "delete_account_abort_hint" = "tap to abort · %ds";
 "share" = "Share";
-"recovery_not_configured_title" = "Recovery Not Configured";
+"recovery_not_configured_title" = "Recovery not configured";
 "developer" = "Developer";
 "change_photo" = "change photo";
 "choose_photo" = "choose photo";
@@ -879,7 +879,7 @@
 "call_video" = "video call";
 "call_audio_route" = "audio";
 "end_to_end_encrypted" = "changes are end-to-end encrypted";
-"invite" = "invite";
+"invite" = "Invite";
 "qr_caption_trust" = "this code is an invitation to connect.";
 "qr_scan_hint" = "show to someone nearby or take a screenshot";
 
@@ -932,9 +932,9 @@
 "searchable_confirm_message" = "Your username will be findable by anyone who types it exactly. Disable at any time in Security settings.";
 "searchable_confirm_action" = "enable";
 "searchable_no_username_hint" = "set a username first to enable search";
-"username_not_set" = "no username";
-"searchable_indicator" = "searchable";
-"searchable_indicator_off" = "not searchable";
+"username_not_set" = "No username";
+"searchable_indicator" = "Searchable";
+"searchable_indicator_off" = "Not searchable";
 "synapses_remote_result_header" = "found on Konstruct";
 "synapses_searching" = "searching...";
 "synapses_not_found" = "not found";
