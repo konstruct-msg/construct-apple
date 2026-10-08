@@ -60,7 +60,7 @@ struct STTSettingsSection: View {
                 .padding(.horizontal, 12)
                 .padding(.vertical, 9)
 
-                CTSep(style: .thin)
+                ConstructRowDivider(indent: CTLayout.edgePad)
 
                 // Engine selection
                 HStack {
@@ -81,7 +81,7 @@ struct STTSettingsSection: View {
                 .padding(.horizontal, 12)
                 .padding(.vertical, 9)
 
-                CTSep(style: .thin)
+                ConstructRowDivider(indent: CTLayout.edgePad)
                 
                 HStack {
                     VStack(alignment: .leading, spacing: 2) {
@@ -100,12 +100,12 @@ struct STTSettingsSection: View {
                 .padding(.horizontal, 12)
                 .padding(.vertical, 9)
 
-                CTSep(style: .thin)
+                ConstructRowDivider(indent: CTLayout.edgePad)
 
                 // Language picker row
                 languageRow
 
-                CTSep(style: .thick)
+                ConstructRowDivider(indent: CTLayout.edgePad)
 
                 if selectedEngine != .apple {
                     // Whisper-specific model management (hidden for pure Apple engine)
@@ -118,7 +118,7 @@ struct STTSettingsSection: View {
 
                     // Per-model rows
                     ForEach(WhisperModel.allCases) { model in
-                        CTSep(style: .thin)
+                        ConstructRowDivider(indent: CTLayout.edgePad)
                         modelRow(model)
                     }
                 }

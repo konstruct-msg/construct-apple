@@ -62,7 +62,7 @@ struct NetworkSettingsView: View {
             LazyVStack(spacing: NetworkSettingsLayout.compactSectionSpacing) {
 
                 // MARK: - Connection Status
-                CTSettingsSectionHeader(title: NSLocalizedString("status", comment: "").uppercased())
+                CTSettingsSectionHeader(title: NSLocalizedString("status", comment: ""))
                 let path = veilManager.currentTrafficPath
                 CTSectionGroup {
                     HStack(spacing: NetworkSettingsLayout.statusRowSpacing) {
@@ -132,7 +132,7 @@ struct NetworkSettingsView: View {
                     .padding(.vertical, NetworkSettingsLayout.rowVerticalPadding)
 
                     if let heartbeat = streamManager.lastHeartbeatDate {
-                        CTSep(style: .thin)
+                        ConstructRowDivider(indent: CTLayout.edgePad)
                         HStack {
                             Text(LocalizedStringKey("last_heartbeat"))
                                 .font(CTFont.body)
@@ -149,7 +149,7 @@ struct NetworkSettingsView: View {
 
                     #if DEBUG || INTERNAL_TOOLS
                     if let error = connectionManager.lastError {
-                        CTSep(style: .thin)
+                        ConstructRowDivider(indent: CTLayout.edgePad)
                         Text(error)
                             .font(CTFont.mono(NetworkSettingsLayout.errorMonospacedFontSize))
                             .foregroundStyle(Color.CT.danger)
@@ -180,7 +180,7 @@ struct NetworkSettingsView: View {
                 // import. Technical VEIL controls live only on internal builds.
                 #if DEBUG || INTERNAL_TOOLS
                 // MARK: - Traffic Protection (VEIL) — internal
-                CTSettingsSectionHeader(title: NSLocalizedString("traffic_protection", comment: "").uppercased())
+                CTSettingsSectionHeader(title: NSLocalizedString("traffic_protection", comment: ""))
                 CTSectionGroup {
                     // Tri-state mode selector (same binding as production soft control)
                     HStack {
@@ -199,7 +199,7 @@ struct NetworkSettingsView: View {
 
                     if (veilManager.mode != .off || veilManager.isRunning) && hasVeilAccessConfigured {
                         if veilManager.isOnCooldown {
-                            CTSep(style: .thin)
+                            ConstructRowDivider(indent: CTLayout.edgePad)
                             HStack {
                                 Text(LocalizedStringKey("veil_retry"))
                                     .font(CTFont.body)
@@ -212,7 +212,7 @@ struct NetworkSettingsView: View {
                             .padding(.horizontal, NetworkSettingsLayout.rowHorizontalPadding)
                             .padding(.vertical, NetworkSettingsLayout.rowVerticalPadding)
                         } else if veilManager.isRunning, let relay = veilManager.activeRelay {
-                            CTSep(style: .thin)
+                            ConstructRowDivider(indent: CTLayout.edgePad)
                             HStack {
                                 Image(systemName: pathSymbol(veilManager.currentTrafficPath))
                                     .font(CTIcon.font(CTIcon.caption, weight: .semibold))
@@ -236,7 +236,7 @@ struct NetworkSettingsView: View {
                             .padding(.vertical, NetworkSettingsLayout.relayRowVerticalPadding)
 
                         } else if veilManager.mode != .off && !veilManager.isRunning {
-                            CTSep(style: .thin)
+                            ConstructRowDivider(indent: CTLayout.edgePad)
                             Text(veilManager.lastError ?? NSLocalizedString("veil_establishing", comment: ""))
                                 .font(CTFont.caption)
                                 .foregroundStyle(Color.CT.textDim)
@@ -282,7 +282,7 @@ struct NetworkSettingsView: View {
                     }
 
                     #if DEBUG
-                    CTSep(style: .thin)
+                    ConstructRowDivider(indent: CTLayout.edgePad)
 
                     // Salamander obfuscation of the QUIC datagrams (DPI-evasion). DEBUG-only —
                     // needs a per-gateway PSK + an obf gateway; against the plain prod gateway it
@@ -416,7 +416,7 @@ struct NetworkSettingsView: View {
     @ViewBuilder
     private var censorshipProtectionSection: some View {
         CTSettingsSectionHeader(
-            title: NSLocalizedString("censorship_protection", comment: "").uppercased()
+            title: NSLocalizedString("censorship_protection", comment: "")
         )
         CTSectionGroup {
             HStack {
@@ -454,7 +454,7 @@ struct NetworkSettingsView: View {
 
     @ViewBuilder
     private var veilAccessSection: some View {
-        CTSettingsSectionHeader(title: NSLocalizedString("veil_config_section", comment: "").uppercased())
+        CTSettingsSectionHeader(title: NSLocalizedString("veil_config_section", comment: ""))
         CTSectionGroup {
             HStack {
                 if hasVeilAccessConfigured {
@@ -481,20 +481,20 @@ struct NetworkSettingsView: View {
             .padding(.horizontal, NetworkSettingsLayout.rowHorizontalPadding)
             .padding(.vertical, NetworkSettingsLayout.rowVerticalPadding)
 
-            CTSep(style: .thin)
+            ConstructRowDivider(indent: CTLayout.edgePad)
             Button { showingVeilScanner = true } label: {
                 veilAccessRow(icon: "qrcode.viewfinder", title: NSLocalizedString("veil_config_scan", comment: ""))
             }
             .buttonStyle(.plain)
 
-            CTSep(style: .thin)
+            ConstructRowDivider(indent: CTLayout.edgePad)
             Button { veilPasteText = ""; showingVeilPaste = true } label: {
                 veilAccessRow(icon: "doc.on.clipboard", title: NSLocalizedString("veil_config_paste", comment: ""))
             }
             .buttonStyle(.plain)
 
             if veilVoucherOffered {
-                CTSep(style: .thin)
+                ConstructRowDivider(indent: CTLayout.edgePad)
                 Button { showingVeilVoucher = true } label: {
                     veilAccessRow(icon: "qrcode", title: NSLocalizedString("veil_voucher_row", comment: ""))
                 }
@@ -502,7 +502,7 @@ struct NetworkSettingsView: View {
             }
 
             if let msg = veilImportMessage {
-                CTSep(style: .thin)
+                ConstructRowDivider(indent: CTLayout.edgePad)
                 Text(msg)
                     .font(CTFont.caption)
                     .foregroundStyle(veilImportIsError ? Color.CT.danger : Color.CT.accent)

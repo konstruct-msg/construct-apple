@@ -511,7 +511,7 @@
 "veil_config_scan" = "Սկանավորել կոնֆիգուրացիայի QR-ը";
 "veil_config_paste" = "Տեղադրել կոնֆիգուրացիայի կոդը";
 "veil_config_import" = "Ներմուծել";
-"veil_config_section" = "VEIL ՀԱՍԱՆԵԼԻՈՒԹՅՈՒՆ";
+"veil_config_section" = "VEIL հասանելիություն";
 "veil_config_active" = "Հասանելիությունը կարգավորված է";
 "veil_config_none" = "Հասանելիություն կարգավորված չէ";
 
@@ -533,9 +533,9 @@
 "censorship_protection_footer_on" = "Միշտ շրջանցում է ցանցային արգելափակումները։ Կարգավորումը տեղի է ունենում ֆոնում։";
 
 // VEIL mode (tri-state)
-"veil_mode_off" = "անջատված";
-"veil_mode_auto" = "ավտո";
-"veil_mode_on" = "միացված";
+"veil_mode_off" = "Անջատված";
+"veil_mode_auto" = "Ավտո";
+"veil_mode_on" = "Միացված";
 "veil_footer_off" = "Երթևեկության պաշտպանությունն անջատված է։ Միայն ուղիղ կապ։";
 "veil_footer_off_obf_active" = "VEIL-ն անջատված է — ուղիղ երթևեկությունը քողարկված է QUIC-ով (Salamander)։";
 "veil_footer_off_obf_fallback" = "VEIL-ն անջատված է — QUIC քողարկումը միացված է. այժմ H2 պահուստային ուղի է (քողարկված չէ)։";
@@ -1188,7 +1188,7 @@
 "stt_hide_transcript" = "Թաքցնել տառադարձումը";
 "stt_section_header" = "տառադարձում";
 "stt_section_footer" = "Ձայնային հաղորդագրությունները կարող են տառադարձվել սարքում։ Մոդելները ներբեռնվում են մեկ անգամ և երբեք չեն լքում հեռախոսը։";
-"stt_retry_download" = "կրկնել";
+"stt_retry_download" = "Կրկնել";
 "stt_engine_label" = "Շարժիչ";
 "stt_engine_auto" = "Ավտո";
 "stt_engine_whisper" = "Whisper";

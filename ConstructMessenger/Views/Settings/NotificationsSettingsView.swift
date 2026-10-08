@@ -32,7 +32,7 @@ struct NotificationsSettingsView: View {
             LazyVStack(spacing: NotificationsSettingsLayout.compactSectionSpacing) {
 
                 // MARK: - General Notifications
-                CTSettingsSectionHeader(title: NSLocalizedString("notifications", comment: "").uppercased())
+                CTSettingsSectionHeader(title: NSLocalizedString("notifications", comment: ""))
                 CTSectionGroup {
                     HStack {
                         Text(LocalizedStringKey("enable_notifications"))
@@ -46,14 +46,10 @@ struct NotificationsSettingsView: View {
                     .padding(.horizontal, NotificationsSettingsLayout.rowHorizontalPadding)
                     .padding(.vertical, NotificationsSettingsLayout.rowVerticalPadding)
                 }
-                Text(LocalizedStringKey("notifications_footer"))
-                    .font(CTFont.caption)
-                    .foregroundStyle(Color.CT.textDim)
-                    .padding(.horizontal, NotificationsSettingsLayout.rowHorizontalPadding)
-                    .padding(.bottom, NotificationsSettingsLayout.footerBottomPadding)
+                CTSectionFooter("notifications_footer")
 
                 // MARK: - System Permission Status
-                CTSettingsSectionHeader(title: NSLocalizedString("system_notification_settings", comment: "").uppercased())
+                CTSettingsSectionHeader(title: NSLocalizedString("system_notification_settings", comment: ""))
                 CTSectionGroup {
                     HStack {
                         Text(LocalizedStringKey("status"))
@@ -69,7 +65,7 @@ struct NotificationsSettingsView: View {
                     .padding(.vertical, NotificationsSettingsLayout.rowVerticalPadding)
 
                     if authorizationStatus == .denied {
-                        CTSep(style: .thin)
+                        ConstructRowDivider(indent: CTLayout.edgePad)
                         Button(action: openSystemSettings) {
                             HStack {
                                 Text(LocalizedStringKey("open_system_settings"))
@@ -86,7 +82,7 @@ struct NotificationsSettingsView: View {
                         }
                         .buttonStyle(.plain)
                     } else if authorizationStatus == .notDetermined {
-                        CTSep(style: .thin)
+                        ConstructRowDivider(indent: CTLayout.edgePad)
                         Button(action: requestNotificationPermission) {
                             HStack {
                                 Text(LocalizedStringKey("grant_permission"))
@@ -106,22 +102,14 @@ struct NotificationsSettingsView: View {
                 }
 
                 if authorizationStatus == .denied {
-                    Text(LocalizedStringKey("notification_permissions_required"))
-                        .font(CTFont.caption)
-                        .foregroundStyle(.orange)
-                        .padding(.horizontal, NotificationsSettingsLayout.rowHorizontalPadding)
-                        .padding(.bottom, NotificationsSettingsLayout.footerBottomPadding)
+                    CTSectionFooter("notification_permissions_required", color: .orange)
                 } else {
-                    Text(LocalizedStringKey("system_settings_footer"))
-                        .font(CTFont.caption)
-                        .foregroundStyle(Color.CT.textDim)
-                        .padding(.horizontal, NotificationsSettingsLayout.rowHorizontalPadding)
-                        .padding(.bottom, NotificationsSettingsLayout.footerBottomPadding)
+                    CTSectionFooter("system_settings_footer")
                 }
 
                 // MARK: - Message Notifications
                 if notificationsEnabled {
-                    CTSettingsSectionHeader(title: NSLocalizedString("message_notifications", comment: "").uppercased())
+                    CTSettingsSectionHeader(title: NSLocalizedString("message_notifications", comment: ""))
                     CTSectionGroup {
                         HStack {
                             Text(LocalizedStringKey("show_message_notifications"))
@@ -135,7 +123,7 @@ struct NotificationsSettingsView: View {
                         .padding(.horizontal, NotificationsSettingsLayout.rowHorizontalPadding)
                         .padding(.vertical, NotificationsSettingsLayout.rowVerticalPadding)
 
-                        CTSep(style: .thin)
+                        ConstructRowDivider(indent: CTLayout.edgePad)
 
                         HStack {
                             Text(LocalizedStringKey("notification_sound"))
@@ -149,7 +137,7 @@ struct NotificationsSettingsView: View {
                         .padding(.horizontal, NotificationsSettingsLayout.rowHorizontalPadding)
                         .padding(.vertical, NotificationsSettingsLayout.rowVerticalPadding)
 
-                        CTSep(style: .thin)
+                        ConstructRowDivider(indent: CTLayout.edgePad)
 
                         HStack {
                             Text(LocalizedStringKey("vibration"))
@@ -165,7 +153,7 @@ struct NotificationsSettingsView: View {
                     }
 
                     // MARK: - Push Notifications
-                    CTSettingsSectionHeader(title: NSLocalizedString("push_notifications", comment: "").uppercased())
+                    CTSettingsSectionHeader(title: NSLocalizedString("push_notifications", comment: ""))
                     CTSectionGroup {
                         #if targetEnvironment(macCatalyst)
                         VStack(alignment: .leading, spacing: NotificationsSettingsLayout.pushDetailSpacing) {
@@ -197,7 +185,7 @@ struct NotificationsSettingsView: View {
                         .padding(.horizontal, NotificationsSettingsLayout.rowHorizontalPadding)
                         .padding(.vertical, NotificationsSettingsLayout.rowVerticalPadding)
 
-                        CTSep(style: .thin)
+                        ConstructRowDivider(indent: CTLayout.edgePad)
 
                         VStack(alignment: .leading, spacing: NotificationsSettingsLayout.pushDetailSpacing) {
                             Text(LocalizedStringKey("push_privacy_notice"))

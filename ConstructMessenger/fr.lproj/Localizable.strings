@@ -476,7 +476,7 @@
 "veil_config_scan" = "Scanner le QR de configuration";
 "veil_config_paste" = "Coller le code de configuration";
 "veil_config_import" = "Importer";
-"veil_config_section" = "ACCÈS VEIL";
+"veil_config_section" = "Accès VEIL";
 "veil_config_active" = "Accès configuré";
 "veil_config_none" = "Aucun accès configuré";
 
@@ -498,9 +498,9 @@
 "censorship_protection_footer_on" = "Contourne toujours les blocages réseau. La configuration se fait en arrière-plan.";
 
 // VEIL mode (tri-state)
-"veil_mode_off" = "désactivé";
-"veil_mode_auto" = "automatique";
-"veil_mode_on" = "activé";
+"veil_mode_off" = "Désactivé";
+"veil_mode_auto" = "Automatique";
+"veil_mode_on" = "Activé";
 "veil_footer_off" = "Protection du trafic désactivée. Connexion directe uniquement.";
 "veil_footer_off_obf_active" = "VEIL désactivé — le trafic direct est obscurci via QUIC (Salamander).";
 "veil_footer_off_obf_fallback" = "VEIL désactivé — obscurcissement QUIC activé ; actuellement en repli H2 (non obscurci).";
@@ -1119,7 +1119,7 @@
 "stt_hide_transcript" = "Masquer la transcription";
 "stt_section_header" = "transcription";
 "stt_section_footer" = "Les messages vocaux peuvent être transcrits sur l’appareil. Les modèles sont téléchargés une fois et ne quittent jamais le téléphone.";
-"stt_retry_download" = "réessayer";
+"stt_retry_download" = "Réessayer";
 "stt_engine_label" = "Moteur";
 "stt_engine_auto" = "Automatique";
 "stt_engine_whisper" = "Whisper";

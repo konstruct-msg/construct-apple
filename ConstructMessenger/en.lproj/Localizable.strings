@@ -157,7 +157,7 @@
 "disconnected" = "Disconnected";
 "connection" = "Connection";
 "subscriptions" = "Subscriptions";
-"last_heartbeat" = "Last Heartbeat";
+"last_heartbeat" = "Last heartbeat";
 "custom_server_debug" = "Custom Server (Debug)";
 "apply_changes" = "Apply Changes";
 "environment" = "Environment";
@@ -170,27 +170,27 @@
 "custom_server" = "Custom Server";
 
 // MARK: - Notifications Settings
-"enable_notifications" = "Enable Notifications";
+"enable_notifications" = "Enable notifications";
 "notifications_footer" = "Control how and when you receive notifications";
-"message_notifications" = "Message Notifications";
-"show_message_notifications" = "Show Message Notifications";
+"message_notifications" = "Message notifications";
+"show_message_notifications" = "Show message notifications";
 "preview_name_and_message" = "Name and Message";
 "preview_name_only" = "Name Only";
 "preview_none" = "No Preview";
 "sound_and_haptics" = "Sound & Haptics";
-"notification_sound" = "Notification Sound";
+"notification_sound" = "Notification sound";
 "vibration" = "Vibration";
 "sound_haptics_footer" = "Customize notification sound and vibration";
-"push_notifications" = "Push Notifications";
-"enable_push_notifications" = "Enable Push Notifications";
+"push_notifications" = "Push notifications";
+"enable_push_notifications" = "Enable push notifications";
 "push_notifications_footer" = "Receive notifications when the app is in the background. Your messages remain end-to-end encrypted.";
-"push_privacy_notice" = "Privacy Notice";
+"push_privacy_notice" = "Privacy notice";
 "push_privacy_notice_text" = "Push notifications are delivered using encrypted, anonymous tokens. The server cannot read your messages or identify who you're talking to.";
-"system_notification_settings" = "System Notification Settings";
+"system_notification_settings" = "System notification settings";
 "open_system_settings" = "Open System Settings";
 "system_settings_footer" = "Manage notification permissions in iOS Settings";
 "notification_permissions_required" = "Notification permissions are required to receive alerts";
-"grant_permission" = "Grant Permission";
+"grant_permission" = "Grant permission";
 "not_determined" = "Not Set";
 "authorized" = "Authorized";
 "denied" = "Denied";
@@ -203,25 +203,25 @@
 "construct_new_messages_from_contacts" = "You have %d new messages from %d contacts";
 "construct_sync_completed" = "Messages Synced";
 "construct_sync_completed_count" = "Synced %d new messages";
-"background_fetch" = "Background Refresh";
+"background_fetch" = "Background refresh";
 "background_fetch_footer" = "Periodically fetches missed messages when the live connection is not active (for example when the app is backgrounded or the network was interrupted). Keeps your chats up to date without relying on push notifications alone.";
-"enable_background_fetch" = "Enable Background Refresh";
-"background_fetch_status" = "Background Refresh Status";
+"enable_background_fetch" = "Enable background refresh";
+"background_fetch_status" = "Background refresh status";
 "background_fetch_disabled" = "Disabled";
 "background_fetch_enabled" = "Enabled";
 "background_fetch_last_check" = "Last check: %@";
-"background_fetch_interval" = "Check Interval";
-"background_fetch_interval_settings" = "Check Interval";
+"background_fetch_interval" = "Check interval";
+"background_fetch_interval_settings" = "Check interval";
 "background_fetch_interval_footer" = "How often to fetch missed messages when the live connection is inactive. iOS may adjust this based on your usage patterns.";
 "background_fetch_interval_minutes" = "%d min";
 "background_fetch_interval_hours" = "%d hr";
 "background_fetch_low_power_mode_warning" = "Disabled in Low Power Mode";
-"background_fetch_low_power_mode_title" = "Low Power Mode Active";
+"background_fetch_low_power_mode_title" = "Low Power Mode is on";
 "background_fetch_low_power_mode_description" = "Background refresh is automatically disabled when Low Power Mode is enabled to save battery.";
 "background_fetch_low_power_mode_alert_title" = "Low Power Mode Detected";
 "background_fetch_low_power_mode_alert_message" = "Background refresh has been disabled because Low Power Mode is enabled. It will be re-enabled automatically when Low Power Mode is turned off.";
 "background_fetch_disabled_low_power" = "Disabled (Low Power Mode)";
-"background_fetch_energy_saving" = "Energy Saving";
+"background_fetch_energy_saving" = "Energy saving";
 
 // MARK: - Profile Sharing
 "profile" = "Profile";
@@ -484,7 +484,7 @@
 "recovery_setup_action" = "Set up";
 
 // macOS Catalyst — push notifications
-"push_not_available_mac" = "Push Notifications Unavailable on Desktop";
+"push_not_available_mac" = "Push notifications unavailable on desktop";
 "push_not_available_mac_hint" = "The desktop app uses a persistent connection for real-time delivery. Push notifications are available on the iOS app.";
 
 // Profile sharing
@@ -511,7 +511,7 @@
 "veil_config_scan" = "Scan configuration QR";
 "veil_config_paste" = "Paste configuration code";
 "veil_config_import" = "Import";
-"veil_config_section" = "VEIL ACCESS";
+"veil_config_section" = "VEIL access";
 "veil_config_active" = "Access configured";
 "veil_config_none" = "No access configured";
 
@@ -523,7 +523,7 @@
 "veil_bootstrap_paste_subtitle" = "If they sent you the code as text";
 "veil_bootstrap_ok" = "Connection configured";
 "veil_bootstrap_ok_hint" = "Go back and create or restore your identity — it will now go through this connection.";
-"traffic_protection" = "Traffic Protection";
+"traffic_protection" = "Traffic protection";
 "veil_footer_short" = "VEIL masks traffic as standard HTTPS. Configuration is provided automatically.";
 
 // Censorship protection (production soft control — no VEIL / relay disclosure)
@@ -533,9 +533,9 @@
 "censorship_protection_footer_on" = "Always routes around network blocks. Setup happens in the background.";
 
 // VEIL mode (tri-state)
-"veil_mode_off" = "off";
-"veil_mode_auto" = "auto";
-"veil_mode_on" = "on";
+"veil_mode_off" = "Off";
+"veil_mode_auto" = "Auto";
+"veil_mode_on" = "On";
 "veil_footer_off" = "Traffic protection disabled. Direct connection only.";
 "veil_footer_off_obf_active" = "VEIL off — direct traffic is obfuscated via QUIC (Salamander).";
 "veil_footer_off_obf_fallback" = "VEIL off — QUIC obfuscation enabled; currently on H2 fallback (not obfuscated).";
@@ -547,29 +547,29 @@
 
 // Data & Storage
 "data_and_storage" = "Data & storage";
-"storage_media_cache" = "Media Cache";
+"storage_media_cache" = "Media cache";
 "storage_media_cache_footer" = "Cached media files let you view photos and files instantly without re-downloading. Stored in the system Caches folder — iOS may clear this automatically when storage is low.";
 "media_cache" = "Media Cache";
 "storage_of_quota" = "%@ of %@";
 "storage_clearing" = "Clearing…";
-"storage_clear_media_cache" = "Clear Media Cache";
-"storage_clear_confirm_title" = "Clear Media Cache?";
+"storage_clear_media_cache" = "Clear media cache";
+"storage_clear_confirm_title" = "Clear media cache?";
 "storage_clear_confirm_message" = "All cached photos, videos and files will be removed. They will be re-downloaded when needed.";
-"storage_limit" = "Storage Limit";
+"storage_limit" = "Storage limit";
 "storage_limit_footer" = "Oldest files are automatically removed when the cache exceeds this limit.";
-"storage_no_limit" = "No Limit";
+"storage_no_limit" = "No limit";
 "storage_no_limit_footer" = "Media files will be kept until you clear them manually or iOS reclaims the space.";
-"media_autodownload" = "Auto-Download Media";
+"media_autodownload" = "Auto-download media";
 "media_autodownload_never" = "Never";
-"media_autodownload_unmetered" = "Wi-Fi Only";
+"media_autodownload_unmetered" = "Wi-Fi only";
 "media_autodownload_always" = "Always";
 "media_autodownload_footer" = "Attachments are fetched as messages arrive. The server keeps files for 7 days, so media in a chat you have not opened within a week cannot be downloaded later.";
-"storage_auto_clear" = "Keep Media For";
+"storage_auto_clear" = "Keep media for";
 "storage_auto_clear_footer" = "Media older than the selected period is removed each time the app launches.";
 "storage_keep_forever" = "Forever";
-"storage_keep_7_days" = "7 Days";
-"storage_keep_30_days" = "30 Days";
-"storage_keep_90_days" = "90 Days";
+"storage_keep_7_days" = "7 days";
+"storage_keep_30_days" = "30 days";
+"storage_keep_90_days" = "90 days";
 
 // Message editing
 "edit_message" = "Edit";
@@ -1180,7 +1180,7 @@
 "stt_no_models" = "None";
 "stt_footer" = "On-device transcription via WhisperKit. No audio leaves your device.";
 "stt_download" = "Download";
-"stt_delete_model" = "Delete Model";
+"stt_delete_model" = "Delete model";
 "stt_delete_confirm_title" = "Delete this model?";
 "stt_transcribe_button" = "Transcribe";
 "stt_transcribing" = "Transcribing…";
@@ -1188,7 +1188,7 @@
 "stt_hide_transcript" = "Hide transcript";
 "stt_section_header" = "transcription";
 "stt_section_footer" = "Voice messages can be transcribed on-device. Models are downloaded once and never leave the phone.";
-"stt_retry_download" = "retry";
+"stt_retry_download" = "Retry";
 "stt_engine_label" = "Engine";
 "stt_engine_auto" = "Auto";
 "stt_engine_whisper" = "Whisper";

@@ -75,7 +75,7 @@ struct IssuedInvitesView: View {
                     } else {
                         CTSectionGroup {
                             ForEach(Array(acts.enumerated()), id: \.element.id) { index, act in
-                                if index > 0 { CTSep(style: .thin) }
+                                if index > 0 { ConstructRowDivider(indent: CTLayout.edgePad) }
                                 row(for: act)
                             }
                         }
@@ -164,7 +164,7 @@ struct IssuedInvitesView: View {
                 .padding(.horizontal, ContactQRCodeLayout.refreshButtonHorizontalPadding)
         } else {
             Button { pendingRevoke = act } label: {
-                Text(NSLocalizedString("revoke", comment: "").lowercased())
+                Text(NSLocalizedString("revoke", comment: ""))
                     .font(CTFont.body)
                     .foregroundStyle(Color.CT.danger)
                     .padding(.horizontal, ContactQRCodeLayout.refreshButtonHorizontalPadding)
@@ -221,13 +221,13 @@ struct IssuedInvitesView: View {
         let time = act.startedAt.formatted(date: .omitted, time: .shortened)
         switch act.kind {
         case .link:
-            return "\(NSLocalizedString("issued_invite_link", comment: "").uppercased()) · \(time)"
+            return "\(NSLocalizedString("issued_invite_link", comment: "")) · \(time)"
         case .qrSession:
             let count = act.liveMints(at: now).count
             let kind = String(
                 format: NSLocalizedString("issued_invite_qr_fmt", comment: ""), count
             )
-            return "\(kind.uppercased()) · \(time)"
+            return "\(kind) · \(time)"
         }
     }
 
