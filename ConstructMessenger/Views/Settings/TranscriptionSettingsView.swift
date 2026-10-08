@@ -36,7 +36,7 @@ struct TranscriptionSettingsView: View {
                     .padding(.horizontal, 12)
                     .padding(.vertical, 9)
                 }
-                sectionFooter("voice_continuous_playback_footer")
+                CTSectionFooter("voice_continuous_playback_footer")
 
                 // Transcription (engine + models) moved to its own top-level section
                 // (see TranscriptionSettingsView) because it's not purely storage-related.
@@ -51,15 +51,6 @@ struct TranscriptionSettingsView: View {
     }
 }
 
-@ViewBuilder
-private func sectionFooter(_ key: String) -> some View {
-    Text(LocalizedStringKey(key))
-        .font(CTFont.caption)
-        .foregroundStyle(Color.CT.textDim)
-        .padding(.horizontal, SettingsLayout.footerHorizontalPadding)
-        .padding(.top, DataStorageSettingsLayout.footerTopPadding)
-        .frame(maxWidth: .infinity, alignment: .leading)
-}
 
 #if DEBUG
 #Preview {

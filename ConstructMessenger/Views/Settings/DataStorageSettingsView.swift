@@ -89,7 +89,7 @@ struct DataStorageSettingsView: View {
                                 .font(CTFont.ui(DataStorageSettingsLayout.usageIconFontSize))
                                 .foregroundStyle(Color.CT.textDim)
                                 .frame(width: SettingsLayout.rowIconMinWidth)
-                            Text(NSLocalizedString("storage_media_cache", comment: "").uppercased())
+                            Text(NSLocalizedString("storage_media_cache", comment: ""))
                                 .font(CTFont.body)
                                 .foregroundStyle(Color.CT.text)
                                 .tracking(DataStorageSettingsLayout.sectionTitleTracking)
@@ -143,7 +143,7 @@ struct DataStorageSettingsView: View {
                             .padding(.bottom, DataStorageSettingsLayout.usageRowBottomPaddingWithoutQuota)
                         }
 
-                        CTSep(style: .thin)
+                        ConstructRowDivider(indent: CTLayout.edgePad)
 
                         ConstructActionRow(
                             systemImage: "trash",
@@ -162,14 +162,14 @@ struct DataStorageSettingsView: View {
                             : 1
                         )
                     }
-                    sectionFooter("storage_media_cache_footer")
+                    CTSectionFooter("storage_media_cache_footer")
 
                     // MARK: Storage Limit
                     CTSettingsSectionHeader(title: NSLocalizedString("storage_limit", comment: ""))
                     CTSectionGroup {
                         VStack(alignment: .leading, spacing: DataStorageSettingsLayout.quotaSectionSpacing) {
                             HStack {
-                                Text(NSLocalizedString("storage_limit", comment: "").uppercased())
+                                Text(NSLocalizedString("storage_limit", comment: ""))
                                     .font(CTFont.body)
                                     .foregroundStyle(Color.CT.textDim)
                                     .tracking(DataStorageSettingsLayout.sectionTitleTracking)
@@ -210,13 +210,13 @@ struct DataStorageSettingsView: View {
                         .padding(.horizontal, DataStorageSettingsLayout.rowHorizontalPadding)
                         .padding(.vertical, SettingsLayout.rowVerticalPadding)
                     }
-                    sectionFooter(maxDiskCacheBytesRaw == 0 ? "storage_no_limit_footer" : "storage_limit_footer")
+                    CTSectionFooter(maxDiskCacheBytesRaw == 0 ? "storage_no_limit_footer" : "storage_limit_footer")
 
                     // MARK: Auto-download
                     CTSettingsSectionHeader(title: NSLocalizedString("media_autodownload", comment: ""))
                     CTSectionGroup {
                         ForEach(Array(autoDownloadOptions.enumerated()), id: \.offset) { pair in
-                            if pair.offset > 0 { CTSep(style: .thin) }
+                            if pair.offset > 0 { ConstructRowDivider(indent: CTLayout.edgePad) }
                             let isSelected = autoDownloadRaw == pair.element.setting.rawValue
                             Button {
                                 autoDownloadRaw = pair.element.setting.rawValue
@@ -226,7 +226,7 @@ struct DataStorageSettingsView: View {
                                         .font(CTFont.ui(DataStorageSettingsLayout.autoEvictionCheckIconSize))
                                         .foregroundStyle(isSelected ? Color.CT.accent : Color.CT.textDim)
                                         .frame(width: SettingsLayout.rowIconMinWidth)
-                                    Text(pair.element.label.uppercased())
+                                    Text(pair.element.label)
                                         .font(CTFont.body)
                                         .foregroundStyle(Color.CT.text)
                                         .tracking(DataStorageSettingsLayout.sectionTitleTracking)
@@ -238,7 +238,7 @@ struct DataStorageSettingsView: View {
                             .buttonStyle(.plain)
                         }
                     }
-                    sectionFooter("media_autodownload_footer")
+                    CTSectionFooter("media_autodownload_footer")
 
                     // MARK: Auto-eviction
                     CTSettingsSectionHeader(title: NSLocalizedString("storage_auto_clear", comment: ""))
@@ -246,7 +246,7 @@ struct DataStorageSettingsView: View {
                         let evicts = evictOptions
                         ForEach(Array(evicts.enumerated()), id: \.offset) { pair in
                             let i = pair.offset
-                            if i > 0 { CTSep(style: .thin) }
+                            if i > 0 { ConstructRowDivider(indent: CTLayout.edgePad) }
                             Button {
                                 evictAfterDays = pair.element.days
                             } label: {
@@ -259,7 +259,7 @@ struct DataStorageSettingsView: View {
                                                 ? Color.CT.accent : Color.CT.textDim
                                         )
                                         .frame(width: SettingsLayout.rowIconMinWidth)
-                                    Text(pair.element.label.uppercased())
+                                    Text(pair.element.label)
                                         .font(CTFont.body)
                                         .foregroundStyle(Color.CT.text)
                                         .tracking(DataStorageSettingsLayout.sectionTitleTracking)
@@ -271,7 +271,7 @@ struct DataStorageSettingsView: View {
                             .buttonStyle(.plain)
                         }
                     }
-                    sectionFooter("storage_auto_clear_footer")
+                    CTSectionFooter("storage_auto_clear_footer")
 
                    
                 }
@@ -305,15 +305,6 @@ struct DataStorageSettingsView: View {
 
     // MARK: - Helpers
 
-    @ViewBuilder
-    private func sectionFooter(_ key: String) -> some View {
-        Text(LocalizedStringKey(key))
-            .font(CTFont.caption)
-            .foregroundStyle(Color.CT.textDim)
-            .padding(.horizontal, SettingsLayout.footerHorizontalPadding)
-            .padding(.top, DataStorageSettingsLayout.footerTopPadding)
-            .frame(maxWidth: .infinity, alignment: .leading)
-    }
 
     private func clearCache() async {
         isClearing = true

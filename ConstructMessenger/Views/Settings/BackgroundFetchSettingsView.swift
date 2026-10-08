@@ -27,7 +27,7 @@ struct BackgroundFetchSettingsContent: View {
     var body: some View {
         Group {
             // MARK: - Enable/Disable
-            CTSettingsSectionHeader(title: NSLocalizedString("background_fetch", comment: "").uppercased())
+            CTSettingsSectionHeader(title: NSLocalizedString("background_fetch", comment: ""))
             CTSectionGroup {
                 HStack(spacing: BackgroundFetchSettingsLayout.toggleRowSpacing) {
                     Text(LocalizedStringKey("enable_background_fetch"))
@@ -51,11 +51,11 @@ struct BackgroundFetchSettingsContent: View {
                 handleToggleChange(newValue)
             }
 
-            sectionFooter("background_fetch_footer")
+            CTSectionFooter("background_fetch_footer")
 
             // MARK: - Interval
             if isEnabled && !isLowPowerModeEnabled {
-                CTSettingsSectionHeader(title: NSLocalizedString("background_fetch_interval_settings", comment: "").uppercased())
+                CTSettingsSectionHeader(title: NSLocalizedString("background_fetch_interval_settings", comment: ""))
                 CTSectionGroup {
                     VStack(alignment: .leading, spacing: BackgroundFetchSettingsLayout.sliderSectionSpacing) {
                         intervalHeader
@@ -65,11 +65,11 @@ struct BackgroundFetchSettingsContent: View {
                     .padding(.horizontal, BackgroundFetchSettingsLayout.rowHorizontalPadding)
                     .padding(.vertical, BackgroundFetchSettingsLayout.rowVerticalPadding)
                 }
-                sectionFooter("background_fetch_interval_footer")
+                CTSectionFooter("background_fetch_interval_footer")
             }
 
             // MARK: - Fetch status
-            CTSettingsSectionHeader(title: NSLocalizedString("background_fetch_status", comment: "").uppercased())
+            CTSettingsSectionHeader(title: NSLocalizedString("background_fetch_status", comment: ""))
             CTSectionGroup {
                 HStack {
                     Text(LocalizedStringKey("background_fetch_status"))
@@ -85,7 +85,7 @@ struct BackgroundFetchSettingsContent: View {
                 .padding(.vertical, BackgroundFetchSettingsLayout.rowVerticalPadding)
 
                 if let lastFetch = fetchManager.lastFetchDate {
-                    CTSep(style: .thin)
+                    ConstructRowDivider(indent: CTLayout.edgePad)
                     HStack {
                         Text(LocalizedStringKey("background_fetch_last_check"))
                             .font(CTFont.body)
@@ -102,7 +102,7 @@ struct BackgroundFetchSettingsContent: View {
 
             // MARK: - Low Power Mode
             if isLowPowerModeEnabled {
-                CTSettingsSectionHeader(title: NSLocalizedString("background_fetch_energy_saving", comment: "").uppercased())
+                CTSettingsSectionHeader(title: NSLocalizedString("background_fetch_energy_saving", comment: ""))
                 CTSectionGroup {
                     VStack(alignment: .leading, spacing: BackgroundFetchSettingsLayout.warningSpacing) {
                         Text(LocalizedStringKey("background_fetch_low_power_mode_title"))
@@ -259,15 +259,6 @@ struct BackgroundFetchSettingsContent: View {
         Self.lastCheckFormatter.localizedString(for: date, relativeTo: Date())
     }
 
-    @ViewBuilder
-    private func sectionFooter(_ key: String) -> some View {
-        Text(LocalizedStringKey(key))
-            .font(CTFont.caption)
-            .foregroundStyle(Color.CT.textDim)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, BackgroundFetchSettingsLayout.rowHorizontalPadding)
-            .padding(.bottom, BackgroundFetchSettingsLayout.footerBottomPadding)
-    }
 }
 
 #Preview {

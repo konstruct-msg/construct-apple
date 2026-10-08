@@ -44,7 +44,6 @@ enum DataStorageSettingsLayout {
     static let quotaTickFontSize: CGFloat = 9
     static let quotaTickMinimumScale: CGFloat = 0.7
     static let autoEvictionCheckIconSize: CGFloat = 17
-    static let footerTopPadding: CGFloat = 6
     static let screenBottomPadding: CGFloat = 32
     static let usageIconFontSize: CGFloat = 16
     static let sectionTitleTracking: CGFloat = 1
@@ -89,7 +88,6 @@ enum NotificationsSettingsLayout {
     static let rowHorizontalPadding: CGFloat = CTLayout.edgePad
     static let rowVerticalPadding: CGFloat = CTLayout.edgePad
     static let compactSectionSpacing: CGFloat = 0
-    static let footerBottomPadding: CGFloat = CTLayout.inlinePad
     static let sectionVerticalPadding: CGFloat = 20
     static let pushDetailSpacing: CGFloat = 4
 }
@@ -107,11 +105,9 @@ enum NetworkSettingsLayout {
     static let transportBadgeHorizontalPadding: CGFloat = 5
     static let transportBadgeVerticalPadding: CGFloat = 2
     /// Tiny transport chip — maps to badge scale (was ad-hoc 4).
-    static let transportBadgeCornerRadius: CGFloat = CTRadius.badge
     static let transportBadgeStrokeWidth: CGFloat = 0.5
     static let transportBadgeStrokeOpacity: Double = 0.4
     static let relayBadgeFontSize: CGFloat = 10
-    static let statusDisabledOpacity: Double = 0.5
     static let errorMonospacedFontSize: CGFloat = 11
     static let relayAddressFontSize: CGFloat = 13
 }
@@ -128,8 +124,6 @@ enum BackgroundFetchSettingsLayout {
     static let rowVerticalPadding: CGFloat = CTLayout.edgePad
     static let toggleRowSpacing: CGFloat = CTLayout.edgePad
     static let warningSpacing: CGFloat = 4
-    static let sectionVerticalPadding: CGFloat = 20
-    static let footerBottomPadding: CGFloat = CTLayout.inlinePad
     static let sliderSectionSpacing: CGFloat = CTLayout.edgePad
     static let tickLabelFontSize: CGFloat = 10
     static let tickLabelMinimumScale: CGFloat = 0.7
