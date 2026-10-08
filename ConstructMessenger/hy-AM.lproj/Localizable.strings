@@ -889,7 +889,7 @@
 "device_link_scan_hint" = "սկանավորեք մեկ այլ սարքով՝ կապելու համար";
 
 // MARK: - Keys Recovery
-"keys_recovery_title" = "սարքի բանալիները հասանելի չեն";
+"keys_recovery_title" = "Սարքի բանալիները հասանելի չեն";
 "keys_recovery_warning_title" = "⚠ ԳԱՂՏՆԱԳՐՄԱՆ ԲԱՆԱԼԻՆԵՐԸ ՉԵՆ ԳՏՆՎԵԼ";
 "keys_recovery_warning_body" = "Ձեր սարքի գաղտնագրման բանալիները չհաջողվեց բեռնել Keychain-ից։ Սա կարող է լինել ժամանակավոր համակարգային խնդիր, կամ բանալիները կարող են մշտապես կորած լինել։\n\nՁեր հաղորդագրություններն ու նիստերը հասանելի չեն լինի, մինչև սա լուծվի։";
 "keys_recovery_section_retry" = "կրկնել";
@@ -1000,7 +1000,7 @@
 "kt_last_failure_at" = "վերջին ձախողում՝ %@";
 
 // Social Recovery (SLIP-39)
-"social_recovery_title" = "ՍՈՑԻԱԼԱԿԱՆ ՎԵՐԱԿԱՆԳՆՈՒՄ";
+"social_recovery_title" = "Սոցիալական վերականգնում";
 "social_recovery_intro_title" = "սոցիալական վերականգնում";
 "social_recovery_intro_body" = "Ձեր ինքնության բանալիները կբաժանվեն վստահելի մարդկանց միջև։ Նրանցից M-ը N-ից կարող են օգնել վերականգնել ինքնությունը, եթե կորցնեք հասանելիությունը։";
 "social_recovery_begin" = "ՍԿՍԵԼ ԿԱՐԳԱՎՈՐՈՒՄԸ [→]";
@@ -1357,3 +1357,6 @@
 "logout_backup_pending_message" = "Վերականգնման բանալին այս սարքում է և դեռ պահպանված չէ։ Դուրս գալը կջնջի այն, և առանց դրա հաշիվը հնարավոր չի լինի վերականգնել։";
 "qr_scanning_unavailable_mac" = "QR սկանավորումը Mac-ում հասանելի չէ";
 "qr_scanning_unavailable_mac_hint" = "Խնդրեք զրուցակցին ուղարկել հրավերի հղումը։";
+
+// The safety numbers screen's bar title; the profile row keeps "safety_numbers".
+"safety_numbers_title" = "Անվտանգության թվեր";

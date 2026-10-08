@@ -889,7 +889,7 @@
 "device_link_scan_hint" = "scan with another device to link";
 
 // MARK: - Keys Recovery
-"keys_recovery_title" = "device keys unavailable";
+"keys_recovery_title" = "Device keys unavailable";
 "keys_recovery_warning_title" = "⚠ CRYPTO KEYS NOT FOUND";
 "keys_recovery_warning_body" = "Your device crypto keys could not be loaded from Keychain. This may be a temporary system issue, or the keys may be permanently lost.\n\nYour messages and sessions cannot be accessed until this is resolved.";
 "keys_recovery_section_retry" = "retry";
@@ -1000,7 +1000,7 @@
 "kt_last_failure_at" = "last failure: %@";
 
 // Social Recovery (SLIP-39)
-"social_recovery_title" = "SOCIAL RECOVERY";
+"social_recovery_title" = "Social recovery";
 "social_recovery_intro_title" = "social recovery";
 "social_recovery_intro_body" = "Your identity keys will be split across people you trust. Any M of N of them can help restore your identity if you lose access.";
 "social_recovery_begin" = "BEGIN SETUP [→]";
@@ -1357,3 +1357,6 @@
 "logout_backup_pending_message" = "Your recovery key is on this device and has not been saved. Signing out deletes it, and the account cannot be recovered without it.";
 "qr_scanning_unavailable_mac" = "QR scanning is not available on Mac";
 "qr_scanning_unavailable_mac_hint" = "Ask your contact to share their invite link instead.";
+
+// The safety numbers screen's bar title; the profile row keeps "safety_numbers".
+"safety_numbers_title" = "Safety numbers";

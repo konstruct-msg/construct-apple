@@ -288,6 +288,7 @@ struct ChatView: View {
                     theirDeviceIds: KeyChangeUX.safetyDeviceIds(ofContact: user.id),
                     theirDisplayName: user.resolvedDisplayName
                 )
+                .sheetNavigation()
             }
         }
         .sheet(item: $quotingMessage) { msg in

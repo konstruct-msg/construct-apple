@@ -36,7 +36,7 @@ struct RecoverySetupView: View {
             }
         }
         .background(Color.CT.bg)
-        .screenTitle(NSLocalizedString("account_recovery_seed", comment: ""))
+        .screenTitle(NSLocalizedString("recovery_gate_nav_title", comment: ""))
         // Its own cancel, not `sheetNavigation`'s close: cancelling resets the setup, and there
         // is none while the key uploads or once it is done.
         .toolbar {

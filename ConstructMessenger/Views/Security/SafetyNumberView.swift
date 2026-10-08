@@ -14,24 +14,12 @@ struct SafetyNumberView: View {
     let theirDeviceIds: [String]
     let theirDisplayName: String
 
-    @Environment(\.dismiss) private var dismiss
     /// Device id → the number, or nil where the core could not name one.
     @State private var numbers: [String: String] = [:]
     @State private var copiedDeviceId: String?
 
     var body: some View {
         VStack(spacing: 0) {
-            CTNavBar(
-                title: NSLocalizedString("safety_numbers", comment: ""),
-                showBack: true,
-                backAction: { dismiss() }
-            ) {
-                EmptyView()
-            } trailing: {
-                EmptyView()
-            }
-            Rectangle().fill(Color.CT.noise).frame(height: 1)
-
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 0) {
                     instructionBlock
@@ -60,6 +48,7 @@ struct SafetyNumberView: View {
             }
         }
         .ctBackground()
+        .screenTitle(NSLocalizedString("safety_numbers_title", comment: ""))
         .onAppear { refreshSafetyNumbers() }
     }
 

@@ -899,7 +899,7 @@
 "share" = "Поделиться";
 
 // MARK: - Keys Recovery
-"keys_recovery_title" = "ключи устройства недоступны";
+"keys_recovery_title" = "Ключи устройства недоступны";
 "keys_recovery_warning_title" = "⚠ КРИПТОКЛЮЧИ НЕ НАЙДЕНЫ";
 "keys_recovery_warning_body" = "Криптографические ключи устройства не удалось загрузить из Keychain. Это может быть временная проблема системы или ключи утеряны безвозвратно.\n\nДоступ к сообщениям и сессиям невозможен до устранения проблемы.";
 "keys_recovery_section_retry" = "повторить попытку";
@@ -1011,7 +1011,7 @@
 "kt_last_failure_at" = "последний сбой: %@";
 
 // Social Recovery (SLIP-39)
-"social_recovery_title" = "ВОССТАНОВЛЕНИЕ";
+"social_recovery_title" = "Социальное восстановление";
 "social_recovery_intro_title" = "социальное восстановление";
 "social_recovery_intro_body" = "ваши ключи будут разделены между доверенными контактами с помощью разделения секрета Шамира. любые M из N смогут восстановить ваш аккаунт.";
 "social_recovery_begin" = "НАЧАТЬ НАСТРОЙКУ [→]";
@@ -1368,3 +1368,6 @@
 "logout_backup_pending_message" = "Ключ восстановления хранится на этом устройстве и ещё не сохранён. Выход удалит его, и без него аккаунт нельзя будет вернуть.";
 "qr_scanning_unavailable_mac" = "Сканирование QR на Mac недоступно";
 "qr_scanning_unavailable_mac_hint" = "Попросите собеседника прислать ссылку-приглашение.";
+
+// The safety numbers screen's bar title; the profile row keeps "safety_numbers".
+"safety_numbers_title" = "Защитные числа";

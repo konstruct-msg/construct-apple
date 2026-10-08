@@ -122,6 +122,7 @@ struct UserProfileView: View {
                 theirDeviceIds: KeyChangeUX.safetyDeviceIds(ofContact: userId),
                 theirDisplayName: user.resolvedDisplayName
             )
+            .sheetNavigation()
         }
         .alert(LocalizedStringKey("local_name"), isPresented: $showingLocalNameEditor) {
             TextField(NSLocalizedString("local_name_placeholder", comment: ""), text: $draftLocalName)
