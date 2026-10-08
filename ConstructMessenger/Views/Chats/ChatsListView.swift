@@ -111,7 +111,7 @@ struct ChatsListView: View {
             .sheet(isPresented: $showingRecoveryBackup, onDismiss: {
                 recoveryViewModel.refreshBackupPending()
             }) {
-                RecoverySetupView()
+                RecoverySetupView().sheetNavigation(closes: false)
             }
             .sheet(isPresented: $showingMyQR) {
                 ContactQRCodeView(

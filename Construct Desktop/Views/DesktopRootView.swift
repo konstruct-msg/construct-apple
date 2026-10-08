@@ -69,11 +69,12 @@ struct DesktopRootView: View {
             if authViewModel.hasRegisteredDeviceKeys == nil {
                 SplashView()
             } else if authViewModel.deviceKeysUnavailable {
-                KeysRecoveryView()
+                // A screen of its own, so it brings the stack its title needs.
+                NavigationStack { KeysRecoveryView() }
                     .environment(authViewModel)
             } else if authViewModel.deviceDeregistered {
                 // Server rejected this device as unregistered — recover, don't wipe silently.
-                KeysRecoveryView(reason: .deviceDeregistered)
+                NavigationStack { KeysRecoveryView(reason: .deviceDeregistered) }
                     .environment(authViewModel)
             } else if authViewModel.isAuthenticated || authViewModel.hasRegisteredDeviceKeys == true {
                 if orientationCompletedForCurrentUser {
@@ -105,7 +106,7 @@ struct DesktopRootView: View {
             if !showing { hasAccountAddress = AccountAddress.own() != nil }
         }
         .sheet(isPresented: $showingRecoveryPrompt) {
-            RecoveryGateView(reason: .afterRegistration)
+            RecoveryGateView(reason: .afterRegistration).sheetNavigation(closes: false)
                 .frame(minWidth: 460, minHeight: 560)
         }
         .onAppear {

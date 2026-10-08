@@ -30,7 +30,10 @@ struct RecoveryGated<Content: View>: View {
             if ready {
                 content()
             } else {
-                RecoveryGateView(reason: .contacts) { ready = true }
+                // In place of a sheet's content, so the gate brings the stack its bar needs.
+                NavigationStack {
+                    RecoveryGateView(reason: .contacts) { ready = true }
+                }
             }
         }
         // Once per opening, not per invite: the QR is re-minted every few seconds. A key the
@@ -61,24 +64,6 @@ struct RecoveryGateView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            CTNavBar(
-                title: NSLocalizedString("recovery_gate_nav_title", comment: ""),
-                showBack: false
-            ) {
-                EmptyView()
-            } trailing: {
-                Button(NSLocalizedString(
-                    reason == .afterRegistration ? "recovery_gate_later" : "cancel",
-                    comment: ""
-                )) {
-                    vm.resetConfirm()
-                    dismiss()
-                }
-                .font(CTFont.bodyEmphasis)
-                .foregroundColor(Color.CT.textDim)
-                .buttonStyle(.plain)
-            }
-
             ScrollView {
                 VStack(alignment: .leading, spacing: CTLayout.sectionGap) {
                     Image(systemName: "key.fill")
@@ -108,9 +93,22 @@ struct RecoveryGateView: View {
             }
         }
         .ctBackground()
+        .screenTitle(NSLocalizedString("recovery_gate_nav_title", comment: ""))
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                Button(NSLocalizedString(
+                    reason == .afterRegistration ? "recovery_gate_later" : "cancel",
+                    comment: ""
+                )) {
+                    vm.resetConfirm()
+                    dismiss()
+                }
+                .barItem()
+            }
+        }
         .task { await vm.loadStatus() }
         .sheet(isPresented: $showingSetup, onDismiss: checkReady) {
-            RecoverySetupView()
+            RecoverySetupView().sheetNavigation(closes: false)
         }
         .onChange(of: vm.confirmStep) { _, step in
             if step == .done { checkReady() }

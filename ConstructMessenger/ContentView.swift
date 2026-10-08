@@ -56,12 +56,13 @@ struct ContentView: View {
             } else if authViewModel.deviceKeysUnavailable {
                 // Authenticated but crypto keys couldn't be loaded — show recovery screen.
                 // Keys are NOT wiped; user can retry, recover via seed phrase, or register new.
-                KeysRecoveryView()
+                // A screen of its own, so it brings the stack its title needs.
+                NavigationStack { KeysRecoveryView() }
                     .environment(authViewModel)
             } else if authViewModel.deviceDeregistered {
                 // Server rejected this device as unregistered but the keys are still present.
                 // Same recovery screen (retry / seed / new account) — never a silent wipe.
-                KeysRecoveryView(reason: .deviceDeregistered)
+                NavigationStack { KeysRecoveryView(reason: .deviceDeregistered) }
                     .environment(authViewModel)
             } else if authViewModel.isAuthenticated || authViewModel.hasRegisteredDeviceKeys == true {
                 // Authenticated OR definitively registered — main app or first-run orientation.
@@ -102,7 +103,7 @@ struct ContentView: View {
             }
         }
         .sheet(isPresented: $showingRecoveryPrompt) {
-            RecoveryGateView(reason: .afterRegistration)
+            RecoveryGateView(reason: .afterRegistration).sheetNavigation(closes: false)
         }
         .onAppear {
             authViewModel.refreshDeviceKeyState()

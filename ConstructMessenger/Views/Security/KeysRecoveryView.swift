@@ -32,12 +32,6 @@ struct KeysRecoveryView: View {
         ZStack {
             Color.CT.bg.ignoresSafeArea()
             VStack(alignment: .leading, spacing: 0) {
-                CTNavBar(title: NSLocalizedString("keys_recovery_title", comment: "")) {
-                    EmptyView()
-                } trailing: {
-                    EmptyView()
-                }
-
                 ScrollView {
                     VStack(alignment: .leading, spacing: 20) {
                         // Warning block
@@ -130,6 +124,7 @@ struct KeysRecoveryView: View {
                 }
             }
         }
+        .screenTitle(NSLocalizedString("keys_recovery_title", comment: ""))
         .sheet(isPresented: $showRecovery) {
             RecoveryEntryView()
                 .environment(recoveryVM)
