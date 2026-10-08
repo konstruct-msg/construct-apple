@@ -96,7 +96,7 @@ struct VideoCallView: View {
             ZStack {
                 Color.CT.bg
                 VStack(spacing: CTLayout.edgePad) {
-                    ContactMainAvatarView(userId: session.peerUserId, displayName: session.peerName, size: 96)
+                    ContactMainAvatarView(userId: session.peerUserId, displayName: session.peerName, size: CTAvatarSize.hero)
                     Image(systemName: "video.slash.fill")
                         .font(CTIcon.font(CTIcon.row))
                         .foregroundStyle(Color.CT.textDim)

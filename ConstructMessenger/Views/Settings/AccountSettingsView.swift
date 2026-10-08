@@ -226,7 +226,7 @@ struct AccountSettingsView: View {
                 userId: viewModel.userId,
                 displayName: viewModel.displayName,
                 image: viewModel.profileImage,
-                size: AvatarStyle.accountSize,
+                size: CTAvatarSize.hero,
                 isActive: false
             )
             .onTapGesture {

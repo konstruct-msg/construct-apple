@@ -134,9 +134,9 @@ private struct DesktopPeopleRow: View {
         let initials = initials(for: user)
         if let data = user.avatar,
            let platformImg = ImageHelper.imageFromData(data) {
-            CTHexAvatar(initials: initials, image: Image(platformImage: platformImg), size: .medium, colorSeed: seed)
+            CTHexAvatar(initials: initials, image: Image(platformImage: platformImg), size: CTAvatarSize.row, colorSeed: seed)
         } else {
-            CTHexAvatar(initials: initials, size: .medium, colorSeed: seed)
+            CTHexAvatar(initials: initials, size: CTAvatarSize.row, colorSeed: seed)
         }
     }
 

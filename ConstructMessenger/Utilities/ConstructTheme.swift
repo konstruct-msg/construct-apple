@@ -509,21 +509,29 @@ struct CTRowIcon: View {
 }
 
 
+// MARK: - Avatar sizes
+
+/// Every avatar is one of these (TODO 130). Each screen used to pick its own number — 28, 36, 40,
+/// 44, 52, 56, 72, 80, 96, 100 — so the same person changed size from screen to screen.
+enum CTAvatarSize {
+    /// A secondary row (the Desktop mini call bar).
+    static let compact: CGFloat = 32
+    /// A list row: chats, recents, people, requests.
+    static let row: CGFloat = 40
+    /// The person at the top of a card: the settings profile row, a shared profile.
+    static let header: CGFloat = 56
+    /// The one person a screen is about: a contact profile, the account, a call.
+    static let hero: CGFloat = 96
+}
+
 // MARK: - CTHexAvatar
 
 struct CTHexAvatar: View {
     var initials: String
     var image: Image? = nil
-    var size: AvatarSize = .medium
+    var size: CGFloat = CTAvatarSize.row
     /// Seed for deterministic color (pass userId or username). Defaults to initials.
     var colorSeed: String? = nil
-
-    enum AvatarSize: CGFloat {
-        case small  = 32
-        case medium = 40
-        case large  = 56
-        case xlarge = 80
-    }
 
     private var accentColor: Color {
         Color.hexagonAccent(for: colorSeed ?? initials)
@@ -535,7 +543,7 @@ struct CTHexAvatar: View {
                 image
                     .resizable()
                     .scaledToFill()
-                    .frame(width: size.rawValue, height: size.rawValue)
+                    .frame(width: size, height: size)
                     .clipShape(Circle())
                 Circle()
                     .stroke(accentColor, lineWidth: 1)
@@ -548,7 +556,7 @@ struct CTHexAvatar: View {
                     .stroke(accentColor, lineWidth: 1)
             }
         }
-        .frame(width: size.rawValue, height: size.rawValue)
+        .frame(width: size, height: size)
     }
 }
 

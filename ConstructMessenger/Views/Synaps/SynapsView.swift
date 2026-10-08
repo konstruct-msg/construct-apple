@@ -560,14 +560,7 @@ struct SynapsView: View {
                     selectedRequest = request
                 } label: {
                     HStack(spacing: 12) {
-                        ZStack {
-                            Circle()
-                                .fill(Color.CT.bgMsg)
-                                .frame(width: 36, height: 36)
-                            IdenticonView(seed: request.fromUserId)
-                                .frame(width: 28, height: 28)
-                                .clipShape(Circle())
-                        }
+                        MainAvatarView(userId: request.fromUserId, size: CTAvatarSize.row)
                         VStack(alignment: .leading, spacing: 2) {
                             if let name = request.displayName, !name.isEmpty {
                                 Text(name)

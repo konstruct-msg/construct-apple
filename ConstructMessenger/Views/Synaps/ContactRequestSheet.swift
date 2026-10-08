@@ -35,19 +35,7 @@ struct ContactRequestSheet: View {
                 VStack(spacing: 20) {
                     // Identity header
                     VStack(spacing: 12) {
-                        ZStack {
-                            Circle()
-                                .fill(Color.CT.bgMsg)
-                                .frame(width: 72, height: 72)
-                            IdenticonView(seed: request.fromUserId)
-                                .frame(width: 56, height: 56)
-                                .clipShape(Circle())
-                        }
-                        .overlay(
-                            Circle()
-                                .stroke(Color.CT.noise, lineWidth: 1)
-                                .frame(width: 72, height: 72)
-                        )
+                        MainAvatarView(userId: request.fromUserId, size: CTAvatarSize.hero)
 
                         VStack(spacing: 4) {
                             Text(displayTitle)

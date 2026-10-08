@@ -22,7 +22,7 @@ struct IncomingVideoCallView: View {
     private enum Layout {
         static let actionSpacing: CGFloat = CTSpace.xxl
         static let actionsBottom: CGFloat = CTSpace.xxl + CTSpace.xl
-        static let avatarSize: CGFloat = 96
+        static let avatarSize: CGFloat = CTAvatarSize.hero
     }
 
     var body: some View {

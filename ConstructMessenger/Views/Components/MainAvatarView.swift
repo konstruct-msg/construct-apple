@@ -121,7 +121,7 @@ struct MainAvatarView: View {
     let userId: String
     var displayName: String = ""
     var image: PlatformImage? = nil
-    var size: CGFloat = 44
+    var size: CGFloat = CTAvatarSize.row
     var isActive: Bool = false    // currently selected / foreground chat
     var isOnline: Bool = false    // presence indicator
     var strokeWidth: CGFloat = 1.5
@@ -225,7 +225,7 @@ struct MainAvatarView: View {
 struct ContactMainAvatarView: View {
     let userId: String
     var displayName: String = ""
-    var size: CGFloat = 44
+    var size: CGFloat = CTAvatarSize.row
     var isActive: Bool = false
     var isOnline: Bool = false
     var strokeWidth: CGFloat = 1.5
@@ -233,7 +233,7 @@ struct ContactMainAvatarView: View {
     init(
         userId: String,
         displayName: String = "",
-        size: CGFloat = 44,
+        size: CGFloat = CTAvatarSize.row,
         isActive: Bool = false,
         isOnline: Bool = false,
         strokeWidth: CGFloat = 1.5

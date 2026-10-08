@@ -240,7 +240,7 @@ private struct CallHistoryRow: View {
                 ContactMainAvatarView(
                     userId: record.peerUserId,
                     displayName: record.peerName,
-                    size: 40
+                    size: CTAvatarSize.row
                 )
 
                 VStack(alignment: .leading, spacing: 3) {

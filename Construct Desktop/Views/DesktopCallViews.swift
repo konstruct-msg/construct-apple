@@ -17,7 +17,7 @@ struct DesktopIncomingCallView: View {
 
     var body: some View {
         HStack(spacing: 16) {
-            MainAvatarView(userId: session.peerUserId, displayName: session.peerName, size: 40)
+            MainAvatarView(userId: session.peerUserId, displayName: session.peerName, size: CTAvatarSize.row)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(session.peerName.uppercased())
@@ -86,7 +86,7 @@ struct DesktopInCallView: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            MainAvatarView(userId: session.peerUserId, displayName: session.peerName, size: 32)
+            MainAvatarView(userId: session.peerUserId, displayName: session.peerName, size: CTAvatarSize.compact)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(session.peerName.uppercased())
