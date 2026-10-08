@@ -69,7 +69,7 @@ struct DesktopSynapsView: View {
                             minScale: 0.20,
                             maxScale: 3.0
                         ) {
-                            DesktopHoneycombCloud(
+                            DesktopSynapsCloud(
                                 contacts:     filtered,
                                 canvasScale:  canvasScale,
                                 canvasOffset: canvasOffset,
@@ -272,13 +272,14 @@ struct DesktopSynapsView: View {
 
     private func fitScale(contacts: [ContactRecord], screenSize: CGSize) -> CGFloat {
         guard !contacts.isEmpty else { return 1.0 }
-        return HoneycombLayoutEngine(contacts: contacts, canvasSize: screenSize).initialScale
+        let metrics = ContactMetrics.byContact(contacts.map(\.id), in: context)
+        return SynapsCloudLayout(contacts: contacts, metrics: metrics).fitScale(in: screenSize)
     }
 }
 
-// MARK: - DesktopHoneycombCloud
+// MARK: - DesktopSynapsCloud
 
-private struct DesktopHoneycombCloud: View {
+private struct DesktopSynapsCloud: View {
     @Environment(\.managedObjectContext) private var context
     let contacts:     [ContactRecord]
     let canvasScale:  CGFloat
@@ -293,25 +294,27 @@ private struct DesktopHoneycombCloud: View {
 
     var body: some View {
         GeometryReader { geo in
-            let engine  = HoneycombLayoutEngine(contacts: contacts, canvasSize: geo.size)
             let metrics = metricsMap
+            let layout  = SynapsCloudLayout(contacts: contacts, metrics: metrics)
+            let centre  = CGPoint(x: geo.size.width / 2, y: geo.size.height / 2)
 
             ZStack(alignment: .topLeading) {
                 Color.clear.frame(width: geo.size.width, height: geo.size.height)
 
-                ForEach(engine.items) { item in
+                ForEach(layout.items) { item in
+                    let position = CGPoint(x: centre.x + item.position.x, y: centre.y + item.position.y)
                     DesktopContactNode(
                         user:         item.user,
-                        cellSize:     engine.cellSize,
+                        pitch:        SynapsCloudLayout.pitch,
                         metrics:      metrics[item.user.id] ?? .zero,
-                        canvasPos:    item.position,
+                        canvasPos:    position,
                         canvasScale:  canvasScale,
                         canvasOffset: canvasOffset,
                         screenSize:   screenSize,
                         onMessage:    { onMessage(item.user) },
                         onRemove:     { onRemove(item.user) }
                     )
-                    .position(item.position)
+                    .position(position)
                 }
             }
         }
@@ -322,7 +325,8 @@ private struct DesktopHoneycombCloud: View {
 
 private struct DesktopContactNode: View {
     let user: ContactRecord
-    let cellSize:     CGFloat
+    /// Centre-to-centre distance of neighbours (`SynapsCloudLayout.pitch`).
+    let pitch:        CGFloat
     let metrics:      ContactMetrics
     let canvasPos:    CGPoint
     let canvasScale:  CGFloat
@@ -334,16 +338,15 @@ private struct DesktopContactNode: View {
     @State private var showPopover = false
     @State private var isHovered   = false
 
-    private var cellWidth: CGFloat { cellSize / 0.74 }
 
     /// Slightly smaller circles so a name label fits under each node (mirrors iOS).
     private var effectiveSize: CGFloat {
         let f = 0.50 + 0.16 * metrics.frequencyScore  // [0.50 … 0.66]
-        return cellWidth * f
+        return pitch * f
     }
 
     private var labelWidth: CGFloat {
-        min(cellWidth * 0.92, max(effectiveSize * 1.35, 56))
+        min(pitch * 0.92, max(effectiveSize * 1.35, 56))
     }
 
     var body: some View {
@@ -389,15 +392,19 @@ private struct DesktopContactNode: View {
             .frame(width: effectiveSize * 1.2, height: effectiveSize * 1.2)
             .opacity(proximityOpacity)
 
-            Text(user.resolvedDisplayName)
-                .font(CTFont.ui(10, weight: .medium))
-                .foregroundStyle(user.isBlocked ? Color.CT.textDim : Color.CT.text)
-                .lineLimit(1)
-                .minimumScaleFactor(0.75)
-                .truncationMode(.tail)
-                .multilineTextAlignment(.center)
-                .frame(width: labelWidth)
-                .opacity(min(1.0, proximityOpacity + 0.35))
+            // Two lines' height always, as on iOS — see ContactCircle.
+            ZStack(alignment: .top) {
+                Text(verbatim: "X\nX").hidden()
+                Text(user.resolvedDisplayName)
+                    .foregroundStyle(user.isBlocked ? Color.CT.textDim : Color.CT.text)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.75)
+                    .truncationMode(.tail)
+                    .multilineTextAlignment(.center)
+            }
+            .font(CTFont.ui(10, weight: .medium))
+            .frame(width: labelWidth)
+            .opacity(min(1.0, proximityOpacity + 0.35))
         }
         .scaleEffect(proximityScale)
         .animation(.easeInOut(duration: 0.12), value: isHovered)
