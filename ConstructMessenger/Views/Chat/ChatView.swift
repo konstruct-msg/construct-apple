@@ -261,7 +261,7 @@ struct ChatView: View {
         .toolbar { chatToolbar }
         .inlineNavTitle()
         #if os(iOS)
-        .toolbar(.hidden, for: .tabBar)
+        .hidesTabBar()
         #endif
         .modifier(ComposerPlacement(usesOverlay: usesOwnedInset) { composer })
         .onDrop(of: [.image, .fileURL], isTargeted: $isChatDropTargeted) { providers in

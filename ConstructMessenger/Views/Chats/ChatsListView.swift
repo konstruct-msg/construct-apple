@@ -53,10 +53,9 @@ struct ChatsListView: View {
             }
             .navigationDestination(for: String.self) { chatId in
                     if let chat = chats.first(where: { $0.id == chatId }) {
+                        // Messenger convention: the bottom tab bar yields to the message input
+                        // bar while inside a conversation — `ChatView` hides it.
                         ChatView(chat: chat, context: viewContext)
-                            // Messenger convention: the bottom tab bar yields to the
-                            // message input bar while inside a conversation.
-                            .toolbar(.hidden, for: .tabBar)
                     }
             }
             .sheet(isPresented: $showingQRScanner) {

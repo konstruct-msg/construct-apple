@@ -172,3 +172,36 @@ private struct ConnectionSubtitle: ViewModifier {
         }
     }
 }
+
+#if os(iOS)
+extension View {
+    /// Hide the tab bar while this screen is on top: it leaves as the screen is pushed and comes
+    /// back as it is popped, in the same transition.
+    ///
+    /// Not `.toolbar(.hidden, for: .tabBar)`: that restores the bar only after a pop has
+    /// finished — about 0.3 s of the list without its tab bar, measured on video (2026-10-08).
+    /// `hidesBottomBarWhenPushed` would be UIKit's own answer, but the push reads it before
+    /// SwiftUI has built the screen that could set it. So the screen tells the tab bar itself, as
+    /// it appears and disappears, and the change animates with the navigation transition.
+    func hidesTabBar() -> some View {
+        background(TabBarHider().frame(width: 0, height: 0))
+    }
+}
+
+private struct TabBarHider: UIViewControllerRepresentable {
+    func makeUIViewController(context: Context) -> Controller { Controller() }
+    func updateUIViewController(_ controller: Controller, context: Context) {}
+
+    final class Controller: UIViewController {
+        override func viewWillAppear(_ animated: Bool) {
+            super.viewWillAppear(animated)
+            tabBarController?.setTabBarHidden(true, animated: animated)
+        }
+
+        override func viewWillDisappear(_ animated: Bool) {
+            super.viewWillDisappear(animated)
+            tabBarController?.setTabBarHidden(false, animated: animated)
+        }
+    }
+}
+#endif
