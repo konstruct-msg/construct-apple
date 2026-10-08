@@ -125,8 +125,10 @@ Tokens — source of truth `ConstructMessenger/Utilities/ConstructTheme.swift`:
 - Background always `Color.CT.bg` (`#090909`) via `.ctBackground()`.
 - New UI must use tokens; when editing a file with a literal `8`/`10`/`18`, migrate that call site.
 - Debug-only UI: `.orange`, `#if DEBUG`.
-- Tab bar is the standard SwiftUI `TabView`; hide it in a conversation only via
-  `.toolbar(.hidden, for: .tabBar)` on the `ChatView` destination.
+- Tab bar is the standard SwiftUI `TabView`; a conversation hides it with `.hidesTabBar()`
+  (`Platform/PlatformNavBar.swift`). Until 2026-10-08 this said `.toolbar(.hidden, for: .tabBar)`,
+  which brings the bar back only after the pop has finished — ~0.3 s of a list without its tab
+  bar, measured on video; `hidesTabBar()` moves it into the transition.
 
 **Xcode Previews run in the app target since 2026-10-01** — `InCallView`'s preview rendered on
 Xcode 27 (JIT executor), with the scheme `ConstructMessenger` (Debug, `-Onone`). Until then this

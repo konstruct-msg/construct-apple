@@ -14,7 +14,6 @@ struct ChatView: View {
     @Environment(\.scenePhase) private var scenePhase
     /// Between this chat's appear and disappear — not covered by a pushed profile or the like.
     @State private var isOnScreen = false
-    @Environment(\.dismiss) private var dismiss
     /// Lazy holder — SwiftUI re-runs View.init on parent re-render; we must not
     /// allocate ChatViewModel there or discarded copies spam deinit / waste work.
     @State private var lazyViewModel: LazyChatViewModel
@@ -40,13 +39,13 @@ struct ChatView: View {
     @State private var replyFocusIds: Set<String> = []
     @State private var replyFocusPeekTask: Task<Void, Never>?
     @State private var showingUserProfile = false
+    /// The top safe area — status bar and the system bar. The UIKit transcript lays out under the
+    /// bar and needs it as padding; a SwiftUI scroll view does that itself.
+    @State private var topBarInset: CGFloat = 0
     @State private var callManager: (any CallUIManaging)? = CallRuntimeProvider.makeUIManager()
 
     @State private var searchText = ""
     @State private var isSearchActive = false
-    /// The header's action palette, while open. Drawn here, over the whole chat, so a tap
-    /// anywhere else can close it.
-    @State private var actionPalette: ChatActionPaletteState?
     @State private var isEditMode = false
     @State private var selectedMessages: Set<String> = []
     @State private var galleryStartItem: GalleryStartItem?  // media gallery presenter
@@ -114,9 +113,6 @@ struct ChatView: View {
         static let composerHorizontalPadding = ChatUIConstants.Shell.composerHorizontalPadding
         static let composerBottomPadding = ChatUIConstants.Shell.composerBottomPadding
         static let messageBottomClearance = ChatUIConstants.Shell.messageBottomClearance
-        /// Extra band below the status-bar safe area (≈ nav capsule height + margin) covered
-        /// by the top scrim so scrolling text blurs/fades before it reaches the clock & signal.
-        static let topScrimUnderSafeArea = ChatUIConstants.Shell.topScrimUnderSafeArea
         /// Same cutoff as ``ChatScrollManager/heightRepinThreshold`` — layout noise, not a pin trigger.
         static let geometryLogThreshold = ChatScrollManager.heightRepinThreshold
     }
@@ -152,7 +148,7 @@ struct ChatView: View {
         // Compute once per body pass to avoid repeated full-array filtering in render path.
         let renderedMessages = filteredMessages
 
-        // Floating capsule glass panels (top nav + bottom input) over scroll, following Apple's capsulization
+        // The transcript under the system bar's glass and the floating composer.
         ZStack {
             // Full-bleed chat background so the floating input capsule sits over a continuous
             // surface — without this the ScrollView's own background stops at the safe area and
@@ -160,7 +156,7 @@ struct ChatView: View {
             // strip under the capsule.
             Color.CT.bg.ignoresSafeArea()
 
-            // Message list — base layer, scrolls underneath the floating capsules
+            // Message list — base layer, scrolls under the bar and the composer
             transcript(renderedMessages)
                 .onChange(of: viewModel.messages.count) { oldCount, count in
                     if AppConstants.enableDebugLogging {
@@ -232,32 +228,20 @@ struct ChatView: View {
                     }
                 }
 
-            // Top scrim so scrolling text fades before the status bar / floating nav.
-            GeometryReader { geo in
-                Rectangle()
-                    .fill(
-                        LinearGradient(
-                            stops: [
-                                .init(color: Color.CT.bg, location: 0),
-                                .init(color: Color.CT.bg.opacity(0.65), location: 0.55),
-                                .init(color: Color.CT.bg.opacity(0), location: 1)
-                            ],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    )
-                    .frame(height: geo.safeAreaInsets.top + Layout.topScrimUnderSafeArea)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                    .ignoresSafeArea(edges: .top)
-            }
-            .allowsHitTesting(false)
-
-            // === Floating capsule glass panels (Apple capsulization) ===
-            // Top: nav + banners (capsule style)
+            // Search and the banners, under the system bar.
             VStack(spacing: ChatUIConstants.Shell.floatingChromeSpacing) {
-                chatTopChrome(resultCount: renderedMessages.count)
+                if isSearchActive {
+                    ChatSearchChromeView(
+                        searchText: $searchText,
+                        resultCount: renderedMessages.count,
+                        onClose: {
+                            withAnimation {
+                                isSearchActive = false
+                            }
+                        }
+                    )
                     .padding(.horizontal, ChatUIConstants.Shell.floatingChromeHorizontal)
-                    .padding(.top, ChatUIConstants.Shell.floatingChromeTop + callBarInset)
+                }
 
                 floodBurstBanner
 
@@ -269,36 +253,17 @@ struct ChatView: View {
 
                 Spacer(minLength: 0)
             }
+            .padding(.top, callBarInset)
             .frame(maxHeight: .infinity, alignment: .top)
-            .overlayPreferenceValue(ChatActionButtonAnchorKey.self) { anchor in
-                GeometryReader { geo in
-                    if let actionPalette, let anchor {
-                        let button = geo[anchor]
-                        ChatActionPaletteView(
-                            state: actionPalette,
-                            actions: headerActions,
-                            center: CGPoint(x: button.midX, y: button.midY),
-                            callout: ChatActionPaletteGeometry.calloutPosition(
-                                buttonCenter: CGPoint(x: button.midX, y: button.midY),
-                                containerWidth: geo.size.width
-                            ),
-                            onAction: performHeaderAction,
-                            onDismiss: { self.actionPalette = nil }
-                        )
-                        .transition(.opacity)
-                    }
-                }
-                .animation(.easeOut(duration: 0.15), value: actionPalette == nil)
-            }
 
         }
+        .onGeometryChange(for: CGFloat.self, of: { $0.safeAreaInsets.top }) { topBarInset = $0 }
+        .toolbar { chatToolbar }
+        .inlineNavTitle()
         #if os(iOS)
-        .hideSystemNavBar()
-        .toolbar(.hidden, for: .tabBar)
+        .hidesTabBar()
         #endif
         .modifier(ComposerPlacement(usesOverlay: usesOwnedInset) { composer })
-        // Edge-swipe-back is handled natively by interactivePopGestureRecognizer
-        // (see InteractiveSwipeBack.swift) — no manual DragGesture needed.
         .onDrop(of: [.image, .fileURL], isTargeted: $isChatDropTargeted) { providers in
             handleChatDrop(providers: providers)
         }
@@ -556,59 +521,100 @@ struct ChatView: View {
         }
     }
     
-    // MARK: - CT Navigation Bar
+    // MARK: - Bar
 
-    @ViewBuilder
-    private func chatTopChrome(resultCount: Int) -> some View {
-        switch ChatTopChromeMode.resolve(isSearchActive: isSearchActive) {
-        case .navigation:
-            chatNavBar
-        case .search:
-            ChatSearchChromeView(
-                searchText: $searchText,
-                resultCount: resultCount,
-                onClose: {
-                    withAnimation {
-                        isSearchActive = false
-                    }
-                }
-            )
-        }
-    }
-
-    @ViewBuilder
-    private var chatNavBar: some View {
-        if let userId = viewModel.chat.otherUser?.id, !userId.isEmpty {
-            ObservedPeerName(userId: userId) { chatNavBar(title: $0) }
-        } else {
-            chatNavBar(title: NSLocalizedString("chat", comment: ""))
-        }
-    }
-
-    private func chatNavBar(title: String) -> some View {
-        ChatNavBarView(
-            title: title,
-            subtitle: navigationStatusSubtitle,
-            contactKTStatus: contactKTStatus,
-            contactTrustAlert: contactTrustAlert,
-            isEditMode: isEditMode,
-            onBack: { dismiss() },
-            onOpenProfile: { showingUserProfile = true },
-            onDoneEdit: {
-                withAnimation {
-                    isEditMode = false
-                    selectedMessages.removeAll()
-                }
-            },
-            actions: headerActions,
-            actionPalette: $actionPalette,
-            onAction: performHeaderAction,
-            onKTWarningTap: {
-                if contactTrustAlert != nil {
-                    showingSafetyNumbers = true
+    /// The conversation on the system bar (`decisions/navigation-bars-are-the-systems.md`): the
+    /// system back, the person's name as the title, the actions in one menu.
+    @ToolbarContentBuilder
+    private var chatToolbar: some ToolbarContent {
+        // The title is a button: a tap on the name opens the person (owner, 2026-10-08). The one
+        // bar of ours whose title is a view, so it sets the bar's title face itself.
+        ToolbarItem(placement: .principal) {
+            Button { showingUserProfile = true } label: {
+                if let userId = viewModel.chat.otherUser?.id, !userId.isEmpty {
+                    ObservedPeerName(userId: userId) { chatTitle($0) }
+                } else {
+                    chatTitle(NSLocalizedString("chat", comment: ""))
                 }
             }
-        )
+            .buttonStyle(.plain)
+            .accessibilityIdentifier(A11y.Chat.title)
+            .accessibilityHint(Text(LocalizedStringKey("profile")))
+        }
+
+        if contactTrustAlert != nil {
+            ToolbarItem(placement: .primaryAction) {
+                Button { showingSafetyNumbers = true } label: {
+                    Label(NSLocalizedString("kt_warning", comment: ""), systemImage: "exclamationmark.shield.fill")
+                }
+                .tint(Color.CT.danger)
+                .accessibilityHint(Text(LocalizedStringKey("key_change_verify")))
+            }
+        }
+
+        if isEditMode {
+            ToolbarItem(placement: .confirmationAction) {
+                ConfirmButton(title: NSLocalizedString("done", comment: "")) {
+                    withAnimation {
+                        isEditMode = false
+                        selectedMessages.removeAll()
+                    }
+                }
+            }
+        } else {
+            ToolbarItem(placement: .primaryAction) {
+                chatActionsItem.barItem()
+            }
+        }
+    }
+
+    /// Search, call, video call — one menu. With a single action (no callable contact) it is
+    /// that action's own button: a menu of one is a detour.
+    @ViewBuilder
+    private var chatActionsItem: some View {
+        let actions = headerActions
+        if actions.count == 1, let only = actions.first {
+            Button { performHeaderAction(only) } label: { chatActionLabel(only) }
+        } else {
+            Menu {
+                ForEach(actions, id: \.self) { action in
+                    Button { performHeaderAction(action) } label: { chatActionLabel(action) }
+                }
+            } label: {
+                Label(NSLocalizedString("chat_actions", comment: ""), systemImage: "ellipsis.circle")
+            }
+        }
+    }
+
+    private func chatActionLabel(_ action: ChatAction) -> some View {
+        Label(NSLocalizedString(action.labelKey, comment: ""), systemImage: action.symbol)
+    }
+
+    /// Name, then the session or connection state under it — the bar's title and subtitle, drawn
+    /// in the faces the app-wide bar appearance gives a plain title.
+    private func chatTitle(_ name: String) -> some View {
+        VStack(spacing: 0) {
+            HStack(spacing: CTLayout.inlinePad / 2) {
+                Text(name)
+                    .font(CTFont.ui(17, weight: .semibold, relativeTo: .headline))
+                    .foregroundStyle(Color.CT.text)
+                    .lineLimit(1)
+                if contactTrustAlert == nil, contactKTStatus == .verified {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(CTFont.caption)
+                        .foregroundStyle(Color.CT.accent)
+                        .accessibilityLabel(Text(LocalizedStringKey("kt_verified")))
+                }
+            }
+            if let subtitle = navigationStatusSubtitle {
+                Text(subtitle)
+                    .font(CTFont.caption)
+                    .foregroundStyle(Color.CT.textDim)
+                    .lineLimit(1)
+                    .transition(.opacity)
+            }
+        }
+        .contentShape(Rectangle())
     }
 
     /// Load KT status for the contact — as saved, since this runs on the notification a write
@@ -659,7 +665,7 @@ struct ChatView: View {
                     transcriptRows(renderedMessages)
                     Color.clear.frame(height: Layout.messageBottomClearance)
                 }
-                .padding(.top, ChatUIConstants.Shell.scrollContentTopPad + callBarInset)
+                .padding(.top, topBarInset + ChatUIConstants.Shell.scrollContentTopPad + callBarInset)
                 .padding(.horizontal)
                 .coordinateSpace(name: Self.transcriptContentSpace)
                 .environment(\.containerWidth, containerWidth)
@@ -668,6 +674,9 @@ struct ChatView: View {
             // never calls — it has no `ScrollViewReader`, so `onProxyReady` does not exist here.
             // Opening a chat therefore left the badge standing for the whole owned-path build.
             .onAppear { LocalNotificationManager.shared.clearBadge() }
+            // Under the bar's glass, as a SwiftUI scroll view goes on its own; `topBarInset` keeps
+            // the first message clear of it.
+            .ignoresSafeArea(.container, edges: .top)
         } else {
             legacyTranscript(renderedMessages)
         }
@@ -1015,7 +1024,6 @@ struct ChatView: View {
     }
 
     private func performHeaderAction(_ action: ChatAction) {
-        actionPalette = nil
         switch action {
         case .search: withAnimation { isSearchActive = true }
         case .call: startCall()

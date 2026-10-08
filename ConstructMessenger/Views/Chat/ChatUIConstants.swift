@@ -45,13 +45,10 @@ enum ChatUIConstants {
         /// Horizontal inset around the floating composer.
         static let composerHorizontalPadding: CGFloat = CTLayout.inlinePad
         static let composerBottomPadding: CGFloat = CTLayout.inlinePad
-        /// Top padding so messages clear the floating nav capsule.
-        static let scrollContentTopPad: CGFloat = 70
-        /// Extra band under the status bar covered by the top scrim.
-        static let topScrimUnderSafeArea: CGFloat = CTLayout.navBarHeight + 24
-        /// Floating nav / banner stack outer chrome.
+        /// Room between the system bar and the first message. The bar itself is the safe area's.
+        static let scrollContentTopPad: CGFloat = CTLayout.inlinePad
+        /// Search and banner stack outer chrome.
         static let floatingChromeHorizontal: CGFloat = CTLayout.inlinePad
-        static let floatingChromeTop: CGFloat = 4
         static let floatingChromeSpacing: CGFloat = CTLayout.inlinePad
         /// Lift scroll-to-bottom FAB above variable-height composer glass.
         static let scrollToBottomLift: CGFloat = 100
