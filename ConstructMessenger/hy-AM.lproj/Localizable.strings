@@ -1202,11 +1202,6 @@
 "account_discard_changes_keep_editing" = "Շարունակել խմբագրումը";
 "account_editing_profile" = "> Պրոֆիլի դաշտերի խմբագրում։ «Պահպանել»՝ պահելու, «Չեղարկել»՝ չեղարկելու համար։";
 
-"liquid_logo.title" = "LIQUID LOGO";
-"liquid_logo.size" = "ՉԱՓ";
-"liquid_logo.haptics" = "Թրթռում";
-"liquid_logo.replay" = "ԿՐԿՆԵԼ";
-"liquid_logo.hint" = "հպեք ցանկացած տեղ՝ կրկնելու համար";
 
 /* Silent-transport neutral network indicator (silent-transport-ui decision) */
 "net_status_protected" = "Պաշտպանված";
