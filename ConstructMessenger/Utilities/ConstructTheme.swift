@@ -912,8 +912,10 @@ struct CTSettingsRow: View {
             }
         }
         .padding(.horizontal, 12)
-        .padding(.vertical, 9)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        // A system list row's height: at 9 the rows of the settings root sat ~36pt apart, tighter
+        // than every toggle row beside them (edgePad around the switch).
+        .padding(.vertical, CTLayout.edgePad)
+        .frame(maxWidth: .infinity, minHeight: CTLayout.hitTarget, alignment: .leading)
         .contentShape(Rectangle())
     }
 }
