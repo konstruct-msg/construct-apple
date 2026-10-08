@@ -667,6 +667,8 @@ struct UserProfileView: View {
 
 // MARK: - Preview
 
+// DEBUG only: the previews seed `ContactsLive.useForPreview`, which a release build does not have.
+#if DEBUG
 #Preview {
     let container = PreviewHelpers.createPreviewContainer()
     ContactsLive.useForPreview(container)
@@ -693,6 +695,7 @@ struct UserProfileView: View {
     return UserProfileView(userId: user.id)
         .environment(\.managedObjectContext, context)
 }
+#endif
 
 /// One of the contact card's round actions: the system's glass circle with a symbol, the title
 /// under it — as the iOS 26 contact cards draw them. The title is part of the button.

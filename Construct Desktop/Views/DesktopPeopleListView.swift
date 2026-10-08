@@ -149,6 +149,8 @@ private struct DesktopPeopleRow: View {
     }
 }
 
+// DEBUG only: the previews seed `ContactsLive.useForPreview`, which a release build does not have.
+#if DEBUG
 #Preview {
     let container = PreviewHelpers.createPreviewContainer()
     ContactsLive.useForPreview(container)
@@ -163,3 +165,4 @@ private struct DesktopPeopleRow: View {
         .environment(chatsViewModel)
         .frame(width: 280, height: 600)
 }
+#endif
