@@ -31,9 +31,11 @@ struct SynapsView: View {
     @State private var pruneTarget:     ContactRecord? = nil
     @State private var showPruneConfirm = false
     // Shared canvas transform — owned here so SynapsCloud can read them for
-    // the proximity effect while ZoomableCloud drives them via gestures.
+    // the lens while ZoomableCloud drives them via gestures.
     @State private var canvasScale:  CGFloat  = 1.0   // recalculated on appear
     @State private var canvasOffset: CGSize   = .zero
+    /// How far inside the visible area the lens ends: about the radius of a circle at the rim.
+    private static let lensInset: CGFloat = 14
     /// Height of what overlays the cloud's top edge (remote result, pending requests).
     @State private var topOverlayHeight: CGFloat = 0
 
@@ -277,7 +279,11 @@ struct SynapsView: View {
                 canvasScale:  canvasScale,
                 canvasOffset: canvasOffset,
                 focus:        focus,
-                reach:        Swift.min(visible.width, visible.height) / 2
+                // The oval stops a rim circle's radius short of the visible edges.
+                lens:         SynapsLens(radii: CGSize(
+                    width: Swift.max(0, visible.width / 2 - Self.lensInset),
+                    height: Swift.max(0, visible.height / 2 - Self.lensInset)
+                ))
             )
         }
         .frame(width: canvas.width, height: canvas.height)
@@ -288,9 +294,9 @@ struct SynapsView: View {
         }
         .offset(x: -insets.leading, y: -insets.top)
         .onAppear {
-            // Fit once per appear; do not re-fit on keyboard-driven size changes — that
-            // would yank a mid-gesture pan/zoom.
-            canvasScale = layout.fitScale(in: visible.size)
+            // The lens keeps every contact inside the visible area at 1:1, so the cloud opens
+            // there rather than fitted (which, under the lens, shrank everyone twice).
+            canvasScale = 1
         }
     }
 
@@ -673,36 +679,52 @@ private struct SynapsCloud: View {
     @Binding var selected: ContactRecord?
     let canvasScale:  CGFloat
     let canvasOffset: CGSize
-    /// The middle of the visible part of the canvas; the cloud's centre sits here.
+    /// The middle of the visible part of the canvas; the cloud's centre and the lens sit here.
     let focus:        CGPoint
-    /// How far from `focus` a contact still counts as central for the proximity effect.
-    let reach:        CGFloat
+    let lens:         SynapsLens
 
     var body: some View {
-        // Contacts past the canvas edge at the current zoom are clipped by ZoomableCloud and
-        // come into view when zoomed out or panned.
         ZStack(alignment: .topLeading) {
             Color.clear
 
             ForEach(layout.items) { item in
-                let position = CGPoint(x: focus.x + item.position.x, y: focus.y + item.position.y)
+                let placed = place(item)
                 ContactCircle(
                     user:         item.user,
                     pitch:        SynapsCloudLayout.pitch,
                     metrics:      metricsByUser[item.user.id] ?? .zero,
-                    canvasPos:    position,
-                    canvasScale:  canvasScale,
-                    canvasOffset: canvasOffset,
-                    focus:        focus,
-                    reach:        reach
+                    lensScale:    placed.scale,
+                    lensOpacity:  placed.opacity,
+                    labelOpacity: placed.labelOpacity
                 ) {
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.72)) {
                         selected = item.user
                     }
                 }
-                .position(position)
+                .position(placed.position)
             }
         }
+    }
+
+    /// Where the lens draws a contact. ZoomableCloud scales the canvas about `focus` and then
+    /// pans it, so the contact's screen point is worked out, moved by the lens, and taken back
+    /// to the canvas point that lands there.
+    private func place(_ item: SynapsCloudLayout.Item) -> (position: CGPoint, scale: CGFloat, opacity: Double, labelOpacity: Double) {
+        let scale = Swift.max(canvasScale, 0.0001)
+        let screen = CGPoint(
+            x: focus.x + item.position.x * scale + canvasOffset.width,
+            y: focus.y + item.position.y * scale + canvasOffset.height
+        )
+        let (drawn, rim) = lens.draw(screen, centre: focus)
+        return (
+            position: CGPoint(
+                x: focus.x + (drawn.x - focus.x - canvasOffset.width) / scale,
+                y: focus.y + (drawn.y - focus.y - canvasOffset.height) / scale
+            ),
+            scale: SynapsLens.scale(atRim: rim),
+            opacity: SynapsLens.opacity(atRim: rim),
+            labelOpacity: SynapsLens.labelOpacity(atDistance: hypot(drawn.x - focus.x, drawn.y - focus.y))
+        )
     }
 }
 
@@ -713,11 +735,11 @@ private struct ContactCircle: View {
     /// Centre-to-centre distance of neighbours (`SynapsCloudLayout.pitch`).
     let pitch:        CGFloat
     let metrics:      ContactMetrics
-    let canvasPos:    CGPoint
-    let canvasScale:  CGFloat
-    let canvasOffset: CGSize
-    let focus:        CGPoint
-    let reach:        CGFloat
+    /// Size and opacity under the lens: full in the middle, smaller and dimmer at the edge.
+    let lensScale:    CGFloat
+    let lensOpacity:  Double
+    /// The name shows only around the middle.
+    let labelOpacity: Double
     var onTap: () -> Void
 
     @State private var touchMoved = false
@@ -737,55 +759,55 @@ private struct ContactCircle: View {
     }
 
     var body: some View {
-        VStack(spacing: 4) {
+        // The circle is the view and stands exactly on its point; the name hangs under it as an
+        // overlay, two points below the rim, and takes no room of its own. Until 2026-10-08 the
+        // circle sat in a frame a fifth larger (room for the halo) with the name below that, so
+        // the name floated off the circle and the circle stood above its point.
+        ZStack {
             ZStack {
-                // Soft halo — ambient “this node is live” (not a feed preview).
+                if let data = user.avatar, let img = PlatformImage(data: data) {
+                    Image(platformImage: img)
+                        .resizable()
+                        .scaledToFill()
+                } else {
+                    Circle().fill(accentColor.opacity(0.12))
+                    IdenticonView(seed: user.id)
+                }
+            }
+            .frame(width: effectiveSize, height: effectiveSize)
+            .clipShape(Circle())
+            .overlay(Circle().stroke(borderColor, lineWidth: metrics.activityRingLineWidth))
+            // Soft halo — ambient “this node is live” (not a feed preview).
+            .background {
                 if metrics.showsActivityHalo && !user.isBlocked {
                     Circle()
                         .stroke(Color.CT.accent.opacity(0.28), lineWidth: 3)
                         .frame(width: effectiveSize * 1.14, height: effectiveSize * 1.14)
                 }
-
-                ZStack {
-                    if let data = user.avatar, let img = PlatformImage(data: data) {
-                        Image(platformImage: img)
-                            .resizable()
-                            .scaledToFill()
-                    } else {
-                        Circle().fill(accentColor.opacity(0.12))
-                        IdenticonView(seed: user.id)
-                    }
-                }
-                .frame(width: effectiveSize, height: effectiveSize)
-                .clipShape(Circle())
-                .overlay(Circle().stroke(borderColor, lineWidth: metrics.activityRingLineWidth))
-
-                if metrics.unreadCount > 0 {
-                    unreadBadge
-                        .offset(x: effectiveSize * 0.34, y: -effectiveSize * 0.34)
-                }
             }
-            .frame(width: effectiveSize * 1.2, height: effectiveSize * 1.2)
-            .opacity(proximityOpacity)
 
-            // A name of two words wraps onto a second line rather than being cut. The label
-            // always takes two lines' height, so a one-line name leaves its circle where a
-            // two-line name's neighbour has it and the row stays level.
-            ZStack(alignment: .top) {
-                Text(verbatim: "X\nX").hidden()
-                Text(user.resolvedDisplayName)
-                    .foregroundStyle(user.isBlocked ? Color.CT.textDim : Color.CT.text)
-                    .lineLimit(2)
-                    .minimumScaleFactor(0.75)
-                    .truncationMode(.tail)
-                    .multilineTextAlignment(.center)
+            if metrics.unreadCount > 0 {
+                unreadBadge
+                    .offset(x: effectiveSize * 0.34, y: -effectiveSize * 0.34)
             }
-            .font(CTFont.ui(10, weight: .medium))
-            .frame(width: labelWidth)
-            // Names stay a bit more readable than peripheral avatars.
-            .opacity(min(1.0, proximityOpacity + 0.35))
         }
-        .scaleEffect(proximityScale)
+        .overlay(alignment: .top) {
+            // A name of two words wraps onto a second line rather than being cut.
+            Text(user.resolvedDisplayName)
+                .font(CTFont.ui(10, weight: .medium))
+                .foregroundStyle(user.isBlocked ? Color.CT.textDim : Color.CT.text)
+                .lineLimit(2)
+                .minimumScaleFactor(0.75)
+                .truncationMode(.tail)
+                .multilineTextAlignment(.center)
+                .frame(width: labelWidth)
+                .fixedSize(horizontal: false, vertical: true)
+                .offset(y: effectiveSize + 2)
+                .opacity(labelOpacity)
+                .allowsHitTesting(false)
+        }
+        .scaleEffect(lensScale)
+        .opacity(lensOpacity)
         // Use DragGesture(minimumDistance: 0) so we can distinguish a stationary
         // tap from a drag that happens to end over the contact. Only fire onTap
         // when the finger hasn't moved more than 8 pt — matching the parent
@@ -831,36 +853,6 @@ private struct ContactCircle: View {
             return "\(name), \(metrics.unreadCount)"
         }
         return name
-    }
-
-    // MARK: Proximity effect
-    //
-    // Compute where this contact actually appears on screen after the canvas
-    // transform (scaleEffect + offset). Contacts close to the screen centre
-    // get a scale boost (≤ +30%) and full opacity; peripheral ones fade out.
-
-    /// Where the contact lands after the canvas transform: zoom about `focus`, then the pan.
-    private var screenPos: CGPoint {
-        CGPoint(
-            x: (canvasPos.x - focus.x) * canvasScale + focus.x + canvasOffset.width,
-            y: (canvasPos.y - focus.y) * canvasScale + focus.y + canvasOffset.height
-        )
-    }
-
-    private var distanceToCenter: CGFloat {
-        hypot(screenPos.x - focus.x, screenPos.y - focus.y)
-    }
-
-    /// Contacts within `reach` of the visible centre are "central".
-    private var proximityScale: CGFloat {
-        let t = Swift.max(0, 1 - distanceToCenter / reach)
-        return 1.0 + 0.10 * t  // max ×1.10 — keeps circles within their hex cells
-    }
-
-    /// Peripheral contacts fade to 40% opacity.
-    private var proximityOpacity: Double {
-        let t = Swift.max(0, 1 - distanceToCenter / (reach * 1.3))
-        return 0.40 + 0.60 * t
     }
 
     // MARK: Style

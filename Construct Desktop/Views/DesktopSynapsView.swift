@@ -392,18 +392,16 @@ private struct DesktopContactNode: View {
             .frame(width: effectiveSize * 1.2, height: effectiveSize * 1.2)
             .opacity(proximityOpacity)
 
-            // Two lines' height always, as on iOS — see ContactCircle.
-            ZStack(alignment: .top) {
-                Text(verbatim: "X\nX").hidden()
-                Text(user.resolvedDisplayName)
-                    .foregroundStyle(user.isBlocked ? Color.CT.textDim : Color.CT.text)
-                    .lineLimit(2)
-                    .minimumScaleFactor(0.75)
-                    .truncationMode(.tail)
-                    .multilineTextAlignment(.center)
-            }
-            .font(CTFont.ui(10, weight: .medium))
-            .frame(width: labelWidth)
+            // One line: the Desktop names every contact (no lens), and the rows are spaced for
+            // the iOS cloud, which names only the ones near the middle.
+            Text(user.resolvedDisplayName)
+                .font(CTFont.ui(10, weight: .medium))
+                .foregroundStyle(user.isBlocked ? Color.CT.textDim : Color.CT.text)
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+                .truncationMode(.tail)
+                .multilineTextAlignment(.center)
+                .frame(width: labelWidth)
             .opacity(min(1.0, proximityOpacity + 0.35))
         }
         .scaleEffect(proximityScale)
