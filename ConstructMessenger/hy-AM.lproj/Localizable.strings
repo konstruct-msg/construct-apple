@@ -861,7 +861,7 @@
 "call_minibar_connecting" = "միացում";
 "call_reconnecting" = "վերամիացում…";
 "call_e2ee_badge" = "ծայրից ծայր գաղտնագրված";
-"edit_identity" = "խմբագրել ինքնությունը";
+"edit_identity" = "Խմբագրել ինքնությունը";
 "delete_account_abort_hint" = "հպեք չեղարկելու համար · %d վրկ";
 "share" = "Կիսվել";
 "recovery_not_configured_title" = "Վերականգնումը կարգավորված չէ";
@@ -1203,7 +1203,7 @@
 "account_discard_changes_message" = "Ունեք չպահպանված պրոֆիլի փոփոխություններ։ Դուրս գա՞լ առանց պահպանելու։";
 "account_discard_changes_discard" = "Մերժել";
 "account_discard_changes_keep_editing" = "Շարունակել խմբագրումը";
-"account_editing_profile" = "> Պրոֆիլի դաշտերի խմբագրում։ Հպեք ✓՝ պահպանելու կամ x՝ չեղարկելու համար։";
+"account_editing_profile" = "> Պրոֆիլի դաշտերի խմբագրում։ «Պահպանել»՝ պահելու, «Չեղարկել»՝ չեղարկելու համար։";
 
 "liquid_logo.title" = "LIQUID LOGO";
 "liquid_logo.size" = "ՉԱՓ";

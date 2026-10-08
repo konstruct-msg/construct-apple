@@ -45,6 +45,7 @@ struct ExportBackupView: View {
                     Button { step -= 1 } label: {
                         Label(NSLocalizedString("back", comment: ""), systemImage: "chevron.backward")
                     }
+                    .barItem()
                 }
             }
         }

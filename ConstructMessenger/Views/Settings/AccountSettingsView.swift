@@ -211,9 +211,10 @@ struct AccountSettingsView: View {
         if isEditingProfile {
             ToolbarItem(placement: .cancellationAction) {
                 Button(NSLocalizedString("cancel", comment: "")) { handleProfileEditCancelTap() }
+                    .barItem()
             }
             ToolbarItem(placement: .confirmationAction) {
-                Button(NSLocalizedString("save", comment: "")) { handleProfileEditActionTap() }
+                ConfirmButton(title: NSLocalizedString("save", comment: "")) { handleProfileEditActionTap() }
                     .disabled(viewModel.isSavingUsername)
             }
         } else {
@@ -221,6 +222,7 @@ struct AccountSettingsView: View {
                 Button { handleProfileEditActionTap() } label: {
                     Label(NSLocalizedString("edit", comment: ""), systemImage: "square.and.pencil")
                 }
+                .barItem()
             }
         }
     }
