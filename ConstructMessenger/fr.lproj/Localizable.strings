@@ -667,8 +667,6 @@
 "invite_redeem_safety_message" = "Contact ajouté via une invitation. Le nom s’affichera dès qu’il sera partagé.";
 "invite_redeem_safety_block" = "Bloquer";
 "invite_accepted_inviter_message" = "Quelqu’un s’est connecté via votre invitation.";
-"show_chat_list" = "Afficher la liste des chats";
-"hide_chat_list" = "Masquer la liste des chats";
 "media_autodownload" = "Téléchargement auto des médias";
 "media_autodownload_never" = "Jamais";
 "media_autodownload_unmetered" = "Wi-Fi uniquement";

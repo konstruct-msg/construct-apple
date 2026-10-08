@@ -1079,8 +1079,6 @@
 
 // MARK: - Status / sidebar
 "status_paused" = "バックグラウンド";
-"show_chat_list" = "チャット一覧を表示";
-"hide_chat_list" = "チャット一覧を隠す";
 
 // MARK: - Local name (contact nickname)
 "local_name" = "ローカル名";

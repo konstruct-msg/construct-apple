@@ -83,7 +83,6 @@
 				Info.plist,
 				Views/Chat/ChatView.swift,
 				"Views/Chat/MessageInputView+iOS.swift",
-				Views/ChatsSplitView.swift,
 				Views/Security/DuressPinSetupView.swift,
 				Views/Security/PinDisableView.swift,
 				Views/Security/PinSetupView.swift,

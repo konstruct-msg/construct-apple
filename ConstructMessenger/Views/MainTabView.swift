@@ -13,10 +13,6 @@ struct MainTabView: View {
     @Environment(AuthViewModel.self) private var authViewModel
     @Environment(ChatsViewModel.self) private var chatsViewModel
 
-    /// Compact = iPhone (or iPad in narrow split-screen multitasking)
-    /// Regular = iPad full-screen or landscape
-    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
-
     // Call overlays
     @State private var callManager: (any CallUIManaging)? = CallRuntimeProvider.makeUIManager()
 
@@ -63,8 +59,7 @@ struct MainTabView: View {
                 if isRinging { isCallExpanded = true }
             }
             .onReceive(NotificationCenter.default.publisher(for: .openSynapsTab)) { _ in
-                // Compact: TabView selection. Regular: ChatsSplitView also listens and
-                // switches its sidebar tab; keep selectedTab in sync for SynapsView guards.
+                // The tab view's selection, at every width.
                 chatsViewModel.selectedTab = 1
             }
     }
@@ -82,57 +77,53 @@ struct MainTabView: View {
         )
     }
 
+    /// One tab view at every width (wave 5.5c, owner 2026-10-08): a tab bar on the phone, the
+    /// system sidebar on the iPad, which folds into a tab bar of its own. Every tab carries a
+    /// title as well as a symbol — a vertical bar (iPhone Duo) and the sidebar show the title.
+    /// SwiftUI loads each tab's content lazily on first selection. Tab values match the legacy
+    /// indices: chats 0, synaps 1, calls 2 (when enabled), settings 3-or-2. A conversation hides
+    /// the tab bar itself (`ChatView`, `hidesTabBar()`).
     @ViewBuilder
     private var callContent: some View {
-        if horizontalSizeClass == .regular {
-            ChatsSplitView()
-                .environment(chatsViewModel)
-        } else {
-            @Bindable var vm = chatsViewModel
-            // Standard system tab bar. SwiftUI loads each tab's content lazily on
-            // first selection, so there is no @FetchRequest burst at launch — the
-            // reason the old ZStack/visitedTabs workaround existed no longer applies.
-            // Tab values match the legacy indices: chats 0, synaps 1, calls 2
-            // (when enabled), settings 3-or-2. The per-tab tab-bar hiding inside a
-            // conversation lives on the ChatView navigation destination.
-            TabView(selection: $vm.selectedTab) {
-                Tab(value: 0) {
-                    ChatsListView()
-                        .environment(chatsViewModel)
-                } label: {
-                    Image(systemName: "message")
-                        .accessibilityIdentifier(A11y.Tab.chats)
-                }
+        @Bindable var vm = chatsViewModel
+        TabView(selection: $vm.selectedTab) {
+            Tab(value: 0) {
+                ChatsListView()
+                    .environment(chatsViewModel)
+            } label: {
+                Label(NSLocalizedString("chats", comment: ""), systemImage: "message")
+                    .accessibilityIdentifier(A11y.Tab.chats)
+            }
 
-                Tab(value: 1) {
-                    SynapsView()
-                        .environment(chatsViewModel)
-                } label: {
-                    Image(systemName: "circle.grid.cross")
-                        .accessibilityIdentifier(A11y.Tab.synaps)
-                }
+            Tab(value: 1) {
+                SynapsView()
+                    .environment(chatsViewModel)
+            } label: {
+                Label(NSLocalizedString("synapses", comment: ""), systemImage: "circle.grid.cross")
+                    .accessibilityIdentifier(A11y.Tab.synaps)
+            }
 
-                if CallsFeature.isEnabled {
-                    Tab(value: 2) {
-                        CallHistoryView()
-                    } label: {
-                        Image(systemName: "phone")
-                            .accessibilityIdentifier(A11y.Tab.calls)
-                    }
-                }
-
-                Tab(value: settingsTab) {
-                    SettingsView()
-                        .environment(chatsViewModel)
+            if CallsFeature.isEnabled {
+                Tab(value: 2) {
+                    CallHistoryView()
                 } label: {
-                    Image(systemName: "gearshape")
-                        .accessibilityIdentifier(A11y.Tab.settings)
+                    Label(NSLocalizedString("calls_recents", comment: ""), systemImage: "phone")
+                        .accessibilityIdentifier(A11y.Tab.calls)
                 }
             }
-            .tint(Color.CT.accent)
-            .toolbarBackground(.hidden, for: .tabBar)
-            .ctBackground()
+
+            Tab(value: settingsTab) {
+                SettingsView()
+                    .environment(chatsViewModel)
+            } label: {
+                Label(NSLocalizedString("settings", comment: ""), systemImage: "gearshape")
+                    .accessibilityIdentifier(A11y.Tab.settings)
+            }
         }
+        .tabViewStyle(.sidebarAdaptable)
+        .tint(Color.CT.accent)
+        .toolbarBackground(.hidden, for: .tabBar)
+        .ctBackground()
     }
 
     /// Settings tab value — shifts to 3 when the calls tab is present, else 2.

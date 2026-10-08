@@ -51,7 +51,7 @@ class DeepLinkHandler {
                     self.deepLink = nil
                     // `LinkParser` produces a fully localized ContactLinkError for every
                     // failure — expired, already used, bad signature, legacy /c/. The four
-                    // QR call sites (ChatsListView, NewChatView, SynapsView, ChatsSplitView)
+                    // QR call sites (ChatsListView, NewChatView, SynapsView)
                     // all show it. This one, the ONLY path a tapped link takes, dropped it:
                     // the app opened, nothing happened, no message. Indistinguishable from
                     // "links are broken", which is exactly how it was reported on 2026-08-13.
