@@ -393,10 +393,15 @@ struct ChatsSplitView: View {
     private var chatDetailPanel: some View {
         if let chatId = selectedChatId,
            let chat = chats.first(where: { $0.id == chatId }) {
-            // ChatView already owns floating glass nav/composer — do not double-chrome.
-            ChatView(chat: chat, context: viewContext)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .clipShape(RoundedRectangle(cornerRadius: CTRadius.card, style: .continuous))
+            // The chat's bar is the system's since wave 5.5b, so the detail needs a stack to
+            // carry it — without one the chat had no name, back or actions on the iPad. One
+            // stack per chat: switching chats starts a fresh one.
+            NavigationStack {
+                ChatView(chat: chat, context: viewContext)
+            }
+            .id(chat.id)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .clipShape(RoundedRectangle(cornerRadius: CTRadius.card, style: .continuous))
         } else {
             ContentUnavailableView(
                 String(localized: "select_chat"),
