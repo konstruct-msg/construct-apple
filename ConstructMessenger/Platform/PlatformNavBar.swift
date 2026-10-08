@@ -195,6 +195,9 @@ private struct TabBarHider: UIViewControllerRepresentable {
     final class Controller: UIViewController {
         override func viewWillAppear(_ animated: Bool) {
             super.viewWillAppear(animated)
+            // Only where the chat covers the list. Beside it (the iPad split view) the tab bar
+            // is the sidebar, and the chat does not hide the way back to the other tabs.
+            guard traitCollection.horizontalSizeClass == .compact else { return }
             tabBarController?.setTabBarHidden(true, animated: animated)
         }
 

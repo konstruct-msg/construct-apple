@@ -19,10 +19,6 @@ import UIKit
 
 struct SynapsView: View {
 
-    /// Hosts a scan-QR action in the nav bar. The iPad regular shell already exposes
-    /// a global QR scan in its rail, so it passes `false` to avoid a duplicate entry point.
-    var showsScanAction: Bool = true
-
     @Environment(\.managedObjectContext) private var context
     @Environment(ChatsViewModel.self) private var chatsViewModel
 
@@ -142,13 +138,11 @@ struct SynapsView: View {
             .onSubmit(of: .search) { dismissSearchKeyboard() }
             #if os(iOS)
             .toolbar {
-                if showsScanAction {
-                    ToolbarItem(placement: .primaryAction) {
-                        Button { showingQRScanner = true } label: {
-                            Label(NSLocalizedString("scan_qr_code", comment: ""), systemImage: "qrcode.viewfinder")
-                        }
-                        .barItem()
+                ToolbarItem(placement: .primaryAction) {
+                    Button { showingQRScanner = true } label: {
+                        Label(NSLocalizedString("scan_qr_code", comment: ""), systemImage: "qrcode.viewfinder")
                     }
+                    .barItem()
                 }
             }
             #endif

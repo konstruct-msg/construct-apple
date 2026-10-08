@@ -11,6 +11,9 @@ import CoreData
 struct ChatsListView: View {
     @Environment(\.managedObjectContext) private var viewContext
     @Environment(AuthViewModel.self) private var authViewModel
+    /// Compact pushes a chat over the list; regular (the iPad) shows the list and the chat side
+    /// by side — the system's split view, not a shell of our own (wave 5.5c, owner 2026-10-08).
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     @FetchRequest
     private var chats: FetchedResults<Chat>
@@ -21,6 +24,8 @@ struct ChatsListView: View {
     @State private var showingQRScanner = false
     @State private var showingMyQR = false
     @State private var navigationPath = NavigationPath()
+    /// The chat in the split view's detail, at regular width.
+    @State private var selectedChatId: String?
     @State private var showingDrafts = false
     @State private var searchQuery = ""
 
@@ -34,9 +39,58 @@ struct ChatsListView: View {
     }
 
     var body: some View {
+        if horizontalSizeClass == .regular {
+            NavigationSplitView {
+                listColumn
+            } detail: {
+                chatDetail
+            }
+            .navigationSplitViewStyle(.balanced)
+        } else {
+            NavigationStack(path: $navigationPath) {
+                listColumn
+                    .navigationDestination(for: String.self) { chatId in
+                        if let chat = chats.first(where: { $0.id == chatId }) {
+                            // Messenger convention: the bottom tab bar yields to the message
+                            // input bar while inside a conversation — `ChatView` hides it.
+                            ChatView(chat: chat, context: viewContext)
+                        }
+                    }
+            }
+        }
+    }
+
+    /// The open chat beside the list. A stack of its own so the chat's bar has somewhere to be,
+    /// one per chat so switching chats starts fresh.
+    @ViewBuilder
+    private var chatDetail: some View {
+        if let chatId = selectedChatId, let chat = chats.first(where: { $0.id == chatId }) {
+            NavigationStack {
+                ChatView(chat: chat, context: viewContext)
+            }
+            .id(chat.id)
+        } else {
+            ContentUnavailableView(
+                String(localized: "select_chat"),
+                systemImage: "message",
+                description: Text("select_chat_description")
+            )
+            .ctBackground()
+        }
+    }
+
+    /// Opens a chat: pushed over the list on the phone, beside it on the iPad.
+    private func open(_ chatId: String) {
+        if horizontalSizeClass == .regular {
+            selectedChatId = chatId
+        } else {
+            navigationPath.append(chatId)
+        }
+    }
+
+    private var listColumn: some View {
         let renderedChats = filteredChats
-        NavigationStack(path: $navigationPath) {
-            chatList(chats: renderedChats)
+        return chatList(chats: renderedChats)
             .ctBackground()
             .navigationTitle(NSLocalizedString("chats", comment: ""))
             .inlineNavTitle()
@@ -50,13 +104,6 @@ struct ChatsListView: View {
                     .barItem()
                     .accessibilityIdentifier(A11y.Chats.scanQR)
                 }
-            }
-            .navigationDestination(for: String.self) { chatId in
-                    if let chat = chats.first(where: { $0.id == chatId }) {
-                        // Messenger convention: the bottom tab bar yields to the message input
-                        // bar while inside a conversation — `ChatView` hides it.
-                        ChatView(chat: chat, context: viewContext)
-                    }
             }
             .sheet(isPresented: $showingQRScanner) {
                     RecoveryGated { QRScannerView { contactURL in handleScannedContact(contactURL) } }
@@ -86,13 +133,14 @@ struct ChatsListView: View {
                         chatsViewModel.chatToOpen = nil
                         Task { @MainActor in
                             try? await Task.sleep(nanoseconds: 100_000_000)
-                            navigationPath.append(chatId)
+                            open(chatId)
                         }
                     }
             }
             .onReceive(NotificationCenter.default.publisher(for: .deleteChat)) { note in
                     guard let chatId = note.object as? String,
                           let chat = chats.first(where: { $0.id == chatId }) else { return }
+                    if selectedChatId == chatId { selectedChatId = nil }
                     Task { await chatsViewModel.deleteChatForgettingSessions(chat: chat) }
             }
             // Total-unread badge only. Do NOT force-invalidate the List here (no
@@ -112,7 +160,6 @@ struct ChatsListView: View {
                     guard notificationContainsChatChanges(note) else { return }
                     updateTotalUnreadCount()
             }
-        }
     }
 
     // MARK: - Chat List
@@ -126,6 +173,10 @@ struct ChatsListView: View {
         let query = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !query.isEmpty else { return all }
         return all.filter { chatMatchesQuery($0, query: query) }
+    }
+
+    private func isOpenBeside(_ chat: Chat) -> Bool {
+        horizontalSizeClass == .regular && selectedChatId == chat.id
     }
 
     /// Order-preserving dedupe of chats by `id` — the crash guard for the List diff assertion.
@@ -153,20 +204,23 @@ struct ChatsListView: View {
             } else {
                 ForEach(renderedChats) { chat in
                     Button {
-                        navigationPath.append(chat.id)
+                        open(chat.id)
                     } label: {
                         ChatRowView(chat: chat)
                     }
                     .buttonStyle(.plain)
                     .accessibilityIdentifier(A11y.Chats.row(chat.id))
-                    // Clear so the CTMatrixBackground watermark shows through the rows.
-                    .listRowBackground(Color.clear)
+                    .accessibilityAddTraits(isOpenBeside(chat) ? .isSelected : [])
+                    // Clear so the CTMatrixBackground watermark shows through the rows; the chat
+                    // open beside the list (iPad) is marked as the selection.
+                    .listRowBackground(isOpenBeside(chat) ? Color.CT.bgMsg : Color.clear)
                     .listRowSeparatorTint(Color.CT.noise)
                     // The first row's top hairline sat under a spacer row while the list scrolled
                     // under a floating header; with the system bar it would be the bar's edge.
                     .listRowSeparator(chat.id == renderedChats.first?.id ? .hidden : .automatic, edges: .top)
                     .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                         Button(role: .destructive) {
+                            if selectedChatId == chat.id { selectedChatId = nil }
                             Task { await chatsViewModel.deleteChatForgettingSessions(chat: chat) }
                         } label: {
                             Label(LocalizedStringKey("delete"), systemImage: "trash")
