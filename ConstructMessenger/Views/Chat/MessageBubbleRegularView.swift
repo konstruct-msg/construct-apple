@@ -65,6 +65,20 @@ struct MessageBubbleRegularView: View {
         message.replyToMessageId?.isEmpty == false
     }
 
+    /// The selection checkbox in edit mode: filled when the message is selected. It drew the
+    /// other way round until 2026-10-08 — every message but the chosen one looked chosen.
+    private var selectionToggle: some View {
+        Button {
+            onSelect?(message)
+        } label: {
+            Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                .font(CTFont.ui(14))
+                .foregroundColor(isSelected ? Color.CT.accent : Color.CT.textDim)
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+
     var body: some View {
         // Parse once per body pass to avoid repeated JSON decode attempts.
         // The sticker is asked first and typed: it has no text form, so no parser below would
@@ -85,21 +99,7 @@ struct MessageBubbleRegularView: View {
         HStack(spacing: ChatUIConstants.Bubble.rowSpacing) {
             // Selection checkbox in edit mode - positioned based on message direction
             if isEditMode && !message.isSentByMe {
-                Button {
-                    onSelect?(message)
-                } label: {
-                    if isSelected {
-                        Image(systemName: "circle")
-                            .font(CTFont.ui(14))
-                            .foregroundColor(Color.CT.textDim)
-                    }
-                    else {
-                        Image(systemName: "checkmark.circle.fill")
-                            .font(CTFont.ui(14))
-                            .foregroundColor(Color.CT.accentDim)
-                    }
-                }
-                .buttonStyle(.plain)
+                selectionToggle
             }
 
             if message.isSentByMe {
@@ -410,21 +410,7 @@ struct MessageBubbleRegularView: View {
             }
 
             if isEditMode && message.isSentByMe {
-                Button {
-                    onSelect?(message)
-                } label: {
-                    if isSelected {
-                        Image(systemName: "circle")
-                            .font(CTFont.ui(14))
-                            .foregroundColor(Color.CT.textDim)
-                    }
-                    else {
-                        Image(systemName: "checkmark.circle.fill")
-                            .font(CTFont.ui(14))
-                            .foregroundColor(Color.CT.accentDim)
-                    }
-                }
-                .buttonStyle(.plain)
+                selectionToggle
             }
         }
     }
