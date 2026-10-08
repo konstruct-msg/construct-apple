@@ -309,6 +309,7 @@
 "server_applied_title" = "コンストラクト接続先を更新しました";
 "server_applied_message" = "今後のすべての接続で新しいgRPC接続先を使用します。";
 "close" = "閉じる";
+"back" = "戻る";
 "chat_nav_back" = "戻る";
 "change_avatar" = "写真を変更";
 

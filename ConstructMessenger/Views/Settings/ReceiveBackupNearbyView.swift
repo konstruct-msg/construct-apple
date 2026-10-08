@@ -34,17 +34,9 @@ struct ReceiveBackupNearbyView: View {
         ZStack {
             Color.CT.bg.ignoresSafeArea()
             VStack(spacing: 0) {
-                CTNavBar(
-                    title: NSLocalizedString(mode == .historySync ? "history_sync_receive_title" : "transfer_receive_title", comment: ""),
-                    showBack: true,
-                    backAction: { dismiss() }
-                ) {
-                    EmptyView()
-                } trailing: {
-                    EmptyView()
-                }
                 content
             }
+            .screenTitle(NSLocalizedString(mode == .historySync ? "history_sync_receive_title" : "transfer_receive_title", comment: ""))
         }
         .onDisappear { service.cancel() }
         .task {

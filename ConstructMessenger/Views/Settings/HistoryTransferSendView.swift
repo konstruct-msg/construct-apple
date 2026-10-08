@@ -34,15 +34,6 @@ struct HistoryTransferSendView: View {
         ZStack {
             Color.CT.bg.ignoresSafeArea()
             VStack(spacing: 0) {
-                CTNavBar(
-                    title: NSLocalizedString(titleKey, comment: ""),
-                    showBack: true,
-                    backAction: { dismiss() }
-                ) {
-                    EmptyView()
-                } trailing: {
-                    EmptyView()
-                }
                 ScrollView {
                     LazyVStack(spacing: 24) {
                         statusLabel
@@ -89,6 +80,7 @@ struct HistoryTransferSendView: View {
                     .padding(CTLayout.edgePad)
                 }
             }
+            .screenTitle(NSLocalizedString(titleKey, comment: ""))
         }
         .task { await run() }
         .alert(NSLocalizedString("transfer_error_title", comment: ""), isPresented: Binding(

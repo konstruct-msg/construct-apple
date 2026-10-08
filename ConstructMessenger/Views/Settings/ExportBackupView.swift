@@ -27,21 +27,6 @@ struct ExportBackupView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            CTNavBar(
-                title: NSLocalizedString("backup_export_title", comment: ""),
-                showBack: step > 0,
-                backAction: { step -= 1 }
-            ) {
-                EmptyView()
-            } trailing: {
-                Button(action: { dismiss() }) {
-                    Image(systemName: "xmark")
-                        .font(CTIcon.font(CTIcon.nav, weight: .regular))
-                        .foregroundColor(Color.CT.accent)
-                }
-                .buttonStyle(.plain)
-            }
-
             switch step {
             case 0:  warningStep
             case 1:  mnemonicStep
@@ -49,6 +34,20 @@ struct ExportBackupView: View {
             }
         }
         .background(Color.CT.bg.ignoresSafeArea())
+        .screenTitle(NSLocalizedString("backup_export_title", comment: ""))
+        // Steps go back inside the sheet; close leaves it from any step.
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                CloseButton { dismiss() }
+            }
+            if step > 0 {
+                ToolbarItem(placement: .navigation) {
+                    Button { step -= 1 } label: {
+                        Label(NSLocalizedString("back", comment: ""), systemImage: "chevron.backward")
+                    }
+                }
+            }
+        }
     }
 
     // MARK: - Step 0: Warning

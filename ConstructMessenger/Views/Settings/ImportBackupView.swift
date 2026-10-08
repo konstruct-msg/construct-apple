@@ -27,15 +27,6 @@ struct ImportBackupView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            CTNavBar(
-                title: NSLocalizedString("backup_import_title", comment: ""),
-                showBack: true,
-                backAction: { dismiss() }
-            ) {
-                EmptyView()
-            } trailing: {
-                EmptyView()
-            }
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
@@ -149,6 +140,7 @@ struct ImportBackupView: View {
                 .padding(.bottom, 32)
             }
         }
+        .screenTitle(NSLocalizedString("backup_import_title", comment: ""))
         .background(Color.CT.bg.ignoresSafeArea())
         .fileImporter(
             isPresented: $showingFilePicker,

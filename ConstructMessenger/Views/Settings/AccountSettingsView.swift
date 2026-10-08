@@ -97,17 +97,19 @@ struct AccountSettingsView: View {
         }
         .sheet(isPresented: $showingExportBackup) {
             ExportBackupView()
+                .sheetNavigation(closes: false)
                 .environment(\.managedObjectContext, viewContext)
         }
         .sheet(isPresented: $showingImportBackup) {
-            ImportBackupView()
+            ImportBackupView().sheetNavigation()
         }
         .sheet(isPresented: $showingSendNearby) {
             SendBackupNearbyView()
+                .sheetNavigation()
                 .environment(\.managedObjectContext, viewContext)
         }
         .sheet(isPresented: $showingReceiveNearby) {
-            ReceiveBackupNearbyView()
+            ReceiveBackupNearbyView().sheetNavigation()
         }
         .sheet(isPresented: $showingDeleteConfirmation) {
             DeleteAccountConfirmationView(onDelete: { authViewModel.deleteAccount() },

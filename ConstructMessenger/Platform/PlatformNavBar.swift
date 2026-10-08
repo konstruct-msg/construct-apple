@@ -58,8 +58,9 @@ extension View {
     /// A sheet's own navigation: a `NavigationStack` and a close item, so the screen inside
     /// declares only its title and actions and reads the same pushed or presented.
     /// `decisions/navigation-bars-are-the-systems.md`.
-    func sheetNavigation() -> some View {
-        SheetNavigation(content: self)
+    /// `closes: false` where the screen has its own close — one that does more than dismiss.
+    func sheetNavigation(closes: Bool = true) -> some View {
+        SheetNavigation(content: self, closes: closes)
     }
 
     /// `navigationBarTitleDisplayMode(.inline)`, which does not exist on macOS.
@@ -76,12 +77,15 @@ extension View {
 private struct SheetNavigation<Content: View>: View {
     @Environment(\.dismiss) private var dismiss
     let content: Content
+    let closes: Bool
 
     var body: some View {
         NavigationStack {
             content.toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    CloseButton { dismiss() }
+                if closes {
+                    ToolbarItem(placement: .cancellationAction) {
+                        CloseButton { dismiss() }
+                    }
                 }
             }
         }

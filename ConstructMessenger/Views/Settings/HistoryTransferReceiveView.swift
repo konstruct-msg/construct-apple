@@ -27,15 +27,6 @@ struct HistoryTransferReceiveView: View {
         ZStack {
             Color.CT.bg.ignoresSafeArea()
             VStack(spacing: 0) {
-                CTNavBar(
-                    title: NSLocalizedString("history_sync_receive_title", comment: ""),
-                    showBack: true,
-                    backAction: { onDone(); dismiss() }
-                ) {
-                    EmptyView()
-                } trailing: {
-                    EmptyView()
-                }
                 ScrollView {
                     LazyVStack(spacing: 24) {
                         if isWaiting {
@@ -66,6 +57,13 @@ struct HistoryTransferReceiveView: View {
                     }
                     .padding(CTLayout.edgePad)
                 }
+            }
+        }
+        .screenTitle(NSLocalizedString("history_sync_receive_title", comment: ""))
+        // Its own close, not `sheetNavigation`'s: leaving also tells the caller (`onDone`).
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                CloseButton { onDone(); dismiss() }
             }
         }
         .task { await run() }

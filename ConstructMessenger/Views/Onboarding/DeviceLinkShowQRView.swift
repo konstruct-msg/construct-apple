@@ -83,6 +83,7 @@ struct DeviceLinkShowQRView: View {
                     dismiss()
                 }
             )
+            .sheetNavigation(closes: false)
             .environment(\.managedObjectContext, PersistenceController.shared.container.viewContext)
                 .onDisappear {
                     authViewModel.clearDeviceLinkPhase()

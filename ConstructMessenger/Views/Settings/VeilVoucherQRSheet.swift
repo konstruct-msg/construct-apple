@@ -15,7 +15,6 @@ import SwiftUI
 
 struct VeilVoucherQRSheet: View {
 
-    @Environment(\.dismiss) private var dismiss
 
     @State private var vm = VeilVoucherViewModel()
     @State private var countdown: String = ""
@@ -23,16 +22,6 @@ struct VeilVoucherQRSheet: View {
 
     var body: some View {
         VStack(spacing: VeilVoucherLayout.rootSpacing) {
-            CTNavBar(
-                title: NSLocalizedString("veil_voucher_title", comment: ""),
-                showBack: true,
-                backAction: { dismiss() }
-            ) {
-                EmptyView()
-            } trailing: {
-                EmptyView()
-            }
-            Rectangle().fill(Color.CT.noise).frame(height: 1)
 
             switch vm.state {
             case .idle:
@@ -59,6 +48,7 @@ struct VeilVoucherQRSheet: View {
                 message(icon: "exclamationmark.triangle", text: text, retry: true)
             }
         }
+        .screenTitle(NSLocalizedString("veil_voucher_title", comment: ""))
         .background(Color.CT.bg.ignoresSafeArea())
         .onDisappear { stopCountdown() }
     }

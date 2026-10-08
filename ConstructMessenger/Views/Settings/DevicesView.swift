@@ -167,6 +167,7 @@ struct DevicesView: View {
                 userId: KeychainManager.shared.loadUserID() ?? "",
                 localDeviceId: KeychainManager.shared.loadDeviceID() ?? ""
             )
+            .sheetNavigation(closes: false)
         }
         .sheet(item: $historyRetryKind) { kind in
             HistoryTransferSendView(
@@ -174,9 +175,10 @@ struct DevicesView: View {
                 userId: KeychainManager.shared.loadUserID() ?? "",
                 peerDeviceId: devices.first(where: { !$0.isCurrent })?.id ?? ""
             )
+            .sheetNavigation()
             .environment(\.managedObjectContext, PersistenceController.shared.container.viewContext)
         }
-        .sheet(isPresented: $showingQRSheet) { DeviceLinkQRSheet() }
+        .sheet(isPresented: $showingQRSheet) { DeviceLinkQRSheet().sheetNavigation() }
 
         // MARK: Confirmations — revoke device
         .confirmationDialog(

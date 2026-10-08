@@ -522,7 +522,7 @@ struct NetworkSettingsView: View {
             // the row disappears without waiting for the screen to be reopened.
             veilVoucherOffered = VeilVoucherAvailability.isOffered
         }) {
-            VeilVoucherQRSheet()
+            VeilVoucherQRSheet().sheetNavigation()
         }
         .alert(NSLocalizedString("veil_config_paste", comment: ""), isPresented: $showingVeilPaste) {
             TextField(NSLocalizedString("veil_config_paste", comment: ""), text: $veilPasteText)
