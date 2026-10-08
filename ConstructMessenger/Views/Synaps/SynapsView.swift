@@ -30,10 +30,12 @@ struct SynapsView: View {
     @State private var selectedContact: ContactRecord? = nil
     @State private var pruneTarget:     ContactRecord? = nil
     @State private var showPruneConfirm = false
-    // Shared canvas transform — owned here so HoneycombCloud can read them for
+    // Shared canvas transform — owned here so SynapsCloud can read them for
     // the proximity effect while ZoomableCloud drives them via gestures.
     @State private var canvasScale:  CGFloat  = 1.0   // recalculated on appear
     @State private var canvasOffset: CGSize   = .zero
+    /// Height of what overlays the cloud's top edge (remote result, pending requests).
+    @State private var topOverlayHeight: CGFloat = 0
 
     // MARK: - Remote search state
     enum RemoteSearchState {
@@ -71,14 +73,24 @@ struct SynapsView: View {
     var body: some View {
         let filteredContacts = filtered
         NavigationStack {
-            // Content is laid out in the safe area *below* the top chrome (nav + search)
-            // via safeAreaInset. Do not overlay chrome without reserving that space —
-            // remote-search results and the honeycomb were previously drawn under the
-            // search field. Extra bottom padding for the old floating CTTabBar is gone:
-            // native TabView already applies tab-bar safe area; the extra 72pt made the
-            // visible cloud end far above the bar.
-            ZStack {
+            // The cloud runs under the bars, as every other screen's content does; until
+            // 2026-10-08 it was cut to the safe area and ended at the search field's lower edge.
+            // What sits over its top edge — a remote result, pending requests — is measured so
+            // the cloud centres and fits in the part that is actually visible.
+            ZStack(alignment: .top) {
                 CTMatrixBackground().ignoresSafeArea()
+
+                if contacts.isEmpty {
+                    // While searching, the remote card above is the primary UI; keep the
+                    // “no synapses yet” empty state for idle only.
+                    if searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        emptyState
+                    }
+                } else {
+                    GeometryReader { geo in
+                        cloud(contacts: filteredContacts, in: geo)
+                    }
+                }
 
                 VStack(spacing: 0) {
                     if !searchText.isEmpty, filteredContacts.isEmpty {
@@ -87,47 +99,8 @@ struct SynapsView: View {
                     if let vm = contactRequestsVM, !vm.incomingRequests.isEmpty, searchText.isEmpty {
                         requestsSection(vm: vm)
                     }
-                    GeometryReader { geo in
-                        Group {
-                            if contacts.isEmpty {
-                                // While searching, the remote card above is the primary UI;
-                                // keep the “no synapses yet” empty state for idle only.
-                                if searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                                    emptyState
-                                } else {
-                                    Color.clear
-                                }
-                            } else {
-                                ZoomableCloud(
-                                    scale:    $canvasScale,
-                                    offset:   $canvasOffset,
-                                    minScale: 0.20,
-                                    maxScale: 3.0
-                                ) {
-                                    HoneycombCloud(
-                                        contacts:     filteredContacts,
-                                        metricsByUser: contactMetricsByUser,
-                                        selected:     $selectedContact,
-                                        canvasScale:  canvasScale,
-                                        canvasOffset: canvasOffset,
-                                        screenSize:   geo.size
-                                    )
-                                }
-                            }
-                        }
-                        .frame(width: geo.size.width, height: geo.size.height)
-                        .contentShape(Rectangle())
-                        .onTapGesture {
-                            // No ScrollView here — tap empty canvas / empty state to drop keyboard.
-                            dismissSearchKeyboard()
-                        }
-                        .onAppear {
-                            // Fit once per appear; do not re-fit on keyboard-driven size
-                            // changes — that would yank a mid-gesture pan/zoom.
-                            canvasScale = fitScale(contacts: Array(contacts), screenSize: geo.size)
-                        }
-                    }
                 }
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { topOverlayHeight = $0 }
             }
             .ctBackground()
             .navigationTitle(NSLocalizedString("synapses", comment: ""))
@@ -271,13 +244,54 @@ struct SynapsView: View {
         }
     }
 
-    // MARK: - Initial scale
+    // MARK: - Cloud
 
-    /// Compute a zoom level that fits all contacts with ~12% breathing room.
-    private func fitScale(contacts: [ContactRecord], screenSize: CGSize) -> CGFloat {
-        guard !contacts.isEmpty else { return 1.0 }
-        let engine = HoneycombLayoutEngine(contacts: contacts, canvasSize: screenSize)
-        return engine.initialScale
+    /// The cloud on a canvas the size of the whole screen. `geo` is the safe area; the canvas
+    /// extends past it by its insets, and the visible part — between the search field (and
+    /// whatever overlays the top) and the tab bar — is where the cloud centres and fits.
+    private func cloud(contacts: [ContactRecord], in geo: GeometryProxy) -> some View {
+        let insets = geo.safeAreaInsets
+        let canvas = CGSize(
+            width: geo.size.width + insets.leading + insets.trailing,
+            height: geo.size.height + insets.top + insets.bottom
+        )
+        let visible = CGRect(
+            x: insets.leading,
+            y: insets.top + topOverlayHeight,
+            width: geo.size.width,
+            height: Swift.max(0, geo.size.height - topOverlayHeight)
+        )
+        let focus = CGPoint(x: visible.midX, y: visible.midY)
+        let layout = SynapsCloudLayout(contacts: contacts, metrics: contactMetricsByUser)
+        return ZoomableCloud(
+            scale:    $canvasScale,
+            offset:   $canvasOffset,
+            anchor:   UnitPoint(x: focus.x / canvas.width, y: focus.y / canvas.height),
+            minScale: 0.20,
+            maxScale: 3.0
+        ) {
+            SynapsCloud(
+                layout:       layout,
+                metricsByUser: contactMetricsByUser,
+                selected:     $selectedContact,
+                canvasScale:  canvasScale,
+                canvasOffset: canvasOffset,
+                focus:        focus,
+                reach:        Swift.min(visible.width, visible.height) / 2
+            )
+        }
+        .frame(width: canvas.width, height: canvas.height)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            // No ScrollView here — tap empty canvas to drop keyboard.
+            dismissSearchKeyboard()
+        }
+        .offset(x: -insets.leading, y: -insets.top)
+        .onAppear {
+            // Fit once per appear; do not re-fit on keyboard-driven size changes — that
+            // would yank a mid-gesture pan/zoom.
+            canvasScale = layout.fitScale(in: visible.size)
+        }
     }
 
     private func rebuildContactMetrics() {
@@ -648,45 +662,45 @@ struct SynapsView: View {
     }
 }
 
-// MARK: - ZoomableCloud, HoneycombLayoutEngine, ContactMetrics
+// MARK: - ZoomableCloud, SynapsCloudLayout, ContactMetrics
 // → moved to SynapsLayoutEngine.swift (shared with DesktopSynapsView)
 
-// MARK: - Honeycomb Cloud
+// MARK: - Cloud
 
-private struct HoneycombCloud: View {
-    let contacts:     [ContactRecord]
+private struct SynapsCloud: View {
+    let layout:       SynapsCloudLayout
     let metricsByUser: [String: ContactMetrics]
     @Binding var selected: ContactRecord?
     let canvasScale:  CGFloat
     let canvasOffset: CGSize
-    let screenSize:   CGSize
+    /// The middle of the visible part of the canvas; the cloud's centre sits here.
+    let focus:        CGPoint
+    /// How far from `focus` a contact still counts as central for the proximity effect.
+    let reach:        CGFloat
 
     var body: some View {
-        GeometryReader { geo in
-            let engine  = HoneycombLayoutEngine(contacts: contacts, canvasSize: geo.size)
-            let metrics = metricsByUser
+        // Contacts past the canvas edge at the current zoom are clipped by ZoomableCloud and
+        // come into view when zoomed out or panned.
+        ZStack(alignment: .topLeading) {
+            Color.clear
 
-            // Canvas is screen-sized; contacts that overflow (large grids when
-            // zoomed to 1:1) are clipped by ZoomableCloud and visible when zoomed out.
-            ZStack(alignment: .topLeading) {
-                Color.clear.frame(width: geo.size.width, height: geo.size.height)
-
-                ForEach(engine.items) { item in
-                    ContactCircle(
-                        user:         item.user,
-                        cellSize:     engine.cellSize,
-                        metrics:      metrics[item.user.id] ?? .zero,
-                        canvasPos:    item.position,
-                        canvasScale:  canvasScale,
-                        canvasOffset: canvasOffset,
-                        screenSize:   screenSize
-                    ) {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.72)) {
-                            selected = item.user
-                        }
+            ForEach(layout.items) { item in
+                let position = CGPoint(x: focus.x + item.position.x, y: focus.y + item.position.y)
+                ContactCircle(
+                    user:         item.user,
+                    pitch:        SynapsCloudLayout.pitch,
+                    metrics:      metricsByUser[item.user.id] ?? .zero,
+                    canvasPos:    position,
+                    canvasScale:  canvasScale,
+                    canvasOffset: canvasOffset,
+                    focus:        focus,
+                    reach:        reach
+                ) {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.72)) {
+                        selected = item.user
                     }
-                    .position(item.position)
                 }
+                .position(position)
             }
         }
     }
@@ -696,33 +710,30 @@ private struct HoneycombCloud: View {
 
 private struct ContactCircle: View {
     let user: ContactRecord
-    /// Base cell size from the layout engine (cellWidth × 0.74).
-    let cellSize:     CGFloat
+    /// Centre-to-centre distance of neighbours (`SynapsCloudLayout.pitch`).
+    let pitch:        CGFloat
     let metrics:      ContactMetrics
     let canvasPos:    CGPoint
     let canvasScale:  CGFloat
     let canvasOffset: CGSize
-    let screenSize:   CGSize
+    let focus:        CGPoint
+    let reach:        CGFloat
     var onTap: () -> Void
 
     @State private var touchMoved = false
 
-    /// cellWidth recovered from engine mapping (cellSize = cellWidth × 0.74).
-    private var cellWidth: CGFloat { cellSize / 0.74 }
-
     // MARK: Size
     //
-    // Frequency score drives rendered diameter in the range [0.50 … 0.66] × cellWidth.
-    // Slightly smaller than pure-avatar layout so a name label fits under each circle
-    // without colliding with the next honeycomb row (vStep ≈ 1.02 × cellWidth).
+    // Frequency score drives rendered diameter in the range [0.50 … 0.66] × pitch, small
+    // enough that the name under each circle clears the row below.
     private var effectiveSize: CGFloat {
         let f = 0.50 + 0.16 * metrics.frequencyScore  // [0.50 … 0.66]
-        return cellWidth * f
+        return pitch * f
     }
 
     /// Max width for the name under the avatar — slightly wider than the circle.
     private var labelWidth: CGFloat {
-        min(cellWidth * 0.92, max(effectiveSize * 1.35, 56))
+        min(pitch * 0.92, max(effectiveSize * 1.35, 56))
     }
 
     var body: some View {
@@ -757,16 +768,22 @@ private struct ContactCircle: View {
             .frame(width: effectiveSize * 1.2, height: effectiveSize * 1.2)
             .opacity(proximityOpacity)
 
-            Text(user.resolvedDisplayName)
-                .font(CTFont.ui(10, weight: .medium))
-                .foregroundStyle(user.isBlocked ? Color.CT.textDim : Color.CT.text)
-                .lineLimit(1)
-                .minimumScaleFactor(0.75)
-                .truncationMode(.tail)
-                .multilineTextAlignment(.center)
-                .frame(width: labelWidth)
-                // Names stay a bit more readable than peripheral avatars.
-                .opacity(min(1.0, proximityOpacity + 0.35))
+            // A name of two words wraps onto a second line rather than being cut. The label
+            // always takes two lines' height, so a one-line name leaves its circle where a
+            // two-line name's neighbour has it and the row stays level.
+            ZStack(alignment: .top) {
+                Text(verbatim: "X\nX").hidden()
+                Text(user.resolvedDisplayName)
+                    .foregroundStyle(user.isBlocked ? Color.CT.textDim : Color.CT.text)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.75)
+                    .truncationMode(.tail)
+                    .multilineTextAlignment(.center)
+            }
+            .font(CTFont.ui(10, weight: .medium))
+            .frame(width: labelWidth)
+            // Names stay a bit more readable than peripheral avatars.
+            .opacity(min(1.0, proximityOpacity + 0.35))
         }
         .scaleEffect(proximityScale)
         // Use DragGesture(minimumDistance: 0) so we can distinguish a stationary
@@ -822,31 +839,27 @@ private struct ContactCircle: View {
     // transform (scaleEffect + offset). Contacts close to the screen centre
     // get a scale boost (≤ +30%) and full opacity; peripheral ones fade out.
 
+    /// Where the contact lands after the canvas transform: zoom about `focus`, then the pan.
     private var screenPos: CGPoint {
-        let cx = screenSize.width  / 2
-        let cy = screenSize.height / 2
-        return CGPoint(
-            x: (canvasPos.x - cx) * canvasScale + cx + canvasOffset.width,
-            y: (canvasPos.y - cy) * canvasScale + cy + canvasOffset.height
+        CGPoint(
+            x: (canvasPos.x - focus.x) * canvasScale + focus.x + canvasOffset.width,
+            y: (canvasPos.y - focus.y) * canvasScale + focus.y + canvasOffset.height
         )
     }
 
     private var distanceToCenter: CGFloat {
-        let c = CGPoint(x: screenSize.width / 2, y: screenSize.height / 2)
-        return hypot(screenPos.x - c.x, screenPos.y - c.y)
+        hypot(screenPos.x - focus.x, screenPos.y - focus.y)
     }
 
-    /// Contacts within ~50% of the shortest screen half-dimension are "central".
+    /// Contacts within `reach` of the visible centre are "central".
     private var proximityScale: CGFloat {
-        let radius = Swift.min(screenSize.width, screenSize.height) * 0.5
-        let t = Swift.max(0, 1 - distanceToCenter / radius)
+        let t = Swift.max(0, 1 - distanceToCenter / reach)
         return 1.0 + 0.10 * t  // max ×1.10 — keeps circles within their hex cells
     }
 
     /// Peripheral contacts fade to 40% opacity.
     private var proximityOpacity: Double {
-        let radius = Swift.min(screenSize.width, screenSize.height) * 0.65
-        let t = Swift.max(0, 1 - distanceToCenter / radius)
+        let t = Swift.max(0, 1 - distanceToCenter / (reach * 1.3))
         return 0.40 + 0.60 * t
     }
 
@@ -863,7 +876,7 @@ private struct ContactCircle: View {
 
 // DEBUG only: the previews seed `ContactsLive.useForPreview`, which a release build does not have.
 #if DEBUG
-#Preview("Honeycomb") {
+#Preview("Cloud") {
     let container = PreviewHelpers.createPreviewContainer()
     ContactsLive.useForPreview(container)
     let context = container.viewContext
