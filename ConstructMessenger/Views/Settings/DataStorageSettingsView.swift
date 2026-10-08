@@ -279,9 +279,7 @@ struct DataStorageSettingsView: View {
             }
         }
         .background(Color.CT.bg.ignoresSafeArea())
-        .navigationTitle("")
         #if os(iOS)
-        .navigationBarTitleDisplayMode(.inline)
         .screenTitle(NSLocalizedString("data_and_storage", comment: ""), shown: showNavBar)
         #endif
         .task {
