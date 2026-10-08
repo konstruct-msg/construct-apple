@@ -235,7 +235,8 @@ struct RegistrationFlowView: View {
         )
         .ctBackground()
         #if os(iOS)
-        .hideSystemNavBar()
+        // No bar while the device registers: there is no way back out of it.
+        .toolbar(.hidden, for: .navigationBar)
         .navigationBarBackButtonHidden(true)
         #endif
         .onAppear { authViewModel.isRegistrationInProgress = true }

@@ -11,9 +11,8 @@
 //  The toast slides in from the top, auto-dismisses info/warning,
 //  and shows a retry button for critical errors.
 //
-//  Placement: below the standard / floating nav band so invite safety,
-//  key-change, and network toasts never stack on top of ChatNavBar /
-//  CTNavBar (same vertical slot under the status bar).
+//  Placement: below the navigation bar band so invite safety, key-change,
+//  and network toasts never cover a screen's title or its bar items.
 //
 
 import SwiftUI
@@ -24,8 +23,8 @@ struct ErrorToastView: View {
 
     @ObservedObject private var router = ErrorRouter.shared
 
-    /// Clears floating ChatNavBar (44 + 4 top chrome) and flat CTNavBar alike.
-    /// ContentView’s ZStack already sits under the status-bar safe area.
+    /// Clears the navigation bar. ContentView’s ZStack already sits under the status-bar safe
+    /// area.
     private static let topChromeClearance: CGFloat =
         CTLayout.navBarHeight + CTLayout.chromeGap
 

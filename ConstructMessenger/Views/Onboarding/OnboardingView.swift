@@ -142,7 +142,8 @@ struct OnboardingView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .ctBackground()
             #if os(iOS)
-            .hideSystemNavBar()
+            // The welcome screen has no bar: nothing to title, nothing to go back to.
+            .toolbar(.hidden, for: .navigationBar)
             #endif
             .navigationDestination(isPresented: $showingRegistration) {
                 RegistrationFlowView(username: username.isEmpty ? nil : username)

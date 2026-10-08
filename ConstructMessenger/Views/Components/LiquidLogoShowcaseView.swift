@@ -4,7 +4,6 @@ import SwiftUI
 /// amplitudes and haptics before wiring the animation into SplashView or onboarding.
 /// Tap anywhere to replay. Dismiss with the close button.
 struct LiquidLogoShowcaseView: View {
-    @Environment(\.dismiss) private var dismiss
     @State private var replay: Int = 0
     @State private var hapticsOn: Bool = true
     @State private var logoSize: CGFloat = 240
@@ -16,17 +15,6 @@ struct LiquidLogoShowcaseView: View {
                 .opacity(0.35)
 
             VStack(spacing: 0) {
-                CTNavBar(
-                    title: NSLocalizedString("liquid_logo.title", comment: ""),
-                    showBack: true,
-                    isModal: true,
-                    backAction: { dismiss() }
-                ) {
-                    EmptyView()
-                } trailing: {
-                    EmptyView()
-                }
-
                 Spacer()
 
                 LiquidLogoView(
@@ -85,6 +73,7 @@ struct LiquidLogoShowcaseView: View {
         }
         .contentShape(Rectangle())
         .onTapGesture { replay &+= 1 }
+        .screenTitle(NSLocalizedString("liquid_logo.title", comment: ""))
         #if os(iOS)
         .statusBarHidden(true)
         #endif

@@ -119,9 +119,12 @@ Tokens — source of truth `ConstructMessenger/Utilities/ConstructTheme.swift`:
   sheet with a title or an action is wrapped at the presenting site in `.sheetNavigation()` (its
   own `NavigationStack` and a close item). Until then this file banned `NavigationStack` in sheets
   and prescribed `CTNavBar`; the ban's one recorded reason was the terminal look of the bar, which
-  2026-09-20 withdrew, and on iPhone Duo only system bars stand vertically. `CTNavBar` and
-  `hideSystemNavBar()` are retiring: no new call site. Our part of the bar is set once, app-wide —
-  tint and title face — never per screen.
+  2026-09-20 withdrew, and on iPhone Duo only system bars stand vertically. `CTNavBar`,
+  `hideSystemNavBar()` and `InteractiveSwipeBack` (the half-screen back swipe) were deleted on
+  2026-10-08 with the last screen that used them; back is the system's gesture. A screen with no
+  bar at all (the onboarding welcome, registration) says `.toolbar(.hidden, for: .navigationBar)`.
+  Our part of the bar is set once, app-wide — the title face — never per screen; bar items take
+  the label colour (`barItem()`), a confirming action the accent (`ConfirmButton`).
 - Background always `Color.CT.bg` (`#090909`) via `.ctBackground()`.
 - New UI must use tokens; when editing a file with a literal `8`/`10`/`18`, migrate that call site.
 - Debug-only UI: `.orange`, `#if DEBUG`.
@@ -169,7 +172,7 @@ theme file is **shared, never copied** — the copy is what killed the last atte
   Connect, so a change to it has a diff and a reviewer. Read `fastlane/metadata/README.md` before
   touching it — field limits, the four store locales, and what must never go in the copy.
   `scripts/check_appstore_metadata.sh` enforces the mechanical part and CI runs it.
-- Nav titles: `CTNavBar` applies `.uppercased()` + `.tracking(4)` — pass the raw localized string.
+- Bar titles are sentence case, passed as the localized string, never uppercased in code.
 - UI copy is plain language ("people / chats / device", never "node / stream / replica"). Code
   identifiers keep domain names — no renames.
 - **VEIL is not ICE.** VEIL is our obfuscation layer (`Veil*` / `veil_*`, `Networking/gRPC/VEIL/`);
