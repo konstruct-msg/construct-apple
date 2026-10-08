@@ -36,12 +36,6 @@ struct AttachmentReviewView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            CTNavBar(
-                title: counter,
-                showBack: true,
-                backAction: { dismiss() }
-            )
-
             TabView(selection: $index) {
                 ForEach(Array(attachments.enumerated()), id: \.offset) { i, attachment in
                     page(for: attachment).tag(i)
@@ -52,6 +46,7 @@ struct AttachmentReviewView: View {
             actions
         }
         .ctBackground()
+        .screenTitle(counter)
         .fullScreenCover(isPresented: $editing) {
             if let image = current?.displayImage {
                 MediaEditorView(

@@ -149,6 +149,7 @@ struct DesktopChatView: View {
             .sheet(isPresented: $showingUserProfile) {
                 if let user = viewModel.chat.otherUser {
                     UserProfileView(userId: user.id, showMessageButton: false)
+                        .sheetNavigation()
                         .environment(\.managedObjectContext, viewContext)
                         .frame(minWidth: 420, minHeight: 480)
                 }
@@ -159,6 +160,7 @@ struct DesktopChatView: View {
                     replyQuoteText = selectedQuote
                     setComposeReplyFocus(messageId: msg.id)
                 }
+                .sheetNavigation()
                 .frame(minWidth: 400, minHeight: 320)
             }
             .sheet(item: $galleryStartItem) { item in

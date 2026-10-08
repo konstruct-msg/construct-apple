@@ -134,18 +134,24 @@ struct SynapsView: View {
                 }
             }
             .ctBackground()
-            .safeAreaInset(edge: .top, spacing: 0) {
-                VStack(spacing: 0) {
-                    synapsNavBar
-                    synapsSearchBar
-                        .padding(.horizontal, 12)
-                        .padding(.top, 4)
-                        .padding(.bottom, 8)
+            .navigationTitle(NSLocalizedString("synapses", comment: ""))
+            .inlineNavTitle()
+            .connectionSubtitle()
+            .searchable(text: $searchText, prompt: Text(LocalizedStringKey("search_prompt")))
+            .searchFocused($isSearchFocused)
+            .onSubmit(of: .search) { dismissSearchKeyboard() }
+            #if os(iOS)
+            .toolbar {
+                if showsScanAction {
+                    ToolbarItem(placement: .primaryAction) {
+                        Button { showingQRScanner = true } label: {
+                            Label(NSLocalizedString("scan_qr_code", comment: ""), systemImage: "qrcode.viewfinder")
+                        }
+                        .barItem()
+                    }
                 }
-                // Solid enough that result rows never read through the chrome; matrix
-                // still shows at the sides via the search capsule’s material.
-                .background(Color.CT.bg.opacity(0.94))
             }
+            #endif
             #if os(iOS)
             .toolbar {
                 ToolbarItemGroup(placement: .keyboard) {
@@ -217,9 +223,6 @@ struct SynapsView: View {
                 guard let vm = contactRequestsVM else { return }
                 Task { await refreshContactRequests(vm: vm, reason: "push_received") }
             }
-            #if os(iOS)
-            .hideSystemNavBar()
-            #endif
             .sheet(isPresented: $showingQRScanner) {
                 RecoveryGated { QRScannerView { contactURL in handleScannedQR(contactURL) } }
             }
@@ -233,6 +236,7 @@ struct SynapsView: View {
                         showPruneConfirm = true
                     }
                 )
+                .sheetNavigation()
                 .environment(\.managedObjectContext, context)
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
@@ -248,6 +252,7 @@ struct SynapsView: View {
                         onDeclineBlock: { try await vm.declineAndBlock(requestId: request.id) },
                         onSpamBlock: { try await vm.reportSpamAndBlock(requestId: request.id) }
                     )
+                    .sheetNavigation(closes: false)
                     .presentationDetents([.medium])
                     .presentationDragIndicator(.visible)
                 }
@@ -329,37 +334,6 @@ struct SynapsView: View {
         } else if let pendingId {
             chatsViewModel.openOrCreateChat(withContact: pendingId)
         }
-    }
-
-    // MARK: - Nav Bar
-
-    private var synapsNavBar: some View {
-        HStack(spacing: 10) {
-            Text(NSLocalizedString("synapses", comment: "").uppercased())
-                .font(CTFont.headline)
-                .foregroundColor(Color.CT.text)
-                .tracking(4)
-            Spacer()
-            #if os(iOS)
-            if showsScanAction {
-                Button { showingQRScanner = true } label: {
-                    Image(systemName: "qrcode.viewfinder")
-                        .font(CTIcon.font(CTIcon.nav))
-                        .foregroundColor(Color.CT.accent)
-                }
-            }
-            #endif
-        }
-        .padding(.horizontal, CTLayout.edgePad)
-        .frame(height: CTLayout.navBarHeight)
-        .ctBorderBottom()
-    }
-
-    // MARK: - Search Bar
-
-    private var synapsSearchBar: some View {
-        CTSearchBar(text: $searchText, focused: $isSearchFocused)
-            .onSubmit { dismissSearchKeyboard() }
     }
 
     private func dismissSearchKeyboard() {

@@ -55,6 +55,14 @@ extension View {
         }
     }
 
+    /// The connection state under a tab root's title — "Connecting…", "Disconnected" — and nothing
+    /// while connected: the state a person needs to know about, said in words where the title is,
+    /// instead of an unlabelled dot beside it. iOS/macOS 26 (`navigationSubtitle`); before that
+    /// the title stands alone.
+    func connectionSubtitle() -> some View {
+        modifier(ConnectionSubtitle())
+    }
+
     /// A sheet's own navigation: a `NavigationStack` and a close item, so the screen inside
     /// declares only its title and actions and reads the same pushed or presented.
     /// `decisions/navigation-bars-are-the-systems.md`.
@@ -131,5 +139,36 @@ extension View {
     /// back would be the only blue in the bar. A confirming action is `ConfirmButton` instead.
     func barItem() -> some View {
         tint(Color.CT.text)
+    }
+}
+
+private struct ConnectionSubtitle: ViewModifier {
+    var connection = ConnectionStatusManager.shared
+    @State private var hasConnectedOnce = false
+
+    /// Mirrors `ConnectionStatusIndicator`: before the first connect a drop is still "connecting";
+    /// a paused stream is the app in the background, where no one reads the bar.
+    private var text: String {
+        if connection.isStreamPaused { return "" }
+        switch connection.connectionStatus {
+        case .connected: return ""
+        case .connecting, .unknown: return NSLocalizedString("status_connecting", comment: "")
+        case .disconnected:
+            return NSLocalizedString(hasConnectedOnce ? "disconnected" : "status_connecting", comment: "")
+        }
+    }
+
+    func body(content: Content) -> some View {
+        Group {
+            if #available(iOS 26.0, macOS 26.0, *) {
+                content.navigationSubtitle(text)
+            } else {
+                content
+            }
+        }
+        .onAppear { if connection.connectionStatus == .connected { hasConnectedOnce = true } }
+        .onChange(of: connection.connectionStatus) { _, status in
+            if status == .connected { hasConnectedOnce = true }
+        }
     }
 }

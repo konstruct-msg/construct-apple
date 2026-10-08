@@ -31,25 +31,6 @@ struct ContactRequestSheet: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            CTNavBar(
-                title: NSLocalizedString("contact_request_sheet_title", comment: ""),
-                showBack: false
-            ) {
-                EmptyView()
-            } trailing: {
-                Button(action: { dismiss() }) {
-                    Image(systemName: "xmark.circle")
-                        .font(CTIcon.font(CTIcon.nav))
-                        .foregroundColor(Color.CT.accent)
-                }
-                .buttonStyle(.plain)
-                .disabled(isProcessing)
-            }
-
-            Rectangle()
-                .fill(Color.CT.noise)
-                .frame(height: 1)
-
             ScrollView {
                 VStack(spacing: 20) {
                     // Identity header
@@ -151,6 +132,14 @@ struct ContactRequestSheet: View {
             }
         }
         .ctBackground()
+        .screenTitle(NSLocalizedString("contact_request_sheet_title", comment: ""))
+        // Its own close, not `sheetNavigation`'s: it waits while an answer is being sent.
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                CloseButton { dismiss() }
+                    .disabled(isProcessing)
+            }
+        }
     }
 
     private enum ButtonRole {

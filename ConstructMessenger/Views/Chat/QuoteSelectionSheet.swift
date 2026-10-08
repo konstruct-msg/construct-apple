@@ -25,24 +25,6 @@ struct QuoteSelectionSheet: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            CTNavBar(
-                title: NSLocalizedString("select_quote", comment: ""),
-                showBack: false,
-                backAction: { dismiss() }
-            ) {
-                EmptyView()
-            } trailing: {
-                Button(NSLocalizedString("reply_with_selection", comment: "")) {
-                    guard !selectedText.isEmpty else { return }
-                    onConfirm(selectedText)
-                    dismiss()
-                }
-                .font(CTFont.bodyEmphasis)
-                .foregroundColor(selectedText.isEmpty ? Color.CT.textDim : Color.CT.accent)
-                .disabled(selectedText.isEmpty)
-                .buttonStyle(.plain)
-            }
-
             VStack(alignment: .leading, spacing: 12) {
                 Text(NSLocalizedString("quote_selection_hint", comment: ""))
                     .font(CTFont.secondary)
@@ -73,19 +55,20 @@ struct QuoteSelectionSheet: View {
                 }
             }
             .padding(.top, 8)
-
-            HStack {
-                Button(NSLocalizedString("cancel", comment: "")) { dismiss() }
-                    .font(CTFont.body)
-                    .foregroundColor(Color.CT.textDim)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 12)
-            }
-            .padding(.horizontal)
             .padding(.bottom, 16)
-            .ctBorderTop()
         }
         .background(Color.CT.bg)
+        .screenTitle(NSLocalizedString("select_quote", comment: ""))
+        .toolbar {
+            ToolbarItem(placement: .confirmationAction) {
+                ConfirmButton(title: NSLocalizedString("reply_with_selection", comment: "")) {
+                    guard !selectedText.isEmpty else { return }
+                    onConfirm(selectedText)
+                    dismiss()
+                }
+                .disabled(selectedText.isEmpty)
+            }
+        }
     }
 }
 

@@ -19,25 +19,26 @@ struct CallHistoryView: View {
     @State private var showClearConfirm = false
 
     var body: some View {
-        VStack(spacing: 0) {
-            HStack {
-                Text(NSLocalizedString("calls_recents", comment: "").uppercased())
-                    .font(CTFont.headline)
-                    .foregroundColor(Color.CT.text)
-                    .tracking(4)
-                Spacer()
-                if !records.isEmpty {
-                    Button(action: { showClearConfirm = true }) {
-                        Text("[\(NSLocalizedString("calls_clear", comment: ""))]")
-                            .font(CTFont.bodyEmphasis)
-                            .foregroundColor(Color.CT.danger)
+        NavigationStack {
+            content
+                .navigationTitle(NSLocalizedString("calls_recents", comment: ""))
+                .inlineNavTitle()
+                .connectionSubtitle()
+                .toolbar {
+                    if !records.isEmpty {
+                        ToolbarItem(placement: .primaryAction) {
+                            Button(role: .destructive) { showClearConfirm = true } label: {
+                                Label(NSLocalizedString("calls_clear", comment: ""), systemImage: "trash")
+                            }
+                            .barItem()
+                        }
                     }
-                    .buttonStyle(.plain)
                 }
-            }
-            .padding(.horizontal, CTLayout.edgePad)
-            .frame(height: CTLayout.navBarHeight)
+        }
+    }
 
+    private var content: some View {
+        VStack(spacing: 0) {
             filterBar
 
             ZStack {
