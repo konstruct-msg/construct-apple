@@ -10,7 +10,6 @@
 import SwiftUI
 
 struct ExistingIdentityChooserView: View {
-    @Environment(\.dismiss) private var dismiss
     @Environment(AccountRecoveryViewModel.self) private var recoveryVM
 
     @State private var showingRecovery = false
@@ -19,13 +18,6 @@ struct ExistingIdentityChooserView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            CTNavBar(
-                title: NSLocalizedString("onboarding_existing_title", comment: ""),
-                showBack: true,
-                isModal: true,
-                backAction: { dismiss() }
-            )
-
             ScrollView {
                 VStack(spacing: CTLayout.sectionGap) {
                     Text(NSLocalizedString("onboarding_existing_intro", comment: ""))
@@ -73,16 +65,17 @@ struct ExistingIdentityChooserView: View {
             }
         }
         .background(Color.CT.bg.ignoresSafeArea())
+        .screenTitle(NSLocalizedString("onboarding_existing_title", comment: ""))
         .sheet(isPresented: $showingRecovery) {
             RecoveryEntryView()
                 .environment(recoveryVM)
         }
         .sheet(isPresented: $showingVeilBootstrap) {
-            VeilBootstrapScanView()
+            VeilBootstrapScanView().sheetNavigation()
         }
         .sheet(isPresented: $showingDeviceLink) {
             #if os(iOS)
-            DeviceLinkMethodView()
+            DeviceLinkMethodView().sheetNavigation()
             #else
             DesktopLinkRequestView()
             #endif

@@ -14,7 +14,6 @@ struct SocialRecoverySetupView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            navBar
             Group {
                 switch service.setupStep {
                 case .idle:
@@ -33,26 +32,31 @@ struct SocialRecoverySetupView: View {
             }
         }
         .background(Color.CT.bg.ignoresSafeArea())
+        .screenTitle(NSLocalizedString("social_recovery_title", comment: ""))
+        .toolbar { barItems }
     }
 
-    // MARK: - Nav bar
+    // MARK: - Bar
 
-    private var navBar: some View {
-        CTNavBar(
-            title: NSLocalizedString("social_recovery_title", comment: ""),
-            showBack: showsBack,
-            backAction: showsBack ? { service.setupStep = .configure } : nil
-        ) {
-            EmptyView()
-        } trailing: {
-            if showsCancel {
+    /// Cancel resets the flow, so it is ours rather than `sheetNavigation`'s close; back returns
+    /// from a share to the configuration, a step inside the sheet rather than a pop.
+    @ToolbarContentBuilder
+    private var barItems: some ToolbarContent {
+        if showsCancel {
+            ToolbarItem(placement: .cancellationAction) {
                 Button(NSLocalizedString("cancel", comment: "")) {
                     service.reset()
                     dismiss()
                 }
-                .font(CTFont.bodyEmphasis)
-                .foregroundColor(Color.CT.textDim)
-                .buttonStyle(.plain)
+                .barItem()
+            }
+        }
+        if showsBack {
+            ToolbarItem(placement: .navigation) {
+                Button { service.setupStep = .configure } label: {
+                    Label(NSLocalizedString("back", comment: ""), systemImage: "chevron.backward")
+                }
+                .barItem()
             }
         }
     }

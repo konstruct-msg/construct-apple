@@ -189,6 +189,7 @@ struct AccountSettingsView: View {
         }
         .sheet(isPresented: $showingSocialRecoverySetup) {
             SocialRecoverySetupView()
+                .sheetNavigation(closes: false)
                 .environment(socialRecoveryService)
         }
         .alert("account_discard_changes_title", isPresented: $showingDiscardProfileChangesConfirm) {

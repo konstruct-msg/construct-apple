@@ -58,7 +58,7 @@ struct DesktopAccountSettingsView: View {
         }
         .task { await recoveryVM.loadStatus() }
         .sheet(isPresented: $showingRecoverySetup) {
-            RecoverySetupView()
+            RecoverySetupView().sheetNavigation(closes: false)
                 .environment(recoveryVM)
                 .frame(minWidth: 480, minHeight: 520)
                 .onDisappear { Task { await recoveryVM.refreshStatus() } }

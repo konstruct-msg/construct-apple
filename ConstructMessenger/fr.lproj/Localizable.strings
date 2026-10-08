@@ -868,7 +868,7 @@
 "device_link_section" = "lier un appareil";
 "generating" = "génération...";
 "device_link_scan_hint" = "scannez avec un autre appareil pour le lier";
-"keys_recovery_title" = "clés de l’appareil indisponibles";
+"keys_recovery_title" = "Clés de l’appareil indisponibles";
 "keys_recovery_warning_title" = "⚠ CLÉS CRYPTO INTROUVABLES";
 "keys_recovery_warning_body" = "Les clés cryptographiques de votre appareil n’ont pas pu être chargées depuis le trousseau. Il peut s’agir d’un problème système temporaire, ou les clés peuvent être définitivement perdues.\n\nVos messages et sessions restent inaccessibles tant que ce n’est pas résolu.";
 "keys_recovery_section_retry" = "réessayer";
@@ -955,7 +955,7 @@
 "kt_hint" = "Les clés d’identité publiques sont inscrites dans un journal en ajout seul, ce qui rend toute altération détectable.";
 "kt_failure_hint" = "la vérification de transparence des clés a échoué — altération possible détectée.";
 "kt_last_failure_at" = "dernier échec : %@";
-"social_recovery_title" = "RÉCUPÉRATION SOCIALE";
+"social_recovery_title" = "Récupération sociale";
 "social_recovery_intro_title" = "récupération sociale";
 "social_recovery_intro_body" = "Vos clés d’identité seront réparties entre des personnes de confiance. M d’entre elles sur N suffisent à restaurer votre identité si vous perdez l’accès.";
 "social_recovery_begin" = "COMMENCER [→]";
@@ -1277,3 +1277,6 @@
 "logout_backup_pending_message" = "Votre clé de récupération se trouve sur cet appareil et n’a pas été enregistrée. La déconnexion la supprime, et sans elle le compte ne peut pas être récupéré.";
 "qr_scanning_unavailable_mac" = "Le scan de QR code n’est pas disponible sur Mac";
 "qr_scanning_unavailable_mac_hint" = "Demandez à votre contact de vous envoyer son lien d’invitation.";
+
+// The safety numbers screen's bar title; the profile row keeps "safety_numbers".
+"safety_numbers_title" = "Numéros de sécurité";

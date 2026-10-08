@@ -126,7 +126,7 @@ struct DesktopSecurityView: View {
             Task { await recoveryVM.refreshStatus() }
         }
         .sheet(isPresented: $showingRecoverySetup) {
-            RecoverySetupView()
+            RecoverySetupView().sheetNavigation(closes: false)
                 .environment(recoveryVM)
                 .frame(minWidth: 480, minHeight: 520)
                 .onDisappear {

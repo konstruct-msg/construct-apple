@@ -1358,3 +1358,6 @@
 "logout_backup_pending_message" = "リカバリーキーはこの端末にあり、まだ保存されていません。サインアウトするとキーは削除され、キーがないとアカウントは復元できません。";
 "qr_scanning_unavailable_mac" = "Mac では QR コードを読み取れません";
 "qr_scanning_unavailable_mac_hint" = "相手に招待リンクを送ってもらってください。";
+
+// The safety numbers screen's bar title; the profile row keeps "safety_numbers".
+"safety_numbers_title" = "セーフティナンバー";

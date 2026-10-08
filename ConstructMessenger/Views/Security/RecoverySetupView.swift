@@ -18,22 +18,6 @@ struct RecoverySetupView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            CTNavBar(
-                title: NSLocalizedString("account_recovery_seed", comment: ""),
-                showBack: false
-            ) {
-                EmptyView()
-            } trailing: {
-                if showsCancelButton {
-                    Button(NSLocalizedString("cancel", comment: "")) {
-                        vm.resetSetup()
-                        dismiss()
-                    }
-                    .font(CTFont.bodyEmphasis)
-                    .foregroundColor(Color.CT.textDim)
-                    .buttonStyle(.plain)
-                }
-            }
             Group {
                 switch vm.setupStep {
                 case .idle:
@@ -52,6 +36,20 @@ struct RecoverySetupView: View {
             }
         }
         .background(Color.CT.bg)
+        .screenTitle(NSLocalizedString("recovery_gate_nav_title", comment: ""))
+        // Its own cancel, not `sheetNavigation`'s close: cancelling resets the setup, and there
+        // is none while the key uploads or once it is done.
+        .toolbar {
+            if showsCancelButton {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(NSLocalizedString("cancel", comment: "")) {
+                        vm.resetSetup()
+                        dismiss()
+                    }
+                    .barItem()
+                }
+            }
+        }
         .onAppear {
             if case .idle = vm.setupStep { vm.prepareSetup() }
         }

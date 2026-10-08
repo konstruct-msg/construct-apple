@@ -25,13 +25,6 @@ struct VeilBootstrapScanView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            CTNavBar(
-                title: NSLocalizedString("veil_bootstrap_title", comment: ""),
-                showBack: true,
-                isModal: true,
-                backAction: { dismiss() }
-            )
-
             ScrollView {
                 VStack(spacing: CTLayout.sectionGap) {
                     Text(NSLocalizedString("veil_bootstrap_intro", comment: ""))
@@ -74,6 +67,7 @@ struct VeilBootstrapScanView: View {
             }
         }
         .background(Color.CT.bg.ignoresSafeArea())
+        .screenTitle(NSLocalizedString("veil_bootstrap_title", comment: ""))
         #if os(iOS)
         .sheet(isPresented: $showingScanner) {
             QRScannerView { code in
