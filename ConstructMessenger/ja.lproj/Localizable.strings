@@ -1066,7 +1066,7 @@
 "account_discard_changes_message" = "プロフィールに未保存の変更があります。保存せずに戻りますか？";
 "account_discard_changes_discard" = "破棄";
 "account_discard_changes_keep_editing" = "編集を続ける";
-"account_editing_profile" = "> プロフィール編集中です。✓ で保存、x でキャンセルします。";
+"account_editing_profile" = "> プロフィール編集中です。「保存」で保存、「キャンセル」で破棄します。";
 
 /* Silent-transport neutral network indicator (silent-transport-ui decision) */
 "net_status_protected" = "保護済み";

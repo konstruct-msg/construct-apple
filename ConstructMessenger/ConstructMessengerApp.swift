@@ -120,10 +120,11 @@ struct Construct_MessengerApp: App {
         UITabBar.appearance().scrollEdgeAppearance  = tabApp
 
         // ── Navigation bar ───────────────────────────────────────────────────
-        // The bar is the system's; ours are the tint and the title face, nothing else
+        // The bar is the system's; ours is the title face, nothing else
         // (`decisions/navigation-bars-are-the-systems.md`). No `standardAppearance`: an
         // appearance of our own with a background turns the iOS 26 glass off. The title is the
-        // chrome's monospace at `CTNavBar`'s size, on the headline curve.
+        // chrome's monospace at `CTNavBar`'s size, on the headline curve. Bar items are the
+        // label colour (`barItem()`), the accent only on a confirming action.
         let titleSize = UIFontMetrics(forTextStyle: .headline).scaledValue(for: 17)
         let titleFont = UIFont(name: "JetBrainsMono-SemiBold", size: titleSize)
             ?? .monospacedSystemFont(ofSize: titleSize, weight: .semibold)
@@ -131,7 +132,6 @@ struct Construct_MessengerApp: App {
             .foregroundColor: bright,
             .font: titleFont
         ]
-        UINavigationBar.appearance().tintColor = accent
 
         // ── Lists / Table views ──────────────────────────────────────────────
         UITableView.appearance().backgroundColor     = UIColor(Color.CT.bg)
