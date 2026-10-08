@@ -59,17 +59,8 @@ struct ChatSelectionBarView: View {
     }
 }
 
-enum ChatTopChromeMode: Equatable {
-    case navigation
-    case search
-
-    static func resolve(isSearchActive: Bool) -> Self {
-        isSearchActive ? .search : .navigation
-    }
-}
-
-/// Search is an alternative occupant of the chat's top-chrome slot, not an overlay below it.
-/// The parent owns presentation; this view owns only the search controls and result count.
+/// In-chat search, under the system bar while it is open. The parent owns presentation; this
+/// view owns only the search controls and result count.
 struct ChatSearchChromeView: View {
     @Binding var searchText: String
     let resultCount: Int

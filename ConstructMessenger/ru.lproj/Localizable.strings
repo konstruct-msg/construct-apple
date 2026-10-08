@@ -289,7 +289,6 @@
 "server_applied_message" = "Новый сервер будет использоваться для всех последующих подключений.";
 "close" = "Закрыть";
 "back" = "Назад";
-"chat_nav_back" = "Назад";
 "change_avatar" = "Сменить фото";
 
 // Onboarding (identity gate — create / restore / link)

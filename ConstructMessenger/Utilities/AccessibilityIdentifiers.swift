@@ -71,7 +71,6 @@ enum A11y {
         static let input       = "chat.input"
         static let send        = "chat.send"
         static let voice       = "chat.voice"
-        static let back        = "chat.back"
         static let title       = "chat.title"
 
         static let attach      = "chat.attach"
