@@ -208,7 +208,7 @@ class ProfileSharingManager {
             )
             // A newer profile may have named another avatar while this one downloaded.
             guard (try? contacts.contact(contactId))?.pendingAvatarRef == stored else { return }
-            try? contacts.setAvatar(contactId, data, pendingRef: nil, pendingSince: nil)
+            _ = try? contacts.setAvatar(contactId, data, pendingRef: nil, pendingSince: nil)
             Log.info("Avatar of \(contact)… downloaded", category: "ProfileSharingManager")
         } catch let error as RPCError where error.code == .notFound {
             Log.info("Avatar of \(contact)… is gone from the media store — dropped", category: "ProfileSharingManager")
@@ -223,6 +223,6 @@ class ProfileSharingManager {
     private static func clearPending(_ contactId: String, ifStill stored: Data) {
         let contacts = LocalRepositories.contacts
         guard let live = try? contacts.contact(contactId), live.pendingAvatarRef == stored else { return }
-        try? contacts.setAvatar(contactId, live.avatar, pendingRef: nil, pendingSince: nil)
+        _ = try? contacts.setAvatar(contactId, live.avatar, pendingRef: nil, pendingSince: nil)
     }
 }

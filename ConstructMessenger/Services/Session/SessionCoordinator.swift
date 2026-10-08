@@ -143,7 +143,7 @@ final class SessionCoordinator: MessageRouterDelegate {
         // The peer could not read our current state with a device and the core retired it. The
         // next send opens a new one; this only carries the core's advice about how.
         SessionActionExecutor.shared.onSessionRetired = { [weak self] deviceId, withoutOneTimePrekey in
-            guard let self else { return }
+            guard self != nil else { return }
             guard let peer = PeerAddress.resolving(device: deviceId) else {
                 Log.info("SessionRetired for device \(deviceId.prefix(8))… of no known contact", category: "SessionCoordinator")
                 return
