@@ -93,6 +93,7 @@ struct SettingsView: View {
             .frame(maxWidth: .infinity)
             .ctBackground()
             .screenTitle(NSLocalizedString("settings", comment: ""))
+            .connectionSubtitle()
             .onAppear {
                 viewModel.setContext(viewContext)
                 if viewModel.needsUserInfoRefresh(from: authViewModel) {

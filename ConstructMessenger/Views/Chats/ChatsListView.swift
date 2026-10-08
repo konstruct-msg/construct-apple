@@ -9,10 +9,6 @@ import Combine
 import CoreData
 
 struct ChatsListView: View {
-    private enum Layout {
-        static let topScrimUnderSafeArea: CGFloat = CTLayout.navBarHeight + 24
-    }
-
     @Environment(\.managedObjectContext) private var viewContext
     @Environment(AuthViewModel.self) private var authViewModel
 
@@ -40,41 +36,21 @@ struct ChatsListView: View {
     var body: some View {
         let renderedChats = filteredChats
         NavigationStack(path: $navigationPath) {
-            ZStack {
-                // Main list content - full height so it can scroll under floating capsules
-                chatList(chats: renderedChats)
-
-                GeometryReader { geo in
-                    Rectangle()
-                        .fill(
-                            LinearGradient(
-                                stops: [
-                                    .init(color: Color.CT.bg, location: 0),
-                                    .init(color: Color.CT.bg.opacity(0.65), location: 0.55),
-                                    .init(color: Color.CT.bg.opacity(0), location: 1)
-                                ],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            )
-                        )
-                        .frame(height: geo.safeAreaInsets.top + Layout.topScrimUnderSafeArea)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                        .ignoresSafeArea(edges: .top)
-                }
-                .allowsHitTesting(false)
-
-                // Top floating area: nav + independent search capsule
-                VStack(spacing: 0) {
-                    navBar
-                    searchBar
-                        .padding(.horizontal, CTLayout.edgePad)
-                        .padding(.top, 4)
-                    Spacer(minLength: 0)
-                }
-                .frame(maxHeight: .infinity, alignment: .top)
-            }
+            chatList(chats: renderedChats)
             .ctBackground()
-            .hideSystemNavBar()
+            .navigationTitle(NSLocalizedString("chats", comment: ""))
+            .inlineNavTitle()
+            .connectionSubtitle()
+            .searchable(text: $searchQuery, prompt: Text(LocalizedStringKey("search_prompt")))
+            .toolbar {
+                ToolbarItem(placement: .primaryAction) {
+                    Button { showingQRScanner = true } label: {
+                        Label(NSLocalizedString("scan_qr_code", comment: ""), systemImage: "qrcode.viewfinder")
+                    }
+                    .barItem()
+                    .accessibilityIdentifier(A11y.Chats.scanQR)
+                }
+            }
             .navigationDestination(for: String.self) { chatId in
                     if let chat = chats.first(where: { $0.id == chatId }) {
                         ChatView(chat: chat, context: viewContext)
@@ -140,37 +116,6 @@ struct ChatsListView: View {
         }
     }
 
-    // MARK: - Search Bar
-
-    private var searchBar: some View {
-        CTSearchBar(text: $searchQuery)
-            .accessibilityIdentifier(A11y.Chats.search)
-    }
-
-    // MARK: - Nav Bar
-
-    private var navBar: some View {
-        HStack(spacing: CTLayout.chromeGap) {
-            // Center the 8pt status dot on the same vertical axis as medium
-            // chat-row avatars (40pt), so the header chrome lines up with the list.
-            ConnectionStatusIndicator()
-                .frame(width: CTHexAvatar.AvatarSize.medium.rawValue, alignment: .center)
-            Spacer()
-            Button { showingQRScanner = true } label: {
-                Image(systemName: "qrcode.viewfinder")
-                    .font(CTIcon.font(CTIcon.nav))
-                    .foregroundColor(Color.CT.accent)
-                    .frame(width: CTLayout.hitTarget, height: CTLayout.hitTarget)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier(A11y.Chats.scanQR)
-            .accessibilityLabel(NSLocalizedString("scan_qr_code", comment: ""))
-        }
-        .padding(.horizontal, CTLayout.edgePad)
-        .frame(height: CTLayout.navBarHeight)
-    }
-
     // MARK: - Chat List
 
     private var filteredChats: [Chat] {
@@ -192,13 +137,6 @@ struct ChatsListView: View {
 
     private func chatList(chats renderedChats: [Chat]) -> some View {
         List {
-            // Spacer row at top so first chats are visible below the floating search capsule,
-            // and content can scroll under the glass.
-            Color.clear
-                .frame(height: CTLayout.navBarHeight + CTLayout.controlHeight + 12)
-                .listRowBackground(Color.clear)
-                .listRowSeparator(.hidden)
-
             if recoveryViewModel.reminder != .none {
                 RecoveryReminderRow(
                     reminder: recoveryViewModel.reminder,
@@ -225,6 +163,9 @@ struct ChatsListView: View {
                     // Clear so the CTMatrixBackground watermark shows through the rows.
                     .listRowBackground(Color.clear)
                     .listRowSeparatorTint(Color.CT.noise)
+                    // The first row's top hairline sat under a spacer row while the list scrolled
+                    // under a floating header; with the system bar it would be the bar's edge.
+                    .listRowSeparator(chat.id == renderedChats.first?.id ? .hidden : .automatic, edges: .top)
                     .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                         Button(role: .destructive) {
                             Task { await chatsViewModel.deleteChatForgettingSessions(chat: chat) }
