@@ -859,7 +859,6 @@
 "call_voice" = "appel audio";
 "call_video" = "appel vidéo";
 "call_audio_route" = "audio";
-"end_to_end_encrypted" = "les modifications sont chiffrées de bout en bout";
 "invite" = "Inviter";
 "qr_caption_trust" = "ce code est une invitation à se connecter.";
 "qr_scan_hint" = "montrez-le à quelqu’un près de vous ou faites une capture d’écran";
@@ -920,7 +919,7 @@
 "contact_request_sheet_title" = "Demande de contact";
 "contact_request_from_title" = "souhaite se connecter";
 "contact_request_empty_inbox" = "aucune demande en attente";
-"safety_numbers" = "numéros de sécurité";
+"safety_numbers" = "Numéros de sécurité";
 "safety_numbers_verify_title" = "vérifier l’identité";
 "safety_numbers_instruction" = "Comparez ces numéros avec %@ de vive voix ou en personne. S’ils correspondent, votre connexion est sûre et n’a pas été interceptée.";
 "safety_numbers_copy" = "copier dans le presse-papiers";
@@ -1253,6 +1252,4 @@
 "qr_scanning_unavailable_mac" = "Le scan de QR code n’est pas disponible sur Mac";
 "qr_scanning_unavailable_mac_hint" = "Demandez à votre contact de vous envoyer son lien d’invitation.";
 
-// The safety numbers screen's bar title; the profile row keeps "safety_numbers".
-"safety_numbers_title" = "Numéros de sécurité";
 "delete_action" = "supprimer";

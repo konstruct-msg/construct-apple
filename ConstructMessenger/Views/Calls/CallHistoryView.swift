@@ -65,21 +65,17 @@ struct CallHistoryView: View {
         }
     }
 
+    /// All or missed — the system's segmented control, as the Phone app's recents.
     private var filterBar: some View {
-        HStack {
-            CTModeSelector(
-                selection: $selectedFilter,
-                options: CallHistoryFilter.allCases,
-                labels: [
-                    .all: NSLocalizedString("calls_filter_all", comment: ""),
-                    .missed: NSLocalizedString("calls_filter_missed", comment: "")
-                ],
-                width: .infinity
-            )
-            Spacer()
+        Picker(selection: $selectedFilter) {
+            Text(NSLocalizedString("calls_filter_all", comment: "")).tag(CallHistoryFilter.all)
+            Text(NSLocalizedString("calls_filter_missed", comment: "")).tag(CallHistoryFilter.missed)
+        } label: {
+            EmptyView()
         }
+        .pickerStyle(.segmented)
         .padding(.horizontal, CTLayout.edgePad)
-        .padding(.bottom, 10)
+        .padding(.bottom, CTLayout.inlinePad)
     }
 
     private var filteredRecords: [CTCallRecord] {
@@ -118,43 +114,30 @@ struct CallHistoryView: View {
         return false
     }
 
+    /// A List, so the rows' swipe actions work — under the ScrollView this used to be, the
+    /// "delete" and "call back" swipes were never offered.
     private var callList: some View {
-        ScrollView(showsIndicators: false) {
-            LazyVStack(alignment: .leading, spacing: 0, pinnedViews: [.sectionHeaders]) {
-                ForEach(groupedSections) { section in
-                    Section {
-                        ForEach(section.records, id: \.id) { record in
-                            CallHistoryRow(
-                                record: record,
-                                onDelete: { deleteRecord(record) },
-                                onCallBack: { callBack(record) }
-                            )
-                            Rectangle()
-                                .fill(Color.CT.noise.opacity(0.35))
-                                .frame(height: 1)
-                                .padding(.leading, 72)
-                        }
-                    } header: {
-                        sectionHeader(title: section.title)
+        List {
+            ForEach(groupedSections) { section in
+                Section {
+                    ForEach(section.records, id: \.id) { record in
+                        CallHistoryRow(
+                            record: record,
+                            onDelete: { deleteRecord(record) },
+                            onCallBack: { callBack(record) }
+                        )
+                        .listRowBackground(Color.clear)
+                        .listRowInsets(EdgeInsets())
+                        .listRowSeparatorTint(Color.CT.noise)
                     }
+                } header: {
+                    CTSettingsSectionHeader(title: section.title)
+                        .listRowInsets(EdgeInsets())
                 }
-                Color.clear.frame(height: 72)
             }
         }
-    }
-
-    private func sectionHeader(title: String) -> some View {
-        ZStack {
-            Color.CT.bg.opacity(0.96)
-            HStack {
-                Text(title.uppercased())
-                    .font(CTFont.badge)
-                    .foregroundStyle(Color.CT.accent)
-                Spacer()
-            }
-            .padding(.horizontal, CTLayout.edgePad)
-            .padding(.vertical, 8)
-        }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
     }
 
     private var emptyState: some View {
@@ -248,10 +231,11 @@ private struct CallHistoryRow: View {
     var body: some View {
         Button(action: onCallBack) {
             HStack(spacing: 12) {
-                Text(directionTag)
-                    .font(CTFont.micro)
+                Image(systemName: directionSymbol)
+                    .font(CTIcon.font(CTIcon.caption, weight: .semibold))
                     .foregroundStyle(directionColor)
                     .frame(width: 20, alignment: .center)
+                    .accessibilityHidden(true)
 
                 ContactMainAvatarView(
                     userId: record.peerUserId,
@@ -283,9 +267,11 @@ private struct CallHistoryRow: View {
                     }
                 }
 
-                Image(systemName: "arrow.up.right")
-                    .font(CTIcon.font(CTIcon.caption, weight: .semibold))
+                // The row's tap calls back; the symbol says so (it was an arrow that did not).
+                Image(systemName: "phone")
+                    .font(CTIcon.font(CTIcon.row))
                     .foregroundStyle(Color.CT.accent)
+                    .accessibilityLabel(Text(LocalizedStringKey("call_call_back")))
             }
             .padding(.horizontal, CTLayout.sectionGap)
             .padding(.vertical, 12)
@@ -305,14 +291,14 @@ private struct CallHistoryRow: View {
         }
     }
 
-    private var directionTag: String {
+    private var directionSymbol: String {
         switch record.direction {
         case .outgoing:
-            return "↗"
+            return "phone.arrow.up.right"
         case .incoming:
-            return "↙"
+            return "phone.arrow.down.left"
         @unknown default:
-            return "~"
+            return "phone"
         }
     }
 

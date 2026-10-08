@@ -68,24 +68,12 @@ struct UserProfileView: View {
     var body: some View {
         VStack(spacing: 0) {
             ScrollView(showsIndicators: false) {
-                LazyVStack(spacing: 0) {
+                LazyVStack(spacing: SettingsLayout.sectionSpacing) {
                     avatarHeader
-                    flatDivider(thick: true)
                     identitySection
-                    flatDivider(thick: true)
                     sharingSection
-                    flatDivider(thick: true)
                     securitySection
-                    flatDivider(thick: true)
                     dangerSection
-                    flatDivider(thick: true)
-
-                    Text("> \(NSLocalizedString("end_to_end_encrypted", comment: ""))")
-                        .font(CTFont.caption)
-                        .foregroundStyle(Color.CT.accent.opacity(0.5))
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, 20)
-                        .padding(.vertical, 12)
                 }
                 .padding(.bottom, 32)
             }
@@ -195,8 +183,9 @@ struct UserProfileView: View {
 
     private var identitySection: some View {
         VStack(alignment: .leading, spacing: 0) {
-            sectionHeader(NSLocalizedString("identity_section", comment: ""))
-            flatRowDivider()
+            CTSettingsSectionHeader(title: NSLocalizedString("identity_section", comment: ""))
+
+            CTSectionGroup {
 
             // Local-only alias the user assigns. Never leaves the device; overrides the
             // resolved display name everywhere (chat list, header, call screens).
@@ -217,7 +206,7 @@ struct UserProfileView: View {
                 }
             }
             .buttonStyle(.plain)
-            flatRowDivider()
+            ConstructRowDivider(indent: 20)
 
             // External identity = key fingerprint (thread 5.3). UUID is internal addressing only.
             if let fp = user.knownIdentityKey.flatMap({ IdentityFingerprint.short(from: $0) }) {
@@ -249,7 +238,7 @@ struct UserProfileView: View {
             }
             // Internal ServerUserId kept off the primary identity surface (addressing only).
             #if DEBUG
-            flatRowDivider()
+            ConstructRowDivider(indent: 20)
             profileRow(label: NSLocalizedString("user_id", comment: "")) {
                 let uid = user.id
                 let short = uid.count > 12 ? "\(uid.prefix(8))...\(uid.suffix(2))" : uid
@@ -258,6 +247,7 @@ struct UserProfileView: View {
                     .foregroundStyle(Color.CT.textDim.opacity(0.7))
             }
             #endif
+            }
         }
     }
 
@@ -317,8 +307,9 @@ struct UserProfileView: View {
     /// title flips between "share" and "stop sharing".
     private var sharingSection: some View {
         VStack(alignment: .leading, spacing: 0) {
-            sectionHeader(NSLocalizedString("profile_sharing_section", comment: ""))
-            flatRowDivider()
+            CTSettingsSectionHeader(title: NSLocalizedString("profile_sharing_section", comment: ""))
+
+            CTSectionGroup {
 
             Toggle(isOn: Binding(
                 get: { user.amISharingWith },
@@ -339,12 +330,13 @@ struct UserProfileView: View {
             .padding(.vertical, 12)
 
             if let sharedAt = user.sharedWithMeAt, user.isSharingWithMe {
-                flatRowDivider()
+                ConstructRowDivider(indent: 20)
                 Text(String(format: NSLocalizedString("sharing_with_you", comment: ""), formatDate(sharedAt)))
                     .font(CTFont.caption)
                     .foregroundStyle(Color.CT.textDim)
                     .padding(.horizontal, 20)
                     .padding(.vertical, 10)
+            }
             }
         }
     }
@@ -353,35 +345,36 @@ struct UserProfileView: View {
 
     private var securitySection: some View {
         VStack(alignment: .leading, spacing: 0) {
-            sectionHeader(NSLocalizedString("security", comment: ""))
-            flatRowDivider()
+            CTSettingsSectionHeader(title: NSLocalizedString("security", comment: ""))
+
+            CTSectionGroup {
 
             if let alert = user.trustAlert {
                 keyChangeWarningBlock(alert)
-                flatRowDivider()
+                ConstructRowDivider(indent: 20)
             }
 
-            profileRow(label: NSLocalizedString("session_crypto_suite", comment: "")) {
-                // The row below names the suite, or says there is no session; this one is
-                // only the state. `[ENC] [ OK ]` was two accent-coloured tokens that looked
-                // exactly like the tappable rows around them.
-                HStack(spacing: 6) {
-                    CTStatusBadge(status: hasSession ? .ok : .off, size: 13)
-                    if hasSession {
-                        Text(NSLocalizedString("encrypted", comment: ""))
+            // One row: the state, said with a badge and a word, and the negotiated suite under it.
+            // It was two rows — a badge alone, then the suite as a row with no label.
+            VStack(alignment: .leading, spacing: 0) {
+                profileRow(label: NSLocalizedString("session_crypto_suite", comment: "")) {
+                    HStack(spacing: 6) {
+                        CTStatusBadge(status: hasSession ? .ok : .off, size: 13)
+                        Text(hasSession ? NSLocalizedString("encrypted", comment: "") : sessionSuiteLabel)
                             .font(CTFont.ui(13, relativeTo: .footnote))
-                            .foregroundStyle(Color.CT.text)
+                            .foregroundStyle(hasSession ? Color.CT.text : Color.CT.textDim)
                     }
                 }
+                if hasSession {
+                    Text(sessionSuiteLabel)
+                        .font(CTFont.mono(11))
+                        .foregroundStyle(Color.CT.textDim)
+                        .padding(.horizontal, 20)
+                        .padding(.top, -6)
+                        .padding(.bottom, 12)
+                }
             }
-            flatRowDivider()
-
-            profileRow(label: "") {
-                Text(sessionSuiteLabel)
-                    .font(CTFont.body)
-                    .foregroundStyle(hasSession ? Color.CT.text : Color.CT.textDim)
-            }
-            flatRowDivider()
+            ConstructRowDivider(indent: 20)
 
             Button {
                 showingSafetyNumbers = true
@@ -393,6 +386,7 @@ struct UserProfileView: View {
                 }
             }
             .buttonStyle(.plain)
+            }
         }
     }
 
@@ -412,37 +406,12 @@ struct UserProfileView: View {
             .foregroundStyle(Color.CT.textDim)
 
             HStack(spacing: 10) {
-                Button {
+                CTButton(label: NSLocalizedString("key_change_verify", comment: ""), role: .destructive) {
                     showingSafetyNumbers = true
-                } label: {
-                    Text(NSLocalizedString("key_change_verify", comment: ""))
-                        .font(CTFont.ui(12, weight: .bold))
-                        .foregroundStyle(Color.CT.bg)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
-                        .background(Color.CT.danger)
-                        .clipShape(CTShape.control())
                 }
-                .buttonStyle(.plain)
-
-                Button {
-                    if KeyChangeUX.acknowledgeKeyChange(userId: user.id) {
-                        // @ObservedObject user refreshes from the Core Data object
-                    }
-                } label: {
-                    Text(NSLocalizedString("security_notice_acknowledge", comment: ""))
-                        .font(CTFont.secondary)
-                        .foregroundStyle(Color.CT.accent)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
-                        .background(Color.CT.bgMsg)
-                        .clipShape(CTShape.control())
-                        .overlay(
-                            CTShape.control()
-                                .strokeBorder(Color.CT.accent.opacity(0.5), lineWidth: 1)
-                        )
+                CTButton(label: NSLocalizedString("security_notice_acknowledge", comment: ""), role: .secondary) {
+                    _ = KeyChangeUX.acknowledgeKeyChange(userId: user.id)
                 }
-                .buttonStyle(.plain)
             }
         }
         .padding(.horizontal, 20)
@@ -455,14 +424,15 @@ struct UserProfileView: View {
 
     private var dangerSection: some View {
         VStack(alignment: .leading, spacing: 0) {
-            sectionHeader(NSLocalizedString("danger_zone", comment: ""), color: Color.CT.danger)
-            flatRowDivider()
+            CTSettingsSectionHeader(title: NSLocalizedString("danger_zone", comment: ""), color: Color.CT.danger)
+
+            CTSectionGroup {
 
             actionRow(
                 label: NSLocalizedString(user.isBlocked ? "unblock_user" : "block_user", comment: ""),
                 color: user.isBlocked ? Color.CT.text : Color.CT.danger
             ) { showingBlockConfirmation = true }
-            flatRowDivider()
+            ConstructRowDivider(indent: 20)
 
             actionRow(
                 label: NSLocalizedString("report_spam", comment: ""),
@@ -470,47 +440,21 @@ struct UserProfileView: View {
             ) { showingReportConfirmation = true }
 
             if let prune = onPrune {
-                flatRowDivider()
+                ConstructRowDivider(indent: 20)
                 actionRow(label: NSLocalizedString("synapses_prune_action", comment: ""), color: Color.CT.danger) {
                     prune(); dismiss()
                 }
+            }
             }
         }
     }
 
     // MARK: - Layout helpers
 
-    private func flatDivider(thick: Bool = false) -> some View {
-        Rectangle()
-            .fill(thick ? Color.CT.noise : Color.CT.noise.opacity(0.5))
-            .frame(height: 1)
-    }
-
-    private func flatRowDivider() -> some View {
-        Rectangle()
-            .fill(Color.CT.noise.opacity(0.35))
-            .frame(height: 1)
-            .padding(.horizontal, 20)
-    }
-
-    private func sectionHeader(_ title: String, color: Color = Color.CT.accent) -> some View {
-        HStack(spacing: 6) {
-            Text(">")
-                .font(CTFont.ui(12, weight: .bold))
-                .foregroundStyle(color)
-            Text(title.uppercased())
-                .font(CTFont.ui(12, weight: .bold))
-                .foregroundStyle(color)
-                .tracking(2)
-        }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 10)
-    }
-
     private func profileRow<V: View>(label: String, @ViewBuilder value: () -> V) -> some View {
         HStack {
             if !label.isEmpty {
-                Text(label.lowercased())
+                Text(label)
                     .font(CTFont.ui(14))
                     .foregroundStyle(Color.CT.textDim)
             }
@@ -524,7 +468,7 @@ struct UserProfileView: View {
     private func actionRow(label: String, color: Color, isLoading: Bool = false, action: @escaping () -> Void) -> some View {
         Button(action: { guard !isLoading else { return }; action() }) {
             HStack {
-                Text(label.lowercased())
+                Text(label)
                     .font(CTFont.ui(14))
                     .foregroundStyle(color)
                 Spacer()

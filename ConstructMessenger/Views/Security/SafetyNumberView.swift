@@ -48,7 +48,7 @@ struct SafetyNumberView: View {
             }
         }
         .ctBackground()
-        .screenTitle(NSLocalizedString("safety_numbers_title", comment: ""))
+        .screenTitle(NSLocalizedString("safety_numbers", comment: ""))
         .onAppear { refreshSafetyNumbers() }
     }
 

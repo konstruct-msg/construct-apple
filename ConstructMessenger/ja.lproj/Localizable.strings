@@ -771,7 +771,6 @@
 "delete_action" = "削除";
 "add_action" = "追加";
 "call_voice" = "音声通話";
-"end_to_end_encrypted" = "変更はエンドツーエンドで暗号化されます";
 "invite" = "招待";
 "qr_caption_trust" = "このコードはつながりへの招待です。";
 "qr_scan_hint" = "近くの人に見せるか、スクリーンショットを撮ってください";
@@ -1335,5 +1334,3 @@
 "qr_scanning_unavailable_mac" = "Mac では QR コードを読み取れません";
 "qr_scanning_unavailable_mac_hint" = "相手に招待リンクを送ってもらってください。";
 
-// The safety numbers screen's bar title; the profile row keeps "safety_numbers".
-"safety_numbers_title" = "セーフティナンバー";
