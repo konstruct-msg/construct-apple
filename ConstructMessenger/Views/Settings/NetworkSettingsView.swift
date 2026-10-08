@@ -188,11 +188,14 @@ struct NetworkSettingsView: View {
                             .font(CTFont.body)
                             .foregroundColor(Color.CT.textDim)
                         Spacer()
-                        CTModeSelector(
-                            selection: veilModeBinding,
-                            options: VeilMode.allCases,
-                            labels: veilModeLabels
-                        )
+                        Picker(LocalizedStringKey("veil_title"), selection: veilModeBinding) {
+                            ForEach(VeilMode.allCases, id: \.self) { mode in
+                                Text(veilModeLabels[mode] ?? "").tag(mode)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+                        .labelsHidden()
+                        .fixedSize()
                     }
                     .padding(.horizontal, NetworkSettingsLayout.rowHorizontalPadding)
                     .padding(.vertical, NetworkSettingsLayout.rowVerticalPadding)
@@ -424,11 +427,14 @@ struct NetworkSettingsView: View {
                     .font(CTFont.body)
                     .foregroundColor(Color.CT.textDim)
                 Spacer()
-                CTModeSelector(
-                    selection: veilModeBinding,
-                    options: VeilMode.allCases,
-                    labels: veilModeLabels
-                )
+                Picker(LocalizedStringKey("censorship_protection"), selection: veilModeBinding) {
+                    ForEach(VeilMode.allCases, id: \.self) { mode in
+                        Text(veilModeLabels[mode] ?? "").tag(mode)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .fixedSize()
             }
             .padding(.horizontal, NetworkSettingsLayout.rowHorizontalPadding)
             .padding(.vertical, NetworkSettingsLayout.rowVerticalPadding)

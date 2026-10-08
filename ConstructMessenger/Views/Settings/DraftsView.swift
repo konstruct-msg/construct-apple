@@ -38,27 +38,27 @@ struct DraftsView: View {
                         .clipShape(CTShape.card())
                         .overlay(CTShape.card().stroke(Color.CT.noise, lineWidth: 1))
 
-                    Button {
+                    CTButton(
+                        label: NSLocalizedString("save_draft", comment: ""),
+                        role: .secondary,
+                        isEnabled: canSaveDraft
+                    ) {
                         addDraft()
-                    } label: {
-                        Text(LocalizedStringKey("save_draft"))
-                            .font(CTFont.body)
-                            .foregroundColor(Color.CT.text)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 10)
-                            .background(Color.CT.bgMsg)
-                            .clipShape(CTShape.card())
-                            .overlay(CTShape.card().stroke(Color.CT.accent, lineWidth: 1))
                     }
-                    .disabled(!canSaveDraft)
                 }
 
                 if drafts.isEmpty {
-                    Spacer()
-                    Text(LocalizedStringKey("drafts_stored_locally"))
-                        .font(CTFont.body)
-                        .foregroundColor(.secondary)
-                    Spacer()
+                    ContentUnavailableView {
+                        Label {
+                            Text(LocalizedStringKey("drafts_empty_title"))
+                                .font(CTFont.headline)
+                        } icon: {
+                            Image(systemName: "doc.text")
+                        }
+                    } description: {
+                        Text(LocalizedStringKey("drafts_stored_locally"))
+                            .font(CTFont.body)
+                    }
                 } else {
                     List {
                         ForEach(drafts) { draft in

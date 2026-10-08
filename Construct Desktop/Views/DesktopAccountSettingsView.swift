@@ -139,11 +139,11 @@ struct DesktopAccountSettingsView: View {
             if let img = viewModel.profileImage {
                 CTHexAvatar(initials: initials,
                             image: Image(nsImage: img),
-                            size: .large,
+                            size: CTAvatarSize.header,
                             colorSeed: seed)
                     .onTapGesture { pickAvatar() }
             } else {
-                CTHexAvatar(initials: initials, size: .large, colorSeed: seed)
+                CTHexAvatar(initials: initials, size: CTAvatarSize.header, colorSeed: seed)
                     .onTapGesture { pickAvatar() }
             }
 

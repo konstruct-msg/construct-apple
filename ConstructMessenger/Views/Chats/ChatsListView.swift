@@ -278,80 +278,39 @@ struct ChatsListView: View {
 
     /// Empty streams list — points users to invite paths (QR / Synaps).
     private var streamsEmptyState: some View {
-        VStack(spacing: CTLayout.sectionGap) {
-            Image(systemName: "bubble.left.and.bubble.right")
-                .font(CTIcon.font(CTIcon.overlay, weight: .light))
-                .foregroundStyle(Color.CT.textDim)
-                .padding(.bottom, 4)
-
-            Text(LocalizedStringKey("chats_empty_title"))
-                .font(CTFont.ui(16, weight: .bold))
-                .foregroundStyle(Color.CT.text)
-                .multilineTextAlignment(.center)
-
+        ContentUnavailableView {
+            Label {
+                Text(LocalizedStringKey("chats_empty_title"))
+                    .font(CTFont.headline)
+            } icon: {
+                Image(systemName: "bubble.left.and.bubble.right")
+            }
+        } description: {
             Text(LocalizedStringKey("chats_empty_subtitle"))
                 .font(CTFont.body)
-                .foregroundStyle(Color.CT.textDim)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, CTLayout.sectionGap)
-
-            VStack(spacing: CTLayout.chromeGap) {
-                emptyActionButton(
-                    titleKey: "chats_empty_scan_qr",
-                    systemImage: "qrcode.viewfinder"
-                ) {
-                    showingQRScanner = true
-                }
-                .accessibilityIdentifier(A11y.Chats.emptyScanQR)
-                emptyActionButton(
-                    titleKey: "chats_empty_show_qr",
-                    systemImage: "qrcode"
-                ) {
-                    showingMyQR = true
-                }
-                .accessibilityIdentifier(A11y.Chats.emptyShowQR)
-                emptyActionButton(
-                    titleKey: "chats_empty_open_synaps",
-                    systemImage: "circle.grid.cross"
-                ) {
-                    NotificationCenter.default.post(name: .openSynapsTab, object: nil)
-                }
-                .accessibilityIdentifier(A11y.Chats.emptyOpenSynaps)
+        } actions: {
+            Button {
+                showingQRScanner = true
+            } label: {
+                Label(LocalizedStringKey("chats_empty_scan_qr"), systemImage: "qrcode.viewfinder")
             }
-            .padding(.top, CTLayout.inlinePad)
-            .frame(maxWidth: 320)
+            .buttonStyle(.borderedProminent)
+            .accessibilityIdentifier(A11y.Chats.emptyScanQR)
+            Button {
+                showingMyQR = true
+            } label: {
+                Label(LocalizedStringKey("chats_empty_show_qr"), systemImage: "qrcode")
+            }
+            .accessibilityIdentifier(A11y.Chats.emptyShowQR)
+            Button {
+                NotificationCenter.default.post(name: .openSynapsTab, object: nil)
+            } label: {
+                Label(LocalizedStringKey("chats_empty_open_synaps"), systemImage: "circle.grid.cross")
+            }
+            .accessibilityIdentifier(A11y.Chats.emptyOpenSynaps)
         }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 48)
-        .padding(.horizontal, CTLayout.edgePad)
+        .font(CTFont.body)
         .accessibilityIdentifier(A11y.Chats.empty)
-    }
-
-    private func emptyActionButton(
-        titleKey: String,
-        systemImage: String,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            HStack(spacing: CTLayout.chromeGap) {
-                Image(systemName: systemImage)
-                    .font(CTIcon.font(CTIcon.nav))
-                Text(NSLocalizedString(titleKey, comment: "").uppercased())
-                    .font(CTFont.ui(12, weight: .bold))
-                    .tracking(1)
-                Spacer(minLength: 0)
-                Image(systemName: "chevron.right")
-                    .font(CTIcon.font(CTIcon.caption, weight: .semibold))
-                    .foregroundStyle(Color.CT.textDim)
-            }
-            .foregroundStyle(Color.CT.accent)
-            .padding(.horizontal, CTLayout.edgePad)
-            .frame(minHeight: CTLayout.controlHeight)
-            .background(Color.CT.bgMsg)
-            .clipShape(CTShape.card())
-            .overlay(CTShape.card().stroke(Color.CT.noise, lineWidth: 0.5))
-        }
-        .buttonStyle(.plain)
     }
 
     // MARK: - Actions

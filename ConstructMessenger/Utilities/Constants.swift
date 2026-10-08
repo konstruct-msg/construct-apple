@@ -27,24 +27,6 @@ struct AccountDeletionConfig {
     static let challengeTTLSeconds: TimeInterval = 60
 }
 
-// MARK: - Avatar Styling
-struct AvatarStyle {
-    static let chatSize: CGFloat = 56
-    static let settingsSize: CGFloat = 54
-    static let bubbleSize: CGFloat = 60
-    static let accountSize: CGFloat = 100
-
-    /// Current avatar clip shape. Change here to update all avatars app-wide.
-    /// Future: swap to HexagonShape() when the visual language is ready.
-    static func avatarShape(_ size: CGFloat = 0) -> Circle {
-        Circle()
-    }
-
-    /// Legacy alias — kept so existing call sites compile without changes.
-    @available(*, deprecated, renamed: "avatarShape")
-    static func squircle(_ size: CGFloat) -> Circle { avatarShape(size) }
-}
-
 // MARK: - Server Configuration
 struct ServerConfig {
     // Primary server URL - API Gateway (routes to all services)

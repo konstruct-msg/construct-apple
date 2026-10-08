@@ -671,8 +671,9 @@
 "shared_profile" = "Shared profile";
 
 // MARK: - Drafts
-"save_draft" = "Save Draft";
+"save_draft" = "Save draft";
 "drafts" = "Drafts";
+"drafts_empty_title" = "No drafts";
 "drafts_stored_locally" = "Drafts are stored locally on this device.";
 
 // MARK: - QR Code

@@ -608,6 +608,7 @@
 // MARK: - Drafts
 "save_draft" = "Enregistrer le brouillon";
 "drafts" = "Brouillons";
+"drafts_empty_title" = "Aucun brouillon";
 "drafts_stored_locally" = "Les brouillons sont stockés localement sur cet appareil.";
 
 // MARK: - QR Code

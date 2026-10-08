@@ -509,21 +509,29 @@ struct CTRowIcon: View {
 }
 
 
+// MARK: - Avatar sizes
+
+/// Every avatar is one of these (TODO 130). Each screen used to pick its own number — 28, 36, 40,
+/// 44, 52, 56, 72, 80, 96, 100 — so the same person changed size from screen to screen.
+enum CTAvatarSize {
+    /// A secondary row (the Desktop mini call bar).
+    static let compact: CGFloat = 32
+    /// A list row: chats, recents, people, requests.
+    static let row: CGFloat = 40
+    /// The person at the top of a card: the settings profile row, a shared profile.
+    static let header: CGFloat = 56
+    /// The one person a screen is about: a contact profile, the account, a call.
+    static let hero: CGFloat = 96
+}
+
 // MARK: - CTHexAvatar
 
 struct CTHexAvatar: View {
     var initials: String
     var image: Image? = nil
-    var size: AvatarSize = .medium
+    var size: CGFloat = CTAvatarSize.row
     /// Seed for deterministic color (pass userId or username). Defaults to initials.
     var colorSeed: String? = nil
-
-    enum AvatarSize: CGFloat {
-        case small  = 32
-        case medium = 40
-        case large  = 56
-        case xlarge = 80
-    }
 
     private var accentColor: Color {
         Color.hexagonAccent(for: colorSeed ?? initials)
@@ -535,7 +543,7 @@ struct CTHexAvatar: View {
                 image
                     .resizable()
                     .scaledToFill()
-                    .frame(width: size.rawValue, height: size.rawValue)
+                    .frame(width: size, height: size)
                     .clipShape(Circle())
                 Circle()
                     .stroke(accentColor, lineWidth: 1)
@@ -548,7 +556,7 @@ struct CTHexAvatar: View {
                     .stroke(accentColor, lineWidth: 1)
             }
         }
-        .frame(width: size.rawValue, height: size.rawValue)
+        .frame(width: size, height: size)
     }
 }
 
@@ -608,47 +616,6 @@ struct CTNoise: View {
 }
 
 // MARK: - Separators
-
-// MARK: - Mode Selector (tri-state segmented control)
-
-/// A CT-styled segmented control for selecting between modes (e.g. VEIL OFF|AUTO|ON).
-/// Accent fill on the selected segment; equal-width options.
-struct CTModeSelector<T: Hashable>: View {
-    @Binding var selection: T
-    let options: [T]
-    let labels: [T: String]
-    /// Fixed total width. Pass `nil` to expand to the parent’s max width (media picker tray).
-    var width: CGFloat? = 180
-
-    var body: some View {
-        let control = HStack(spacing: 0) {
-            ForEach(options, id: \.self) { option in
-                let isSelected = selection == option
-                Button {
-                    selection = option
-                } label: {
-                    Text(labels[option] ?? "")
-                        .font(CTFont.secondary)
-                        .foregroundColor(isSelected ? Color.CT.bg : Color.CT.textDim)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 6)
-                        .background(isSelected ? Color.CT.accent : Color.clear)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.8)
-                }
-                .buttonStyle(.plain)
-            }
-        }
-        .overlay(CTShape.card().stroke(Color.CT.accent.opacity(0.4), lineWidth: 0.5))
-        .clipShape(CTShape.card())
-
-        if let width {
-            control.frame(width: width)
-        } else {
-            control.frame(maxWidth: .infinity)
-        }
-    }
-}
 
 // MARK: - Separator
 

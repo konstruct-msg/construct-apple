@@ -328,12 +328,13 @@ struct MediaPickerSheet: View {
         }
     }
 
-    /// Same control family as VEIL OFF|AUTO|ON (`CTModeSelector`).
+    /// The system segmented control, like the VEIL mode in network settings.
     @ViewBuilder
     private var qualitySegment: some View {
         switch qualityMode {
         case .photo:
-            CTModeSelector(
+            Picker(
+                LocalizedStringKey("quality_original"),
                 selection: Binding(
                     get: { sendOriginal ? MediaQuality.original : MediaQuality.compressed },
                     set: { q in
@@ -341,31 +342,30 @@ struct MediaPickerSheet: View {
                         sendOriginal = hd
                         vm.setPhotoHD(hd)
                     }
-                ),
-                options: [MediaQuality.compressed, .original],
-                labels: [
-                    .compressed: NSLocalizedString("quality_compressed", comment: ""),
-                    .original: NSLocalizedString("quality_original", comment: "")
-                ],
-                width: nil
-            )
+                )
+            ) {
+                Text(LocalizedStringKey("quality_compressed")).tag(MediaQuality.compressed)
+                Text(LocalizedStringKey("quality_original")).tag(MediaQuality.original)
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
         case .video:
-            CTModeSelector(
+            Picker(
+                LocalizedStringKey("quality_original"),
                 selection: Binding(
                     get: { vm.trayVideoQuality },
                     set: { q in
                         videoQualityRaw = q.rawValue
                         vm.setVideoQualityForAllSelected(q)
                     }
-                ),
-                options: VideoQuality.allCases,
-                labels: [
-                    .p720: NSLocalizedString("media_picker_video_720", comment: ""),
-                    .p1080: NSLocalizedString("media_picker_video_1080", comment: ""),
-                    .original: NSLocalizedString("quality_original", comment: "")
-                ],
-                width: nil
-            )
+                )
+            ) {
+                Text(LocalizedStringKey("media_picker_video_720")).tag(VideoQuality.p720)
+                Text(LocalizedStringKey("media_picker_video_1080")).tag(VideoQuality.p1080)
+                Text(LocalizedStringKey("quality_original")).tag(VideoQuality.original)
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
         }
     }
 

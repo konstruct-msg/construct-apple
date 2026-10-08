@@ -28,13 +28,13 @@ struct ProfileShareBubbleView: View {
                 CTHexAvatar(
                     initials: initials,
                     image: Image(platformImage: uiImage),
-                    size: .large
+                    size: CTAvatarSize.header
                 )
             } else {
                 CTHexAvatar(
                     initials: initials,
                     image: nil,
-                    size: .large,
+                    size: CTAvatarSize.header,
                     colorSeed: profileData.displayName
                 )
             }

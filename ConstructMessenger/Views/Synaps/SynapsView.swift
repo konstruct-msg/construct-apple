@@ -347,29 +347,20 @@ struct SynapsView: View {
 
     // MARK: - Empty state
 
+    // The QR scan (nav bar / iPad rail) and the search bar above are the real entry points; the
+    // description already names both. No duplicate action buttons here.
     private var emptyState: some View {
-        VStack(spacing: CTLayout.sectionGap) {
-            Image(systemName: "circle.grid.cross")
-                .font(CTIcon.font(CTIcon.overlay, weight: .light))
-                .foregroundStyle(Color.CT.textDim)
-                .padding(.bottom, 4)
-
-            Text(LocalizedStringKey("synapses_empty_title"))
-                .font(CTFont.ui(16, weight: .bold))
-                .foregroundStyle(Color.CT.text)
-                .multilineTextAlignment(.center)
-
-            // The QR scan (nav bar / iPad rail) and the search bar above are the
-            // real entry points; the subtitle already names both. No duplicate
-            // action buttons here.
+        ContentUnavailableView {
+            Label {
+                Text(LocalizedStringKey("synapses_empty_title"))
+                    .font(CTFont.headline)
+            } icon: {
+                Image(systemName: "circle.grid.cross")
+            }
+        } description: {
             Text(LocalizedStringKey("synapses_empty_subtitle"))
                 .font(CTFont.body)
-                .foregroundStyle(Color.CT.textDim)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, CTLayout.sectionGap)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding(.horizontal, CTLayout.edgePad)
     }
 
     // MARK: - Remote Search Card
@@ -560,14 +551,7 @@ struct SynapsView: View {
                     selectedRequest = request
                 } label: {
                     HStack(spacing: 12) {
-                        ZStack {
-                            Circle()
-                                .fill(Color.CT.bgMsg)
-                                .frame(width: 36, height: 36)
-                            IdenticonView(seed: request.fromUserId)
-                                .frame(width: 28, height: 28)
-                                .clipShape(Circle())
-                        }
+                        MainAvatarView(userId: request.fromUserId, size: CTAvatarSize.row)
                         VStack(alignment: .leading, spacing: 2) {
                             if let name = request.displayName, !name.isEmpty {
                                 Text(name)

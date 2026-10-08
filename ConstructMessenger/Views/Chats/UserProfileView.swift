@@ -133,7 +133,7 @@ struct UserProfileView: View {
                 userId: user.id,
                 displayName: user.resolvedDisplayName,
                 image: avatarImage,
-                size: 96,
+                size: CTAvatarSize.hero,
                 isActive: false
             )
             // Tap to view the avatar full-screen (only when there is an image).
