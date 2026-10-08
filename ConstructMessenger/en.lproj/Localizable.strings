@@ -107,9 +107,9 @@
 "share_contact_footer" = "Share your QR code or link to let others add you as a contact";
 
 "pin_code" = "PIN Code";
-"enable_pin_code" = "Enable PIN Code";
-"disable_pin_code" = "Disable PIN Code";
-"change_pin_code" = "Change PIN Code";
+"enable_pin_code" = "Enable PIN code";
+"disable_pin_code" = "Disable PIN code";
+"change_pin_code" = "Change PIN code";
 "enter_pin_code" = "Enter PIN Code";
 "create_pin_code" = "Create PIN Code";
 "confirm_pin_code" = "Confirm PIN Code";
@@ -121,7 +121,7 @@
 "pin_reset_explain" = "All local data will be erased from this device. Your identity can be restored later with your seed phrase, only if recovery was set up.";
 "pin_reset_action" = "Reset";
 "pin_reset_countdown" = "Resetting in %d… enter your PIN to cancel";
-"lock_delay" = "Lock After";
+"lock_delay" = "Lock after";
 "lock_now" = "Lock Now";
 "lock_delay_immediate" = "Immediately";
 "lock_delay_30s" = "30 Seconds";
@@ -279,7 +279,7 @@
 "warning" = "Warning";"DANGER_ZONE" = "Danger Zone";
 "account_recovery" = "Account Recovery";
 "discovery" = "Discovery";
-"account_recovery_seed" = "Identity Recovery (Seed Phrase)";
+"account_recovery_seed" = "Recovery phrase";
 "account_recovery_seed_hint" = "Restore access using your recovery seed phrase.";
 "account_recovery_seed_coming_soon" = "Seed phrase recovery will be available in a future update.";
 
@@ -287,9 +287,9 @@
 "duress_pin" = "Destruction PIN";
 "duress_pin_hint" = "A separate PIN that silently wipes all data when entered on the lock screen.";
 "duress_pin_coming_soon" = "Destruction PIN will be available in a future update.";
-"enable_duress_pin" = "Enable Destruction PIN";
-"disable_duress_pin" = "Disable Destruction PIN";
-"duress_pin_change" = "Change Destruction PIN";
+"enable_duress_pin" = "Enable destruction PIN";
+"disable_duress_pin" = "Disable destruction PIN";
+"duress_pin_change" = "Change destruction PIN";
 "create_duress_pin" = "Create Destruction PIN";
 "confirm_duress_pin" = "Confirm Destruction PIN";
 "duress_pin_setup_warning" = "When entered on the lock screen, this PIN silently wipes all local data and attempts to delete your account from the server. This action is irreversible.";
@@ -779,7 +779,7 @@
 "flood_banner_subtitle" = "Notifications from this contact are paused. Review and decide.";
 "session_at_risk_title" = "Contact's keys aren't fresh";
 "session_at_risk_subtitle" = "They've been offline a while. Messages still send securely; keys refresh when they're back.";
-"lockdown_mode" = "Lockdown Mode";
+"lockdown_mode" = "Lockdown mode";
 "lockdown_active_since" = "Active since %@";
 "lockdown_mode_hint" = "Only contacts added before activation receive notifications. New senders are silently saved — you can review them anytime.";
 "allow" = "Allow";
@@ -926,12 +926,12 @@
 "logout_no_backup_proceed_action" = "Sign Out Anyway";
 
 // MARK: - Discoverable / User Search
-"searchable_toggle_title" = "searchable by username";
+"searchable_toggle_title" = "Searchable by username";
 "searchable_toggle_footer" = "When enabled, anyone who knows your exact username can find you. This cannot be used to guess or enumerate usernames — only 100% exact matches work. Off by default.";
 "searchable_confirm_title" = "enable search?";
 "searchable_confirm_message" = "Your username will be findable by anyone who types it exactly. Disable at any time in Security settings.";
 "searchable_confirm_action" = "enable";
-"searchable_no_username_hint" = "set a username first to enable search";
+"searchable_no_username_hint" = "Set a username first to turn on search.";
 "username_not_set" = "No username";
 "searchable_indicator" = "Searchable";
 "searchable_indicator_off" = "Not searchable";
@@ -967,16 +967,16 @@
 
 // Stealth mode
 "stealth_section" = "stealth";
-"stealth_title" = "sender anonymity";
+"stealth_title" = "Sender anonymity";
 "stealth_always_on_hint" = "Konstruct never learns who sent a message. Always on — there is no switch, and nothing to keep topped up.";
 "stealth_off_hint" = "Off — your sends disclose who you are to Konstruct. Debug override only.";
 
 
 // Key Transparency
-"kt_section" = "key transparency";
-"kt_status" = "merkle log";
-"kt_verified" = "verified";
-"kt_warning" = "warning";
+"kt_section" = "Key transparency";
+"kt_status" = "Merkle log";
+"kt_verified" = "Verified";
+"kt_warning" = "Warning";
 
 // Key-change trust event (thread 5.4)
 "key_change_banner_title_failed" = "Identity check failed";
@@ -994,7 +994,7 @@
 "identity_fingerprint_unknown" = "Not pinned yet";
 "identity_fingerprint_copy_hint" = "Copies fingerprint to clipboard";
 "identity_fingerprint_copied" = "Copied";
-"kt_no_data" = "no data";
+"kt_no_data" = "No data";
 "kt_hint" = "Public identity keys are recorded in an append-only log so tampering can be detected.";
 "kt_failure_hint" = "key transparency verification failed — possible tampering detected.";
 "kt_last_failure_at" = "last failure: %@";

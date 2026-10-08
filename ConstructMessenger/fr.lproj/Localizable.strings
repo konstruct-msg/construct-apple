@@ -279,7 +279,7 @@
 "warning" = "Avertissement";
 "account_recovery" = "Récupération de compte";
 "discovery" = "Découverte";
-"account_recovery_seed" = "Récupération d'identité (phrase de récupération)";
+"account_recovery_seed" = "Phrase de récupération";
 "account_recovery_seed_hint" = "Restaurez l'accès en utilisant votre phrase de récupération.";
 "account_recovery_seed_coming_soon" = "La récupération par phrase de récupération sera disponible dans une future mise à jour.";
 
@@ -896,12 +896,12 @@
 "logout_no_backup_message" = "Vous n’avez pas encore noté votre phrase de récupération. Si vous vous déconnectez sans elle, vous risquez de perdre définitivement cette identité et ses messages.";
 "logout_no_backup_setup_action" = "Configurer la récupération d’abord";
 "logout_no_backup_proceed_action" = "Se déconnecter quand même";
-"searchable_toggle_title" = "trouvable par nom d’utilisateur";
+"searchable_toggle_title" = "Trouvable par nom d’utilisateur";
 "searchable_toggle_footer" = "Une fois activé, toute personne qui connaît votre nom d’utilisateur exact peut vous trouver. Cela ne permet pas de deviner ni d’énumérer les noms — seules les correspondances exactes fonctionnent. Désactivé par défaut.";
 "searchable_confirm_title" = "activer la recherche ?";
 "searchable_confirm_message" = "Votre nom d’utilisateur sera trouvable par quiconque le tape exactement. Désactivable à tout moment dans les réglages de Sécurité.";
 "searchable_confirm_action" = "activer";
-"searchable_no_username_hint" = "définissez d’abord un nom d’utilisateur pour activer la recherche";
+"searchable_no_username_hint" = "Définissez d’abord un nom d’utilisateur pour activer la recherche.";
 "username_not_set" = "Aucun nom d’utilisateur";
 "searchable_indicator" = "Trouvable";
 "searchable_indicator_off" = "Non trouvable";
@@ -931,13 +931,13 @@
 "safety_numbers_mismatch_body" = "Cessez de communiquer et vérifiez votre connexion. Une différence peut indiquer que quelqu’un intercepte vos messages.";
 "safety_numbers_unavailable" = "indisponible — identité non initialisée";
 "stealth_section" = "furtivité";
-"stealth_title" = "anonymat de l’expéditeur";
+"stealth_title" = "Anonymat de l’expéditeur";
 "stealth_always_on_hint" = "Konstruct n’apprend jamais qui a envoyé un message. Toujours actif — il n’y a pas d’interrupteur, et rien à recharger.";
 "stealth_off_hint" = "Désactivé — vos envois révèlent qui vous êtes à Konstruct. Surcharge de débogage uniquement.";
-"kt_section" = "transparence des clés";
-"kt_status" = "journal merkle";
-"kt_verified" = "vérifié";
-"kt_warning" = "avertissement";
+"kt_section" = "Transparence des clés";
+"kt_status" = "Journal Merkle";
+"kt_verified" = "Vérifié";
+"kt_warning" = "Avertissement";
 "key_change_banner_title_failed" = "Vérification d’identité échouée";
 "key_change_banner_subtitle_failed" = "Nous n’avons pas pu confirmer la clé de sécurité de cette personne auprès du journal de transparence. Vérifiez en personne si possible.";
 "key_change_verify" = "Vérifier";
@@ -951,7 +951,7 @@
 "identity_fingerprint_unknown" = "Pas encore épinglée";
 "identity_fingerprint_copy_hint" = "Copie l’empreinte dans le presse-papiers";
 "identity_fingerprint_copied" = "Copiée";
-"kt_no_data" = "aucune donnée";
+"kt_no_data" = "Aucune donnée";
 "kt_hint" = "Les clés d’identité publiques sont inscrites dans un journal en ajout seul, ce qui rend toute altération détectable.";
 "kt_failure_hint" = "la vérification de transparence des clés a échoué — altération possible détectée.";
 "kt_last_failure_at" = "dernier échec : %@";

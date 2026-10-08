@@ -391,7 +391,7 @@
 // Security — Recovery & Duress (from EN)
 "account_recovery" = "Восстановление аккаунта";
 "discovery" = "Обнаруживаемость";
-"account_recovery_seed" = "Восстановление идентичности по фразе";
+"account_recovery_seed" = "Фраза восстановления";
 "account_recovery_seed_hint" = "Восстановите доступ с помощью фразы восстановления.";
 "account_recovery_seed_coming_soon" = "Восстановление по фразе появится в одном из следующих обновлений.";
 
@@ -936,12 +936,12 @@
 "logout_no_backup_proceed_action" = "Выйти всё равно";
 
 // MARK: - Discoverable / User Search
-"searchable_toggle_title" = "видимость в поиске";
+"searchable_toggle_title" = "Видимость в поиске";
 "searchable_toggle_footer" = "Когда включено, любой, кто знает ваш точный username, может вас найти. Угадать или перебрать username невозможно — срабатывает только 100% совпадение. По умолчанию выключено.";
 "searchable_confirm_title" = "включить поиск?";
 "searchable_confirm_message" = "Ваш username станет доступен для поиска всем, кто введёт его точно. Отключить можно в любой момент в настройках безопасности.";
 "searchable_confirm_action" = "включить";
-"searchable_no_username_hint" = "сначала задайте username";
+"searchable_no_username_hint" = "Сначала задайте имя пользователя, чтобы включить поиск.";
 "username_not_set" = "Имя пользователя не задано";
 "searchable_indicator" = "В поиске";
 "searchable_indicator_off" = "Не в поиске";
@@ -977,17 +977,17 @@
 
 // Stealth mode
 "stealth_section" = "стелс";
-"stealth_title" = "анонимность отправителя";
+"stealth_title" = "Анонимность отправителя";
 "stealth_always_on_hint" = "Конструкт никогда не узнаёт, кто отправил сообщение. Работает всегда — выключателя нет, и пополнять ничего не нужно.";
 "stealth_off_hint" = "Выключено — ваши отправки раскрывают Конструкту, кто вы. Только для отладки.";
 
 // Короткие метки для CTModeSelector (переключатель режимов) в настройках stealth.
 
 // Key Transparency
-"kt_section" = "прозрачность ключей";
-"kt_status" = "merkle-лог";
-"kt_verified" = "подтверждено";
-"kt_warning" = "внимание";
+"kt_section" = "Прозрачность ключей";
+"kt_status" = "Merkle-лог";
+"kt_verified" = "Подтверждено";
+"kt_warning" = "Внимание";
 
 // Key-change trust event (thread 5.4)
 "key_change_banner_title_failed" = "Проверка личности не удалась";
@@ -1005,7 +1005,7 @@
 "identity_fingerprint_unknown" = "Ещё не закреплён";
 "identity_fingerprint_copy_hint" = "Копирует отпечаток в буфер";
 "identity_fingerprint_copied" = "Скопировано";
-"kt_no_data" = "нет данных";
+"kt_no_data" = "Нет данных";
 "kt_hint" = "каждый ключ идентификации постоянно записывается в append-only merkle-лог. подделка криптографически обнаруживаема.";
 "kt_failure_hint" = "проверка прозрачности ключей не прошла — возможна подделка.";
 "kt_last_failure_at" = "последний сбой: %@";

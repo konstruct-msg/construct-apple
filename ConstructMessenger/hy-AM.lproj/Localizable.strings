@@ -279,7 +279,7 @@
 "warning" = "Զգուշացում";"DANGER_ZONE" = "Վտանգի գոտի";
 "account_recovery" = "Հաշվի վերականգնում";
 "discovery" = "Հայտնաբերում";
-"account_recovery_seed" = "Ինքնության վերականգնում (սերմնաբառ)";
+"account_recovery_seed" = "Վերականգնման արտահայտություն";
 "account_recovery_seed_hint" = "Վերականգնեք հասանելիությունը ձեր վերականգնման սերմնաբառով։";
 "account_recovery_seed_coming_soon" = "Սերմնաբառով վերականգնումը հասանելի կլինի ապագա թարմացման մեջ։";
 
@@ -926,12 +926,12 @@
 "logout_no_backup_proceed_action" = "Դուրս գալ միևնույն է";
 
 // MARK: - Discoverable / User Search
-"searchable_toggle_title" = "որոնելի օգտանունով";
+"searchable_toggle_title" = "Որոնելի օգտանունով";
 "searchable_toggle_footer" = "Միացված լինելու դեպքում ձեզ կարող է գտնել յուրաքանչյուրը, ով գիտի ձեր ճշգրիտ օգտանունը։ Սա չի կարող օգտագործվել օգտանուններ գուշակելու կամ թվարկելու համար — աշխատում են միայն 100% ճշգրիտ համընկնումները։ Լռելյայն անջատված է։";
 "searchable_confirm_title" = "միացնե՞լ որոնումը։";
 "searchable_confirm_message" = "Ձեր օգտանունը կգտնվի յուրաքանչյուրի կողմից, ով այն մուտքագրի ճշգրիտ։ Կարող եք անջատել ցանկացած պահի Անվտանգության կարգավորումներում։";
 "searchable_confirm_action" = "միացնել";
-"searchable_no_username_hint" = "նախ սահմանեք օգտանուն՝ որոնումը միացնելու համար";
+"searchable_no_username_hint" = "Նախ սահմանեք օգտանուն՝ որոնումը միացնելու համար։";
 "username_not_set" = "Օգտանուն չկա";
 "searchable_indicator" = "Որոնելի";
 "searchable_indicator_off" = "Ոչ որոնելի";
@@ -967,16 +967,16 @@
 
 // Stealth mode
 "stealth_section" = "թաքնվածություն";
-"stealth_title" = "ուղարկողի անանունություն";
+"stealth_title" = "Ուղարկողի անանունություն";
 "stealth_always_on_hint" = "Կոնստրուկտը երբեք չի իմանում, թե ով է ուղարկել հաղորդագրությունը։ Միշտ միացված է — անջատիչ չկա և լիցքավորելու բան չկա։";
 "stealth_off_hint" = "Անջատված — ձեր ուղարկումները բացահայտում են, թե ով եք դուք Կոնստրուկտին։ Միայն վրիպազերծման շրջանցում։";
 
 
 // Key Transparency
-"kt_section" = "բանալիների թափանցիկություն";
-"kt_status" = "merkle մատյան";
-"kt_verified" = "ստուգված";
-"kt_warning" = "զգուշացում";
+"kt_section" = "Բանալիների թափանցիկություն";
+"kt_status" = "Merkle մատյան";
+"kt_verified" = "Ստուգված";
+"kt_warning" = "Զգուշացում";
 
 // Key-change trust event (thread 5.4)
 "key_change_banner_title_failed" = "Ինքնության ստուգումը ձախողվեց";
@@ -994,7 +994,7 @@
 "identity_fingerprint_unknown" = "Դեռ ամրացված չէ";
 "identity_fingerprint_copy_hint" = "Պատճենում է մատնահետքը սեղմատախտակ";
 "identity_fingerprint_copied" = "Պատճենված է";
-"kt_no_data" = "տվյալներ չկան";
+"kt_no_data" = "Տվյալներ չկան";
 "kt_hint" = "Հանրային ինքնության բանալիները գրանցվում են միայն ավելացվող մատյանում, որպեսզի միջամտությունը հայտնաբերվի։";
 "kt_failure_hint" = "բանալիների թափանցիկության ստուգումը ձախողվեց — հնարավոր միջամտություն։";
 "kt_last_failure_at" = "վերջին ձախողում՝ %@";

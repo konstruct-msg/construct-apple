@@ -690,13 +690,18 @@ struct CTSectionGroup<Content: View>: View {
 /// padding.
 struct CTSectionFooter: View {
     let key: String
+    /// Dim by default; the danger colour where the note is a warning about the rows above.
+    var color: Color = Color.CT.textDim
 
-    init(_ key: String) { self.key = key }
+    init(_ key: String, color: Color = Color.CT.textDim) {
+        self.key = key
+        self.color = color
+    }
 
     var body: some View {
         Text(LocalizedStringKey(key))
             .font(CTFont.caption)
-            .foregroundStyle(Color.CT.textDim)
+            .foregroundStyle(color)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, CTLayout.edgePad + CTLayout.inlinePad)
             .padding(.top, CTLayout.inlinePad / 2)

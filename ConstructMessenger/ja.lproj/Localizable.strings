@@ -260,7 +260,7 @@
 "warning" = "警告";"DANGER_ZONE" = "危険地帯";
 "account_recovery" = "アイデンティティ復旧";
 "discovery" = "発見";
-"account_recovery_seed" = "アイデンティティ復旧 (シードフレーズ)";
+"account_recovery_seed" = "復旧フレーズ";
 "account_recovery_seed_hint" = "復旧シードフレーズを使用してアクセスを復元します。";
 "account_recovery_seed_coming_soon" = "シードフレーズによる復旧は、今後のアップデートで利用可能になる予定です。";
 
@@ -867,9 +867,9 @@
 // Key Transparency
 "kt_section" = "キーの透明性";
 "kt_status" = "メルクル・ログ";
-"kt_verified" = "[✓] 検証済み";
-"kt_warning" = "[!] 警告";
-"kt_no_data" = "[–] データなし";
+"kt_verified" = "検証済み";
+"kt_warning" = "警告";
+"kt_no_data" = "データなし";
 "kt_hint" = "すべてのアイデンティティキーは、追記専用のメルクル・ログに永久に記録されます。改ざんは暗号技術により検出可能です。";
 "kt_failure_hint" = "キーの透明性の検証に失敗しました — 改ざんが検出された可能性があります。";
 "kt_last_failure_at" = "最後の失敗: %@";

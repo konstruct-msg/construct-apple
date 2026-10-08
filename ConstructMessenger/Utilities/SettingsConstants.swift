@@ -160,22 +160,9 @@ enum SecuritySettingsLayout {
     static let compactRowVerticalPadding: CGFloat = CTLayout.chromeGap
     static let rowContentSpacing: CGFloat = CTLayout.chromeGap
     static let sectionVerticalPadding: CGFloat = CTLayout.inlinePad
-    static let hintTopPadding: CGFloat = 6
-    static let hintBottomPadding: CGFloat = CTLayout.chromeGap
-    static let hintCompactTopPadding: CGFloat = 2
     static let hintDisabledOpacity: Double = 0.6
     static let lockStatusSpacing: CGFloat = 2
     static let recoveryStatusSpacing: CGFloat = 2
-    static let separatorOpacity: Double = 0.4
-}
-
-enum KeyTransparencySettingsLayout {
-    static let rowHorizontalPadding: CGFloat = CTLayout.sectionGap
-    static let rowVerticalPadding: CGFloat = CTLayout.chromeGap
-    static let hintHorizontalPadding: CGFloat = CTLayout.edgePad
-    static let hintTopPadding: CGFloat = 2
-    static let hintBottomPadding: CGFloat = CTLayout.chromeGap
-    static let statusTrailingPadding: CGFloat = 4
 }
 
 enum DevicesSettingsLayout {
