@@ -609,47 +609,6 @@ struct CTNoise: View {
 
 // MARK: - Separators
 
-// MARK: - Mode Selector (tri-state segmented control)
-
-/// A CT-styled segmented control for selecting between modes (e.g. VEIL OFF|AUTO|ON).
-/// Accent fill on the selected segment; equal-width options.
-struct CTModeSelector<T: Hashable>: View {
-    @Binding var selection: T
-    let options: [T]
-    let labels: [T: String]
-    /// Fixed total width. Pass `nil` to expand to the parent’s max width (media picker tray).
-    var width: CGFloat? = 180
-
-    var body: some View {
-        let control = HStack(spacing: 0) {
-            ForEach(options, id: \.self) { option in
-                let isSelected = selection == option
-                Button {
-                    selection = option
-                } label: {
-                    Text(labels[option] ?? "")
-                        .font(CTFont.secondary)
-                        .foregroundColor(isSelected ? Color.CT.bg : Color.CT.textDim)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 6)
-                        .background(isSelected ? Color.CT.accent : Color.clear)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.8)
-                }
-                .buttonStyle(.plain)
-            }
-        }
-        .overlay(CTShape.card().stroke(Color.CT.accent.opacity(0.4), lineWidth: 0.5))
-        .clipShape(CTShape.card())
-
-        if let width {
-            control.frame(width: width)
-        } else {
-            control.frame(maxWidth: .infinity)
-        }
-    }
-}
-
 // MARK: - Separator
 
 struct CTSep: View {

@@ -860,7 +860,7 @@
 // Stealth mode
 "stealth_section" = "ステルス";
 
-// Short labels for CTModeSelector
+// Short labels for the VEIL mode segmented control
 
 // Key Transparency
 "kt_section" = "キーの透明性";
