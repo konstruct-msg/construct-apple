@@ -340,7 +340,14 @@ final class VeilFrontExternalDialer: @unchecked Sendable {
 
     private func makeConnection(callbackQueue: DispatchQueue) -> NWConnection {
         let tls = NWProtocolTLS.Options()
-        sec_protocol_options_set_min_tls_protocol_version(tls.securityProtocolOptions, .TLSv13)
+        // Offer TLS 1.2+1.3 (not 1.3-only) so our ClientHello sits in the largest
+        // iOS crowd — a plain Safari/NWConnection hello — rather than a rarer
+        // TLS1.3-only profile. On-wire measurement (2026-10-08, iOS 27 / Rostelecom):
+        // forcing .TLSv13 yielded a distinct TLS1.3-only fingerprint (JA3
+        // 245862ef…, 3 ciphers, no EMS/renegotiation_info) whereas Safari offers
+        // 1.2+1.3 (JA3 ecdf4f49…). The relay still negotiates TLS 1.3, so this is a
+        // fingerprint/blending change only — not a protocol downgrade.
+        sec_protocol_options_set_min_tls_protocol_version(tls.securityProtocolOptions, .TLSv12)
         sec_protocol_options_add_tls_application_protocol(tls.securityProtocolOptions, "h2")
         sec_protocol_options_set_tls_server_name(tls.securityProtocolOptions, sni)
         sec_protocol_options_set_verify_block(
