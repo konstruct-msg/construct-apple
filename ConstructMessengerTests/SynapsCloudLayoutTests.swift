@@ -4,7 +4,7 @@
 //
 //  The Synaps cloud is a hexagonal spiral from the centre (TODO 74): the most active contact in
 //  the middle, rings of 6, 12, 18 around it, nothing overlapping, and a cloud that grows as √n
-//  rather than as a column four wide.
+//  rather than as a column four wide. The lens over it keeps everyone inside an oval.
 //
 
 import XCTest
@@ -90,6 +90,51 @@ final class SynapsCloudLayoutTests: XCTestCase {
         XCTAssertLessThanOrEqual(2 * half.height * scale, visible.height)
         XCTAssertEqual(SynapsCloudLayout(contacts: [record("x")], metrics: [:]).fitScale(in: visible), 1,
                        "one contact is never blown up past 1:1")
+    }
+
+    // MARK: Lens
+
+    private let lens = SynapsLens(radii: CGSize(width: 180, height: 340))
+    private let centre = CGPoint(x: 200, y: 400)
+
+    /// However far out a contact is laid, it is drawn inside the oval. Mutation: drop the tanh —
+    /// a contact a thousand points out is drawn a thousand points out.
+    func testNothingIsDrawnPastTheOval() {
+        for angle in stride(from: 0.0, to: 2 * .pi, by: .pi / 12) {
+            for d in [10.0, 200, 1_000, 10_000] {
+                let p = CGPoint(x: centre.x + d * cos(angle), y: centre.y + d * sin(angle))
+                let drawn = lens.draw(p, centre: centre)
+                let ux = (drawn.point.x - centre.x) / lens.radii.width
+                let uy = (drawn.point.y - centre.y) / lens.radii.height
+                XCTAssertLessThanOrEqual(hypot(ux, uy), 1.000_1)
+                XCTAssertLessThan(drawn.rim, 1.000_1)
+            }
+        }
+    }
+
+    /// The middle is left alone and order outwards is kept. Mutation: compress linearly by a
+    /// constant — the centre ring moves; or make drawnRim non-monotonic — the order breaks.
+    func testTheMiddleIsUntouchedAndOrderIsKept() {
+        let near = lens.draw(CGPoint(x: centre.x + 5, y: centre.y), centre: centre).point
+        XCTAssertEqual(near.x, centre.x + 5, accuracy: 0.01)
+        var last: CGFloat = 0
+        for d in stride(from: 20.0, through: 2_000, by: 20) {
+            let rim = lens.draw(CGPoint(x: centre.x, y: centre.y + d), centre: centre).rim
+            XCTAssertGreaterThan(rim, last)
+            last = rim
+        }
+    }
+
+    /// Full size and full name in the middle; small, dim and unnamed at the edge. Mutation: swap
+    /// the smoothstep bounds of any one of the three.
+    func testSizeOpacityAndNameFollowTheRim() {
+        XCTAssertEqual(SynapsLens.scale(atRim: 0), 1)
+        XCTAssertEqual(SynapsLens.scale(atRim: 1), SynapsLens.rimScale, accuracy: 0.001)
+        XCTAssertEqual(SynapsLens.opacity(atRim: 0.7), 1)
+        XCTAssertEqual(SynapsLens.opacity(atRim: 1), SynapsLens.rimOpacity, accuracy: 0.001)
+        // The first ring (one pitch out) is named, the second (two) is not.
+        XCTAssertEqual(SynapsLens.labelOpacity(atDistance: pitch), 1)
+        XCTAssertEqual(SynapsLens.labelOpacity(atDistance: pitch * 2), 0)
     }
 
     private func record(_ id: String) -> ContactRecord {

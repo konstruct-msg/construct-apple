@@ -22,10 +22,11 @@ import CoreData
 struct SynapsCloudLayout {
     /// Centre-to-centre distance of two neighbours in a row, at scale 1.
     static let pitch: CGFloat = 96
-    /// Rows sit further apart than pure hex packing (√3/2): a name of up to two lines is drawn
-    /// under each avatar and must clear the row below, the centre one at its largest (frequency
-    /// and proximity both up). At 1.08, with one line, the centre name touched the ring under it.
-    static let rowStretch: CGFloat = 1.35
+    /// Rows sit a little further apart than pure hex packing (√3/2): the names near the centre
+    /// are drawn under their circles and must clear the ring below. Only those are named (the
+    /// lens fades the rest), which is what lets this stay close to 1 and the cloud round — at
+    /// 1.35, with every contact named, it read as rows of a grid.
+    static let rowStretch: CGFloat = 1.15
 
     struct Item: Identifiable {
         let id: String
@@ -96,6 +97,69 @@ struct SynapsCloudLayout {
         guard half.width > 0, half.height > 0, visible.width > 0, visible.height > 0 else { return 1 }
         let fit = Swift.min(visible.width / (2 * half.width), visible.height / (2 * half.height))
         return Swift.min(fit * 0.92, 1)
+    }
+}
+
+// MARK: - Lens
+
+/// The Apple Watch lens over the cloud (TODO 74): a contact keeps its size near the middle of
+/// the visible area and shrinks towards the edge, and is pulled in as it goes so the cloud reads
+/// as one round shape rather than as the grid it is laid out on. It works on where a contact is
+/// on screen, so panning moves contacts through the lens, as on the watch.
+///
+/// The lens is an oval filling the visible area, not a circle: a phone's visible area is twice
+/// as tall as it is wide, and a circle as wide as the screen left the top and bottom thirds
+/// empty. Distances are measured in units of the radius along each axis, so "how far out" is
+/// one number, `rim`: 0 in the middle, 1 at the oval's edge.
+struct SynapsLens {
+    /// Half the oval's width and height.
+    let radii: CGSize
+    /// The size of a contact at the rim, relative to one in the middle.
+    static let rimScale: CGFloat = 0.35
+    /// The opacity of a contact at the rim. The outermost ring is pressed against the edge,
+    /// where its circles crowd; dimming it keeps it from reading as a border of its own.
+    static let rimOpacity: Double = 0.35
+
+    /// How far out a contact `rim` units away is drawn: unchanged near the middle, pulled in ever
+    /// harder towards the edge, never past it.
+    static func drawnRim(_ rim: CGFloat) -> CGFloat { tanh(rim) }
+
+    /// Where a point at `screen` is drawn, and how far out (0…1) that is.
+    func draw(_ screen: CGPoint, centre: CGPoint) -> (point: CGPoint, rim: CGFloat) {
+        guard radii.width > 0, radii.height > 0 else { return (screen, 0) }
+        let ux = (screen.x - centre.x) / radii.width
+        let uy = (screen.y - centre.y) / radii.height
+        let rim = hypot(ux, uy)
+        guard rim > 0 else { return (screen, 0) }
+        let drawn = Self.drawnRim(rim)
+        let k = drawn / rim
+        return (CGPoint(x: centre.x + ux * k * radii.width, y: centre.y + uy * k * radii.height), drawn)
+    }
+
+    /// Size at a drawn rim distance: 1 in the inner third, `rimScale` at the edge.
+    static func scale(atRim rim: CGFloat) -> CGFloat {
+        1 - (1 - rimScale) * smoothstep(0.3, 1, rim)
+    }
+
+    /// The circle fades only in the outermost band.
+    static func opacity(atRim rim: CGFloat) -> Double {
+        1 - (1 - rimOpacity) * Double(smoothstep(0.82, 0.98, rim))
+    }
+
+    /// Only the middle contact and the ring around it are named. Measured in points on screen,
+    /// not in rim units: the oval is narrow across, so by rim the first ring's left and right
+    /// neighbours counted as further out than its upper ones and lost their names, while the
+    /// second ring's upper and lower ones kept theirs half-drawn over the circles below.
+    static func labelOpacity(atDistance d: CGFloat) -> Double {
+        let pitch = SynapsCloudLayout.pitch
+        // The first ring is drawn at most ~1.07 pitches out, the second from ~1.48 (measured with
+        // thirty contacts); the fade sits between them.
+        return Double(1 - smoothstep(pitch * 1.15, pitch * 1.4, d))
+    }
+
+    static func smoothstep(_ lo: CGFloat, _ hi: CGFloat, _ x: CGFloat) -> CGFloat {
+        let t = Swift.min(Swift.max((x - lo) / (hi - lo), 0), 1)
+        return t * t * (3 - 2 * t)
     }
 }
 
