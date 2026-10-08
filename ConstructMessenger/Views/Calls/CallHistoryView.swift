@@ -141,13 +141,14 @@ struct CallHistoryView: View {
     }
 
     private var emptyState: some View {
-        VStack(spacing: 12) {
-            Text(emptyStateText)
-                .font(CTFont.body)
-                .foregroundStyle(Color.CT.textDim)
-                .multilineTextAlignment(.center)
+        ContentUnavailableView {
+            Label {
+                Text(emptyStateText)
+                    .font(CTFont.headline)
+            } icon: {
+                Image(systemName: selectedFilter == .missed ? "phone.arrow.down.left" : "phone")
+            }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var emptyStateText: String {

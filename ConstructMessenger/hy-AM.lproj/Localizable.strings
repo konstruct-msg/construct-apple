@@ -673,6 +673,7 @@
 // MARK: - Drafts
 "save_draft" = "Պահպանել սևագիրը";
 "drafts" = "Սևագրեր";
+"drafts_empty_title" = "Սևագրեր չկան";
 "drafts_stored_locally" = "Սևագրերը պահվում են տեղում՝ այս սարքում։";
 
 // MARK: - QR Code

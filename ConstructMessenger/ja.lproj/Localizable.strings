@@ -587,6 +587,7 @@
 // MARK: - Drafts
 "save_draft" = "下書きを保存";
 "drafts" = "下書き";
+"drafts_empty_title" = "下書きはありません";
 "drafts_stored_locally" = "下書きはこのデバイスにローカルに保存されます。";
 
 // MARK: - QR Code

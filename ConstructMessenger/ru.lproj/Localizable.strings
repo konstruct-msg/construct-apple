@@ -674,6 +674,7 @@
 // MARK: - Drafts
 "save_draft" = "Сохранить черновик";
 "drafts" = "Черновики";
+"drafts_empty_title" = "Черновиков нет";
 "drafts_stored_locally" = "Черновики хранятся локально на этом устройстве.";
 
 // MARK: - QR Code
