@@ -311,6 +311,7 @@ struct ChatView: View {
                     userId: user.id,
                     showMessageButton: false   // already inside this chat — no loop
                 )
+                .sheetNavigation()
                 .environment(\.managedObjectContext, viewContext)
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
@@ -330,6 +331,7 @@ struct ChatView: View {
                 replyQuoteText = selectedQuote
                 setComposeReplyFocus(messageId: msg.id)
             }
+            .sheetNavigation()
             .presentationDetents([.medium, .large])
             .presentationDragIndicator(.visible)
         }

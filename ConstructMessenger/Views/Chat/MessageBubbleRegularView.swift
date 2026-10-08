@@ -393,6 +393,7 @@ struct MessageBubbleRegularView: View {
                 ReactionEmojiPickerSheet { emoji in
                     onReact?(message, emoji)
                 }
+                .sheetNavigation()
                 #if os(iOS)
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)

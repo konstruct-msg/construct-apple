@@ -132,12 +132,6 @@ struct ReactionEmojiPickerSheet: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            CTNavBar(
-                title: NSLocalizedString("react", comment: ""),
-                showBack: true,
-                isModal: true,
-                backAction: { dismiss() }
-            )
             ScrollView {
                 LazyVGrid(columns: columns, alignment: .leading, spacing: CTLayout.inlinePad, pinnedViews: [.sectionHeaders]) {
                     ForEach(EmojiCatalogue.groups) { group in
@@ -173,5 +167,6 @@ struct ReactionEmojiPickerSheet: View {
             }
         }
         .ctBackground()
+        .screenTitle(NSLocalizedString("react", comment: ""))
     }
 }

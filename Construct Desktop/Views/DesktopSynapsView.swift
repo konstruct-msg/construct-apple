@@ -132,6 +132,7 @@ struct DesktopSynapsView: View {
                     onDeclineBlock: { try await vm.declineAndBlock(requestId: request.id) },
                     onSpamBlock: { try await vm.reportSpamAndBlock(requestId: request.id) }
                 )
+                .sheetNavigation(closes: false)
                 .frame(minWidth: 400, minHeight: 280)
             }
         }

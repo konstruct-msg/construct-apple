@@ -233,6 +233,7 @@ struct SynapsView: View {
                         showPruneConfirm = true
                     }
                 )
+                .sheetNavigation()
                 .environment(\.managedObjectContext, context)
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
@@ -248,6 +249,7 @@ struct SynapsView: View {
                         onDeclineBlock: { try await vm.declineAndBlock(requestId: request.id) },
                         onSpamBlock: { try await vm.reportSpamAndBlock(requestId: request.id) }
                     )
+                    .sheetNavigation(closes: false)
                     .presentationDetents([.medium])
                     .presentationDragIndicator(.visible)
                 }

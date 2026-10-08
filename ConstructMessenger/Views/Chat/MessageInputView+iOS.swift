@@ -119,6 +119,7 @@ struct IOSMessageInputView: View {
                 onEdit: { attachments.replaceImage(at: $0, with: $1) },
                 onDelete: { attachments.removeAttachment(at: $0) }
             )
+            .sheetNavigation()
         }
     }
 

@@ -67,17 +67,6 @@ struct UserProfileView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            CTNavBar(
-                title: NSLocalizedString("profile", comment: ""),
-                showBack: true,
-                backAction: { dismiss() }
-            ) {
-                EmptyView()
-            } trailing: {
-                EmptyView()
-            }
-            flatDivider(thick: true)
-
             ScrollView(showsIndicators: false) {
                 LazyVStack(spacing: 0) {
                     avatarHeader
@@ -102,6 +91,7 @@ struct UserProfileView: View {
             }
         }
         .background(Color.CT.bg.ignoresSafeArea())
+        .screenTitle(NSLocalizedString("profile", comment: ""))
         .onAppear {
             viewModel.setContext(viewContext)
             refreshSessionSecurityState()
