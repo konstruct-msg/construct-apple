@@ -128,7 +128,7 @@ final class SessionRestoreService {
         // Both lists are consumed inline: the plan is the only list in scope below, so there is
         // no second one to iterate by mistake.
         let plan = SessionRestorePlan.make(
-            recentChatContacts: getRecentChatDeviceIds(limit: limit, context: context),
+            recentChatContacts: getRecentChatDeviceIds(limit: limit),
             liveSessionContacts: liveSessionDeviceIds()
         )
 
@@ -161,7 +161,7 @@ final class SessionRestoreService {
 
     /// The devices of the most recent chats, most recent chat first.
     ///
-    /// Expanded here, not passed on as accounts. `Chat.otherUser?.id` is a `ServerUserId`, and
+    /// Expanded here, not passed on as accounts. A chat's peer is a `ServerUserId`, and
     /// everything below the seam takes a `CryptoDeviceId` — so until this expansion existed every
     /// session the chat list named was refused by `SessionAddressing.asDevice` and counted as a
     /// failure. Both testers' logs on 2026-09-23 showed it: 1 restored of 5 and 14 of 24, with an
@@ -174,22 +174,11 @@ final class SessionRestoreService {
     /// Internal, not private: `SessionRestoreSourcesTests` drives it against an in-memory store.
     /// The claim worth a test is that an account never leaves this method, and that is not
     /// visible from the outside of a service whose other half is the Keychain.
-    func getRecentChatDeviceIds(limit: Int, context: NSManagedObjectContext) -> [String] {
-        guard context.persistentStoreCoordinator != nil else {
-            return []
-        }
-
-        let fetchRequest: NSFetchRequest<Chat> = Chat.fetchRequest()
-        fetchRequest.sortDescriptors = [NSSortDescriptor(key: "lastMessageTime", ascending: false)]
-        fetchRequest.fetchLimit = limit
-
-        do {
-            let chats = try context.fetch(fetchRequest)
-            return chats
-                .compactMap { $0.otherUser?.id }
-                .flatMap { SessionAddressing.deviceIds(ofPeer: $0) }
-        } catch {
-            return []
-        }
+    func getRecentChatDeviceIds(limit: Int) -> [String] {
+        let chats = (try? LocalRepositories.chats.chats()) ?? []
+        return chats
+            .sorted { ($0.lastMessageTime ?? .distantPast) > ($1.lastMessageTime ?? .distantPast) }
+            .prefix(limit)
+            .flatMap { SessionAddressing.deviceIds(ofPeer: $0.peerId) }
     }
 }

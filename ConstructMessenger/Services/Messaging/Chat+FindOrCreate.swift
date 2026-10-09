@@ -144,7 +144,9 @@ extension Chat {
         return winner
     }
 
-    private static func selectBestChat(among chats: [Chat]) -> Chat {
+    /// Among duplicates, the one kept: newest activity, then most messages, then the smaller id.
+    /// `CoreDataChatStore` reads by it, so a read and a merge agree on which id survives.
+    static func selectBestChat(among chats: [Chat]) -> Chat {
         chats.max { a, b in
             let ta = a.lastMessageTime ?? .distantPast
             let tb = b.lastMessageTime ?? .distantPast

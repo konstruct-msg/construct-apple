@@ -216,7 +216,7 @@ struct SynapsView: View {
                         request: request,
                         onAccept: {
                             let user = try await vm.accept(request: request, context: context)
-                            chatsViewModel.openOrCreateChat(with: user)
+                            chatsViewModel.openOrCreateChat(withContact: user.id)
                         },
                         onDeclineBlock: { try await vm.declineAndBlock(requestId: request.id) },
                         onSpamBlock: { try await vm.reportSpamAndBlock(requestId: request.id) }
@@ -344,7 +344,7 @@ struct SynapsView: View {
 
         let accepted = await vm.checkAcceptedRequests(context: context)
         if let first = accepted.first {
-            chatsViewModel.openOrCreateChat(with: first)
+            chatsViewModel.openOrCreateChat(withContact: first.id)
         } else if let pendingId {
             chatsViewModel.openOrCreateChat(withContact: pendingId)
         }
@@ -618,7 +618,7 @@ struct SynapsView: View {
             )
             searchText = ""
             remoteState = .idle
-            chatsViewModel.openOrCreateChat(with: user)
+            chatsViewModel.openOrCreateChat(withContact: user.id)
         } catch {
             Log.error("addRemoteUserAndChat failed: \(error)", category: "SynapsView")
         }

@@ -141,7 +141,7 @@ struct ChatsListView: View {
                     guard let chatId = note.object as? String,
                           let chat = chats.first(where: { $0.id == chatId }) else { return }
                     if selectedChatId == chatId { selectedChatId = nil }
-                    Task { await chatsViewModel.deleteChatForgettingSessions(chat: chat) }
+                    Task { await chatsViewModel.deleteChatForgettingSessions(chatId: chat.id) }
             }
             // Total-unread badge only. Do NOT force-invalidate the List here (no
             // `.id(revision)`): the `@FetchRequest(animation: .default)` already drives
@@ -221,7 +221,7 @@ struct ChatsListView: View {
                     .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                         Button(role: .destructive) {
                             if selectedChatId == chat.id { selectedChatId = nil }
-                            Task { await chatsViewModel.deleteChatForgettingSessions(chat: chat) }
+                            Task { await chatsViewModel.deleteChatForgettingSessions(chatId: chat.id) }
                         } label: {
                             Label(LocalizedStringKey("delete"), systemImage: "trash")
                         }

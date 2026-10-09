@@ -130,6 +130,9 @@ protocol ContactStore: Sendable {
     @discardableResult func setAvatar(
         _ id: String, _ avatar: Data?, pendingRef: Data?, pendingSince: Date?
     ) throws -> Bool
+
+    /// The row, its chat and the chat's messages; false when there is no such row.
+    @discardableResult func delete(_ id: String) throws -> Bool
 }
 
 /// Our own profile. `accountId` as for `ContactStore`.
@@ -145,11 +148,13 @@ protocol OwnProfileStore: Sendable {
 final class CoreDataContactStore: ContactStore, OwnProfileStore, @unchecked Sendable {
 
     private let container: NSPersistentContainer
-    private let feed: ContactChangeFeed
+    private let feed: RowChangeFeed
 
     init(container: NSPersistentContainer) {
         self.container = container
-        self.feed = ContactChangeFeed(coordinator: container.persistentStoreCoordinator)
+        self.feed = RowChangeFeed(coordinator: container.persistentStoreCoordinator) { object in
+            (object as? User).map(\.id)
+        }
     }
 
     func changes() -> AsyncStream<Set<String>> { feed.stream() }
@@ -239,6 +244,19 @@ final class CoreDataContactStore: ContactStore, OwnProfileStore, @unchecked Send
             $0.avatarData = avatar
             $0.pendingAvatarRef = pendingRef
             $0.pendingAvatarSince = pendingSince
+        }
+    }
+
+    func delete(_ id: String) throws -> Bool {
+        try run { context in
+            let req = User.fetchRequest()
+            req.predicate = NSPredicate(format: "id == %@", id)
+            req.fetchLimit = 1
+            guard let user = try context.fetch(req).first else { return false }
+            // `chats` cascades, and each chat's `messages` with it.
+            context.delete(user)
+            try context.saveOrThrow(category: "Contacts")
+            return true
         }
     }
 
@@ -375,22 +393,23 @@ extension User {
     }
 }
 
-/// Every save on `coordinator` that touched a `User` row, as the row ids — whichever context saved,
-/// so a write that still goes around the repository (the chats domain, until it moves) is seen too.
-final class ContactChangeFeed: @unchecked Sendable {
+/// Every save on `coordinator` that touched a row `rowId` names, as the row ids — whichever context
+/// saved, so a write that still goes around the repository (the messages domain, until it moves) is
+/// seen too. `rowId` answers `nil` for an object of another table.
+final class RowChangeFeed: @unchecked Sendable {
 
     private let lock = NSLock()
     private var subscribers: [UUID: AsyncStream<Set<String>>.Continuation] = [:]
     private var token: NSObjectProtocol?
 
-    init(coordinator: NSPersistentStoreCoordinator) {
+    init(coordinator: NSPersistentStoreCoordinator, rowId: @escaping @Sendable (NSManagedObject) -> String?) {
         token = NotificationCenter.default.addObserver(
             forName: .NSManagedObjectContextDidSave, object: nil, queue: nil
         ) { [weak self] note in
             // Posted on the saving context's queue, so its objects may be read here.
             guard let context = note.object as? NSManagedObjectContext,
                   context.persistentStoreCoordinator === coordinator else { return }
-            let ids = Self.userIds(in: note)
+            let ids = Self.rowIds(in: note, rowId)
             if !ids.isEmpty { self?.send(ids) }
         }
     }
@@ -415,11 +434,11 @@ final class ContactChangeFeed: @unchecked Sendable {
         targets.forEach { $0.yield(ids) }
     }
 
-    private static func userIds(in note: Notification) -> Set<String> {
+    private static func rowIds(in note: Notification, _ rowId: (NSManagedObject) -> String?) -> Set<String> {
         var ids = Set<String>()
         for key in [NSInsertedObjectsKey, NSUpdatedObjectsKey, NSDeletedObjectsKey] {
             for object in (note.userInfo?[key] as? Set<NSManagedObject>) ?? [] {
-                if let user = object as? User, !user.id.isEmpty { ids.insert(user.id) }
+                if let id = rowId(object), !id.isEmpty { ids.insert(id) }
             }
         }
         return ids

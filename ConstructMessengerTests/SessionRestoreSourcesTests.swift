@@ -23,7 +23,7 @@ final class SessionRestoreSourcesTests: XCTestCase {
 
     // MARK: - The chat list is account-space and must not stay that way
 
-    /// Mutation: return `$0.otherUser?.id` from `getRecentChatDeviceIds` without the expansion —
+    /// Mutation: return `$0.peerId` from `getRecentChatDeviceIds` without the expansion —
     /// this reddens with the account in the list, which is exactly what the logs showed.
     func testAChatContributesItsPeersDevicesAndNeverTheAccount() {
         let container = PersistenceController(inMemory: true).container
@@ -36,14 +36,17 @@ final class SessionRestoreSourcesTests: XCTestCase {
         let user = User(context: context)
         user.id = account
         user.username = "annie"
+        user.displayName = ""
         let chat = Chat(context: context)
         chat.id = UUID().uuidString
         chat.otherUser = user
         chat.lastMessageTime = Date()
-        try? context.save()
+        // The repository reads what is saved, on its own context.
+        try! context.save()
         let devices = CoreDataPeerDeviceStore(container: container)
         LocalRepositories.usePeerDevicesForTesting(devices)
-        defer { LocalRepositories.usePeerDevicesForTesting(nil) }
+        LocalRepositories.useChatsForTesting(container)
+        defer { LocalRepositories.usePeerDevicesForTesting(nil); LocalRepositories.useChatsForTesting(nil) }
         _ = try? devices.record([phone, desktop].enumerated().map { index, deviceId in
             PeerDeviceRecord(
                 deviceId: deviceId, accountId: account, identityKey: Data(),
@@ -52,7 +55,7 @@ final class SessionRestoreSourcesTests: XCTestCase {
         })
 
         let ids = SessionRestoreService(persistence: .shared)
-            .getRecentChatDeviceIds(limit: 20, context: context)
+            .getRecentChatDeviceIds(limit: 20)
 
         XCTAssertEqual(Set(ids), [phone, desktop], "both of the peer's devices, and only devices")
         XCTAssertFalse(ids.contains(account), "an account id below the seam is the defect itself")
@@ -74,16 +77,19 @@ final class SessionRestoreSourcesTests: XCTestCase {
         let user = User(context: context)
         user.id = "9a921fe2-0f5e-4a2f-9a3f-0f0b4f2a1c77"
         user.username = "bob"
+        user.displayName = ""
         let chat = Chat(context: context)
         chat.id = UUID().uuidString
         chat.otherUser = user
         chat.lastMessageTime = Date()
-        try? context.save()
+        // The repository reads what is saved, on its own context.
+        try! context.save()
         LocalRepositories.usePeerDevicesForTesting(CoreDataPeerDeviceStore(container: container))
-        defer { LocalRepositories.usePeerDevicesForTesting(nil) }
+        LocalRepositories.useChatsForTesting(container)
+        defer { LocalRepositories.usePeerDevicesForTesting(nil); LocalRepositories.useChatsForTesting(nil) }
 
         let ids = SessionRestoreService(persistence: .shared)
-            .getRecentChatDeviceIds(limit: 20, context: context)
+            .getRecentChatDeviceIds(limit: 20)
 
         // No `PeerDevice` rows and no pinned key in this store, so the honest result is empty —
         // not the account. The assertion is about which of the two it is.

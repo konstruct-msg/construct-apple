@@ -604,13 +604,11 @@ final class StreamLifecycleCoordinator {
     }
 
     private func prewarmEligibleContactIds() -> [String] {
-        guard let context = viewContext else { return [] }
+        guard viewContext != nil else { return [] }
         let myId = AuthSessionManager.shared.currentUserId ?? ""
         guard !myId.isEmpty else { return [] }
-        let fetchRequest = Chat.fetchRequest()
-        fetchRequest.predicate = NSPredicate(format: "lastMessageTime != nil AND otherUser.id != %@", myId)
-        let chats = (try? context.fetch(fetchRequest)) ?? []
-        return chats.compactMap { $0.otherUser?.id }
+        let chats = (try? LocalRepositories.chats.chats()) ?? []
+        return chats.filter { $0.lastMessageTime != nil && $0.peerId != myId }.map(\.peerId)
     }
 
     private func currentConversationIds() -> [String] {
