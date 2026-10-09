@@ -16,12 +16,32 @@ final class ChatPreviewOrderingTests: XCTestCase {
 
     override func setUp() {
         super.setUp()
-        context = PersistenceController(inMemory: true).container.viewContext
+        let container = PersistenceController(inMemory: true).container
+        context = container.viewContext
+        // The reconciler writes through `ChatStore` (chats B2); point it at this store.
+        LocalRepositories.useChatsForTesting(container)
     }
 
     override func tearDown() {
+        LocalRepositories.useChatsForTesting(nil)
         context = nil
         super.tearDown()
+    }
+
+    /// A chat the repository can find: saved, with its peer's row.
+    private func makeSavedChat() throws -> Chat {
+        let peer = User(context: context)
+        peer.id = "peer-" + UUID().uuidString
+        peer.username = ""
+        peer.displayName = ""
+        let chat = makeChat()
+        chat.otherUser = peer
+        try context.save()
+        return chat
+    }
+
+    private func stored(_ chat: Chat) throws -> ChatRecord {
+        try XCTUnwrap(LocalRepositories.chats.chat(chat.id))
     }
 
     private func makeChat() -> Chat {
@@ -94,16 +114,6 @@ final class ChatPreviewOrderingTests: XCTestCase {
         XCTAssertEqual(chat.lastMessageTime, newest.addingTimeInterval(-600))
     }
 
-    func testClearPreviewEmptiesBothFields() {
-        let chat = makeChat()
-        chat.applyPreview(text: "something", timestamp: Date())
-
-        chat.clearPreview()
-
-        XCTAssertNil(chat.lastMessageText)
-        XCTAssertNil(chat.lastMessageTime)
-    }
-
     /// Control-signal payloads must never surface as preview text, and going through
     /// `applyPreview` must not lose that filtering.
     func testPreviewStillFiltersControlSignals() {
@@ -115,8 +125,8 @@ final class ChatPreviewOrderingTests: XCTestCase {
 
     /// List self-heal: when denormalized preview lags the transcript (missed writer /
     /// frozen stamp), `reconcilePreviewFromTranscript` force-aligns to the newest message.
-    func testReconcilePreview_AdvancesStaleStampFromTranscript() {
-        let chat = makeChat()
+    func testReconcilePreview_AdvancesStaleStampFromTranscript() throws {
+        let chat = try makeSavedChat()
         let older = Date(timeIntervalSince1970: 1_700_000_000)
         let newer = older.addingTimeInterval(3_600)
 
@@ -133,14 +143,15 @@ final class ChatPreviewOrderingTests: XCTestCase {
         msg.retryCount = 0
         msg.chat = chat
         msg.applyStoredEncryption(plaintext: "По прежнему никаких обновлений", contactId: "peer")
+        try context.save()
 
         XCTAssertTrue(chat.reconcilePreviewFromTranscript(in: context))
-        XCTAssertEqual(chat.lastMessageText, "По прежнему никаких обновлений")
-        XCTAssertEqual(chat.lastMessageTime, newer)
+        XCTAssertEqual(try stored(chat).lastMessageText, "По прежнему никаких обновлений")
+        XCTAssertEqual(try stored(chat).lastMessageTime, newer)
     }
 
-    func testReconcilePreview_NoOpWhenAlreadyInSync() {
-        let chat = makeChat()
+    func testReconcilePreview_NoOpWhenAlreadyInSync() throws {
+        let chat = try makeSavedChat()
         let at = Date(timeIntervalSince1970: 1_700_000_000)
         chat.applyPreview(text: "hello", timestamp: at)
 
@@ -155,13 +166,14 @@ final class ChatPreviewOrderingTests: XCTestCase {
         msg.retryCount = 0
         msg.chat = chat
         msg.applyStoredEncryption(plaintext: "hello", contactId: "peer")
+        try context.save()
 
         XCTAssertFalse(chat.reconcilePreviewFromTranscript(in: context))
-        XCTAssertEqual(chat.lastMessageText, "hello")
+        XCTAssertEqual(try stored(chat).lastMessageText, "hello")
     }
 
-    func testReconcilePreview_UnfreezesFutureStamp() {
-        let chat = makeChat()
+    func testReconcilePreview_UnfreezesFutureStamp() throws {
+        let chat = try makeSavedChat()
         let real = Date(timeIntervalSince1970: 1_700_000_000)
         let frozen = real.addingTimeInterval(3 * 3600)
 
@@ -182,10 +194,11 @@ final class ChatPreviewOrderingTests: XCTestCase {
         // Without reconcile, applyPreview would refuse a later real message older than freeze.
         chat.applyPreview(text: "would be refused", timestamp: real.addingTimeInterval(1))
         XCTAssertEqual(chat.lastMessageText, "frozen future")
+        try context.save()
 
         XCTAssertTrue(chat.reconcilePreviewFromTranscript(in: context))
-        XCTAssertEqual(chat.lastMessageText, "real tip")
-        XCTAssertEqual(chat.lastMessageTime, real)
+        XCTAssertEqual(try stored(chat).lastMessageText, "real tip")
+        XCTAssertEqual(try stored(chat).lastMessageTime, real)
     }
 }
 

@@ -205,16 +205,14 @@ private struct ChatRowLayout: View {
     @ViewBuilder
     private var contextMenuContent: some View {
         Button {
-            chat.isPinned.toggle()
-            try? chat.managedObjectContext?.save()
+            try? LocalRepositories.chats.setPinned(chat.id, !chat.isPinned)
         } label: {
             Label(LocalizedStringKey(chat.isPinned ? "unpin" : "pin"),
                   systemImage: chat.isPinned ? "pin.slash" : "pin")
         }
 
         Button {
-            chat.unreadCount = chat.unreadCount > 0 ? 0 : 1
-            try? chat.managedObjectContext?.save()
+            try? LocalRepositories.chats.setUnread(chat.id, chat.unreadCount > 0 ? 0 : 1)
         } label: {
             Label(
                 LocalizedStringKey(chat.unreadCount > 0 ? "mark_read" : "mark_unread"),

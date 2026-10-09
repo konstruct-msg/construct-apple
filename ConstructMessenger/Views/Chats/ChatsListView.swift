@@ -149,14 +149,16 @@ struct ChatsListView: View {
             // `chat`/`user`. Swapping the List's identity mid-animation raced the
             // coalesced UICollectionView batch update → "invalid number of items"
             // crash (device log 2026-07-19, during END_SESSION re-init + openOrCreateChat).
-            .onReceive(NotificationCenter.default.publisher(for: .NSManagedObjectContextDidSave)) { note in
+            // On the main queue: repositories save on their own background contexts, and this
+            // touches the view context and the fetch request.
+            .onReceive(NotificationCenter.default.publisher(for: .NSManagedObjectContextDidSave).receive(on: DispatchQueue.main)) { note in
                     guard notificationContainsChatChanges(note) else { return }
                     // After a message write, denormalized previews can lag (missed applyPreview
                     // or observation gap). Touch only chats present in the save.
                     reconcileStalePreviews(from: note)
                     updateTotalUnreadCount()
             }
-            .onReceive(NotificationCenter.default.publisher(for: .NSManagedObjectContextObjectsDidChange)) { note in
+            .onReceive(NotificationCenter.default.publisher(for: .NSManagedObjectContextObjectsDidChange).receive(on: DispatchQueue.main)) { note in
                     guard notificationContainsChatChanges(note) else { return }
                     updateTotalUnreadCount()
             }
@@ -316,13 +318,11 @@ struct ChatsListView: View {
     // MARK: - Actions
 
     private func togglePin(_ chat: Chat) {
-        chat.isPinned.toggle()
-        try? viewContext.save()
+        try? LocalRepositories.chats.setPinned(chat.id, !chat.isPinned)
     }
 
     private func toggleMarkUnread(_ chat: Chat) {
-        chat.unreadCount = chat.unreadCount > 0 ? 0 : 1
-        try? viewContext.save()
+        try? LocalRepositories.chats.setUnread(chat.id, chat.unreadCount > 0 ? 0 : 1)
     }
 
     private func updateTotalUnreadCount() {
@@ -330,7 +330,7 @@ struct ChatsListView: View {
     }
 
     /// Re-align denormalized list previews with each chat's newest transcript message.
-    /// No-op when already in sync; saves once if any row was repaired.
+    /// No-op when already in sync; a repair is written through `ChatStore`.
     /// - Parameter note: when non-nil, only chats touched by that save are scanned.
     private func reconcileStalePreviews(from note: Notification?) {
         let targets: [Chat]
@@ -340,30 +340,32 @@ struct ChatsListView: View {
         } else {
             targets = Array(chats)
         }
-        var changed = false
         for chat in targets {
-            if chat.reconcilePreviewFromTranscript(in: viewContext) {
-                changed = true
-            }
-        }
-        if changed {
-            viewContext.saveAndLog()
+            chat.reconcilePreviewFromTranscript(in: viewContext)
         }
     }
 
+    /// The saving context may be another queue's, so only object ids are read from the note —
+    /// they cross threads — and each is resolved in the view context.
     private func chatsTouchedBySave(_ note: Notification) -> [Chat] {
-        var ids = Set<NSManagedObjectID>()
-        for key in [NSInsertedObjectsKey, NSUpdatedObjectsKey, NSDeletedObjectsKey] {
+        var chatIds = Set<NSManagedObjectID>()
+        var messageIds = Set<NSManagedObjectID>()
+        for key in [NSInsertedObjectsKey, NSUpdatedObjectsKey] {
             guard let objects = note.userInfo?[key] as? Set<NSManagedObject> else { continue }
             for obj in objects {
-                if let msg = obj as? Message, let chat = msg.chat {
-                    ids.insert(chat.objectID)
-                } else if obj is Chat {
-                    ids.insert(obj.objectID)
+                switch obj.objectID.entity.name {
+                case "Message": messageIds.insert(obj.objectID)
+                case "Chat":    chatIds.insert(obj.objectID)
+                default:        break
                 }
             }
         }
-        return ids.compactMap { try? viewContext.existingObject(with: $0) as? Chat }
+        for id in messageIds {
+            if let chat = (try? viewContext.existingObject(with: id) as? Message)?.chat {
+                chatIds.insert(chat.objectID)
+            }
+        }
+        return chatIds.compactMap { try? viewContext.existingObject(with: $0) as? Chat }
     }
 
     private func notificationContainsChatChanges(_ note: Notification) -> Bool {
@@ -371,7 +373,7 @@ struct ChatsListView: View {
         for key in keys {
             guard let objects = note.userInfo?[key] as? Set<NSManagedObject> else { continue }
             if objects.contains(where: { entity in
-                let name = entity.entity.name
+                let name = entity.objectID.entity.name
                 return name == "Chat" || name == "Message"
             }) {
                 return true

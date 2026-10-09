@@ -173,13 +173,11 @@ struct DesktopChatsListView: View {
     // MARK: - Actions
 
     private func togglePin(_ chat: Chat) {
-        chat.isPinned.toggle()
-        try? viewContext.save()
+        try? LocalRepositories.chats.setPinned(chat.id, !chat.isPinned)
     }
 
     private func toggleMarkUnread(_ chat: Chat) {
-        chat.unreadCount = chat.unreadCount > 0 ? 0 : 1
-        try? viewContext.save()
+        try? LocalRepositories.chats.setUnread(chat.id, chat.unreadCount > 0 ? 0 : 1)
     }
 
     // MARK: - QR Code Handling

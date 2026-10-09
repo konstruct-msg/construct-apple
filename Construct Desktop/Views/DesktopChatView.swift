@@ -546,8 +546,7 @@ struct DesktopChatView: View {
 
     private func markChatAsRead() {
         guard viewModel.chat.unreadCount > 0 else { return }
-        viewModel.chat.unreadCount = 0
-        try? viewContext.save()
+        try? LocalRepositories.chats.setUnread(viewModel.chat.id, 0)
     }
 
     private func toggleMessageSelection(_ message: Message) {

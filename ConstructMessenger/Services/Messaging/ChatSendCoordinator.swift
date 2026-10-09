@@ -415,11 +415,14 @@ final class ChatSendCoordinator {
             msg.isSentByMe = true
             msg.chat = chat
             msg.applyStoredEncryption(plaintext: queued.text, contactId: recipientId)
-            // These rows bypass MessagePersistenceService, so the preview needs advancing here
-            // too — otherwise the list keeps showing an older message than the transcript does.
-            chat.applyPreview(text: queued.text, timestamp: queued.timestamp)
         }
         viewContext.saveAndLog()
+        // These rows bypass MessagePersistenceService.saveMessage, so the preview needs advancing
+        // here too — otherwise the list keeps showing an older message than the transcript does.
+        // After the save, through the repository; only the newest can be the preview.
+        if let newest = queuedMessages.filter({ $0.placeholderId == nil }).max(by: { $0.timestamp < $1.timestamp }) {
+            MessagePersistenceService.advancePreview(of: chat, text: newest.text, at: newest.timestamp)
+        }
         queuedMessages.removeAll()
     }
 

@@ -196,7 +196,9 @@ final class CoreDataChatStore: ChatStore, @unchecked Sendable {
         try run { context in
             guard let chat = try Self.row(id, in: context) else { return false }
             guard change(chat) else { return false }
-            if context.hasChanges { try context.saveOrThrow(category: "Chats") }
+            // A write of the values already there saves nothing, so it announces nothing: the
+            // chats list re-checks previews on every save, and an idle save would wake it again.
+            if !chat.changedValues().isEmpty { try context.saveOrThrow(category: "Chats") }
             return true
         }
     }

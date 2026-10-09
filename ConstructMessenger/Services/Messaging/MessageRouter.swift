@@ -1811,6 +1811,7 @@ final class MessageRouter {
         if let existingMessage = try context.fetch(fetchRequest).first {
             if existingMessage.fromUserId == messageData.from {
                 var changed = false
+                var recoveredPreviewAt: Date?
                 if let serverOrderKey = messageData.serverOrderKey,
                    existingMessage.serverOrderKey != serverOrderKey {
                     existingMessage.serverOrderKey = serverOrderKey
@@ -1820,19 +1821,23 @@ final class MessageRouter {
                 if !existingMessage.hasDecryptedContent {
                     Log.debug("Updating decrypted content for message \(canonicalId)", category: "MessageRouter")
                     existingMessage.applyStoredEncryption(plaintextData: storagePayload, contactId: messageData.from)
-                    // Force when the preview is blank: a message that was stored undecryptable
-                    // left an empty preview behind, and recovering its text must fill that in
-                    // even though a newer message has since moved `lastMessageTime` forward.
-                    chat.applyPreview(
-                        text: previewSource,
-                        timestamp: existingMessage.timestamp,
-                        force: (chat.lastMessageText ?? "").isEmpty
-                    )
+                    recoveredPreviewAt = existingMessage.timestamp
                     changed = true
                 }
                 if changed {
                     try context.saveOrThrow(category: "MessageRouter")
                     Log.debug("Updated message content/order", category: "MessageRouter")
+                }
+                if let at = recoveredPreviewAt {
+                    // Forced when the preview is blank: a message that was stored undecryptable
+                    // left an empty preview behind, and recovering its text must fill that in
+                    // even though a newer message has since moved the preview's time forward.
+                    let shown = (try? LocalRepositories.chats.chat(chat.id))?.lastMessageText ?? ""
+                    if shown.isEmpty {
+                        MessagePersistenceService.setPreview(of: chat, text: previewSource, at: at)
+                    } else {
+                        MessagePersistenceService.advancePreview(of: chat, text: previewSource, at: at)
+                    }
                 }
                 return canonicalId  // Message already exists
             }
@@ -1889,18 +1894,15 @@ final class MessageRouter {
             }
         }
 
-        chat.applyPreview(text: previewSource, timestamp: message.timestamp)
+        try context.saveOrThrow(category: "MessageRouter")
+        // The list row, after the message is saved — through the repository, never in this context.
+        MessagePersistenceService.advancePreview(of: chat, text: previewSource, at: message.timestamp)
         // Same "can the user actually see this?" test the banner uses — an open chat behind a
         // backgrounded app is not visible, and used to keep unreadCount pinned at 0.
         if !InAppNotificationService.isChatVisible(chat.id) {
-            chat.unreadCount += 1
+            MessagePersistenceService.incrementUnread(of: chat)
         }
-
-        try context.saveOrThrow(category: "MessageRouter")
-        Log.debug(
-            "Chat metadata updated chatId=\(chat.id.prefix(8))… preview='\(chat.lastMessageText ?? "")' unread=\(chat.unreadCount) ts=\(chat.lastMessageTime?.description ?? "nil")",
-            category: "MessageRouter"
-        )
+        Log.debug("Chat metadata updated chatId=\(chat.id.prefix(8))…", category: "MessageRouter")
         PerformanceMetrics.shared.messageUIDisplayed(messageId: messageData.id)
 
         let senderId = messageData.from
@@ -2331,8 +2333,8 @@ final class MessageRouter {
             MediaWireCodec.receiveAlbum(mediaAlbum, for: rowId)
         }
 
-        chat.applyPreview(text: previewText, timestamp: msg.timestamp)
         context.saveAndLog()
+        MessagePersistenceService.advancePreview(of: chat, text: previewText, at: msg.timestamp)
 
         if !original.senderDeviceId.isEmpty {
             CryptoManager.shared.saveSessionToKeychain(
