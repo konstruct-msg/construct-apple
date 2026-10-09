@@ -132,7 +132,6 @@ class ChatsViewModel {
         if let existing = viewContext, existing === context { return }
         self.viewContext = context
         SessionLifecycleController.shared.setContext(context)
-        chatManagementService.setContext(context)
         streamLifecycle.setContext(context)
         if !didPerformFirstContextSetup && streamManager.subscriptionUserIds.isEmpty {
             didPerformFirstContextSetup = true
@@ -168,7 +167,7 @@ class ChatsViewModel {
     func startChat(
         redeeming info: ContactInfo,
         origin: SessionReducer.ChatStartOrigin = .existingContact
-    ) -> Chat? {
+    ) -> ChatRecord? {
         let user = PublicUserInfo(
             id: info.userId,
             username: info.username,
@@ -189,7 +188,7 @@ class ChatsViewModel {
         identityPublicKey: Data? = nil,
         accountAddress: Data? = nil,
         origin: SessionReducer.ChatStartOrigin = .existingContact
-    ) -> Chat? {
+    ) -> ChatRecord? {
         let chat = chatManagementService.startChat(
             with: user,
             identityPublicKey: identityPublicKey,
@@ -222,10 +221,6 @@ class ChatsViewModel {
             SessionLifecycleController.shared.prewarmSessions(for: [user.id])
         }
         return chat
-    }
-
-    func deleteChat(chat: Chat) {
-        chatManagementService.deleteChat(chat)
     }
 
     /// Remove a contact from this device. Local only: nothing is sent.
@@ -273,41 +268,15 @@ class ChatsViewModel {
         streamLifecycle.reconnectIfSubscriptionsChanged()
     }
 
-    /// The chat with the contact `contactId` — for screens that hold a `ContactRecord`. The chats
-    /// domain still links a chat to the managed row, so the row is fetched here.
+    /// Open the chat with the contact `contactId`, adding it if there is none. The contact's row
+    /// must exist.
     func openOrCreateChat(withContact contactId: String) {
-        guard let context = viewContext, let user = try? User.row(contactId, in: context) else { return }
-        openOrCreateChat(with: user)
-    }
-
-    func openOrCreateChat(with user: User) {
         selectedTab = 0
-        guard let context = viewContext else { return }
-        // Always go through the shared 1:1 finder — do not trust `user.chats` alone
-        // (relationship can lag; parallel paths used to mint a second UUID).
-        let result = Chat.findOrCreate(
-            for: user,
-            in: context,
-            touchLastMessageTimeOnCreate: true
-        )
-        if !result.created, result.chat.lastMessageTime == nil {
-            result.chat.lastMessageTime = Date()
-        }
         do {
-            if context.hasChanges {
-                try context.save()
-            }
-            chatToOpen = result.chat.id
+            chatToOpen = try LocalRepositories.chats.openChat(withPeer: contactId).chat.id
         } catch {
-            Log.error("openOrCreateChat: failed to save: \(error)", category: "ChatsViewModel")
+            Log.error("openOrCreateChat: \(contactId.prefix(8))…: \(error)", category: "ChatsViewModel")
         }
-    }
-
-    func toggleMute(chat: Chat) {
-        guard let context = viewContext else { return }
-        chat.isMuted.toggle()
-        context.saveAndLog()
-        Log.info("Chat \(chat.id) isMuted=\(chat.isMuted)", category: "ChatsViewModel")
     }
 
     /// Delete a chat and forget the sessions with its peer. Local only: nothing is sent — the
@@ -315,12 +284,12 @@ class ChatsViewModel {
     /// new one (`decisions/sessions-renew-by-sending.md`). Until 2026-09-27 this announced an
     /// END_SESSION, and only from an account's single device, because the peer could not tell
     /// which of our devices asked.
-    func deleteChatForgettingSessions(chat: Chat) async {
+    func deleteChatForgettingSessions(chatId: String) async {
         // Logged before the first `await`, because everything after it can fail to arrive.
         // 2026-09-04: a chat was deleted in the UI, the app died on another screen moments later,
         // and the conversation was back after relaunch — with no line anywhere saying a delete had
         // been asked for.
-        let requestedFor = chat.otherUser?.id
+        let requestedFor = (try? LocalRepositories.chats.chat(chatId))?.peerId
         Log.info(
             "Chat delete requested for \(requestedFor?.prefix(8).description ?? "unknown")…",
             category: "ChatsViewModel"
@@ -329,7 +298,7 @@ class ChatsViewModel {
         // The delete lands first, and on purpose. It is what the person asked for, it needs
         // nothing but the store, and the row has already left the list. On 2026-09-04 it ran last,
         // behind a network round trip, and a delete did not survive the app dying inside it.
-        chatManagementService.deleteChatLocally(chat)
+        chatManagementService.deleteChatLocally(chatId)
 
         if let userId = requestedFor {
             chatManagementService.archiveSessions(ofPeer: userId)

@@ -126,7 +126,7 @@ struct DesktopSynapsView: View {
                     request: request,
                     onAccept: {
                         let user = try await vm.accept(request: request, context: context)
-                        chatsViewModel.openOrCreateChat(with: user)
+                        chatsViewModel.openOrCreateChat(withContact: user.id)
                         onSwitchToChats?()
                     },
                     onDeclineBlock: { try await vm.declineAndBlock(requestId: request.id) },
@@ -186,7 +186,7 @@ struct DesktopSynapsView: View {
 
         let accepted = await vm.checkAcceptedRequests(context: context)
         if let first = accepted.first {
-            chatsViewModel.openOrCreateChat(with: first)
+            chatsViewModel.openOrCreateChat(withContact: first.id)
             onSwitchToChats?()
         } else if let pendingId {
             chatsViewModel.openOrCreateChat(withContact: pendingId)

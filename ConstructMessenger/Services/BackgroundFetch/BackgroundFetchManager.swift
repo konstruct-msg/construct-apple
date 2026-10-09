@@ -480,11 +480,9 @@ class BackgroundFetchManager: NSObject {
         // Only after a fetch that reached the server: one that failed found nothing because it
         // fetched nothing, and the banner may be a real message's.
         guard fetched else { return }
+        guard let chats = try? LocalRepositories.chats.chats() else { return }
+        let unread = chats.filter { $0.unreadCount > 0 }.count
         await MainActor.run {
-            let request = Chat.fetchRequest()
-            request.predicate = NSPredicate(format: "unreadCount > 0")
-            let context = PersistenceController.shared.container.viewContext
-            guard let unread = try? context.count(for: request) else { return }
             LocalNotificationManager.shared.withdrawPushBannersIfNothingUnread(unreadChats: unread)
         }
     }

@@ -212,4 +212,29 @@ final class ContactStoreTests: XCTestCase {
         XCTAssertEqual(try store.profile(accountId: "me")?.profileEditedAtMs, 2000)
         XCTAssertEqual(try store.contact("me")?.isContact, false)
     }
+
+    /// The crate's `delete_contact`: the row, its chat and the chat's messages; another contact's
+    /// chat stays. Mutation: delete only the `User` with `chats` set to nullify — the chat stays.
+    func testDeletingAContactTakesItsChatAndMessages() throws {
+        try store.insert(.new(id: "gone", isContact: true, addedAt: nil))
+        try store.insert(.new(id: "kept", isContact: true, addedAt: nil))
+        let chats = CoreDataChatStore(container: container)
+        let gone = try chats.openChat(withPeer: "gone").chat
+        let kept = try chats.openChat(withPeer: "kept").chat
+        let context = container.viewContext
+        let message = PreviewHelpers.createSampleMessage(
+            context: context, chat: try Chat.row(gone.id, in: context), isSentByMe: false, text: "hi"
+        )
+        message.fromUserId = "gone"
+        message.toUserId = "me"
+        try context.save()
+
+        XCTAssertTrue(try store.delete("gone"))
+        XCTAssertNil(try store.contact("gone"))
+        XCTAssertNil(try chats.chat(gone.id))
+        XCTAssertEqual(try chats.chat(kept.id)?.peerId, "kept")
+        context.refreshAllObjects()
+        XCTAssertEqual(try context.count(for: Message.fetchRequest()), 0)
+        XCTAssertFalse(try store.delete("gone"), "a second delete finds nothing")
+    }
 }

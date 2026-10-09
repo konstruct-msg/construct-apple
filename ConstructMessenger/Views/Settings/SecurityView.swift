@@ -13,7 +13,6 @@ struct SecurityView: View {
     @Environment(SettingsViewModel.self) private var settingsViewModel
     @Environment(AccountRecoveryViewModel.self) private var recoveryVM
     @Environment(AuthViewModel.self) private var authVM
-    @Environment(\.managedObjectContext) private var viewContext
 
     @State private var showingPinSetup = false
     @State private var showingDisablePinSheet = false
@@ -406,11 +405,9 @@ struct SecurityView: View {
         }
     }
 
-    /// Fetch IDs of all current chat partners from Core Data (snapshot for lockdown).
+    /// The people we have a chat with (snapshot for lockdown).
     private func fetchCurrentContactIds() -> Set<String> {
-        let req = Chat.fetchRequest()
-        let chats = (try? viewContext.fetch(req)) ?? []
-        return Set(chats.compactMap { $0.otherUser?.id })
+        Set(((try? LocalRepositories.chats.chats()) ?? []).map(\.peerId))
     }
 }
 

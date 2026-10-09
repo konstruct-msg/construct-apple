@@ -506,12 +506,11 @@ struct DiagnosticsView: View {
     /// Contacts we currently hold a Double Ratchet session with — the only valid targets, since
     /// the point is to re-init *while the peer still holds the old session*.
     private func loadReinitTargets() {
-        let context = PersistenceController.shared.container.viewContext
-        let chats = (try? context.fetch(Chat.fetchRequest())) ?? []
+        let chats = (try? LocalRepositories.chats.chats()) ?? []
         reinitTargets = chats.compactMap { chat in
-            guard let user = chat.otherUser, !user.id.isEmpty else { return nil }
-            guard CryptoManager.shared.hasSessionWithAnyDevice(ofPeer: user.id) else { return nil }
-            return ReinitTarget(id: user.id, name: user.resolvedDisplayName)
+            guard CryptoManager.shared.hasSessionWithAnyDevice(ofPeer: chat.peerId) else { return nil }
+            let name = (try? LocalRepositories.contacts.contact(chat.peerId))?.resolvedDisplayName ?? chat.peerId
+            return ReinitTarget(id: chat.peerId, name: name)
         }
         if reinitTargets.isEmpty {
             reinitStatus = "no contact has an active session"
