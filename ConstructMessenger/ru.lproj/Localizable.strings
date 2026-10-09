@@ -1375,3 +1375,4 @@
 "device_link_error_expired" = "Срок запроса истёк. Покажите новый код.";
 "device_link_error_token" = "Срок действия кода истёк. Отсканируйте новый.";
 "device_link_error_already_linked" = "Это устройство уже привязано.";
+"voice_playback_speed" = "Скорость воспроизведения";
