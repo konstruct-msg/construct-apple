@@ -66,7 +66,11 @@ final class MessageStoreTests: XCTestCase {
     func testTheBodyIsNotStoredInTheClear() throws {
         try store.insert(record("m1", key: "k1", body: "a secret sentence"), searchText: nil)
         let context = container.newBackgroundContext()
-        let stored = try context.performAndWait { try XCTUnwrap(Message.row("m1", in: context)).encryptedContent }
+        let stored = try context.performAndWait {
+            let req = Message.fetchRequest()
+            req.predicate = NSPredicate(format: "id == %@", "m1")
+            return try XCTUnwrap(context.fetch(req).first).encryptedContent
+        }
         XCTAssertFalse(stored.isEmpty)
         XCTAssertNil(stored.range(of: Data("a secret sentence".utf8)))
     }
@@ -147,6 +151,18 @@ final class MessageStoreTests: XCTestCase {
         XCTAssertTrue(read.isEdited)
         XCTAssertEqual(read.editedAt, at)
         XCTAssertFalse(try store.edit("nothing", body: Data(), searchText: nil, editedAt: at))
+    }
+
+    /// A body read late replaces what is stored and is not an edit. Mutation: mark the message
+    /// edited in `setBody`.
+    func testABodyReadLateIsNotAnEdit() throws {
+        try store.insert(record("m1", key: "k1", body: ""), searchText: nil)
+        XCTAssertTrue(try store.setBody("m1", body: Data("recovered".utf8), searchText: "recovered"))
+        let read = try XCTUnwrap(store.message("m1"))
+        XCTAssertEqual(String(decoding: read.body, as: UTF8.self), "recovered")
+        XCTAssertFalse(read.isEdited)
+        XCTAssertNil(read.editedAt)
+        XCTAssertFalse(try store.setBody("nothing", body: Data("x".utf8), searchText: nil))
     }
 
     /// Pages run back through the transcript, oldest first in a page. Mutation: drop the
