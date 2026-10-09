@@ -523,9 +523,24 @@ uint64_t uniffi_construct_core_fn_constructor_localstore_new(RustBuffer path, Ru
 int8_t uniffi_construct_core_fn_method_localstore_advance_chat_preview(uint64_t ptr, RustBuffer id, RustBuffer text, int64_t time, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_LOCALSTORE_ALL_MESSAGES_AFTER
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_LOCALSTORE_ALL_MESSAGES_AFTER
+RustBuffer uniffi_construct_core_fn_method_localstore_all_messages_after(uint64_t ptr, RustBuffer after_order_key, RustBuffer after_id, uint32_t limit, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_LOCALSTORE_ALL_PEER_DEVICES
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_LOCALSTORE_ALL_PEER_DEVICES
 RustBuffer uniffi_construct_core_fn_method_localstore_all_peer_devices(uint64_t ptr, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_LOCALSTORE_ALL_REACTIONS
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_LOCALSTORE_ALL_REACTIONS
+RustBuffer uniffi_construct_core_fn_method_localstore_all_reactions(uint64_t ptr, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_LOCALSTORE_APPLY_SESSION_ARCHIVE
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_LOCALSTORE_APPLY_SESSION_ARCHIVE
+RustBuffer uniffi_construct_core_fn_method_localstore_apply_session_archive(uint64_t ptr, RustBuffer id, int16_t max_retries, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_LOCALSTORE_APPLY_SHARED_PROFILE
@@ -598,6 +613,11 @@ int8_t uniffi_construct_core_fn_method_localstore_edit_message(uint64_t ptr, Rus
 RustBuffer uniffi_construct_core_fn_method_localstore_every_contact(uint64_t ptr, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_LOCALSTORE_EXPIRE_REACTIONS
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_LOCALSTORE_EXPIRE_REACTIONS
+uint32_t uniffi_construct_core_fn_method_localstore_expire_reactions(uint64_t ptr, int64_t cutoff, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_LOCALSTORE_FORGET_SERVER_MESSAGE_IDS_BEFORE
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_LOCALSTORE_FORGET_SERVER_MESSAGE_IDS_BEFORE
 uint64_t uniffi_construct_core_fn_method_localstore_forget_server_message_ids_before(uint64_t ptr, int64_t cutoff, RustCallStatus *_Nonnull out_status
@@ -611,6 +631,11 @@ RustBuffer uniffi_construct_core_fn_method_localstore_get(uint64_t ptr, RustBuff
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_LOCALSTORE_IDENTITY_KEY_PINS
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_LOCALSTORE_IDENTITY_KEY_PINS
 RustBuffer uniffi_construct_core_fn_method_localstore_identity_key_pins(uint64_t ptr, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_LOCALSTORE_INCREMENT_RETRY_COUNT
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_LOCALSTORE_INCREMENT_RETRY_COUNT
+RustBuffer uniffi_construct_core_fn_method_localstore_increment_retry_count(uint64_t ptr, RustBuffer id, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_LOCALSTORE_INCREMENT_UNREAD
@@ -643,9 +668,19 @@ int8_t uniffi_construct_core_fn_method_localstore_mark_contact(uint64_t ptr, Rus
 RustBuffer uniffi_construct_core_fn_method_localstore_message(uint64_t ptr, RustBuffer id, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_LOCALSTORE_MESSAGE_COUNT
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_LOCALSTORE_MESSAGE_COUNT
+uint64_t uniffi_construct_core_fn_method_localstore_message_count(uint64_t ptr, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_LOCALSTORE_MESSAGES_BEFORE
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_LOCALSTORE_MESSAGES_BEFORE
 RustBuffer uniffi_construct_core_fn_method_localstore_messages_before(uint64_t ptr, RustBuffer chat_id, RustBuffer before_order_key, RustBuffer before_id, uint32_t limit, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_LOCALSTORE_MESSAGES_FROM
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_LOCALSTORE_MESSAGES_FROM
+RustBuffer uniffi_construct_core_fn_method_localstore_messages_from(uint64_t ptr, RustBuffer chat_id, RustBuffer from_order_key, RustBuffer from_id, uint32_t limit, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_LOCALSTORE_OWN_PROFILE
@@ -661,6 +696,11 @@ RustBuffer uniffi_construct_core_fn_method_localstore_peer_device(uint64_t ptr, 
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_LOCALSTORE_PEER_DEVICES
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_LOCALSTORE_PEER_DEVICES
 RustBuffer uniffi_construct_core_fn_method_localstore_peer_devices(uint64_t ptr, RustBuffer account_id, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_LOCALSTORE_PENDING_SENDS
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_LOCALSTORE_PENDING_SENDS
+RustBuffer uniffi_construct_core_fn_method_localstore_pending_sends(uint64_t ptr, RustBuffer chat_id, int16_t retry_ceiling, uint32_t limit, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_LOCALSTORE_PUT
@@ -753,9 +793,19 @@ int8_t uniffi_construct_core_fn_method_localstore_set_kt_status(uint64_t ptr, Ru
 void uniffi_construct_core_fn_method_localstore_set_observer(uint64_t ptr, RustBuffer observer, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_LOCALSTORE_SET_ORDER_KEY
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_LOCALSTORE_SET_ORDER_KEY
+int8_t uniffi_construct_core_fn_method_localstore_set_order_key(uint64_t ptr, RustBuffer id, RustBuffer order_key, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_LOCALSTORE_SET_OWN_PROFILE
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_LOCALSTORE_SET_OWN_PROFILE
 void uniffi_construct_core_fn_method_localstore_set_own_profile(uint64_t ptr, RustBuffer profile, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_LOCALSTORE_SET_RETRY_COUNT
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_LOCALSTORE_SET_RETRY_COUNT
+int8_t uniffi_construct_core_fn_method_localstore_set_retry_count(uint64_t ptr, RustBuffer id, int16_t count, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_LOCALSTORE_SET_SECURITY_NOTICE
@@ -766,6 +816,11 @@ int8_t uniffi_construct_core_fn_method_localstore_set_security_notice(uint64_t p
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_LOCALSTORE_SET_SHARING_WITH
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_LOCALSTORE_SET_SHARING_WITH
 int8_t uniffi_construct_core_fn_method_localstore_set_sharing_with(uint64_t ptr, RustBuffer id, int8_t sharing, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_LOCALSTORE_SET_TRANSCRIPT
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_LOCALSTORE_SET_TRANSCRIPT
+int8_t uniffi_construct_core_fn_method_localstore_set_transcript(uint64_t ptr, RustBuffer id, RustBuffer text, RustBuffer language, RustBuffer generated_at, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_LOCALSTORE_SET_UNREAD
@@ -2520,9 +2575,27 @@ uint16_t uniffi_construct_core_checksum_method_localstore_advance_chat_preview(v
     
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_LOCALSTORE_ALL_MESSAGES_AFTER
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_LOCALSTORE_ALL_MESSAGES_AFTER
+uint16_t uniffi_construct_core_checksum_method_localstore_all_messages_after(void
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_LOCALSTORE_ALL_PEER_DEVICES
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_LOCALSTORE_ALL_PEER_DEVICES
 uint16_t uniffi_construct_core_checksum_method_localstore_all_peer_devices(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_LOCALSTORE_ALL_REACTIONS
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_LOCALSTORE_ALL_REACTIONS
+uint16_t uniffi_construct_core_checksum_method_localstore_all_reactions(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_LOCALSTORE_APPLY_SESSION_ARCHIVE
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_LOCALSTORE_APPLY_SESSION_ARCHIVE
+uint16_t uniffi_construct_core_checksum_method_localstore_apply_session_archive(void
     
 );
 #endif
@@ -2610,6 +2683,12 @@ uint16_t uniffi_construct_core_checksum_method_localstore_every_contact(void
     
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_LOCALSTORE_EXPIRE_REACTIONS
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_LOCALSTORE_EXPIRE_REACTIONS
+uint16_t uniffi_construct_core_checksum_method_localstore_expire_reactions(void
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_LOCALSTORE_FORGET_SERVER_MESSAGE_IDS_BEFORE
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_LOCALSTORE_FORGET_SERVER_MESSAGE_IDS_BEFORE
 uint16_t uniffi_construct_core_checksum_method_localstore_forget_server_message_ids_before(void
@@ -2625,6 +2704,12 @@ uint16_t uniffi_construct_core_checksum_method_localstore_get(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_LOCALSTORE_IDENTITY_KEY_PINS
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_LOCALSTORE_IDENTITY_KEY_PINS
 uint16_t uniffi_construct_core_checksum_method_localstore_identity_key_pins(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_LOCALSTORE_INCREMENT_RETRY_COUNT
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_LOCALSTORE_INCREMENT_RETRY_COUNT
+uint16_t uniffi_construct_core_checksum_method_localstore_increment_retry_count(void
     
 );
 #endif
@@ -2664,9 +2749,21 @@ uint16_t uniffi_construct_core_checksum_method_localstore_message(void
     
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_LOCALSTORE_MESSAGE_COUNT
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_LOCALSTORE_MESSAGE_COUNT
+uint16_t uniffi_construct_core_checksum_method_localstore_message_count(void
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_LOCALSTORE_MESSAGES_BEFORE
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_LOCALSTORE_MESSAGES_BEFORE
 uint16_t uniffi_construct_core_checksum_method_localstore_messages_before(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_LOCALSTORE_MESSAGES_FROM
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_LOCALSTORE_MESSAGES_FROM
+uint16_t uniffi_construct_core_checksum_method_localstore_messages_from(void
     
 );
 #endif
@@ -2685,6 +2782,12 @@ uint16_t uniffi_construct_core_checksum_method_localstore_peer_device(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_LOCALSTORE_PEER_DEVICES
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_LOCALSTORE_PEER_DEVICES
 uint16_t uniffi_construct_core_checksum_method_localstore_peer_devices(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_LOCALSTORE_PENDING_SENDS
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_LOCALSTORE_PENDING_SENDS
+uint16_t uniffi_construct_core_checksum_method_localstore_pending_sends(void
     
 );
 #endif
@@ -2796,9 +2899,21 @@ uint16_t uniffi_construct_core_checksum_method_localstore_set_observer(void
     
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_LOCALSTORE_SET_ORDER_KEY
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_LOCALSTORE_SET_ORDER_KEY
+uint16_t uniffi_construct_core_checksum_method_localstore_set_order_key(void
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_LOCALSTORE_SET_OWN_PROFILE
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_LOCALSTORE_SET_OWN_PROFILE
 uint16_t uniffi_construct_core_checksum_method_localstore_set_own_profile(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_LOCALSTORE_SET_RETRY_COUNT
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_LOCALSTORE_SET_RETRY_COUNT
+uint16_t uniffi_construct_core_checksum_method_localstore_set_retry_count(void
     
 );
 #endif
@@ -2811,6 +2926,12 @@ uint16_t uniffi_construct_core_checksum_method_localstore_set_security_notice(vo
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_LOCALSTORE_SET_SHARING_WITH
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_LOCALSTORE_SET_SHARING_WITH
 uint16_t uniffi_construct_core_checksum_method_localstore_set_sharing_with(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_LOCALSTORE_SET_TRANSCRIPT
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_LOCALSTORE_SET_TRANSCRIPT
+uint16_t uniffi_construct_core_checksum_method_localstore_set_transcript(void
     
 );
 #endif

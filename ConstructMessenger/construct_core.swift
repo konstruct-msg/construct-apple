@@ -1324,7 +1324,24 @@ public protocol LocalStoreProtocol: AnyObject, Sendable {
      */
     func advanceChatPreview(id: String, text: String, time: Int64) throws  -> Bool
     
+    /**
+     * Every chat's messages after (`after_order_key`, `after_id`) — both null from the start — a
+     * page at a time, in that order: a history snapshot.
+     */
+    func allMessagesAfter(afterOrderKey: String?, afterId: String?, limit: UInt32) throws  -> [LocalMessage]
+    
     func allPeerDevices() throws  -> [LocalPeerDevice]
+    
+    /**
+     * Every reaction, oldest first: a history snapshot.
+     */
+    func allReactions() throws  -> [LocalReaction]
+    
+    /**
+     * The session the message was encrypted under was archived: keep, queue again, or fail
+     * once `max_retries` is spent — the one write that may lower `sent`. Null: no message.
+     */
+    func applySessionArchive(id: String, maxRetries: Int16) throws  -> LocalArchiveOutcome?
     
     /**
      * Sharing on, with the name and both times the client chose.
@@ -1369,11 +1386,21 @@ public protocol LocalStoreProtocol: AnyObject, Sendable {
      */
     func everyContact() throws  -> [LocalContact]
     
+    /**
+     * Forget reactions received at or before `cutoff` (ms); one with no receipt time stays.
+     */
+    func expireReactions(cutoff: Int64) throws  -> UInt32
+    
     func forgetServerMessageIdsBefore(cutoff: Int64) throws  -> UInt64
     
     func get(key: String) throws  -> Data?
     
     func identityKeyPins() throws  -> [LocalIdentityKeyPin]
+    
+    /**
+     * One more attempt, counted in the store; the new count, null for no message.
+     */
+    func incrementRetryCount(id: String) throws  -> Int16?
     
     func incrementUnread(id: String) throws  -> Bool
     
@@ -1397,11 +1424,18 @@ public protocol LocalStoreProtocol: AnyObject, Sendable {
     
     func message(id: String) throws  -> LocalMessage?
     
+    func messageCount() throws  -> UInt64
+    
     /**
      * Up to `limit` messages just before (`before_order_key`, `before_id`) — both null for the
      * newest page — oldest first.
      */
     func messagesBefore(chatId: String, beforeOrderKey: String?, beforeId: String?, limit: UInt32) throws  -> [LocalMessage]
+    
+    /**
+     * Up to `limit` messages from (`from_order_key`, `from_id`), that one included, oldest first.
+     */
+    func messagesFrom(chatId: String, fromOrderKey: String, fromId: String, limit: UInt32) throws  -> [LocalMessage]
     
     func ownProfile() throws  -> LocalOwnProfile?
     
@@ -1411,6 +1445,11 @@ public protocol LocalStoreProtocol: AnyObject, Sendable {
      * Oldest first; devices first seen in the same millisecond by id.
      */
     func peerDevices(accountId: String) throws  -> [LocalPeerDevice]
+    
+    /**
+     * Ours, queued or failed with `retry_count < retry_ceiling`; one chat, or every chat for null.
+     */
+    func pendingSends(chatId: String?, retryCeiling: Int16, limit: UInt32) throws  -> [LocalMessage]
     
     func put(key: String, value: Data) throws 
     
@@ -1458,6 +1497,11 @@ public protocol LocalStoreProtocol: AnyObject, Sendable {
     
     func setContactNames(id: String, username: String, displayName: String) throws  -> Bool
     
+    /**
+     * Statuses: 0 sending, 1 sent, 2 delivered, 3 queued, 4 failed. A write that would replace
+     * stronger evidence of arrival (delivered > sent > the rest) is refused: false, as for no
+     * change and no message.
+     */
     func setDeliveryStatus(id: String, status: Int16) throws  -> Bool
     
     func setIdentityKey(id: String, key: Data?) throws  -> Bool
@@ -1466,14 +1510,26 @@ public protocol LocalStoreProtocol: AnyObject, Sendable {
     
     func setObserver(observer: LocalStoreObserver?) 
     
+    func setOrderKey(id: String, orderKey: String) throws  -> Bool
+    
     /**
      * Replaces our profile — there is one.
      */
     func setOwnProfile(profile: LocalOwnProfile) throws 
     
+    /**
+     * Each write below changes its named fields of one message; false: no message or no change.
+     */
+    func setRetryCount(id: String, count: Int16) throws  -> Bool
+    
     func setSecurityNotice(id: String, notice: Int16) throws  -> Bool
     
     func setSharingWith(id: String, sharing: Bool) throws  -> Bool
+    
+    /**
+     * All null clears the transcript.
+     */
+    func setTranscript(id: String, text: String?, language: String?, generatedAt: Int64?) throws  -> Bool
     
     func setUnread(id: String, count: Int32) throws  -> Bool
     
@@ -1587,10 +1643,50 @@ open func advanceChatPreview(id: String, text: String, time: Int64)throws  -> Bo
 })
 }
     
+    /**
+     * Every chat's messages after (`after_order_key`, `after_id`) — both null from the start — a
+     * page at a time, in that order: a history snapshot.
+     */
+open func allMessagesAfter(afterOrderKey: String?, afterId: String?, limit: UInt32)throws  -> [LocalMessage]  {
+    return try  FfiConverterSequenceTypeLocalMessage.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_all_messages_after(
+            self.uniffiCloneHandle(),
+        FfiConverterOptionString.lower(afterOrderKey),
+        FfiConverterOptionString.lower(afterId),
+        FfiConverterUInt32.lower(limit),$0
+    )
+})
+}
+    
 open func allPeerDevices()throws  -> [LocalPeerDevice]  {
     return try  FfiConverterSequenceTypeLocalPeerDevice.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
     uniffi_construct_core_fn_method_localstore_all_peer_devices(
             self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+    /**
+     * Every reaction, oldest first: a history snapshot.
+     */
+open func allReactions()throws  -> [LocalReaction]  {
+    return try  FfiConverterSequenceTypeLocalReaction.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_all_reactions(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+    /**
+     * The session the message was encrypted under was archived: keep, queue again, or fail
+     * once `max_retries` is spent — the one write that may lower `sent`. Null: no message.
+     */
+open func applySessionArchive(id: String, maxRetries: Int16)throws  -> LocalArchiveOutcome?  {
+    return try  FfiConverterOptionTypeLocalArchiveOutcome.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_apply_session_archive(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(id),
+        FfiConverterInt16.lower(maxRetries),$0
     )
 })
 }
@@ -1735,6 +1831,18 @@ open func everyContact()throws  -> [LocalContact]  {
 })
 }
     
+    /**
+     * Forget reactions received at or before `cutoff` (ms); one with no receipt time stays.
+     */
+open func expireReactions(cutoff: Int64)throws  -> UInt32  {
+    return try  FfiConverterUInt32.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_expire_reactions(
+            self.uniffiCloneHandle(),
+        FfiConverterInt64.lower(cutoff),$0
+    )
+})
+}
+    
 open func forgetServerMessageIdsBefore(cutoff: Int64)throws  -> UInt64  {
     return try  FfiConverterUInt64.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
     uniffi_construct_core_fn_method_localstore_forget_server_message_ids_before(
@@ -1757,6 +1865,18 @@ open func identityKeyPins()throws  -> [LocalIdentityKeyPin]  {
     return try  FfiConverterSequenceTypeLocalIdentityKeyPin.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
     uniffi_construct_core_fn_method_localstore_identity_key_pins(
             self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+    /**
+     * One more attempt, counted in the store; the new count, null for no message.
+     */
+open func incrementRetryCount(id: String)throws  -> Int16?  {
+    return try  FfiConverterOptionInt16.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_increment_retry_count(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(id),$0
     )
 })
 }
@@ -1827,6 +1947,14 @@ open func message(id: String)throws  -> LocalMessage?  {
 })
 }
     
+open func messageCount()throws  -> UInt64  {
+    return try  FfiConverterUInt64.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_message_count(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
     /**
      * Up to `limit` messages just before (`before_order_key`, `before_id`) — both null for the
      * newest page — oldest first.
@@ -1838,6 +1966,21 @@ open func messagesBefore(chatId: String, beforeOrderKey: String?, beforeId: Stri
         FfiConverterString.lower(chatId),
         FfiConverterOptionString.lower(beforeOrderKey),
         FfiConverterOptionString.lower(beforeId),
+        FfiConverterUInt32.lower(limit),$0
+    )
+})
+}
+    
+    /**
+     * Up to `limit` messages from (`from_order_key`, `from_id`), that one included, oldest first.
+     */
+open func messagesFrom(chatId: String, fromOrderKey: String, fromId: String, limit: UInt32)throws  -> [LocalMessage]  {
+    return try  FfiConverterSequenceTypeLocalMessage.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_messages_from(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(chatId),
+        FfiConverterString.lower(fromOrderKey),
+        FfiConverterString.lower(fromId),
         FfiConverterUInt32.lower(limit),$0
     )
 })
@@ -1868,6 +2011,20 @@ open func peerDevices(accountId: String)throws  -> [LocalPeerDevice]  {
     uniffi_construct_core_fn_method_localstore_peer_devices(
             self.uniffiCloneHandle(),
         FfiConverterString.lower(accountId),$0
+    )
+})
+}
+    
+    /**
+     * Ours, queued or failed with `retry_count < retry_ceiling`; one chat, or every chat for null.
+     */
+open func pendingSends(chatId: String?, retryCeiling: Int16, limit: UInt32)throws  -> [LocalMessage]  {
+    return try  FfiConverterSequenceTypeLocalMessage.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_pending_sends(
+            self.uniffiCloneHandle(),
+        FfiConverterOptionString.lower(chatId),
+        FfiConverterInt16.lower(retryCeiling),
+        FfiConverterUInt32.lower(limit),$0
     )
 })
 }
@@ -2029,6 +2186,11 @@ open func setContactNames(id: String, username: String, displayName: String)thro
 })
 }
     
+    /**
+     * Statuses: 0 sending, 1 sent, 2 delivered, 3 queued, 4 failed. A write that would replace
+     * stronger evidence of arrival (delivered > sent > the rest) is refused: false, as for no
+     * change and no message.
+     */
 open func setDeliveryStatus(id: String, status: Int16)throws  -> Bool  {
     return try  FfiConverterBool.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
     uniffi_construct_core_fn_method_localstore_set_delivery_status(
@@ -2067,6 +2229,16 @@ open func setObserver(observer: LocalStoreObserver?)  {try! rustCall() {
 }
 }
     
+open func setOrderKey(id: String, orderKey: String)throws  -> Bool  {
+    return try  FfiConverterBool.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_set_order_key(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(id),
+        FfiConverterString.lower(orderKey),$0
+    )
+})
+}
+    
     /**
      * Replaces our profile — there is one.
      */
@@ -2076,6 +2248,19 @@ open func setOwnProfile(profile: LocalOwnProfile)throws   {try rustCallWithError
         FfiConverterTypeLocalOwnProfile_lower(profile),$0
     )
 }
+}
+    
+    /**
+     * Each write below changes its named fields of one message; false: no message or no change.
+     */
+open func setRetryCount(id: String, count: Int16)throws  -> Bool  {
+    return try  FfiConverterBool.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_set_retry_count(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(id),
+        FfiConverterInt16.lower(count),$0
+    )
+})
 }
     
 open func setSecurityNotice(id: String, notice: Int16)throws  -> Bool  {
@@ -2094,6 +2279,21 @@ open func setSharingWith(id: String, sharing: Bool)throws  -> Bool  {
             self.uniffiCloneHandle(),
         FfiConverterString.lower(id),
         FfiConverterBool.lower(sharing),$0
+    )
+})
+}
+    
+    /**
+     * All null clears the transcript.
+     */
+open func setTranscript(id: String, text: String?, language: String?, generatedAt: Int64?)throws  -> Bool  {
+    return try  FfiConverterBool.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_set_transcript(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(id),
+        FfiConverterOptionString.lower(text),
+        FfiConverterOptionString.lower(language),
+        FfiConverterOptionInt64.lower(generatedAt),$0
     )
 })
 }
@@ -9214,6 +9414,90 @@ public func FfiConverterTypeKtVerdict_lower(_ value: KtVerdict) -> RustBuffer {
 
 // Note that we don't yet support `indirect` for enums.
 // See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+/**
+ * What a session archive did to an outgoing message encrypted under it.
+ */
+
+public enum LocalArchiveOutcome: Equatable, Hashable {
+    
+    /**
+     * The peer confirmed it; it stays delivered.
+     */
+    case keep
+    /**
+     * Queued to be sent again.
+     */
+    case resend
+    /**
+     * Attempts spent; failed.
+     */
+    case giveUp
+
+
+
+}
+
+#if compiler(>=6)
+extension LocalArchiveOutcome: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeLocalArchiveOutcome: FfiConverterRustBuffer {
+    typealias SwiftType = LocalArchiveOutcome
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> LocalArchiveOutcome {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .keep
+        
+        case 2: return .resend
+        
+        case 3: return .giveUp
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: LocalArchiveOutcome, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case .keep:
+            writeInt(&buf, Int32(1))
+        
+        
+        case .resend:
+            writeInt(&buf, Int32(2))
+        
+        
+        case .giveUp:
+            writeInt(&buf, Int32(3))
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLocalArchiveOutcome_lift(_ buf: RustBuffer) throws -> LocalArchiveOutcome {
+    return try FfiConverterTypeLocalArchiveOutcome.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLocalArchiveOutcome_lower(_ value: LocalArchiveOutcome) -> RustBuffer {
+    return FfiConverterTypeLocalArchiveOutcome.lower(value)
+}
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
 
 public enum LocalInsert: Equatable, Hashable {
     
@@ -10371,6 +10655,30 @@ public func FfiConverterCallbackInterfacePowProgressCallback_lower(_ v: PowProgr
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterOptionInt16: FfiConverterRustBuffer {
+    typealias SwiftType = Int16?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterInt16.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterInt16.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterOptionUInt32: FfiConverterRustBuffer {
     typealias SwiftType = UInt32?
 
@@ -10795,6 +11103,30 @@ fileprivate struct FfiConverterOptionTypeKtVerdict: FfiConverterRustBuffer {
         switch try readInt(&buf) as Int8 {
         case 0: return nil
         case 1: return try FfiConverterTypeKtVerdict.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterOptionTypeLocalArchiveOutcome: FfiConverterRustBuffer {
+    typealias SwiftType = LocalArchiveOutcome?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeLocalArchiveOutcome.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeLocalArchiveOutcome.read(from: &buf)
         default: throw UniffiInternalError.unexpectedOptionalTag
         }
     }
@@ -12251,7 +12583,16 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_method_localstore_advance_chat_preview() != 18597) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_construct_core_checksum_method_localstore_all_messages_after() != 48577) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_construct_core_checksum_method_localstore_all_peer_devices() != 59848) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_all_reactions() != 47486) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_apply_session_archive() != 5672) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_localstore_apply_shared_profile() != 40422) {
@@ -12296,6 +12637,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_method_localstore_every_contact() != 24186) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_construct_core_checksum_method_localstore_expire_reactions() != 1251) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_construct_core_checksum_method_localstore_forget_server_message_ids_before() != 29537) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -12303,6 +12647,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_localstore_identity_key_pins() != 6243) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_increment_retry_count() != 1246) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_localstore_increment_unread() != 19638) {
@@ -12323,7 +12670,13 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_method_localstore_message() != 63926) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_construct_core_checksum_method_localstore_message_count() != 25863) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_construct_core_checksum_method_localstore_messages_before() != 61408) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_messages_from() != 53099) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_localstore_own_profile() != 283) {
@@ -12333,6 +12686,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_localstore_peer_devices() != 14816) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_pending_sends() != 61956) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_localstore_put() != 58855) {
@@ -12389,13 +12745,22 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_method_localstore_set_observer() != 60987) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_construct_core_checksum_method_localstore_set_order_key() != 30671) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_construct_core_checksum_method_localstore_set_own_profile() != 60092) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_set_retry_count() != 31877) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_localstore_set_security_notice() != 29437) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_localstore_set_sharing_with() != 40928) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_set_transcript() != 2133) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_localstore_set_unread() != 48624) {
