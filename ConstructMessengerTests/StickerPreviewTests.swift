@@ -26,9 +26,17 @@ final class StickerPreviewTests: XCTestCase {
     func testReconcileFromTranscriptKeepsTheStickerLine() throws {
         let container = PersistenceController(inMemory: true).container
         let ctx = container.viewContext
+        // The reconciler writes through `ChatStore` (chats B2); point it at this store.
+        LocalRepositories.useChatsForTesting(container)
+        defer { LocalRepositories.useChatsForTesting(nil) }
 
+        let peer = User(context: ctx)
+        peer.id = "peer"
+        peer.username = ""
+        peer.displayName = ""
         let chat = Chat(context: ctx)
         chat.id = UUID().uuidString
+        chat.otherUser = peer
         let row = Message(context: ctx)
         row.id = UUID().uuidString.lowercased()
         row.chat = chat
@@ -43,8 +51,10 @@ final class StickerPreviewTests: XCTestCase {
         XCTAssertEqual(row.legacyBody, "", "a sticker has no text form")
         XCTAssertEqual(row.previewText, "🟥 \(NSLocalizedString("sticker", comment: ""))")
 
-        chat.clearPreview()
         XCTAssertTrue(chat.reconcilePreviewFromTranscript(in: ctx))
-        XCTAssertEqual(chat.lastMessageText, "🟥 \(NSLocalizedString("sticker", comment: ""))")
+        XCTAssertEqual(
+            try LocalRepositories.chats.chat(chat.id)?.lastMessageText,
+            "🟥 \(NSLocalizedString("sticker", comment: ""))"
+        )
     }
 }

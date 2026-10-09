@@ -85,12 +85,6 @@ extension Chat {
         lastMessageTime = timestamp
     }
 
-    /// Clear the preview — no messages left in the conversation.
-    func clearPreview() {
-        lastMessageText = nil
-        lastMessageTime = nil
-    }
-
     /// Align denormalized list preview with the newest visible transcript message.
     ///
     /// Call when the list appears / after a context save. Covers three stuck-row classes:
@@ -101,6 +95,9 @@ extension Chat {
     ///
     /// Uses the same `contentTypeRaw == 0` filter as `ChatMessageStore`'s FRC so control
     /// rows never become the list subtitle. Returns `true` when fields changed.
+    ///
+    /// Reads the transcript here; writes the preview through `ChatStore` (chats B2), so nothing
+    /// is left to save in `context`.
     @discardableResult
     func reconcilePreviewFromTranscript(in context: NSManagedObjectContext? = nil) -> Bool {
         let ctx = context ?? managedObjectContext
@@ -125,7 +122,7 @@ extension Chat {
 
         guard let newest else {
             if lastMessageText != nil || lastMessageTime != nil {
-                clearPreview()
+                MessagePersistenceService.setPreview(of: self, text: nil, at: nil)
                 return true
             }
             return false
@@ -138,7 +135,7 @@ extension Chat {
             return false
         }
 
-        applyPreview(text: newest.previewText, timestamp: newest.timestamp, force: true)
+        MessagePersistenceService.setPreview(of: self, text: newest.previewText, at: newest.timestamp)
         Log.debug(
             "Preview reconciled for \(id.prefix(8))… → '\(text.prefix(40))' ts=\(newest.timestamp)",
             category: "Chat"

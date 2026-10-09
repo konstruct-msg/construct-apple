@@ -68,12 +68,7 @@ class ChatsViewModel {
             var stamped = 0
             for chat in chats where chat.reconcilePreviewFromTranscript(in: context) { stamped += 1 }
             guard stamped > 0 else { return }
-            do {
-                try context.save()
-                Log.info("history_import: stamped \(stamped) chat preview(s) so the stream subscribes to them", category: "HistorySync")
-            } catch {
-                Log.error("history_import: could not stamp chat previews: \(error)", category: "HistorySync")
-            }
+            Log.info("history_import: stamped \(stamped) chat preview(s) so the stream subscribes to them", category: "HistorySync")
         }
     }
 

@@ -65,7 +65,7 @@ class MessagePersistenceService {
                 existing.applyStoredEncryption(plaintextData: payload, contactId: contactId)
                 Log.info("Recovered undecryptable message \(message.id.prefix(8))… — content now available", category: "MessagePersistence")
                 // Update chat preview if this was the last message showing "unavailable"
-                try? updateChatMetadata(chat: chat, lastMessageText: previewText, lastMessageTime: existing.timestamp, in: context)
+                Self.advancePreview(of: chat, text: previewText, at: existing.timestamp)
             }
             isNewMessage = false
         } else {
@@ -110,13 +110,8 @@ class MessagePersistenceService {
         // backgrounded or crashes before the Task executes.
         try context.save()
         if isNewMessage {
-            if !isSentByMe { chat.unreadCount += 1 }
-            try updateChatMetadata(
-                chat: chat,
-                lastMessageText: previewText,
-                lastMessageTime: messageTimestamp,
-                in: context
-            )
+            if !isSentByMe { Self.incrementUnread(of: chat) }
+            Self.advancePreview(of: chat, text: previewText, at: messageTimestamp)
         }
         
         Log.debug("Message saved to Core Data", category: "MessagePersistence")
@@ -287,8 +282,9 @@ class MessagePersistenceService {
         context.saveAndLog()
 
         // Update chat metadata so the preview row shows something sensible.
-        let preview = !caption.isEmpty ? caption : (items.first?.fileName.map { "📎 \($0)" } ?? "📷 Photo")
-        try? updateChatMetadata(chat: chat, lastMessageText: preview, lastMessageTime: now, in: context)
+        let preview = !caption.isEmpty ? caption
+            : (items.first?.fileName.map { "📎 \($0)" } ?? "📷 " + NSLocalizedString("photo", comment: ""))
+        Self.advancePreview(of: chat, text: preview, at: now)
 
         Log.debug("Saved upload placeholder \(id.prefix(8))…", category: "MessagePersistence")
     }
@@ -331,7 +327,7 @@ class MessagePersistenceService {
 
         context.saveAndLog()
 
-        try? updateChatMetadata(chat: chat, lastMessageText: "Voice message", lastMessageTime: now, in: context)
+        Self.advancePreview(of: chat, text: NSLocalizedString("voice_message", comment: ""), at: now)
 
         Log.debug("Saved voice upload placeholder \(id.prefix(8))…", category: "MessagePersistence")
     }
@@ -394,25 +390,42 @@ class MessagePersistenceService {
     }
     
     // MARK: - Chat Metadata
-    
-    /// Update chat's last message metadata
-    /// - Parameters:
-    ///   - chat: Chat to update
-    ///   - lastMessageText: Text of last message
-    ///   - lastMessageTime: Timestamp of last message
-    ///   - context: Managed object context
-    private func updateChatMetadata(
-        chat: Chat,
-        lastMessageText: String,
-        lastMessageTime: Date,
-        in context: NSManagedObjectContext
-    ) throws {
-        chat.applyPreview(text: lastMessageText, timestamp: lastMessageTime)
-        try context.save()
 
-        Log.debug("Updated chat.lastMessageText and lastMessageTime", category: "MessagePersistence")
+    // The chat's list row — preview and unread count — is written through `ChatStore`, after the
+    // message's own save, and never in the message's context (LOCAL_STORE_MIGRATION_PLAN, chats
+    // B2). The crate writes them the same way: `insert_message`, then `advance_chat_preview`, two
+    // statements. The message's context holds the chat only to link messages to it; that context
+    // is the view context, which merges the repository's write and, by its property-trump policy,
+    // keeps it when it next saves a link (`ChatStoreTests`).
+
+    /// Move the list's preview to this message, unless the one shown is newer.
+    nonisolated static func advancePreview(of chat: Chat, text: String, at time: Date) {
+        do {
+            if try !LocalRepositories.chats.advancePreview(chat.id, text: Chat.formatPreviewText(text), time: time) {
+                Log.debug("Preview of \(chat.id.prefix(8))… not advanced — a newer one is shown", category: "MessagePersistence")
+            }
+        } catch {
+            Log.error("Preview of \(chat.id.prefix(8))… not written: \(error)", category: "MessagePersistence")
+        }
     }
-    
+
+    /// Set the preview whatever it was — recomputed from the messages left; nil when none is.
+    nonisolated static func setPreview(of chat: Chat, text: String?, at time: Date?) {
+        do {
+            try LocalRepositories.chats.setPreview(chat.id, text: text.map(Chat.formatPreviewText), time: time)
+        } catch {
+            Log.error("Preview of \(chat.id.prefix(8))… not set: \(error)", category: "MessagePersistence")
+        }
+    }
+
+    nonisolated static func incrementUnread(of chat: Chat) {
+        do {
+            try LocalRepositories.chats.incrementUnread(chat.id)
+        } catch {
+            Log.error("Unread of \(chat.id.prefix(8))… not counted: \(error)", category: "MessagePersistence")
+        }
+    }
+
     // MARK: - Message Deletion
     
     /// Delete a single message from Core Data
@@ -506,14 +519,9 @@ class MessagePersistenceService {
         fetchRequest.sortDescriptors = [NSSortDescriptor(key: "serverOrderKey", ascending: false)]
         fetchRequest.fetchLimit = 1
         
-        if let lastMessage = try context.fetch(fetchRequest).first {
-            // Recomputed from what survives — this is the one case that may move backwards.
-            chat.applyPreview(text: lastMessage.previewText, timestamp: lastMessage.timestamp, force: true)
-        } else {
-            chat.clearPreview()
-        }
-        
-        try context.save()
+        // Recomputed from what survives — this is the one case that may move backwards.
+        let lastMessage = try context.fetch(fetchRequest).first
+        Self.setPreview(of: chat, text: lastMessage?.previewText, at: lastMessage?.timestamp)
         Log.debug("Updated chat metadata after deletion", category: "MessagePersistence")
     }
 
