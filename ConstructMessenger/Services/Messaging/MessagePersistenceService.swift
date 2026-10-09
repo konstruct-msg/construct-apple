@@ -44,76 +44,63 @@ class MessagePersistenceService {
             return decryptedContent
         }()
         
-        let fetchRequest = Message.fetchRequest()
-        let messagePredicate = NSPredicate(format: "id ==[c] %@", message.id)
-        fetchRequest.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [messagePredicate])
-        
         let messageTimestamp = Date(timeIntervalSince1970: TimeInterval(message.timestamp))
-        let isNewMessage: Bool
-        
-        if let existing = try? context.fetch(fetchRequest).first {
+        let store = LocalRepositories.messages
+
+        if let existing = try store.message(message.id) {
             Log.debug("Updating existing message \(message.id)", category: "MessagePersistence")
-            existing.deliveryStatus = status
+            try store.setDeliveryStatus(existing.id, status)
             if let serverOrderKey = message.serverOrderKey {
-                existing.serverOrderKey = serverOrderKey
+                try store.setOrderKey(existing.id, serverOrderKey)
             }
             // Recover a previously undecryptable message: if the sender re-sent the same
             // message (same UUID) after a session heal, update the content so the "unavailable"
             // bubble is replaced with the actual text.
-            if !existing.hasDecryptedContent, !payload.isEmpty {
+            //
+            // Still a managed-object write: replacing the body without marking the message edited
+            // has no operation in `MessageStore` or the crate yet (an edit marks it).
+            if existing.body.isEmpty, !payload.isEmpty, let row = try Message.row(existing.id, in: context) {
                 let contactId = isSentByMe ? message.to : message.from
-                existing.applyStoredEncryption(plaintextData: payload, contactId: contactId)
+                row.applyStoredEncryption(plaintextData: payload, contactId: contactId)
+                try context.save()
                 Log.info("Recovered undecryptable message \(message.id.prefix(8))… — content now available", category: "MessagePersistence")
                 // Update chat preview if this was the last message showing "unavailable"
                 Self.advancePreview(of: chat, text: previewText, at: existing.timestamp)
             }
-            isNewMessage = false
-        } else {
-            Log.debug("Creating new message \(message.id)", category: "MessagePersistence")
-            let newMessage = Message(context: context)
-            newMessage.id = message.id.lowercased()
-            newMessage.fromUserId = message.from
-            newMessage.toUserId = message.to
-            newMessage.contentType = .regular
-            newMessage.timestamp = messageTimestamp
-            newMessage.serverOrderKey = message.serverOrderKey
-                ?? (isSentByMe
-                    ? ServerMessageOrder.pending(localMessageId: newMessage.id)
-                    : ServerMessageOrder.local(timestamp: messageTimestamp, messageId: newMessage.id))
-            newMessage.isSentByMe = isSentByMe
-            newMessage.deliveryStatus = status
-            newMessage.retryCount = 0
-            newMessage.chat = chat
-            newMessage.suiteId = suiteId
-
-            let contactId = isSentByMe ? message.to : message.from
-            newMessage.applyStoredEncryption(plaintextData: payload, contactId: contactId)
-
-            // Set reply information
-            if let replyMessage = replyTo {
-                newMessage.replyToMessageId = replyMessage.id.lowercased()
-                newMessage.replyQuote = ReplyPreviewPayload.projecting(
-                    originalContent: replyMessage.legacyBody,
-                    textOverride: replyToContentOverride
-                )?.storedContent
-            }
-
-            // Store all thumbnails indexed for multi-image messages
-            for (index, thumb) in localThumbnails.enumerated() {
-                MediaManager.shared.storeThumbnail(thumb, for: message.id, at: index)
-            }
-
-            isNewMessage = true
+            return false
         }
-        
-        // Save synchronously — a deferred Task risks permanent data loss if the app is
-        // backgrounded or crashes before the Task executes.
-        try context.save()
+
+        Log.debug("Creating new message \(message.id)", category: "MessagePersistence")
+        let id = message.id.lowercased()
+        // Store all thumbnails indexed for multi-image messages
+        for (index, thumb) in localThumbnails.enumerated() {
+            MediaManager.shared.storeThumbnail(thumb, for: message.id, at: index)
+        }
+        let record = MessageRecord(
+            id: id, chatId: chat.id, fromUserId: message.from, toUserId: message.to,
+            isSentByMe: isSentByMe, timestamp: messageTimestamp,
+            orderKey: message.serverOrderKey
+                ?? (isSentByMe
+                    ? ServerMessageOrder.pending(localMessageId: id)
+                    : ServerMessageOrder.local(timestamp: messageTimestamp, messageId: id)),
+            body: payload, contentType: .regular, deliveryStatus: status, retryCount: 0,
+            suiteId: suiteId, isEdited: false, editedAt: nil,
+            replyToMessageId: replyTo?.id.lowercased(),
+            replyQuote: replyTo.flatMap {
+                ReplyPreviewPayload.projecting(
+                    originalContent: $0.legacyBody, textOverride: replyToContentOverride
+                )?.storedContent
+            },
+            transcript: nil, transcriptLanguage: nil, transcriptGeneratedAt: nil
+        )
+        // Saved synchronously, through the repository: a deferred write risks the message being
+        // lost if the app is backgrounded or killed before it runs.
+        let isNewMessage = try store.insert(record, searchText: LocalMessagePayload.decode(payload).plainText)
         if isNewMessage {
             if !isSentByMe { Self.incrementUnread(of: chat) }
             Self.advancePreview(of: chat, text: previewText, at: messageTimestamp)
         }
-        
+
         Log.debug("Message saved to Core Data", category: "MessagePersistence")
         return isNewMessage
     }
@@ -125,16 +112,15 @@ class MessagePersistenceService {
         serverOrderKey: String,
         in context: NSManagedObjectContext
     ) {
-        let fetchRequest = Message.fetchRequest()
-        fetchRequest.predicate = NSPredicate(format: "id ==[c] %@", messageId)
-        fetchRequest.fetchLimit = 1
-        guard let message = try? context.fetch(fetchRequest).first else {
-            Log.error("Cannot find message to update server order: \(messageId)", category: "MessagePersistence")
-            return
+        do {
+            if try LocalRepositories.messages.message(messageId) == nil {
+                Log.error("Cannot find message to update server order: \(messageId)", category: "MessagePersistence")
+                return
+            }
+            try LocalRepositories.messages.setOrderKey(messageId, serverOrderKey)
+        } catch {
+            Log.error("Server order of \(messageId.prefix(8))… not written: \(error)", category: "MessagePersistence")
         }
-        guard message.serverOrderKey != serverOrderKey else { return }
-        message.serverOrderKey = serverOrderKey
-        context.saveAndLog()
     }
     
     // MARK: - Update Message Status
@@ -152,22 +138,17 @@ class MessagePersistenceService {
         storagePayload: Data? = nil,
         in context: NSManagedObjectContext
     ) {
-        let fetchRequest = Message.fetchRequest()
-        fetchRequest.predicate = NSPredicate(format: "id ==[c] %@", messageId)
-        fetchRequest.fetchLimit = 1
-        guard let message = try? context.fetch(fetchRequest).first else {
-            Log.error("Cannot find message to update content: \(messageId)", category: "MessagePersistence")
-            return
+        let body = storagePayload ?? Data(newContent.utf8)
+        do {
+            // `isEdited` is always true at the callers; an edit marks the message, as the crate's does.
+            if try !LocalRepositories.messages.edit(
+                messageId, body: body, searchText: LocalMessagePayload.decode(body).plainText, editedAt: editedAt
+            ) {
+                Log.error("Cannot find message to update content: \(messageId)", category: "MessagePersistence")
+            }
+        } catch {
+            Log.error("Content of \(messageId.prefix(8))… not written: \(error)", category: "MessagePersistence")
         }
-        let contactId = message.isSentByMe ? message.toUserId : message.fromUserId
-        if let storagePayload {
-            message.applyStoredEncryption(plaintextData: storagePayload, contactId: contactId)
-        } else {
-            message.applyStoredEncryption(plaintext: newContent, contactId: contactId)
-        }
-        message.isEdited = isEdited
-        message.editedAt = editedAt
-        context.saveAndLog()
     }
 
     // MARK: - Upload Placeholder
@@ -246,40 +227,28 @@ class MessagePersistenceService {
         let placeholderJson = Self.placeholderBody(caption: caption, items: items)
 
         let now = Date()
-        let newMessage = Message(context: context)
-        newMessage.id = id.lowercased()
-        newMessage.fromUserId = fromUserId
-        newMessage.toUserId = toUserId
-        // MUST stay `.regular`: `ChatMessageStore`'s FRC filters the transcript on
-        // `contentTypeRaw == 0`, so a `.media` row is fetched by nothing and the bubble
-        // never appears — the upload ran invisibly and the media only showed up once the
-        // real (`.regular`) message replaced the placeholder. `MessageContentType.infer`
-        // deliberately maps media payloads to `.regular` for the same reason.
-        newMessage.contentType = .regular
-        newMessage.timestamp = now
-        newMessage.serverOrderKey = ServerMessageOrder.pending(localMessageId: newMessage.id)
-        newMessage.isSentByMe = true
-        newMessage.deliveryStatus = .sending
-        newMessage.retryCount = 0
-        newMessage.chat = chat
-
-        newMessage.applyStoredEncryption(plaintext: placeholderJson, contactId: toUserId)
-
-        if let replyMessage = replyTo {
-            newMessage.replyToMessageId = replyMessage.id.lowercased()
-            newMessage.replyQuote = ReplyPreviewPayload.projecting(
-                originalContent: replyMessage.legacyBody,
-                textOverride: replyToContentOverride
-            )?.storedContent
-        }
-
+        let rowId = id.lowercased()
         for (index, item) in items.enumerated() {
             if let thumb = item.thumbnail {
                 MediaManager.shared.storeThumbnail(thumb, for: id, at: index)
             }
         }
-
-        context.saveAndLog()
+        // `contentType` MUST stay `.regular`: `ChatMessageStore`'s FRC filters the transcript on
+        // `contentTypeRaw == 0`, so a `.media` row is fetched by nothing and the bubble never
+        // appears — the upload ran invisibly and the media only showed up once the real
+        // (`.regular`) message replaced the placeholder. `MessageContentType.infer` deliberately
+        // maps media payloads to `.regular` for the same reason.
+        insertOwn(MessageRecord(
+            id: rowId, chatId: chat.id, fromUserId: fromUserId, toUserId: toUserId, isSentByMe: true,
+            timestamp: now, orderKey: ServerMessageOrder.pending(localMessageId: rowId),
+            body: Data(placeholderJson.utf8), contentType: .regular, deliveryStatus: .sending,
+            retryCount: 0, suiteId: 0, isEdited: false, editedAt: nil,
+            replyToMessageId: replyTo?.id.lowercased(),
+            replyQuote: replyTo.flatMap {
+                ReplyPreviewPayload.projecting(originalContent: $0.legacyBody, textOverride: replyToContentOverride)?.storedContent
+            },
+            transcript: nil, transcriptLanguage: nil, transcriptGeneratedAt: nil
+        ))
 
         // Update chat metadata so the preview row shows something sensible.
         let preview = !caption.isEmpty ? caption
@@ -309,23 +278,15 @@ class MessagePersistenceService {
         """
 
         let now = Date()
-        let newMessage = Message(context: context)
-        newMessage.id = id
-        newMessage.fromUserId = fromUserId
-        newMessage.toUserId = toUserId
-        // `.regular` for the same reason as the media placeholder above — the transcript
-        // FRC only fetches `contentTypeRaw == 0`.
-        newMessage.contentType = .regular
-        newMessage.timestamp = now
-        newMessage.serverOrderKey = ServerMessageOrder.pending(localMessageId: newMessage.id)
-        newMessage.isSentByMe = true
-        newMessage.deliveryStatus = .sending
-        newMessage.retryCount = 0
-        newMessage.chat = chat
-
-        newMessage.applyStoredEncryption(plaintext: placeholderJson, contactId: toUserId)
-
-        context.saveAndLog()
+        // `.regular` for the same reason as the media placeholder above — the transcript FRC only
+        // fetches `contentTypeRaw == 0`. The id keeps its case: the upload tracks it as given.
+        insertOwn(MessageRecord(
+            id: id, chatId: chat.id, fromUserId: fromUserId, toUserId: toUserId, isSentByMe: true,
+            timestamp: now, orderKey: ServerMessageOrder.pending(localMessageId: id),
+            body: Data(placeholderJson.utf8), contentType: .regular, deliveryStatus: .sending,
+            retryCount: 0, suiteId: 0, isEdited: false, editedAt: nil, replyToMessageId: nil,
+            replyQuote: nil, transcript: nil, transcriptLanguage: nil, transcriptGeneratedAt: nil
+        ))
 
         Self.advancePreview(of: chat, text: NSLocalizedString("voice_message", comment: ""), at: now)
 
@@ -341,13 +302,23 @@ class MessagePersistenceService {
     /// message).  The caller is then responsible for calling
     /// `context.saveAndLog()` once all changes are staged.
     func deleteMessage(id: String, in context: NSManagedObjectContext, autoSave: Bool = true) {
-        let req = Message.fetchRequest()
-        req.predicate = NSPredicate(format: "id ==[c] %@", id)
-        req.fetchLimit = 1
-        guard let msg = try? context.fetch(req).first else { return }
-        context.delete(msg)
-        if autoSave { context.saveAndLog() }
-        Log.debug("Deleted placeholder \(id.prefix(8))…", category: "MessagePersistence")
+        // Through the repository, which saves at once: `autoSave: false` no longer batches.
+        do {
+            try LocalRepositories.messages.delete([id])
+            Log.debug("Deleted placeholder \(id.prefix(8))…", category: "MessagePersistence")
+        } catch {
+            Log.error("Placeholder \(id.prefix(8))… not deleted: \(error)", category: "MessagePersistence")
+        }
+    }
+
+    /// A message of our own, written whole through the repository; a failure is logged, as the
+    /// placeholders' `saveAndLog` did.
+    private func insertOwn(_ record: MessageRecord) {
+        do {
+            try LocalRepositories.messages.insert(record, searchText: nil)
+        } catch {
+            Log.error("Message \(record.id.prefix(8))… not saved: \(error)", category: "MessagePersistence")
+        }
     }
 
     // MARK: - Update Status
@@ -357,20 +328,15 @@ class MessagePersistenceService {
         status: DeliveryStatus,
         in context: NSManagedObjectContext
     ) {
-        let fetchRequest = Message.fetchRequest()
-        let messagePredicate = NSPredicate(format: "id ==[c] %@", messageId)
-        fetchRequest.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [messagePredicate])
-        
-        guard let message = try? context.fetch(fetchRequest).first else {
-            Log.error("Message not found: \(messageId)", category: "MessagePersistence")
-            return
-        }
-        
-        message.deliveryStatus = status
         do {
-            try context.save()
+            guard try LocalRepositories.messages.message(messageId) != nil else {
+                Log.error("Message not found: \(messageId)", category: "MessagePersistence")
+                return
+            }
+            // The store refuses a status weaker than the one held (`DeliveryStatusTransition`).
+            try LocalRepositories.messages.setDeliveryStatus(messageId, status)
         } catch {
-            Log.error("Core Data status save failed: \(error)", category: "MessagePersistence")
+            Log.error("Status of \(messageId.prefix(8))… not written: \(error)", category: "MessagePersistence")
         }
 
         // Keep MessageQueueManager's in-memory timers in sync so we don't
@@ -435,71 +401,20 @@ class MessagePersistenceService {
     ///   - context: Core Data context
     /// - Throws: Core Data error if save fails
     func deleteMessage(_ message: Message, chat: Chat, in context: NSManagedObjectContext) throws {
-        guard !message.isDeleted,
-              message.managedObjectContext == context else {
-            Log.error("Message is deleted or not in the correct context", category: "MessagePersistenceService")
+        guard !message.isDeleted else {
+            Log.error("Message is already deleted", category: "MessagePersistenceService")
             throw NSError(domain: "MessagePersistence", code: 1, userInfo: [NSLocalizedDescriptionKey: "Invalid message"])
         }
-        
-        let messageId = message.id
-        Log.debug("Deleting message: \(messageId)", category: "MessagePersistenceService")
-        
-        context.delete(message)
-        context.processPendingChanges()
-        try context.save()
-        
-        Log.info("Message deleted from Core Data: \(messageId)", category: "MessagePersistenceService")
-        
-        // Sync parent context if needed
-        if let parent = context.parent {
-            parent.performAndWait {
-                do { try parent.save() } catch { Log.error("MessagePersistenceService: parent context save failed: \(error)", category: "Persistence") }
-            }
-        }
-        
-        // Update chat metadata
-        try updateChatMetadataAfterDeletion(chat: chat, in: context)
+        try deleteMessages(withIds: [message.id], chat: chat, in: context)
     }
-    
-    /// Delete multiple messages by IDs
-    /// - Parameters:
-    ///   - messageIds: Set of message IDs to delete
-    ///   - chat: Chat containing the messages
-    ///   - context: Core Data context
-    /// - Throws: Core Data error if save fails
+
+    /// Delete messages by id, through the repository, then recompute the chat's preview from what
+    /// is left. The view context drops the rows when it merges the repository's save.
     func deleteMessages(withIds messageIds: Set<String>, chat: Chat, in context: NSManagedObjectContext) throws {
         guard !messageIds.isEmpty else { return }
-        
         Log.debug("Deleting \(messageIds.count) messages", category: "MessagePersistenceService")
-        
-        let fetchRequest = Message.fetchRequest()
-        let idsPredicate = NSPredicate(format: "id IN %@", messageIds)
-        fetchRequest.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [idsPredicate])
-        
-        guard let messagesToDelete = try? context.fetch(fetchRequest) else {
-            Log.error("Failed to fetch messages for deletion", category: "MessagePersistenceService")
-            throw NSError(domain: "MessagePersistence", code: 2, userInfo: [NSLocalizedDescriptionKey: "Failed to fetch messages"])
-        }
-        
-        Log.debug("Found \(messagesToDelete.count) messages to delete", category: "MessagePersistenceService")
-        
-        for message in messagesToDelete {
-            context.delete(message)
-        }
-        
-        context.processPendingChanges()
-        try context.save()
-        
-        Log.info("\(messagesToDelete.count) messages deleted from Core Data", category: "MessagePersistenceService")
-        
-        // Sync parent context if needed
-        if let parent = context.parent {
-            parent.performAndWait {
-                do { try parent.save() } catch { Log.error("MessagePersistenceService: parent context save failed: \(error)", category: "Persistence") }
-            }
-        }
-        
-        // Update chat metadata
+        try LocalRepositories.messages.delete(messageIds)
+        Log.info("\(messageIds.count) message(s) deleted", category: "MessagePersistenceService")
         try updateChatMetadataAfterDeletion(chat: chat, in: context)
     }
     
@@ -512,16 +427,10 @@ class MessagePersistenceService {
         chat: Chat,
         in context: NSManagedObjectContext
     ) throws {
-        // Find the most recent message for this chat
-        let fetchRequest = Message.fetchRequest()
-        let chatPredicate = NSPredicate(format: "chat == %@", chat)
-        fetchRequest.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [chatPredicate])
-        fetchRequest.sortDescriptors = [NSSortDescriptor(key: "serverOrderKey", ascending: false)]
-        fetchRequest.fetchLimit = 1
-        
         // Recomputed from what survives — this is the one case that may move backwards.
-        let lastMessage = try context.fetch(fetchRequest).first
-        Self.setPreview(of: chat, text: lastMessage?.previewText, at: lastMessage?.timestamp)
+        let newest = try LocalRepositories.messages.messages(inChat: chat.id, before: nil, limit: 1).last
+        let text = newest.map { LocalMessagePayload.decode($0.body).previewHint }
+        Self.setPreview(of: chat, text: text, at: newest?.timestamp)
         Log.debug("Updated chat metadata after deletion", category: "MessagePersistence")
     }
 

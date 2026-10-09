@@ -404,22 +404,23 @@ final class ChatSendCoordinator {
         }
 
         for queued in queuedMessages where queued.placeholderId == nil {
-            let msg = Message(context: viewContext)
-            msg.id = UUID().uuidString
-            msg.fromUserId = currentUserId
-            msg.toUserId = recipientId
-            msg.contentType = .regular
-            msg.timestamp = queued.timestamp
-            msg.serverOrderKey = ServerMessageOrder.pending(localMessageId: msg.id)
-            msg.deliveryStatus = .failed
-            msg.isSentByMe = true
-            msg.chat = chat
-            msg.applyStoredEncryption(plaintext: queued.text, contactId: recipientId)
+            let id = UUID().uuidString
+            do {
+                try LocalRepositories.messages.insert(MessageRecord(
+                    id: id, chatId: chat.id, fromUserId: currentUserId, toUserId: recipientId,
+                    isSentByMe: true, timestamp: queued.timestamp,
+                    orderKey: ServerMessageOrder.pending(localMessageId: id),
+                    body: Data(queued.text.utf8), contentType: .regular, deliveryStatus: .failed,
+                    retryCount: 0, suiteId: 0, isEdited: false, editedAt: nil, replyToMessageId: nil,
+                    replyQuote: nil, transcript: nil, transcriptLanguage: nil, transcriptGeneratedAt: nil
+                ), searchText: queued.text)
+            } catch {
+                Log.error("Failed queued message \(id.prefix(8))… not saved: \(error)", category: "ChatViewModel")
+            }
         }
-        viewContext.saveAndLog()
         // These rows bypass MessagePersistenceService.saveMessage, so the preview needs advancing
         // here too — otherwise the list keeps showing an older message than the transcript does.
-        // After the save, through the repository; only the newest can be the preview.
+        // After the insert, through the repository; only the newest can be the preview.
         if let newest = queuedMessages.filter({ $0.placeholderId == nil }).max(by: { $0.timestamp < $1.timestamp }) {
             MessagePersistenceService.advancePreview(of: chat, text: newest.text, at: newest.timestamp)
         }

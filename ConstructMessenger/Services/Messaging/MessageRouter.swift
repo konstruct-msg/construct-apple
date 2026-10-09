@@ -1213,22 +1213,22 @@ final class MessageRouter {
                 case .edit(let targetMessageID, let newText, _):
                     // Modern edit from MessageContent.edit (newText carries caption for media too).
                     // Scoped to the author: a peer may only edit messages it sent us.
-                    let fetch = Message.fetchRequest()
-                    fetch.predicate = NSPredicate(format: "id ==[c] %@ AND fromUserId == %@", targetMessageID, otherUserId)
-                    fetch.fetchLimit = 1
-                    if let original = try? context.fetch(fetch).first {
+                    if let original = try? LocalRepositories.messages.message(targetMessageID),
+                       original.fromUserId == otherUserId {
                         let captionOrText = newText.text
+                        var body = original.body
                         if !captionOrText.isEmpty {
-                            let stored = MessageDisplayCache.shared.payloadData(for: original)
-                            if let edited = MediaWireCodec.editedCaptionPayload(storedPlaintext: stored, newCaption: captionOrText) {
-                                original.applyStoredEncryption(plaintextData: edited.storagePayload, contactId: otherUserId)
+                            if let edited = MediaWireCodec.editedCaptionPayload(storedPlaintext: original.body, newCaption: captionOrText) {
+                                body = edited.storagePayload
                             } else {
-                                original.applyStoredEncryption(plaintext: captionOrText, contactId: otherUserId)
+                                body = Data(captionOrText.utf8)
                             }
                         }
                         // Future: if newMedia populated, convert via MediaWireCodec + album wrapper here.
-                        original.isEdited = true
-                        original.editedAt = Date()
+                        _ = try? LocalRepositories.messages.edit(
+                            original.id, body: body,
+                            searchText: LocalMessagePayload.decode(body).plainText, editedAt: Date()
+                        )
                         Log.info("Applied modern edit to \(targetMessageID.prefix(8))… from \(otherUserId.prefix(8))…", category: "MessageRouter")
                     } else {
                         Log.error("Modern edit target not found: \(targetMessageID.prefix(8))… from \(otherUserId.prefix(8))… — edit dropped", category: "MessageRouter")
@@ -1803,30 +1803,23 @@ final class MessageRouter {
         // would reference an id its siblings never stored.
         let envelopeId = DeviceCopyWireId.baseId(of: messageData.id) ?? messageData.id
         var canonicalId = (e2eMessageId ?? envelopeId).lowercased()
-        let fetchRequest = Message.fetchRequest()
-        fetchRequest.predicate = NSPredicate(format: "id ==[c] %@", canonicalId)
-        fetchRequest.fetchLimit = 1
+        let store = LocalRepositories.messages
 
         // Check if message already exists (from background fetch, retry redelivery, …)
-        if let existingMessage = try context.fetch(fetchRequest).first {
-            if existingMessage.fromUserId == messageData.from {
-                var changed = false
+        if let existing = try store.message(canonicalId) {
+            if existing.fromUserId == messageData.from {
                 var recoveredPreviewAt: Date?
-                if let serverOrderKey = messageData.serverOrderKey,
-                   existingMessage.serverOrderKey != serverOrderKey {
-                    existingMessage.serverOrderKey = serverOrderKey
-                    changed = true
+                if let serverOrderKey = messageData.serverOrderKey {
+                    try store.setOrderKey(existing.id, serverOrderKey)
                 }
-                // Update encrypted content if message wasn't previously decrypted
-                if !existingMessage.hasDecryptedContent {
+                // Update the content if the message was stored undecryptable. Still a
+                // managed-object write: replacing the body without marking the message edited has
+                // no operation in `MessageStore` or the crate yet.
+                if existing.body.isEmpty, let row = try Message.row(existing.id, in: context) {
                     Log.debug("Updating decrypted content for message \(canonicalId)", category: "MessageRouter")
-                    existingMessage.applyStoredEncryption(plaintextData: storagePayload, contactId: messageData.from)
-                    recoveredPreviewAt = existingMessage.timestamp
-                    changed = true
-                }
-                if changed {
+                    row.applyStoredEncryption(plaintextData: storagePayload, contactId: messageData.from)
                     try context.saveOrThrow(category: "MessageRouter")
-                    Log.debug("Updated message content/order", category: "MessageRouter")
+                    recoveredPreviewAt = existing.timestamp
                 }
                 if let at = recoveredPreviewAt {
                     // Forced when the preview is blank: a message that was stored undecryptable
@@ -1845,48 +1838,28 @@ final class MessageRouter {
             // suppress it; store this message under the (unique) envelope id instead.
             Log.error("E2E id \(canonicalId.prefix(8))… collides with a message from another author — falling back to envelope id", category: "MessageRouter")
             canonicalId = messageData.id.lowercased()
-            let envelopeFetch = Message.fetchRequest()
-            envelopeFetch.predicate = NSPredicate(format: "id ==[c] %@", canonicalId)
-            envelopeFetch.fetchLimit = 1
-            if try context.fetch(envelopeFetch).first != nil {
+            if try store.message(canonicalId) != nil {
                 return canonicalId  // already stored under the envelope id (e.g. by background fetch)
             }
         }
 
-        // Create new message
-        let message = Message(context: context)
-        message.id = canonicalId
-        message.fromUserId = messageData.from
-        message.toUserId = messageData.to
-        message.contentType = .regular
-        message.timestamp = Date.fromRemoteTimestamp(messageData.timestamp)
-        message.serverOrderKey = messageData.serverOrderKey
-            ?? ServerMessageOrder.local(timestamp: message.timestamp, messageId: canonicalId)
-        message.isSentByMe = false
-        message.deliveryStatus = .delivered
-        message.retryCount = 0
-        message.chat = chat
-
-        message.applyStoredEncryption(plaintextData: storagePayload, contactId: messageData.from)
-
         // Restore reply-to context so the receiver sees the same reply bubble as the sender.
         // Priority: QuotedMessage from proto plaintext (privacy-safe, no server visibility).
         // Fallback: legacy replyToMessageId from envelope (old clients without proto payload).
+        var replyToMessageId: String?
+        var replyQuote: String?
         if let qm = quotedMessage, !qm.messageID.isEmpty {
-            message.replyToMessageId = qm.messageID.lowercased()
-            message.replyQuote = ReplyPreviewPayload.receiving(
+            replyToMessageId = qm.messageID.lowercased()
+            replyQuote = ReplyPreviewPayload.receiving(
                 textPreview: qm.hasTextPreview ? qm.textPreview : nil,
                 mediaType: qm.hasMediaType ? qm.mediaType : nil
             )?.storedContent
         } else if !messageData.replyToMessageId.isEmpty {
-            message.replyToMessageId = messageData.replyToMessageId.lowercased()
-            let replyFetch = Message.fetchRequest()
-            replyFetch.predicate = NSPredicate(format: "id ==[c] %@", messageData.replyToMessageId)
-            replyFetch.fetchLimit = 1
+            replyToMessageId = messageData.replyToMessageId.lowercased()
             do {
-                if let replyMsg = try context.fetch(replyFetch).first {
-                    message.replyQuote = ReplyPreviewPayload.projecting(
-                        originalContent: replyMsg.legacyBody
+                if let replied = try store.message(messageData.replyToMessageId) {
+                    replyQuote = ReplyPreviewPayload.projecting(
+                        originalContent: LocalMessagePayload.decode(replied.body).displayString
                     )?.storedContent
                 }
             } catch {
@@ -1894,9 +1867,19 @@ final class MessageRouter {
             }
         }
 
-        try context.saveOrThrow(category: "MessageRouter")
+        // Create new message — through the repository, whole, in one write.
+        let timestamp = Date.fromRemoteTimestamp(messageData.timestamp)
+        try store.insert(MessageRecord(
+            id: canonicalId, chatId: chat.id, fromUserId: messageData.from, toUserId: messageData.to,
+            isSentByMe: false, timestamp: timestamp,
+            orderKey: messageData.serverOrderKey
+                ?? ServerMessageOrder.local(timestamp: timestamp, messageId: canonicalId),
+            body: storagePayload, contentType: .regular, deliveryStatus: .delivered, retryCount: 0,
+            suiteId: 0, isEdited: false, editedAt: nil, replyToMessageId: replyToMessageId,
+            replyQuote: replyQuote, transcript: nil, transcriptLanguage: nil, transcriptGeneratedAt: nil
+        ), searchText: LocalMessagePayload.decode(storagePayload).plainText)
         // The list row, after the message is saved — through the repository, never in this context.
-        MessagePersistenceService.advancePreview(of: chat, text: previewSource, at: message.timestamp)
+        MessagePersistenceService.advancePreview(of: chat, text: previewSource, at: timestamp)
         // Same "can the user actually see this?" test the banner uses — an open chat behind a
         // backgrounded app is not visible, and used to keep unreadCount pinned at 0.
         if !InAppNotificationService.isChatVisible(chat.id) {
@@ -2299,15 +2282,10 @@ final class MessageRouter {
         // (`-ss-…`, `-ss-…-cN`) so edits/receipts still match the originating device's message id.
         let rowId = Self.senderSyncRowId(e2eMessageId: e2eRowId, wireMessageId: original.id)
 
-        let fetch = Message.fetchRequest()
-        fetch.predicate = NSPredicate(format: "id ==[c] %@", rowId)
-        fetch.fetchLimit = 1
         do {
-            if let existing = try context.fetch(fetch).first {
-                if let serverOrderKey = original.serverOrderKey,
-                   existing.serverOrderKey != serverOrderKey {
-                    existing.serverOrderKey = serverOrderKey
-                    context.saveAndLog()
+            if let existing = try LocalRepositories.messages.message(rowId) {
+                if let serverOrderKey = original.serverOrderKey {
+                    try LocalRepositories.messages.setOrderKey(existing.id, serverOrderKey)
                 }
                 return // already saved (duplicate delivery / other chunk path)
             }
@@ -2316,25 +2294,25 @@ final class MessageRouter {
             return
         }
 
-        let msg = Message(context: context)
-        msg.id = rowId
-        msg.fromUserId = original.from
-        msg.toUserId = partnerUserId
-        msg.timestamp = Date.fromRemoteTimestamp(original.timestamp)
-        msg.serverOrderKey = original.serverOrderKey
-            ?? ServerMessageOrder.local(timestamp: msg.timestamp, messageId: rowId)
-        msg.isSentByMe = true
-        msg.deliveryStatus = .sent
-        msg.retryCount = 0
-        msg.chat = chat
-
-        msg.applyStoredEncryption(plaintextData: storagePayload, contactId: partnerUserId)
         if let mediaAlbum {
             MediaWireCodec.receiveAlbum(mediaAlbum, for: rowId)
         }
-
-        context.saveAndLog()
-        MessagePersistenceService.advancePreview(of: chat, text: previewText, at: msg.timestamp)
+        let timestamp = Date.fromRemoteTimestamp(original.timestamp)
+        do {
+            try LocalRepositories.messages.insert(MessageRecord(
+                id: rowId, chatId: chat.id, fromUserId: original.from, toUserId: partnerUserId,
+                isSentByMe: true, timestamp: timestamp,
+                orderKey: original.serverOrderKey
+                    ?? ServerMessageOrder.local(timestamp: timestamp, messageId: rowId),
+                body: storagePayload, contentType: .regular, deliveryStatus: .sent, retryCount: 0,
+                suiteId: 0, isEdited: false, editedAt: nil, replyToMessageId: nil, replyQuote: nil,
+                transcript: nil, transcriptLanguage: nil, transcriptGeneratedAt: nil
+            ), searchText: LocalMessagePayload.decode(storagePayload).plainText)
+        } catch {
+            Log.error("SENDER_SYNC: message \(rowId.prefix(8))… not saved: \(error)", category: "MessageRouter")
+            return
+        }
+        MessagePersistenceService.advancePreview(of: chat, text: previewText, at: timestamp)
 
         if !original.senderDeviceId.isEmpty {
             CryptoManager.shared.saveSessionToKeychain(

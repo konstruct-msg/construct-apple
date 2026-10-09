@@ -20,18 +20,26 @@ final class UploadPlaceholderVisibilityTests: XCTestCase {
 
     override func setUp() {
         super.setUp()
-        context = PersistenceController(inMemory: true).container.viewContext
+        let container = PersistenceController(inMemory: true).container
+        context = container.viewContext
+        // The placeholders are written through the repositories (messages B1); point them here.
+        LocalRepositories.useMessagesForTesting(container)
+        LocalRepositories.useChatsForTesting(container)
     }
 
     override func tearDown() {
+        LocalRepositories.useMessagesForTesting(nil)
+        LocalRepositories.useChatsForTesting(nil)
         context = nil
         super.tearDown()
     }
 
+    /// A saved chat: the repository finds it by id in its own context.
     private func makeChat() -> Chat {
         let chat = Chat(context: context)
         chat.id = UUID().uuidString
         chat.unreadCount = 0
+        try! context.save()
         return chat
     }
 

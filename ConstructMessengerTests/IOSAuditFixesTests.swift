@@ -88,11 +88,20 @@ final class IOSAuditFixesTests: XCTestCase {
 
     @MainActor
     func testMessageRouterPersistsAckAfterMessageSave_OnSuccess() throws {
-        let context = makeInMemoryContext()
+        let container = PersistenceController(inMemory: true).container
+        let context = container.viewContext
+        // The message is written through the repositories (messages B1); point them here.
+        LocalRepositories.useMessagesForTesting(container)
+        LocalRepositories.useChatsForTesting(container)
+        defer {
+            LocalRepositories.useMessagesForTesting(nil)
+            LocalRepositories.useChatsForTesting(nil)
+        }
         let senderId = "router-success-sender"
         let recipientId = "router-success-recipient"
         let messageId = "router-success-\(UUID().uuidString)"
         let chat = makeChat(in: context, userId: senderId)
+        try context.save()
         let message = makeIncomingMessage(id: messageId, from: senderId, to: recipientId)
         let router = MessageRouter()
 

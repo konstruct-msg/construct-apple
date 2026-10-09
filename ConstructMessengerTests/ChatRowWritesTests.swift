@@ -22,12 +22,14 @@ final class ChatRowWritesTests: XCTestCase {
         container = PersistenceController(inMemory: true).container
         LocalRepositories.useContactsForTesting(container)
         LocalRepositories.useChatsForTesting(container)
+        LocalRepositories.useMessagesForTesting(container)
         chats = CoreDataChatStore(container: container)
     }
 
     override func tearDown() {
         LocalRepositories.useContactsForTesting(nil)
         LocalRepositories.useChatsForTesting(nil)
+        LocalRepositories.useMessagesForTesting(nil)
         chats = nil
         container = nil
         super.tearDown()
