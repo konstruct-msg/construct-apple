@@ -33,9 +33,14 @@ final class QueuedSendVisibilityTests: XCTestCase {
     override func setUp() {
         super.setUp()
         container = PersistenceController(inMemory: true).container
+        // Messages and the chat's row are written through the repositories; point them here.
+        LocalRepositories.useMessagesForTesting(container)
+        LocalRepositories.useChatsForTesting(container)
     }
 
     override func tearDown() {
+        LocalRepositories.useMessagesForTesting(nil)
+        LocalRepositories.useChatsForTesting(nil)
         container = nil
         super.tearDown()
     }
@@ -44,11 +49,13 @@ final class QueuedSendVisibilityTests: XCTestCase {
         let other = User(context: context)
         other.id = UUID().uuidString
         other.username = "annie"
+        other.displayName = ""
         peer = other.id
         let chat = Chat(context: context)
         chat.id = UUID().uuidString
         chat.otherUser = other
-        try? context.save()
+        // The repository reads what is saved, on its own context.
+        try! context.save()
 
         let coordinator = ChatSendCoordinator(
             chat: chat,
@@ -62,6 +69,9 @@ final class QueuedSendVisibilityTests: XCTestCase {
         let request = Message.fetchRequest()
         request.predicate = NSPredicate(format: "chat == %@", chat)
         request.sortDescriptors = [NSSortDescriptor(key: "timestamp", ascending: true)]
+        // Writes land through the repository's own context, and the merge into this one comes a
+        // run-loop pass later; what this context already holds is read again first.
+        context.refreshAllObjects()
         return (try? context.fetch(request)) ?? []
     }
 

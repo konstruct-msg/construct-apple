@@ -62,8 +62,8 @@ final class TranscriptOrderIsTotalTests: XCTestCase {
     /// The invariant the comment on `backfillMissingServerOrderKeys` had been asserting on its own
     /// since the column was added, while `addSystemMessage` left it nil.
     ///
-    /// Mutation: delete `message.serverOrderKey = …` from any `Message(context:)` site in the app
-    /// — this reddens and names the file and line.
+    /// Mutation: delete `row.serverOrderKey = …` from any `Message(context:)` site in the app — the
+    /// store's insert included — this reddens and names the file and line.
     func testEveryRowCreationSiteStampsTheOrderColumn() {
         let appRoot = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
@@ -92,7 +92,11 @@ final class TranscriptOrderIsTotalTests: XCTestCase {
             }
         }
 
-        XCTAssertGreaterThan(sitesChecked, 5, "found no row creation sites — the walk itself is broken")
+        // Since messages B1 (2026-10-09) the app's own rows are written through `MessageStore`, whose
+        // `MessageRecord.orderKey` is not optional — the type carries this invariant there. The
+        // managed-object sites left are the store's own insert, the history import and the
+        // previews; the walk must still find them.
+        XCTAssertGreaterThanOrEqual(sitesChecked, 3, "found no row creation sites — the walk itself is broken")
         XCTAssertTrue(
             offenders.isEmpty,
             "a Message row is created without an order key at: \(offenders.joined(separator: ", ")). "
