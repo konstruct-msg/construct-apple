@@ -15,8 +15,8 @@ struct ChatsListView: View {
     /// by side — the system's split view, not a shell of our own (wave 5.5c, owner 2026-10-08).
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
-    @FetchRequest
-    private var chats: FetchedResults<Chat>
+    /// The list's rows — values from `ChatStore`, in place of `@FetchRequest<Chat>` (chats C).
+    private var chats: [ChatRecord] { ChatsLive.shared.chats() }
 
     @Environment(ChatsViewModel.self) private var chatsViewModel
     @Environment(AccountRecoveryViewModel.self) private var recoveryViewModel
@@ -28,15 +28,6 @@ struct ChatsListView: View {
     @State private var selectedChatId: String?
     @State private var showingDrafts = false
     @State private var searchQuery = ""
-
-    init() {
-        let fetchRequest: NSFetchRequest<Chat> = Chat.fetchRequest()
-        fetchRequest.sortDescriptors = [
-            NSSortDescriptor(keyPath: \Chat.isPinned, ascending: false),
-            NSSortDescriptor(keyPath: \Chat.lastMessageTime, ascending: false)
-        ]
-        _chats = FetchRequest<Chat>(fetchRequest: fetchRequest, animation: .default)
-    }
 
     var body: some View {
         if horizontalSizeClass == .regular {
@@ -50,7 +41,9 @@ struct ChatsListView: View {
             NavigationStack(path: $navigationPath) {
                 listColumn
                     .navigationDestination(for: String.self) { chatId in
-                        if let chat = chats.first(where: { $0.id == chatId }) {
+                        // The conversation still takes the managed chat — the messages domain
+                        // moves it — so the open chat is the one bridge to it.
+                        if let chat = try? Chat.row(chatId, in: viewContext) {
                             // Messenger convention: the bottom tab bar yields to the message
                             // input bar while inside a conversation — `ChatView` hides it.
                             ChatView(chat: chat, context: viewContext)
@@ -64,7 +57,7 @@ struct ChatsListView: View {
     /// one per chat so switching chats starts fresh.
     @ViewBuilder
     private var chatDetail: some View {
-        if let chatId = selectedChatId, let chat = chats.first(where: { $0.id == chatId }) {
+        if let chatId = selectedChatId, let chat = try? Chat.row(chatId, in: viewContext) {
             NavigationStack {
                 ChatView(chat: chat, context: viewContext)
             }
@@ -138,56 +131,40 @@ struct ChatsListView: View {
                     }
             }
             .onReceive(NotificationCenter.default.publisher(for: .deleteChat)) { note in
-                    guard let chatId = note.object as? String,
-                          let chat = chats.first(where: { $0.id == chatId }) else { return }
+                    guard let chatId = note.object as? String else { return }
                     if selectedChatId == chatId { selectedChatId = nil }
-                    Task { await chatsViewModel.deleteChatForgettingSessions(chatId: chat.id) }
+                    Task { await chatsViewModel.deleteChatForgettingSessions(chatId: chatId) }
             }
-            // Total-unread badge only. Do NOT force-invalidate the List here (no
-            // `.id(revision)`): the `@FetchRequest(animation: .default)` already drives
-            // row inserts/deletes/reordering, and each `ChatRowView` observes its own
-            // `chat`/`user`. Swapping the List's identity mid-animation raced the
-            // coalesced UICollectionView batch update → "invalid number of items"
-            // crash (device log 2026-07-19, during END_SESSION re-init + openOrCreateChat).
+            // Do NOT force-invalidate the List (no `.id(revision)`): the rows' ids drive inserts,
+            // deletes and reordering. Swapping the List's identity mid-animation raced the
+            // coalesced UICollectionView batch update → "invalid number of items" crash (device
+            // log 2026-07-19, during END_SESSION re-init + openOrCreateChat).
+            .onChange(of: ChatsLive.shared.revision) { _, _ in updateTotalUnreadCount() }
             // On the main queue: repositories save on their own background contexts, and this
-            // touches the view context and the fetch request.
+            // touches the view context.
             .onReceive(NotificationCenter.default.publisher(for: .NSManagedObjectContextDidSave).receive(on: DispatchQueue.main)) { note in
                     guard notificationContainsChatChanges(note) else { return }
-                    // After a message write, denormalized previews can lag (missed applyPreview
-                    // or observation gap). Touch only chats present in the save.
+                    // After a message write, denormalized previews can lag (missed writer or a
+                    // frozen stamp). Touch only chats present in the save.
                     reconcileStalePreviews(from: note)
-                    updateTotalUnreadCount()
-            }
-            .onReceive(NotificationCenter.default.publisher(for: .NSManagedObjectContextObjectsDidChange).receive(on: DispatchQueue.main)) { note in
-                    guard notificationContainsChatChanges(note) else { return }
-                    updateTotalUnreadCount()
             }
     }
 
     // MARK: - Chat List
 
-    private var filteredChats: [Chat] {
-        // Dedupe by `id` before the `ForEach`: `@FetchRequest(animation:)` can transiently
-        // surface the same Chat twice while a background-context merge (push-driven chat
-        // insert) races the animated list update. A `ForEach` over a duplicate Identifiable
-        // id trips UICollectionView's "invalid number of items" diff assertion → hard crash.
-        let all = Self.dedupedByID(Array(chats))
+    /// Ids are unique in the store, so the `ForEach` needs no dedupe: the `@FetchRequest` this
+    /// replaced could surface one chat twice while a merge raced the animated update.
+    private var filteredChats: [ChatRecord] {
         let query = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !query.isEmpty else { return all }
-        return all.filter { chatMatchesQuery($0, query: query) }
+        guard !query.isEmpty else { return chats }
+        return chats.filter { ChatsLive.matches($0, query: query) }
     }
 
-    private func isOpenBeside(_ chat: Chat) -> Bool {
+    private func isOpenBeside(_ chat: ChatRecord) -> Bool {
         horizontalSizeClass == .regular && selectedChatId == chat.id
     }
 
-    /// Order-preserving dedupe of chats by `id` — the crash guard for the List diff assertion.
-    private static func dedupedByID(_ items: [Chat]) -> [Chat] {
-        var seen = Set<String>()
-        return items.filter { seen.insert($0.id).inserted }
-    }
-
-    private func chatList(chats renderedChats: [Chat]) -> some View {
+    private func chatList(chats renderedChats: [ChatRecord]) -> some View {
         List {
             if recoveryViewModel.reminder != .none {
                 RecoveryReminderRow(
@@ -317,16 +294,16 @@ struct ChatsListView: View {
 
     // MARK: - Actions
 
-    private func togglePin(_ chat: Chat) {
+    private func togglePin(_ chat: ChatRecord) {
         try? LocalRepositories.chats.setPinned(chat.id, !chat.isPinned)
     }
 
-    private func toggleMarkUnread(_ chat: Chat) {
+    private func toggleMarkUnread(_ chat: ChatRecord) {
         try? LocalRepositories.chats.setUnread(chat.id, chat.unreadCount > 0 ? 0 : 1)
     }
 
     private func updateTotalUnreadCount() {
-        chatsViewModel.totalUnreadCount = chats.reduce(0) { $0 + Int($1.unreadCount) }
+        chatsViewModel.totalUnreadCount = ChatsLive.shared.totalUnread
     }
 
     /// Re-align denormalized list previews with each chat's newest transcript message.
@@ -338,7 +315,7 @@ struct ChatsListView: View {
             targets = chatsTouchedBySave(note)
             guard !targets.isEmpty else { return }
         } else {
-            targets = Array(chats)
+            targets = chats.compactMap { try? Chat.row($0.id, in: viewContext) }
         }
         for chat in targets {
             chat.reconcilePreviewFromTranscript(in: viewContext)
@@ -380,15 +357,6 @@ struct ChatsListView: View {
             }
         }
         return false
-    }
-
-    private func chatMatchesQuery(_ chat: Chat, query: String) -> Bool {
-        let name = chat.otherUser?.resolvedDisplayName ?? ""
-        let username = chat.otherUser?.username ?? ""
-        let preview = chat.lastMessageText ?? ""
-        return name.localizedCaseInsensitiveContains(query)
-            || username.localizedCaseInsensitiveContains(query)
-            || preview.localizedCaseInsensitiveContains(query)
     }
 
     // MARK: - QR Code Handling
@@ -444,6 +412,8 @@ struct ChatsListView: View {
     }
 }
 
+// DEBUG only: the preview seeds `ChatsLive.useForPreview`, which a release build does not have.
+#if DEBUG
 #Preview {
     let container = PreviewHelpers.createPreviewContainer()
     let context = container.viewContext
@@ -454,11 +424,14 @@ struct ChatsListView: View {
     _ = PreviewHelpers.createSampleChat(context: context, with: user2, unread: 33)
     _ = PreviewHelpers.createSampleChat(context: context, with: user3, unread: 1)
     try? context.save()
+    ChatsLive.useForPreview(container)
+    ContactsLive.useForPreview(container)
     let chatsViewModel = ChatsViewModel()
     chatsViewModel.setContext(context)
     return ChatsListView()
         .environment(\.managedObjectContext, context)
         .environment(chatsViewModel)
 }
+#endif
 
 #endif

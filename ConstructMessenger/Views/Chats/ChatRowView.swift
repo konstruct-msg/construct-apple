@@ -5,19 +5,17 @@
 
 import SwiftUI
 import Combine
-import CoreData
 
 struct ChatRowView: View {
-    @ObservedObject var chat: Chat
+    /// A value from `ChatsLive`: the row redraws when the chat's value differs. Until 2026-10-09
+    /// this observed the managed `Chat`, and an `.id(...)` of every preview field forced a redraw
+    /// whenever its `objectWillChange` stayed silent.
+    let chat: ChatRecord
 
     var body: some View {
-        // Profile shares update the contact (name, avatar), not `Chat`, so observing Chat alone
-        // does not refresh the row. The contact is read from `ContactsLive`, whose changes do.
-        if let userId = chat.otherUser?.id, !userId.isEmpty {
-            ChatRowBody(chat: chat, userId: userId)
-        } else {
-            ChatRowOrphanBody(chat: chat)
-        }
+        // The person is read from `ContactsLive`, whose changes redraw the row too — a profile
+        // share updates the contact, not the chat.
+        ChatRowLayout(chat: chat, user: ContactsLive.shared.contact(chat.peerId))
     }
 
     private static let rowTimeFormatter: DateFormatter = {
@@ -51,65 +49,10 @@ struct ChatRowView: View {
     }
 }
 
-// MARK: - Row body
-
-private struct ChatRowBody: View {
-    @ObservedObject var chat: Chat
-    let userId: String
-
-    init(chat: Chat, userId: String) {
-        self.chat = chat
-        self.userId = userId
-    }
-
-    var body: some View {
-        if let contact = ContactsLive.shared.contact(userId) {
-            ChatRowWithUser(chat: chat, user: contact)
-        } else {
-            ChatRowOrphanBody(chat: chat)
-        }
-    }
-}
-
-private struct ChatRowWithUser: View {
-    @ObservedObject var chat: Chat
-    let user: ContactRecord
-
-    var body: some View {
-        ChatRowLayout(chat: chat, user: user)
-            // Bust any stale SwiftUI identity when profile *or preview* fields change.
-            // Omitting lastMessageText/Time left rows frozen after Core Data advanced
-            // while NSManagedObject objectWillChange stayed silent (list under NavStack).
-            .id(rowIdentity)
-    }
-
-    private var rowIdentity: String {
-        let previewTs = chat.lastMessageTime.map { String($0.timeIntervalSince1970) } ?? "nil"
-        return "\(chat.id)|\(user.resolvedDisplayName)|\(user.avatar?.count ?? 0)|\(user.isSharingWithMe)|\(chat.unreadCount)|\(chat.isPinned)|\(chat.lastMessageText ?? "")|\(previewTs)"
-    }
-}
-
-/// Rare fallback when we hold no row for the peer — observes Chat only.
-private struct ChatRowOrphanBody: View {
-    @ObservedObject var chat: Chat
-
-    var body: some View {
-        ChatRowLayout(chat: chat, user: nil)
-            .id(orphanIdentity)
-    }
-
-    private var orphanIdentity: String {
-        let previewTs = chat.lastMessageTime.map { String($0.timeIntervalSince1970) } ?? "nil"
-        return "\(chat.id)|\(chat.unreadCount)|\(chat.lastMessageText ?? "")|\(previewTs)"
-    }
-}
-
 // MARK: - Shared layout
 
 private struct ChatRowLayout: View {
-    /// Must observe Chat: preview/pin/unread land on this object. A plain `let` + stable
-    /// `.id` without preview fields left the subtitle stuck after local sends.
-    @ObservedObject var chat: Chat
+    let chat: ChatRecord
     var user: ContactRecord?
 
     var body: some View {

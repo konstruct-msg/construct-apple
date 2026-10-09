@@ -13,22 +13,13 @@ import CoreData
 struct DesktopChatsListView: View {
     @Environment(\.managedObjectContext) private var viewContext
 
-    @FetchRequest
-    private var chats: FetchedResults<Chat>
+    /// The list's rows — values from `ChatStore`, in place of `@FetchRequest<Chat>` (chats C).
+    private var chats: [ChatRecord] { ChatsLive.shared.chats() }
 
     @Environment(ChatsViewModel.self) private var chatsViewModel
     @State private var showingQRScanner = false
     @State private var searchQuery = ""
     @FocusState private var searchFocused: Bool
-
-    init() {
-        let fetchRequest: NSFetchRequest<Chat> = Chat.fetchRequest()
-        fetchRequest.sortDescriptors = [
-            NSSortDescriptor(keyPath: \Chat.isPinned, ascending: false),
-            NSSortDescriptor(keyPath: \Chat.lastMessageTime, ascending: false)
-        ]
-        _chats = FetchRequest<Chat>(fetchRequest: fetchRequest, animation: .default)
-    }
 
     var body: some View {
         @Bindable var chatsViewModel = chatsViewModel
@@ -45,11 +36,10 @@ struct DesktopChatsListView: View {
             consumeSidebarSearchFocus()
         }
         .onReceive(NotificationCenter.default.publisher(for: .deleteChat)) { note in
-            guard let chatId = note.object as? String,
-                  let chat = chats.first(where: { $0.id == chatId }) else { return }
-            Task { await chatsViewModel.deleteChatForgettingSessions(chatId: chat.id) }
+            guard let chatId = note.object as? String else { return }
+            Task { await chatsViewModel.deleteChatForgettingSessions(chatId: chatId) }
         }
-        .onChange(of: chats.reduce(0, { $0 + Int($1.unreadCount) })) { _, total in
+        .onChange(of: ChatsLive.shared.totalUnread, initial: true) { _, total in
             chatsViewModel.totalUnreadCount = total
         }
         .onChange(of: chatsViewModel.sidebarSearchFocused) { _, shouldFocus in
@@ -121,15 +111,9 @@ struct DesktopChatsListView: View {
 
     // MARK: - Chat List
 
-    private var filteredChats: [Chat] {
-        guard !searchQuery.isEmpty else { return Array(chats) }
-        let q = searchQuery.lowercased()
-        return chats.filter { chat in
-            let name = (chat.otherUser?.resolvedDisplayName ?? "").lowercased()
-            let username = (chat.otherUser?.username ?? "").lowercased()
-            let preview = (chat.lastMessageText ?? "").lowercased()
-            return name.contains(q) || username.contains(q) || preview.contains(q)
-        }
+    private var filteredChats: [ChatRecord] {
+        guard !searchQuery.isEmpty else { return chats }
+        return chats.filter { ChatsLive.matches($0, query: searchQuery) }
     }
 
     private func chatList(selection: Binding<String?>) -> some View {
@@ -172,11 +156,11 @@ struct DesktopChatsListView: View {
 
     // MARK: - Actions
 
-    private func togglePin(_ chat: Chat) {
+    private func togglePin(_ chat: ChatRecord) {
         try? LocalRepositories.chats.setPinned(chat.id, !chat.isPinned)
     }
 
-    private func toggleMarkUnread(_ chat: Chat) {
+    private func toggleMarkUnread(_ chat: ChatRecord) {
         try? LocalRepositories.chats.setUnread(chat.id, chat.unreadCount > 0 ? 0 : 1)
     }
 
@@ -225,6 +209,8 @@ struct DesktopChatsListView: View {
     }
 }
 
+// DEBUG only: the preview seeds `ChatsLive.useForPreview`, which a release build does not have.
+#if DEBUG
 #Preview {
     let container = PreviewHelpers.createPreviewContainer()
     let context = container.viewContext
@@ -233,6 +219,8 @@ struct DesktopChatsListView: View {
     _ = PreviewHelpers.createSampleChat(context: context, with: user1)
     _ = PreviewHelpers.createSampleChat(context: context, with: user2)
     try? context.save()
+    ChatsLive.useForPreview(container)
+    ContactsLive.useForPreview(container)
     let chatsViewModel = ChatsViewModel()
     chatsViewModel.setContext(context)
     return DesktopChatsListView()
@@ -240,3 +228,4 @@ struct DesktopChatsListView: View {
         .environment(chatsViewModel)
         .frame(width: 280, height: 600)
 }
+#endif
