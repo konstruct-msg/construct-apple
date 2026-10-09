@@ -1284,3 +1284,4 @@
 "device_link_error_expired" = "La demande a expiré. Affichez un nouveau code.";
 "device_link_error_token" = "Ce code a expiré. Scannez-en un nouveau.";
 "device_link_error_already_linked" = "Cet appareil est déjà associé.";
+"voice_playback_speed" = "Vitesse de lecture";

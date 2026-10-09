@@ -1364,3 +1364,4 @@
 "device_link_error_expired" = "Հարցման ժամկետը լրացել է։ Ցույց տվեք նոր կոդ։";
 "device_link_error_token" = "Այս կոդի ժամկետը լրացել է։ Սկանավորեք նորը։";
 "device_link_error_already_linked" = "Այս սարքն արդեն կապված է։";
+"voice_playback_speed" = "Նվագարկման արագություն";

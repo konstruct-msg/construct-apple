@@ -1364,3 +1364,4 @@
 "device_link_error_expired" = "リクエストの有効期限が切れました。新しいコードを表示してください。";
 "device_link_error_token" = "このコードは期限切れです。新しいコードをスキャンしてください。";
 "device_link_error_already_linked" = "このデバイスはすでにリンクされています。";
+"voice_playback_speed" = "再生速度";

@@ -158,9 +158,14 @@ final class AudioRecorderService: ObservableObject {
     // MARK: - Metering timer
 
     private func startMeteringTimer() {
-        meteringTimer = Timer.scheduledTimer(withTimeInterval: meteringInterval, repeats: true) { [weak self] _ in
+        // `.common`, not the default mode `scheduledTimer` uses: the default mode does not run
+        // while a scroll view tracks a finger, so the recording timer and the live waveform froze
+        // whenever the transcript was scrolled — the recording itself went on.
+        let timer = Timer(timeInterval: meteringInterval, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in self?.sampleMetering() }
         }
+        RunLoop.main.add(timer, forMode: .common)
+        meteringTimer = timer
     }
 
     private func stopMeteringTimer() {

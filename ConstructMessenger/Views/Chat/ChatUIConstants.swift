@@ -157,6 +157,8 @@ enum ChatUIConstants {
         static let waveformHeight: CGFloat = 28
         static let durationWidth: CGFloat = 34
         static let toggleSize: CGFloat = 20
+        /// Sideways travel before a drag on the waveform scrubs, so a tap stays a tap.
+        static let scrubMinimumDistance: CGFloat = 6
         static let playerSpacing: CGFloat = CTLayout.inlinePad
         static let horizontalPadding: CGFloat = CTLayout.chromeGap
         static let verticalPadding: CGFloat = CTLayout.inlinePad

@@ -29,11 +29,16 @@ struct VoiceMessageBubbleView: View {
     /// arrives — so a freshly-completed transcription reveals itself, but the
     /// user can still collapse it via the inline toggle.
     @State private var isTranscriptExpanded: Bool = true
+    /// Where a finger is on the waveform while it drags; the seek lands when it lifts.
+    @State private var scrubFraction: Double? = nil
 
     /// True when the transcript is actually rendered below the waveform.
     private var isTranscriptShown: Bool { (transcript?.isEmpty == false) && isTranscriptExpanded }
 
     private var isPlaying: Bool { player.isPlaying(voiceContent.mediaId) }
+    /// Playing or paused: the position and the time left are this track's.
+    private var isActive: Bool { player.isActive(voiceContent.mediaId) }
+    private var shownProgress: Double { scrubFraction ?? (isActive ? player.progress : 0) }
     private var isUploading: Bool { deliveryStatus == .sending && voiceContent.mediaUrl.isEmpty }
     private var uploadFailed: Bool { deliveryStatus == .failed && voiceContent.mediaUrl.isEmpty }
     private var isMediaUnavailable: Bool {
@@ -53,7 +58,7 @@ struct VoiceMessageBubbleView: View {
             }
         }
         .onDisappear {
-            if isPlaying { player.stop() }
+            if isActive { player.stop() }
         }
         .onChange(of: ConnectionStatusManager.shared.connectionStatus) { _, newStatus in
             // Auto-retry download when connection restores after a transient failure.
@@ -70,7 +75,7 @@ struct VoiceMessageBubbleView: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: ChatUIConstants.Voice.playerSpacing) {
                 Button {
-                    if isPlaying {
+                    if isActive {
                         // Active track — may have been started by continuous playback, so this
                         // view's `audioData` can be nil. togglePlay ignores `data` for the
                         // active track, so pause/resume works without re-downloading.
@@ -99,13 +104,16 @@ struct VoiceMessageBubbleView: View {
 
                 VoiceWaveformView(
                     samples: voiceContent.waveform,
-                    style: .playback(progress: isPlaying ? player.progress : 0, isSentByMe: isSentByMe)
+                    style: .playback(progress: shownProgress, isSentByMe: isSentByMe)
                 )
                 .frame(
                     maxWidth: .infinity,
                     minHeight: ChatUIConstants.Voice.waveformHeight,
                     maxHeight: ChatUIConstants.Voice.waveformHeight
                 )
+                .overlay { scrubSurface }
+
+                if isActive { rateButton }
 
                 transcribeToggle
 
@@ -132,6 +140,57 @@ struct VoiceMessageBubbleView: View {
                 isTranscriptExpanded = true
             }
         }
+    }
+
+    /// Tap a point of the waveform to play from there; drag along it to move through the track.
+    /// The drag takes only a sideways movement, so a vertical one is still the list's scroll, and
+    /// it sits on the waveform — a child of the bubble — so it wins over the bubble's reply swipe.
+    private var scrubSurface: some View {
+        GeometryReader { geo in
+            Color.clear
+                .contentShape(Rectangle())
+                .onTapGesture(coordinateSpace: .local) { location in
+                    seek(to: VoiceScrub.fraction(at: location.x, width: geo.size.width))
+                }
+                .gesture(
+                    DragGesture(minimumDistance: ChatUIConstants.Voice.scrubMinimumDistance)
+                        .onChanged { value in
+                            guard scrubFraction != nil
+                                || abs(value.translation.width) > abs(value.translation.height)
+                            else { return }
+                            scrubFraction = VoiceScrub.fraction(at: value.location.x, width: geo.size.width)
+                        }
+                        .onEnded { _ in
+                            if let fraction = scrubFraction { seek(to: fraction) }
+                            scrubFraction = nil
+                        }
+                )
+        }
+    }
+
+    private func seek(to fraction: Double) {
+        let id = voiceContent.mediaId
+        if isActive {
+            player.seek(mediaId: id, data: Data(), to: fraction)
+        } else if let data = audioData {
+            player.seek(mediaId: id, data: data, to: fraction)
+        } else if !isLoading {
+            loadAndPlay(startingAt: fraction)
+        }
+    }
+
+    /// 1× → 1.25× → 1.5× → 2×, kept for every voice message after this one.
+    private var rateButton: some View {
+        Button { player.cycleRate() } label: {
+            Text(VoiceScrub.rateLabel(player.rate))
+                .font(CTFont.ui(ChatUIConstants.Typography.durationSize, weight: .semibold))
+                .monospacedDigit()
+                .foregroundColor(isSentByMe ? Color.CT.outMsgText : Color.CT.accent)
+                .frame(minWidth: ChatUIConstants.Voice.toggleSize, minHeight: ChatUIConstants.Voice.toggleSize)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(NSLocalizedString("voice_playback_speed", comment: ""))
+        .accessibilityValue(VoiceScrub.rateLabel(player.rate))
     }
 
     /// Inline compact toggle that lives in the player HStack between the
@@ -315,10 +374,9 @@ struct VoiceMessageBubbleView: View {
 
     private var durationLabel: String {
         let seconds: TimeInterval
-        if isPlaying {
-            seconds = player.totalDuration > 0
-                ? player.totalDuration * (1 - player.progress)
-                : voiceContent.duration
+        if isActive || scrubFraction != nil {
+            let total = player.totalDuration > 0 && isActive ? player.totalDuration : voiceContent.duration
+            seconds = total * (1 - shownProgress)
         } else {
             seconds = voiceContent.duration
         }
@@ -327,7 +385,7 @@ struct VoiceMessageBubbleView: View {
 
     // MARK: - Download
 
-    private func loadAndPlay() {
+    private func loadAndPlay(startingAt fraction: Double? = nil) {
         isLoading = true
         loadError  = false
         Task {
@@ -340,7 +398,11 @@ struct VoiceMessageBubbleView: View {
                 await MainActor.run {
                     self.audioData = data
                     self.isLoading  = false
-                    player.togglePlay(mediaId: voiceContent.mediaId, data: data)
+                    if let fraction {
+                        player.seek(mediaId: voiceContent.mediaId, data: data, to: fraction)
+                    } else {
+                        player.togglePlay(mediaId: voiceContent.mediaId, data: data)
+                    }
                 }
             } catch {
                 await MainActor.run {
@@ -350,6 +412,23 @@ struct VoiceMessageBubbleView: View {
                 }
             }
         }
+    }
+}
+
+// MARK: - Scrubbing and speed
+
+/// The waveform's arithmetic, apart from the view so a test can reach it.
+enum VoiceScrub {
+    /// The point of the track under `x` on a waveform `width` wide, 0…1.
+    static func fraction(at x: CGFloat, width: CGFloat) -> Double {
+        guard width > 0, x.isFinite else { return 0 }
+        return Double(min(max(x / width, 0), 1))
+    }
+
+    /// "1×", "1.25×", "1.5×", "2×".
+    static func rateLabel(_ rate: Float) -> String {
+        let number = rate == rate.rounded() ? String(Int(rate)) : String(format: "%g", rate)
+        return number + "×"
     }
 }
 
