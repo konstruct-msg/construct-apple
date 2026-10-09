@@ -566,7 +566,7 @@ struct NetworkSettingsView: View {
             veilTicketRefresh += 1
         case .failure(let err):
             veilImportIsError = true
-            veilImportMessage = err.localizedDescription
+            veilImportMessage = err.userFacingMessage
         }
     }
 

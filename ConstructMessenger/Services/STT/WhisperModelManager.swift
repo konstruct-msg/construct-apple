@@ -156,7 +156,7 @@ public final class WhisperModelManager: ObservableObject {
             // Re-scan to keep @Published state consistent (important if WhisperKit placed files in subdirs).
             reconcileModels()
         } catch {
-            modelStates[model] = .failed(error.localizedDescription)
+            modelStates[model] = .failed(error.userFacingMessage)
         }
         #else
         modelStates[model] = .failed("WhisperKit package not linked")

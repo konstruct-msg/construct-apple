@@ -8,7 +8,7 @@
 import Foundation
 
 // MARK: - Validation Error
-enum MessageValidationError: LocalizedError {
+enum MessageValidationError: LocalizedError, UserFacingError {
     case textTooLarge(currentSize: Int, maxSize: Int)
     case fileTooLarge(fileName: String, currentSize: Int64, maxSize: Int64)
     case unsupportedFileType(fileName: String, extension: String)
@@ -16,22 +16,33 @@ enum MessageValidationError: LocalizedError {
     case emptyMessage
     case selfSend
 
-    var errorDescription: String? {
+    /// The sizes are formatted here and nothing else is carried in: a file name is the person's.
+    /// `textTooLarge` is said without its numbers — its callers measure in characters or in
+    /// bytes, and a file size is neither.
+    var userText: UserText {
         switch self {
-        case .textTooLarge(let current, let max):
-            return "Message text is too large (\(MessageSizeLimits.formatFileSize(Int64(current)))). Maximum allowed: \(MessageSizeLimits.formatFileSize(Int64(max)))"
+        case .textTooLarge:
+            return UserText("validation_text_too_large")
         case .fileTooLarge(let name, let current, let max):
-            return "File '\(name)' is too large (\(MessageSizeLimits.formatFileSize(current))). Maximum allowed: \(MessageSizeLimits.formatFileSize(max))"
-        case .unsupportedFileType(let name, let ext):
-            return "File type '.\(ext)' is not supported for file '\(name)'"
+            return UserText(
+                "validation_file_too_large", name,
+                MessageSizeLimits.formatFileSize(current), MessageSizeLimits.formatFileSize(max)
+            )
+        case .unsupportedFileType(_, let ext):
+            return UserText("validation_unsupported_type", ext)
         case .totalSizeTooLarge(let current, let max):
-            return "Total message size is too large (\(MessageSizeLimits.formatFileSize(current))). Maximum allowed: \(MessageSizeLimits.formatFileSize(max))"
+            return UserText(
+                "validation_total_too_large",
+                MessageSizeLimits.formatFileSize(current), MessageSizeLimits.formatFileSize(max)
+            )
         case .emptyMessage:
-            return "Message cannot be empty"
+            return UserText("validation_empty")
         case .selfSend:
-            return "Cannot send encrypted messages to yourself"
+            return UserText("validation_self_send")
         }
     }
+
+    var errorDescription: String? { userText.resolved }
 }
 
 // MARK: - Message Validator

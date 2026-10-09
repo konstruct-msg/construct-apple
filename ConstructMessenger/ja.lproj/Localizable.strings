@@ -515,7 +515,7 @@
 "edit_message" = "編集";
 "edited" = "編集済み";
 "editing_message" = "メッセージを編集";
-"edit_message_failed" = "メッセージの編集に失敗しました: %@";
+"edit_message_failed" = "メッセージを編集できませんでした";
 "edit_message_limit_reached" = "編集制限に達しました (最大20回)";
 
 // Message reactions
@@ -1164,9 +1164,7 @@
 "invite_error_invalid_url" = "指定されたURLが無効です。";
 "invite_error_unsupported_link" = "コンストラクトの招待リンクではありません。";
 "invite_error_expired" = "この招待は期限切れです。新しいものをもらってください。";
-"invite_error_invalid_fmt" = "無効な招待：%@";
 "invite_error_already_used" = "この招待は使用済みです。新しいものをもらってください。";
-"invite_error_verification_failed_fmt" = "招待を確認できませんでした：%@";
 "invite_error_legacy_unsupported" = "このリンク形式はサポートされなくなりました。新しい招待QRかリンクをもらってください。";
 "invite_error_malformed" = "招待データが壊れています";
 "invite_redeem_safety_message" = "招待から連絡先を追加しました。名前は相手が共有すると表示されます。";
@@ -1335,3 +1333,34 @@
 "qr_scanning_unavailable_mac" = "Mac では QR コードを読み取れません";
 "qr_scanning_unavailable_mac_hint" = "相手に招待リンクを送ってもらってください。";
 
+/* Errors a person reads (TODO 128) */
+"error_no_connection" = "サーバーに接続できません。インターネット接続を確認して、もう一度お試しください。";
+"error_server" = "サーバーが今この操作を実行できませんでした。しばらくしてからお試しください。";
+"error_rate_limited" = "試行回数が多すぎます。少し待ってからもう一度お試しください。";
+"error_sign_in_again" = "続けるには、もう一度サインインしてください。";
+"error_generic" = "問題が発生しました。もう一度お試しください。";
+"error_encryption" = "暗号化できませんでした。もう一度お試しください。";
+"error_decryption" = "メッセージを読み取れませんでした。会話は自動的に回復します。";
+"error_peer_unreachable" = "相手のデバイスに接続できませんでした。しばらくしてからお試しください。";
+"error_upload_failed" = "ファイルを送信できませんでした。もう一度お試しください。";
+"error_download_failed" = "ファイルをダウンロードできませんでした。もう一度お試しください。";
+"error_media_processing" = "写真またはビデオを準備できませんでした。";
+"error_no_space" = "このデバイスの空き容量が不足しています。";
+"error_action_reconnect" = "再接続";
+"error_action_sign_in" = "サインイン";
+"username_taken" = "このユーザー名はすでに使われています。";
+"validation_text_too_large" = "メッセージが長すぎます。いくつかに分けてください。";
+"validation_file_too_large" = "%1$@ は大きすぎます: %2$@(上限 %3$@)。";
+"validation_unsupported_type" = ".%@ 形式のファイルは送信できません。";
+"validation_total_too_large" = "メッセージが大きすぎます: %1$@(上限 %2$@)。";
+"validation_empty" = "メッセージが空です。";
+"validation_self_send" = "自分へのメモは下書きに保存してください。";
+"invite_error_invalid" = "この招待は無効です。新しいものをもらってください。";
+"invite_error_verification_failed" = "この招待を確認できませんでした。接続を確認して、もう一度お試しください。";
+"backup_error_wrong_password" = "パスワードが違うか、バックアップが破損しています。";
+"device_link_error_keys" = "このデバイスの鍵を作成できませんでした。もう一度お試しください。";
+"device_link_error_invalid_qr" = "これはコンストラクトのデバイスコードではありません。";
+"device_link_error_rejected" = "もう一方のデバイスがリクエストを拒否しました。";
+"device_link_error_expired" = "リクエストの有効期限が切れました。新しいコードを表示してください。";
+"device_link_error_token" = "このコードは期限切れです。新しいコードをスキャンしてください。";
+"device_link_error_already_linked" = "このデバイスはすでにリンクされています。";

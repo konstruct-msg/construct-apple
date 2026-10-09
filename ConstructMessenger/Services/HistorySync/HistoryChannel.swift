@@ -267,7 +267,7 @@ enum HistoryTransferUserMessage {
         case let e as NearbyTransferError:
             return e.errorDescription ?? NSLocalizedString("transfer_error_connection", comment: "")
         default:
-            return error.localizedDescription
+            return error.userFacingMessage
         }
     }
 }

@@ -64,7 +64,7 @@ final class SocialRecoveryService {
             distributedFlags = Array(repeating: false, count: shareCount)
             setupStep = .displayShare(index: 0)
         } catch {
-            setupStep = .failed(error.localizedDescription)
+            setupStep = .failed(error.userFacingMessage)
         }
     }
 
@@ -101,7 +101,7 @@ final class SocialRecoveryService {
             isConfigured = true
             setupStep = .done
         } catch {
-            setupStep = .failed(error.localizedDescription)
+            setupStep = .failed(error.userFacingMessage)
         }
     }
 

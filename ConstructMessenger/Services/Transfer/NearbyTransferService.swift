@@ -32,7 +32,7 @@ import CryptoKit
 
 // MARK: - Errors
 
-enum NearbyTransferError: LocalizedError {
+enum NearbyTransferError: LocalizedError, UserFacingError {
     case authenticationFailed
     case connectionClosed
     case malformedFrame
@@ -42,18 +42,20 @@ enum NearbyTransferError: LocalizedError {
     case kemKeyIdMismatch
     case noHybridKey
 
-    var errorDescription: String? {
+    var userText: UserText {
         switch self {
-        case .authenticationFailed: return NSLocalizedString("transfer_error_auth", comment: "")
-        case .connectionClosed:     return NSLocalizedString("transfer_error_connection", comment: "")
-        case .malformedFrame:       return NSLocalizedString("transfer_error_corrupt", comment: "")
-        case .transferCancelled:    return NSLocalizedString("transfer_error_cancelled", comment: "")
-        case .v1RefusedForHistory:  return NSLocalizedString("transfer_error_history_v1_refused", comment: "")
-        case .qrPinMismatch:        return NSLocalizedString("history_sync_qr_pin_mismatch", comment: "")
-        case .kemKeyIdMismatch:     return NSLocalizedString("history_sync_kem_key_id_mismatch", comment: "")
-        case .noHybridKey:          return NSLocalizedString("history_sync_no_hybrid_key", comment: "")
+        case .authenticationFailed: return UserText("transfer_error_auth")
+        case .connectionClosed:     return UserText("transfer_error_connection")
+        case .malformedFrame:       return UserText("transfer_error_corrupt")
+        case .transferCancelled:    return UserText("transfer_error_cancelled")
+        case .v1RefusedForHistory:  return UserText("transfer_error_history_v1_refused")
+        case .qrPinMismatch:        return UserText("history_sync_qr_pin_mismatch")
+        case .kemKeyIdMismatch:     return UserText("history_sync_kem_key_id_mismatch")
+        case .noHybridKey:          return UserText("history_sync_no_hybrid_key")
         }
     }
+
+    var errorDescription: String? { userText.resolved }
 }
 
 // MARK: - Service
@@ -182,7 +184,7 @@ final class NearbyTransferService {
                 // cancel() already reset state
             } catch {
                 if !Task.isCancelled {
-                    transferState = .failed(error.localizedDescription)
+                    transferState = .failed(error.userFacingMessage)
                 }
             }
         }
@@ -204,7 +206,7 @@ final class NearbyTransferService {
                 // cancel() already reset state
             } catch {
                 if !Task.isCancelled {
-                    transferState = .failed(error.localizedDescription)
+                    transferState = .failed(error.userFacingMessage)
                 }
             }
         }

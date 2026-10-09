@@ -29,10 +29,10 @@ class DeepLinkHandler {
         // import worked and the user saw no confirmation either way.
         if Self.veilConfigBlob(from: url) != nil {
             Task { @MainActor in
-                guard let message = VeilVoucherRedemption.messageIfVoucher(url.absoluteString) else {
+                guard let outcome = VeilVoucherRedemption.messageIfVoucher(url.absoluteString) else {
                     return
                 }
-                ErrorRouter.shared.report(.unknown(message))
+                ErrorRouter.shared.report(outcome)
             }
             return true
         }
@@ -68,7 +68,7 @@ class DeepLinkHandler {
                     // renders — but nothing proves the two are wired. On device the answer
                     // is the pair of log lines "AppDelegate: Received Universal Link" and
                     // "ErrorRouter [deeplink]".
-                    ErrorRouter.shared.report(.unknown(error.localizedDescription), context: "deeplink")
+                    ErrorRouter.shared.report(error, context: "deeplink")
                 }
             }
         }

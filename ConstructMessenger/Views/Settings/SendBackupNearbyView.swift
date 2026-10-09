@@ -245,7 +245,7 @@ struct SendBackupNearbyView: View {
             }
             service.startSending(payload: payload, type: transferType, fixedPIN: autoPairingPIN)
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = error.userFacingMessage
             showError = true
         }
     }

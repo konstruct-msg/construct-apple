@@ -195,7 +195,7 @@ final class MessageInputAttachmentStore: ObservableObject {
                 } catch let error as MessageValidationError {
                     ErrorRouter.shared.report(error)
                 } catch {
-                    ErrorRouter.shared.report(.unknown(error.userFacingMessage))
+                    ErrorRouter.shared.report(error)
                 }
             }
         }

@@ -187,7 +187,7 @@ struct DesktopChatsListView: View {
     private func handleScannedContact(_ urlString: String) {
         Log.info("🔍 DesktopChatsListView: Handling scanned URL: \(urlString)", category: "DesktopChatsListView")
         guard let url = URL(string: urlString) else {
-            showErrorAfterDismiss(NSLocalizedString("invalid_qr_code_construct", comment: ""))
+            showErrorAfterDismiss(.said(UserText("invalid_qr_code_construct")))
             return
         }
         Task {
@@ -199,7 +199,7 @@ struct DesktopChatsListView: View {
                 }
             } catch {
                 await MainActor.run {
-                    showErrorAfterDismiss(error.localizedDescription)
+                    showErrorAfterDismiss(AppError.from(error))
                     showingQRScanner = false
                 }
             }
@@ -219,10 +219,10 @@ struct DesktopChatsListView: View {
         }
     }
 
-    private func showErrorAfterDismiss(_ message: String) {
+    private func showErrorAfterDismiss(_ error: AppError) {
         showingQRScanner = false
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
-            ErrorRouter.shared.report(.unknown(message))
+            ErrorRouter.shared.report(error)
         }
     }
 }

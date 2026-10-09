@@ -400,39 +400,32 @@ final class DeviceLinkViewModel {
     private func localizedError(_ error: Error) -> String {
         if let grpcError = error as? RPCError {
             switch grpcError.code {
-            case .unauthenticated:
-                return "Link token expired or invalid — please scan a fresh QR code"
-            case .alreadyExists:
-                return "This device is already linked"
-            case .resourceExhausted:
-                return "Rate limit reached — try again in 24 hours"
-            case .deadlineExceeded:
-                return "Network timeout — please check your connection and retry"
-            default:
-                return "Failed: \(grpcError.message)"
+            case .unauthenticated: return UserText("device_link_error_token").resolved
+            case .alreadyExists:   return UserText("device_link_error_already_linked").resolved
+            default:               break
             }
         }
-        if let deviceLinkError = error as? DeviceLinkError {
-            return deviceLinkError.localizedDescription
-        }
-        return error.localizedDescription
+        // Everything else — a timeout, the rate limit, an error of ours — through the one set.
+        return error.userFacingMessage
     }
 }
 
 // MARK: - DeviceLinkError
 
-enum DeviceLinkError: LocalizedError {
+enum DeviceLinkError: LocalizedError, UserFacingError {
     case keyGenerationFailed
     case invalidQRCode
     case rejected
     case expired
 
-    var errorDescription: String? {
+    var userText: UserText {
         switch self {
-        case .keyGenerationFailed: return "Failed to generate device keys — please try again"
-        case .invalidQRCode:       return "Could not read QR code — make sure it's a valid Construct link"
-        case .rejected:            return "Device link request was rejected by the existing device"
-        case .expired:             return "Device link request expired — please generate a new QR code"
+        case .keyGenerationFailed: return UserText("device_link_error_keys")
+        case .invalidQRCode:       return UserText("device_link_error_invalid_qr")
+        case .rejected:            return UserText("device_link_error_rejected")
+        case .expired:             return UserText("device_link_error_expired")
         }
     }
+
+    var errorDescription: String? { userText.resolved }
 }

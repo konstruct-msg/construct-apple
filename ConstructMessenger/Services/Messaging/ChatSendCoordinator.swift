@@ -304,7 +304,7 @@ final class ChatSendCoordinator {
                 ErrorRouter.shared.report(error)
                 return
             } catch {
-                ErrorRouter.shared.report(.unknown(error.userFacingMessage))
+                ErrorRouter.shared.report(error)
                 return
             }
             sendFileMessage(fileURLs: fileURLs, caption: text, replyTo: replyTo, replyToContentOverride: replyToContentOverride)
@@ -317,7 +317,7 @@ final class ChatSendCoordinator {
                 ErrorRouter.shared.report(error)
                 return
             } catch {
-                ErrorRouter.shared.report(.unknown(error.userFacingMessage))
+                ErrorRouter.shared.report(error)
                 return
             }
             sendMediaMessage(attachments: attachments, caption: text, replyTo: replyTo, replyToContentOverride: replyToContentOverride)
@@ -329,7 +329,7 @@ final class ChatSendCoordinator {
             ErrorRouter.shared.report(error)
             return
         } catch {
-            ErrorRouter.shared.report(.unknown(error.userFacingMessage))
+            ErrorRouter.shared.report(error)
             return
         }
         sendTextMessage(text: text, replyTo: replyTo, replyToContentOverride: replyToContentOverride)
@@ -660,11 +660,10 @@ final class ChatSendCoordinator {
                         Log.info("Transport failure — queueing \(messageId.prefix(8))… for safe retry", category: "ChatViewModel")
                         self.updateMessageStatus(messageId: messageId, status: .queued)
                     } else {
+                        // The message says it failed — its mark and its retry — so no toast says
+                        // it again (TODO 128: one failure, one signal).
                         self.updateMessageStatus(messageId: messageId, status: .failed)
                         OutgoingWirePayloadStore.shared.remove(baseMessageId: messageId)
-                        ErrorRouter.shared.report(error, recovery: { [weak self] in
-                            self?.sendTextMessage(text: text, replyTo: replyTo, replyToContentOverride: replyToContentOverride, localThumbnails: localThumbnails)
-                        })
                     }
                 }
             }
@@ -700,7 +699,7 @@ final class ChatSendCoordinator {
         guard let recipientId = chat.otherUser?.id,
               let currentUserId = AuthSessionManager.shared.currentUserId else {
             Log.error("No recipient/user ID for media message", category: "ChatViewModel")
-            ErrorRouter.shared.report(.unknown("Cannot send media: no recipient"))
+            ErrorRouter.shared.report(.unknown(detail: "media send with no recipient or no account"))
             return
         }
         let placeholderId = UUID().uuidString
@@ -764,11 +763,8 @@ final class ChatSendCoordinator {
             } catch {
                 Log.error("Media upload failed: \(error.localizedDescription) | raw: \(error)", category: "ChatViewModel")
                 MediaUploadProgressTracker.shared.clear(placeholderId)
+                // The placeholder shows the failure and its retry; no toast besides.
                 updateMessageStatus(messageId: placeholderId, status: .failed)
-                ErrorRouter.shared.report(
-                    AppError.mediaUploadFailed(error.localizedDescription),
-                    recovery: { [weak self] in self?.retryMessage_byId(placeholderId) }
-                )
             }
         }
     }
@@ -809,8 +805,8 @@ final class ChatSendCoordinator {
                 )
             } catch {
                 Log.error("Voice upload failed: \(error.localizedDescription)", category: "ChatViewModel")
+                // The placeholder shows the failure; no toast besides.
                 updateMessageStatus(messageId: placeholderId, status: .failed)
-                ErrorRouter.shared.report(AppError.mediaUploadFailed(error.localizedDescription))
             }
         }
     }
@@ -869,11 +865,8 @@ final class ChatSendCoordinator {
                 )
             } catch {
                 Log.error("File upload failed: \(error.localizedDescription)", category: "ChatViewModel")
+                // The placeholder shows the failure and its retry; no toast besides.
                 updateMessageStatus(messageId: placeholderId, status: .failed)
-                ErrorRouter.shared.report(
-                    AppError.mediaUploadFailed(error.localizedDescription),
-                    recovery: { [weak self] in self?.retryMessage_byId(placeholderId) }
-                )
             }
         }
     }
@@ -924,7 +917,7 @@ final class ChatSendCoordinator {
             ReactionQuickSetStore.shared.record(added)
         }
         guard let payload = ReactionWire.encode(plan) else {
-            ErrorRouter.shared.report(.unknown(NSLocalizedString("reaction_failed", comment: "")))
+            ErrorRouter.shared.report(.said(UserText("reaction_failed")))
             return
         }
 
@@ -981,9 +974,9 @@ final class ChatSendCoordinator {
                     nowMs: plan.timestampMs,
                     in: self.viewContext
                 )
-                ErrorRouter.shared.report(.unknown(NSLocalizedString("reaction_failed", comment: "")))
+                ErrorRouter.shared.report(.said(UserText("reaction_failed")))
             } catch {
-                ErrorRouter.shared.report(.unknown(NSLocalizedString("reaction_failed", comment: "")))
+                ErrorRouter.shared.report(.said(UserText("reaction_failed")))
             }
         }
     }
@@ -1020,7 +1013,7 @@ final class ChatSendCoordinator {
                 var content = Shared_Proto_Messaging_V1_MessageContent()
                 content.edit = editMsg
                 guard let editPayload = try? content.serializedData() else {
-                    ErrorRouter.shared.report(.unknown("Failed to serialize edit"))
+                    ErrorRouter.shared.report(.said(UserText("edit_message_failed")))
                     return
                 }
 
@@ -1048,9 +1041,10 @@ final class ChatSendCoordinator {
             } catch is StealthDowngradeBlocked {
                 // Stealth on but the edit could not be sealed — fail closed, never send identified.
                 Log.info("Stealth: edit send blocked (cannot seal) — not downgrading for \(message.id.prefix(8))…", category: "ChatSendCoordinator")
-                ErrorRouter.shared.report(.unknown(NSLocalizedString("edit_message_failed", comment: "")))
+                ErrorRouter.shared.report(.said(UserText("edit_message_failed")))
             } catch {
-                ErrorRouter.shared.report(.unknown(String(format: NSLocalizedString("edit_message_failed", comment: ""), error.localizedDescription)))
+                Log.error("Edit not sent for \(message.id.prefix(8))…: \(error)", category: "ChatSendCoordinator")
+                ErrorRouter.shared.report(.said(UserText("edit_message_failed")))
             }
         }
     }
@@ -1088,18 +1082,11 @@ final class ChatSendCoordinator {
                     self.persistenceService.deleteMessage(id: message.id, in: self.viewContext)
                     self.sendTextMessage(text: text, replyTo: nil)
                 } else {
-                    ErrorRouter.shared.report(.unknown(error))
+                    // The message keeps its failed mark and its retry; no toast besides.
+                    Log.error("Retry of \(message.id.prefix(8))… failed: \(error)", category: "ChatViewModel")
                 }
             }
         )
-    }
-
-    private func retryMessage_byId(_ messageId: String) {
-        let fetchRequest = Message.fetchRequest()
-        fetchRequest.predicate = NSPredicate(format: "id == %@", messageId)
-        fetchRequest.fetchLimit = 1
-        guard let msg = try? viewContext.fetch(fetchRequest).first else { return }
-        retryMessage(msg)
     }
 
     // MARK: - Persistence helpers

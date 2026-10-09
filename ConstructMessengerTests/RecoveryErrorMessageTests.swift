@@ -41,9 +41,10 @@ final class RecoveryErrorMessageTests: XCTestCase {
         }
     }
 
-    /// Anything else shows the server's own words — an expired or bad signature, a server fault.
-    func testAnUnmappedRefusalShowsTheServersWords() {
+    /// Anything else is our general sentence for a server refusal, never the server's own words
+    /// (TODO 128) — they are English, and written for whoever reads the server's logs.
+    func testAnUnmappedRefusalSaysOurSentenceNotTheServers() {
         let error = RPCError(code: .invalidArgument, message: "Setup signature has expired")
-        XCTAssertEqual(AccountRecoveryViewModel.errorMessage(from: error), "Setup signature has expired")
+        XCTAssertEqual(AccountRecoveryViewModel.errorMessage(from: error), UserText("error_server").resolved)
     }
 }

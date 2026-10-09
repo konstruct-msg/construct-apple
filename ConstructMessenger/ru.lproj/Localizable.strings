@@ -375,9 +375,7 @@
 "invite_error_invalid_url" = "Указан некорректный URL.";
 "invite_error_unsupported_link" = "Это не поддерживаемая ссылка-приглашение Конструкта.";
 "invite_error_expired" = "Срок действия приглашения истёк. Попросите новое.";
-"invite_error_invalid_fmt" = "Недействительное приглашение: %@";
 "invite_error_already_used" = "Это приглашение уже использовано. Попросите новое.";
-"invite_error_verification_failed_fmt" = "Не удалось проверить приглашение: %@";
 "invite_error_legacy_unsupported" = "Этот формат ссылки больше не поддерживается. Попросите свежий QR или ссылку.";
 "invite_error_malformed" = "Повреждённые данные приглашения";
 "invite_redeem_safety_message" = "Контакт добавлен по приглашению. Имя появится, когда собеседник им поделится.";
@@ -576,7 +574,7 @@
 "edit_message" = "Изменить";
 "edited" = "изменено";
 "editing_message" = "Редактирование сообщения";
-"edit_message_failed" = "Не удалось изменить сообщение: %@";
+"edit_message_failed" = "Не удалось изменить сообщение";
 "edit_message_limit_reached" = "Достигнут лимит правок (максимум 20)";
 
 // Message reactions
@@ -1345,3 +1343,35 @@
 "qr_scanning_unavailable_mac_hint" = "Попросите собеседника прислать ссылку-приглашение.";
 
 "delete_action" = "удалить";
+
+/* Errors a person reads (TODO 128) */
+"error_no_connection" = "Нет соединения с сервером. Проверьте интернет и попробуйте снова.";
+"error_server" = "Сервер сейчас не смог это сделать. Попробуйте позже.";
+"error_rate_limited" = "Слишком много попыток. Подождите немного и попробуйте снова.";
+"error_sign_in_again" = "Войдите снова, чтобы продолжить.";
+"error_generic" = "Что-то пошло не так. Попробуйте снова.";
+"error_encryption" = "Не удалось зашифровать. Попробуйте снова.";
+"error_decryption" = "Не удалось прочитать сообщение. Переписка восстановится сама.";
+"error_peer_unreachable" = "Не удалось связаться с устройством собеседника. Попробуйте позже.";
+"error_upload_failed" = "Не удалось отправить файл. Попробуйте снова.";
+"error_download_failed" = "Не удалось загрузить файл. Попробуйте снова.";
+"error_media_processing" = "Не удалось подготовить фото или видео.";
+"error_no_space" = "На устройстве не хватает места.";
+"error_action_reconnect" = "Переподключить";
+"error_action_sign_in" = "Войти";
+"username_taken" = "Это имя пользователя уже занято.";
+"validation_text_too_large" = "Сообщение слишком длинное. Разделите его на несколько.";
+"validation_file_too_large" = "Файл «%1$@» слишком большой: %2$@, можно не больше %3$@.";
+"validation_unsupported_type" = "Файлы типа .%@ отправить нельзя.";
+"validation_total_too_large" = "Сообщение слишком большое: %1$@, можно не больше %2$@.";
+"validation_empty" = "Сообщение пустое.";
+"validation_self_send" = "Заметки для себя — в Черновиках.";
+"invite_error_invalid" = "Приглашение недействительно. Попросите новое.";
+"invite_error_verification_failed" = "Не удалось проверить приглашение. Проверьте соединение и попробуйте снова.";
+"backup_error_wrong_password" = "Неверный пароль или копия повреждена.";
+"device_link_error_keys" = "Не удалось создать ключи для этого устройства. Попробуйте снова.";
+"device_link_error_invalid_qr" = "Это не код устройства Конструкта.";
+"device_link_error_rejected" = "Другое ваше устройство отклонило запрос.";
+"device_link_error_expired" = "Срок запроса истёк. Покажите новый код.";
+"device_link_error_token" = "Срок действия кода истёк. Отсканируйте новый.";
+"device_link_error_already_linked" = "Это устройство уже привязано.";

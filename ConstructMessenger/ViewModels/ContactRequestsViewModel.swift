@@ -81,7 +81,7 @@ final class ContactRequestsViewModel {
             )
         } catch {
             Log.error("Failed to load contact requests: \(error)", category: "ContactRequests")
-            self.error = error.localizedDescription
+            self.error = error.userFacingMessage
         }
     }
 

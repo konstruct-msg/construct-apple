@@ -156,7 +156,7 @@ struct VeilBootstrapScanView: View {
         case .failure(let error):
             isError = true
             isConfigured = false
-            message = error.localizedDescription
+            message = error.userFacingMessage
         }
     }
 }

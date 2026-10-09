@@ -597,7 +597,7 @@ private struct SingleMediaCell: View {
                     isLoading = false
                     if thumbnailImage == nil {
                         isMissingMedia = disposition == .permanentlyUnavailable
-                        loadError = error.localizedDescription
+                        loadError = error.userFacingMessage
                     }
                     hasReceivedBytes = false
                     downloadProgress = 0

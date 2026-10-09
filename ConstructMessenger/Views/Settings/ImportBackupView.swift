@@ -151,7 +151,7 @@ struct ImportBackupView: View {
                 }
                 if accessed { url.stopAccessingSecurityScopedResource() }
             case .failure(let error):
-                errorMessage = error.localizedDescription
+                errorMessage = error.userFacingMessage
             }
         }
         .alert(LocalizedStringKey("backup_restore_success_title"), isPresented: $showingRestartAlert) {
@@ -173,7 +173,7 @@ struct ImportBackupView: View {
                 try await service.importBackup(from: fileURL, mnemonic: trimmed)
                 showingRestartAlert = true
             } catch {
-                errorMessage = error.localizedDescription
+                errorMessage = error.userFacingMessage
             }
             isImporting = false
         }

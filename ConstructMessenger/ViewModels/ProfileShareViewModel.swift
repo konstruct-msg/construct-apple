@@ -169,7 +169,7 @@ class ProfileShareViewModel {
             payload = try profile.data.encoded()
         } catch {
             Log.error("Profile did not encode: \(error)", category: "ProfileShare")
-            return (false, error.localizedDescription)
+            return (false, error.userFacingMessage)
         }
         let messageId = UUID().uuidString.lowercased()
         let plan: ChunkedMessagePlan = .whole(payload, contentType: 29, messageId: UUID(uuidString: messageId) ?? UUID())
@@ -192,7 +192,7 @@ class ProfileShareViewModel {
             return (true, nil)
         } catch {
             Log.error("Failed to send profile message via gRPC: \(error.localizedDescription)", category: "ProfileShare")
-            return (false, error.localizedDescription)
+            return (false, error.userFacingMessage)
         }
     }
     

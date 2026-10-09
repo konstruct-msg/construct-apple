@@ -11,7 +11,7 @@ import CryptoKit
 import CommonCrypto
 
 // MARK: - Backup Encryption Error
-enum BackupEncryptionError: LocalizedError {
+enum BackupEncryptionError: LocalizedError, UserFacingError {
     case invalidPassword
     case encryptionFailed
     case decryptionFailed
@@ -19,22 +19,18 @@ enum BackupEncryptionError: LocalizedError {
     case keyDerivationFailed
     case dataCorrupted
 
-    var errorDescription: String? {
+    var userText: UserText {
         switch self {
         case .invalidPassword:
-            return "Invalid password or corrupted backup"
-        case .encryptionFailed:
-            return "Failed to encrypt backup data"
-        case .decryptionFailed:
-            return "Failed to decrypt backup data"
-        case .invalidBackupFormat:
-            return "Invalid backup file format"
-        case .keyDerivationFailed:
-            return "Failed to derive encryption key"
-        case .dataCorrupted:
-            return "Backup data is corrupted or tampered"
+            return UserText("backup_error_wrong_password")
+        case .decryptionFailed, .invalidBackupFormat, .dataCorrupted:
+            return UserText("backup_error_invalid_file")
+        case .encryptionFailed, .keyDerivationFailed:
+            return UserText("error_encryption")
         }
     }
+
+    var errorDescription: String? { userText.resolved }
 }
 
 // MARK: - Backup Encryption

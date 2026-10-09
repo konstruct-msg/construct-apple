@@ -52,7 +52,7 @@ struct HistoryTransferOfferView: View {
             case .success(let url):
                 Task { await importFile(from: url) }
             case .failure(let err):
-                errorMessage = err.localizedDescription
+                errorMessage = err.userFacingMessage
             }
         }
         .alert(NSLocalizedString("transfer_error_title", comment: ""), isPresented: Binding(

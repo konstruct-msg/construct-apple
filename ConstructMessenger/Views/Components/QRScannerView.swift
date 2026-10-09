@@ -237,7 +237,7 @@ struct QRScannerView: View {
         guard let text = PlatformClipboard.paste()?.trimmingCharacters(in: .whitespacesAndNewlines),
               !text.isEmpty else {
             dismiss()
-            ErrorRouter.shared.report(.unknown(NSLocalizedString("clipboard_no_valid_invite", comment: "")))
+            ErrorRouter.shared.report(.said(UserText("clipboard_no_valid_invite")))
             return
         }
         Log.debug("QRScannerView: pasting from clipboard: \(text.prefix(80))", category: "QRScannerView")
@@ -283,7 +283,7 @@ struct QRScannerView: View {
             UINotificationFeedbackGenerator().notificationOccurred(.error)
             #endif
             dismiss()
-            ErrorRouter.shared.report(.unknown(NSLocalizedString("invalid_qr_code_construct", comment: "")))
+            ErrorRouter.shared.report(.said(UserText("invalid_qr_code_construct")))
         }
     }
 

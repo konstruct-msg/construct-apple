@@ -295,7 +295,7 @@ struct SettingsView: View {
                 if vm.mode != .off { vm.stop(); await vm.startIfEnabled() }
             }
         case .failure(let e):
-            emergencyImportMsg = e.localizedDescription
+            emergencyImportMsg = e.userFacingMessage
         }
     }
 

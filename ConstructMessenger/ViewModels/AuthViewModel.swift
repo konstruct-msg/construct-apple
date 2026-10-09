@@ -8,6 +8,7 @@
 import Foundation
 import CoreData
 import CryptoKit
+import GRPCCore
 #if canImport(UIKit)
 import UIKit
 #endif
@@ -883,19 +884,19 @@ class AuthViewModel {
                     self.cancelTimeouts()
                     self.isLoading = false
                     self.deleteAccountFailed = true
-                    ErrorRouter.shared.report(.unknown(Self.friendlyDeleteError(error)))
+                    ErrorRouter.shared.report(Self.friendlyDeleteError(error))
                 }
             }
         }
     }
 
-    private static func friendlyDeleteError(_ error: Error) -> String {
-        let desc = error.localizedDescription
-        // Only hide real error for unimplemented (code 12) — server endpoint not ready yet
-        if desc.contains("unimplemented") || desc == "GRPCCore.RPCError error 12" {
-            return NSLocalizedString("delete_account_not_available", comment: "")
+    private static func friendlyDeleteError(_ error: Error) -> AppError {
+        // Unimplemented (code 12): the server endpoint is not there yet.
+        if let rpc = error as? RPCError, rpc.code == .unimplemented {
+            return .said(UserText("delete_account_not_available"))
         }
-        return String(format: NSLocalizedString("delete_account_failed", comment: ""), desc)
+        // The reason is our own sentence for the failure, never the error's words.
+        return .said(UserText("delete_account_failed", AppError.from(error).userText.resolved))
     }
 
     /// Deletes all local data without contacting the server.
