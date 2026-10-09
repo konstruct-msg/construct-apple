@@ -788,6 +788,11 @@ int8_t uniffi_construct_core_fn_method_localstore_set_identity_key(uint64_t ptr,
 int8_t uniffi_construct_core_fn_method_localstore_set_kt_status(uint64_t ptr, RustBuffer id, int16_t status, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_LOCALSTORE_SET_MESSAGE_BODY
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_LOCALSTORE_SET_MESSAGE_BODY
+int8_t uniffi_construct_core_fn_method_localstore_set_message_body(uint64_t ptr, RustBuffer id, RustBuffer body, RustBuffer search_text, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_LOCALSTORE_SET_OBSERVER
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_LOCALSTORE_SET_OBSERVER
 void uniffi_construct_core_fn_method_localstore_set_observer(uint64_t ptr, RustBuffer observer, RustCallStatus *_Nonnull out_status
@@ -2890,6 +2895,12 @@ uint16_t uniffi_construct_core_checksum_method_localstore_set_identity_key(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_LOCALSTORE_SET_KT_STATUS
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_LOCALSTORE_SET_KT_STATUS
 uint16_t uniffi_construct_core_checksum_method_localstore_set_kt_status(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_LOCALSTORE_SET_MESSAGE_BODY
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_LOCALSTORE_SET_MESSAGE_BODY
+uint16_t uniffi_construct_core_checksum_method_localstore_set_message_body(void
     
 );
 #endif
