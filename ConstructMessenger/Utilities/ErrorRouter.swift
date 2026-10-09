@@ -52,7 +52,7 @@ final class ErrorRouter: ObservableObject {
     func report(_ error: AppError, context: String = "", recovery: (() -> Void)? = nil,
                 file: String = #file, line: Int = #line) {
         let ctx = context.isEmpty ? "" : " [\(context)]"
-        Log.error("ErrorRouter\(ctx): \(error.errorDescription ?? String(describing: error))",
+        Log.error("ErrorRouter\(ctx): \(error.logDescription)",
                   category: "ErrorRouter")
 
         guard error.shouldDisplay else { return }

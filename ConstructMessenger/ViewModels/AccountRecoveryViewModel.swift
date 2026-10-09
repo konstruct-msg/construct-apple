@@ -464,7 +464,7 @@ final class AccountRecoveryViewModel {
     /// (GRPCCore.RPCError error 1)", so no branch ever matched: every refusal — a key already set,
     /// an expired signature, a server fault — showed that sentence, and nothing was logged.
     static func errorMessage(from error: Error) -> String {
-        guard let rpc = error as? RPCError else { return error.localizedDescription }
+        guard let rpc = error as? RPCError else { return error.userFacingMessage }
         switch rpc.code {
         case .notFound: return NSLocalizedString("recovery_error_not_found", comment: "")
         case .failedPrecondition: return NSLocalizedString("recovery_error_not_configured", comment: "")

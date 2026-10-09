@@ -86,16 +86,22 @@ extension String {
 import GRPCCore
 
 extension Error {
-    /// Returns a human-readable message suitable for display in the UI.
-    /// Extracts the server message from gRPC RPCError instead of the useless
-    /// "The operation couldn't be completed. (GRPCCore.RPCError error N.)" string.
+    /// The sentence a screen shows for this error: `AppError.from`'s, which classifies by type and
+    /// code. Until 2026-10-09 this returned the server's `RPCError.message` or the error's
+    /// `localizedDescription` — "invalid access token", "device_id is required", a system sentence
+    /// naming `GRPCCore.RuntimeError` — on screens with no `ErrorRouter` in between.
     var userFacingMessage: String {
-        if let rpcError = self as? RPCError {
-            let msg = rpcError.message
-            if !msg.isEmpty { return msg }
-            return "Server error (code \(rpcError.code.rawValue))"
+        AppError.from(self).errorDescription ?? UserText("error_generic").resolved
+    }
+
+    /// `userFacingMessage` for a request that sets a username, where the server's ALREADY_EXISTS
+    /// means the name is taken. Elsewhere that code means other things (a device, a key), so the
+    /// general mapping does not say it.
+    var usernameFacingMessage: String {
+        if let rpc = self as? RPCError, rpc.code == .alreadyExists {
+            return UserText("username_taken").resolved
         }
-        return localizedDescription
+        return userFacingMessage
     }
 }
 

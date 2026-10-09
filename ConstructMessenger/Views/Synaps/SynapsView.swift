@@ -544,16 +544,14 @@ struct SynapsView: View {
             // Transport blips surface as gRPC "Stream unexpectedly closed." — map to a
             // human-readable connection message (RPC already retried in UserServiceClient).
             Log.error("sendContactRequest failed for \(profile.userID.prefix(8))…: \(error)", category: "ContactRequest")
-            let raw = error.userFacingMessage
-            let lower = raw.lowercased()
-            let message: String
-            if lower.contains("stream") || lower.contains("unavailable") || lower.contains("closed")
-                || lower.contains("connection") || lower.contains("timeout") || lower.contains("deadline") {
-                message = NSLocalizedString("contact_request_send_failed", comment: "")
+            // A connection failure gets the request's own sentence; anything else, the general one.
+            // Classified by type, not by sniffing the error's words for "stream" or "timeout".
+            let appError = AppError.from(error)
+            if case .network = appError {
+                ErrorRouter.shared.report(.said(UserText("contact_request_send_failed")))
             } else {
-                message = raw
+                ErrorRouter.shared.report(appError)
             }
-            ErrorRouter.shared.report(.unknown(message))
         }
     }
 
@@ -628,17 +626,17 @@ struct SynapsView: View {
 
     private func handleScannedQR(_ urlString: String) {
         // A voucher scanned here is a voucher, not a malformed contact code.
-        if let message = VeilVoucherRedemption.messageIfVoucher(urlString) {
+        if let outcome = VeilVoucherRedemption.messageIfVoucher(urlString) {
             showingQRScanner = false
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
-                ErrorRouter.shared.report(.unknown(message))
+                ErrorRouter.shared.report(outcome)
             }
             return
         }
         guard let url = URL(string: urlString) else {
             showingQRScanner = false
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
-                ErrorRouter.shared.report(.unknown(NSLocalizedString("invalid_qr_code_construct", comment: "")))
+                ErrorRouter.shared.report(.said(UserText("invalid_qr_code_construct")))
             }
             return
         }
@@ -660,7 +658,7 @@ struct SynapsView: View {
                 await MainActor.run {
                     showingQRScanner = false
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
-                        ErrorRouter.shared.report(.unknown(error.localizedDescription))
+                        ErrorRouter.shared.report(error)
                     }
                 }
             }

@@ -251,7 +251,7 @@ struct ReceiveBackupNearbyView: View {
             } catch {
                 service.receivedPayload = nil
                 isStaging = false
-                stagingError = error.localizedDescription
+                stagingError = error.userFacingMessage
                 showError = true
             }
         }

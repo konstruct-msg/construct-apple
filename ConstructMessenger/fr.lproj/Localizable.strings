@@ -535,7 +535,7 @@
 "edit_message" = "Modifier";
 "edited" = "modifié";
 "editing_message" = "Modification du message";
-"edit_message_failed" = "Échec de la modification du message : %@";
+"edit_message_failed" = "Impossible de modifier le message";
 "edit_message_limit_reached" = "Limite de modifications atteinte (20 modifications max)";
 
 // Message reactions
@@ -660,9 +660,7 @@
 "invite_error_invalid_url" = "L’URL fournie n’est pas valide.";
 "invite_error_unsupported_link" = "Ce n’est pas un lien d’invitation Konstruct pris en charge.";
 "invite_error_expired" = "Cette invitation a expiré. Demandez-en une nouvelle.";
-"invite_error_invalid_fmt" = "Invitation invalide : %@";
 "invite_error_already_used" = "Cette invitation a déjà été utilisée. Demandez-en une nouvelle.";
-"invite_error_verification_failed_fmt" = "Impossible de vérifier l’invitation : %@";
 "invite_error_legacy_unsupported" = "Ce format de lien n’est plus pris en charge. Demandez un nouveau QR ou lien d’invitation.";
 "invite_error_malformed" = "Données d’invitation malformées";
 "invite_redeem_safety_message" = "Contact ajouté via une invitation. Le nom s’affichera dès qu’il sera partagé.";
@@ -1254,3 +1252,35 @@
 "qr_scanning_unavailable_mac_hint" = "Demandez à votre contact de vous envoyer son lien d’invitation.";
 
 "delete_action" = "supprimer";
+
+/* Errors a person reads (TODO 128) */
+"error_no_connection" = "Pas de connexion au serveur. Vérifiez Internet et réessayez.";
+"error_server" = "Le serveur n’a pas pu le faire pour l’instant. Réessayez plus tard.";
+"error_rate_limited" = "Trop de tentatives. Patientez un peu et réessayez.";
+"error_sign_in_again" = "Reconnectez-vous pour continuer.";
+"error_generic" = "Un problème est survenu. Réessayez.";
+"error_encryption" = "Échec du chiffrement. Réessayez.";
+"error_decryption" = "Impossible de lire un message. La conversation se rétablira d’elle-même.";
+"error_peer_unreachable" = "Impossible de joindre l’appareil de cette personne. Réessayez plus tard.";
+"error_upload_failed" = "Impossible d’envoyer le fichier. Réessayez.";
+"error_download_failed" = "Impossible de télécharger le fichier. Réessayez.";
+"error_media_processing" = "Impossible de préparer la photo ou la vidéo.";
+"error_no_space" = "Espace insuffisant sur cet appareil.";
+"error_action_reconnect" = "Reconnecter";
+"error_action_sign_in" = "Se connecter";
+"username_taken" = "Ce nom d’utilisateur est déjà pris.";
+"validation_text_too_large" = "Le message est trop long. Divisez-le en plusieurs.";
+"validation_file_too_large" = "%1$@ est trop volumineux : %2$@, au maximum %3$@.";
+"validation_unsupported_type" = "Les fichiers de type .%@ ne peuvent pas être envoyés.";
+"validation_total_too_large" = "Le message est trop volumineux : %1$@, au maximum %2$@.";
+"validation_empty" = "Le message est vide.";
+"validation_self_send" = "Les notes pour vous-même vont dans les Brouillons.";
+"invite_error_invalid" = "Cette invitation n’est pas valide. Demandez-en une nouvelle.";
+"invite_error_verification_failed" = "Impossible de vérifier cette invitation. Vérifiez la connexion et réessayez.";
+"backup_error_wrong_password" = "Mot de passe incorrect, ou la sauvegarde est endommagée.";
+"device_link_error_keys" = "Impossible de créer les clés de cet appareil. Réessayez.";
+"device_link_error_invalid_qr" = "Ce n’est pas un code d’appareil Konstruct.";
+"device_link_error_rejected" = "Votre autre appareil a refusé la demande.";
+"device_link_error_expired" = "La demande a expiré. Affichez un nouveau code.";
+"device_link_error_token" = "Ce code a expiré. Scannez-en un nouveau.";
+"device_link_error_already_linked" = "Cet appareil est déjà associé.";

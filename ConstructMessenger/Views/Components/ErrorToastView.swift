@@ -45,15 +45,10 @@ struct ErrorToastView: View {
                 .foregroundColor(tintColor(for: error))
                 .lineLimit(1).fixedSize()
             VStack(alignment: .leading, spacing: 2) {
-                Text(error.errorDescription ?? "An error occurred")
+                Text(error.errorDescription ?? UserText("error_generic").resolved)
                     .font(CTFont.body)
                     .foregroundColor(Color.CT.text)
                     .lineLimit(2)
-                if let suggestion = error.recoverySuggestion {
-                    Text(suggestion)
-                        .font(CTFont.caption)
-                        .foregroundColor(Color.CT.textDim)
-                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -110,19 +105,23 @@ struct ErrorToastView: View {
         switch error {
         case .network, .streamDisconnected:
             return Image(systemName: "wifi.slash")
+        case .serverRefused, .rateLimited:
+            return Image(systemName: "exclamationmark.icloud.fill")
         case .sessionInitFailed, .decryptionFailed,
              .cryptoCoreUnavailable, .keyOperationFailed:
             return Image(systemName: "exclamationmark.triangle.fill")
         case .mediaUploadFailed, .mediaDownloadFailed,
                 .mediaOptimizationFailed:
             return Image(systemName: "exclamationmark.icloud.fill")
+        case .noSpace:
+            return Image(systemName: "externaldrive.fill.badge.exclamationmark")
         case .validation:
             return Image(systemName: "exclamationmark.bubble.fill")
-        case .authFailed, .sessionExpired:
+        case .sessionExpired:
             return Image(systemName: "lock.rotation")
         case .notice:
             return Image(systemName: "person.badge.plus")
-        case .unknown:
+        case .said, .unknown:
             return Image(systemName: "exclamationmark.bubble.fill")
         }
     }
@@ -165,7 +164,7 @@ private func errorToastPreview(_ error: AppError, recovery: (() -> Void)? = nil)
 }
 
 #Preview("Critical · action") {
-    // .sessionExpired → "Log in again" button + recovery suggestion line
+    // .sessionExpired → the sign-in button
     errorToastPreview(.sessionExpired, recovery: {})
 }
 
@@ -176,6 +175,6 @@ private func errorToastPreview(_ error: AppError, recovery: (() -> Void)? = nil)
 
 #Preview("Critical · dismissable") {
     // No recovery handler → the × dismiss button branch
-    errorToastPreview(.unknown("Server error (code 13)"))
+    errorToastPreview(.unknown(detail: "Server error (code 13)"))
 }
 #endif

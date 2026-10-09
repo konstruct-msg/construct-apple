@@ -415,9 +415,7 @@
 "invite_error_invalid_url" = "Նշված URL-ն անվավեր է։";
 "invite_error_unsupported_link" = "Սա աջակցվող Կոնստրուկտ հրավերի հղում չէ։";
 "invite_error_expired" = "Այս հրավերը ժամկետանց է։ Խնդրեք նորը։";
-"invite_error_invalid_fmt" = "Անվավեր հրավեր՝ %@";
 "invite_error_already_used" = "Այս հրավերն արդեն օգտագործվել է։ Խնդրեք նորը։";
-"invite_error_verification_failed_fmt" = "Չհաջողվեց ստուգել հրավերը՝ %@";
 "invite_error_legacy_unsupported" = "Այս հղման ձևաչափն այլևս չի աջակցվում։ Խնդրեք նոր QR կամ հղում։";
 "invite_error_malformed" = "Անսարք հրավերի տվյալներ";
 "invite_redeem_safety_message" = "Կոնտակտն ավելացվել է հրավերից։ Նրանց անունը կերևա, երբ նրանք կիսվեն դրանով։";
@@ -575,7 +573,7 @@
 "edit_message" = "Խմբագրել";
 "edited" = "խմբագրված";
 "editing_message" = "Հաղորդագրության խմբագրում";
-"edit_message_failed" = "Չհաջողվեց խմբագրել հաղորդագրությունը՝ %@";
+"edit_message_failed" = "Չհաջողվեց խմբագրել հաղորդագրությունը";
 "edit_message_limit_reached" = "Խմբագրման սահմանը սպառված է (առավելագույնը 20 խմբագրում)";
 
 // Message reactions
@@ -1334,3 +1332,35 @@
 "qr_scanning_unavailable_mac_hint" = "Խնդրեք զրուցակցին ուղարկել հրավերի հղումը։";
 
 "delete_action" = "ջնջել";
+
+/* Errors a person reads (TODO 128) */
+"error_no_connection" = "Սերվերի հետ կապ չկա։ Ստուգեք ինտերնետը և փորձեք նորից։";
+"error_server" = "Սերվերը հիմա չկարողացավ դա անել։ Փորձեք ավելի ուշ։";
+"error_rate_limited" = "Չափազանց շատ փորձեր։ Մի փոքր սպասեք և փորձեք նորից։";
+"error_sign_in_again" = "Շարունակելու համար նորից մուտք գործեք։";
+"error_generic" = "Ինչ-որ բան սխալ գնաց։ Փորձեք նորից։";
+"error_encryption" = "Չհաջողվեց գաղտնագրել։ Փորձեք նորից։";
+"error_decryption" = "Չհաջողվեց կարդալ հաղորդագրությունը։ Զրույցը կվերականգնվի ինքնուրույն։";
+"error_peer_unreachable" = "Չհաջողվեց կապվել զրուցակցի սարքի հետ։ Փորձեք ավելի ուշ։";
+"error_upload_failed" = "Չհաջողվեց ուղարկել ֆայլը։ Փորձեք նորից։";
+"error_download_failed" = "Չհաջողվեց ներբեռնել ֆայլը։ Փորձեք նորից։";
+"error_media_processing" = "Չհաջողվեց պատրաստել լուսանկարը կամ տեսանյութը։";
+"error_no_space" = "Սարքում բավարար տեղ չկա։";
+"error_action_reconnect" = "Վերամիանալ";
+"error_action_sign_in" = "Մուտք գործել";
+"username_taken" = "Այս օգտանունն արդեն զբաղված է։";
+"validation_text_too_large" = "Հաղորդագրությունը չափազանց երկար է։ Բաժանեք այն մի քանիսի։";
+"validation_file_too_large" = "%1$@ ֆայլը չափազանց մեծ է՝ %2$@, առավելագույնը՝ %3$@։";
+"validation_unsupported_type" = ".%@ տեսակի ֆայլերը հնարավոր չէ ուղարկել։";
+"validation_total_too_large" = "Հաղորդագրությունը չափազանց մեծ է՝ %1$@, առավելագույնը՝ %2$@։";
+"validation_empty" = "Հաղորդագրությունը դատարկ է։";
+"validation_self_send" = "Ինքներդ ձեզ համար նշումները՝ Սևագրերում։";
+"invite_error_invalid" = "Այս հրավերը վավեր չէ։ Խնդրեք նորը։";
+"invite_error_verification_failed" = "Չհաջողվեց ստուգել այս հրավերը։ Ստուգեք կապը և փորձեք նորից։";
+"backup_error_wrong_password" = "Սխալ գաղտնաբառ, կամ պահուստը վնասված է։";
+"device_link_error_keys" = "Չհաջողվեց ստեղծել այս սարքի բանալիները։ Փորձեք նորից։";
+"device_link_error_invalid_qr" = "Սա Կոնստրուկտի սարքի կոդ չէ։";
+"device_link_error_rejected" = "Ձեր մյուս սարքը մերժեց հարցումը։";
+"device_link_error_expired" = "Հարցման ժամկետը լրացել է։ Ցույց տվեք նոր կոդ։";
+"device_link_error_token" = "Այս կոդի ժամկետը լրացել է։ Սկանավորեք նորը։";
+"device_link_error_already_linked" = "Այս սարքն արդեն կապված է։";

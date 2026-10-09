@@ -52,17 +52,18 @@ struct VeilConfigBlob {
 }
 
 enum VeilConfigImporter {
-    enum ImportError: LocalizedError {
+    enum ImportError: LocalizedError, UserFacingError {
         case malformed, badSignature, expired, unknownRelay, spkiMismatch
-        var errorDescription: String? {
+        var userText: UserText {
             switch self {
-            case .malformed:    return NSLocalizedString("veil_import_err_malformed", comment: "")
+            case .malformed:    return UserText("veil_import_err_malformed")
             case .badSignature, .spkiMismatch:
-                return NSLocalizedString("veil_import_err_signature", comment: "")
-            case .expired:      return NSLocalizedString("veil_import_err_expired", comment: "")
-            case .unknownRelay: return NSLocalizedString("veil_import_err_unknown_relay", comment: "")
+                return UserText("veil_import_err_signature")
+            case .expired:      return UserText("veil_import_err_expired")
+            case .unknownRelay: return UserText("veil_import_err_unknown_relay")
             }
         }
+        var errorDescription: String? { userText.resolved }
     }
 
     /// Import a base64url-encoded signed config blob (from a scanned QR or a

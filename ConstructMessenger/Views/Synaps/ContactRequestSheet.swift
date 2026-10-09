@@ -206,7 +206,7 @@ struct ContactRequestSheet: View {
             try await action()
             dismiss()
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = error.userFacingMessage
         }
         isProcessing = false
         activeAction = nil

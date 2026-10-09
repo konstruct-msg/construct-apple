@@ -415,9 +415,7 @@
 "invite_error_invalid_url" = "The provided URL is invalid.";
 "invite_error_unsupported_link" = "This is not a supported Konstruct invite link.";
 "invite_error_expired" = "This invite has expired. Ask for a new one.";
-"invite_error_invalid_fmt" = "Invalid invite: %@";
 "invite_error_already_used" = "This invite was already used. Ask for a new one.";
-"invite_error_verification_failed_fmt" = "Could not verify invite: %@";
 "invite_error_legacy_unsupported" = "This link format is no longer supported. Ask for a fresh invite QR or link.";
 "invite_error_malformed" = "Malformed invite data";
 "invite_redeem_safety_message" = "Contact added from an invite. Their name appears once they share it.";
@@ -575,7 +573,7 @@
 "edit_message" = "Edit";
 "edited" = "edited";
 "editing_message" = "Editing message";
-"edit_message_failed" = "Failed to edit message: %@";
+"edit_message_failed" = "Couldn’t edit the message";
 "edit_message_limit_reached" = "Edit limit reached (20 edits max)";
 
 // Message reactions
@@ -1334,3 +1332,35 @@
 "qr_scanning_unavailable_mac_hint" = "Ask your contact to share their invite link instead.";
 
 "delete_action" = "delete";
+
+/* Errors a person reads (TODO 128) */
+"error_no_connection" = "No connection to the server. Check the internet and try again.";
+"error_server" = "The server couldn’t do this right now. Try again later.";
+"error_rate_limited" = "Too many attempts. Wait a little and try again.";
+"error_sign_in_again" = "Sign in again to continue.";
+"error_generic" = "Something went wrong. Try again.";
+"error_encryption" = "Couldn’t encrypt. Try again.";
+"error_decryption" = "Couldn’t read a message. The conversation will recover on its own.";
+"error_peer_unreachable" = "Couldn’t reach this person’s device. Try again later.";
+"error_upload_failed" = "Couldn’t send the file. Try again.";
+"error_download_failed" = "Couldn’t download the file. Try again.";
+"error_media_processing" = "Couldn’t prepare the photo or video.";
+"error_no_space" = "Not enough space on this device.";
+"error_action_reconnect" = "Reconnect";
+"error_action_sign_in" = "Sign in";
+"username_taken" = "This username is already taken.";
+"validation_text_too_large" = "The message is too long. Split it into several.";
+"validation_file_too_large" = "%1$@ is too large: %2$@, at most %3$@.";
+"validation_unsupported_type" = "Files of type .%@ can’t be sent.";
+"validation_total_too_large" = "The message is too large: %1$@, at most %2$@.";
+"validation_empty" = "The message is empty.";
+"validation_self_send" = "Notes to yourself go in Drafts.";
+"invite_error_invalid" = "This invite isn’t valid. Ask for a new one.";
+"invite_error_verification_failed" = "Couldn’t verify this invite. Check the connection and try again.";
+"backup_error_wrong_password" = "Wrong password, or the backup is damaged.";
+"device_link_error_keys" = "Couldn’t create keys for this device. Try again.";
+"device_link_error_invalid_qr" = "This isn’t a Konstruct device code.";
+"device_link_error_rejected" = "Your other device declined the request.";
+"device_link_error_expired" = "The request has expired. Show a new code.";
+"device_link_error_token" = "This code has expired. Scan a new one.";
+"device_link_error_already_linked" = "This device is already linked.";

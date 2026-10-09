@@ -12,6 +12,11 @@ import GRPCCore
 
 // MARK: - AppError
 
+/// What failed, as the app tells a person about it (TODO 128).
+///
+/// The text shown is always `userText` — a key of ours, per case. No case carries a sentence from
+/// the error it was made from: `unknown` keeps its detail for the log, and our own sentences come
+/// in through `said`, which takes a `UserText` and so only a key.
 enum AppError: LocalizedError {
 
     // MARK: - Network
@@ -19,6 +24,10 @@ enum AppError: LocalizedError {
     case network(NetworkError)
     /// gRPC stream failed to reconnect
     case streamDisconnected
+    /// The server answered, with an error that is not ours to explain
+    case serverRefused
+    /// The server is limiting how often this can be done
+    case rateLimited
 
     // MARK: - Session / Crypto
     /// E2EE session could not be established with a contact
@@ -28,29 +37,31 @@ enum AppError: LocalizedError {
     /// Cryptographic core is not initialised
     case cryptoCoreUnavailable
     /// Key generation or rotation failed
-    case keyOperationFailed(String)
+    case keyOperationFailed
 
     // MARK: - Media
     /// File/image upload failed
-    case mediaUploadFailed(String)
+    case mediaUploadFailed
     /// File/image download failed
-    case mediaDownloadFailed(String)
+    case mediaDownloadFailed
     /// Media optimisation (resize/compress) failed
     case mediaOptimizationFailed
+    /// The device is out of storage
+    case noSpace
 
     // MARK: - Validation
     /// Message content failed validation (too large, empty, bad type)
     case validation(MessageValidationError)
 
     // MARK: - Authentication
-    /// Login / token refresh failed
-    case authFailed(String)
     /// Session token expired and could not be refreshed
     case sessionExpired
 
     // MARK: - Generic
-    /// Catch-all for unmapped errors; use sparingly
-    case unknown(String)
+    /// Our own sentence for a failure no other case names.
+    case said(UserText)
+    /// Anything unclassified. The detail goes to the log; the screen says "something went wrong".
+    case unknown(detail: String)
 
     /// Non-error informational banner (invite safety, etc.). Optional action title for the toast button.
     case notice(message: String, actionTitle: String?)
@@ -76,13 +87,16 @@ extension AppError {
         case .decryptionFailed:        return .warning
         case .streamDisconnected:      return .warning
         case .network:                 return .warning
+        case .rateLimited:             return .warning
         case .mediaUploadFailed,
              .mediaDownloadFailed:     return .warning
+        case .said:                    return .warning
         case .sessionInitFailed,
              .cryptoCoreUnavailable,
              .keyOperationFailed,
+             .serverRefused,
+             .noSpace,
              .sessionExpired,
-             .authFailed,
              .unknown:                 return .critical
         }
     }
@@ -103,7 +117,7 @@ extension AppError {
         case .network, .streamDisconnected: return .reconnect
         case .mediaUploadFailed:            return .retry
         case .sessionInitFailed:            return .retry
-        case .sessionExpired, .authFailed:  return .relogin
+        case .sessionExpired:               return .relogin
         default:                            return .none
         }
     }
@@ -116,58 +130,51 @@ extension AppError {
         default:
             switch recovery {
             case .none:       return nil
-            case .retry:      return "Retry"
-            case .reconnect:  return "Reconnect"
-            case .relogin:    return "Log in again"
+            case .retry:      return UserText("retry").resolved
+            case .reconnect:  return UserText("error_action_reconnect").resolved
+            case .relogin:    return UserText("error_action_sign_in").resolved
             }
         }
     }
 }
 
-// MARK: - LocalizedError
+// MARK: - What the person reads
 
 extension AppError {
-    var errorDescription: String? {
+    /// The sentence for this failure. Every case answers with a key of ours.
+    var userText: UserText {
         switch self {
-        case .network(let e):
-            return e.errorDescription ?? "Connection error"
-        case .streamDisconnected:
-            return "Lost connection to server"
-        case .sessionInitFailed:
-            return "Could not establish secure connection"
-        case .decryptionFailed:
-            return "Could not decrypt message"
-        case .cryptoCoreUnavailable:
-            return "Encryption engine unavailable"
-        case .keyOperationFailed(let detail):
-            return "Key operation failed: \(detail)"
-        case .mediaUploadFailed(let detail):
-            return "Upload failed: \(detail)"
-        case .mediaDownloadFailed(let detail):
-            return "Download failed: \(detail)"
-        case .mediaOptimizationFailed:
-            return "Could not process media"
-        case .validation(let e):
-            return e.errorDescription
-        case .authFailed(let detail):
-            return detail.isEmpty ? "Authentication failed" : detail
-        case .sessionExpired:
-            return "Session expired, please log in again"
-        case .unknown(let detail):
-            return detail.isEmpty ? "An unexpected error occurred" : detail
-        case .notice(let message, _):
-            return message
+        case .network(let e):           return e.userText
+        case .streamDisconnected:       return UserText("error_no_connection")
+        case .serverRefused:            return UserText("error_server")
+        case .rateLimited:              return UserText("error_rate_limited")
+        case .sessionInitFailed:        return UserText("error_peer_unreachable")
+        case .decryptionFailed:         return UserText("error_decryption")
+        case .cryptoCoreUnavailable,
+             .keyOperationFailed:       return UserText("error_encryption")
+        case .mediaUploadFailed:        return UserText("error_upload_failed")
+        case .mediaDownloadFailed:      return UserText("error_download_failed")
+        case .mediaOptimizationFailed:  return UserText("error_media_processing")
+        case .noSpace:                  return UserText("error_no_space")
+        case .validation(let e):        return e.userText
+        case .sessionExpired:           return UserText("error_sign_in_again")
+        case .said(let text):           return text
+        case .unknown:                  return UserText("error_generic")
+        case .notice:                   return UserText("error_generic")
         }
     }
 
-    var recoverySuggestion: String? {
+    var errorDescription: String? {
+        if case .notice(let message, _) = self { return message }
+        return userText.resolved
+    }
+
+    /// What the log gets: the case, and for `unknown` the detail the screen never shows.
+    var logDescription: String {
         switch self {
-        case .decryptionFailed:
-            return "The conversation will re-sync automatically"
-        case .sessionExpired:
-            return "Your session has expired"
-        default:
-            return nil
+        case .unknown(let detail): return "unknown: \(detail)"
+        case .notice(let message, _): return "notice: \(message)"
+        default: return String(describing: self)
         }
     }
 }
@@ -175,7 +182,8 @@ extension AppError {
 // MARK: - Mapping from domain errors
 
 extension AppError {
-    /// Map any domain `Error` to an `AppError`.
+    /// Map any `Error` to what the person is told. By type and code only: an error's own words
+    /// reach the log, never the screen.
     static func from(_ error: Error) -> AppError {
         switch error {
         case let e as AppError:
@@ -184,6 +192,8 @@ extension AppError {
             return .network(e)
         case let e as MessageValidationError:
             return .validation(e)
+        case let e as UserFacingError:
+            return .said(e.userText)
         case let e as CryptoManagerError:
             switch e {
             case .coreNotInitialized:          return .cryptoCoreUnavailable
@@ -196,40 +206,58 @@ extension AppError {
             case .encryptionFailed,
                  .invalidKeyData,
                  .invalidSignature,
-                 .keyStatePersistFailed:       return .keyOperationFailed(e.localizedDescription)
+                 .keyStatePersistFailed:       return .keyOperationFailed
             }
         case let e as RPCError:
             switch e.code {
             case .unauthenticated:             return .sessionExpired
             case .unavailable, .deadlineExceeded:
                                                return .network(.connectionFailed)
-            default:
-                let msg = e.message.isEmpty ? "Server error (code \(e.code.rawValue))" : e.message
-                return .unknown(msg)
+            case .resourceExhausted:           return .rateLimited
+            default:                           return .serverRefused
             }
+        // The gRPC client's own failures — not started, stopped, transport closed — never an
+        // answer from the server. This was the "GRPCCore.RuntimeError, error 1" toast.
+        case is RuntimeError, is GRPCClientError:
+            return .network(.connectionFailed)
+        case let e as URLError:
+            return e.code == .notConnectedToInternet || e.code == .networkConnectionLost
+                || e.code == .timedOut || e.code == .cannotConnectToHost || e.code == .cannotFindHost
+                ? .network(.connectionFailed) : .unknown(detail: String(describing: e))
         default:
-            let msg = error.localizedDescription
-            return .unknown(msg)
+            let ns = error as NSError
+            if (ns.domain == NSCocoaErrorDomain && ns.code == NSFileWriteOutOfSpaceError)
+                || (ns.domain == NSPOSIXErrorDomain && ns.code == Int(ENOSPC)) {
+                return .noSpace
+            }
+            return .unknown(detail: String(describing: error))
         }
     }
 
     /// Whether this error should be reported to the user or silently logged only.
     var shouldDisplay: Bool {
         switch self {
-        case .notice:
-            return true
         case .decryptionFailed:
             return false   // session self-heals; no user noise
         case .sessionInitFailed:
             // Message bubble already shows retry — banner is redundant and misleading
             // (often caused by stale contact keys, not a fixable network issue).
             return false
-        case .unknown(let detail):
-            // Suppress raw internal strings that must never reach the UI.
-            let internalPrefixes = ["Orchestrator returned", "OutboundSessionService", "No session with contact"]
-            return !internalPrefixes.contains { detail.hasPrefix($0) }
         default:
             return true
+        }
+    }
+}
+
+extension NetworkError {
+    var userText: UserText {
+        switch self {
+        case .connectionFailed, .disconnected, .notConnected:
+            return UserText("error_no_connection")
+        case .serverError:
+            return UserText("error_server")
+        case .invalidMessage, .encodingFailed, .decodingFailed:
+            return UserText("error_generic")
         }
     }
 }

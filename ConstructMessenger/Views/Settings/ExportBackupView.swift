@@ -226,7 +226,7 @@ struct ExportBackupView: View {
                 mnemonicWords = m.split(separator: " ").map(String.init)
                 step = 1
             } catch {
-                errorMessage = error.localizedDescription
+                errorMessage = error.userFacingMessage
             }
             isWorking = false
         }
@@ -240,7 +240,7 @@ struct ExportBackupView: View {
             do {
                 backupURL = try await service.exportBackup(mnemonic: mnemonic, context: viewContext)
             } catch {
-                errorMessage = error.localizedDescription
+                errorMessage = error.userFacingMessage
             }
             isWorking = false
         }

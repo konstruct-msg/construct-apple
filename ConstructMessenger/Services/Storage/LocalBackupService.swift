@@ -287,22 +287,25 @@ private struct BackupManifest: Codable {
 
 // MARK: - BackupError
 
-enum BackupError: LocalizedError {
+enum BackupError: LocalizedError, UserFacingError {
     case invalidMnemonic
     case fileNotFound(String)
     case invalidFile
     case decryptionFailed
     case userIdMismatch
 
-    var errorDescription: String? {
+    /// `fileNotFound`'s path is for the log.
+    var userText: UserText {
         switch self {
-        case .invalidMnemonic:     return NSLocalizedString("backup_error_invalid_mnemonic", comment: "")
-        case .fileNotFound(let n): return "File not found: \(n)"
-        case .invalidFile:         return NSLocalizedString("backup_error_invalid_file", comment: "")
-        case .decryptionFailed:    return NSLocalizedString("backup_error_invalid_file", comment: "")
-        case .userIdMismatch:      return NSLocalizedString("history_sync_user_mismatch", comment: "")
+        case .invalidMnemonic:   return UserText("backup_error_invalid_mnemonic")
+        case .fileNotFound:      return UserText("backup_error_invalid_file")
+        case .invalidFile:       return UserText("backup_error_invalid_file")
+        case .decryptionFailed:  return UserText("backup_error_invalid_file")
+        case .userIdMismatch:    return UserText("history_sync_user_mismatch")
         }
     }
+
+    var errorDescription: String? { userText.resolved }
 }
 
 // MARK: - Helpers

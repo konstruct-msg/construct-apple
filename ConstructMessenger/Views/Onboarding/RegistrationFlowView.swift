@@ -472,7 +472,7 @@ struct RegistrationFlowView: View {
             
         } catch {
             Log.error("Registration failed: \(error)", category: "Registration")
-            currentStep = .error(error.userFacingMessage)
+            currentStep = .error(username == nil ? error.userFacingMessage : error.usernameFacingMessage)
         }
     }
 }

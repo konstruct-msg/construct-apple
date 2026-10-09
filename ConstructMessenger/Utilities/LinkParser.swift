@@ -9,7 +9,7 @@
 
 import Foundation
 
-enum ContactLinkError: Error, LocalizedError {
+enum ContactLinkError: Error, LocalizedError, UserFacingError {
     case invalidURL
     case invalidPrefix
     case inviteExpired
@@ -19,30 +19,21 @@ enum ContactLinkError: Error, LocalizedError {
     /// This device does not know the account's address yet (`RecoveryGateView`).
     case recoveryKeyRequired
 
-    var errorDescription: String? {
+    /// The reason in `inviteInvalid` and the error in `verificationFailed` are for the log: one
+    /// is sometimes the server's wording, the other a system error's.
+    var userText: UserText {
         switch self {
-        case .invalidURL:
-            return NSLocalizedString("invite_error_invalid_url", comment: "")
-        case .invalidPrefix:
-            return NSLocalizedString("invite_error_unsupported_link", comment: "")
-        case .inviteExpired:
-            return NSLocalizedString("invite_error_expired", comment: "")
-        case .inviteInvalid(let reason):
-            return String(
-                format: NSLocalizedString("invite_error_invalid_fmt", comment: ""),
-                reason
-            )
-        case .inviteAlreadyUsed:
-            return NSLocalizedString("invite_error_already_used", comment: "")
-        case .verificationFailed(let error):
-            return String(
-                format: NSLocalizedString("invite_error_verification_failed_fmt", comment: ""),
-                error.localizedDescription
-            )
-        case .recoveryKeyRequired:
-            return NSLocalizedString("invite_error_recovery_key_required", comment: "")
+        case .invalidURL:          return UserText("invite_error_invalid_url")
+        case .invalidPrefix:       return UserText("invite_error_unsupported_link")
+        case .inviteExpired:       return UserText("invite_error_expired")
+        case .inviteInvalid:       return UserText("invite_error_invalid")
+        case .inviteAlreadyUsed:   return UserText("invite_error_already_used")
+        case .verificationFailed:  return UserText("invite_error_verification_failed")
+        case .recoveryKeyRequired: return UserText("invite_error_recovery_key_required")
         }
     }
+
+    var errorDescription: String? { userText.resolved }
 }
 
 struct ContactInfo: Equatable {

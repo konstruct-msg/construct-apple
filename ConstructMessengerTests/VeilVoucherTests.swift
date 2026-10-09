@@ -266,8 +266,9 @@ final class VeilVoucherTests: XCTestCase {
     func testAMalformedVoucherLinkIsClaimedAndReportedAsAVoucher() {
         // Claimed (so the contact parser never sees it) but refused, with the importer's
         // own message rather than "scan a Konstruct contact code".
-        let message = VeilVoucherRedemption.messageIfVoucher("konstruct://veil-config?d=!!!")
-        XCTAssertNotNil(message)
-        XCTAssertNotEqual(message, NSLocalizedString("veil_config_import_ok", comment: ""))
+        let outcome = try? XCTUnwrap(VeilVoucherRedemption.messageIfVoucher("konstruct://veil-config?d=!!!"))
+        XCTAssertNotNil(outcome)
+        if case .notice = outcome { XCTFail("a refused voucher is not the import notice") }
+        XCTAssertEqual(outcome?.userText, UserText("veil_import_err_malformed"))
     }
 }

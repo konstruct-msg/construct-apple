@@ -260,7 +260,7 @@ struct DevicesView: View {
             // spinner for the rows), and `.task` starts the same load. A cancelled load is not a
             // failure: the other one is still running, and an alert for it says nothing true.
             if error is CancellationError || Task.isCancelled { return }
-            errorMessage = error.localizedDescription
+            errorMessage = error.userFacingMessage
             Log.error("listDevices failed: \(error)", category: "DevicesView")
         }
     }
@@ -282,7 +282,7 @@ struct DevicesView: View {
             try await AuthServiceClient.shared.revokeDevice(deviceId: device.id)
             await loadDevices()
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = error.userFacingMessage
             Log.error("revokeDevice failed: \(error)", category: "DevicesView")
         }
     }

@@ -201,7 +201,7 @@ class SettingsViewModel {
             username = trimmed
             usernameSaved = true
         } catch {
-            usernameSaveError = error.userFacingMessage
+            usernameSaveError = error.usernameFacingMessage
         }
 
         isSavingUsername = false
