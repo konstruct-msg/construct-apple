@@ -262,6 +262,7 @@ struct ChatView: View {
         .inlineNavTitle()
         #if os(iOS)
         .hidesTabBar()
+        .softTopScrollEdge()
         #endif
         .modifier(ComposerPlacement(usesOverlay: usesOwnedInset) { composer })
         .onDrop(of: [.image, .fileURL], isTargeted: $isChatDropTargeted) { providers in

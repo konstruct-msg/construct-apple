@@ -25,6 +25,25 @@ extension View {
         #endif
     }
 
+    /// The soft edge under the system bar, for a screen whose scroll view is UIKit's — the chat's
+    /// transcript (`ChatTranscriptScrollView`). iOS 27 gives such a scroll view the hard edge, a
+    /// blurred band with a dividing line under the bar, where iOS 26 gave it the soft one every
+    /// SwiftUI list still gets (seen on device and on both simulators, 2026-10-09). Setting the
+    /// UIKit `topEdgeEffect.style` does not hold: SwiftUI sets the style of the scroll views it
+    /// hosts, so the style is asked of SwiftUI.
+    @ViewBuilder
+    func softTopScrollEdge() -> some View {
+        #if os(iOS)
+        if #available(iOS 26.0, *) {
+            self.scrollEdgeEffectStyle(.soft, for: .top)
+        } else {
+            self
+        }
+        #else
+        self
+        #endif
+    }
+
     /// A screen's title on the system bar, inline. `shown: false` where the screen is embedded in
     /// a host that names it (the Desktop settings pane).
     @ViewBuilder
