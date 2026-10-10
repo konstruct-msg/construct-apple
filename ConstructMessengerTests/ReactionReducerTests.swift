@@ -263,21 +263,11 @@ final class ReactionReducerTests: XCTestCase {
         )
     }
 
-    // MARK: - Clock + orphan
+    // MARK: - Clock
 
     func testZeroPayloadTimestamp_UsesFallback() {
         XCTAssertEqual(ReactionReducer.normalizeTimestamp(payloadMs: 0, fallbackMs: t0), t0)
         XCTAssertEqual(ReactionReducer.normalizeTimestamp(payloadMs: t1, fallbackMs: t0), t1)
-    }
-
-    func testOrphanEvictedAfterSevenDays() {
-        let received = t0
-        let sixDays = received + 6 * 24 * 60 * 60 * 1000
-        let sevenDays = received + 7 * 24 * 60 * 60 * 1000
-        XCTAssertFalse(ReactionReducer.shouldEvictOrphan(targetExists: false, receivedAtMs: received, nowMs: sixDays))
-        XCTAssertTrue(ReactionReducer.shouldEvictOrphan(targetExists: false, receivedAtMs: received, nowMs: sevenDays))
-        XCTAssertFalse(ReactionReducer.shouldEvictOrphan(targetExists: true, receivedAtMs: received, nowMs: sevenDays),
-                       "a reaction whose target arrived must not be swept as an orphan")
     }
 
     // MARK: - Not a chat row

@@ -165,9 +165,4 @@ enum ReactionReducer {
             timestampMs: nowMs
         )
     }
-
-    static func shouldEvictOrphan(targetExists: Bool, receivedAtMs: Int64, nowMs: Int64) -> Bool {
-        if targetExists { return false }
-        return nowMs &- receivedAtMs >= Int64(orphanTTLSeconds * 1000)
-    }
 }

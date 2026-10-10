@@ -905,11 +905,7 @@ final class ChatSendCoordinator {
         guard let recipientId = chat.otherUser?.id,
               let currentUserId = AuthSessionManager.shared.currentUserId else { return }
         let nowMs = Int64(Date().timeIntervalSince1970 * 1000)
-        let existing = ReactionStore.row(
-            targetMessageId: message.id,
-            reactorUserId: currentUserId,
-            in: viewContext
-        )
+        let existing = try? LocalRepositories.reactions.reaction(on: message.id, by: currentUserId)
         guard let plan = ReactionReducer.sendPlan(
             targetMessageId: message.id,
             currentEmoji: existing?.emoji,
@@ -926,15 +922,14 @@ final class ChatSendCoordinator {
         }
 
         let previous = existing.map { ReactionReducer.Row(emoji: $0.emoji, timestampMs: $0.timestampMs) }
-        _ = ReactionStore.applyIncoming(
+        _ = Reactions.applyIncoming(
             targetMessageId: plan.targetMessageId,
             reactorUserId: currentUserId,
             actionRawValue: ReactionWire.actionRawValue(plan.incoming),
             emoji: ReactionWire.emoji(plan.incoming),
             payloadTimestampMs: plan.timestampMs,
             fallbackTimestampMs: plan.timestampMs,
-            nowMs: plan.timestampMs,
-            in: viewContext
+            nowMs: plan.timestampMs
         )
 
         Task { [weak self] in
@@ -971,12 +966,11 @@ final class ChatSendCoordinator {
                     "Stealth: reaction send blocked (cannot seal) — rolling back \(message.id.prefix(8))…",
                     category: "ChatSendCoordinator"
                 )
-                ReactionStore.restoreLocal(
+                Reactions.restoreLocal(
                     targetMessageId: plan.targetMessageId,
                     reactorUserId: currentUserId,
                     previous: previous,
-                    nowMs: plan.timestampMs,
-                    in: self.viewContext
+                    nowMs: plan.timestampMs
                 )
                 ErrorRouter.shared.report(.said(UserText("reaction_failed")))
             } catch {

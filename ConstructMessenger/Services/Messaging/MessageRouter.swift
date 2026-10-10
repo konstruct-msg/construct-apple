@@ -1204,7 +1204,7 @@ final class MessageRouter {
                         emoji: emoji,
                         action: action,
                         payloadTimestampMs: timestampMs,
-                        fallbackTimestampMs: ReactionStore.envelopeTimestampMs(message.timestamp),
+                        fallbackTimestampMs: Reactions.envelopeTimestampMs(message.timestamp),
                         from: otherUserId,
                         envelopeId: message.id,
                         in: context
@@ -1281,15 +1281,14 @@ final class MessageRouter {
         in context: NSManagedObjectContext
     ) {
         let nowMs = Int64(Date().timeIntervalSince1970 * 1000)
-        let decision = ReactionStore.applyIncoming(
+        let decision = Reactions.applyIncoming(
             targetMessageId: targetMessageID,
             reactorUserId: otherUserId,
             actionRawValue: action.rawValue,
             emoji: emoji,
             payloadTimestampMs: payloadTimestampMs,
             fallbackTimestampMs: fallbackTimestampMs,
-            nowMs: nowMs,
-            in: context
+            nowMs: nowMs
         )
         if decision == .dropInvalid {
             Log.error(
@@ -2244,15 +2243,14 @@ final class MessageRouter {
             Log.info("SENDER_SYNC: edit in sync payload, ignoring", category: "MessageRouter")
             return
         case .reaction(let targetMessageID, let emoji, let action, let timestampMs):
-            let decision = ReactionStore.applyIncoming(
+            let decision = Reactions.applyIncoming(
                 targetMessageId: targetMessageID,
                 reactorUserId: original.from,
                 actionRawValue: action.rawValue,
                 emoji: emoji,
                 payloadTimestampMs: timestampMs,
-                fallbackTimestampMs: ReactionStore.envelopeTimestampMs(original.timestamp),
-                nowMs: Int64(Date().timeIntervalSince1970 * 1000),
-                in: context
+                fallbackTimestampMs: Reactions.envelopeTimestampMs(original.timestamp),
+                nowMs: Int64(Date().timeIntervalSince1970 * 1000)
             )
             Log.info(
                 "SENDER_SYNC: reaction on \(targetMessageID.prefix(8))… \(decision) — not a chat row",

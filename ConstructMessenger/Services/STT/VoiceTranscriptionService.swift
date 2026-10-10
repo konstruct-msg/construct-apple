@@ -1,5 +1,4 @@
 import Foundation
-import CoreData
 
 #if canImport(WhisperKit)
 import WhisperKit
@@ -76,23 +75,18 @@ public final class VoiceTranscriptionService {
 
     // MARK: - Public API
 
-    /// Transcribes the given audio data and persists the result to CoreData.
+    /// Transcribes the given audio and stores the text on the message.
     /// - Parameters:
     ///   - audioData: Raw audio bytes (m4a/opus/wav) from the decrypted voice message.
-    ///   - message: The CoreData Message object to update with the transcript.
-    ///   - context: The NSManagedObjectContext to save into.
-    public func transcribe(
-        audioData: Data,
-        message: Message,
-        context: NSManagedObjectContext
-    ) async throws {
+    ///   - messageId: The message the transcript belongs to.
+    /// - Returns: The text, as stored.
+    @discardableResult
+    func transcribe(audioData: Data, messageId: String) async throws -> String {
         let result = try await provider.transcribe(audioData: audioData)
-        await MainActor.run {
-            message.transcript = result.text
-            message.transcriptLanguage = result.language
-            message.transcriptGeneratedAt = Date()
-            try? context.save()
-        }
+        try LocalRepositories.messages.setTranscript(
+            messageId, text: result.text, language: result.language, generatedAt: Date()
+        )
+        return result.text
     }
 
     /// Returns true if a model/provider is available to run transcription.

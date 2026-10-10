@@ -163,13 +163,10 @@ struct MessageBubbleRegularView: View {
                                         mediaUrl: voiceContent.mediaUrl,
                                         mediaKey: voiceContent.mediaKey
                                     )
-                                    if let ctx = message.managedObjectContext {
-                                        try await VoiceTranscriptionService.shared.transcribe(
-                                            audioData: data,
-                                            message: message,
-                                            context: ctx
-                                        )
-                                    }
+                                    try await VoiceTranscriptionService.shared.transcribe(
+                                        audioData: data,
+                                        messageId: message.id
+                                    )
                                 } catch {
                                     Log.error("Transcription failed: \(error)", category: "MessageBubbleRegularView")
                                 }
@@ -305,7 +302,7 @@ struct MessageBubbleRegularView: View {
             .simultaneousGesture(doubleTapLikeGesture)
             #endif
             .onAppear { reloadReactionBadges() }
-            .onReceive(NotificationCenter.default.publisher(for: ReactionStore.didChange)) { note in
+            .onReceive(NotificationCenter.default.publisher(for: Reactions.didChange)) { note in
                 guard let target = note.object as? String,
                       target.caseInsensitiveCompare(message.id) == .orderedSame
                 else { return }
@@ -477,11 +474,7 @@ struct MessageBubbleRegularView: View {
     }
 
     private func reloadReactionBadges() {
-        guard let context = message.managedObjectContext else {
-            reactionBadges = []
-            return
-        }
-        reactionBadges = ReactionStore.reactions(on: message.id, in: context).map {
+        reactionBadges = ((try? LocalRepositories.reactions.reactions(on: message.id)) ?? []).map {
             ReactionBadge(emoji: $0.emoji, reactorUserId: $0.reactorUserId)
         }
     }

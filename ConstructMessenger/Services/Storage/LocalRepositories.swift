@@ -30,6 +30,9 @@ enum LocalRepositories {
     private(set) nonisolated(unsafe) static var messages: any MessageStore =
         CoreDataMessageStore(container: PersistenceController.shared.container)
 
+    private(set) nonisolated(unsafe) static var reactions: any ReactionStore =
+        CoreDataReactionStore(container: PersistenceController.shared.container)
+
     #if DEBUG
     /// A test's own store (an in-memory container); `nil` restores the app's.
     static func usePeerDevicesForTesting(_ store: (any PeerDeviceStore)?) {
@@ -49,6 +52,10 @@ enum LocalRepositories {
 
     static func useMessagesForTesting(_ container: NSPersistentContainer?) {
         messages = CoreDataMessageStore(container: container ?? PersistenceController.shared.container)
+    }
+
+    static func useReactionsForTesting(_ container: NSPersistentContainer?) {
+        reactions = CoreDataReactionStore(container: container ?? PersistenceController.shared.container)
     }
 
     static func useServerMessageIdsForTesting(_ store: (any ServerMessageIdStore)?) {

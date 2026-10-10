@@ -154,9 +154,11 @@ struct VideoNoteBubbleView: View {
                 let url = try await MediaVideoFile.fetch(item: item, messageId: message.id, itemIndex: itemIndex)
                 await MainActor.run { videoURL = url }
                 let audio = try await MediaVideoFile.speech(of: url)
-                guard let context = message.managedObjectContext else { return }
-                try await VoiceTranscriptionService.shared.transcribe(audioData: audio, message: message, context: context)
-                transcript = message.transcript
+                // The stored text, not the held row's: the write lands in another context and
+                // reaches this one on its next merge.
+                transcript = try await VoiceTranscriptionService.shared.transcribe(
+                    audioData: audio, messageId: message.id
+                )
                 showsTranscript = true
             } catch {
                 Log.error("Video note transcription failed: \(error)", category: "VideoNoteBubbleView")
