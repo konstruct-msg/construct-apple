@@ -9,6 +9,7 @@
 //
 
 import CoreData
+import SwiftProtobuf
 import XCTest
 @testable import Construct_Messenger
 
@@ -60,8 +61,27 @@ final class HistoryCoreStreamTests: XCTestCase {
             var c = Construct_Client_History_V1_HistoryContact()
             c.userID = Data(repeating: UInt8(i + 1), count: 16)
             c.displayName = "c\(i)"
-            return .record(.contact(c))
+            return .record(.transcript(type: HistoryRecordType.contact, proto: try! c.serializedData()))
         }
+    }
+
+    /// A receiving device's store, empty, with the repositories the importer writes through
+    /// pointed at it until the test ends.
+    private func freshStore() -> NSManagedObjectContext {
+        let container = PersistenceController(inMemory: true).container
+        LocalRepositories.usePeerDevicesForTesting(CoreDataPeerDeviceStore(container: container))
+        LocalRepositories.useContactsForTesting(container)
+        LocalRepositories.useChatsForTesting(container)
+        LocalRepositories.useMessagesForTesting(container)
+        LocalRepositories.useReactionsForTesting(container)
+        addTeardownBlock {
+            LocalRepositories.usePeerDevicesForTesting(nil)
+            LocalRepositories.useContactsForTesting(nil)
+            LocalRepositories.useChatsForTesting(nil)
+            LocalRepositories.useMessagesForTesting(nil)
+            LocalRepositories.useReactionsForTesting(nil)
+        }
+        return container.viewContext
     }
 
     /// A media file on this device's disk, as the encoder would find it.
@@ -124,7 +144,7 @@ final class HistoryCoreStreamTests: XCTestCase {
         // The new device does not have it yet.
         try FileManager.default.removeItem(at: MediaManager.onDiskURL(for: media.id))
 
-        let context = PersistenceController(inMemory: true).container.viewContext
+        let context = freshStore()
         let outcome = try await importFile(url, into: new, from: old, context: context)
 
         guard case .imported(let summary, let phase) = outcome else { return XCTFail("\(outcome)") }
@@ -145,7 +165,7 @@ final class HistoryCoreStreamTests: XCTestCase {
         let url = try await writeFile(from: old, to: new, contactCount: 1, media: media)
         try Data("kept".utf8).write(to: MediaManager.onDiskURL(for: media.id))
 
-        let context = PersistenceController(inMemory: true).container.viewContext
+        let context = freshStore()
         guard case .imported(let summary, _) = try await importFile(url, into: new, from: old, context: context) else {
             return XCTFail("expected an import")
         }
@@ -164,7 +184,7 @@ final class HistoryCoreStreamTests: XCTestCase {
         let whole = try Data(contentsOf: url)
         try whole.prefix(whole.count - 30_000).write(to: url)
 
-        let context = PersistenceController(inMemory: true).container.viewContext
+        let context = freshStore()
         do {
             _ = try await importFile(url, into: new, from: old, context: context)
             XCTFail("a cut file must not import")
@@ -222,7 +242,7 @@ final class HistoryCoreStreamTests: XCTestCase {
     func testAPhase2DropKeepsPhase1Rows() async throws {
         let old = try device()
         let new = try device()
-        let context = PersistenceController(inMemory: true).container.viewContext
+        let context = freshStore()
         let sending = HistoryTransferCoordinator()
         let receiving = HistoryTransferCoordinator()
 

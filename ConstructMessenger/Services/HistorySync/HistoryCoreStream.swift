@@ -30,60 +30,43 @@ enum HistoryRecordType {
     static let call: UInt8 = 0x07
 }
 
-/// A transcript record, decoded. Media is not a record here: it streams (`HistoryOutbound.media`
-/// on the way out, `HistoryMediaSink` on the way in).
+/// A transcript record. The manifest is read here — the transfer's phase and counts come from it;
+/// every other record crosses as its protobuf bytes, which the core reads and writes
+/// (`history_import_*`, `history_export_*`). Media is not a record here: it streams
+/// (`HistoryOutbound.media` on the way out, `HistoryMediaSink` on the way in).
 enum HistoryRecord: Equatable {
     case manifest(Construct_Client_History_V1_HistoryManifest)
-    case contact(Construct_Client_History_V1_HistoryContact)
-    case chat(Construct_Client_History_V1_HistoryChat)
-    case message(Construct_Client_History_V1_HistoryMessage)
-    case reaction(Construct_Client_History_V1_HistoryReaction)
-    case peerDevice(Construct_Client_History_V1_HistoryPeerDevice)
-    case call(Construct_Client_History_V1_HistoryCall)
+    /// A contact, chat, message, reaction, peer device or call record.
+    case transcript(type: UInt8, proto: Data)
     /// A record the core passed over — an unknown type, or a message with a body from a later
     /// version. Counted, never applied.
     case skipped(type: UInt8)
 
     /// The record as the core takes it.
     func wire() throws -> HistoryRecordOut {
-        let (type, proto): (UInt8, Data)
         switch self {
-        case .manifest(let m): (type, proto) = (HistoryRecordType.manifest, try m.serializedData())
-        case .contact(let c): (type, proto) = (HistoryRecordType.contact, try c.serializedData())
-        case .chat(let c): (type, proto) = (HistoryRecordType.chat, try c.serializedData())
-        case .message(let m): (type, proto) = (HistoryRecordType.message, try m.serializedData())
-        case .reaction(let r): (type, proto) = (HistoryRecordType.reaction, try r.serializedData())
-        case .peerDevice(let p): (type, proto) = (HistoryRecordType.peer, try p.serializedData())
-        case .call(let c): (type, proto) = (HistoryRecordType.call, try c.serializedData())
-        case .skipped: throw HistoryError.Malformed(message: "a skipped record is not sent")
+        case .manifest(let m):
+            return HistoryRecordOut(recordType: HistoryRecordType.manifest, proto: try m.serializedData())
+        case .transcript(let type, let proto):
+            return HistoryRecordOut(recordType: type, proto: proto)
+        case .skipped:
+            throw HistoryError.Malformed(message: "a skipped record is not sent")
         }
-        return HistoryRecordOut(recordType: type, proto: proto)
     }
 
-    /// A record the core released. It has already checked the protocol rules; a proto that does
-    /// not decode here is still malformed.
+    /// A record the core released. It has already checked the protocol rules; a record that does
+    /// not read is malformed when the importer hands it to the core.
     static func decode(type: UInt8, proto: Data) throws -> HistoryRecord {
-        do {
-            switch type {
-            case HistoryRecordType.manifest:
-                return .manifest(try .init(serializedBytes: proto))
-            case HistoryRecordType.contact:
-                return .contact(try .init(serializedBytes: proto))
-            case HistoryRecordType.chat:
-                return .chat(try .init(serializedBytes: proto))
-            case HistoryRecordType.message:
-                return .message(try .init(serializedBytes: proto))
-            case HistoryRecordType.reaction:
-                return .reaction(try .init(serializedBytes: proto))
-            case HistoryRecordType.peer:
-                return .peerDevice(try .init(serializedBytes: proto))
-            case HistoryRecordType.call:
-                return .call(try .init(serializedBytes: proto))
-            default:
-                return .skipped(type: type)
+        switch type {
+        case HistoryRecordType.manifest:
+            guard let manifest = try? Construct_Client_History_V1_HistoryManifest(serializedBytes: proto) else {
+                throw HistoryError.Malformed(message: "malformed")
             }
-        } catch {
-            throw HistoryError.Malformed(message: "malformed")
+            return .manifest(manifest)
+        case HistoryRecordType.contact...HistoryRecordType.call:
+            return .transcript(type: type, proto: proto)
+        default:
+            return .skipped(type: type)
         }
     }
 }
@@ -310,12 +293,10 @@ extension HistoryQRPin {
 /// Where received events go: transcript records into Core Data through the importer, media into
 /// files. Records are applied on `context`'s queue, one hop per chunk of events.
 final class HistoryImportSink {
-    private let importer = HistorySnapshotImporter()
+    private let importer: HistorySnapshotImporter
     private let context: NSManagedObjectContext
-    private let expectedUserId: String
     private let media = HistoryMediaSink()
-    private var summary = HistoryImportSummary()
-    private var sinceSave = 0
+    private var mediaSummary = HistoryImportSummary()
     private(set) var manifestPhase: UInt32 = 0
     var onManifest: ((Construct_Client_History_V1_HistoryManifest) -> Void)?
     /// Records applied so far, after each chunk's worth.
@@ -324,7 +305,7 @@ final class HistoryImportSink {
     private(set) var seen = 0
 
     init(expectedUserId: String, context: NSManagedObjectContext) {
-        self.expectedUserId = expectedUserId
+        self.importer = HistorySnapshotImporter(expectedUserId: expectedUserId, context: context)
         self.context = context
     }
 
@@ -343,53 +324,36 @@ final class HistoryImportSink {
             case .skipped(let type):
                 records.append(.skipped(type: type))
             case .mediaStart(let id, _, _):
-                summary.add(try media.start(mediaId: id))
+                mediaSummary.add(try media.start(mediaId: id))
             case .mediaBytes(let data):
                 try media.append(data)
             case .mediaEnd:
-                summary.add(try media.end())
+                mediaSummary.add(try media.end())
             case .end:
                 break
             }
         }
         guard !records.isEmpty else { return }
         let importer = importer
-        let expectedUserId = expectedUserId
-        let context = context
-        let saveEvery = HistorySnapshotImporter.saveBatchSize
-        let unsavedBefore = sinceSave
-        let (partial, unsaved) = try await context.perform {
-            var local = HistoryImportSummary()
-            var unsaved = unsavedBefore
-            for record in records {
-                local.add(try importer.apply(record, expectedUserId: expectedUserId, in: context))
-                unsaved += 1
-                if unsaved >= saveEvery {
-                    try context.saveOrThrow(category: "HistorySync")
-                    unsaved = 0
-                }
-            }
-            return (local, unsaved)
+        try await context.perform {
+            for record in records { try importer.apply(record) }
         }
-        sinceSave = unsaved
-        summary.merge(partial)
         seen += records.count
         onProgress?(seen)
     }
 
-    /// A transfer that failed: drop the blob in progress. Records already saved stay — the import
-    /// is additive and a retry is idempotent.
+    /// A transfer that failed: drop the blob in progress. Records already written stay — the
+    /// import is additive and a retry is idempotent.
     func abandonMedia() {
         media.abandon()
     }
 
     func finish() async throws -> HistoryCoreStream.Outcome {
         media.abandon()
-        if sinceSave > 0 {
-            let context = context
-            try await context.perform { try context.saveOrThrow(category: "HistorySync") }
-            sinceSave = 0
-        }
+        let importer = importer
+        try await context.perform { try importer.flush() }
+        var summary = importer.summary
+        summary.merge(mediaSummary)
         return .imported(summary, manifestPhase: manifestPhase)
     }
 }

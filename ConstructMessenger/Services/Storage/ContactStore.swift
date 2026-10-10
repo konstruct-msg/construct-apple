@@ -109,6 +109,9 @@ protocol ContactStore: Sendable {
     /// Adds the row unless one with its id exists; true when added. A row that exists is left as it
     /// is — changing it is the field writes' job.
     @discardableResult func insert(_ contact: ContactRecord) throws -> Bool
+    /// Every field of the row `contact.id` set to the record's (`upsert_contact`); false when
+    /// there is no such row. For a merge already decided — the history import's.
+    @discardableResult func replace(_ contact: ContactRecord) throws -> Bool
 
     /// A contact from now on; `addedAt` is kept if it was set.
     @discardableResult func markContact(_ id: String, addedAt: Date) throws -> Bool
@@ -214,6 +217,10 @@ final class CoreDataContactStore: ContactStore, OwnProfileStore, @unchecked Send
             try context.saveOrThrow(category: "Contacts")
             return true
         }
+    }
+
+    func replace(_ contact: ContactRecord) throws -> Bool {
+        try update(contact.id) { contact.write(to: $0) }
     }
 
     func markContact(_ id: String, addedAt: Date) throws -> Bool {
