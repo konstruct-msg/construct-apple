@@ -1812,13 +1812,12 @@ final class MessageRouter {
                 if let serverOrderKey = messageData.serverOrderKey {
                     try store.setOrderKey(existing.id, serverOrderKey)
                 }
-                // Update the content if the message was stored undecryptable. Still a
-                // managed-object write: replacing the body without marking the message edited has
-                // no operation in `MessageStore` or the crate yet.
-                if existing.body.isEmpty, let row = try Message.row(existing.id, in: context) {
+                // Update the content if the message was stored undecryptable — a body read late,
+                // not an edit.
+                if existing.body.isEmpty,
+                   try store.setBody(existing.id, body: storagePayload,
+                                     searchText: LocalMessagePayload.decode(storagePayload).plainText) {
                     Log.debug("Updating decrypted content for message \(canonicalId)", category: "MessageRouter")
-                    row.applyStoredEncryption(plaintextData: storagePayload, contactId: messageData.from)
-                    try context.saveOrThrow(category: "MessageRouter")
                     recoveredPreviewAt = existing.timestamp
                 }
                 if let at = recoveredPreviewAt {

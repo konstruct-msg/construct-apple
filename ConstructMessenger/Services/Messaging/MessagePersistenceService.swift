@@ -55,14 +55,9 @@ class MessagePersistenceService {
             }
             // Recover a previously undecryptable message: if the sender re-sent the same
             // message (same UUID) after a session heal, update the content so the "unavailable"
-            // bubble is replaced with the actual text.
-            //
-            // Still a managed-object write: replacing the body without marking the message edited
-            // has no operation in `MessageStore` or the crate yet (an edit marks it).
-            if existing.body.isEmpty, !payload.isEmpty, let row = try Message.row(existing.id, in: context) {
-                let contactId = isSentByMe ? message.to : message.from
-                row.applyStoredEncryption(plaintextData: payload, contactId: contactId)
-                try context.save()
+            // bubble is replaced with the actual text — a body read late, not an edit.
+            if existing.body.isEmpty, !payload.isEmpty,
+               try store.setBody(existing.id, body: payload, searchText: LocalMessagePayload.decode(payload).plainText) {
                 Log.info("Recovered undecryptable message \(message.id.prefix(8))… — content now available", category: "MessagePersistence")
                 // Update chat preview if this was the last message showing "unavailable"
                 Self.advancePreview(of: chat, text: previewText, at: existing.timestamp)

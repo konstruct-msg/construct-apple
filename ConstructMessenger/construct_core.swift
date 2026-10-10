@@ -1508,6 +1508,12 @@ public protocol LocalStoreProtocol: AnyObject, Sendable {
     
     func setKtStatus(id: String, status: Int16) throws  -> Bool
     
+    /**
+     * The body and its search text replaced, the message not marked edited: a body read late —
+     * stored undecryptable, sent again under the same id. False: no message.
+     */
+    func setMessageBody(id: String, body: Data, searchText: String?) throws  -> Bool
+    
     func setObserver(observer: LocalStoreObserver?) 
     
     func setOrderKey(id: String, orderKey: String) throws  -> Bool
@@ -2217,6 +2223,21 @@ open func setKtStatus(id: String, status: Int16)throws  -> Bool  {
             self.uniffiCloneHandle(),
         FfiConverterString.lower(id),
         FfiConverterInt16.lower(status),$0
+    )
+})
+}
+    
+    /**
+     * The body and its search text replaced, the message not marked edited: a body read late —
+     * stored undecryptable, sent again under the same id. False: no message.
+     */
+open func setMessageBody(id: String, body: Data, searchText: String?)throws  -> Bool  {
+    return try  FfiConverterBool.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_set_message_body(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(id),
+        FfiConverterData.lower(body),
+        FfiConverterOptionString.lower(searchText),$0
     )
 })
 }
@@ -12740,6 +12761,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_localstore_set_kt_status() != 19632) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_set_message_body() != 28116) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_localstore_set_observer() != 60987) {

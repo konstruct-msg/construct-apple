@@ -72,6 +72,10 @@ protocol MessageStore: Sendable {
     /// An edit: the body replaced, the message marked edited at `editedAt`.
     @discardableResult func edit(_ id: String, body: Data, searchText: String?, editedAt: Date) throws -> Bool
 
+    /// A body read late — a message stored undecryptable, sent again under the same id: replaced,
+    /// and **not** marked edited, since it says what it said all along (`set_message_body`).
+    @discardableResult func setBody(_ id: String, body: Data, searchText: String?) throws -> Bool
+
     /// Writes `status` unless the stored one is stronger evidence of arrival
     /// (`DeliveryStatusTransition`); false when refused, unchanged, or no such message.
     @discardableResult func setDeliveryStatus(_ id: String, _ status: DeliveryStatus) throws -> Bool
@@ -180,6 +184,12 @@ final class CoreDataMessageStore: MessageStore, @unchecked Sendable {
         }
     }
 
+    func setBody(_ id: String, body: Data, searchText: String?) throws -> Bool {
+        try update(id) { row in
+            row.applyStoredEncryption(plaintextData: body, contactId: row.isSentByMe ? row.toUserId : row.fromUserId)
+        }
+    }
+
     func setDeliveryStatus(_ id: String, _ status: DeliveryStatus) throws -> Bool {
         // The guarded setter applies `DeliveryStatusTransition`; a refused write changes nothing.
         try update(id) { $0.deliveryStatus = status }
@@ -281,18 +291,5 @@ extension MessageRecord {
             replyQuote: row.replyQuote, transcript: row.transcript,
             transcriptLanguage: row.transcriptLanguage, transcriptGeneratedAt: row.transcriptGeneratedAt
         )
-    }
-}
-
-extension Message {
-    /// The row `id` in `context`, as last saved — for a caller that still needs the managed object
-    /// (the transcript, a reply to link) after writing through `MessageStore`. Refreshed, for the
-    /// reason `User.row` gives. Disappears with step 2 of the messages domain.
-    static func row(_ id: String, in context: NSManagedObjectContext) throws -> Message? {
-        let req = Message.fetchRequest()
-        req.predicate = NSPredicate(format: "id ==[c] %@", id)
-        req.fetchLimit = 1
-        req.shouldRefreshRefetchedObjects = true
-        return try context.fetch(req).first
     }
 }
