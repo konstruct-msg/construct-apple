@@ -336,7 +336,11 @@ struct HistorySnapshotImporter {
         guard let reactor = HistoryAccountID.dashed(reaction.reactorUserID) else {
             throw HistorySnapshotError.malformed
         }
-        if ReactionStore.row(targetMessageId: target, reactorUserId: reactor, in: context) != nil {
+        let existing = Reaction.fetchRequest()
+        existing.predicate = NSPredicate(
+            format: "targetMessageId ==[c] %@ AND reactorUserId ==[c] %@", target, reactor
+        )
+        if try context.count(for: existing) > 0 {
             return .conflictKeepExisting
         }
         let row = Reaction(context: context)
