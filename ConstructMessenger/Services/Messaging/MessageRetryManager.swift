@@ -84,7 +84,7 @@ class MessageRetryManager {
                     await MainActor.run {
                         // The message must still be there; everything below acts on it.
                         guard (try? LocalRepositories.messages.message(capturedMessageId)) != nil else { return }
-                        recordOutcome(capturedMessageId, finalStatus, orderKey: serverOrderKey)
+                        self.recordOutcome(capturedMessageId, finalStatus, orderKey: serverOrderKey)
                         if finalStatus == .sent || finalStatus == .delivered {
                             OutgoingWirePayloadStore.shared.remove(baseMessageId: capturedMessageId)
                         }
@@ -100,7 +100,7 @@ class MessageRetryManager {
                         // The message must still be there; everything below acts on it.
                         guard (try? LocalRepositories.messages.message(capturedMessageId)) != nil else { return }
                         // Keep the stored payload; re-seal on the next retry once a bundle/IK exists.
-                        recordOutcome(capturedMessageId, .queued)
+                        self.recordOutcome(capturedMessageId, .queued)
                         Log.info("Retry: sealed send blocked (cannot seal) — queued \(capturedMessageId.prefix(8))…, nudging bundle fetch", category: "MessageRetryManager")
                         SessionLifecycleController.shared.reestablishSessionForQueuedOutbound(to: recipientId)
                     }
@@ -115,7 +115,7 @@ class MessageRetryManager {
                             }
                             return false
                         }()
-                        recordOutcome(capturedMessageId, isRetryableTransport ? .queued : .failed)
+                        self.recordOutcome(capturedMessageId, isRetryableTransport ? .queued : .failed)
                         if isRetryableTransport {
                             Log.info("Retry transport failure — queued \(capturedMessageId.prefix(8))… for later", category: "MessageRetryManager")
                         } else {
@@ -140,7 +140,7 @@ class MessageRetryManager {
             await MainActor.run {
                 // The message must still be there; everything below acts on it.
                 guard (try? LocalRepositories.messages.message(capturedMessageId)) != nil else { return }
-                recordOutcome(capturedMessageId, status)
+                self.recordOutcome(capturedMessageId, status)
                 if status == .sent || status == .delivered || status == .failed {
                     OutgoingWirePayloadStore.shared.remove(baseMessageId: capturedMessageId)
                 }
@@ -506,7 +506,7 @@ class MessageRetryManager {
                     await MainActor.run {
                         // The message must still be there; everything below acts on it.
                         guard (try? LocalRepositories.messages.message(messageId)) != nil else { return }
-                        recordOutcome(messageId, finalStatus, orderKey: serverOrderKey)
+                        self.recordOutcome(messageId, finalStatus, orderKey: serverOrderKey)
                         if finalStatus == .sent || finalStatus == .delivered {
                             OutgoingWirePayloadStore.shared.remove(baseMessageId: messageId)
                         } else if finalStatus == .failed {
