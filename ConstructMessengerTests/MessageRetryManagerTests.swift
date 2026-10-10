@@ -5,15 +5,28 @@ import CoreData
 @MainActor
 final class MessageRetryManagerTests: XCTestCase {
     private var context: NSManagedObjectContext!
+    private var chat: Chat!
 
     override func setUp() {
         super.setUp()
-        context = PersistenceController(inMemory: true).container.viewContext
+        let container = PersistenceController(inMemory: true).container
+        context = container.viewContext
+        // The manager writes through the repository (messages B2); point it here.
+        LocalRepositories.useMessagesForTesting(container)
+        chat = Chat(context: context)
+        chat.id = UUID().uuidString
     }
 
     override func tearDown() {
+        LocalRepositories.useMessagesForTesting(nil)
+        chat = nil
         context = nil
         super.tearDown()
+    }
+
+    /// What the store holds for `message` — the manager writes there, not on the object it was given.
+    private func stored(_ message: Message) -> MessageRecord? {
+        try? LocalRepositories.messages.message(message.id)
     }
 
     func testPrepareMessagesForGlobalRetry_PreservesQueuedMessagesWithoutWirePayload() {
@@ -48,20 +61,22 @@ final class MessageRetryManagerTests: XCTestCase {
             OutgoingWirePayloadStore.shared.remove(baseMessageId: failedMissingPayload.id)
         }
 
+        try! context.save()
+
         let pendingIds = retryManager.prepareMessagesForGlobalRetry(
             [sendable, queuedMissingPayload, failedMissingPayload],
             context: context
         )
 
         XCTAssertEqual(pendingIds, [sendable.id])
-        XCTAssertEqual(sendable.deliveryStatus, .sending)
-        XCTAssertEqual(sendable.retryCount, 2)
+        XCTAssertEqual(stored(sendable)?.deliveryStatus, .sending)
+        XCTAssertEqual(stored(sendable)?.retryCount, 2)
 
-        XCTAssertEqual(queuedMissingPayload.deliveryStatus, .queued)
-        XCTAssertEqual(queuedMissingPayload.retryCount, 2)
+        XCTAssertEqual(stored(queuedMissingPayload)?.deliveryStatus, .queued)
+        XCTAssertEqual(stored(queuedMissingPayload)?.retryCount, 2)
 
-        XCTAssertEqual(failedMissingPayload.deliveryStatus, .failed)
-        XCTAssertEqual(failedMissingPayload.retryCount, 3)
+        XCTAssertEqual(stored(failedMissingPayload)?.deliveryStatus, .failed)
+        XCTAssertEqual(stored(failedMissingPayload)?.retryCount, 3)
     }
 
     private func makeMessage(id: String, status: DeliveryStatus, retryCount: Int16) -> Message {
@@ -76,6 +91,8 @@ final class MessageRetryManagerTests: XCTestCase {
         message.contentType = .regular
         message.encryptedContent = Data()
         message.decryptedContent = "hello"
+        message.serverOrderKey = ServerMessageOrder.pending(localMessageId: id)
+        message.chat = chat
         return message
     }
 }

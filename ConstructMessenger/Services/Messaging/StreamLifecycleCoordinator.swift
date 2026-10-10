@@ -551,28 +551,24 @@ final class StreamLifecycleCoordinator {
             )
             return
         }
-        guard let context = viewContext else { return }
+        guard viewContext != nil else { return }
         // Identity for an E2E receipt: the peer names our message by the canonical id it was sent
         // under. Kept as a normalisation rather than dropped — `localId(for:)` returns its input
         // when unmapped, so it costs a dictionary lookup and covers the case where that stops being
         // true, which is not a case anything would notice failing.
         let localIds = messageIds.map { ServerMessageIdMap.shared.localId(for: $0) }
-        context.perform {
-            for messageId in localIds {
-                let fetchRequest = Message.fetchRequest()
-                fetchRequest.predicate = NSPredicate(format: "id ==[c] %@", messageId)
-                guard let message = try? context.fetch(fetchRequest).first,
-                      message.isSentByMe else { continue }
-                guard message.deliveryStatus != .delivered else { continue }
-                let prev = message.deliveryStatus
-                message.deliveryStatus = .delivered
-                if prev == .failed {
-                    Log.error("Receipt: corrected false-failed message \(messageId) → .delivered", category: "MessageStream")
-                } else {
-                    Log.info("Receipt: message \(messageId) marked delivered (was \(prev))", category: "MessageStream")
-                }
+        // Through the repository (messages B2); the store's rule lets `.delivered` over anything.
+        let store = LocalRepositories.messages
+        for messageId in localIds {
+            guard let message = try? store.message(messageId), message.isSentByMe,
+                  message.deliveryStatus != .delivered else { continue }
+            let prev = message.deliveryStatus
+            _ = try? store.setDeliveryStatus(message.id, .delivered)
+            if prev == .failed {
+                Log.error("Receipt: corrected false-failed message \(messageId) → .delivered", category: "MessageStream")
+            } else {
+                Log.info("Receipt: message \(messageId) marked delivered (was \(prev))", category: "MessageStream")
             }
-            context.saveAndLog()
         }
     }
 

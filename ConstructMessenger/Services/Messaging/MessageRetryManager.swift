@@ -38,15 +38,9 @@ class MessageRetryManager {
             return
         }
 
-        // Increment retry count
-        message.retryCount += 1
-        context.saveAndLog()
-
-        Log.info("Retrying message \(message.id.prefix(8))... (attempt \(message.retryCount))", category: "MessageRetryManager")
-
-        // Update existing message status instead of creating new one
-        message.deliveryStatus = .sending
-        context.saveAndLog()
+        // One more attempt, counted in the store, and the row back to sending.
+        let attempt = markAttempt(message.id)
+        Log.info("Retrying message \(message.id.prefix(8))... (attempt \(attempt.map(String.init) ?? "?"))", category: "MessageRetryManager")
 
         let capturedMessageId = message.id
         let capturedSenderId = message.fromUserId
@@ -88,15 +82,9 @@ class MessageRetryManager {
                     let finalErrorCode = report.status.errorCode
                     let serverOrderKey = report.status.serverOrderKey
                     await MainActor.run {
-                        let fetchRequest = Message.fetchRequest()
-                        fetchRequest.predicate = NSPredicate(format: "id == %@", capturedMessageId)
-                        fetchRequest.fetchLimit = 1
-                        guard let liveMsg = try? context.fetch(fetchRequest).first else { return }
-                        liveMsg.deliveryStatus = finalStatus
-                        if let serverOrderKey {
-                            liveMsg.serverOrderKey = serverOrderKey
-                        }
-                        context.saveAndLog()
+                        // The message must still be there; everything below acts on it.
+                        guard (try? LocalRepositories.messages.message(capturedMessageId)) != nil else { return }
+                        recordOutcome(capturedMessageId, finalStatus, orderKey: serverOrderKey)
                         if finalStatus == .sent || finalStatus == .delivered {
                             OutgoingWirePayloadStore.shared.remove(baseMessageId: capturedMessageId)
                         }
@@ -109,22 +97,17 @@ class MessageRetryManager {
                     }
                 } catch is StealthDowngradeBlocked {
                     await MainActor.run {
-                        let fetchRequest = Message.fetchRequest()
-                        fetchRequest.predicate = NSPredicate(format: "id == %@", capturedMessageId)
-                        fetchRequest.fetchLimit = 1
-                        guard let liveMsg = try? context.fetch(fetchRequest).first else { return }
+                        // The message must still be there; everything below acts on it.
+                        guard (try? LocalRepositories.messages.message(capturedMessageId)) != nil else { return }
                         // Keep the stored payload; re-seal on the next retry once a bundle/IK exists.
-                        liveMsg.deliveryStatus = .queued
-                        context.saveAndLog()
+                        recordOutcome(capturedMessageId, .queued)
                         Log.info("Retry: sealed send blocked (cannot seal) — queued \(capturedMessageId.prefix(8))…, nudging bundle fetch", category: "MessageRetryManager")
                         SessionLifecycleController.shared.reestablishSessionForQueuedOutbound(to: recipientId)
                     }
                 } catch {
                     await MainActor.run {
-                        let fetchRequest = Message.fetchRequest()
-                        fetchRequest.predicate = NSPredicate(format: "id == %@", capturedMessageId)
-                        fetchRequest.fetchLimit = 1
-                        guard let liveMsg = try? context.fetch(fetchRequest).first else { return }
+                        // The message must still be there; everything below acts on it.
+                        guard (try? LocalRepositories.messages.message(capturedMessageId)) != nil else { return }
                         let isRetryableTransport: Bool = {
                             if error is GRPCClientError { return true }
                             if let rpc = error as? RPCError {
@@ -132,8 +115,7 @@ class MessageRetryManager {
                             }
                             return false
                         }()
-                        liveMsg.deliveryStatus = isRetryableTransport ? .queued : .failed
-                        context.saveAndLog()
+                        recordOutcome(capturedMessageId, isRetryableTransport ? .queued : .failed)
                         if isRetryableTransport {
                             Log.info("Retry transport failure — queued \(capturedMessageId.prefix(8))… for later", category: "MessageRetryManager")
                         } else {
@@ -156,12 +138,9 @@ class MessageRetryManager {
             guard let self else { return }
             let status = await self.reencryptAndSend(messageId: capturedMessageId, recipientId: recipientId, senderId: capturedSenderId, context: context)
             await MainActor.run {
-                let fr = Message.fetchRequest()
-                fr.predicate = NSPredicate(format: "id == %@", capturedMessageId)
-                fr.fetchLimit = 1
-                guard let liveMsg = try? context.fetch(fr).first else { return }
-                liveMsg.deliveryStatus = status
-                context.saveAndLog()
+                // The message must still be there; everything below acts on it.
+                guard (try? LocalRepositories.messages.message(capturedMessageId)) != nil else { return }
+                recordOutcome(capturedMessageId, status)
                 if status == .sent || status == .delivered || status == .failed {
                     OutgoingWirePayloadStore.shared.remove(baseMessageId: capturedMessageId)
                 }
@@ -303,6 +282,43 @@ class MessageRetryManager {
         )
     }
 
+    // MARK: - Writes
+
+    // Every write here goes through `MessageStore` by id (LOCAL_STORE_MIGRATION_PLAN, messages B2):
+    // the status under the store's rule (`DeliveryStatusTransition`), the attempt counted in the
+    // store. A `Message` this manager holds is read before it writes and never written itself —
+    // after a write it is stale until the view context merges, a run-loop pass later.
+
+    /// The outcome of a send: the status, and the server's order key when it placed the message.
+    /// False when the message is gone.
+    @discardableResult
+    private func recordOutcome(_ id: String, _ status: DeliveryStatus, orderKey: String? = nil) -> Bool {
+        let store = LocalRepositories.messages
+        do {
+            guard try store.message(id) != nil else { return false }
+            try store.setDeliveryStatus(id, status)
+            if let orderKey { try store.setOrderKey(id, orderKey) }
+            return true
+        } catch {
+            Log.error("Outcome of \(id.prefix(8))… not written: \(error)", category: "MessageRetryManager")
+            return false
+        }
+    }
+
+    /// One more attempt: counted in the store, and the message back to sending. The new count.
+    @discardableResult
+    private func markAttempt(_ id: String) -> Int16? {
+        let store = LocalRepositories.messages
+        do {
+            let count = try store.incrementRetryCount(id)
+            try store.setDeliveryStatus(id, .sending)
+            return count
+        } catch {
+            Log.error("Attempt on \(id.prefix(8))… not counted: \(error)", category: "MessageRetryManager")
+            return nil
+        }
+    }
+
     // MARK: - Global Queued Messages Processing
 
     /// Process queued messages for ALL chats — called from the background service layer
@@ -436,11 +452,7 @@ class MessageRetryManager {
             // see `DeliveryStatusTransition` — so the population should stop growing.)
             var stranded = 0
             for message in sendable where message.deliveryStatus == .queued {
-                message.deliveryStatus = .failed
-                stranded += 1
-            }
-            if stranded > 0 {
-                context.saveAndLog()
+                if recordOutcome(message.id, .failed) { stranded += 1 }
             }
             Log.info(
                 "sendQueuedMessages: no queued messages with reusable wire payload or recoverable " +
@@ -452,14 +464,12 @@ class MessageRetryManager {
 
         // Mark the re-encrypt targets as sending up front so the UI reflects progress and the
         // retry count advances exactly once per tick (mirrors prepareMessagesForGlobalRetry).
-        for message in sendable where reencryptIds.contains(message.id) {
-            message.deliveryStatus = .sending
-            message.retryCount += 1
-            messageQueueManager.markMessageAsSending(message.id)
+        for id in reencryptIds {
+            markAttempt(id)
+            messageQueueManager.markMessageAsSending(id)
         }
 
         Log.info("Sending \(pendingIds.count) queued (stored ciphertext) + \(reencryptIds.count) re-encrypted message(s) (sequential to preserve ratchet state)", category: "MessageRetryManager")
-        context.saveAndLog()
 
         // Send SEQUENTIALLY inside a single Task — Double Ratchet encryption must not run
         // concurrently for the same recipient to prevent ratchet state divergence and
@@ -494,21 +504,15 @@ class MessageRetryManager {
                         finalStatus = .queued
                     }
                     await MainActor.run {
-                        let fr = Message.fetchRequest()
-                        fr.predicate = NSPredicate(format: "id == %@", messageId)
-                        fr.fetchLimit = 1
-                        guard let liveMsg = try? context.fetch(fr).first else { return }
-                        liveMsg.deliveryStatus = finalStatus
-                        if let serverOrderKey {
-                            liveMsg.serverOrderKey = serverOrderKey
-                        }
-                        context.saveAndLog()
+                        // The message must still be there; everything below acts on it.
+                        guard (try? LocalRepositories.messages.message(messageId)) != nil else { return }
+                        recordOutcome(messageId, finalStatus, orderKey: serverOrderKey)
                         if finalStatus == .sent || finalStatus == .delivered {
                             OutgoingWirePayloadStore.shared.remove(baseMessageId: messageId)
                         } else if finalStatus == .failed {
                             OutgoingWirePayloadStore.shared.remove(baseMessageId: messageId)
                         }
-                        Log.debug("Re-sent queued message via gRPC: \(messageId) status=\(finalStatus) (attempt \(liveMsg.retryCount))", category: "MessageRetryManager")
+                        Log.debug("Re-sent queued message via gRPC: \(messageId) status=\(finalStatus) (attempt \((try? LocalRepositories.messages.message(messageId))?.retryCount ?? 0))", category: "MessageRetryManager")
                     }
                     // The stored-ciphertext resend reached the recipient's devices (or owes the
                     // rest to the fan-out queue). Our own other devices still need the message,
@@ -520,22 +524,17 @@ class MessageRetryManager {
                     }
                 } catch is StealthDowngradeBlocked {
                     await MainActor.run {
-                        let fr = Message.fetchRequest()
-                        fr.predicate = NSPredicate(format: "id == %@", messageId)
-                        fr.fetchLimit = 1
-                        guard let liveMsg = try? context.fetch(fr).first else { return }
-                        liveMsg.deliveryStatus = .queued
-                        context.saveAndLog()
+                        // The message must still be there; everything below acts on it.
+                        guard (try? LocalRepositories.messages.message(messageId)) != nil else { return }
+                        recordOutcome(messageId, .queued)
                         Log.info("Batch retry: sealed send blocked (cannot seal) — queued \(messageId.prefix(8))…, nudging bundle fetch", category: "MessageRetryManager")
                         SessionLifecycleController.shared.reestablishSessionForQueuedOutbound(to: recipientId)
                     }
                 } catch {
                     await MainActor.run {
                         Log.error("Failed to re-send queued message \(messageId): \(error)", category: "MessageRetryManager")
-                        let fr = Message.fetchRequest()
-                        fr.predicate = NSPredicate(format: "id == %@", messageId)
-                        fr.fetchLimit = 1
-                        guard let liveMsg = try? context.fetch(fr).first else { return }
+                        // The message must still be there; everything below acts on it.
+                        guard (try? LocalRepositories.messages.message(messageId)) != nil else { return }
                         let isRetryableTransport: Bool = {
                             if error is GRPCClientError { return true }
                             if let rpc = error as? RPCError {
@@ -543,8 +542,7 @@ class MessageRetryManager {
                             }
                             return false
                         }()
-                        liveMsg.deliveryStatus = isRetryableTransport ? .queued : .failed
-                        context.saveAndLog()
+                        recordOutcome(messageId, isRetryableTransport ? .queued : .failed)
                     }
                 }
             }
@@ -553,12 +551,9 @@ class MessageRetryManager {
             for messageId in reencryptIds {
                 let status = await self.reencryptAndSend(messageId: messageId, recipientId: recipientId, senderId: currentUserId, context: context)
                 await MainActor.run {
-                    let fr = Message.fetchRequest()
-                    fr.predicate = NSPredicate(format: "id == %@", messageId)
-                    fr.fetchLimit = 1
-                    guard let liveMsg = try? context.fetch(fr).first else { return }
-                    liveMsg.deliveryStatus = status
-                    context.saveAndLog()
+                    // The message must still be there; everything below acts on it.
+                    guard (try? LocalRepositories.messages.message(messageId)) != nil else { return }
+                    recordOutcome(messageId, status)
                     if status == .sent || status == .delivered || status == .failed {
                         OutgoingWirePayloadStore.shared.remove(baseMessageId: messageId)
                     }
@@ -716,13 +711,7 @@ class MessageRetryManager {
                 spendUnit: TokenSpendUnitStore.paidUnit(baseMessageId: messageId, recipientId: recipientId)
             ).status
             if let serverOrderKey = aggregated.serverOrderKey {
-                let orderedFetch = Message.fetchRequest()
-                orderedFetch.predicate = NSPredicate(format: "id == %@", messageId)
-                orderedFetch.fetchLimit = 1
-                if let message = try? context.fetch(orderedFetch).first {
-                    message.serverOrderKey = serverOrderKey
-                    context.saveAndLog()
-                }
+                _ = try? LocalRepositories.messages.setOrderKey(messageId, serverOrderKey)
             }
             switch aggregated.status.lowercased() {
             case "failed", "blocked": return aggregated.retryable ? .queued : .failed
@@ -775,15 +764,15 @@ class MessageRetryManager {
                    retryCount: message.retryCount,
                    retryCeiling: ceiling
                ) {
-                message.deliveryStatus = stored.status
-                message.retryCount = stored.retryCount
+                // Status first: the store's rule decides it, and the spent budget follows.
+                _ = try? LocalRepositories.messages.setDeliveryStatus(message.id, stored.status)
+                _ = try? LocalRepositories.messages.setRetryCount(message.id, stored.retryCount)
                 retired += 1
             } else {
                 sendable.append(message)
             }
         }
         if retired > 0 {
-            context.saveAndLog()
             Log.info(
                 "sendQueuedMessages: retired \(retired) upload placeholder(s) — the body is not a message",
                 category: "MessageRetryManager"
@@ -815,8 +804,7 @@ class MessageRetryManager {
                 continue
             }
 
-            message.deliveryStatus = .sending
-            message.retryCount += 1
+            markAttempt(message.id)
             messageQueueManager.markMessageAsSending(message.id)
             pendingIds.append(message.id)
         }
