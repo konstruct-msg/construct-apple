@@ -1355,6 +1355,11 @@ public protocol LocalStoreProtocol: AnyObject, Sendable {
     func chatForPeer(peerId: String) throws  -> LocalChat?
     
     /**
+     * How many messages a chat holds.
+     */
+    func chatMessageCount(chatId: String) throws  -> UInt64
+    
+    /**
      * Pinned first, then most recent, chats with no message last.
      */
     func chats() throws  -> [LocalChat]
@@ -1387,7 +1392,8 @@ public protocol LocalStoreProtocol: AnyObject, Sendable {
     func everyContact() throws  -> [LocalContact]
     
     /**
-     * Forget reactions received at or before `cutoff` (ms); one with no receipt time stays.
+     * Forget reactions whose message is not here, received at or before `cutoff` (ms). A reaction
+     * on a held message is never expired; one with no receipt time stays.
      */
     func expireReactions(cutoff: Int64) throws  -> UInt32
     
@@ -1454,6 +1460,11 @@ public protocol LocalStoreProtocol: AnyObject, Sendable {
     func put(key: String, value: Data) throws 
     
     func reactions(targetMessageId: String) throws  -> [LocalReaction]
+    
+    /**
+     * Every reaction on a chat's messages, by message then time — one read per transcript.
+     */
+    func reactionsInChat(chatId: String) throws  -> [LocalReaction]
     
     /**
      * An id already known keeps its first account.
@@ -1740,6 +1751,18 @@ open func chatForPeer(peerId: String)throws  -> LocalChat?  {
 }
     
     /**
+     * How many messages a chat holds.
+     */
+open func chatMessageCount(chatId: String)throws  -> UInt64  {
+    return try  FfiConverterUInt64.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_chat_message_count(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(chatId),$0
+    )
+})
+}
+    
+    /**
      * Pinned first, then most recent, chats with no message last.
      */
 open func chats()throws  -> [LocalChat]  {
@@ -1838,7 +1861,8 @@ open func everyContact()throws  -> [LocalContact]  {
 }
     
     /**
-     * Forget reactions received at or before `cutoff` (ms); one with no receipt time stays.
+     * Forget reactions whose message is not here, received at or before `cutoff` (ms). A reaction
+     * on a held message is never expired; one with no receipt time stays.
      */
 open func expireReactions(cutoff: Int64)throws  -> UInt32  {
     return try  FfiConverterUInt32.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
@@ -2049,6 +2073,18 @@ open func reactions(targetMessageId: String)throws  -> [LocalReaction]  {
     uniffi_construct_core_fn_method_localstore_reactions(
             self.uniffiCloneHandle(),
         FfiConverterString.lower(targetMessageId),$0
+    )
+})
+}
+    
+    /**
+     * Every reaction on a chat's messages, by message then time — one read per transcript.
+     */
+open func reactionsInChat(chatId: String)throws  -> [LocalReaction]  {
+    return try  FfiConverterSequenceTypeLocalReaction.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_reactions_in_chat(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(chatId),$0
     )
 })
 }
@@ -12628,6 +12664,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_method_localstore_chat_for_peer() != 26460) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_construct_core_checksum_method_localstore_chat_message_count() != 28786) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_construct_core_checksum_method_localstore_chats() != 2703) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -12716,6 +12755,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_localstore_reactions() != 33658) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_reactions_in_chat() != 41794) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_localstore_record_peer_device() != 19683) {

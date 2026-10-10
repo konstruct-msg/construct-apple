@@ -563,6 +563,11 @@ RustBuffer uniffi_construct_core_fn_method_localstore_chat(uint64_t ptr, RustBuf
 RustBuffer uniffi_construct_core_fn_method_localstore_chat_for_peer(uint64_t ptr, RustBuffer peer_id, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_LOCALSTORE_CHAT_MESSAGE_COUNT
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_LOCALSTORE_CHAT_MESSAGE_COUNT
+uint64_t uniffi_construct_core_fn_method_localstore_chat_message_count(uint64_t ptr, RustBuffer chat_id, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_LOCALSTORE_CHATS
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_LOCALSTORE_CHATS
 RustBuffer uniffi_construct_core_fn_method_localstore_chats(uint64_t ptr, RustCallStatus *_Nonnull out_status
@@ -711,6 +716,11 @@ void uniffi_construct_core_fn_method_localstore_put(uint64_t ptr, RustBuffer key
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_LOCALSTORE_REACTIONS
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_LOCALSTORE_REACTIONS
 RustBuffer uniffi_construct_core_fn_method_localstore_reactions(uint64_t ptr, RustBuffer target_message_id, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_LOCALSTORE_REACTIONS_IN_CHAT
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_LOCALSTORE_REACTIONS_IN_CHAT
+RustBuffer uniffi_construct_core_fn_method_localstore_reactions_in_chat(uint64_t ptr, RustBuffer chat_id, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_LOCALSTORE_RECORD_PEER_DEVICE
@@ -2628,6 +2638,12 @@ uint16_t uniffi_construct_core_checksum_method_localstore_chat_for_peer(void
     
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_LOCALSTORE_CHAT_MESSAGE_COUNT
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_LOCALSTORE_CHAT_MESSAGE_COUNT
+uint16_t uniffi_construct_core_checksum_method_localstore_chat_message_count(void
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_LOCALSTORE_CHATS
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_LOCALSTORE_CHATS
 uint16_t uniffi_construct_core_checksum_method_localstore_chats(void
@@ -2805,6 +2821,12 @@ uint16_t uniffi_construct_core_checksum_method_localstore_put(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_LOCALSTORE_REACTIONS
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_LOCALSTORE_REACTIONS
 uint16_t uniffi_construct_core_checksum_method_localstore_reactions(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_LOCALSTORE_REACTIONS_IN_CHAT
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_LOCALSTORE_REACTIONS_IN_CHAT
+uint16_t uniffi_construct_core_checksum_method_localstore_reactions_in_chat(void
     
 );
 #endif
