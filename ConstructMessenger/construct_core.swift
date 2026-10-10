@@ -1319,6 +1319,11 @@ public func FfiConverterTypeHistorySender_lower(_ value: HistorySender) -> UInt6
 public protocol LocalStoreProtocol: AnyObject, Sendable {
     
     /**
+     * A redelivered chunk keeps the copy held. Returns whether it was new.
+     */
+    func addPendingChunk(chunk: LocalPendingChunk) throws  -> Bool
+    
+    /**
      * Each write below changes its named fields of one chat in one statement; false: no such chat.
      * Moves the preview unless the one shown is newer; false also when it is.
      */
@@ -1373,6 +1378,11 @@ public protocol LocalStoreProtocol: AnyObject, Sendable {
     
     func contactsWithPendingAvatar() throws  -> [LocalContact]
     
+    /**
+     * The attempts now, or null when not queued.
+     */
+    func countResendAttempt(messageId: String, deviceId: String) throws  -> UInt32?
+    
     func deleteChat(id: String) throws 
     
     /**
@@ -1380,11 +1390,22 @@ public protocol LocalStoreProtocol: AnyObject, Sendable {
      */
     func deleteContact(id: String) throws 
     
+    func deleteIssuedInvites(jtis: [String]) throws 
+    
     func deleteMessage(id: String) throws 
+    
+    func deletePendingChunks(senderId: String, messageId: String) throws 
     
     func deleteReaction(targetMessageId: String, reactorUserId: String) throws 
     
+    func deleteResend(messageId: String, deviceId: String) throws 
+    
     func editMessage(id: String, body: Data, searchText: String?, editedAt: Int64) throws  -> Bool
+    
+    /**
+     * Every entry whose key starts with `prefix`, by key; no pattern characters.
+     */
+    func entriesWithPrefix(prefix: String) throws  -> [LocalKvEntry]
     
     /**
      * Every row, contacts or not, by id.
@@ -1396,6 +1417,12 @@ public protocol LocalStoreProtocol: AnyObject, Sendable {
      * on a held message is never expired; one with no receipt time stays.
      */
     func expireReactions(cutoff: Int64) throws  -> UInt32
+    
+    func forgetPendingChunksBefore(cutoff: Int64) throws  -> UInt64
+    
+    func forgetProcessedBefore(cutoff: Int64) throws  -> UInt64
+    
+    func forgetResendsBefore(cutoff: Int64) throws  -> UInt64
     
     func forgetServerMessageIdsBefore(cutoff: Int64) throws  -> UInt64
     
@@ -1420,6 +1447,13 @@ public protocol LocalStoreProtocol: AnyObject, Sendable {
      */
     func insertMessage(message: LocalMessage, searchText: String?) throws  -> LocalInsert
     
+    func isProcessed(messageId: String) throws  -> Bool
+    
+    /**
+     * Newest first.
+     */
+    func issuedInvites() throws  -> [LocalIssuedInvite]
+    
     func localMessageId(serverId: String) throws  -> String?
     
     /**
@@ -1427,6 +1461,11 @@ public protocol LocalStoreProtocol: AnyObject, Sendable {
      * A contact from now on; `added_at` is kept if it was set.
      */
     func markContact(id: String, addedAt: Int64) throws  -> Bool
+    
+    /**
+     * An envelope processed, so a redelivery is not; exact ids. Returns whether it was new.
+     */
+    func markProcessed(messageId: String, senderId: String, processedAt: Int64) throws  -> Bool
     
     func message(id: String) throws  -> LocalMessage?
     
@@ -1452,12 +1491,39 @@ public protocol LocalStoreProtocol: AnyObject, Sendable {
      */
     func peerDevices(accountId: String) throws  -> [LocalPeerDevice]
     
+    func pendingChunkCount(senderId: String, messageId: String) throws  -> UInt32
+    
+    /**
+     * Every message with chunks held, by its first chunk's arrival.
+     */
+    func pendingChunkMessages() throws  -> [LocalPendingChunkMessage]
+    
+    /**
+     * One sender's message, by chunk index.
+     */
+    func pendingChunks(senderId: String, messageId: String) throws  -> [LocalPendingChunk]
+    
+    /**
+     * Oldest first.
+     */
+    func pendingResends() throws  -> [LocalPendingResend]
+    
     /**
      * Ours, queued or failed with `retry_count < retry_ceiling`; one chat, or every chat for null.
      */
     func pendingSends(chatId: String?, retryCeiling: Int16, limit: UInt32) throws  -> [LocalMessage]
     
+    /**
+     * Every id held: to warm an in-memory cache at launch.
+     */
+    func processedMessageIds() throws  -> [String]
+    
     func put(key: String, value: Data) throws 
+    
+    /**
+     * A second request for the same copy keeps the first row. Returns whether it was new.
+     */
+    func queueResend(resend: LocalPendingResend) throws  -> Bool
     
     func reactions(targetMessageId: String) throws  -> [LocalReaction]
     
@@ -1465,6 +1531,11 @@ public protocol LocalStoreProtocol: AnyObject, Sendable {
      * Every reaction on a chat's messages, by message then time — one read per transcript.
      */
     func reactionsInChat(chatId: String) throws  -> [LocalReaction]
+    
+    /**
+     * Insert, or replace the row of its jti.
+     */
+    func recordIssuedInvite(invite: LocalIssuedInvite) throws 
     
     /**
      * An id already known keeps its first account.
@@ -1646,6 +1717,18 @@ public static func inMemory(key: Data)throws  -> LocalStore  {
 
     
     /**
+     * A redelivered chunk keeps the copy held. Returns whether it was new.
+     */
+open func addPendingChunk(chunk: LocalPendingChunk)throws  -> Bool  {
+    return try  FfiConverterBool.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_add_pending_chunk(
+            self.uniffiCloneHandle(),
+        FfiConverterTypeLocalPendingChunk_lower(chunk),$0
+    )
+})
+}
+    
+    /**
      * Each write below changes its named fields of one chat in one statement; false: no such chat.
      * Moves the preview unless the one shown is newer; false also when it is.
      */
@@ -1801,6 +1884,19 @@ open func contactsWithPendingAvatar()throws  -> [LocalContact]  {
 })
 }
     
+    /**
+     * The attempts now, or null when not queued.
+     */
+open func countResendAttempt(messageId: String, deviceId: String)throws  -> UInt32?  {
+    return try  FfiConverterOptionUInt32.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_count_resend_attempt(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(messageId),
+        FfiConverterString.lower(deviceId),$0
+    )
+})
+}
+    
 open func deleteChat(id: String)throws   {try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
     uniffi_construct_core_fn_method_localstore_delete_chat(
             self.uniffiCloneHandle(),
@@ -1820,10 +1916,27 @@ open func deleteContact(id: String)throws   {try rustCallWithError(FfiConverterT
 }
 }
     
+open func deleteIssuedInvites(jtis: [String])throws   {try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_delete_issued_invites(
+            self.uniffiCloneHandle(),
+        FfiConverterSequenceString.lower(jtis),$0
+    )
+}
+}
+    
 open func deleteMessage(id: String)throws   {try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
     uniffi_construct_core_fn_method_localstore_delete_message(
             self.uniffiCloneHandle(),
         FfiConverterString.lower(id),$0
+    )
+}
+}
+    
+open func deletePendingChunks(senderId: String, messageId: String)throws   {try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_delete_pending_chunks(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(senderId),
+        FfiConverterString.lower(messageId),$0
     )
 }
 }
@@ -1837,6 +1950,15 @@ open func deleteReaction(targetMessageId: String, reactorUserId: String)throws  
 }
 }
     
+open func deleteResend(messageId: String, deviceId: String)throws   {try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_delete_resend(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(messageId),
+        FfiConverterString.lower(deviceId),$0
+    )
+}
+}
+    
 open func editMessage(id: String, body: Data, searchText: String?, editedAt: Int64)throws  -> Bool  {
     return try  FfiConverterBool.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
     uniffi_construct_core_fn_method_localstore_edit_message(
@@ -1845,6 +1967,18 @@ open func editMessage(id: String, body: Data, searchText: String?, editedAt: Int
         FfiConverterData.lower(body),
         FfiConverterOptionString.lower(searchText),
         FfiConverterInt64.lower(editedAt),$0
+    )
+})
+}
+    
+    /**
+     * Every entry whose key starts with `prefix`, by key; no pattern characters.
+     */
+open func entriesWithPrefix(prefix: String)throws  -> [LocalKvEntry]  {
+    return try  FfiConverterSequenceTypeLocalKvEntry.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_entries_with_prefix(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(prefix),$0
     )
 })
 }
@@ -1867,6 +2001,33 @@ open func everyContact()throws  -> [LocalContact]  {
 open func expireReactions(cutoff: Int64)throws  -> UInt32  {
     return try  FfiConverterUInt32.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
     uniffi_construct_core_fn_method_localstore_expire_reactions(
+            self.uniffiCloneHandle(),
+        FfiConverterInt64.lower(cutoff),$0
+    )
+})
+}
+    
+open func forgetPendingChunksBefore(cutoff: Int64)throws  -> UInt64  {
+    return try  FfiConverterUInt64.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_forget_pending_chunks_before(
+            self.uniffiCloneHandle(),
+        FfiConverterInt64.lower(cutoff),$0
+    )
+})
+}
+    
+open func forgetProcessedBefore(cutoff: Int64)throws  -> UInt64  {
+    return try  FfiConverterUInt64.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_forget_processed_before(
+            self.uniffiCloneHandle(),
+        FfiConverterInt64.lower(cutoff),$0
+    )
+})
+}
+    
+open func forgetResendsBefore(cutoff: Int64)throws  -> UInt64  {
+    return try  FfiConverterUInt64.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_forget_resends_before(
             self.uniffiCloneHandle(),
         FfiConverterInt64.lower(cutoff),$0
     )
@@ -1945,6 +2106,26 @@ open func insertMessage(message: LocalMessage, searchText: String?)throws  -> Lo
 })
 }
     
+open func isProcessed(messageId: String)throws  -> Bool  {
+    return try  FfiConverterBool.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_is_processed(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(messageId),$0
+    )
+})
+}
+    
+    /**
+     * Newest first.
+     */
+open func issuedInvites()throws  -> [LocalIssuedInvite]  {
+    return try  FfiConverterSequenceTypeLocalIssuedInvite.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_issued_invites(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
 open func localMessageId(serverId: String)throws  -> String?  {
     return try  FfiConverterOptionString.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
     uniffi_construct_core_fn_method_localstore_local_message_id(
@@ -1964,6 +2145,20 @@ open func markContact(id: String, addedAt: Int64)throws  -> Bool  {
             self.uniffiCloneHandle(),
         FfiConverterString.lower(id),
         FfiConverterInt64.lower(addedAt),$0
+    )
+})
+}
+    
+    /**
+     * An envelope processed, so a redelivery is not; exact ids. Returns whether it was new.
+     */
+open func markProcessed(messageId: String, senderId: String, processedAt: Int64)throws  -> Bool  {
+    return try  FfiConverterBool.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_mark_processed(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(messageId),
+        FfiConverterString.lower(senderId),
+        FfiConverterInt64.lower(processedAt),$0
     )
 })
 }
@@ -2045,6 +2240,51 @@ open func peerDevices(accountId: String)throws  -> [LocalPeerDevice]  {
 })
 }
     
+open func pendingChunkCount(senderId: String, messageId: String)throws  -> UInt32  {
+    return try  FfiConverterUInt32.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_pending_chunk_count(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(senderId),
+        FfiConverterString.lower(messageId),$0
+    )
+})
+}
+    
+    /**
+     * Every message with chunks held, by its first chunk's arrival.
+     */
+open func pendingChunkMessages()throws  -> [LocalPendingChunkMessage]  {
+    return try  FfiConverterSequenceTypeLocalPendingChunkMessage.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_pending_chunk_messages(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+    /**
+     * One sender's message, by chunk index.
+     */
+open func pendingChunks(senderId: String, messageId: String)throws  -> [LocalPendingChunk]  {
+    return try  FfiConverterSequenceTypeLocalPendingChunk.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_pending_chunks(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(senderId),
+        FfiConverterString.lower(messageId),$0
+    )
+})
+}
+    
+    /**
+     * Oldest first.
+     */
+open func pendingResends()throws  -> [LocalPendingResend]  {
+    return try  FfiConverterSequenceTypeLocalPendingResend.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_pending_resends(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
     /**
      * Ours, queued or failed with `retry_count < retry_ceiling`; one chat, or every chat for null.
      */
@@ -2059,6 +2299,17 @@ open func pendingSends(chatId: String?, retryCeiling: Int16, limit: UInt32)throw
 })
 }
     
+    /**
+     * Every id held: to warm an in-memory cache at launch.
+     */
+open func processedMessageIds()throws  -> [String]  {
+    return try  FfiConverterSequenceString.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_processed_message_ids(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
 open func put(key: String, value: Data)throws   {try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
     uniffi_construct_core_fn_method_localstore_put(
             self.uniffiCloneHandle(),
@@ -2066,6 +2317,18 @@ open func put(key: String, value: Data)throws   {try rustCallWithError(FfiConver
         FfiConverterData.lower(value),$0
     )
 }
+}
+    
+    /**
+     * A second request for the same copy keeps the first row. Returns whether it was new.
+     */
+open func queueResend(resend: LocalPendingResend)throws  -> Bool  {
+    return try  FfiConverterBool.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_queue_resend(
+            self.uniffiCloneHandle(),
+        FfiConverterTypeLocalPendingResend_lower(resend),$0
+    )
+})
 }
     
 open func reactions(targetMessageId: String)throws  -> [LocalReaction]  {
@@ -2087,6 +2350,17 @@ open func reactionsInChat(chatId: String)throws  -> [LocalReaction]  {
         FfiConverterString.lower(chatId),$0
     )
 })
+}
+    
+    /**
+     * Insert, or replace the row of its jti.
+     */
+open func recordIssuedInvite(invite: LocalIssuedInvite)throws   {try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_record_issued_invite(
+            self.uniffiCloneHandle(),
+        FfiConverterTypeLocalIssuedInvite_lower(invite),$0
+    )
+}
 }
     
     /**
@@ -5968,6 +6242,125 @@ public func FfiConverterTypeLocalIdentityKeyPin_lower(_ value: LocalIdentityKeyP
 }
 
 
+/**
+ * An invite capability this device minted; `sitting` groups the codes of one QR showing.
+ */
+public struct LocalIssuedInvite: Equatable, Hashable {
+    public var jti: String
+    public var kind: String
+    public var issuedAt: Int64
+    public var ttlSeconds: UInt32
+    public var sitting: String?
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(jti: String, kind: String, issuedAt: Int64, ttlSeconds: UInt32, sitting: String?) {
+        self.jti = jti
+        self.kind = kind
+        self.issuedAt = issuedAt
+        self.ttlSeconds = ttlSeconds
+        self.sitting = sitting
+    }
+
+    
+}
+
+#if compiler(>=6)
+extension LocalIssuedInvite: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeLocalIssuedInvite: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> LocalIssuedInvite {
+        return
+            try LocalIssuedInvite(
+                jti: FfiConverterString.read(from: &buf), 
+                kind: FfiConverterString.read(from: &buf), 
+                issuedAt: FfiConverterInt64.read(from: &buf), 
+                ttlSeconds: FfiConverterUInt32.read(from: &buf), 
+                sitting: FfiConverterOptionString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: LocalIssuedInvite, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.jti, into: &buf)
+        FfiConverterString.write(value.kind, into: &buf)
+        FfiConverterInt64.write(value.issuedAt, into: &buf)
+        FfiConverterUInt32.write(value.ttlSeconds, into: &buf)
+        FfiConverterOptionString.write(value.sitting, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLocalIssuedInvite_lift(_ buf: RustBuffer) throws -> LocalIssuedInvite {
+    return try FfiConverterTypeLocalIssuedInvite.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLocalIssuedInvite_lower(_ value: LocalIssuedInvite) -> RustBuffer {
+    return FfiConverterTypeLocalIssuedInvite.lower(value)
+}
+
+
+public struct LocalKvEntry: Equatable, Hashable {
+    public var key: String
+    public var value: Data
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(key: String, value: Data) {
+        self.key = key
+        self.value = value
+    }
+
+    
+}
+
+#if compiler(>=6)
+extension LocalKvEntry: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeLocalKvEntry: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> LocalKvEntry {
+        return
+            try LocalKvEntry(
+                key: FfiConverterString.read(from: &buf), 
+                value: FfiConverterData.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: LocalKvEntry, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.key, into: &buf)
+        FfiConverterData.write(value.value, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLocalKvEntry_lift(_ buf: RustBuffer) throws -> LocalKvEntry {
+    return try FfiConverterTypeLocalKvEntry.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLocalKvEntry_lower(_ value: LocalKvEntry) -> RustBuffer {
+    return FfiConverterTypeLocalKvEntry.lower(value)
+}
+
+
 public struct LocalMessage: Equatable, Hashable {
     public var id: String
     public var chatId: String
@@ -6212,6 +6605,217 @@ public func FfiConverterTypeLocalPeerDevice_lift(_ buf: RustBuffer) throws -> Lo
 #endif
 public func FfiConverterTypeLocalPeerDevice_lower(_ value: LocalPeerDevice) -> RustBuffer {
     return FfiConverterTypeLocalPeerDevice.lower(value)
+}
+
+
+/**
+ * One decrypted chunk of an incoming message not yet complete.
+ */
+public struct LocalPendingChunk: Equatable, Hashable {
+    public var senderId: String
+    public var messageId: String
+    public var chunkIndex: UInt32
+    public var totalChunks: UInt32
+    public var plaintextLength: UInt64
+    public var contentType: UInt8
+    public var payload: Data
+    /**
+     * The envelope that carried it.
+     */
+    public var envelopeId: String?
+    public var receivedAt: Int64
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(senderId: String, messageId: String, chunkIndex: UInt32, totalChunks: UInt32, plaintextLength: UInt64, contentType: UInt8, payload: Data, 
+        /**
+         * The envelope that carried it.
+         */envelopeId: String?, receivedAt: Int64) {
+        self.senderId = senderId
+        self.messageId = messageId
+        self.chunkIndex = chunkIndex
+        self.totalChunks = totalChunks
+        self.plaintextLength = plaintextLength
+        self.contentType = contentType
+        self.payload = payload
+        self.envelopeId = envelopeId
+        self.receivedAt = receivedAt
+    }
+
+    
+}
+
+#if compiler(>=6)
+extension LocalPendingChunk: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeLocalPendingChunk: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> LocalPendingChunk {
+        return
+            try LocalPendingChunk(
+                senderId: FfiConverterString.read(from: &buf), 
+                messageId: FfiConverterString.read(from: &buf), 
+                chunkIndex: FfiConverterUInt32.read(from: &buf), 
+                totalChunks: FfiConverterUInt32.read(from: &buf), 
+                plaintextLength: FfiConverterUInt64.read(from: &buf), 
+                contentType: FfiConverterUInt8.read(from: &buf), 
+                payload: FfiConverterData.read(from: &buf), 
+                envelopeId: FfiConverterOptionString.read(from: &buf), 
+                receivedAt: FfiConverterInt64.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: LocalPendingChunk, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.senderId, into: &buf)
+        FfiConverterString.write(value.messageId, into: &buf)
+        FfiConverterUInt32.write(value.chunkIndex, into: &buf)
+        FfiConverterUInt32.write(value.totalChunks, into: &buf)
+        FfiConverterUInt64.write(value.plaintextLength, into: &buf)
+        FfiConverterUInt8.write(value.contentType, into: &buf)
+        FfiConverterData.write(value.payload, into: &buf)
+        FfiConverterOptionString.write(value.envelopeId, into: &buf)
+        FfiConverterInt64.write(value.receivedAt, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLocalPendingChunk_lift(_ buf: RustBuffer) throws -> LocalPendingChunk {
+    return try FfiConverterTypeLocalPendingChunk.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLocalPendingChunk_lower(_ value: LocalPendingChunk) -> RustBuffer {
+    return FfiConverterTypeLocalPendingChunk.lower(value)
+}
+
+
+/**
+ * One message with chunks held.
+ */
+public struct LocalPendingChunkMessage: Equatable, Hashable {
+    public var senderId: String
+    public var messageId: String
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(senderId: String, messageId: String) {
+        self.senderId = senderId
+        self.messageId = messageId
+    }
+
+    
+}
+
+#if compiler(>=6)
+extension LocalPendingChunkMessage: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeLocalPendingChunkMessage: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> LocalPendingChunkMessage {
+        return
+            try LocalPendingChunkMessage(
+                senderId: FfiConverterString.read(from: &buf), 
+                messageId: FfiConverterString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: LocalPendingChunkMessage, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.senderId, into: &buf)
+        FfiConverterString.write(value.messageId, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLocalPendingChunkMessage_lift(_ buf: RustBuffer) throws -> LocalPendingChunkMessage {
+    return try FfiConverterTypeLocalPendingChunkMessage.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLocalPendingChunkMessage_lower(_ value: LocalPendingChunkMessage) -> RustBuffer {
+    return FfiConverterTypeLocalPendingChunkMessage.lower(value)
+}
+
+
+/**
+ * A message the core asked to send again to one device; `message_id` is the id the reader named.
+ */
+public struct LocalPendingResend: Equatable, Hashable {
+    public var messageId: String
+    public var deviceId: String
+    public var accountId: String
+    public var createdAt: Int64
+    public var attempts: UInt32
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(messageId: String, deviceId: String, accountId: String, createdAt: Int64, attempts: UInt32) {
+        self.messageId = messageId
+        self.deviceId = deviceId
+        self.accountId = accountId
+        self.createdAt = createdAt
+        self.attempts = attempts
+    }
+
+    
+}
+
+#if compiler(>=6)
+extension LocalPendingResend: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeLocalPendingResend: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> LocalPendingResend {
+        return
+            try LocalPendingResend(
+                messageId: FfiConverterString.read(from: &buf), 
+                deviceId: FfiConverterString.read(from: &buf), 
+                accountId: FfiConverterString.read(from: &buf), 
+                createdAt: FfiConverterInt64.read(from: &buf), 
+                attempts: FfiConverterUInt32.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: LocalPendingResend, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.messageId, into: &buf)
+        FfiConverterString.write(value.deviceId, into: &buf)
+        FfiConverterString.write(value.accountId, into: &buf)
+        FfiConverterInt64.write(value.createdAt, into: &buf)
+        FfiConverterUInt32.write(value.attempts, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLocalPendingResend_lift(_ buf: RustBuffer) throws -> LocalPendingResend {
+    return try FfiConverterTypeLocalPendingResend.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLocalPendingResend_lower(_ value: LocalPendingResend) -> RustBuffer {
+    return FfiConverterTypeLocalPendingResend.lower(value)
 }
 
 
@@ -9734,6 +10338,7 @@ public enum LocalStoreTable: Equatable, Hashable {
     case calls
     case peerDevices
     case ownProfile
+    case issuedInvites
 
 
 
@@ -9766,6 +10371,8 @@ public struct FfiConverterTypeLocalStoreTable: FfiConverterRustBuffer {
         case 6: return .peerDevices
         
         case 7: return .ownProfile
+        
+        case 8: return .issuedInvites
         
         default: throw UniffiInternalError.unexpectedEnumCase
         }
@@ -9801,6 +10408,10 @@ public struct FfiConverterTypeLocalStoreTable: FfiConverterRustBuffer {
         
         case .ownProfile:
             writeInt(&buf, Int32(7))
+        
+        
+        case .issuedInvites:
+            writeInt(&buf, Int32(8))
         
         }
     }
@@ -11489,6 +12100,56 @@ fileprivate struct FfiConverterSequenceTypeLocalIdentityKeyPin: FfiConverterRust
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterSequenceTypeLocalIssuedInvite: FfiConverterRustBuffer {
+    typealias SwiftType = [LocalIssuedInvite]
+
+    public static func write(_ value: [LocalIssuedInvite], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeLocalIssuedInvite.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [LocalIssuedInvite] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [LocalIssuedInvite]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeLocalIssuedInvite.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeLocalKvEntry: FfiConverterRustBuffer {
+    typealias SwiftType = [LocalKvEntry]
+
+    public static func write(_ value: [LocalKvEntry], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeLocalKvEntry.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [LocalKvEntry] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [LocalKvEntry]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeLocalKvEntry.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterSequenceTypeLocalMessage: FfiConverterRustBuffer {
     typealias SwiftType = [LocalMessage]
 
@@ -11531,6 +12192,81 @@ fileprivate struct FfiConverterSequenceTypeLocalPeerDevice: FfiConverterRustBuff
         seq.reserveCapacity(Int(len))
         for _ in 0 ..< len {
             seq.append(try FfiConverterTypeLocalPeerDevice.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeLocalPendingChunk: FfiConverterRustBuffer {
+    typealias SwiftType = [LocalPendingChunk]
+
+    public static func write(_ value: [LocalPendingChunk], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeLocalPendingChunk.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [LocalPendingChunk] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [LocalPendingChunk]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeLocalPendingChunk.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeLocalPendingChunkMessage: FfiConverterRustBuffer {
+    typealias SwiftType = [LocalPendingChunkMessage]
+
+    public static func write(_ value: [LocalPendingChunkMessage], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeLocalPendingChunkMessage.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [LocalPendingChunkMessage] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [LocalPendingChunkMessage]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeLocalPendingChunkMessage.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeLocalPendingResend: FfiConverterRustBuffer {
+    typealias SwiftType = [LocalPendingResend]
+
+    public static func write(_ value: [LocalPendingResend], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeLocalPendingResend.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [LocalPendingResend] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [LocalPendingResend]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeLocalPendingResend.read(from: &buf))
         }
         return seq
     }
@@ -12637,6 +13373,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_method_historysender_snapshot_id() != 18376) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_construct_core_checksum_method_localstore_add_pending_chunk() != 42119) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_construct_core_checksum_method_localstore_advance_chat_preview() != 18597) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -12679,25 +13418,49 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_method_localstore_contacts_with_pending_avatar() != 30938) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_construct_core_checksum_method_localstore_count_resend_attempt() != 33415) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_construct_core_checksum_method_localstore_delete_chat() != 62753) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_localstore_delete_contact() != 25391) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_construct_core_checksum_method_localstore_delete_issued_invites() != 54416) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_construct_core_checksum_method_localstore_delete_message() != 53751) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_delete_pending_chunks() != 19253) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_localstore_delete_reaction() != 1671) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_construct_core_checksum_method_localstore_delete_resend() != 36433) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_construct_core_checksum_method_localstore_edit_message() != 48649) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_entries_with_prefix() != 686) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_localstore_every_contact() != 24186) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_localstore_expire_reactions() != 1251) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_forget_pending_chunks_before() != 26227) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_forget_processed_before() != 4143) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_forget_resends_before() != 16607) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_localstore_forget_server_message_ids_before() != 29537) {
@@ -12721,10 +13484,19 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_method_localstore_insert_message() != 2107) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_construct_core_checksum_method_localstore_is_processed() != 48882) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_issued_invites() != 39927) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_construct_core_checksum_method_localstore_local_message_id() != 42048) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_localstore_mark_contact() != 13229) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_mark_processed() != 32160) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_localstore_message() != 63926) {
@@ -12748,16 +13520,37 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_method_localstore_peer_devices() != 14816) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_construct_core_checksum_method_localstore_pending_chunk_count() != 56798) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_pending_chunk_messages() != 17861) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_pending_chunks() != 22010) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_pending_resends() != 27270) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_construct_core_checksum_method_localstore_pending_sends() != 61956) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_construct_core_checksum_method_localstore_processed_message_ids() != 40709) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_construct_core_checksum_method_localstore_put() != 58855) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_queue_resend() != 37524) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_localstore_reactions() != 33658) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_localstore_reactions_in_chat() != 41794) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_record_issued_invite() != 58843) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_localstore_record_peer_device() != 19683) {
