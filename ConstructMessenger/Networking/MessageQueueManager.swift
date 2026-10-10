@@ -67,8 +67,10 @@ class MessageQueueManager {
                     retryCount: message.retryCount,
                     retryCeiling: ceiling
                 ) else { continue }
-                message.deliveryStatus = stored.status
-                message.retryCount = stored.retryCount
+                // Through the repository (messages B2): the status under the store's rule, then
+                // the retry budget.
+                _ = try? LocalRepositories.messages.setDeliveryStatus(message.id, stored.status)
+                _ = try? LocalRepositories.messages.setRetryCount(message.id, stored.retryCount)
                 switch disposition {
                 case .leave: break
                 case .failForRetry: failed += 1
@@ -76,15 +78,10 @@ class MessageQueueManager {
                 }
             }
             guard failed > 0 || retired > 0 else { return }
-            do {
-                try context.save()
-                Log.info(
-                    "Orphaned sends: \(failed) marked failed for retry, \(retired) upload placeholder(s) retired",
-                    category: "MessageQueue"
-                )
-            } catch {
-                Log.error("Failed to reset stuck-sending messages: \(error)", category: "MessageQueue")
-            }
+            Log.info(
+                "Orphaned sends: \(failed) marked failed for retry, \(retired) upload placeholder(s) retired",
+                category: "MessageQueue"
+            )
         }
     }
 
@@ -164,22 +161,12 @@ class MessageQueueManager {
         // on the MainActor hops would warn about mismatched ownership.
         context.perform { [self] in
             for messageId in messageIds {
-                let fetchRequest: NSFetchRequest<Message> = Message.fetchRequest()
-                fetchRequest.predicate = NSPredicate(format: "id == %@", messageId)
-
-                if let message = try? context.fetch(fetchRequest).first {
-                    if message.deliveryStatus == .sending {
-                        Log.info("Message \(messageId) timed out, marking as queued", category: "MessageQueue")
-                        message.deliveryStatus = .queued
-                        Task { @MainActor in self.markMessageAsFailed(messageId) }
-                    }
+                // Read and written through the repository (messages B2).
+                if (try? LocalRepositories.messages.message(messageId))?.deliveryStatus == .sending {
+                    Log.info("Message \(messageId) timed out, marking as queued", category: "MessageQueue")
+                    _ = try? LocalRepositories.messages.setDeliveryStatus(messageId, .queued)
+                    Task { @MainActor in self.markMessageAsFailed(messageId) }
                 }
-            }
-
-            do {
-                try context.save()
-            } catch {
-                Log.error("MessageQueueManager: failed to save timed-out message statuses: \(error)", category: "MessageQueue")
             }
             // Try to resend if network is available (gRPC reconnects automatically)
             Task { @MainActor in

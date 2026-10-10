@@ -685,20 +685,21 @@ final class SessionCoordinator: MessageRouterDelegate {
                     return
                 }
             }
-            // `.sending` ranks below `.sent`, so the guarded setter refuses the mark; the error is
-            // what voided the evidence, so it goes through the writer that says so.
-            msg.applyArchiveOutcome(.resend)
-            msg.deliveryStatus = .sending
-            msg.retryCount += 1
-            context.saveAndLog()
+            // `.sending` ranks below `.sent`, so the store's rule refuses the mark; the error is
+            // what voided the evidence, so it goes through the archive writer, which says so. That
+            // writer keeps a message the peer confirmed `.delivered` (until 2026-10-10 this path
+            // demoted even that); the resend below still goes out.
+            let store = LocalRepositories.messages
+            _ = try? store.applySessionArchive(msg.id, maxRetries: .max)
+            _ = try? store.setDeliveryStatus(msg.id, .sending)
+            _ = try? store.incrementRetryCount(msg.id)
             do {
                 let plan = ChunkedMessageSender.shared.buildPlan(
                     plaintext: Data(plaintext.utf8),
                     messageId: UUID(uuidString: msg.id) ?? UUID()
                 )
                 guard !plan.payloads.isEmpty else {
-                    msg.applyArchiveOutcome(.giveUp)
-                    context.saveAndLog()
+                    _ = try? store.applySessionArchive(msg.id, maxRetries: 0)
                     return
                 }
                 let response = try await OutboundMessagePipeline.shared.sendToRecipientDevices(
@@ -709,22 +710,21 @@ final class SessionCoordinator: MessageRouterDelegate {
                     timestamp: UInt64(msg.timestamp.timeIntervalSince1970),
                     onlyDevices: [device]
                 ).status
+                let outcome: DeliveryStatus
                 switch response.status.lowercased() {
-                case "delivered": msg.deliveryStatus = .delivered
-                case "queued": msg.deliveryStatus = .queued
-                case "failed", "blocked": msg.deliveryStatus = .failed
-                default: msg.deliveryStatus = .sent
+                case "delivered": outcome = .delivered
+                case "queued": outcome = .queued
+                case "failed", "blocked": outcome = .failed
+                default: outcome = .sent
                 }
-                context.saveAndLog()
+                _ = try? store.setDeliveryStatus(msg.id, outcome)
             } catch is StealthDowngradeBlocked {
                 // Stealth on but could not seal — keep it queued, never send identified.
-                msg.deliveryStatus = .queued
-                context.saveAndLog()
+                _ = try? store.setDeliveryStatus(msg.id, .queued)
                 SessionLifecycleController.shared.reestablishSessionForQueuedOutbound(to: peer.account)
             } catch {
                 // `.failed` ranks below `.sent`: through the archive writer, as above.
-                msg.applyArchiveOutcome(.giveUp)
-                context.saveAndLog()
+                _ = try? store.applySessionArchive(msg.id, maxRetries: 0)
                 Log.error("Resend of \(messageId.prefix(8))… failed: \(error.localizedDescription)", category: "SessionInit")
             }
         }
