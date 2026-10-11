@@ -7,7 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		52DC79E18C4774AA8E0544D8 /* NotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A16BC8E3CB4A389C0E7CFF2E /* NotificationService.swift */; };
 		68AFEF4061D54FD4D885332F /* ConstructTransport.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = FC6F98B0C3691C35F17194D3 /* ConstructTransport.xcframework */; };
+		ACDE1C1688919CC6C388B8CE /* KonstructNotifications.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = E780D9E6B3962C7EEABAAE17 /* KonstructNotifications.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		BF0A1D232FCF418600D0597C /* WhisperKit in Frameworks */ = {isa = PBXBuildFile; productRef = BF0A1D222FCF418600D0597C /* WhisperKit */; };
 		BF3DE8702F62C2000058C1AA /* ConstructCore.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = BF7098D02F01D3C400CC6F04 /* ConstructCore.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		BF3DE8722F62C2000058C1AA /* GRPCCore in Frameworks */ = {isa = PBXBuildFile; productRef = BF3DE8712F62C2000058C1AA /* GRPCCore */; };
@@ -26,6 +28,13 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
+		820D1DA11C864C1CD7B7400F /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = BF103A672EED889800324CEA /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = C10BFE4A97A3EB1718CA1365;
+			remoteInfo = "Konstruct Notifications";
+		};
 		BF3DE83D2F62C1C40058C1AA /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = BF103A672EED889800324CEA /* Project object */;
@@ -49,14 +58,32 @@
 		};
 /* End PBXContainerItemProxy section */
 
+/* Begin PBXCopyFilesBuildPhase section */
+		404628A758CEC25CFADDFDBB /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				ACDE1C1688919CC6C388B8CE /* KonstructNotifications.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
 		1FC23B2B49E141EBA1C6CE15 /* ConstructMessenger.xcdatamodeld */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcdatamodeld; name = ConstructMessenger.xcdatamodeld; path = ConstructMessenger/ConstructMessenger.xcdatamodeld; sourceTree = "<group>"; };
+		A16BC8E3CB4A389C0E7CFF2E /* NotificationService.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = NotificationService.swift; sourceTree = "<group>"; };
 		BF103A6F2EED889800324CEA /* Construct Messenger.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Construct Messenger.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		BF3DE8302F62C1C30058C1AA /* Construct Desktop.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Construct Desktop.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		BF3DE83C2F62C1C40058C1AA /* Construct DesktopTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Construct DesktopTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		BF3DE8462F62C1C40058C1AA /* Construct DesktopUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Construct DesktopUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		BF7098D02F01D3C400CC6F04 /* ConstructCore.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; path = ConstructCore.xcframework; sourceTree = "<group>"; };
 		BF8A96FA2EFF0FAF009C5EF7 /* ConstructMessengerTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ConstructMessengerTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		E780D9E6B3962C7EEABAAE17 /* KonstructNotifications.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; name = KonstructNotifications.appex; path = KonstructNotifications.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		E7A70662FB36326215776D2D /* ConstructNotifications.entitlements */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.entitlements; path = ConstructNotifications.entitlements; sourceTree = "<group>"; };
+		EFA1A37D17E9A7D4557EE9CA /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		FC6F98B0C3691C35F17194D3 /* ConstructTransport.xcframework */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = wrapper.xcframework; path = ConstructTransport.xcframework; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -147,6 +174,13 @@
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		0ED73AF6B1C27841E70987DB /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		BF103A6C2EED889800324CEA /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -211,6 +245,7 @@
 				BF3DE8492F62C1C40058C1AA /* Construct DesktopUITests */,
 				BF5F2DF92EF96B1C00BB01C5 /* Frameworks */,
 				BF103A702EED889800324CEA /* Products */,
+				DD8CAFA2D41EDBE6DA1FCCBD /* ConstructNotifications */,
 			);
 			sourceTree = "<group>";
 		};
@@ -222,6 +257,7 @@
 				BF3DE8302F62C1C30058C1AA /* Construct Desktop.app */,
 				BF3DE83C2F62C1C40058C1AA /* Construct DesktopTests.xctest */,
 				BF3DE8462F62C1C40058C1AA /* Construct DesktopUITests.xctest */,
+				E780D9E6B3962C7EEABAAE17 /* KonstructNotifications.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -236,6 +272,17 @@
 			name = Frameworks;
 			sourceTree = "<group>";
 		};
+		DD8CAFA2D41EDBE6DA1FCCBD /* ConstructNotifications */ = {
+			isa = PBXGroup;
+			children = (
+				A16BC8E3CB4A389C0E7CFF2E /* NotificationService.swift */,
+				EFA1A37D17E9A7D4557EE9CA /* Info.plist */,
+				E7A70662FB36326215776D2D /* ConstructNotifications.entitlements */,
+			);
+			name = ConstructNotifications;
+			path = ConstructNotifications;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -246,10 +293,12 @@
 				BF103A6B2EED889800324CEA /* Sources */,
 				BF103A6C2EED889800324CEA /* Frameworks */,
 				BF103A6D2EED889800324CEA /* Resources */,
+				404628A758CEC25CFADDFDBB /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				9B09499C53F68EA528A3937E /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				BF103A712EED889800324CEA /* ConstructMessenger */,
@@ -357,6 +406,23 @@
 			productReference = BF8A96FA2EFF0FAF009C5EF7 /* ConstructMessengerTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
+		C10BFE4A97A3EB1718CA1365 /* Konstruct Notifications */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 0FEE3BD99922A3C3475A6F80 /* Build configuration list for PBXNativeTarget "Konstruct Notifications" */;
+			buildPhases = (
+				36E36DE4B561ACFB44D6BCEE /* Sources */,
+				0ED73AF6B1C27841E70987DB /* Frameworks */,
+				2C801ABFD8186349AB3E314C /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = "Konstruct Notifications";
+			productName = "Konstruct Notifications";
+			productReference = E780D9E6B3962C7EEABAAE17 /* KonstructNotifications.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -418,11 +484,19 @@
 				BF3DE82F2F62C1C30058C1AA /* Construct Desktop */,
 				BF3DE83B2F62C1C40058C1AA /* Construct DesktopTests */,
 				BF3DE8452F62C1C40058C1AA /* Construct DesktopUITests */,
+				C10BFE4A97A3EB1718CA1365 /* Konstruct Notifications */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		2C801ABFD8186349AB3E314C /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		BF103A6D2EED889800324CEA /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -461,6 +535,14 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		36E36DE4B561ACFB44D6BCEE /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				52DC79E18C4774AA8E0544D8 /* NotificationService.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		BF103A6B2EED889800324CEA /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -499,6 +581,12 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
+		9B09499C53F68EA528A3937E /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			name = "Konstruct Notifications";
+			target = C10BFE4A97A3EB1718CA1365 /* Konstruct Notifications */;
+			targetProxy = 820D1DA11C864C1CD7B7400F /* PBXContainerItemProxy */;
+		};
 		BF3DE83E2F62C1C40058C1AA /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = BF3DE82F2F62C1C30058C1AA /* Construct Desktop */;
@@ -517,6 +605,57 @@
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
+		1046E91624422366A9D118B7 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_ENTITLEMENTS = ConstructNotifications/ConstructNotifications.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = PK2473XF3P;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = ConstructNotifications/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Konstruct;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.3;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = maximeliseyev.constructmessenger.notifications;
+				PRODUCT_NAME = KonstructNotifications;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.7;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		A407BEFFE75D780A7621E0E3 /* Beta */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_ENTITLEMENTS = ConstructNotifications/ConstructNotifications.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = PK2473XF3P;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = ConstructNotifications/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Konstruct;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.3;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = maximeliseyev.constructmessenger.notifications;
+				PRODUCT_NAME = KonstructNotifications;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.7;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Beta;
+		};
 		A6C39B042EED889800324CEA /* Beta */ = {
 			isa = XCBuildConfiguration;
 			baseConfigurationReferenceAnchor = BF103A712EED889800324CEA /* ConstructMessenger */;
@@ -554,6 +693,32 @@
 			};
 			name = Beta;
 		};
+		ACE6482D73367B2A1826B849 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_ENTITLEMENTS = ConstructNotifications/ConstructNotifications.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = PK2473XF3P;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = ConstructNotifications/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Konstruct;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.3;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = maximeliseyev.constructmessenger.notifications;
+				PRODUCT_NAME = KonstructNotifications;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 5.7;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
 		B0AB8C452EED889800324CEA /* Beta */ = {
 			isa = XCBuildConfiguration;
 			baseConfigurationReferenceAnchor = BF103A712EED889800324CEA /* ConstructMessenger */;
@@ -563,7 +728,6 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = ConstructMessenger/ConstructMessenger.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 695;
 				DEVELOPMENT_TEAM = PK2473XF3P;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -595,7 +759,6 @@
 				);
 				LIBRARY_SEARCH_PATHS = "$(PROJECT_DIR)";
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 0.20.2;
 				PRODUCT_BUNDLE_IDENTIFIER = maximeliseyev.constructmessenger;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -648,6 +811,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 695;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = PK2473XF3P;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -669,6 +833,7 @@
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.1;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MARKETING_VERSION = 0.20.2;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
@@ -716,6 +881,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 695;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = PK2473XF3P;
 				ENABLE_NS_ASSERTIONS = NO;
@@ -731,6 +897,7 @@
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.1;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MARKETING_VERSION = 0.20.2;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				SDKROOT = iphoneos;
@@ -749,7 +916,6 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = ConstructMessenger/ConstructMessenger.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 695;
 				DEVELOPMENT_TEAM = PK2473XF3P;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -781,7 +947,6 @@
 				);
 				LIBRARY_SEARCH_PATHS = "$(PROJECT_DIR)";
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 0.20.2;
 				PRODUCT_BUNDLE_IDENTIFIER = maximeliseyev.constructmessenger;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -806,7 +971,6 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = ConstructMessenger/ConstructMessenger.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 695;
 				DEVELOPMENT_TEAM = PK2473XF3P;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -838,7 +1002,6 @@
 				);
 				LIBRARY_SEARCH_PATHS = "$(PROJECT_DIR)";
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 0.20.2;
 				PRODUCT_BUNDLE_IDENTIFIER = maximeliseyev.constructmessenger;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -1259,6 +1422,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 695;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = PK2473XF3P;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -1273,6 +1437,7 @@
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.1;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MARKETING_VERSION = 0.20.2;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				SDKROOT = iphoneos;
@@ -1286,6 +1451,16 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		0FEE3BD99922A3C3475A6F80 /* Build configuration list for PBXNativeTarget "Konstruct Notifications" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				ACE6482D73367B2A1826B849 /* Release */,
+				1046E91624422366A9D118B7 /* Debug */,
+				A407BEFFE75D780A7621E0E3 /* Beta */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		BF103A6A2EED889800324CEA /* Build configuration list for PBXProject "ConstructMessenger" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
