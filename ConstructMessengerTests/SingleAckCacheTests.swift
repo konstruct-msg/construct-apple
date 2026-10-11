@@ -69,14 +69,17 @@ final class SingleAckCacheTests: XCTestCase {
     /// duplicate and is dropped without ever reaching the transcript.
     @MainActor
     func testCacheMarkDoesNotAnswerTheDurableQuestion() {
-        let context = PersistenceController(inMemory: true).container.viewContext
+        LocalRepositories.useProcessedMessagesForTesting(
+            CoreDataProcessedMessageStore(container: PersistenceController(inMemory: true).container)
+        )
+        defer { LocalRepositories.useProcessedMessagesForTesting(nil) }
         let messageId = freshId("cache-only")
 
         PersistentACKStore.shared.markProcessedInCache(messageId)
 
         XCTAssertTrue(PersistentACKStore.shared.isProcessedInMemory(messageId))
         XCTAssertFalse(
-            PersistentACKStore.shared.isProcessedInCoreData(messageId, in: context),
+            PersistentACKStore.shared.isProcessedDurably(messageId),
             "A cache-only mark must never be mistaken for a durable ACK from a prior launch"
         )
     }
@@ -84,7 +87,10 @@ final class SingleAckCacheTests: XCTestCase {
     /// A durable ACK warms the cache, so the hot-path guard stops paying for a fetch.
     @MainActor
     func testDurableHitWarmsTheCache() throws {
-        let context = PersistenceController(inMemory: true).container.viewContext
+        let container = PersistenceController(inMemory: true).container
+        LocalRepositories.useProcessedMessagesForTesting(CoreDataProcessedMessageStore(container: container))
+        defer { LocalRepositories.useProcessedMessagesForTesting(nil) }
+        let context = container.viewContext
         let messageId = freshId("durable-warm")
 
         let record = ProcessedMessage(context: context)
@@ -94,7 +100,7 @@ final class SingleAckCacheTests: XCTestCase {
         try context.save()
 
         XCTAssertFalse(PersistentACKStore.shared.isProcessedInMemory(messageId))
-        XCTAssertTrue(PersistentACKStore.shared.isProcessedInCoreData(messageId, in: context))
+        XCTAssertTrue(PersistentACKStore.shared.isProcessedDurably(messageId))
         XCTAssertTrue(
             PersistentACKStore.shared.isProcessedInMemory(messageId),
             "A durable hit must warm the single cache"

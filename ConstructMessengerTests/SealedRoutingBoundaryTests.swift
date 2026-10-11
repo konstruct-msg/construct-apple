@@ -66,7 +66,9 @@ final class SealedRoutingBoundaryTests: XCTestCase {
         AuthSessionManager.shared.updateUserId(me)
         try CryptoCoreTestBootstrap.ensureCore(localUserId: me)
 
-        context = CryptoCoreTestBootstrap.inMemoryContext()
+        let container = PersistenceController(inMemory: true).container
+        LocalRepositories.useProcessedMessagesForTesting(CoreDataProcessedMessageStore(container: container))
+        context = container.viewContext
         router = MessageRouter()
         router.setContext(context)
         delegate = RecordingDelegate()
@@ -77,6 +79,7 @@ final class SealedRoutingBoundaryTests: XCTestCase {
         if let savedUserId, !savedUserId.isEmpty {
             AuthSessionManager.shared.updateUserId(savedUserId)
         }
+        LocalRepositories.useProcessedMessagesForTesting(nil)
         context = nil
         router = nil
         delegate = nil
@@ -122,7 +125,7 @@ final class SealedRoutingBoundaryTests: XCTestCase {
         router.routeIncomingMessage(message, in: context)
 
         XCTAssertTrue(delegate.decryptionErrors.isEmpty)
-        XCTAssertTrue(PersistentACKStore.shared.isProcessed(message.id, in: context))
+        XCTAssertTrue(PersistentACKStore.shared.isProcessed(message.id))
     }
 
     /// Control-branch classification must not swallow ordinary sealed traffic.
