@@ -265,3 +265,61 @@ extension Chat {
         return chat
     }
 }
+
+/// The crate's `chats`. Off until step 4 switches macOS over (`LocalRepositories`). One chat per
+/// peer is the crate's unique index; the preview rule (forward, an equal time moves it) and the
+/// list order are its statements.
+final class LocalStoreChatStore: ChatStore, @unchecked Sendable {
+
+    private let session: LocalStoreSession
+    private var store: LocalStore { session.store }
+
+    init(session: LocalStoreSession) {
+        self.session = session
+    }
+
+    func changes() -> AsyncStream<Set<String>> { session.changes(of: .chats) }
+
+    func chat(_ id: String) throws -> ChatRecord? {
+        try store.chat(id: id).map(ChatRecord.init)
+    }
+
+    func chat(withPeer peerId: String) throws -> ChatRecord? {
+        try store.chatForPeer(peerId: peerId).map(ChatRecord.init)
+    }
+
+    func chats() throws -> [ChatRecord] {
+        try store.chats().map(ChatRecord.init)
+    }
+
+    // MARK: Writes
+
+    /// A peer with no contact row is the crate's foreign key refusing, thrown as it comes.
+    func insert(_ chat: ChatRecord) throws -> Bool {
+        try store.insertChat(chat: chat.local) == .inserted
+    }
+
+    func advancePreview(_ id: String, text: String, time: Date) throws -> Bool {
+        try store.advanceChatPreview(id: id, text: text, time: time.unixMs)
+    }
+
+    func setPreview(_ id: String, text: String?, time: Date?) throws -> Bool {
+        try store.setChatPreview(id: id, text: text, time: time?.unixMs)
+    }
+
+    func incrementUnread(_ id: String) throws -> Bool {
+        try store.incrementUnread(id: id)
+    }
+
+    func setUnread(_ id: String, _ count: Int) throws -> Bool {
+        try store.setUnread(id: id, count: Int32(clamping: count))
+    }
+
+    func setPinned(_ id: String, _ pinned: Bool) throws -> Bool {
+        try store.setChatPinned(id: id, pinned: pinned)
+    }
+
+    func delete(_ id: String) throws {
+        try store.deleteChat(id: id)
+    }
+}

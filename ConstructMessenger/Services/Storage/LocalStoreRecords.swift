@@ -108,3 +108,21 @@ extension PeerDeviceRecord {
         )
     }
 }
+
+extension ChatRecord {
+    init(_ row: LocalChat) {
+        self.init(
+            id: row.id, peerId: row.peerId, lastMessageText: row.lastMessageText,
+            lastMessageTime: row.lastMessageTime.map(Date.init(unixMs:)), isPinned: row.isPinned,
+            unreadCount: Int(row.unreadCount)
+        )
+    }
+
+    var local: LocalChat {
+        LocalChat(
+            id: id, peerId: peerId, lastMessageText: lastMessageText,
+            lastMessageTime: lastMessageTime?.unixMs, isPinned: isPinned,
+            unreadCount: Int32(clamping: unreadCount)
+        )
+    }
+}
