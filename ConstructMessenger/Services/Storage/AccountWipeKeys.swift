@@ -111,6 +111,12 @@ enum AccountWipeKeys {
         // the person signing out, and a drain after a re-registration would try to send them as
         // whoever signed in next.
         "construct.fanoutRetryQueue.v1",
+        // The invites this account minted (`IssuedInviteStore`). Left behind, the next account's
+        // Settings would list codes it never issued and offer to revoke them — under a token that
+        // is not theirs. `invite_journal_v1` is where they were kept until 2026-10-11, never in
+        // this list; it went with no wipe at all.
+        "construct.issuedInvites.v2",
+        "invite_journal_v1",
         // The device set this account's metadata blob was last sealed for. Leaves with the
         // account: a stale marker after a re-registration would convince the next account that its
         // metadata was already published, and its row would stay unnamed on every sibling.
