@@ -239,6 +239,10 @@ enum AccountWipeKeys {
         "construct.PendingReassemblyStore",
         "construct.ReceiptResendThrottle",
         "construct.reassembly_store_key",
+        // The file name of the encrypted local store (`LocalStoreSession`), not a defaults key. A
+        // wipe removes the file with the container sweep, after destroying its key
+        // (`LocalDataWipe.run`).
+        "construct.db",
 
         // Notification names.
         "construct.reaction.didChange"

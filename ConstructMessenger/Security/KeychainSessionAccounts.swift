@@ -55,6 +55,20 @@ enum KeychainSessionAccounts {
     /// one place the Keychain namespace is spelled.
     static let orchestratorState = "construct.orchestrator_state"
 
+    // MARK: - Read by the notification extension as well
+
+    // The extension compiles this file and reads these from the app's keychain
+    // (`decisions/notification-extension-reads-only.md`), so both processes spell them here.
+    // Only the app writes any of them.
+    static let keyRecord = "crypto_private_keys"
+    static let deviceId = "deviceId"
+    static let userId = "userId"
+    static let sessionToken = "session_token"
+    /// The committed stream cursor (`StreamCursorStore`).
+    static let streamCursor = "stream_cursor"
+    /// The endpoint the app connects to, as `host:port` (`ServerEndpoint`).
+    static let serverEndpoint = "server_endpoint"
+
     /// The account a core `SecureStoreSlot` is stored under on this platform.
     ///
     /// The core used to send a formatted key (`"session_<id>"`, `"archive_<id>"`, …) and this

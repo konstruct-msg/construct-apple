@@ -56,6 +56,9 @@ enum LocalDataWipe {
         }
 
         AccountWipeKeys.wipe()
+        // In the Keychain since 2026-10-11, which `AccountWipeKeys` (UserDefaults) does not reach:
+        // the next account must not resume the last one's stream.
+        StreamCursorStore.clear()
         KeychainManager.shared.deleteAllContactRequestMappings()
         // The recovery phrase, if it is still waiting for its copy. A wipe is the account going
         // away from this device — sign-out or deletion — and the next identity must not find
