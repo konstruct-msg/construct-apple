@@ -2,10 +2,10 @@
 //  ChatStoreTests.swift
 //  ConstructMessengerTests
 //
-//  What any `ChatStore` must answer. Run against Core Data today; the `LocalStore` implementation
-//  (LOCAL_STORE_MIGRATION_PLAN step 3) runs the same cases. Contacts are written through
-//  `ContactStore`, as the app writes them; duplicate chats are seeded as Core Data, the one store
-//  that can hold them.
+//  What any `ChatStore` must answer, run on both implementations — Core Data here, `LocalStore` in
+//  the subclass below (LOCAL_STORE_MIGRATION_PLAN step 3). Contacts are written through
+//  `ContactStore`, as the app writes them. Duplicate chats — which only Core Data can hold — and
+//  the message cascade through its relationships are `CoreDataChatStoreTests`.
 //
 
 import CoreData
@@ -13,23 +13,25 @@ import XCTest
 @testable import Construct_Messenger
 
 @MainActor
-final class ChatStoreTests: XCTestCase {
+class ChatStoreTests: XCTestCase {
 
-    private var container: NSPersistentContainer!
-    private var store: CoreDataChatStore!
-    private var contacts: CoreDataContactStore!
+    /// A chat store and a contact store over one database.
+    func makeStores() -> (chats: any ChatStore, contacts: any ContactStore) {
+        let container = PersistenceController(inMemory: true).container
+        return (CoreDataChatStore(container: container), CoreDataContactStore(container: container))
+    }
+
+    private var store: (any ChatStore)!
+    private var contacts: (any ContactStore)!
 
     override func setUp() {
         super.setUp()
-        container = PersistenceController(inMemory: true).container
-        store = CoreDataChatStore(container: container)
-        contacts = CoreDataContactStore(container: container)
+        (store, contacts) = makeStores()
     }
 
     override func tearDown() {
         store = nil
         contacts = nil
-        container = nil
         super.tearDown()
     }
 
@@ -159,6 +161,69 @@ final class ChatStoreTests: XCTestCase {
         XCTAssertEqual(try store.chats().map(\.id), ["pinned", "new", "also-old", "old", "empty"])
     }
 
+    /// The chat goes; the contact stays. Mutation: delete the peer instead.
+    func testDeletingAChatKeepsTheContact() throws {
+        try contact("p")
+        try store.insert(record("c", peer: "p"))
+        try store.delete("c")
+        XCTAssertNil(try store.chat("c"))
+        XCTAssertNil(try store.chat(withPeer: "p"))
+        XCTAssertNotNil(try contacts.contact("p"))
+        XCTAssertNoThrow(try store.delete("c"), "a second delete finds nothing and says nothing")
+    }
+
+    /// A write through the store and a save elsewhere are both announced, by chat id. Mutation:
+    /// return `nil` for a `Chat` in the feed's `rowId`.
+    func testTheFeedAnnouncesEveryChatWrite() async throws {
+        var seen = Set<String>()
+        let changes = store.changes()
+        let reading = Task { for await ids in changes { seen.formUnion(ids) } }
+        defer { reading.cancel() }
+
+        try contact("p")
+        try store.insert(record("via-repo", peer: "p"))
+        try store.incrementUnread("via-repo")
+        await eventually { seen.contains("via-repo") }
+        XCTAssertFalse(seen.contains("p"), "a contact's id is not a chat's")
+    }
+}
+
+/// The same cases on the crate.
+final class LocalStoreChatStoreTests: ChatStoreTests {
+    override func makeStores() -> (chats: any ChatStore, contacts: any ContactStore) {
+        let session = LocalStoreSession.inMemoryForTesting()
+        return (LocalStoreChatStore(session: session), LocalStoreContactStore(session: session))
+    }
+}
+
+/// What only Core Data has: duplicate chats for one peer, which the crate's unique index cannot
+/// hold, and the message cascade through its relationships (the crate's is `delete_chat`, tested
+/// there).
+@MainActor
+final class CoreDataChatStoreTests: XCTestCase {
+
+    private var container: NSPersistentContainer!
+    private var store: CoreDataChatStore!
+    private var contacts: CoreDataContactStore!
+
+    override func setUp() {
+        super.setUp()
+        container = PersistenceController(inMemory: true).container
+        store = CoreDataChatStore(container: container)
+        contacts = CoreDataContactStore(container: container)
+    }
+
+    override func tearDown() {
+        store = nil
+        contacts = nil
+        container = nil
+        super.tearDown()
+    }
+
+    private func contact(_ id: String) throws {
+        try contacts.insert(.new(id: id, isContact: true, addedAt: nil))
+    }
+
     /// Among duplicates Core Data still holds, the read names the chat the merge keeps. Mutation:
     /// return the first fetched — the read and a later `Chat.findOrCreate` disagree on the id.
     func testAmongDuplicatesTheReadNamesTheOneKept() throws {
@@ -186,10 +251,11 @@ final class ChatStoreTests: XCTestCase {
         }
     }
 
-    /// The chat and its messages go; the contact stays. Mutation: delete the peer instead.
-    func testDeletingAChatKeepsTheContact() throws {
+    /// The chat's messages go with it. Mutation: `messages` set to nullify — the message stays.
+    func testDeletingAChatTakesItsMessages() throws {
         try contact("p")
-        try store.insert(record("c", peer: "p"))
+        try store.insert(ChatRecord(id: "c", peerId: "p", lastMessageText: nil, lastMessageTime: nil,
+                                    isPinned: false, unreadCount: 0))
         let context = container.viewContext
         let message = PreviewHelpers.createSampleMessage(
             context: context, chat: try Chat.row("c", in: context), isSentByMe: false, text: "hi"
@@ -203,20 +269,5 @@ final class ChatStoreTests: XCTestCase {
         XCTAssertNotNil(try contacts.contact("p"))
         context.refreshAllObjects()
         XCTAssertEqual(try context.count(for: Message.fetchRequest()), 0)
-    }
-
-    /// A write through the store and a save elsewhere are both announced, by chat id. Mutation:
-    /// return `nil` for a `Chat` in the feed's `rowId`.
-    func testTheFeedAnnouncesEveryChatWrite() async throws {
-        var seen = Set<String>()
-        let changes = store.changes()
-        let reading = Task { for await ids in changes { seen.formUnion(ids) } }
-        defer { reading.cancel() }
-
-        try contact("p")
-        try store.insert(record("via-repo", peer: "p"))
-        try store.incrementUnread("via-repo")
-        await eventually { seen.contains("via-repo") }
-        XCTAssertFalse(seen.contains("p"), "a contact's id is not a chat's")
     }
 }
