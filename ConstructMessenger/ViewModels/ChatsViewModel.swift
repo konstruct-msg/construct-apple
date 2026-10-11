@@ -132,7 +132,7 @@ class ChatsViewModel {
             didPerformFirstContextSetup = true
             streamLifecycle.forceReconnect()
         }
-        PersistentACKStore.shared.pruneExpired(in: context)
+        PersistentACKStore.shared.pruneExpired()
         // `SessionHealingService.restoreQueueState` / `pruneExpired` stood here until 2026-09-23.
         // Both served a second healing queue this app kept beside the core's; the core restores
         // and prunes its own with the orchestrator state. What is left is the rows a previous

@@ -95,8 +95,8 @@ final class MessageRouter {
             guard case .callSignalDecrypted(_, let messageId, _) = action,
                   let held = coreQueuedEnvelopes.removeValue(forKey: messageId) else { continue }
             Self.dispatchCallSignals(in: [action], from: held.otherUserId)
-            PersistentACKStore.shared.markProcessed(messageId, senderId: held.otherUserId, in: context)
-            _ = PersistentACKStore.shared.settleDurableWrite(messageId, in: context)
+            PersistentACKStore.shared.markProcessed(messageId, senderId: held.otherUserId)
+            _ = PersistentACKStore.shared.settleDurableWrite(messageId)
             StreamCursorTracker.shared.resolve(messageId: messageId)
         }
         // A control frame the drain opened: handled by the account its envelope was held under.
@@ -104,7 +104,7 @@ final class MessageRouter {
             guard case .controlFrameDecrypted(_, let messageId, _, _) = action,
                   let held = coreQueuedEnvelopes.removeValue(forKey: messageId) else { continue }
             handleControlFrames(in: [action], messageId: messageId, from: held.otherUserId, in: context)
-            _ = PersistentACKStore.shared.settleDurableWrite(messageId, in: context)
+            _ = PersistentACKStore.shared.settleDurableWrite(messageId)
             StreamCursorTracker.shared.resolve(messageId: messageId)
         }
         for action in actions {
@@ -113,7 +113,7 @@ final class MessageRouter {
             do {
                 let (chat, _) = try findOrCreateChat(for: held.otherUserId, in: context)
                 _ = executeRustActions([action], for: held.message, chat: chat, otherUserId: held.otherUserId, in: context)
-                if PersistentACKStore.shared.settleDurableWrite(messageId, in: context) {
+                if PersistentACKStore.shared.settleDurableWrite(messageId) {
                     Log.error(
                         "PersistAck unmet for \(messageId.prefix(8))… after a core drain (\(site)) — saved, but nothing durable remembers handling it",
                         category: "MessageRouter"
@@ -260,7 +260,7 @@ final class MessageRouter {
             // record exists solely in a cache that dies with the process — after a restart the
             // message returns and nothing remembers handling it. `.deferred` and `.skip` mean some
             // other path still owns it, and an obligation outstanding there is not yet a gap.
-            let unmet = PersistentACKStore.shared.settleDurableWrite(message.id, in: context)
+            let unmet = PersistentACKStore.shared.settleDurableWrite(message.id)
             if unmet, case .durable = streamOutcome {
                 Log.error(
                     "PersistAck unmet for \(message.id.prefix(8))… — core required a durable record, the pass ended .durable with none written; a restart will re-deliver this message with nothing remembering it",
@@ -332,7 +332,7 @@ final class MessageRouter {
                     "FAN-OUT: \(message.id.prefix(8))… is addressed to another of our devices — skipping",
                     category: "MessageRouter"
                 )
-                PersistentACKStore.shared.markProcessed(message.id, senderId: message.from, in: context)
+                PersistentACKStore.shared.markProcessed(message.id, senderId: message.from)
                 return
             }
         }
@@ -358,7 +358,7 @@ final class MessageRouter {
         // duplicate branch below produces, so cursor bookkeeping is unchanged — the `defer` above
         // still settles and reports.
         if Self.canSkipRedeliveryBeforeUnseal(
-            isProcessed: PersistentACKStore.shared.isProcessed(message.id, in: context),
+            isProcessed: PersistentACKStore.shared.isProcessed(message.id),
             messageNumber: message.messageNumber,
             receiptStillThrottled: ReceiptResendThrottle.shared.isThrottled(messageId: message.id)
         ) {
@@ -505,7 +505,7 @@ final class MessageRouter {
         //    Exception: if this is a session init (msgNum=0) and we have no active session
         //    for the sender, re-process it. This handles the crash-recovery scenario where
         //    the init was ACKed before the session was persisted (e.g., app crashed mid-init).
-        if PersistentACKStore.shared.isProcessed(message.id, in: context) {
+        if PersistentACKStore.shared.isProcessed(message.id) {
             // Orphaned-init exception: re-process msgNum=0 when the session was lost
             // after ACK (e.g. app crashed between ACK and session persist). But exclude
             // messages that have already been through initReceivingSession and failed
@@ -551,7 +551,7 @@ final class MessageRouter {
         //    Route separately: decrypt with per-device session, save as outgoing in the
         //    conversation with the original partner (extracted from conversationId).
         if message.isSenderSync {
-            PersistentACKStore.shared.markProcessed(message.id, senderId: message.from, in: context)
+            PersistentACKStore.shared.markProcessed(message.id, senderId: message.from)
             handleSenderSync(message, in: context)
             return
         }
@@ -581,7 +581,7 @@ final class MessageRouter {
                 category: "MessageRouter"
             )
             PerformanceMetrics.shared.record(.selfAddressedDropped, label: "ct_\(message.contentType)")
-            PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId, in: context)
+            PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId)
             return
         }
 
@@ -593,7 +593,7 @@ final class MessageRouter {
         //    named no state, so nothing here could tell whether it was about the one we hold — the
         //    decryption error below does.
         if message.isEndSession {
-            PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId, in: context)
+            PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId)
             Log.info("END_SESSION from \(otherUserId.prefix(8))… — retired message type, acknowledged and ignored", category: "MessageRouter")
             return
         }
@@ -602,7 +602,7 @@ final class MessageRouter {
         //     it and decides — retire our current state when it names that state, resend the
         //     named message once — and nothing here second-guesses it.
         if message.isDecryptionError {
-            PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId, in: context)
+            PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId)
             delegate?.messageRouter(
                 self,
                 receivedDecryptionError: PeerAddress(account: otherUserId, device: message.senderDeviceId),
@@ -768,7 +768,7 @@ final class MessageRouter {
             // message on every background cycle (which would recreate ghost contacts and cause
             // Core Data validation errors). A throw is the core refusing the event, not a
             // session failing to read it, so there is no state to name in a decryption error.
-            PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId, in: context)
+            PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId)
             if isNewChat { context.delete(chat) }
             return
         }
@@ -781,7 +781,7 @@ final class MessageRouter {
         // Rust asks whenever its in-memory cache misses; Swift checks Core Data and feeds back
         // ackDbResult so Rust can decide whether to decrypt or drop the message.
         if let ackMsgId = plan.ackCheckMessageId {
-            let isProcessed = PersistentACKStore.shared.isProcessedInCoreData(ackMsgId, in: context)
+            let isProcessed = PersistentACKStore.shared.isProcessedDurably(ackMsgId)
             let ackResult = CfeIncomingEvent.ackDbResult(messageId: ackMsgId, isProcessed: isProcessed)
             let followup: [CfeAction]
             do {
@@ -870,7 +870,7 @@ final class MessageRouter {
             // for a durable record, and this path wrote none until 0.29 sent every signal here.
             _ = executeRustActions(actions, for: message, chat: chat, otherUserId: otherUserId, in: context)
             Self.dispatchCallSignals(in: actions, from: otherUserId)
-            PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId, in: context)
+            PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId)
             return
         case .controlFrameDecrypted:
             // A receipt, a card, a profile, a heartbeat — named by the core from the KNST frame
@@ -886,7 +886,7 @@ final class MessageRouter {
             Log.info("SESSION_STATE[unreadable]: \(message.id.prefix(8))… from \(otherUserId.prefix(8))… msgNum=\(message.messageNumber) — the writer is told", category: "SessionInit")
             PerformanceMetrics.shared.record(.undeliveredNoReceipt, label: "unreadable")
             SessionActionExecutor.shared.execute(actions)
-            PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId, in: context)
+            PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId)
             if isNewChat { context.delete(chat) }
             return
         case .openReceiving(let lostDevice):
@@ -914,7 +914,7 @@ final class MessageRouter {
             // moves past it (`.durable`). Held, it would come back as this same duplicate on
             // every redelivery.
             SessionActionExecutor.shared.execute(actions)
-            PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId, in: context)
+            PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId)
             Log.debug(
                 "Duplicate named by the core — \(message.id.prefix(8))… msgNum=\(message.messageNumber), recorded and dropped",
                 category: "MessageRouter"
@@ -926,7 +926,7 @@ final class MessageRouter {
             // like a duplicate; nothing is answered — there is no state in it to name. The
             // executor logs the core's reason (the `notifyError` beside the verdict).
             SessionActionExecutor.shared.execute(actions)
-            PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId, in: context)
+            PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId)
             Log.info(
                 "Malformed payload named by the core — \(message.id.prefix(8))…, recorded and dropped",
                 category: "MessageRouter"
@@ -1112,7 +1112,7 @@ final class MessageRouter {
                 // (.durable) + markProcessed dedups, so the queue drains and there is no redelivery.
                 // See decisions/sealed-sender-authenticated-transitional.md.
                 if BlockedContacts.isBlocked(otherUserId) {
-                    PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId, in: context)
+                    PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId)
                     Log.info("SECURITY[block_drop]: suppressed message \(message.id.prefix(8))… from blocked \(otherUserId.prefix(8))… (ratchet advanced; no store/notify/receipt)", category: "MessageRouter")
                     continue
                 }
@@ -1124,7 +1124,7 @@ final class MessageRouter {
                 // "$<uuid>" bubble.
                 if message.isSessionResetInit {
                     Log.info("SESSION_RESET_INIT payload discarded (not user-visible, content_type=24) — \(message.id.prefix(8))…", category: "MessageRouter")
-                    PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId, in: context)
+                    PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId)
                     continue
                 }
 
@@ -1139,7 +1139,7 @@ final class MessageRouter {
                 if let control = ChunkedMessageCodec.controlFrame(plaintext),
                    ContentTypeRouting.disposition(forFrameContentType: control.contentType) == .silentControl {
                     Log.error("Control frame ct=\(control.contentType) from \(otherUserId.prefix(8))… reached the body path — the core should have named it", category: "MessageRouter")
-                    PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId, in: context)
+                    PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId)
                     continue
                 }
                 if let control = ChunkedMessageCodec.controlFrame(plaintext),
@@ -1157,12 +1157,12 @@ final class MessageRouter {
                 // always was. Read for one release; ignored once a typed profile is held.
                 if let profile = ProfileShareData.fromBinaryData(plaintext) {
                     ProfileSharingManager.shared.handleProfileMessage(profile, from: otherUserId)
-                    PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId, in: context)
+                    PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId)
                     continue
                 } else if let str = String(data: plaintext, encoding: .utf8),
                           let profile = ProfileSharingManager.shared.parseProfileMessage(str) {
                     ProfileSharingManager.shared.handleProfileMessage(profile, from: otherUserId)
-                    PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId, in: context)
+                    PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId)
                     continue
                 }
 
@@ -1196,7 +1196,7 @@ final class MessageRouter {
                     if let profile = ProfileShareData.fromBinaryData(profileData) {
                         ProfileSharingManager.shared.handleProfileMessage(profile, from: otherUserId)
                     }
-                    PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId, in: context)
+                    PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId)
                     continue
                 case .reaction(let targetMessageID, let emoji, let action, let timestampMs):
                     handleIncomingReaction(
@@ -1233,7 +1233,7 @@ final class MessageRouter {
                     } else {
                         Log.error("Modern edit target not found: \(targetMessageID.prefix(8))… from \(otherUserId.prefix(8))… — edit dropped", category: "MessageRouter")
                     }
-                    PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId, in: context)
+                    PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId)
                     continue
                 case .incomplete:
                     // Every chunk but the last lands here — the normal state of a large message,
@@ -1255,7 +1255,7 @@ final class MessageRouter {
                         "Chunk \(message.id.prefix(8))… from \(otherUserId.prefix(8))… — stored, awaiting more",
                         category: "MessageRouter"
                     )
-                    PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId, in: context)
+                    PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId)
                     disposition = .incompleteReassembly
                 case .invalid(let reason):
                     Log.error("Invalid chunked message: \(reason)", category: "MessageRouter")
@@ -1301,7 +1301,7 @@ final class MessageRouter {
                 category: "MessageRouter"
             )
         }
-        PersistentACKStore.shared.markProcessed(envelopeId, senderId: otherUserId, in: context)
+        PersistentACKStore.shared.markProcessed(envelopeId, senderId: otherUserId)
     }
 
     private func handleResolvedMessage(
@@ -1325,7 +1325,7 @@ final class MessageRouter {
         // tracked by `lastHeartbeatDate` off the stream-level heartbeatAck, a different mechanism.)
         if message.contentType == WireMessageKind.heartbeatContentType {
             Log.debug("Heartbeat received from \(otherUserId.prefix(8))… — session healthy", category: "MessageRouter")
-            PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId, in: context)
+            PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId)
             return
         }
 
@@ -1341,7 +1341,7 @@ final class MessageRouter {
             in: context
         ), specialMessageHandled {
             do {
-                try PersistentACKStore.shared.markProcessedOrThrow(message.id, senderId: otherUserId, in: context)
+                try PersistentACKStore.shared.markProcessedOrThrow(message.id, senderId: otherUserId)
             } catch {
                 Log.error("Failed to persist ACK for special message \(message.id.prefix(8))…: \(error)", category: "MessageRouter")
             }
@@ -1366,7 +1366,7 @@ final class MessageRouter {
             if let mediaAlbum {
                 MediaWireCodec.receiveAlbum(mediaAlbum, for: canonicalId)
             }
-            try PersistentACKStore.shared.markProcessedOrThrow(message.id, senderId: otherUserId, in: context)
+            try PersistentACKStore.shared.markProcessedOrThrow(message.id, senderId: otherUserId)
         } catch {
             Log.error("Failed to persist message \(message.id.prefix(8))…: \(error)", category: "MessageRouter")
             return
@@ -1432,7 +1432,7 @@ final class MessageRouter {
         in context: NSManagedObjectContext
     ) -> StreamCursorTracker.Outcome? {
         // Already processed on an earlier pass: re-ACK, and do not open from it again.
-        if PersistentACKStore.shared.isProcessed(message.id, in: context) {
+        if PersistentACKStore.shared.isProcessed(message.id) {
             Log.info("SESSION_STATE[first_message_dedup]: \(message.id.prefix(8))… from \(userId.prefix(8))… already processed — re-ACKing, no open", category: "SessionInit")
             OutboundSessionService.sendDeliveryReceipt(for: [message.id], to: userId, in: context)
             if isNewChat { context.delete(chat) }
@@ -1446,7 +1446,7 @@ final class MessageRouter {
         // addressed to a device and sealed to its certificate key, and this message has neither.
         guard claimed != nil else {
             Log.info("SESSION_STATE[first_contact_unattributed]: \(message.id.prefix(8))… from \(userId.prefix(8))… names no device — refused", category: "SessionInit")
-            PersistentACKStore.shared.markProcessed(message.id, senderId: userId, in: context)
+            PersistentACKStore.shared.markProcessed(message.id, senderId: userId)
             PerformanceMetrics.shared.record(.undeliveredNoReceipt, label: "first_contact_unattributed")
             if isNewChat { context.delete(chat) }
             return .durable
@@ -1465,7 +1465,7 @@ final class MessageRouter {
             break
         case .discard:
             Log.debug("Discarding \(initKind) from vanished peer \(userId.prefix(8))… — no session is possible", category: "MessageRouter")
-            PersistentACKStore.shared.markProcessed(message.id, senderId: userId, in: context)
+            PersistentACKStore.shared.markProcessed(message.id, senderId: userId)
             PerformanceMetrics.shared.record(.undeliveredNoReceipt, label: "peer_vanished")
             if isNewChat { context.delete(chat) }
             // `.durable` on purpose: nothing will revisit this message — see `VanishedPeerStore`.
@@ -1527,7 +1527,7 @@ final class MessageRouter {
         // No receipt for a receipt: ct=14 has no row on the sender's side, and answering one
         // receipt with another is the shape of a loop.
         defer {
-            PersistentACKStore.shared.markProcessed(messageId, senderId: otherUserId, in: context)
+            PersistentACKStore.shared.markProcessed(messageId, senderId: otherUserId)
         }
 
         guard !payload.isEmpty else {
@@ -1619,14 +1619,14 @@ final class MessageRouter {
         let device = message.senderDeviceId
         guard !device.isEmpty,
               let event = buildIncomingEvent(message: message, otherUserId: userId, asDevice: device) else {
-            PersistentACKStore.shared.markProcessed(message.id, senderId: userId, in: context)
+            PersistentACKStore.shared.markProcessed(message.id, senderId: userId)
             return
         }
         do {
             var actions = try CryptoManager.shared.handleOrchestratorEvent(event, tag: "answer_unreadable")
             // After a restart the core asks whether it has seen the message before deciding.
             if let asked = OrchestratorActionPlan(actions: actions).ackCheckMessageId {
-                let seen = PersistentACKStore.shared.isProcessedInCoreData(asked, in: context)
+                let seen = PersistentACKStore.shared.isProcessedDurably(asked)
                 actions = try CryptoManager.shared.handleOrchestratorEvent(
                     .ackDbResult(messageId: asked, isProcessed: seen),
                     tag: "answer_unreadable_ack"
@@ -1636,7 +1636,7 @@ final class MessageRouter {
         } catch {
             Log.error("Could not answer \(message.id.prefix(8))… from \(userId.prefix(8))…: \(error)", category: "MessageRouter")
         }
-        PersistentACKStore.shared.markProcessed(message.id, senderId: userId, in: context)
+        PersistentACKStore.shared.markProcessed(message.id, senderId: userId)
     }
 
     /// The control frames in `actions`, as `(contentType, body)` — what the core named after
@@ -1662,7 +1662,7 @@ final class MessageRouter {
         from otherUserId: String,
         in context: NSManagedObjectContext
     ) {
-        defer { PersistentACKStore.shared.markProcessed(messageId, senderId: otherUserId, in: context) }
+        defer { PersistentACKStore.shared.markProcessed(messageId, senderId: otherUserId) }
         if BlockedContacts.isBlocked(otherUserId) {
             Log.info("SECURITY[block_drop]: suppressed control frame \(messageId.prefix(8))… from blocked \(otherUserId.prefix(8))…", category: "MessageRouter")
             return
@@ -1970,7 +1970,7 @@ final class MessageRouter {
                 "SENDER_SYNC: \(message.id) is addressed to another of our devices — skipping",
                 category: "MessageRouter"
             )
-            PersistentACKStore.shared.markProcessed(message.id, senderId: message.from, in: context)
+            PersistentACKStore.shared.markProcessed(message.id, senderId: message.from)
             return
         }
 
@@ -2391,7 +2391,7 @@ extension MessageRouter {
             quotedMessage: nil,
             in: context
         )
-        try PersistentACKStore.shared.markProcessedOrThrow(message.id, senderId: otherUserId, in: context)
+        try PersistentACKStore.shared.markProcessedOrThrow(message.id, senderId: otherUserId)
     }
 }
 #endif

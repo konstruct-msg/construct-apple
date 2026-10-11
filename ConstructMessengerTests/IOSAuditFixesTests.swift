@@ -52,12 +52,15 @@ final class IOSAuditFixesTests: XCTestCase {
     }
 
     func testMarkProcessedOrThrow_PersistsAckAndWarmsInMemoryCache_OnSuccess() throws {
-        let context = makeInMemoryContext()
+        let container = PersistenceController(inMemory: true).container
+        LocalRepositories.useProcessedMessagesForTesting(CoreDataProcessedMessageStore(container: container))
+        defer { LocalRepositories.useProcessedMessagesForTesting(nil) }
+        let context = container.viewContext
         let messageId = "ack-success-\(UUID().uuidString)"
 
         XCTAssertFalse(PersistentACKStore.shared.isProcessedInMemory(messageId))
 
-        try PersistentACKStore.shared.markProcessedOrThrow(messageId, senderId: "sender-success", in: context)
+        try PersistentACKStore.shared.markProcessedOrThrow(messageId, senderId: "sender-success")
 
         XCTAssertTrue(PersistentACKStore.shared.isProcessedInMemory(messageId))
 
@@ -68,22 +71,19 @@ final class IOSAuditFixesTests: XCTestCase {
         XCTAssertEqual(records.first?.senderId, "sender-success")
     }
 
+    /// The durable write fails — the store throws — and the cache is not warmed: a mark only the
+    /// cache holds would turn a redelivery after a restart into a second message. The failure
+    /// comes from the store, where a real one would.
     func testMarkProcessedOrThrow_DoesNotWarmInMemoryCache_WhenSaveFails() throws {
-        let context = makeInMemoryContext()
+        LocalRepositories.useProcessedMessagesForTesting(FailingProcessedMessageStore())
+        defer { LocalRepositories.useProcessedMessagesForTesting(nil) }
         let messageId = "ack-failure-\(UUID().uuidString)"
 
-        _ = Message(context: context)
-
         XCTAssertThrowsError(
-            try PersistentACKStore.shared.markProcessedOrThrow(messageId, senderId: "sender-failure", in: context)
+            try PersistentACKStore.shared.markProcessedOrThrow(messageId, senderId: "sender-failure")
         )
 
         XCTAssertFalse(PersistentACKStore.shared.isProcessedInMemory(messageId))
-
-        let fetch = ProcessedMessage.fetchRequest()
-        fetch.predicate = NSPredicate(format: "messageId == %@", messageId)
-        let records = try context.fetch(fetch)
-        XCTAssertTrue(records.isEmpty)
     }
 
     @MainActor
@@ -93,7 +93,9 @@ final class IOSAuditFixesTests: XCTestCase {
         // The message is written through the repositories (messages B1); point them here.
         LocalRepositories.useMessagesForTesting(container)
         LocalRepositories.useChatsForTesting(container)
+        LocalRepositories.useProcessedMessagesForTesting(CoreDataProcessedMessageStore(container: container))
         defer {
+            LocalRepositories.useProcessedMessagesForTesting(nil)
             LocalRepositories.useMessagesForTesting(nil)
             LocalRepositories.useChatsForTesting(nil)
         }
@@ -125,7 +127,10 @@ final class IOSAuditFixesTests: XCTestCase {
 
     @MainActor
     func testMessageRouterDoesNotPersistAck_WhenMessageSaveFails() throws {
-        let context = makeInMemoryContext()
+        let container = PersistenceController(inMemory: true).container
+        LocalRepositories.useProcessedMessagesForTesting(CoreDataProcessedMessageStore(container: container))
+        defer { LocalRepositories.useProcessedMessagesForTesting(nil) }
+        let context = container.viewContext
         let senderId = "router-failure-sender"
         let recipientId = "router-failure-recipient"
         let messageId = "router-failure-\(UUID().uuidString)"
@@ -151,4 +156,12 @@ final class IOSAuditFixesTests: XCTestCase {
         ackFetch.predicate = NSPredicate(format: "messageId == %@", messageId)
         XCTAssertEqual(try context.fetch(ackFetch).count, 0)
     }
+}
+
+/// A durable store that never takes a write.
+private struct FailingProcessedMessageStore: ProcessedMessageStore {
+    struct Refused: Error {}
+    func markProcessed(_ messageId: String, senderId: String, at date: Date) throws -> Bool { throw Refused() }
+    func isProcessed(_ messageId: String) throws -> Bool { false }
+    func forget(processedBefore date: Date) throws -> Int { 0 }
 }
