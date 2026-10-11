@@ -50,20 +50,6 @@ struct DesktopRootView: View {
         )
     }
 
-    /// Derives the Nearby-transfer PIN for the post-link history sync. The `pendingDeviceId` the
-    /// phone hashed is THIS device's freshly-linked deviceId (it generated the join request under
-    /// it), which equals `KeychainManager.loadDeviceID()`. Prefer the value plumbed through the
-    /// link phase, but fall back to our own deviceId so the auto-PIN survives a dropped/late phase
-    /// hand-off (otherwise the receiver degrades to a manual 6-digit PIN prompt).
-    private func historySyncPairingPIN(for pendingId: String?) -> String? {
-        guard let userId = authViewModel.currentUserId ?? KeychainManager.shared.loadUserID(),
-              !userId.isEmpty else { return nil }
-        let resolvedPendingId = (pendingId?.isEmpty == false ? pendingId : nil)
-            ?? KeychainManager.shared.loadDeviceID()
-        guard let resolvedPendingId, !resolvedPendingId.isEmpty else { return nil }
-        return HistorySyncPairing.pin(pendingDeviceId: resolvedPendingId, userId: userId)
-    }
-
     var body: some View {
         Group {
             if authViewModel.hasRegisteredDeviceKeys == nil {
