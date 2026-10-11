@@ -2,76 +2,70 @@
 //  ContactStoreTests.swift
 //  ConstructMessengerTests
 //
-//  What any `ContactStore` / `OwnProfileStore` must answer. Run against Core Data today; the
-//  `LocalStore` implementation (LOCAL_STORE_MIGRATION_PLAN step 3) runs the same cases. Rows are
-//  seeded as Core Data writes them now, since the writes move behind the seam in the next step.
+//  What any `ContactStore` / `OwnProfileStore` must answer, written against the protocols and run
+//  on both implementations — Core Data here, `LocalStore` in the subclass below
+//  (LOCAL_STORE_MIGRATION_PLAN step 3). What only Core Data has — its columns, the `User` object,
+//  the chat cascade through its relationships — is `CoreDataContactStoreTests`.
 //
 
 import CoreData
 import XCTest
 @testable import Construct_Messenger
 
-final class ContactStoreTests: XCTestCase {
+class ContactStoreTests: XCTestCase {
 
-    private var container: NSPersistentContainer!
-    private var store: CoreDataContactStore!
+    typealias Store = any ContactStore & OwnProfileStore
+
+    func makeStore() -> Store {
+        CoreDataContactStore(container: PersistenceController(inMemory: true).container)
+    }
+
+    private var store: Store!
 
     override func setUp() {
         super.setUp()
-        container = PersistenceController(inMemory: true).container
-        store = CoreDataContactStore(container: container)
+        store = makeStore()
     }
 
     override func tearDown() {
         store = nil
-        container = nil
         super.tearDown()
     }
 
-    @discardableResult
-    private func seed(_ id: String, configure: (User) -> Void = { _ in }) throws -> User {
-        let context = container.viewContext
-        let user = User(context: context)
-        user.id = id
-        user.username = ""
-        user.displayName = ""
-        configure(user)
-        try context.save()
-        return user
+    private func record(_ id: String) -> ContactRecord {
+        var r = ContactRecord.new(id: id, isContact: true, addedAt: Date(timeIntervalSince1970: 50))
+        r.username = "ada"; r.displayName = "Ada"; r.localAlias = "A"; r.avatar = Data([1])
+        r.knownIdentityKey = Data([2]); r.accountAddress = Data([3]); r.amISharingWith = true
+        r.pendingAvatarRef = Data([4]); r.pendingAvatarSince = Date(timeIntervalSince1970: 60)
+        return r
     }
 
-    /// Every field the record carries comes from its column. Mutation: map one field from the
-    /// wrong attribute in `ContactRecord(row:)` — the record reads back different.
+    /// A row holding every field, none of them at its default.
+    private func full(_ id: String) -> ContactRecord {
+        var r = record(id)
+        r.isBlocked = true; r.isSharingWithMe = true
+        r.sharedWithMeAt = Date(timeIntervalSince1970: 1_000)
+        r.ktStatus = .failed; r.securityNotice = .addressChanged; r.profileEditedAtMs = 7
+        return r
+    }
+
+    @discardableResult
+    private func seed(_ id: String, configure: (inout ContactRecord) -> Void = { _ in }) throws -> ContactRecord {
+        var row = ContactRecord.new(id: id, isContact: false, addedAt: nil)
+        configure(&row)
+        XCTAssertTrue(try store.insert(row))
+        return row
+    }
+
+    /// Every field the record carries reads back as written. Mutation: drop or swap one field in
+    /// either direction of the implementation's mapping — the record reads back different.
     func testARowReadsBackWhole() throws {
-        let at = Date(timeIntervalSince1970: 1_000)
-        try seed("a") {
-            $0.username = "ada"; $0.displayName = "Ada"; $0.localAlias = "A"
-            $0.avatarData = Data([1]); $0.knownIdentityKey = Data([2]); $0.accountAddress = Data([3])
-            $0.isContact = true; $0.isBlocked = true; $0.isSharingWithMe = true; $0.amISharingWith = true
-            $0.sharedWithMeAt = at; $0.addedAt = at.addingTimeInterval(1)
-            $0.ktStatus = .failed; $0.securityNotice = .addressChanged; $0.profileEditedAtMs = 7
-            $0.pendingAvatarRef = Data([4]); $0.pendingAvatarSince = at.addingTimeInterval(2)
-        }
-        XCTAssertEqual(try store.contact("a"), ContactRecord(
-            id: "a", username: "ada", displayName: "Ada", localAlias: "A", avatar: Data([1]),
-            knownIdentityKey: Data([2]), accountAddress: Data([3]), isContact: true, isBlocked: true,
-            isSharingWithMe: true, amISharingWith: true, sharedWithMeAt: at,
-            addedAt: at.addingTimeInterval(1), ktStatus: .failed, securityNotice: .addressChanged,
-            profileEditedAtMs: 7, pendingAvatarRef: Data([4]),
-            pendingAvatarSince: at.addingTimeInterval(2)
-        ))
+        try store.insert(full("a"))
+        XCTAssertEqual(try store.contact("a"), full("a"))
         XCTAssertNil(try store.contact("nobody"))
     }
 
-    /// The record names a person the way a `User` does — one rule, not two. Mutation: let
-    /// `ContactRecord.resolvedDisplayName` skip the alias.
-    func testTheNameShownIsTheSameAsTheRows() throws {
-        let row = try seed("b") { $0.username = "bea"; $0.displayName = "Bea"; $0.localAlias = "Mum" }
-        XCTAssertEqual(try store.contact("b")?.resolvedDisplayName, row.resolvedDisplayName)
-        XCTAssertEqual(try store.contact("b")?.resolvedDisplayName, "Mum")
-    }
-
-    /// Mutation: drop `isBlocked == YES` from the count — every known row reads as blocked.
+    /// Mutation: answer `isBlocked` from the row's existence — every known row reads as blocked.
     func testOnlyABlockedRowIsBlocked() throws {
         try seed("blocked") { $0.isBlocked = true }
         try seed("open")
@@ -80,13 +74,21 @@ final class ContactStoreTests: XCTestCase {
         XCTAssertFalse(try store.isBlocked("nobody"))
     }
 
-    /// Our own row is not a contact, and everything else is listed, contacts or not, by id.
-    /// Mutation: drop the `id != own` term — our profile is encoded into history as a contact.
+    /// A row a client holds for its own account is left out; everything else is listed, contacts
+    /// or not, by id. Mutation: drop the `except` term — our profile is encoded into history as a
+    /// contact.
     func testEveryContactIsEveryoneButUs() throws {
         try seed("me")
         try seed("z") { $0.isContact = true }
-        try seed("k") { $0.isContact = false }
+        try seed("k")
         XCTAssertEqual(try store.everyContact(except: "me").map(\.id), ["k", "z"])
+    }
+
+    func testContactsAreTheRowsMarkedAsContactsById() throws {
+        try seed("z") { $0.isContact = true; $0.displayName = "Aaron" }
+        try seed("k")
+        try seed("b") { $0.isContact = true; $0.displayName = "Zed" }
+        XCTAssertEqual(try store.contacts().map(\.id), ["b", "z"])
     }
 
     /// Mutation: drop the `amISharingWith` term — the rebroadcast goes to everyone.
@@ -106,11 +108,10 @@ final class ContactStoreTests: XCTestCase {
         XCTAssertEqual(try store.identityKeyPins(), [IdentityKeyPin(contactId: "p", key: Data([9, 9]))])
     }
 
-    func testOurProfileIsOurRow() throws {
-        try seed("me") { $0.username = "max"; $0.displayName = "Max"; $0.avatarData = Data([5]); $0.profileEditedAtMs = 3 }
-        XCTAssertEqual(try store.profile(accountId: "me"), OwnProfileRecord(
-            accountId: "me", username: "max", displayName: "Max", avatar: Data([5]), profileEditedAtMs: 3
-        ))
+    func testOurProfileIsReadForOurAccountOnly() throws {
+        let me = OwnProfileRecord(accountId: "me", username: "max", displayName: "Max", avatar: Data([5]), profileEditedAtMs: 3)
+        try store.save(me)
+        XCTAssertEqual(try store.profile(accountId: "me"), me)
         XCTAssertNil(try store.profile(accountId: ""))
         XCTAssertNil(try store.profile(accountId: "someone"))
     }
@@ -127,25 +128,44 @@ final class ContactStoreTests: XCTestCase {
         wait(for: [done], timeout: 5)
     }
 
-    // MARK: - Writes
-
-    private func record(_ id: String) -> ContactRecord {
-        var r = ContactRecord.new(id: id, isContact: true, addedAt: Date(timeIntervalSince1970: 50))
-        r.username = "ada"; r.displayName = "Ada"; r.localAlias = "A"; r.avatar = Data([1])
-        r.knownIdentityKey = Data([2]); r.accountAddress = Data([3]); r.amISharingWith = true
-        r.pendingAvatarRef = Data([4]); r.pendingAvatarSince = Date(timeIntervalSince1970: 60)
-        return r
+    /// The screens redraw from this (`ContactsLive`). Mutation: drop the feed's yield — nothing
+    /// is heard.
+    func testAWriteIsHeardByIdOnTheChangeStream() async throws {
+        let heard = expectation(description: "the write is heard")
+        let changes = store.changes()
+        let listener = Task {
+            for await ids in changes where ids.contains("heard") {
+                heard.fulfill()
+                return
+            }
+        }
+        try seed("heard")
+        await fulfillment(of: [heard], timeout: 5)
+        listener.cancel()
     }
+
+    // MARK: - Writes
 
     /// An insert adds a row whole and never replaces one. Mutation: drop the existence check —
     /// a second insert overwrites what the field writes put there.
     func testInsertAddsWholeAndNeverReplaces() throws {
         XCTAssertTrue(try store.insert(record("a")))
         XCTAssertEqual(try store.contact("a"), record("a"))
+        XCTAssertTrue(try store.setAlias("a", "Mine"))
         var other = record("a")
         other.displayName = "Someone else"
         XCTAssertFalse(try store.insert(other))
         XCTAssertEqual(try store.contact("a")?.displayName, "Ada")
+        XCTAssertEqual(try store.contact("a")?.localAlias, "Mine")
+    }
+
+    /// Mutation: make `replace` an upsert — the row nobody holds appears.
+    func testReplaceWritesEveryFieldOfAHeldRowAndCreatesNone() throws {
+        try store.insert(.new(id: "a", isContact: false, addedAt: nil))
+        XCTAssertTrue(try store.replace(full("a")))
+        XCTAssertEqual(try store.contact("a"), full("a"))
+        XCTAssertFalse(try store.replace(full("gone")))
+        XCTAssertNil(try store.contact("gone"))
     }
 
     /// Each write changes its fields and nothing else. Mutation: write a field outside the named
@@ -210,11 +230,97 @@ final class ContactStoreTests: XCTestCase {
         try store.save(me)
         XCTAssertEqual(try store.profile(accountId: "me"), me)
         XCTAssertEqual(try store.profile(accountId: "me")?.profileEditedAtMs, 2000)
-        XCTAssertEqual(try store.contact("me")?.isContact, false)
+        XCTAssertNotEqual(try store.contact("me")?.isContact, true)
+        XCTAssertFalse(try store.contacts().contains { $0.id == "me" })
     }
 
-    /// The crate's `delete_contact`: the row, its chat and the chat's messages; another contact's
-    /// chat stays. Mutation: delete only the `User` with `chats` set to nullify — the chat stays.
+    func testADeleteSaysWhetherThereWasARow() throws {
+        try store.insert(.new(id: "gone", isContact: true, addedAt: nil))
+        XCTAssertTrue(try store.delete("gone"))
+        XCTAssertNil(try store.contact("gone"))
+        XCTAssertFalse(try store.delete("gone"), "a second delete finds nothing")
+    }
+}
+
+/// The same cases on the crate.
+final class LocalStoreContactStoreTests: ContactStoreTests {
+    override func makeStore() -> Store {
+        LocalStoreContactStore(session: .inMemoryForTesting())
+    }
+}
+
+/// What only the Core Data implementation has: its columns, the `User` object screens still
+/// hold, and the chat cascade through its relationships (the crate's is `delete_contact`, tested
+/// there).
+final class CoreDataContactStoreTests: XCTestCase {
+
+    private var container: NSPersistentContainer!
+    private var store: CoreDataContactStore!
+
+    override func setUp() {
+        super.setUp()
+        container = PersistenceController(inMemory: true).container
+        store = CoreDataContactStore(container: container)
+    }
+
+    override func tearDown() {
+        store = nil
+        container = nil
+        super.tearDown()
+    }
+
+    @discardableResult
+    private func seed(_ id: String, configure: (User) -> Void = { _ in }) throws -> User {
+        let context = container.viewContext
+        let user = User(context: context)
+        user.id = id
+        user.username = ""
+        user.displayName = ""
+        configure(user)
+        try context.save()
+        return user
+    }
+
+    /// Every field the record carries comes from its column. Mutation: map one field from the
+    /// wrong attribute in `ContactRecord(row:)` — the record reads back different.
+    func testARowReadsBackWhole() throws {
+        let at = Date(timeIntervalSince1970: 1_000)
+        try seed("a") {
+            $0.username = "ada"; $0.displayName = "Ada"; $0.localAlias = "A"
+            $0.avatarData = Data([1]); $0.knownIdentityKey = Data([2]); $0.accountAddress = Data([3])
+            $0.isContact = true; $0.isBlocked = true; $0.isSharingWithMe = true; $0.amISharingWith = true
+            $0.sharedWithMeAt = at; $0.addedAt = at.addingTimeInterval(1)
+            $0.ktStatus = .failed; $0.securityNotice = .addressChanged; $0.profileEditedAtMs = 7
+            $0.pendingAvatarRef = Data([4]); $0.pendingAvatarSince = at.addingTimeInterval(2)
+        }
+        XCTAssertEqual(try store.contact("a"), ContactRecord(
+            id: "a", username: "ada", displayName: "Ada", localAlias: "A", avatar: Data([1]),
+            knownIdentityKey: Data([2]), accountAddress: Data([3]), isContact: true, isBlocked: true,
+            isSharingWithMe: true, amISharingWith: true, sharedWithMeAt: at,
+            addedAt: at.addingTimeInterval(1), ktStatus: .failed, securityNotice: .addressChanged,
+            profileEditedAtMs: 7, pendingAvatarRef: Data([4]),
+            pendingAvatarSince: at.addingTimeInterval(2)
+        ))
+    }
+
+    /// The record names a person the way a `User` does — one rule, not two. Mutation: let
+    /// `ContactRecord.resolvedDisplayName` skip the alias.
+    func testTheNameShownIsTheSameAsTheRows() throws {
+        let row = try seed("b") { $0.username = "bea"; $0.displayName = "Bea"; $0.localAlias = "Mum" }
+        XCTAssertEqual(try store.contact("b")?.resolvedDisplayName, row.resolvedDisplayName)
+        XCTAssertEqual(try store.contact("b")?.resolvedDisplayName, "Mum")
+    }
+
+    /// Our profile is our row in the same table here.
+    func testOurProfileIsOurRow() throws {
+        try seed("me") { $0.username = "max"; $0.displayName = "Max"; $0.avatarData = Data([5]); $0.profileEditedAtMs = 3 }
+        XCTAssertEqual(try store.profile(accountId: "me"), OwnProfileRecord(
+            accountId: "me", username: "max", displayName: "Max", avatar: Data([5]), profileEditedAtMs: 3
+        ))
+    }
+
+    /// The row, its chat and the chat's messages; another contact's chat stays. Mutation: delete
+    /// only the `User` with `chats` set to nullify — the chat stays.
     func testDeletingAContactTakesItsChatAndMessages() throws {
         try store.insert(.new(id: "gone", isContact: true, addedAt: nil))
         try store.insert(.new(id: "kept", isContact: true, addedAt: nil))
@@ -230,11 +336,9 @@ final class ContactStoreTests: XCTestCase {
         try context.save()
 
         XCTAssertTrue(try store.delete("gone"))
-        XCTAssertNil(try store.contact("gone"))
         XCTAssertNil(try chats.chat(gone.id))
         XCTAssertEqual(try chats.chat(kept.id)?.peerId, "kept")
         context.refreshAllObjects()
         XCTAssertEqual(try context.count(for: Message.fetchRequest()), 0)
-        XCTAssertFalse(try store.delete("gone"), "a second delete finds nothing")
     }
 }

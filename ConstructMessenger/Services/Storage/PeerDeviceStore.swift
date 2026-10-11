@@ -134,3 +134,39 @@ final class CoreDataPeerDeviceStore: PeerDeviceStore, @unchecked Sendable {
         return try context.performAndWait { try body(context) }
     }
 }
+
+/// The crate's `peer_devices`. Off until step 4 switches macOS over (`LocalRepositories`).
+///
+/// `record` is one crate write per device, not one for the batch: a failure part way leaves the
+/// earlier devices recorded, which the next call's `AlreadyPresent` absorbs. The rule — an id keeps
+/// its first account — is each write's, in the crate.
+final class LocalStorePeerDeviceStore: PeerDeviceStore, @unchecked Sendable {
+
+    private let store: LocalStore
+
+    init(session: LocalStoreSession) {
+        self.store = session.store
+    }
+
+    func devices(ofAccount accountId: String) throws -> [PeerDeviceRecord] {
+        try store.peerDevices(accountId: accountId).map(PeerDeviceRecord.init)
+    }
+
+    func device(_ deviceId: String) throws -> PeerDeviceRecord? {
+        try store.peerDevice(deviceId: deviceId).map(PeerDeviceRecord.init)
+    }
+
+    func allDevices() throws -> [PeerDeviceRecord] {
+        try store.allPeerDevices().map(PeerDeviceRecord.init)
+    }
+
+    func record(_ devices: [PeerDeviceRecord]) throws -> [String] {
+        try devices.compactMap { device in
+            try store.recordPeerDevice(device: device.local) == .inserted ? device.deviceId : nil
+        }
+    }
+
+    func retain(ofAccount accountId: String, keeping: Set<String>) throws -> [String] {
+        try store.retainPeerDevices(accountId: accountId, active: Array(keeping))
+    }
+}
