@@ -63,6 +63,6 @@ class ServerMessageIdStoreTests: XCTestCase {
 /// The same cases on the crate.
 final class LocalStoreServerMessageIdStoreTests: ServerMessageIdStoreTests {
     override func makeStore() -> any ServerMessageIdStore {
-        LocalStoreServerMessageIdStore(store: LocalStoreSession.inMemoryForTesting().store)
+        LocalStoreServerMessageIdStore(session: .inMemoryForTesting())
     }
 }

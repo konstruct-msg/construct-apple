@@ -82,8 +82,8 @@ final class LocalStoreServerMessageIdStore: ServerMessageIdStore, @unchecked Sen
 
     private let store: LocalStore
 
-    init(store: LocalStore) {
-        self.store = store
+    init(session: LocalStoreSession) {
+        self.store = session.store
     }
 
     func record(serverId: String, localId: String, at date: Date) throws {

@@ -451,3 +451,124 @@ final class RowChangeFeed: @unchecked Sendable {
         return ids
     }
 }
+
+/// The crate's `contacts` and `own_profile`. Off until step 4 switches macOS over
+/// (`LocalRepositories`). Every write is one crate statement; the rules — an insert never
+/// overwrites, a replace never creates, our account out of the lists, an empty key pins nothing —
+/// are the crate's. Our profile is its own table there, so `ownAccountId` only names the row to
+/// leave out of a list that a client may also hold for itself.
+final class LocalStoreContactStore: ContactStore, OwnProfileStore, @unchecked Sendable {
+
+    private let session: LocalStoreSession
+    private var store: LocalStore { session.store }
+
+    init(session: LocalStoreSession) {
+        self.session = session
+    }
+
+    func changes() -> AsyncStream<Set<String>> { session.changes(of: .contacts) }
+
+    func contact(_ id: String) throws -> ContactRecord? {
+        try store.contact(id: id).map(ContactRecord.init)
+    }
+
+    func isBlocked(_ id: String) throws -> Bool {
+        try store.contact(id: id)?.isBlocked == true
+    }
+
+    func everyContact(except ownAccountId: String?) throws -> [ContactRecord] {
+        try store.everyContact(exceptAccount: ownAccountId).map(ContactRecord.init)
+    }
+
+    /// The crate lists them by the name shown, the protocol by id; the screens sort for the
+    /// reader's language either way (`ContactsLive.contacts`).
+    func contacts() throws -> [ContactRecord] {
+        try store.contacts().map(ContactRecord.init).sorted { $0.id < $1.id }
+    }
+
+    func sharingWith(except ownAccountId: String?) throws -> [String] {
+        try store.sharingWith(exceptAccount: ownAccountId)
+    }
+
+    func identityKeyPins() throws -> [IdentityKeyPin] {
+        try store.identityKeyPins().map { IdentityKeyPin(contactId: $0.contactId, key: $0.key) }
+    }
+
+    func contactsWithPendingAvatar() throws -> [ContactRecord] {
+        try store.contactsWithPendingAvatar().map(ContactRecord.init)
+    }
+
+    // MARK: Writes
+
+    func insert(_ contact: ContactRecord) throws -> Bool {
+        try store.insertContact(contact: contact.local) == .inserted
+    }
+
+    func replace(_ contact: ContactRecord) throws -> Bool {
+        try store.replaceContact(contact: contact.local)
+    }
+
+    func markContact(_ id: String, addedAt: Date) throws -> Bool {
+        try store.markContact(id: id, addedAt: addedAt.unixMs)
+    }
+    func setBlocked(_ id: String, _ blocked: Bool) throws -> Bool {
+        try store.setContactBlocked(id: id, blocked: blocked)
+    }
+    func setAlias(_ id: String, _ alias: String?) throws -> Bool {
+        try store.setContactAlias(id: id, alias: alias)
+    }
+    func setSharingWith(_ id: String, _ sharing: Bool) throws -> Bool {
+        try store.setSharingWith(id: id, sharing: sharing)
+    }
+    func setIdentityKey(_ id: String, _ key: Data?) throws -> Bool {
+        try store.setIdentityKey(id: id, key: key)
+    }
+    func setKTStatus(_ id: String, _ status: KTStatus) throws -> Bool {
+        try store.setKtStatus(id: id, status: status.rawValue)
+    }
+    func setAccountAddress(_ id: String, _ address: Data?) throws -> Bool {
+        try store.setAccountAddress(id: id, address: address)
+    }
+    func setSecurityNotice(_ id: String, _ notice: SecurityNotice) throws -> Bool {
+        try store.setSecurityNotice(id: id, notice: notice.rawValue)
+    }
+    func setNames(_ id: String, username: String, displayName: String) throws -> Bool {
+        try store.setContactNames(id: id, username: username, displayName: displayName)
+    }
+    func applySharedProfile(
+        _ id: String, displayName: String, sharedWithMeAt: Date, profileEditedAtMs: Int64
+    ) throws -> Bool {
+        try store.applySharedProfile(
+            id: id, displayName: displayName, sharedWithMeAt: sharedWithMeAt.unixMs,
+            profileEditedAtMs: profileEditedAtMs
+        )
+    }
+    func setAvatar(_ id: String, _ avatar: Data?, pendingRef: Data?, pendingSince: Date?) throws -> Bool {
+        try store.setContactAvatar(
+            id: id, avatar: avatar, pendingRef: pendingRef, pendingSince: pendingSince?.unixMs
+        )
+    }
+
+    func delete(_ id: String) throws -> Bool {
+        try store.deleteContact(id: id)
+    }
+
+    // MARK: Our profile
+
+    /// The one profile the crate holds, when it is `accountId`'s.
+    func profile(accountId: String) throws -> OwnProfileRecord? {
+        guard !accountId.isEmpty, let row = try store.ownProfile(), row.accountId == accountId else { return nil }
+        return OwnProfileRecord(
+            accountId: row.accountId, username: row.username, displayName: row.displayName,
+            avatar: row.avatar, profileEditedAtMs: row.profileEditedAtMs
+        )
+    }
+
+    func save(_ profile: OwnProfileRecord) throws {
+        try store.setOwnProfile(profile: LocalOwnProfile(
+            accountId: profile.accountId, username: profile.username,
+            displayName: profile.displayName, avatar: profile.avatar,
+            profileEditedAtMs: profile.profileEditedAtMs
+        ))
+    }
+}

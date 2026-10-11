@@ -78,6 +78,6 @@ class PeerDeviceStoreTests: XCTestCase {
 /// The same cases on the crate.
 final class LocalStorePeerDeviceStoreTests: PeerDeviceStoreTests {
     override func makeStore() -> any PeerDeviceStore {
-        LocalStorePeerDeviceStore(store: LocalStoreSession.inMemoryForTesting().store)
+        LocalStorePeerDeviceStore(session: .inMemoryForTesting())
     }
 }
