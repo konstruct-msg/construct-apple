@@ -47,6 +47,7 @@ actor NativeProxyEffector: ProxyEffector {
         if let learnedPin = VeilLearnedFrontStore.shared.pin(for: relay.address),
            (relay.pinnedSpki ?? "").lowercased() != learnedPin {
             pool.recordFailure(relay)
+            await VeilProxyManager.shared.handleRelayUnavailable(relay.address)
             return .proxyStartFailed(relay: relay.address, reason: "learned front offered without its pin")
         }
         do {
@@ -55,6 +56,7 @@ actor NativeProxyEffector: ProxyEffector {
             return .proxyStarted(relay: relay.address, port: result.port, restarted: result.restarted)
         } catch {
             pool.recordFailure(relay)
+            await VeilProxyManager.shared.handleRelayUnavailable(relay.address)
             // Prefer the clean, real reason (veil_last_error → VeilProxyRuntimeError)
             // over the raw nested enum description.
             let reason = (error as? VeilProxyError)?.localizedDescription ?? "\(error)"

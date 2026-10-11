@@ -396,6 +396,26 @@ final class VeilProxyManager: ObservableObject {
         VeilCapabilityProvisioner.shared.provisionIfNeeded(relayAddress: target)
         VeilCapabilityRenewer.shared.renewIfNeeded(relayAddress: target)
         VeilCapabilityV2Bootstrapper.shared.bootstrapOrRenewIfNeeded(relayAddress: target)
+        // Keep ≥2 usable fronts so losing one never leaves this device on a single point of
+        // failure between the ~46-day renewals. No-ops once the floor is met.
+        VeilFrontFloorMaintainer.shared.topUpIfBelowFloor(
+            candidates: capabilityCandidateAddresses(preferring: address),
+            through: activeRelay?.address ?? target
+        )
+    }
+
+    /// A front's native proxy failed to start or tunnel — it is (at least transiently)
+    /// unavailable. Give the floor maintainer a chance to pull in another front now, before
+    /// the *next* one also fails, rather than waiting for the distant near-expiry renewal.
+    /// The failed address is excluded from the usable count so a capped-but-blocked front
+    /// does not mask that we are effectively down to one.
+    func handleRelayUnavailable(_ address: String) {
+        guard mode != .off else { return }
+        VeilFrontFloorMaintainer.shared.frontBecameUnavailable(
+            address,
+            candidates: capabilityCandidateAddresses(),
+            through: activeRelay?.address
+        )
     }
 
     /// Legacy name — forwards to `startIfNeeded()`.
