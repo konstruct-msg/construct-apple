@@ -4,18 +4,45 @@
 //
 //  `Reactions` over `ReactionStore` (messages B3): a reaction is a Reaction row, never a Message.
 //  Orphans (target missing) stay until the target arrives or the 7-day TTL — the store decides
-//  which reaction is an orphan, as the crate's `expire_reactions` does.
+//  which reaction is an orphan, as the crate's `expire_reactions` does. Run on both
+//  implementations — Core Data here, `LocalStore` in the subclass below; the two hooks are how
+//  each holds a target message.
 //
 
 import XCTest
 import CoreData
 @testable import Construct_Messenger
 
-final class ReactionStoreTests: XCTestCase {
+class ReactionStoreTests: XCTestCase {
 
-    private var container: NSPersistentContainer!
-    private var store: CoreDataReactionStore!
-    private var context: NSManagedObjectContext { container.viewContext }
+    /// The store, a way to hold a target message under the id given as given, and the number of
+    /// transcript rows.
+    func makeStore() -> (
+        reactions: any ReactionStore, holdMessage: (String) throws -> Void, messageCount: () throws -> Int
+    ) {
+        let container = PersistenceController(inMemory: true).container
+        let context = container.viewContext
+        return (
+            CoreDataReactionStore(container: container),
+            { id in
+                // A raw row, as rows were written before ids were lowercased at the seam.
+                let msg = Message(context: context)
+                msg.id = id
+                msg.fromUserId = "11111111-2222-4333-8444-555555555555"
+                msg.toUserId = "00000000-0000-4000-8000-000000000000"
+                msg.timestamp = Date(timeIntervalSince1970: 1_700_000_000)
+                msg.isSentByMe = false
+                msg.encryptedContent = Data()
+                msg.retryCount = 0
+                try context.save()
+            },
+            { try context.count(for: Message.fetchRequest()) }
+        )
+    }
+
+    private var store: (any ReactionStore)!
+    private var holdMessage: ((String) throws -> Void)!
+    private var messageCount: (() throws -> Int)!
     private let day: Int64 = 24 * 60 * 60 * 1000
 
     private let target = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
@@ -25,13 +52,13 @@ final class ReactionStoreTests: XCTestCase {
 
     override func setUp() {
         super.setUp()
-        container = PersistenceController(inMemory: true).container
-        store = CoreDataReactionStore(container: container)
+        (store, holdMessage, messageCount) = makeStore()
     }
 
     override func tearDown() {
         store = nil
-        container = nil
+        holdMessage = nil
+        messageCount = nil
         super.tearDown()
     }
 
@@ -61,15 +88,7 @@ final class ReactionStoreTests: XCTestCase {
     }
 
     private func insertTargetMessage(id: String? = nil) {
-        let msg = Message(context: context)
-        msg.id = id ?? target
-        msg.fromUserId = reactor
-        msg.toUserId = "00000000-0000-4000-8000-000000000000"
-        msg.timestamp = Date(timeIntervalSince1970: TimeInterval(t0) / 1000)
-        msg.isSentByMe = false
-        msg.encryptedContent = Data()
-        msg.retryCount = 0
-        try? context.save()
+        XCTAssertNoThrow(try holdMessage(id ?? target))
     }
 
     func testAddCreatesRow_NotAMessage() {
@@ -80,8 +99,7 @@ final class ReactionStoreTests: XCTestCase {
         XCTAssertEqual(row?.targetMessageId, target)
         XCTAssertEqual(row?.reactorUserId, reactor)
 
-        let messages = (try? context.fetch(Message.fetchRequest())) ?? []
-        XCTAssertTrue(messages.isEmpty, "a reaction must never become a transcript row")
+        XCTAssertEqual(try messageCount(), 0, "a reaction must never become a transcript row")
     }
 
     func testNewerAddReplacesEmoji() {
@@ -112,8 +130,7 @@ final class ReactionStoreTests: XCTestCase {
     func testOrphanIsStoredWhenTargetMissing() {
         apply(emoji: "😮", action: 1, ts: t0)
         XCTAssertNotNil(stored(), "a reaction that beat its message must still land")
-        let messages = (try? context.fetch(Message.fetchRequest())) ?? []
-        XCTAssertTrue(messages.isEmpty)
+        XCTAssertEqual(try messageCount(), 0)
     }
 
     /// Mutation: `>=` for `<=` on `receivedAt` in `expireOrphans` — the six-day orphan goes and
@@ -195,5 +212,31 @@ final class ReactionStoreTests: XCTestCase {
             store: store
         )
         XCTAssertNil(stored())
+    }
+}
+
+/// The same cases on the crate. A target is held through the repositories the app will use, which
+/// lowercase a message id on the way in.
+final class LocalStoreReactionStoreTests: ReactionStoreTests {
+    override func makeStore() -> (
+        reactions: any ReactionStore, holdMessage: (String) throws -> Void, messageCount: () throws -> Int
+    ) {
+        let session = LocalStoreSession.inMemoryForTesting()
+        let peer = "11111111-2222-4333-8444-555555555555"
+        return (
+            LocalStoreReactionStore(session: session),
+            { id in
+                try LocalStoreContactStore(session: session).insert(.new(id: peer, isContact: true, addedAt: nil))
+                let chat = try LocalStoreChatStore(session: session).openChat(withPeer: peer).chat
+                try LocalStoreMessageStore(session: session).insert(MessageRecord(
+                    id: id, chatId: chat.id, fromUserId: peer, toUserId: "me", isSentByMe: false,
+                    timestamp: Date(timeIntervalSince1970: 1_700_000_000), orderKey: "k-\(id)", body: Data(),
+                    contentType: .regular, deliveryStatus: .delivered, retryCount: 0, suiteId: 4,
+                    isEdited: false, editedAt: nil, replyToMessageId: nil, replyQuote: nil,
+                    transcript: nil, transcriptLanguage: nil, transcriptGeneratedAt: nil
+                ), searchText: nil)
+            },
+            { Int(try session.store.messageCount()) }
+        )
     }
 }
