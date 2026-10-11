@@ -70,6 +70,13 @@ enum ContactName {
         return DisplayNameGenerator.generate(from: id)
     }
 
+    /// A username as typed into a search: `@alias` and `alias` are the same handle.
+    static func handle(_ typed: String) -> String {
+        var handle = typed.trimmingCharacters(in: .whitespacesAndNewlines)
+        while handle.hasPrefix("@") { handle.removeFirst() }
+        return handle
+    }
+
     /// The names a server-provided username leaves a person with — the rule
     /// `User.applyServerUsername` documents, as values, so a write through `ContactStore.setNames`
     /// follows it too.

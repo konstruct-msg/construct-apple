@@ -78,8 +78,7 @@ final class ChatsLive {
     /// preview. Shared by the iOS and the Desktop lists, which each kept a copy.
     static func matches(_ chat: ChatRecord, query: String) -> Bool {
         let contact = ContactsLive.shared.contact(chat.peerId)
-        return (contact?.resolvedDisplayName ?? "").localizedCaseInsensitiveContains(query)
-            || (contact?.username ?? "").localizedCaseInsensitiveContains(query)
+        return contact?.matches(query: query) == true
             || (chat.lastMessageText ?? "").localizedCaseInsensitiveContains(query)
     }
 

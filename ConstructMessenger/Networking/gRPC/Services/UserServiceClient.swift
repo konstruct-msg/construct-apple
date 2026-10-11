@@ -133,7 +133,7 @@ final class UserServiceClient: Sendable {
                 let client = Shared_Proto_Services_V1_UserService.Client(wrapping: grpcClient)
 
                 var request = Shared_Proto_Services_V1_FindUserRequest()
-                request.username = username.trimmingCharacters(in: .whitespaces).lowercased()
+                request.username = ContactName.handle(username).lowercased()
 
                 let response = try await client.findUser(request: .init(message: request))
                 return response.userID
