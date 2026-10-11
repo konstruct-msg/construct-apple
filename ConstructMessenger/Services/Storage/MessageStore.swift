@@ -60,6 +60,11 @@ protocol MessageStore: Sendable {
     /// held, `nil` for the newest page — oldest first.
     func messages(inChat chatId: String, before: (orderKey: String, id: String)?, limit: Int) throws -> [MessageRecord]
 
+    /// Every message in transcript order after `after` — `(orderKey, id)` of the last one read,
+    /// `nil` to start — up to `limit`: a history export reads them page by page
+    /// (`all_messages_after`).
+    func allMessages(after: (orderKey: String, id: String)?, limit: Int) throws -> [MessageRecord]
+
     /// The ids of messages written or deleted, once per save.
     func changes() -> AsyncStream<Set<String>>
 
@@ -68,6 +73,10 @@ protocol MessageStore: Sendable {
     /// Adds the message unless one with its id is there; true when added. The chat must exist.
     /// `searchText` — what the message says, for the full-text index; `nil` for media and control.
     @discardableResult func insert(_ message: MessageRecord, searchText: String?) throws -> Bool
+
+    /// `insert` for each, in one write: a history import lands thousands at once. Returns the
+    /// ids added; one already held is kept.
+    @discardableResult func insert(_ messages: [(message: MessageRecord, searchText: String?)]) throws -> Set<String>
 
     /// An edit: the body replaced, the message marked edited at `editedAt`.
     @discardableResult func edit(_ id: String, body: Data, searchText: String?, editedAt: Date) throws -> Bool
@@ -138,42 +147,79 @@ final class CoreDataMessageStore: MessageStore, @unchecked Sendable {
 
     // MARK: Writes
 
+    func allMessages(after: (orderKey: String, id: String)?, limit: Int) throws -> [MessageRecord] {
+        try run { context in
+            let req = Message.fetchRequest()
+            if let after {
+                // A nil key never answers: `PersistenceController` fills them at launch.
+                req.predicate = NSPredicate(
+                    format: "serverOrderKey > %@ OR (serverOrderKey == %@ AND id > %@)",
+                    after.orderKey, after.orderKey, after.id
+                )
+            }
+            req.sortDescriptors = [
+                NSSortDescriptor(key: "serverOrderKey", ascending: true),
+                NSSortDescriptor(key: "id", ascending: true),
+            ]
+            req.fetchLimit = limit
+            return try context.fetch(req).compactMap(MessageRecord.init(row:))
+        }
+    }
+
     func insert(_ message: MessageRecord, searchText: String?) throws -> Bool {
         try run { context in
-            if try Self.row(message.id, in: context) != nil { return false }
-            let chats = Chat.fetchRequest()
-            chats.predicate = NSPredicate(format: "id == %@", message.chatId)
-            chats.fetchLimit = 1
-            guard let chat = try context.fetch(chats).first else {
-                throw MessageStoreError.noChat(chatId: message.chatId)
-            }
-            let row = Message(context: context)
-            row.id = message.id
-            row.chat = chat
-            row.fromUserId = message.fromUserId
-            row.toUserId = message.toUserId
-            row.isSentByMe = message.isSentByMe
-            row.timestamp = message.timestamp
-            row.serverOrderKey = message.orderKey
-            row.contentType = message.contentType
-            row.deliveryStatusRaw = message.deliveryStatus.rawValue
-            row.retryCount = message.retryCount
-            row.suiteId = message.suiteId
-            row.isEdited = message.isEdited
-            row.editedAt = message.editedAt
-            row.replyToMessageId = message.replyToMessageId
-            // The body first: it makes the row's key, which the quote and transcript are sealed
-            // under. `applyStoredEncryption` may stamp a content type it infers from the body;
-            // the record's own type is set again after it.
-            row.applyStoredEncryption(plaintextData: message.body, contactId: message.peerId)
-            if message.contentType != .regular { row.contentType = message.contentType }
-            row.replyQuote = message.replyQuote
-            row.transcript = message.transcript
-            row.transcriptLanguage = message.transcriptLanguage
-            row.transcriptGeneratedAt = message.transcriptGeneratedAt
+            guard try Self.insertRow(message, in: context) else { return false }
             try context.saveOrThrow(category: "Messages")
             return true
         }
+    }
+
+    func insert(_ messages: [(message: MessageRecord, searchText: String?)]) throws -> Set<String> {
+        guard !messages.isEmpty else { return [] }
+        return try run { context in
+            var added = Set<String>()
+            for (message, _) in messages where try Self.insertRow(message, in: context) {
+                added.insert(message.id)
+            }
+            if !added.isEmpty { try context.saveOrThrow(category: "Messages") }
+            return added
+        }
+    }
+
+    /// The row for `message` in `context`, unsaved; false when one with its id is there.
+    private static func insertRow(_ message: MessageRecord, in context: NSManagedObjectContext) throws -> Bool {
+        if try Self.row(message.id, in: context) != nil { return false }
+        let chats = Chat.fetchRequest()
+        chats.predicate = NSPredicate(format: "id == %@", message.chatId)
+        chats.fetchLimit = 1
+        guard let chat = try context.fetch(chats).first else {
+            throw MessageStoreError.noChat(chatId: message.chatId)
+        }
+        let row = Message(context: context)
+        row.id = message.id
+        row.chat = chat
+        row.fromUserId = message.fromUserId
+        row.toUserId = message.toUserId
+        row.isSentByMe = message.isSentByMe
+        row.timestamp = message.timestamp
+        row.serverOrderKey = message.orderKey
+        row.contentType = message.contentType
+        row.deliveryStatusRaw = message.deliveryStatus.rawValue
+        row.retryCount = message.retryCount
+        row.suiteId = message.suiteId
+        row.isEdited = message.isEdited
+        row.editedAt = message.editedAt
+        row.replyToMessageId = message.replyToMessageId
+        // The body first: it makes the row's key, which the quote and transcript are sealed
+        // under. `applyStoredEncryption` may stamp a content type it infers from the body;
+        // the record's own type is set again after it.
+        row.applyStoredEncryption(plaintextData: message.body, contactId: message.peerId)
+        if message.contentType != .regular { row.contentType = message.contentType }
+        row.replyQuote = message.replyQuote
+        row.transcript = message.transcript
+        row.transcriptLanguage = message.transcriptLanguage
+        row.transcriptGeneratedAt = message.transcriptGeneratedAt
+        return true
     }
 
     func edit(_ id: String, body: Data, searchText: String?, editedAt: Date) throws -> Bool {

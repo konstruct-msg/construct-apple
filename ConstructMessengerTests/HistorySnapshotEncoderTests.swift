@@ -48,13 +48,21 @@ final class HistorySnapshotEncoderTests: XCTestCase {
         super.setUp()
         container = PersistenceController(inMemory: true).container
         LocalRepositories.usePeerDevicesForTesting(CoreDataPeerDeviceStore(container: container))
-        LocalRepositories.useContactsForTesting(container)
+        useRepositories(container)
         MessageDisplayCache.shared.evictAll()
     }
 
+    /// Every repository the encoder reads and the importer writes, over one device's store.
+    private func useRepositories(_ container: NSPersistentContainer?) {
+        LocalRepositories.usePeerDevicesForTesting(container.map { CoreDataPeerDeviceStore(container: $0) })
+        LocalRepositories.useContactsForTesting(container)
+        LocalRepositories.useChatsForTesting(container)
+        LocalRepositories.useMessagesForTesting(container)
+        LocalRepositories.useReactionsForTesting(container)
+    }
+
     override func tearDown() {
-        LocalRepositories.usePeerDevicesForTesting(nil)
-        LocalRepositories.useContactsForTesting(nil)
+        useRepositories(nil)
         MessageDisplayCache.shared.evictAll()
         container = nil
         super.tearDown()
@@ -67,8 +75,8 @@ final class HistorySnapshotEncoderTests: XCTestCase {
         let encoder = HistorySnapshotEncoder(identity: identity)
         let records = try await collect(encoder.encodeTranscript(context: context)).records
         let messages = records.compactMap { rec -> Construct_Client_History_V1_HistoryMessage? in
-            if case .message(let m) = rec { return m }
-            return nil
+            guard case .transcript(HistoryRecordType.message, let proto) = rec else { return nil }
+            return try? Construct_Client_History_V1_HistoryMessage(serializedBytes: proto)
         }
         XCTAssertEqual(messages.count, 2, "normal + legacy text; the other three are skipped")
         XCTAssertEqual(encoder.counters.messageControlSkipped, 1)
@@ -147,10 +155,9 @@ final class HistorySnapshotEncoderTests: XCTestCase {
 
         let storeB = PersistenceController(inMemory: true).container
         let contextB = storeB.viewContext
-        // Device B's own peer-device table, or B would re-encode A's hints and prove nothing.
-        LocalRepositories.usePeerDevicesForTesting(CoreDataPeerDeviceStore(container: storeB))
-        LocalRepositories.useContactsForTesting(storeB)
-        _ = try HistorySnapshotImporter().importRecords(fromA.records, expectedUserId: local, in: contextB)
+        // Device B's own tables, or B would re-encode A's rows and prove nothing.
+        useRepositories(storeB)
+        _ = try HistorySnapshotImporter(expectedUserId: local, context: contextB).importRecords(fromA.records)
 
         let encoderB = HistorySnapshotEncoder(identity: identity)
         let fromB = try await collect(encoderB.encodeAll(context: contextB))
@@ -346,18 +353,28 @@ final class HistorySnapshotEncoderTests: XCTestCase {
             switch rec {
             case .manifest:
                 break
-            case .contact(let c):
-                map["c:\(HistoryAccountID.dashed(c.userID) ?? "")"] = try c.serializedData()
-            case .chat(let c):
-                map["h:\(HistoryAccountID.dashed(c.otherUserID) ?? "")"] = try c.serializedData()
-            case .message(let m):
-                map["m:\(m.id)"] = try m.serializedData()
-            case .reaction(let r):
-                map["r:\(r.targetMessageID):\(HistoryAccountID.dashed(r.reactorUserID) ?? "")"] = try r.serializedData()
-            case .peerDevice(let p):
-                map["p:\(p.deviceID)"] = try p.serializedData()
-            case .call(let c):
-                map["k:\(c.id)"] = try c.serializedData()
+            case .transcript(let type, let proto):
+                let key: String
+                switch type {
+                case HistoryRecordType.contact:
+                    let c = try Construct_Client_History_V1_HistoryContact(serializedBytes: proto)
+                    key = "c:\(HistoryAccountID.dashed(c.userID) ?? "")"
+                case HistoryRecordType.chat:
+                    let c = try Construct_Client_History_V1_HistoryChat(serializedBytes: proto)
+                    key = "h:\(HistoryAccountID.dashed(c.otherUserID) ?? "")"
+                case HistoryRecordType.message:
+                    key = "m:\(try Construct_Client_History_V1_HistoryMessage(serializedBytes: proto).id)"
+                case HistoryRecordType.reaction:
+                    let r = try Construct_Client_History_V1_HistoryReaction(serializedBytes: proto)
+                    key = "r:\(r.targetMessageID):\(HistoryAccountID.dashed(r.reactorUserID) ?? "")"
+                case HistoryRecordType.peer:
+                    key = "p:\(try Construct_Client_History_V1_HistoryPeerDevice(serializedBytes: proto).deviceID)"
+                case HistoryRecordType.call:
+                    key = "k:\(try Construct_Client_History_V1_HistoryCall(serializedBytes: proto).id)"
+                default:
+                    key = "t:\(type)"
+                }
+                map[key] = proto
             case .skipped(let type):
                 map["s:\(type)"] = Data()
             }

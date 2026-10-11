@@ -94,9 +94,9 @@ final class TranscriptOrderIsTotalTests: XCTestCase {
 
         // Since messages B1 (2026-10-09) the app's own rows are written through `MessageStore`, whose
         // `MessageRecord.orderKey` is not optional — the type carries this invariant there. The
-        // managed-object sites left are the store's own insert, the history import and the
-        // previews; the walk must still find them.
-        XCTAssertGreaterThanOrEqual(sitesChecked, 3, "found no row creation sites — the walk itself is broken")
+        // managed-object sites left are the store's own insert and the previews (the history
+        // import went through the store on 2026-10-10); the walk must still find them.
+        XCTAssertGreaterThanOrEqual(sitesChecked, 2, "found no row creation sites — the walk itself is broken")
         XCTAssertTrue(
             offenders.isEmpty,
             "a Message row is created without an order key at: \(offenders.joined(separator: ", ")). "
