@@ -76,3 +76,25 @@ final class CoreDataServerMessageIdStore: ServerMessageIdStore, @unchecked Senda
         return try context.performAndWait { try body(context) }
     }
 }
+
+/// The crate's `server_message_ids`, which lowercases both sides itself. Off until step 4.
+final class LocalStoreServerMessageIdStore: ServerMessageIdStore, @unchecked Sendable {
+
+    private let store: LocalStore
+
+    init(session: LocalStoreSession) {
+        self.store = session.store
+    }
+
+    func record(serverId: String, localId: String, at date: Date) throws {
+        try store.recordServerMessageId(serverId: serverId, localId: localId, recordedAt: date.unixMs)
+    }
+
+    func localId(forServerId serverId: String) throws -> String? {
+        try store.localMessageId(serverId: serverId)
+    }
+
+    func forget(recordedBefore date: Date) throws -> Int {
+        Int(try store.forgetServerMessageIdsBefore(cutoff: date.unixMs))
+    }
+}

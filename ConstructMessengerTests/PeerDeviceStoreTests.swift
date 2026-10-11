@@ -2,18 +2,18 @@
 //  PeerDeviceStoreTests.swift
 //  ConstructMessengerTests
 //
-//  What any `PeerDeviceStore` must do. Written against the protocol, run against Core Data today;
-//  the `LocalStore` implementation (LOCAL_STORE_MIGRATION_PLAN step 3) runs the same cases, which
-//  is how the two are held to one behaviour rather than to two descriptions of it. The crate's own
+//  What any `PeerDeviceStore` must do. Written against the protocol and run on both
+//  implementations — Core Data here, `LocalStore` in the subclass below (LOCAL_STORE_MIGRATION_PLAN
+//  step 3) — which is how the two are held to one behaviour rather than to two descriptions of it. The crate's own
 //  statement of the same rules is `construct-core/store/tests/store_test.rs`.
 //
 
 import XCTest
 @testable import Construct_Messenger
 
-final class PeerDeviceStoreTests: XCTestCase {
+class PeerDeviceStoreTests: XCTestCase {
 
-    private func makeStore() -> any PeerDeviceStore {
+    func makeStore() -> any PeerDeviceStore {
         CoreDataPeerDeviceStore(container: PersistenceController(inMemory: true).container)
     }
 
@@ -72,5 +72,12 @@ final class PeerDeviceStoreTests: XCTestCase {
         _ = try store.record([device("d1", "alice")])
         let off = try await Task.detached { try store.devices(ofAccount: "alice").map(\.deviceId) }.value
         XCTAssertEqual(off, ["d1"])
+    }
+}
+
+/// The same cases on the crate.
+final class LocalStorePeerDeviceStoreTests: PeerDeviceStoreTests {
+    override func makeStore() -> any PeerDeviceStore {
+        LocalStorePeerDeviceStore(session: .inMemoryForTesting())
     }
 }
