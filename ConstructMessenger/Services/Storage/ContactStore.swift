@@ -145,6 +145,16 @@ protocol ContactStore: Sendable {
     @discardableResult func setAvatar(
         _ id: String, _ avatar: Data?, pendingRef: Data?, pendingSince: Date?
     ) throws -> Bool
+    /// An avatar announced, to download; the one shown stays until the download replaces it.
+    @discardableResult func setPendingAvatar(_ id: String, ref: Data, since: Date) throws -> Bool
+    /// The avatar alone; one announced and still waiting keeps waiting.
+    @discardableResult func setAvatarKeepingPending(_ id: String, _ avatar: Data?) throws -> Bool
+    /// The download of `expected` finished: it becomes the avatar and the wait ends — only while
+    /// `expected` is still the one waiting, checked in the same write. False when a newer profile
+    /// announced another meanwhile (nothing is changed), or there is no such row.
+    @discardableResult func completePendingAvatar(_ id: String, expected: Data, avatar: Data) throws -> Bool
+    /// The wait for `expected` ends without it, the avatar shown stays; the same condition.
+    @discardableResult func dropPendingAvatar(_ id: String, expected: Data) throws -> Bool
 
     /// The row, its chat and the chat's messages; false when there is no such row.
     @discardableResult func delete(_ id: String) throws -> Bool
@@ -266,6 +276,26 @@ final class CoreDataContactStore: ContactStore, OwnProfileStore, @unchecked Send
         }
     }
 
+    func setPendingAvatar(_ id: String, ref: Data, since: Date) throws -> Bool {
+        try update(id) { $0.pendingAvatarRef = ref; $0.pendingAvatarSince = since }
+    }
+    func setAvatarKeepingPending(_ id: String, _ avatar: Data?) throws -> Bool {
+        try update(id) { $0.avatarData = avatar }
+    }
+    func completePendingAvatar(_ id: String, expected: Data, avatar: Data) throws -> Bool {
+        try update(id, if: { $0.pendingAvatarRef == expected }) {
+            $0.avatarData = avatar
+            $0.pendingAvatarRef = nil
+            $0.pendingAvatarSince = nil
+        }
+    }
+    func dropPendingAvatar(_ id: String, expected: Data) throws -> Bool {
+        try update(id, if: { $0.pendingAvatarRef == expected }) {
+            $0.pendingAvatarRef = nil
+            $0.pendingAvatarSince = nil
+        }
+    }
+
     func delete(_ id: String) throws -> Bool {
         try run { context in
             let req = User.fetchRequest()
@@ -279,13 +309,18 @@ final class CoreDataContactStore: ContactStore, OwnProfileStore, @unchecked Send
         }
     }
 
-    /// The fields named in `change` and nothing else; saved only when something did change.
-    private func update(_ id: String, _ change: (User) -> Void) throws -> Bool {
+    /// The fields named in `change` and nothing else, when `condition` holds for the row as
+    /// fetched in the same context; saved only when something did change. A save that another
+    /// context's write beat to the row fails on the context's merge policy (`NSErrorMergePolicy`)
+    /// rather than writing over it, so the check and the write cannot be split by another writer.
+    private func update(
+        _ id: String, if condition: (User) -> Bool = { _ in true }, _ change: (User) -> Void
+    ) throws -> Bool {
         try run { context in
             let req = User.fetchRequest()
             req.predicate = NSPredicate(format: "id == %@", id)
             req.fetchLimit = 1
-            guard let user = try context.fetch(req).first else { return false }
+            guard let user = try context.fetch(req).first, condition(user) else { return false }
             change(user)
             if context.hasChanges { try context.saveOrThrow(category: "Contacts") }
             return true
@@ -559,6 +594,19 @@ final class LocalStoreContactStore: ContactStore, OwnProfileStore, @unchecked Se
         try store.setContactAvatar(
             id: id, avatar: avatar, pendingRef: pendingRef, pendingSince: pendingSince?.unixMs
         )
+    }
+
+    func setPendingAvatar(_ id: String, ref: Data, since: Date) throws -> Bool {
+        try store.setPendingAvatar(id: id, pendingRef: ref, since: since.unixMs)
+    }
+    func setAvatarKeepingPending(_ id: String, _ avatar: Data?) throws -> Bool {
+        try store.setContactAvatarKeepingPending(id: id, avatar: avatar)
+    }
+    func completePendingAvatar(_ id: String, expected: Data, avatar: Data) throws -> Bool {
+        try store.completePendingAvatar(id: id, expectedRef: expected, avatar: avatar)
+    }
+    func dropPendingAvatar(_ id: String, expected: Data) throws -> Bool {
+        try store.dropPendingAvatar(id: id, expectedRef: expected)
     }
 
     func delete(_ id: String) throws -> Bool {
