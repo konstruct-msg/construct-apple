@@ -2,6 +2,12 @@
 // Trust me, you don't want to mess with it!
 
 // swiftlint:disable all
+/**
+ * History records ↔ local store rows (`construct-docs/decisions/history-projection-in-the-core.md`).
+ * Import merges into what the receiver holds: names and avatar only fill in, sharing flags only
+ * rise, a block is never lifted, our own message lands sent, an imported message takes a local
+ * order key. Times are ms.
+ */
 import Foundation
 
 // Depending on the consumer's build setup, the low-level FFI code
@@ -5198,6 +5204,62 @@ public func FfiConverterTypeFirstFlightOpened_lower(_ value: FirstFlightOpened) 
 
 
 /**
+ * What a chat record asks of the receiver's chat with `peer_id`: that it exist, pinned if `pin`
+ * (never unpinned), its unread count cleared.
+ */
+public struct HistoryChatImport: Equatable, Hashable {
+    public var peerId: String
+    public var pin: Bool
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(peerId: String, pin: Bool) {
+        self.peerId = peerId
+        self.pin = pin
+    }
+
+    
+}
+
+#if compiler(>=6)
+extension HistoryChatImport: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeHistoryChatImport: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> HistoryChatImport {
+        return
+            try HistoryChatImport(
+                peerId: FfiConverterString.read(from: &buf), 
+                pin: FfiConverterBool.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: HistoryChatImport, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.peerId, into: &buf)
+        FfiConverterBool.write(value.pin, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeHistoryChatImport_lift(_ buf: RustBuffer) throws -> HistoryChatImport {
+    return try FfiConverterTypeHistoryChatImport.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeHistoryChatImport_lower(_ value: HistoryChatImport) -> RustBuffer {
+    return FfiConverterTypeHistoryChatImport.lower(value)
+}
+
+
+/**
  * The keys the directory holds for the device a frame names. Checked against the frame's own,
  * and the signature is verified with these.
  */
@@ -5250,6 +5312,61 @@ public func FfiConverterTypeHistoryKnownKeys_lift(_ buf: RustBuffer) throws -> H
 #endif
 public func FfiConverterTypeHistoryKnownKeys_lower(_ value: HistoryKnownKeys) -> RustBuffer {
     return FfiConverterTypeHistoryKnownKeys.lower(value)
+}
+
+
+/**
+ * A media file a body refers to.
+ */
+public struct HistoryMediaRef: Equatable, Hashable {
+    public var id: String
+    public var mime: String
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(id: String, mime: String) {
+        self.id = id
+        self.mime = mime
+    }
+
+    
+}
+
+#if compiler(>=6)
+extension HistoryMediaRef: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeHistoryMediaRef: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> HistoryMediaRef {
+        return
+            try HistoryMediaRef(
+                id: FfiConverterString.read(from: &buf), 
+                mime: FfiConverterString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: HistoryMediaRef, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.id, into: &buf)
+        FfiConverterString.write(value.mime, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeHistoryMediaRef_lift(_ buf: RustBuffer) throws -> HistoryMediaRef {
+    return try FfiConverterTypeHistoryMediaRef.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeHistoryMediaRef_lower(_ value: HistoryMediaRef) -> RustBuffer {
+    return FfiConverterTypeHistoryMediaRef.lower(value)
 }
 
 
@@ -9712,6 +9829,177 @@ public func FfiConverterTypeHistoryEvent_lower(_ value: HistoryEvent) -> RustBuf
 
 // Note that we don't yet support `indirect` for enums.
 // See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+
+public enum HistoryMessageExport: Equatable, Hashable {
+    
+    /**
+     * The record, and the media files its body refers to.
+     */
+    case record(record: Data, media: [HistoryMediaRef]
+    )
+    /**
+     * A control row: not transcript.
+     */
+    case control
+    /**
+     * No body: a message this device never read.
+     */
+    case empty
+    /**
+     * A body from before CTM1: the client that wrote it converts it.
+     */
+    case legacy
+
+
+
+}
+
+#if compiler(>=6)
+extension HistoryMessageExport: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeHistoryMessageExport: FfiConverterRustBuffer {
+    typealias SwiftType = HistoryMessageExport
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> HistoryMessageExport {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .record(record: try FfiConverterData.read(from: &buf), media: try FfiConverterSequenceTypeHistoryMediaRef.read(from: &buf)
+        )
+        
+        case 2: return .control
+        
+        case 3: return .empty
+        
+        case 4: return .legacy
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: HistoryMessageExport, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case let .record(record,media):
+            writeInt(&buf, Int32(1))
+            FfiConverterData.write(record, into: &buf)
+            FfiConverterSequenceTypeHistoryMediaRef.write(media, into: &buf)
+            
+        
+        case .control:
+            writeInt(&buf, Int32(2))
+        
+        
+        case .empty:
+            writeInt(&buf, Int32(3))
+        
+        
+        case .legacy:
+            writeInt(&buf, Int32(4))
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeHistoryMessageExport_lift(_ buf: RustBuffer) throws -> HistoryMessageExport {
+    return try FfiConverterTypeHistoryMessageExport.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeHistoryMessageExport_lower(_ value: HistoryMessageExport) -> RustBuffer {
+    return FfiConverterTypeHistoryMessageExport.lower(value)
+}
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+
+public enum HistoryMessageImport: Equatable, Hashable {
+    
+    /**
+     * The row to insert into the chat with `peer_id`; its `chat_id` is empty — open that chat
+     * and set it. A message already held is kept: the insert does not overwrite.
+     */
+    case row(peerId: String, message: LocalMessage
+    )
+    /**
+     * A body this version does not know: skip the record.
+     */
+    case unknownBody
+
+
+
+}
+
+#if compiler(>=6)
+extension HistoryMessageImport: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeHistoryMessageImport: FfiConverterRustBuffer {
+    typealias SwiftType = HistoryMessageImport
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> HistoryMessageImport {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .row(peerId: try FfiConverterString.read(from: &buf), message: try FfiConverterTypeLocalMessage.read(from: &buf)
+        )
+        
+        case 2: return .unknownBody
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: HistoryMessageImport, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case let .row(peerId,message):
+            writeInt(&buf, Int32(1))
+            FfiConverterString.write(peerId, into: &buf)
+            FfiConverterTypeLocalMessage.write(message, into: &buf)
+            
+        
+        case .unknownBody:
+            writeInt(&buf, Int32(2))
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeHistoryMessageImport_lift(_ buf: RustBuffer) throws -> HistoryMessageImport {
+    return try FfiConverterTypeHistoryMessageImport.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeHistoryMessageImport_lower(_ value: HistoryMessageImport) -> RustBuffer {
+    return FfiConverterTypeHistoryMessageImport.lower(value)
+}
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
 /**
  * What the link QR pinned for the other device.
  */
@@ -11950,6 +12238,31 @@ fileprivate struct FfiConverterSequenceTypeDeliveryTarget: FfiConverterRustBuffe
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterSequenceTypeHistoryMediaRef: FfiConverterRustBuffer {
+    typealias SwiftType = [HistoryMediaRef]
+
+    public static func write(_ value: [HistoryMediaRef], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeHistoryMediaRef.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [HistoryMediaRef] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [HistoryMediaRef]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeHistoryMediaRef.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterSequenceTypeHistoryRecordOut: FfiConverterRustBuffer {
     typealias SwiftType = [HistoryRecordOut]
 
@@ -12531,6 +12844,115 @@ public func historyDiscoveryTag(userIdDashed: String, deviceIdHex: String) -> St
     uniffi_construct_core_fn_func_history_discovery_tag(
         FfiConverterString.lower(userIdDashed),
         FfiConverterString.lower(deviceIdHex),$0
+    )
+})
+}
+public func historyExportCall(call: LocalCall) -> Data  {
+    return try!  FfiConverterData.lift(try! rustCall() {
+    uniffi_construct_core_fn_func_history_export_call(
+        FfiConverterTypeLocalCall_lower(call),$0
+    )
+})
+}
+public func historyExportChat(peerId: String, isPinned: Bool) -> Data  {
+    return try!  FfiConverterData.lift(try! rustCall() {
+    uniffi_construct_core_fn_func_history_export_chat(
+        FfiConverterString.lower(peerId),
+        FfiConverterBool.lower(isPinned),$0
+    )
+})
+}
+public func historyExportContact(contact: LocalContact) -> Data  {
+    return try!  FfiConverterData.lift(try! rustCall() {
+    uniffi_construct_core_fn_func_history_export_contact(
+        FfiConverterTypeLocalContact_lower(contact),$0
+    )
+})
+}
+/**
+ * `chat_peer_id` names the received side of an older row whose stored id is not an account.
+ */
+public func historyExportMessage(message: LocalMessage, ownAccountId: String, chatPeerId: String?) -> HistoryMessageExport  {
+    return try!  FfiConverterTypeHistoryMessageExport_lift(try! rustCall() {
+    uniffi_construct_core_fn_func_history_export_message(
+        FfiConverterTypeLocalMessage_lower(message),
+        FfiConverterString.lower(ownAccountId),
+        FfiConverterOptionString.lower(chatPeerId),$0
+    )
+})
+}
+public func historyExportPeerDevice(device: LocalPeerDevice) -> Data  {
+    return try!  FfiConverterData.lift(try! rustCall() {
+    uniffi_construct_core_fn_func_history_export_peer_device(
+        FfiConverterTypeLocalPeerDevice_lower(device),$0
+    )
+})
+}
+public func historyExportReaction(reaction: LocalReaction) -> Data  {
+    return try!  FfiConverterData.lift(try! rustCall() {
+    uniffi_construct_core_fn_func_history_export_reaction(
+        FfiConverterTypeLocalReaction_lower(reaction),$0
+    )
+})
+}
+/**
+ * `peer_name`: the receiver's name for the peer; the record carries none.
+ */
+public func historyImportCall(record: Data, peerName: String, nowMs: Int64)throws  -> LocalCall  {
+    return try  FfiConverterTypeLocalCall_lift(try rustCallWithError(FfiConverterTypeHistoryError_lift) {
+    uniffi_construct_core_fn_func_history_import_call(
+        FfiConverterData.lower(record),
+        FfiConverterString.lower(peerName),
+        FfiConverterInt64.lower(nowMs),$0
+    )
+})
+}
+public func historyImportChat(record: Data)throws  -> HistoryChatImport  {
+    return try  FfiConverterTypeHistoryChatImport_lift(try rustCallWithError(FfiConverterTypeHistoryError_lift) {
+    uniffi_construct_core_fn_func_history_import_chat(
+        FfiConverterData.lower(record),$0
+    )
+})
+}
+/**
+ * Pass a display name the client generated itself as empty.
+ */
+public func historyImportContact(record: Data, existing: LocalContact?, nowMs: Int64)throws  -> LocalContact  {
+    return try  FfiConverterTypeLocalContact_lift(try rustCallWithError(FfiConverterTypeHistoryError_lift) {
+    uniffi_construct_core_fn_func_history_import_contact(
+        FfiConverterData.lower(record),
+        FfiConverterOptionTypeLocalContact.lower(existing),
+        FfiConverterInt64.lower(nowMs),$0
+    )
+})
+}
+public func historyImportMessage(record: Data, ownAccountId: String)throws  -> HistoryMessageImport  {
+    return try  FfiConverterTypeHistoryMessageImport_lift(try rustCallWithError(FfiConverterTypeHistoryError_lift) {
+    uniffi_construct_core_fn_func_history_import_message(
+        FfiConverterData.lower(record),
+        FfiConverterString.lower(ownAccountId),$0
+    )
+})
+}
+/**
+ * Null when the device id is not the one its key derives.
+ */
+public func historyImportPeerDevice(record: Data, nowMs: Int64)throws  -> LocalPeerDevice?  {
+    return try  FfiConverterOptionTypeLocalPeerDevice.lift(try rustCallWithError(FfiConverterTypeHistoryError_lift) {
+    uniffi_construct_core_fn_func_history_import_peer_device(
+        FfiConverterData.lower(record),
+        FfiConverterInt64.lower(nowMs),$0
+    )
+})
+}
+/**
+ * Keep out one whose message is not held, and one the reactor already has on it.
+ */
+public func historyImportReaction(record: Data, receivedAtMs: Int64)throws  -> LocalReaction  {
+    return try  FfiConverterTypeLocalReaction_lift(try rustCallWithError(FfiConverterTypeHistoryError_lift) {
+    uniffi_construct_core_fn_func_history_import_reaction(
+        FfiConverterData.lower(record),
+        FfiConverterInt64.lower(receivedAtMs),$0
     )
 })
 }
@@ -13140,6 +13562,42 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_func_history_discovery_tag() != 23862) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_func_history_export_call() != 65400) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_func_history_export_chat() != 2620) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_func_history_export_contact() != 2852) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_func_history_export_message() != 38436) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_func_history_export_peer_device() != 36469) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_func_history_export_reaction() != 58276) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_func_history_import_call() != 43811) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_func_history_import_chat() != 39910) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_func_history_import_contact() != 39002) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_func_history_import_message() != 43846) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_func_history_import_peer_device() != 43819) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_func_history_import_reaction() != 55772) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_func_history_max_blob_bytes() != 49495) {

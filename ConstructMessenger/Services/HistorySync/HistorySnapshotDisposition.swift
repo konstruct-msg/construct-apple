@@ -2,17 +2,13 @@
 //  HistorySnapshotDisposition.swift
 //  Construct Messenger
 //
-//  The importer's own policy: how a received record meets rows already in the store. The
-//  protocol's rules — record order, phases, the manifest, discovery, the QR fingerprint — are the
-//  core's (`construct-core/src/history/`) since 2026-09-29, and are not repeated here.
+//  What is left on this side of the history projection: the id and participant rules the export
+//  of a pre-CTM1 row needs. How a record meets the rows already held is the core's
+//  (`history_import_*`, decisions/history-projection-in-the-core.md), as the protocol's rules
+//  have been since 2026-09-29.
 //
 
 import Foundation
-
-enum HistoryConflictPolicy: Equatable {
-    case keepExisting
-    case insert
-}
 
 /// A record the store cannot take: an id missing, a body that does not map. The stream itself was
 /// judged by the core; these are this app's reasons.
@@ -22,26 +18,6 @@ enum HistorySnapshotError: Error, Equatable {
 }
 
 enum HistorySnapshotDisposition {
-    static func messageConflict(existing: Bool) -> HistoryConflictPolicy {
-        existing ? .keepExisting : .insert
-    }
-
-    /// Upsert key is the peer's account id. Chat.id is minted per device.
-    static func chatUpsertKey(otherUserId: Data) -> Data {
-        otherUserId
-    }
-
-    /// Share flags only go false→true. A profile-true on the receiver is not clobbered.
-    static func contactShareFlag(snapshot: Bool, alreadyTrueOnReceiver: Bool) -> Bool {
-        alreadyTrueOnReceiver || snapshot
-    }
-
-    /// Core derivation, not a second SHA-256. device_id is 32 lowercase hex.
-    static func peerDeviceHintAcceptable(deviceId: String, identityKey: Data) -> Bool {
-        let derived = deriveDeviceId(identityPublicKey: identityKey)
-        return derived == deviceId.lowercased()
-    }
-
     static func lowercaseMessageId(_ id: String) -> String {
         id.lowercased()
     }

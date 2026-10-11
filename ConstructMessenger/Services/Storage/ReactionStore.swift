@@ -29,6 +29,8 @@ protocol ReactionStore: Sendable {
     func reaction(on targetMessageId: String, by reactorUserId: String) throws -> ReactionRecord?
     /// A message's reactions, oldest first.
     func reactions(on targetMessageId: String) throws -> [ReactionRecord]
+    /// Every reaction, oldest first: a history export.
+    func allReactions() throws -> [ReactionRecord]
     /// Insert, or replace the reactor's row on that message.
     func upsert(_ reaction: ReactionRecord) throws
     func delete(on targetMessageId: String, by reactorUserId: String) throws
@@ -57,6 +59,14 @@ final class CoreDataReactionStore: ReactionStore, @unchecked Sendable {
         try run { context in
             let req = Reaction.fetchRequest()
             req.predicate = NSPredicate(format: "targetMessageId ==[c] %@", targetMessageId)
+            req.sortDescriptors = [NSSortDescriptor(key: "timestampMs", ascending: true)]
+            return try context.fetch(req).map(ReactionRecord.init(row:))
+        }
+    }
+
+    func allReactions() throws -> [ReactionRecord] {
+        try run { context in
+            let req = Reaction.fetchRequest()
             req.sortDescriptors = [NSSortDescriptor(key: "timestampMs", ascending: true)]
             return try context.fetch(req).map(ReactionRecord.init(row:))
         }
