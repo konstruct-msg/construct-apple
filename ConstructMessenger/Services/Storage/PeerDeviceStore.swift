@@ -144,8 +144,8 @@ final class LocalStorePeerDeviceStore: PeerDeviceStore, @unchecked Sendable {
 
     private let store: LocalStore
 
-    init(store: LocalStore) {
-        self.store = store
+    init(session: LocalStoreSession) {
+        self.store = session.store
     }
 
     func devices(ofAccount accountId: String) throws -> [PeerDeviceRecord] {

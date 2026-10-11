@@ -27,9 +27,18 @@ final class LocalStoreSession: Sendable {
     }
 
     let store: LocalStore
+    private let feed = LocalStoreFeed()
 
     private init(store: LocalStore) {
         self.store = store
+        store.setObserver(observer: feed)
+    }
+
+    /// The ids of `table`'s rows written or deleted, once per committed write — what a
+    /// repository's `changes()` hands the screens. Subscribe before the first read, or a write
+    /// between the two is missed.
+    func changes(of table: LocalStoreTable) -> AsyncStream<Set<String>> {
+        feed.stream(table)
     }
 
     static var defaultURL: URL {
@@ -74,4 +83,29 @@ final class LocalStoreSession: Sendable {
         LocalStoreSession(store: try! LocalStore.inMemory(key: Data(repeating: 0x5A, count: 32)))
     }
     #endif
+}
+
+/// The core's observer, fanned out by table. `on_change` arrives on the writing thread after the
+/// commit, never under the store's lock.
+private final class LocalStoreFeed: LocalStoreObserver, @unchecked Sendable {
+
+    private let lock = NSLock()
+    private var subscribers: [UUID: (table: LocalStoreTable, continuation: AsyncStream<Set<String>>.Continuation)] = [:]
+
+    func stream(_ table: LocalStoreTable) -> AsyncStream<Set<String>> {
+        AsyncStream { continuation in
+            let key = UUID()
+            lock.withLock { subscribers[key] = (table, continuation) }
+            continuation.onTermination = { [weak self] _ in
+                self?.lock.withLock { _ = self?.subscribers.removeValue(forKey: key) }
+            }
+        }
+    }
+
+    func onChange(change: LocalStoreChange) {
+        let ids = Set(change.ids)
+        guard !ids.isEmpty else { return }
+        let targets = lock.withLock { subscribers.values.filter { $0.table == change.table } }
+        targets.forEach { $0.continuation.yield(ids) }
+    }
 }
