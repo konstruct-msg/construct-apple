@@ -1375,6 +1375,13 @@ public protocol LocalStoreProtocol: AnyObject, Sendable {
      */
     func chats() throws  -> [LocalChat]
     
+    /**
+     * Each of the two below acts only while `expected_ref` is still the one waiting, checked in
+     * the same statement; false when another was announced meanwhile, or there is no such row.
+     * The download finished: it becomes the avatar and the wait ends.
+     */
+    func completePendingAvatar(id: String, expectedRef: Data, avatar: Data) throws  -> Bool
+    
     func contact(id: String) throws  -> LocalContact?
     
     /**
@@ -1392,9 +1399,9 @@ public protocol LocalStoreProtocol: AnyObject, Sendable {
     func deleteChat(id: String) throws 
     
     /**
-     * Takes the contact's chats and their messages with it.
+     * Takes the contact's chats and their messages with it; false: no such row.
      */
-    func deleteContact(id: String) throws 
+    func deleteContact(id: String) throws  -> Bool
     
     func deleteIssuedInvites(jtis: [String]) throws 
     
@@ -1406,6 +1413,11 @@ public protocol LocalStoreProtocol: AnyObject, Sendable {
     
     func deleteResend(messageId: String, deviceId: String) throws 
     
+    /**
+     * The wait ends without it; the avatar shown stays.
+     */
+    func dropPendingAvatar(id: String, expectedRef: Data) throws  -> Bool
+    
     func editMessage(id: String, body: Data, searchText: String?, editedAt: Int64) throws  -> Bool
     
     /**
@@ -1414,9 +1426,9 @@ public protocol LocalStoreProtocol: AnyObject, Sendable {
     func entriesWithPrefix(prefix: String) throws  -> [LocalKvEntry]
     
     /**
-     * Every row, contacts or not, by id.
+     * Every row, contacts or not, by id; `except_account` (our own) left out.
      */
-    func everyContact() throws  -> [LocalContact]
+    func everyContact(exceptAccount: String?) throws  -> [LocalContact]
     
     /**
      * Forget reactions whose message is not here, received at or before `cutoff` (ms). A reaction
@@ -1434,6 +1446,9 @@ public protocol LocalStoreProtocol: AnyObject, Sendable {
     
     func get(key: String) throws  -> Data?
     
+    /**
+     * An empty key pins nothing.
+     */
     func identityKeyPins() throws  -> [LocalIdentityKeyPin]
     
     /**
@@ -1447,6 +1462,11 @@ public protocol LocalStoreProtocol: AnyObject, Sendable {
      * `AlreadyPresent` when the id or the peer has a chat — then use `chat_for_peer`.
      */
     func insertChat(chat: LocalChat) throws  -> LocalInsert
+    
+    /**
+     * The whole row, unless one with its id is held — that row is left as it is.
+     */
+    func insertContact(contact: LocalContact) throws  -> LocalInsert
     
     /**
      * `search_text` is what the message says, for the full-text index; null for media/control.
@@ -1556,6 +1576,12 @@ public protocol LocalStoreProtocol: AnyObject, Sendable {
     func remove(key: String) throws 
     
     /**
+     * Every field of the row `contact.id` set to `contact`'s, for a merge already decided; false:
+     * no such row (a row deleted meanwhile stays deleted).
+     */
+    func replaceContact(contact: LocalContact) throws  -> Bool
+    
+    /**
      * Forget devices the server no longer lists; an empty list forgets nothing. Returns the removed.
      */
     func retainPeerDevices(accountId: String, active: [String]) throws  -> [String]
@@ -1580,6 +1606,11 @@ public protocol LocalStoreProtocol: AnyObject, Sendable {
      * The avatar and the one still to download, set together.
      */
     func setContactAvatar(id: String, avatar: Data?, pendingRef: Data?, pendingSince: Int64?) throws  -> Bool
+    
+    /**
+     * The avatar alone; one announced and still waiting keeps waiting.
+     */
+    func setContactAvatarKeepingPending(id: String, avatar: Data?) throws  -> Bool
     
     func setContactBlocked(id: String, blocked: Bool) throws  -> Bool
     
@@ -1612,6 +1643,11 @@ public protocol LocalStoreProtocol: AnyObject, Sendable {
     func setOwnProfile(profile: LocalOwnProfile) throws 
     
     /**
+     * An avatar announced; the one shown stays until the download replaces it.
+     */
+    func setPendingAvatar(id: String, pendingRef: Data, since: Int64) throws  -> Bool
+    
+    /**
      * Each write below changes its named fields of one message; false: no message or no change.
      */
     func setRetryCount(id: String, count: Int16) throws  -> Bool
@@ -1628,9 +1664,9 @@ public protocol LocalStoreProtocol: AnyObject, Sendable {
     func setUnread(id: String, count: Int32) throws  -> Bool
     
     /**
-     * The ids we share our profile with.
+     * The ids we share our profile with; `except_account` (our own) left out.
      */
-    func sharingWith() throws  -> [String]
+    func sharingWith(exceptAccount: String?) throws  -> [String]
     
     func upsertCall(call: LocalCall) throws 
     
@@ -1639,6 +1675,9 @@ public protocol LocalStoreProtocol: AnyObject, Sendable {
      */
     func upsertChat(chat: LocalChat) throws 
     
+    /**
+     * The whole row, created or overwritten.
+     */
     func upsertContact(contact: LocalContact) throws 
     
     func upsertReaction(reaction: LocalReaction) throws 
@@ -1862,6 +1901,22 @@ open func chats()throws  -> [LocalChat]  {
 })
 }
     
+    /**
+     * Each of the two below acts only while `expected_ref` is still the one waiting, checked in
+     * the same statement; false when another was announced meanwhile, or there is no such row.
+     * The download finished: it becomes the avatar and the wait ends.
+     */
+open func completePendingAvatar(id: String, expectedRef: Data, avatar: Data)throws  -> Bool  {
+    return try  FfiConverterBool.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_complete_pending_avatar(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(id),
+        FfiConverterData.lower(expectedRef),
+        FfiConverterData.lower(avatar),$0
+    )
+})
+}
+    
 open func contact(id: String)throws  -> LocalContact?  {
     return try  FfiConverterOptionTypeLocalContact.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
     uniffi_construct_core_fn_method_localstore_contact(
@@ -1912,14 +1967,15 @@ open func deleteChat(id: String)throws   {try rustCallWithError(FfiConverterType
 }
     
     /**
-     * Takes the contact's chats and their messages with it.
+     * Takes the contact's chats and their messages with it; false: no such row.
      */
-open func deleteContact(id: String)throws   {try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+open func deleteContact(id: String)throws  -> Bool  {
+    return try  FfiConverterBool.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
     uniffi_construct_core_fn_method_localstore_delete_contact(
             self.uniffiCloneHandle(),
         FfiConverterString.lower(id),$0
     )
-}
+})
 }
     
 open func deleteIssuedInvites(jtis: [String])throws   {try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
@@ -1965,6 +2021,19 @@ open func deleteResend(messageId: String, deviceId: String)throws   {try rustCal
 }
 }
     
+    /**
+     * The wait ends without it; the avatar shown stays.
+     */
+open func dropPendingAvatar(id: String, expectedRef: Data)throws  -> Bool  {
+    return try  FfiConverterBool.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_drop_pending_avatar(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(id),
+        FfiConverterData.lower(expectedRef),$0
+    )
+})
+}
+    
 open func editMessage(id: String, body: Data, searchText: String?, editedAt: Int64)throws  -> Bool  {
     return try  FfiConverterBool.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
     uniffi_construct_core_fn_method_localstore_edit_message(
@@ -1990,12 +2059,13 @@ open func entriesWithPrefix(prefix: String)throws  -> [LocalKvEntry]  {
 }
     
     /**
-     * Every row, contacts or not, by id.
+     * Every row, contacts or not, by id; `except_account` (our own) left out.
      */
-open func everyContact()throws  -> [LocalContact]  {
+open func everyContact(exceptAccount: String?)throws  -> [LocalContact]  {
     return try  FfiConverterSequenceTypeLocalContact.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
     uniffi_construct_core_fn_method_localstore_every_contact(
-            self.uniffiCloneHandle(),$0
+            self.uniffiCloneHandle(),
+        FfiConverterOptionString.lower(exceptAccount),$0
     )
 })
 }
@@ -2058,6 +2128,9 @@ open func get(key: String)throws  -> Data?  {
 })
 }
     
+    /**
+     * An empty key pins nothing.
+     */
 open func identityKeyPins()throws  -> [LocalIdentityKeyPin]  {
     return try  FfiConverterSequenceTypeLocalIdentityKeyPin.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
     uniffi_construct_core_fn_method_localstore_identity_key_pins(
@@ -2095,6 +2168,18 @@ open func insertChat(chat: LocalChat)throws  -> LocalInsert  {
     uniffi_construct_core_fn_method_localstore_insert_chat(
             self.uniffiCloneHandle(),
         FfiConverterTypeLocalChat_lower(chat),$0
+    )
+})
+}
+    
+    /**
+     * The whole row, unless one with its id is held — that row is left as it is.
+     */
+open func insertContact(contact: LocalContact)throws  -> LocalInsert  {
+    return try  FfiConverterTypeLocalInsert_lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_insert_contact(
+            self.uniffiCloneHandle(),
+        FfiConverterTypeLocalContact_lower(contact),$0
     )
 })
 }
@@ -2403,6 +2488,19 @@ open func remove(key: String)throws   {try rustCallWithError(FfiConverterTypeLoc
 }
     
     /**
+     * Every field of the row `contact.id` set to `contact`'s, for a merge already decided; false:
+     * no such row (a row deleted meanwhile stays deleted).
+     */
+open func replaceContact(contact: LocalContact)throws  -> Bool  {
+    return try  FfiConverterBool.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_replace_contact(
+            self.uniffiCloneHandle(),
+        FfiConverterTypeLocalContact_lower(contact),$0
+    )
+})
+}
+    
+    /**
      * Forget devices the server no longer lists; an empty list forgets nothing. Returns the removed.
      */
 open func retainPeerDevices(accountId: String, active: [String])throws  -> [String]  {
@@ -2483,6 +2581,19 @@ open func setContactAvatar(id: String, avatar: Data?, pendingRef: Data?, pending
         FfiConverterOptionData.lower(avatar),
         FfiConverterOptionData.lower(pendingRef),
         FfiConverterOptionInt64.lower(pendingSince),$0
+    )
+})
+}
+    
+    /**
+     * The avatar alone; one announced and still waiting keeps waiting.
+     */
+open func setContactAvatarKeepingPending(id: String, avatar: Data?)throws  -> Bool  {
+    return try  FfiConverterBool.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_set_contact_avatar_keeping_pending(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(id),
+        FfiConverterOptionData.lower(avatar),$0
     )
 })
 }
@@ -2588,6 +2699,20 @@ open func setOwnProfile(profile: LocalOwnProfile)throws   {try rustCallWithError
 }
     
     /**
+     * An avatar announced; the one shown stays until the download replaces it.
+     */
+open func setPendingAvatar(id: String, pendingRef: Data, since: Int64)throws  -> Bool  {
+    return try  FfiConverterBool.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_set_pending_avatar(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(id),
+        FfiConverterData.lower(pendingRef),
+        FfiConverterInt64.lower(since),$0
+    )
+})
+}
+    
+    /**
      * Each write below changes its named fields of one message; false: no message or no change.
      */
 open func setRetryCount(id: String, count: Int16)throws  -> Bool  {
@@ -2646,12 +2771,13 @@ open func setUnread(id: String, count: Int32)throws  -> Bool  {
 }
     
     /**
-     * The ids we share our profile with.
+     * The ids we share our profile with; `except_account` (our own) left out.
      */
-open func sharingWith()throws  -> [String]  {
+open func sharingWith(exceptAccount: String?)throws  -> [String]  {
     return try  FfiConverterSequenceString.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
     uniffi_construct_core_fn_method_localstore_sharing_with(
-            self.uniffiCloneHandle(),$0
+            self.uniffiCloneHandle(),
+        FfiConverterOptionString.lower(exceptAccount),$0
     )
 })
 }
@@ -2675,6 +2801,9 @@ open func upsertChat(chat: LocalChat)throws   {try rustCallWithError(FfiConverte
 }
 }
     
+    /**
+     * The whole row, created or overwritten.
+     */
 open func upsertContact(contact: LocalContact)throws   {try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
     uniffi_construct_core_fn_method_localstore_upsert_contact(
             self.uniffiCloneHandle(),
@@ -13867,6 +13996,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_method_localstore_chats() != 2703) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_construct_core_checksum_method_localstore_complete_pending_avatar() != 13444) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_construct_core_checksum_method_localstore_contact() != 43265) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -13882,7 +14014,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_method_localstore_delete_chat() != 62753) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_method_localstore_delete_contact() != 25391) {
+    if (uniffi_construct_core_checksum_method_localstore_delete_contact() != 42745) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_localstore_delete_issued_invites() != 54416) {
@@ -13900,13 +14032,16 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_method_localstore_delete_resend() != 36433) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_construct_core_checksum_method_localstore_drop_pending_avatar() != 33118) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_construct_core_checksum_method_localstore_edit_message() != 48649) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_localstore_entries_with_prefix() != 686) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_method_localstore_every_contact() != 24186) {
+    if (uniffi_construct_core_checksum_method_localstore_every_contact() != 10711) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_localstore_expire_reactions() != 1251) {
@@ -13937,6 +14072,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_localstore_insert_chat() != 53415) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_insert_contact() != 61515) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_localstore_insert_message() != 2107) {
@@ -14020,6 +14158,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_method_localstore_remove() != 30144) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_construct_core_checksum_method_localstore_replace_contact() != 29124) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_construct_core_checksum_method_localstore_retain_peer_devices() != 39765) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -14039,6 +14180,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_localstore_set_contact_avatar() != 42614) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_set_contact_avatar_keeping_pending() != 50769) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_localstore_set_contact_blocked() != 21924) {
@@ -14068,6 +14212,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_method_localstore_set_own_profile() != 60092) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_construct_core_checksum_method_localstore_set_pending_avatar() != 12015) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_construct_core_checksum_method_localstore_set_retry_count() != 31877) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -14083,7 +14230,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_method_localstore_set_unread() != 48624) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_method_localstore_sharing_with() != 63075) {
+    if (uniffi_construct_core_checksum_method_localstore_sharing_with() != 44917) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_localstore_upsert_call() != 6097) {
