@@ -24,8 +24,10 @@ final class NotificationService: UNNotificationServiceExtension {
         withContentHandler contentHandler: @escaping (UNNotificationContent) -> Void
     ) {
         let group = AppKeychain.accessGroup
-        log.notice("NSE run: group=\(group ?? "missing", privacy: .public) deviceId=\(AppKeychain.presence("deviceId"), privacy: .public) keyRecord=\(AppKeychain.presence("crypto_private_keys"), privacy: .public)")
-        contentHandler(request.content)
+        let deviceId = AppKeychain.presence("deviceId")
+        let keyRecord = AppKeychain.presence("crypto_private_keys")
+        log.notice("NSE run: group=\(group ?? "missing", privacy: .public) deviceId=\(deviceId, privacy: .public) keyRecord=\(keyRecord, privacy: .public)")
+        contentHandler(ProbeBanner.marked(request.content, deviceId: deviceId, keyRecord: keyRecord))
     }
 
     override func serviceExtensionTimeWillExpire() {
@@ -57,5 +59,26 @@ enum AppKeychain {
         case errSecItemNotFound: return "missing"
         default: return "status \(status)"
         }
+    }
+}
+
+/// The probe's answer on the banner itself, on a build installed from Xcode: there the result can
+/// be read off the screen, where the extension's log is visible only to a Console stream already
+/// running when the push lands. Two conditions, because `DEBUG` alone also covers the Beta
+/// configuration TestFlight ships: an Xcode install carries `embedded.mobileprovision`, and
+/// TestFlight and the App Store strip it. Neither carries the subtitle.
+enum ProbeBanner {
+    static func marked(_ content: UNNotificationContent, deviceId: String, keyRecord: String) -> UNNotificationContent {
+        #if DEBUG
+        guard isXcodeInstall, let marked = content.mutableCopy() as? UNMutableNotificationContent else { return content }
+        marked.subtitle = "NSE · deviceId \(deviceId) · keyRecord \(keyRecord)"
+        return marked
+        #else
+        return content
+        #endif
+    }
+
+    private static var isXcodeInstall: Bool {
+        Bundle.main.path(forResource: "embedded", ofType: "mobileprovision") != nil
     }
 }
