@@ -36,6 +36,8 @@ enum LocalRepositories {
     private(set) nonisolated(unsafe) static var processedMessages: any ProcessedMessageStore =
         CoreDataProcessedMessageStore(container: PersistenceController.shared.container)
 
+    private(set) nonisolated(unsafe) static var calls: any CallStore =
+        CoreDataCallStore(container: PersistenceController.shared.container)
     private(set) nonisolated(unsafe) static var pendingChunks: any PendingChunkStore = FilePendingChunkStore()
 
     private(set) nonisolated(unsafe) static var keyValue: any KeyValueStore = DefaultsKeyValueStore()
@@ -69,6 +71,10 @@ enum LocalRepositories {
 
     static func useProcessedMessagesForTesting(_ store: (any ProcessedMessageStore)?) {
         processedMessages = store ?? CoreDataProcessedMessageStore(container: PersistenceController.shared.container)
+    }
+
+    static func useCallsForTesting(_ container: NSPersistentContainer?) {
+        calls = CoreDataCallStore(container: container ?? PersistenceController.shared.container)
     }
 
     static func useIssuedInvitesForTesting(_ store: (any IssuedInviteStore)?) {

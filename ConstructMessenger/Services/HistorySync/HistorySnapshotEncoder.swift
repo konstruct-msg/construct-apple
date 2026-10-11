@@ -18,7 +18,7 @@
 //  - Drafts, VEIL tickets, Privacy Pass, MediaSendCache
 //  - App settings / theme / orientation / PIN-lock
 //  - Recovery phrase, old-device JWTs, sticker pack blobs
-//  - CTCallRecord.peerName, endedAt, directionRaw
+//  - CallRecord.peerName, endedAt, direction
 //  - On-disk media ≥ 512 MiB (counted, not a failed snapshot)
 //  - Message.serverOrderKey (CTH1 v1 carries display timestamp only; the importer uses the
 //    legacy fallback until the snapshot format has an explicit order field)
@@ -127,7 +127,7 @@ final class HistorySnapshotEncoder {
         if phase == 1 || phase == 3 {
             let contacts = try LocalRepositories.contacts.everyContact(except: identity.userId)
             let hints = try LocalRepositories.peerDevices.allDevices()
-            let calls = try fetchCalls(context: context)
+            let calls = try LocalRepositories.calls.calls(limit: Int(Int32.max)).reversed()
             let emittedIds = Set(lifted.map(\.id))
             let reactions = try LocalRepositories.reactions.allReactions()
                 .filter { emittedIds.contains($0.targetMessageId.lowercased()) }
@@ -288,17 +288,10 @@ final class HistorySnapshotEncoder {
 
     // MARK: - Calls
 
-    /// Calls are read from Core Data until their domain is behind the seam.
-    private func fetchCalls(context: NSManagedObjectContext) throws -> [CTCallRecord] {
-        let req = CTCallRecord.fetchRequest()
-        req.sortDescriptors = [NSSortDescriptor(key: "startedAt", ascending: true)]
-        return try context.fetch(req)
-    }
-
-    private static func local(_ call: CTCallRecord) -> LocalCall {
+    private static func local(_ call: CallRecord) -> LocalCall {
         LocalCall(
             id: call.id, peerUserId: call.peerUserId, peerName: call.peerName,
-            direction: call.directionRaw, status: call.statusRaw,
+            direction: call.direction.rawValue, status: call.status.rawValue,
             startedAt: call.startedAt?.unixMs, endedAt: call.endedAt?.unixMs,
             durationSeconds: call.durationSeconds
         )
