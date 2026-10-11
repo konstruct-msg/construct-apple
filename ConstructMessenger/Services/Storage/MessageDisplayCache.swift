@@ -17,7 +17,7 @@ final class MessageDisplayCache {
 
     static let shared = MessageDisplayCache()
 
-    private let cache = NSCache<NSString, NSData>()
+    private let cache = NSCache<NSString, WipedOnRelease>()
 
     private init() {
         cache.countLimit = 500
@@ -26,7 +26,7 @@ final class MessageDisplayCache {
     // MARK: - Write
 
     func store(messageId: String, plaintextData: Data) {
-        cache.setObject(plaintextData as NSData, forKey: messageId as NSString)
+        cache.setObject(WipedOnRelease(plaintextData), forKey: messageId as NSString)
     }
 
     /// Convenience for legacy callers that only have a String.
@@ -42,6 +42,11 @@ final class MessageDisplayCache {
         cache.removeAllObjects()
     }
 
+    /// The cached bytes for `messageId`, if held — for tests of `UnsealedMemory`.
+    func cachedPayload(messageId: String) -> Data? {
+        cache.object(forKey: messageId as NSString)?.data
+    }
+
     // MARK: - Read
 
     /// Raw decrypted payload bytes (CTM1 or legacy UTF-8). Empty on failure.
@@ -49,13 +54,13 @@ final class MessageDisplayCache {
         let id = message.id
 
         if let cached = cache.object(forKey: id as NSString) {
-            return cached as Data
+            return cached.data
         }
 
         // Legacy unmigrated row — plaintext still in decryptedContent.
         if let legacy = message.decryptedContent {
             let data = Data(legacy.utf8)
-            cache.setObject(data as NSData, forKey: id as NSString)
+            cache.setObject(WipedOnRelease(data), forKey: id as NSString)
             return data
         }
 
@@ -68,7 +73,7 @@ final class MessageDisplayCache {
             return Data()
         }
 
-        cache.setObject(plainData as NSData, forKey: id as NSString)
+        cache.setObject(WipedOnRelease(plainData), forKey: id as NSString)
         return plainData
     }
 
@@ -81,5 +86,30 @@ final class MessageDisplayCache {
     /// Media CTM1 rehydrates to legacy media JSON only at this edge (not re-stored).
     func plaintext(for message: Message) -> String {
         payload(for: message).displayString
+    }
+}
+
+/// A decrypted payload held by the cache, zeroed when the cache lets go of it — on eviction, on
+/// `evictAll` (which `UnsealedMemory` calls when the app leaves the screen) and under memory
+/// pressure. `NSCache` frees an `NSData` without zeroing it, which left message text readable in
+/// released memory. Only this copy is wiped: a reader that took the bytes keeps its own.
+final class WipedOnRelease {
+    private(set) var data: Data
+
+    init(_ data: Data) {
+        self.data = data
+    }
+
+    deinit {
+        Self.wipe(&data)
+    }
+
+    /// Zeroes `data` in place with `memset_s`, which the compiler may not drop as a dead store.
+    static func wipe(_ data: inout Data) {
+        let count = data.count
+        data.withUnsafeMutableBytes { bytes in
+            guard let base = bytes.baseAddress else { return }
+            _ = memset_s(base, count, 0, count)
+        }
     }
 }

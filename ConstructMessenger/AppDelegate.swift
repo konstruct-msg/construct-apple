@@ -26,6 +26,8 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         // observers are registered before the first background transition. The transport layer
         // reads it off-main to suppress futile VEIL restarts while suspended (see AppActivityState).
         _ = AppActivityState.shared
+        // Drop the store key and decrypted text when the app leaves the screen (UnsealedMemory).
+        UnsealedMemory.forgetOnBackground()
 
         // Register UserDefaults defaults — only applies when key has never been set.
         // This makes push notifications and background fetch ON for new installs.
