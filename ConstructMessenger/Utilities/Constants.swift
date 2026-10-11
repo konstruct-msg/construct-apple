@@ -173,7 +173,7 @@ struct APIConstants {
     }
 
     // Keychain Keys
-    static let sessionTokenKey = "session_token"
+    static let sessionTokenKey = KeychainSessionAccounts.sessionToken
     static let privateKeyKey = "private_key"
     static let userIdKey = "user_id"
     static let lastUsernameKey = "last_username"
