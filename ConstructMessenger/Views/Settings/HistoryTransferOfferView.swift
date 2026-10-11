@@ -63,15 +63,14 @@ struct HistoryTransferOfferView: View {
         } message: {
             Text(errorMessage ?? "")
         }
-        .alert(NSLocalizedString("transfer_complete", comment: ""), isPresented: Binding(
+        .alert(NSLocalizedString("history_sync_done", comment: ""), isPresented: Binding(
             get: { importedSummary != nil },
             set: { if !$0 { importedSummary = nil } }
         )) {
             Button(NSLocalizedString("ok", comment: ""), role: .cancel) { finish() }
         } message: {
-            if let s = importedSummary {
-                Text(String(format: NSLocalizedString("history_sync_imported_summary", comment: ""), s.applied))
-            }
+            // A count of records says nothing to a person; what moved is the chats.
+            Text(NSLocalizedString("history_sync_imported_done", comment: ""))
         }
     }
 

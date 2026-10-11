@@ -21,13 +21,6 @@ struct DeviceLinkQRSheet: View {
             case .skip: return "skip"
             }
         }
-
-        var mode: SendBackupNearbyView.Mode {
-            switch self {
-            case .send: return .historySync
-            case .skip: return .historySyncSkip
-            }
-        }
     }
 
     @Environment(\.dismiss) private var dismiss
@@ -80,7 +73,7 @@ struct DeviceLinkQRSheet: View {
             }
             Button(NSLocalizedString("history_sync_send_offer_skip", comment: ""), role: .cancel) {
                 showHistorySyncOffer = false
-                if historySyncPIN != nil {
+                if newlyLinkedDeviceId != nil {
                     activeHistorySyncSender = .skip
                 } else {
                     dismiss()
@@ -90,19 +83,17 @@ struct DeviceLinkQRSheet: View {
             Text(NSLocalizedString("history_sync_send_offer_message", comment: ""))
         }
         .sheet(item: $activeHistorySyncSender) { sheet in
-            SendBackupNearbyView(mode: sheet.mode, autoPairingPIN: historySyncPIN)
+            // The same sender as the scanning path (`DeviceLinkScanView`): the new device listens
+            // on the history channel, not the backup transfer this sheet used until 2026-10-11.
+            HistoryTransferSendView(
+                skip: sheet == .skip,
+                userId: KeychainManager.shared.loadUserID() ?? "",
+                peerDeviceId: newlyLinkedDeviceId ?? ""
+            )
                 .sheetNavigation()
                 .environment(\.managedObjectContext, PersistenceController.shared.container.viewContext)
                 .onDisappear { dismiss() }
         }
-    }
-
-    /// PIN derived from the newly-linked device id — matches the receiver, which derives the
-    /// same value from its own device id (`HistorySyncPairing`).
-    private var historySyncPIN: String? {
-        guard let deviceId = newlyLinkedDeviceId,
-              let userId = AuthSessionManager.shared.currentUserId else { return nil }
-        return HistorySyncPairing.pin(pendingDeviceId: deviceId, userId: userId)
     }
 
     /// Snapshot the current devices, then poll until a new one appears (the scanner that just
