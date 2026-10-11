@@ -69,7 +69,7 @@ struct SynapsView: View {
     private var filtered: [ContactRecord] {
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !query.isEmpty else { return contacts }
-        return contacts.filter { userMatchesQuery($0, query: query) }
+        return contacts.filter { $0.matches(query: query) }
     }
 
     var body: some View {
@@ -153,7 +153,7 @@ struct SynapsView: View {
                     guard !Task.isCancelled else { return }
                     let query = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
                     guard !query.isEmpty else { return }
-                    let hasLocalMatches = contacts.contains { userMatchesQuery($0, query: query) }
+                    let hasLocalMatches = contacts.contains { $0.matches(query: query) }
                     await performRemoteSearch(username: query, localMatchesExist: hasLocalMatches)
                 }
             }
@@ -517,11 +517,6 @@ struct SynapsView: View {
         } catch {
             remoteState = .notFound
         }
-    }
-
-    private func userMatchesQuery(_ user: ContactRecord, query: String) -> Bool {
-        user.displayName.localizedCaseInsensitiveContains(query)
-            || user.username.localizedCaseInsensitiveContains(query)
     }
 
     /// Sends a contact request to a discoverable user found via remote search.
