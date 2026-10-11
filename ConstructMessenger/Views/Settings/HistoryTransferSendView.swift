@@ -30,59 +30,56 @@ struct HistoryTransferSendView: View {
     @State private var isWritingFile = false
     @State private var exportedFile: URL?
 
+    /// How long the other device may go unseen before the screen says what is needed and
+    /// offers a file. Neither side gives up on its own: the person may still be walking over.
+    static let notSeenAfter: Duration = .seconds(20)
+    @State private var peerNotSeen = false
+
+    private var isSkip: Bool { skip || kind == .skip }
+
+    private var stages: [HistoryTransferStage] {
+        switch kind {
+        case .chatsOnly: return [.chats]
+        case .mediaOnly: return [.media]
+        case .nearby, .skip: return HistoryTransferStage.allCases
+        }
+    }
+
+    /// The file is the way out, not a second choice beside Wi-Fi: offered once the other device
+    /// has gone unseen, or the transfer stopped.
+    private var offersFile: Bool {
+        switch coordinator.phase {
+        case .saveFileInstead, .mediaIncomplete: return true
+        case .idle: return peerNotSeen
+        default: return false
+        }
+    }
+
     var body: some View {
-        ZStack {
-            Color.CT.bg.ignoresSafeArea()
-            VStack(spacing: 0) {
-                ScrollView {
-                    LazyVStack(spacing: 24) {
-                        statusLabel
-                        if let file = exportedFile {
-                            Text(NSLocalizedString("history_sync_file_ready", comment: ""))
-                                .font(CTFont.body)
-                                .foregroundStyle(Color.CT.textDim)
-                                .multilineTextAlignment(.center)
-                            CTSectionGroup {
-                                ShareLink(item: file) {
-                                    HStack(spacing: 14) {
-                                        Image(systemName: "square.and.arrow.up")
-                                            .font(CTIcon.font(CTIcon.row))
-                                            .foregroundStyle(Color.CT.accent)
-                                            .frame(minWidth: 22, alignment: .center)
-                                        Text(NSLocalizedString("history_sync_share_file", comment: ""))
-                                            .font(CTFont.ui(15))
-                                            .foregroundStyle(Color.CT.text)
-                                        Spacer()
-                                    }
-                                    .padding(.horizontal, CTLayout.edgePad)
-                                    .frame(minHeight: CTLayout.controlHeight)
-                                    .contentShape(Rectangle())
-                                }
-                            }
-                        } else if isWritingFile {
-                            HStack(spacing: CTLayout.inlinePad) {
-                                ProgressView()
-                                Text(NSLocalizedString("history_sync_preparing_file", comment: ""))
-                                    .font(CTFont.body)
-                                    .foregroundStyle(Color.CT.textDim)
-                            }
-                        } else if coordinator.phase == .idle || coordinator.phase == .saveFileInstead {
-                            CTSectionGroup {
-                                ConstructButtonRow(
-                                    systemImage: "square.and.arrow.down",
-                                    title: LocalizedStringKey("history_sync_save_file")
-                                ) {
-                                    Task { await saveFile() }
-                                }
-                            }
-                        }
+        ScrollView {
+            VStack(spacing: CTLayout.sectionGap) {
+                if isSkip {
+                    Text(NSLocalizedString("history_sync_skip_sending", comment: ""))
+                        .font(CTFont.body)
+                        .foregroundStyle(Color.CT.text)
+                        .multilineTextAlignment(.center)
+                } else {
+                    HistoryTransferProgress(phase: coordinator.phase, side: .sending, stages: stages)
+                    if coordinator.phase == .idle, peerNotSeen {
+                        hint("history_sync_not_seen_hint")
                     }
-                    .padding(CTLayout.edgePad)
+                    fileSection
                 }
             }
-            .screenTitle(NSLocalizedString(titleKey, comment: ""))
+            .padding(CTLayout.edgePad)
         }
+        .background(Color.CT.bg.ignoresSafeArea())
+        .screenTitle(NSLocalizedString(isSkip ? "history_sync_skip_title" : "history_sync_send_title", comment: ""))
         .task { await run() }
+        .task {
+            try? await Task.sleep(for: Self.notSeenAfter)
+            if coordinator.phase == .idle { peerNotSeen = true }
+        }
         .alert(NSLocalizedString("transfer_error_title", comment: ""), isPresented: Binding(
             get: { errorMessage != nil },
             set: { if !$0 { errorMessage = nil } }
@@ -93,33 +90,51 @@ struct HistoryTransferSendView: View {
         }
     }
 
-    private var titleKey: String {
-        if skip || kind == .skip { return "history_sync_skip_title" }
-        switch kind {
-        case .chatsOnly: return "history_sync_settings_chats"
-        case .mediaOnly: return "history_sync_settings_media"
-        case .nearby, .skip: return "history_sync_send_title"
+    @ViewBuilder
+    private var fileSection: some View {
+        if let file = exportedFile {
+            hint("history_sync_file_ready")
+            CTSectionGroup {
+                ShareLink(item: file) {
+                    HStack(spacing: CTLayout.edgePad) {
+                        Image(systemName: "square.and.arrow.up")
+                            .font(CTIcon.font(CTIcon.row))
+                            .foregroundStyle(Color.CT.accent)
+                        Text(NSLocalizedString("history_sync_share_file", comment: ""))
+                            .font(CTFont.body)
+                            .foregroundStyle(Color.CT.text)
+                        Spacer()
+                    }
+                    .padding(.horizontal, CTLayout.edgePad)
+                    .frame(minHeight: CTLayout.controlHeight)
+                    .contentShape(Rectangle())
+                }
+            }
+        } else if isWritingFile {
+            HStack(spacing: CTLayout.inlinePad) {
+                ProgressView()
+                Text(NSLocalizedString("history_sync_preparing_file", comment: ""))
+                    .font(CTFont.body)
+                    .foregroundStyle(Color.CT.textDim)
+            }
+        } else if offersFile {
+            CTSectionGroup {
+                ConstructButtonRow(
+                    systemImage: "square.and.arrow.down",
+                    title: LocalizedStringKey("history_sync_save_file")
+                ) {
+                    Task { await saveFile() }
+                }
+            }
         }
     }
 
-    @ViewBuilder
-    private var statusLabel: some View {
-        let key: String = {
-            switch coordinator.phase {
-            case .idle, .transcript:
-                return (skip || kind == .skip) ? "history_sync_skip_sending" : "history_sync_auto_sending"
-            case .chatsTransferred: return "history_sync_chats_transferred"
-            case .media: return "history_sync_auto_sending"
-            case .complete: return "transfer_complete"
-            case .mediaIncomplete: return "history_sync_media_incomplete"
-            case .skipped: return "history_sync_skip_sending"
-            case .saveFileInstead: return "history_sync_save_file_instead"
-            }
-        }()
+    private func hint(_ key: String) -> some View {
         Text(NSLocalizedString(key, comment: ""))
-            .font(CTFont.ui(14))
-            .foregroundStyle(Color.CT.text)
+            .font(CTFont.secondary)
+            .foregroundStyle(Color.CT.textDim)
             .multilineTextAlignment(.center)
+            .frame(maxWidth: .infinity)
     }
 
     /// Post-link: transcript, then media, each on its own connection (K18). Settings retry runs
