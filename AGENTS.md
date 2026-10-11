@@ -54,6 +54,10 @@ Sibling repos: `~/Code/construct-core` (crypto), `~/Code/construct-transport` (Q
   upgrade; a pinned one stops resolving and the failure reads like a project problem. This file
   said `iPhone 16,OS=18.6` for months after that runtime was gone. Check
   `xcrun simctl list devices available` rather than trusting any example.
+- **The version and build number are set on the PROJECT, not on a target** (since 2026-10-11),
+  so the app and its notification extension (`ConstructNotifications/`) inherit one value; App
+  Store Connect rejects an embedded extension whose version differs. A number typed on a target's
+  General tab writes a target-level override; `scripts/check_build_versions.sh` (CI) fails on it.
 - **`ConstructMessenger` is the scheme with the test target.** A scheme that builds the app alone
   runs zero tests and reports success.
 
