@@ -250,6 +250,13 @@ typedef void (*UniffiCallbackInterfaceLocalStoreObserverMethod0)(uint64_t, RustB
     );
 
 #endif
+#ifndef UNIFFI_FFIDEF_CALLBACK_INTERFACE_PEEK_SESSION_SOURCE_METHOD0
+#define UNIFFI_FFIDEF_CALLBACK_INTERFACE_PEEK_SESSION_SOURCE_METHOD0
+typedef void (*UniffiCallbackInterfacePeekSessionSourceMethod0)(uint64_t, RustBuffer, RustBuffer* _Nonnull, 
+        RustCallStatus *_Nonnull uniffiCallStatus
+    );
+
+#endif
 #ifndef UNIFFI_FFIDEF_CALLBACK_INTERFACE_PLATFORM_BRIDGE_METHOD0
 #define UNIFFI_FFIDEF_CALLBACK_INTERFACE_PLATFORM_BRIDGE_METHOD0
 typedef void (*UniffiCallbackInterfacePlatformBridgeMethod0)(uint64_t, RustBuffer, RustBuffer, void* _Nonnull, 
@@ -299,6 +306,15 @@ typedef struct UniffiVTableCallbackInterfaceLocalStoreObserver {
     UniffiCallbackInterfaceClone _Nonnull uniffiClone;
     UniffiCallbackInterfaceLocalStoreObserverMethod0 _Nonnull onChange;
 } UniffiVTableCallbackInterfaceLocalStoreObserver;
+
+#endif
+#ifndef UNIFFI_FFIDEF_V_TABLE_CALLBACK_INTERFACE_PEEK_SESSION_SOURCE
+#define UNIFFI_FFIDEF_V_TABLE_CALLBACK_INTERFACE_PEEK_SESSION_SOURCE
+typedef struct UniffiVTableCallbackInterfacePeekSessionSource {
+    UniffiCallbackInterfaceFree _Nonnull uniffiFree;
+    UniffiCallbackInterfaceClone _Nonnull uniffiClone;
+    UniffiCallbackInterfacePeekSessionSourceMethod0 _Nonnull session;
+} UniffiVTableCallbackInterfacePeekSessionSource;
 
 #endif
 #ifndef UNIFFI_FFIDEF_V_TABLE_CALLBACK_INTERFACE_PLATFORM_BRIDGE
@@ -718,6 +734,11 @@ RustBuffer uniffi_construct_core_fn_method_localstore_insert_contact(uint64_t pt
 RustBuffer uniffi_construct_core_fn_method_localstore_insert_message(uint64_t ptr, RustBuffer message, RustBuffer search_text, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_LOCALSTORE_INSERT_MESSAGES
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_LOCALSTORE_INSERT_MESSAGES
+RustBuffer uniffi_construct_core_fn_method_localstore_insert_messages(uint64_t ptr, RustBuffer messages, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_LOCALSTORE_IS_PROCESSED
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_LOCALSTORE_IS_PROCESSED
 int8_t uniffi_construct_core_fn_method_localstore_is_processed(uint64_t ptr, RustBuffer message_id, RustCallStatus *_Nonnull out_status
@@ -1066,6 +1087,26 @@ void uniffi_construct_core_fn_method_mlsstore_process_commit(uint64_t ptr, RustB
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_MLSSTORE_REMOVE_MEMBER
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_MLSSTORE_REMOVE_MEMBER
 RustBuffer uniffi_construct_core_fn_method_mlsstore_remove_member(uint64_t ptr, RustBuffer group_id, uint32_t leaf_index, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_CLONE_NOTIFICATIONPEEK
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_CLONE_NOTIFICATIONPEEK
+uint64_t uniffi_construct_core_fn_clone_notificationpeek(uint64_t handle, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FREE_NOTIFICATIONPEEK
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FREE_NOTIFICATIONPEEK
+void uniffi_construct_core_fn_free_notificationpeek(uint64_t handle, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_CONSTRUCTOR_NOTIFICATIONPEEK_NEW
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_CONSTRUCTOR_NOTIFICATIONPEEK_NEW
+uint64_t uniffi_construct_core_fn_constructor_notificationpeek_new(RustBuffer key_record, RustBuffer my_user_id, RustBuffer orchestrator_state, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_NOTIFICATIONPEEK_PEEK
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_NOTIFICATIONPEEK_PEEK
+RustBuffer uniffi_construct_core_fn_method_notificationpeek_peek(uint64_t ptr, RustBuffer message_id, RustBuffer sealed_inner, uint64_t sessions, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_CLONE_ORCHESTRATORCORE
@@ -1527,6 +1568,11 @@ void uniffi_construct_core_fn_method_trafficprotectionmanager_update_battery_lev
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_INIT_CALLBACK_VTABLE_LOCALSTOREOBSERVER
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_INIT_CALLBACK_VTABLE_LOCALSTOREOBSERVER
 void uniffi_construct_core_fn_init_callback_vtable_localstoreobserver(const UniffiVTableCallbackInterfaceLocalStoreObserver* _Nonnull vtable
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_INIT_CALLBACK_VTABLE_PEEKSESSIONSOURCE
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_INIT_CALLBACK_VTABLE_PEEKSESSIONSOURCE
+void uniffi_construct_core_fn_init_callback_vtable_peeksessionsource(const UniffiVTableCallbackInterfacePeekSessionSource* _Nonnull vtable
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_INIT_CALLBACK_VTABLE_PLATFORMBRIDGE
@@ -3081,6 +3127,12 @@ uint16_t uniffi_construct_core_checksum_method_localstore_insert_message(void
     
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_LOCALSTORE_INSERT_MESSAGES
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_LOCALSTORE_INSERT_MESSAGES
+uint16_t uniffi_construct_core_checksum_method_localstore_insert_messages(void
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_LOCALSTORE_IS_PROCESSED
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_LOCALSTORE_IS_PROCESSED
 uint16_t uniffi_construct_core_checksum_method_localstore_is_processed(void
@@ -3486,6 +3538,12 @@ uint16_t uniffi_construct_core_checksum_method_mlsstore_process_commit(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_MLSSTORE_REMOVE_MEMBER
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_MLSSTORE_REMOVE_MEMBER
 uint16_t uniffi_construct_core_checksum_method_mlsstore_remove_member(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_NOTIFICATIONPEEK_PEEK
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_NOTIFICATIONPEEK_PEEK
+uint16_t uniffi_construct_core_checksum_method_notificationpeek_peek(void
     
 );
 #endif
@@ -3999,6 +4057,12 @@ uint16_t uniffi_construct_core_checksum_constructor_localstore_new(void
     
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_CONSTRUCTOR_NOTIFICATIONPEEK_NEW
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_CONSTRUCTOR_NOTIFICATIONPEEK_NEW
+uint16_t uniffi_construct_core_checksum_constructor_notificationpeek_new(void
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_CONSTRUCTOR_RUSTACKSTORE_NEW
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_CONSTRUCTOR_RUSTACKSTORE_NEW
 uint16_t uniffi_construct_core_checksum_constructor_rustackstore_new(void
@@ -4014,6 +4078,12 @@ uint16_t uniffi_construct_core_checksum_constructor_trafficprotectionmanager_new
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_LOCALSTOREOBSERVER_ON_CHANGE
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_LOCALSTOREOBSERVER_ON_CHANGE
 uint16_t uniffi_construct_core_checksum_method_localstoreobserver_on_change(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_PEEKSESSIONSOURCE_SESSION
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_PEEKSESSIONSOURCE_SESSION
+uint16_t uniffi_construct_core_checksum_method_peeksessionsource_session(void
     
 );
 #endif

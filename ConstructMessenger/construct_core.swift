@@ -1473,6 +1473,12 @@ public protocol LocalStoreProtocol: AnyObject, Sendable {
      */
     func insertMessage(message: LocalMessage, searchText: String?) throws  -> LocalInsert
     
+    /**
+     * `insert_message` for each, in one transaction; the ids added, in order. One failure (a
+     * chat that is not there) writes none of them.
+     */
+    func insertMessages(messages: [LocalMessageInsert]) throws  -> [String]
+    
     func isProcessed(messageId: String) throws  -> Bool
     
     /**
@@ -2193,6 +2199,19 @@ open func insertMessage(message: LocalMessage, searchText: String?)throws  -> Lo
             self.uniffiCloneHandle(),
         FfiConverterTypeLocalMessage_lower(message),
         FfiConverterOptionString.lower(searchText),$0
+    )
+})
+}
+    
+    /**
+     * `insert_message` for each, in one transaction; the ids added, in order. One failure (a
+     * chat that is not there) writes none of them.
+     */
+open func insertMessages(messages: [LocalMessageInsert])throws  -> [String]  {
+    return try  FfiConverterSequenceString.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_insert_messages(
+            self.uniffiCloneHandle(),
+        FfiConverterSequenceTypeLocalMessageInsert.lower(messages),$0
     )
 })
 }
@@ -3212,6 +3231,148 @@ public func FfiConverterTypeMlsStore_lift(_ handle: UInt64) throws -> MlsStore {
 #endif
 public func FfiConverterTypeMlsStore_lower(_ value: MlsStore) -> UInt64 {
     return FfiConverterTypeMlsStore.lower(value)
+}
+
+
+
+
+
+
+/**
+ * A throwaway view of this device's sessions for the notification extension. Built from the key
+ * record and the orchestrator state the app saved; it answers `peek` and nothing else. Nothing it
+ * does is saved, sent or marked, and no session state leaves it.
+ */
+public protocol NotificationPeekProtocol: AnyObject, Sendable {
+    
+    /**
+     * The verdict on one delivery: `sealed_inner` is its `SealedInner` as the server returned it.
+     * Peek a fetch's deliveries in server order on one instance.
+     */
+    func peek(messageId: String, sealedInner: Data, sessions: PeekSessionSource)  -> PeekVerdict
+    
+}
+/**
+ * A throwaway view of this device's sessions for the notification extension. Built from the key
+ * record and the orchestrator state the app saved; it answers `peek` and nothing else. Nothing it
+ * does is saved, sent or marked, and no session state leaves it.
+ */
+open class NotificationPeek: NotificationPeekProtocol, @unchecked Sendable {
+    fileprivate let handle: UInt64
+
+    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoHandle {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromHandle handle: UInt64) {
+        self.handle = handle
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noHandle: NoHandle) {
+        self.handle = 0
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiCloneHandle() -> UInt64 {
+        return try! rustCall { uniffi_construct_core_fn_clone_notificationpeek(self.handle, $0) }
+    }
+public convenience init(keyRecord: Data, myUserId: String, orchestratorState: Data?)throws  {
+    let handle =
+        try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_constructor_notificationpeek_new(
+        FfiConverterData.lower(keyRecord),
+        FfiConverterString.lower(myUserId),
+        FfiConverterOptionData.lower(orchestratorState),$0
+    )
+}
+    self.init(unsafeFromHandle: handle)
+}
+
+    deinit {
+        try! rustCall { uniffi_construct_core_fn_free_notificationpeek(handle, $0) }
+    }
+
+    
+
+    
+    /**
+     * The verdict on one delivery: `sealed_inner` is its `SealedInner` as the server returned it.
+     * Peek a fetch's deliveries in server order on one instance.
+     */
+open func peek(messageId: String, sealedInner: Data, sessions: PeekSessionSource) -> PeekVerdict  {
+    return try!  FfiConverterTypePeekVerdict_lift(try! rustCall() {
+    uniffi_construct_core_fn_method_notificationpeek_peek(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(messageId),
+        FfiConverterData.lower(sealedInner),
+        FfiConverterCallbackInterfacePeekSessionSource_lower(sessions),$0
+    )
+})
+}
+    
+
+    
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeNotificationPeek: FfiConverter {
+    typealias FfiType = UInt64
+    typealias SwiftType = NotificationPeek
+
+    public static func lift(_ handle: UInt64) throws -> NotificationPeek {
+        return NotificationPeek(unsafeFromHandle: handle)
+    }
+
+    public static func lower(_ value: NotificationPeek) -> UInt64 {
+        return value.uniffiCloneHandle()
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> NotificationPeek {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+    public static func write(_ value: NotificationPeek, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeNotificationPeek_lift(_ handle: UInt64) throws -> NotificationPeek {
+    return try FfiConverterTypeNotificationPeek.lift(handle)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeNotificationPeek_lower(_ value: NotificationPeek) -> UInt64 {
+    return FfiConverterTypeNotificationPeek.lower(value)
 }
 
 
@@ -6728,6 +6889,62 @@ public func FfiConverterTypeLocalMessage_lower(_ value: LocalMessage) -> RustBuf
 
 
 /**
+ * One message with chunks held.
+ * A message and what it says, for the full-text index (null for media and control).
+ */
+public struct LocalMessageInsert: Equatable, Hashable {
+    public var message: LocalMessage
+    public var searchText: String?
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(message: LocalMessage, searchText: String?) {
+        self.message = message
+        self.searchText = searchText
+    }
+
+    
+}
+
+#if compiler(>=6)
+extension LocalMessageInsert: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeLocalMessageInsert: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> LocalMessageInsert {
+        return
+            try LocalMessageInsert(
+                message: FfiConverterTypeLocalMessage.read(from: &buf), 
+                searchText: FfiConverterOptionString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: LocalMessageInsert, into buf: inout [UInt8]) {
+        FfiConverterTypeLocalMessage.write(value.message, into: &buf)
+        FfiConverterOptionString.write(value.searchText, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLocalMessageInsert_lift(_ buf: RustBuffer) throws -> LocalMessageInsert {
+    return try FfiConverterTypeLocalMessageInsert.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLocalMessageInsert_lower(_ value: LocalMessageInsert) -> RustBuffer {
+    return FfiConverterTypeLocalMessageInsert.lower(value)
+}
+
+
+/**
  * Our own profile — one row, not a contact.
  */
 public struct LocalOwnProfile: Equatable, Hashable {
@@ -6943,9 +7160,6 @@ public func FfiConverterTypeLocalPendingChunk_lower(_ value: LocalPendingChunk) 
 }
 
 
-/**
- * One message with chunks held.
- */
 public struct LocalPendingChunkMessage: Equatable, Hashable {
     public var senderId: String
     public var messageId: String
@@ -10976,6 +11190,100 @@ public func FfiConverterTypeMlsError_lower(_ value: MlsError) -> RustBuffer {
 // Note that we don't yet support `indirect` for enums.
 // See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
 /**
+ * What a sealed delivery is, decided without acting on it.
+ */
+
+public enum PeekVerdict: Equatable, Hashable {
+    
+    /**
+     * Already processed by the app: its message key is spent in the stored session.
+     */
+    case alreadyHandled
+    /**
+     * A message the app would announce.
+     */
+    case visible
+    /**
+     * A silent control frame, a call signal or a DECRYPTION_ERROR: nothing to announce.
+     */
+    case control
+    /**
+     * Not read here, for any reason. The alert shows.
+     */
+    case unreadable
+
+
+
+}
+
+#if compiler(>=6)
+extension PeekVerdict: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypePeekVerdict: FfiConverterRustBuffer {
+    typealias SwiftType = PeekVerdict
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> PeekVerdict {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .alreadyHandled
+        
+        case 2: return .visible
+        
+        case 3: return .control
+        
+        case 4: return .unreadable
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: PeekVerdict, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case .alreadyHandled:
+            writeInt(&buf, Int32(1))
+        
+        
+        case .visible:
+            writeInt(&buf, Int32(2))
+        
+        
+        case .control:
+            writeInt(&buf, Int32(3))
+        
+        
+        case .unreadable:
+            writeInt(&buf, Int32(4))
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypePeekVerdict_lift(_ buf: RustBuffer) throws -> PeekVerdict {
+    return try FfiConverterTypePeekVerdict.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypePeekVerdict_lower(_ value: PeekVerdict) -> RustBuffer {
+    return FfiConverterTypePeekVerdict.lower(value)
+}
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+/**
  * Read-only health snapshot of a Double Ratchet session.
  * Whose Kyber key a session's post-quantum layer came from. Anything a person sees about
  * "PQ" reads this — `is_pq_strengthened` only says a KEM secret was mixed in.
@@ -11345,6 +11653,133 @@ public func FfiConverterCallbackInterfaceLocalStoreObserver_lift(_ handle: UInt6
 #endif
 public func FfiConverterCallbackInterfaceLocalStoreObserver_lower(_ v: LocalStoreObserver) -> UInt64 {
     return FfiConverterCallbackInterfaceLocalStoreObserver.lower(v)
+}
+
+
+
+
+/**
+ * The stored session state of a peer device, as the platform's secure store holds it.
+ */
+public protocol PeekSessionSource: AnyObject, Sendable {
+    
+    func session(deviceId: String)  -> Data?
+    
+}
+
+
+// Put the implementation in a struct so we don't pollute the top-level namespace
+fileprivate struct UniffiCallbackInterfacePeekSessionSource {
+
+    // Create the VTable using a series of closures.
+    // Swift automatically converts these into C callback functions.
+    //
+    // This creates 1-element array, since this seems to be the only way to construct a const
+    // pointer that we can pass to the Rust code.
+    static let vtable: [UniffiVTableCallbackInterfacePeekSessionSource] = [UniffiVTableCallbackInterfacePeekSessionSource(
+        uniffiFree: { (uniffiHandle: UInt64) -> () in
+            do {
+                try FfiConverterCallbackInterfacePeekSessionSource.handleMap.remove(handle: uniffiHandle)
+            } catch {
+                print("Uniffi callback interface PeekSessionSource: handle missing in uniffiFree")
+            }
+        },
+        uniffiClone: { (uniffiHandle: UInt64) -> UInt64 in
+            do {
+                return try FfiConverterCallbackInterfacePeekSessionSource.handleMap.clone(handle: uniffiHandle)
+            } catch {
+                fatalError("Uniffi callback interface PeekSessionSource: handle missing in uniffiClone")
+            }
+        },
+        session: { (
+            uniffiHandle: UInt64,
+            deviceId: RustBuffer,
+            uniffiOutReturn: UnsafeMutablePointer<RustBuffer>,
+            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
+        ) in
+            let makeCall = {
+                () throws -> Data? in
+                guard let uniffiObj = try? FfiConverterCallbackInterfacePeekSessionSource.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return uniffiObj.session(
+                     deviceId: try FfiConverterString.lift(deviceId)
+                )
+            }
+
+            
+            let writeReturn = { uniffiOutReturn.pointee = FfiConverterOptionData.lower($0) }
+            uniffiTraitInterfaceCall(
+                callStatus: uniffiCallStatus,
+                makeCall: makeCall,
+                writeReturn: writeReturn
+            )
+        }
+    )]
+}
+
+private func uniffiCallbackInitPeekSessionSource() {
+    uniffi_construct_core_fn_init_callback_vtable_peeksessionsource(UniffiCallbackInterfacePeekSessionSource.vtable)
+}
+
+// FfiConverter protocol for callback interfaces
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterCallbackInterfacePeekSessionSource {
+    fileprivate static let handleMap = UniffiHandleMap<PeekSessionSource>()
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+extension FfiConverterCallbackInterfacePeekSessionSource : FfiConverter {
+    typealias SwiftType = PeekSessionSource
+    typealias FfiType = UInt64
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public static func lift(_ handle: UInt64) throws -> SwiftType {
+        try handleMap.get(handle: handle)
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public static func lower(_ v: SwiftType) -> UInt64 {
+        return handleMap.insert(obj: v)
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public static func write(_ v: SwiftType, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(v))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterCallbackInterfacePeekSessionSource_lift(_ handle: UInt64) throws -> PeekSessionSource {
+    return try FfiConverterCallbackInterfacePeekSessionSource.lift(handle)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterCallbackInterfacePeekSessionSource_lower(_ v: PeekSessionSource) -> UInt64 {
+    return FfiConverterCallbackInterfacePeekSessionSource.lower(v)
 }
 
 
@@ -12609,6 +13044,31 @@ fileprivate struct FfiConverterSequenceTypeLocalMessage: FfiConverterRustBuffer 
         seq.reserveCapacity(Int(len))
         for _ in 0 ..< len {
             seq.append(try FfiConverterTypeLocalMessage.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeLocalMessageInsert: FfiConverterRustBuffer {
+    typealias SwiftType = [LocalMessageInsert]
+
+    public static func write(_ value: [LocalMessageInsert], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeLocalMessageInsert.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [LocalMessageInsert] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [LocalMessageInsert]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeLocalMessageInsert.read(from: &buf))
         }
         return seq
     }
@@ -14080,6 +14540,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_method_localstore_insert_message() != 2107) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_construct_core_checksum_method_localstore_insert_messages() != 25547) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_construct_core_checksum_method_localstore_is_processed() != 48882) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -14282,6 +14745,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_mlsstore_remove_member() != 48469) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_notificationpeek_peek() != 41718) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_orchestratorcore_ack_is_processed() != 63134) {
@@ -14539,6 +15005,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_constructor_localstore_new() != 34198) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_construct_core_checksum_constructor_notificationpeek_new() != 3700) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_construct_core_checksum_constructor_rustackstore_new() != 64675) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -14546,6 +15015,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_localstoreobserver_on_change() != 28445) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_peeksessionsource_session() != 52815) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_platformbridge_save_to_secure_store() != 64407) {
@@ -14568,6 +15040,7 @@ private let initializationResult: InitializationResult = {
     }
 
     uniffiCallbackInitLocalStoreObserver()
+    uniffiCallbackInitPeekSessionSource()
     uniffiCallbackInitPlatformBridge()
     uniffiCallbackInitPowProgressCallback()
     return InitializationResult.ok

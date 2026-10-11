@@ -58,6 +58,35 @@ final class LocalStoreSessionTests: XCTestCase {
         }
     }
 
+    /// TODO 137's check "nothing on disk is in the clear", through the repositories the app will
+    /// use: the file and its WAL hold neither the message, its search text nor the peer's name.
+    /// No Swift mutation reaches this — the encryption is the crate's; it fails if the app's link
+    /// resolves the store's `sqlite3_*` to the system library (`LocalStoreBindingTests`), which
+    /// ignores `PRAGMA key` and writes every row in the clear.
+    func testNothingTheRepositoriesWriteIsOnDiskInTheClear() throws {
+        let session = try LocalStoreSession.open(at: url, key: key).get()
+        let contacts = LocalStoreContactStore(session: session)
+        var peer = ContactRecord.new(id: "peer", isContact: true, addedAt: nil)
+        peer.displayName = "Unmistakable-Peer-Name"
+        try contacts.insert(peer)
+        let chat = try LocalStoreChatStore(session: session).openChat(withPeer: "peer").chat
+        let text = "Unmistakable-Message-Text"
+        try LocalStoreMessageStore(session: session).insert(MessageRecord(
+            id: "m1", chatId: chat.id, fromUserId: "peer", toUserId: "me", isSentByMe: false,
+            timestamp: Date(), orderKey: "k1", body: Data(text.utf8), contentType: .regular,
+            deliveryStatus: .delivered, retryCount: 0, suiteId: 4, isEdited: false, editedAt: nil,
+            replyToMessageId: nil, replyQuote: nil, transcript: nil, transcriptLanguage: nil,
+            transcriptGeneratedAt: nil
+        ), searchText: text)
+
+        var bytes = try Data(contentsOf: url)
+        if let wal = try? Data(contentsOf: URL(fileURLWithPath: url.path + "-wal")) { bytes.append(wal) }
+        XCTAssertFalse(bytes.isEmpty)
+        for needle in ["Unmistakable-Message", "Unmistakable-Peer", "SQLite format 3"] {
+            XCTAssertNil(bytes.range(of: Data(needle.utf8)), needle)
+        }
+    }
+
     func testWipeRemovesTheFilesAndClosesTheStore() throws {
         let session = try LocalStoreSession.open(at: url, key: key).get()
         _ = try session.store.recordPeerDevice(device: device("d1"))

@@ -3,8 +3,9 @@
 //  ConstructMessengerTests
 //
 //  What any `MessageStore` must answer — the same claims `construct-store`'s own tests make of
-//  `LocalStore` (store_test.rs, messages domain), run against Core Data today. Each test names the
-//  mutation that must redden it.
+//  `LocalStore` (store_test.rs, messages domain), run on both implementations: Core Data here,
+//  `LocalStore` in the subclass below. What only Core Data has — the body sealed per row — is
+//  `CoreDataMessageStoreTests`. Each test names the mutation that must redden it.
 //
 
 import CoreData
@@ -12,23 +13,28 @@ import XCTest
 @testable import Construct_Messenger
 
 @MainActor
-final class MessageStoreTests: XCTestCase {
+class MessageStoreTests: XCTestCase {
 
-    private var container: NSPersistentContainer!
-    private var store: CoreDataMessageStore!
+    /// A message store, and the chat and contact stores over the same database to seed with.
+    func makeStores() -> (messages: any MessageStore, chats: any ChatStore, contacts: any ContactStore) {
+        let container = PersistenceController(inMemory: true).container
+        return (CoreDataMessageStore(container: container), CoreDataChatStore(container: container),
+                CoreDataContactStore(container: container))
+    }
+
+    private var store: (any MessageStore)!
     private var chatId = ""
 
     override func setUp() {
         super.setUp()
-        container = PersistenceController(inMemory: true).container
-        store = CoreDataMessageStore(container: container)
-        try! CoreDataContactStore(container: container).insert(.new(id: "peer", isContact: true, addedAt: nil))
-        chatId = try! CoreDataChatStore(container: container).openChat(withPeer: "peer").chat.id
+        let stores = makeStores()
+        store = stores.messages
+        try! stores.contacts.insert(.new(id: "peer", isContact: true, addedAt: nil))
+        chatId = try! stores.chats.openChat(withPeer: "peer").chat.id
     }
 
     override func tearDown() {
         store = nil
-        container = nil
         super.tearDown()
     }
 
@@ -59,20 +65,6 @@ final class MessageStoreTests: XCTestCase {
         XCTAssertEqual(try store.message("m1"), written)
         XCTAssertEqual(try store.message("M1")?.id, "m1", "ids are compared without case")
         XCTAssertNil(try store.message("nothing"))
-    }
-
-    /// The body is sealed at rest in Core Data: the stored bytes are not what the message says.
-    /// Mutation: store the payload as `encryptedContent` in the clear.
-    func testTheBodyIsNotStoredInTheClear() throws {
-        try store.insert(record("m1", key: "k1", body: "a secret sentence"), searchText: nil)
-        let context = container.newBackgroundContext()
-        let stored = try context.performAndWait {
-            let req = Message.fetchRequest()
-            req.predicate = NSPredicate(format: "id == %@", "m1")
-            return try XCTUnwrap(context.fetch(req).first).encryptedContent
-        }
-        XCTAssertFalse(stored.isEmpty)
-        XCTAssertNil(stored.range(of: Data("a secret sentence".utf8)))
     }
 
     /// One id, one message; a message needs its chat. Mutation: drop the existing-row check.
@@ -184,6 +176,29 @@ final class MessageStoreTests: XCTestCase {
         XCTAssertNotNil(try store.message("m2"))
     }
 
+    /// A history import lands a batch: what is new is added, what is held is kept. Mutation:
+    /// overwrite a held message in the batch.
+    func testABatchAddsWhatIsNewAndKeepsWhatIsHeld() throws {
+        try store.insert(record("held", key: "k0", body: "old"), searchText: nil)
+        let added = try store.insert([
+            (record("m1", key: "k1"), "one"), (record("held", key: "k9", body: "new"), nil),
+            (record("m2", key: "k2"), nil),
+        ])
+        XCTAssertEqual(added, ["m1", "m2"])
+        XCTAssertEqual(try store.message("held").map { String(decoding: $0.body, as: UTF8.self) }, "old")
+        XCTAssertEqual(try store.messages(inChat: chatId, before: nil, limit: 10).map(\.id), ["held", "m1", "m2"])
+        XCTAssertEqual(try store.insert([]), [])
+    }
+
+    /// A control payload that reached the store typed `.regular` is typed as control, so it never
+    /// shows as a bubble. Mutation: skip `MessageContentType.infer` on insert.
+    func testALeakedControlPayloadIsTypedAsControl() throws {
+        try store.insert(record("ctl", key: "k1", body: "__session_ping"), searchText: nil)
+        XCTAssertEqual(try store.message("ctl")?.contentType, .sessionPing)
+        try store.insert(record("txt", key: "k2", body: "just words"), searchText: nil)
+        XCTAssertEqual(try store.message("txt")?.contentType, .regular)
+    }
+
     /// Writes are announced by message id. Mutation: return `nil` for a `Message` in the feed.
     func testWritesAreAnnounced() async throws {
         var seen = Set<String>()
@@ -194,5 +209,62 @@ final class MessageStoreTests: XCTestCase {
         try store.setDeliveryStatus("m1", .sent)
         for _ in 0..<200 where !seen.contains("m1") { try? await Task.sleep(nanoseconds: 10_000_000) }
         XCTAssertTrue(seen.contains("m1"))
+    }
+}
+
+/// The same cases on the crate.
+final class LocalStoreMessageStoreTests: MessageStoreTests {
+    override func makeStores() -> (messages: any MessageStore, chats: any ChatStore, contacts: any ContactStore) {
+        let session = LocalStoreSession.inMemoryForTesting()
+        return (LocalStoreMessageStore(session: session), LocalStoreChatStore(session: session),
+                LocalStoreContactStore(session: session))
+    }
+}
+
+/// What only Core Data has: the body sealed per row (`MessageKeyStore`). The crate encrypts the
+/// whole database instead — `LocalStoreSessionTests` reads its file.
+@MainActor
+final class CoreDataMessageStoreTests: XCTestCase {
+
+    private var container: NSPersistentContainer!
+    private var store: CoreDataMessageStore!
+    private var chatId = ""
+
+    override func setUp() {
+        super.setUp()
+        container = PersistenceController(inMemory: true).container
+        store = CoreDataMessageStore(container: container)
+        try! CoreDataContactStore(container: container).insert(.new(id: "peer", isContact: true, addedAt: nil))
+        chatId = try! CoreDataChatStore(container: container).openChat(withPeer: "peer").chat.id
+    }
+
+    override func tearDown() {
+        store = nil
+        container = nil
+        super.tearDown()
+    }
+
+    private func record(_ id: String, key: String, body: String) -> MessageRecord {
+        MessageRecord(
+            id: id, chatId: chatId, fromUserId: "me", toUserId: "peer", isSentByMe: true,
+            timestamp: Date(timeIntervalSince1970: 1_000), orderKey: key, body: Data(body.utf8),
+            contentType: .regular, deliveryStatus: .sending, retryCount: 0, suiteId: 4,
+            isEdited: false, editedAt: nil, replyToMessageId: nil, replyQuote: nil, transcript: nil,
+            transcriptLanguage: nil, transcriptGeneratedAt: nil
+        )
+    }
+
+    /// The body is sealed at rest in Core Data: the stored bytes are not what the message says.
+    /// Mutation: store the payload as `encryptedContent` in the clear.
+    func testTheBodyIsNotStoredInTheClear() throws {
+        try store.insert(record("m1", key: "k1", body: "a secret sentence"), searchText: nil)
+        let context = container.newBackgroundContext()
+        let stored = try context.performAndWait {
+            let req = Message.fetchRequest()
+            req.predicate = NSPredicate(format: "id == %@", "m1")
+            return try XCTUnwrap(context.fetch(req).first).encryptedContent
+        }
+        XCTAssertFalse(stored.isEmpty)
+        XCTAssertNil(stored.range(of: Data("a secret sentence".utf8)))
     }
 }

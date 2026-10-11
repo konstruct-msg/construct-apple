@@ -135,3 +135,46 @@ extension ReactionRecord {
         )
     }
 }
+
+/// The crate's `reactions`. Off until step 4 switches macOS over (`LocalRepositories`). Which
+/// reaction is an orphan — its message not held — is the crate's `expire_reactions`. Ids cross in
+/// lowercase, the form the crate keeps targets in, as `CoreDataReactionStore` writes them.
+final class LocalStoreReactionStore: ReactionStore, @unchecked Sendable {
+
+    private let session: LocalStoreSession
+    private var store: LocalStore { session.store }
+
+    init(session: LocalStoreSession) {
+        self.session = session
+    }
+
+    func reaction(on targetMessageId: String, by reactorUserId: String) throws -> ReactionRecord? {
+        let reactor = reactorUserId.lowercased()
+        return try reactions(on: targetMessageId).first { $0.reactorUserId == reactor }
+    }
+
+    func reactions(on targetMessageId: String) throws -> [ReactionRecord] {
+        try store.reactions(targetMessageId: targetMessageId.lowercased()).map(ReactionRecord.init)
+    }
+
+    func allReactions() throws -> [ReactionRecord] {
+        try store.allReactions().map(ReactionRecord.init)
+    }
+
+    func upsert(_ reaction: ReactionRecord) throws {
+        var row = reaction.local
+        row.targetMessageId = reaction.targetMessageId.lowercased()
+        row.reactorUserId = reaction.reactorUserId.lowercased()
+        try store.upsertReaction(reaction: row)
+    }
+
+    func delete(on targetMessageId: String, by reactorUserId: String) throws {
+        try store.deleteReaction(
+            targetMessageId: targetMessageId.lowercased(), reactorUserId: reactorUserId.lowercased()
+        )
+    }
+
+    func expireOrphans(receivedAtOrBefore cutoff: Date) throws -> Int {
+        Int(try store.expireReactions(cutoff: cutoff.unixMs))
+    }
+}
