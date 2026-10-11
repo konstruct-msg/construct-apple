@@ -1166,7 +1166,7 @@ final class MessageRouter {
                     continue
                 }
 
-                switch chunkReassembler.process(data: plaintext, envelopeId: message.id) {
+                switch chunkReassembler.process(data: plaintext, senderId: otherUserId) {
                 case .assembled(let text, let quoted, let e2eMessageId, let mediaAlbum, let storagePayload):
                     handleResolvedMessage(
                         text,
@@ -2004,7 +2004,7 @@ final class MessageRouter {
         myUserId: String,
         in context: NSManagedObjectContext
     ) {
-        switch chunkReassembler.assemble(data: plaintext, envelopeId: original.id) {
+        switch chunkReassembler.assemble(data: plaintext, senderId: original.from) {
         case .incomplete:
             Log.debug("SENDER_SYNC: chunk incomplete — waiting for more", category: "MessageRouter")
         case .invalid(let reason):

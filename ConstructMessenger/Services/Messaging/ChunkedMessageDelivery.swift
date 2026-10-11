@@ -49,13 +49,14 @@ final class ChunkedMessageReassembler {
 
     /// Decode one decrypted payload.
     ///
-    /// `envelopeId` is the transport id that carried these bytes. It is recorded with the partial
-    /// so the caller can mark it processed the moment the bytes are durable — an intermediate
-    /// chunk that is never marked is what let the same ids loop through redelivery.
+    /// `senderId` is the account the bytes came from: a partial message is held under it, so a
+    /// chunk another sender sends under the same message id is not added to it. Until 2026-10-11
+    /// the envelope id took this place and was stored with the partial for the caller to mark —
+    /// which no caller did; the router marks each envelope itself.
     ///
     /// `now` is a parameter only so expiry is testable without waiting out the retention window.
-    func process(data: Data, envelopeId: String, now: Date = Date()) -> ChunkedMessageResult {
-        switch assemble(data: data, envelopeId: envelopeId, now: now) {
+    func process(data: Data, senderId: String, now: Date = Date()) -> ChunkedMessageResult {
+        switch assemble(data: data, senderId: senderId, now: now) {
         case .complete(let assembled, let e2eMessageId):
             return decodeAssembled(assembled, e2eMessageId: e2eMessageId)
         case .notFramed(let raw):
@@ -78,19 +79,21 @@ final class ChunkedMessageReassembler {
     /// Splitting rather than special-casing: the framing logic stays in one place and `process`
     /// keeps calling it, so a sender-sync stream and an ordinary one cannot drift apart in how
     /// they are reassembled.
-    func assemble(data: Data, envelopeId: String, now: Date = Date()) -> ChunkedAssembly {
+    /// `senderId` is the account the chunks came from: a message is one sender's, and another
+    /// sender's chunk under the same id is not added to it.
+    func assemble(data: Data, senderId: String, now: Date = Date()) -> ChunkedAssembly {
         // Sweep on every decrypted message, not only on chunked ones: a stalled reassembly is
         // most likely to be noticed while ordinary traffic keeps flowing from other peers.
         store.sweepExpired(now: now)
 
         // A KNST frame, as the core reads it; anything else is a direct proto or legacy text.
         guard let parsed = ChunkedMessageCodec.parseChunk(data: data) else { return .notFramed(data) }
-        return assembleKnstChunk(parsed, envelopeId: envelopeId, now: now)
+        return assembleKnstChunk(parsed, senderId: senderId, now: now)
     }
 
     private func assembleKnstChunk(
         _ parsed: ChunkedMessageCodec.ParsedChunk,
-        envelopeId: String,
+        senderId: String,
         now: Date
     ) -> ChunkedAssembly {
         if parsed.totalChunks == 1 {
@@ -102,23 +105,23 @@ final class ChunkedMessageReassembler {
         }
 
         guard let complete = store.put(
+            senderId: senderId,
             messageId: parsed.messageId,
             chunkIndex: parsed.chunkIndex,
             totalChunks: parsed.totalChunks,
             plaintextLength: parsed.plaintextLength,
             contentType: parsed.contentType,
             payload: parsed.payload,
-            envelopeId: envelopeId,
             now: now
         ) else {
             return .incomplete
         }
 
         guard let assembled = complete.assembled() else {
-            store.remove(messageId: parsed.messageId)
+            store.remove(senderId: senderId, messageId: parsed.messageId)
             return .invalid("Plaintext length exceeds assembled size")
         }
-        store.remove(messageId: parsed.messageId)
+        store.remove(senderId: senderId, messageId: parsed.messageId)
         return .complete(assembled, e2eMessageId: Self.e2eId(from: parsed.messageId))
     }
 

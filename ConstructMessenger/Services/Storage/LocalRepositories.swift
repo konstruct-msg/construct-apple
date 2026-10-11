@@ -36,6 +36,8 @@ enum LocalRepositories {
     private(set) nonisolated(unsafe) static var processedMessages: any ProcessedMessageStore =
         CoreDataProcessedMessageStore(container: PersistenceController.shared.container)
 
+    private(set) nonisolated(unsafe) static var pendingChunks: any PendingChunkStore = FilePendingChunkStore()
+
     #if DEBUG
     /// A test's own store (an in-memory container); `nil` restores the app's.
     static func usePeerDevicesForTesting(_ store: (any PeerDeviceStore)?) {
@@ -63,6 +65,10 @@ enum LocalRepositories {
 
     static func useProcessedMessagesForTesting(_ store: (any ProcessedMessageStore)?) {
         processedMessages = store ?? CoreDataProcessedMessageStore(container: PersistenceController.shared.container)
+    }
+
+    static func usePendingChunksForTesting(_ store: (any PendingChunkStore)?) {
+        pendingChunks = store ?? FilePendingChunkStore()
     }
 
     static func useServerMessageIdsForTesting(_ store: (any ServerMessageIdStore)?) {
