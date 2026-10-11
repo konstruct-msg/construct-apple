@@ -112,9 +112,7 @@ class ProfileSharingManager {
                         userId, displayName: nameSnapshot.isEmpty ? live.displayName : nameSnapshot,
                         sharedWithMeAt: live.sharedWithMeAt ?? Date(), profileEditedAtMs: live.profileEditedAtMs
                     )
-                    try contacts.setAvatar(
-                        userId, decryptedData, pendingRef: live.pendingAvatarRef, pendingSince: live.pendingAvatarSince
-                    )
+                    try contacts.setAvatarKeepingPending(userId, decryptedData)
                     Log.info("Avatar downloaded and saved for user \(userId)", category: "ProfileSharingManager")
                 } catch {
                     Log.error("Failed to download avatar: \(error.localizedDescription)", category: "ProfileSharingManager")
@@ -124,9 +122,7 @@ class ProfileSharingManager {
                   let avatarData = Data(base64Encoded: avatarBase64) {
             // Old format: base64 data (backward compatibility)
             do {
-                try contacts.setAvatar(
-                    userId, avatarData, pendingRef: held.pendingAvatarRef, pendingSince: held.pendingAvatarSince
-                )
+                try contacts.setAvatarKeepingPending(userId, avatarData)
             } catch {
                 Log.error("Failed to save avatar: \(error)", category: "ProfileSharingManager")
             }
@@ -166,7 +162,7 @@ class ProfileSharingManager {
             )
             switch action {
             case .download(let ref):
-                try contacts.setAvatar(userId, held.avatar, pendingRef: try? ref.stored(), pendingSince: Date())
+                try contacts.setPendingAvatar(userId, ref: try ref.stored(), since: Date())
             case .clear:
                 try contacts.setAvatar(userId, nil, pendingRef: nil, pendingSince: nil)
             case .keep:
@@ -206,10 +202,13 @@ class ProfileSharingManager {
             let data = try await MediaManager.shared.downloadAndDecryptAvatar(
                 mediaId: ref.mediaId, mediaUrl: ref.mediaUrl, mediaKey: ref.mediaKey
             )
-            // A newer profile may have named another avatar while this one downloaded.
-            guard (try? contacts.contact(contactId))?.pendingAvatarRef == stored else { return }
-            _ = try? contacts.setAvatar(contactId, data, pendingRef: nil, pendingSince: nil)
-            Log.info("Avatar of \(contact)… downloaded", category: "ProfileSharingManager")
+            // A newer profile may have named another avatar while this one downloaded; the store
+            // checks that in the write.
+            if (try? contacts.completePendingAvatar(contactId, expected: stored, avatar: data)) == true {
+                Log.info("Avatar of \(contact)… downloaded", category: "ProfileSharingManager")
+            } else {
+                Log.info("Avatar of \(contact)… downloaded after a newer one was named — not used", category: "ProfileSharingManager")
+            }
         } catch let error as RPCError where error.code == .notFound {
             Log.info("Avatar of \(contact)… is gone from the media store — dropped", category: "ProfileSharingManager")
             clearPending(contactId, ifStill: stored)
@@ -221,8 +220,6 @@ class ProfileSharingManager {
     /// The pending reference goes, the avatar held stays — unless a newer profile has named
     /// another one meanwhile.
     private static func clearPending(_ contactId: String, ifStill stored: Data) {
-        let contacts = LocalRepositories.contacts
-        guard let live = try? contacts.contact(contactId), live.pendingAvatarRef == stored else { return }
-        _ = try? contacts.setAvatar(contactId, live.avatar, pendingRef: nil, pendingSince: nil)
+        _ = try? LocalRepositories.contacts.dropPendingAvatar(contactId, expected: stored)
     }
 }
