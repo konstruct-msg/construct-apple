@@ -44,6 +44,18 @@ struct ContactRecord: Equatable, Sendable, Identifiable {
         ContactName.resolved(alias: localAlias, displayName: displayName, username: username, id: id)
     }
 
+    /// Whether a search for `query` finds this person: by the name shown for them — which may be
+    /// our alias or a generated name, neither of them a stored field — by their shared name, or
+    /// by their username, with or without the `@` the search prompt suggests.
+    func matches(query: String) -> Bool {
+        let query = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else { return false }
+        let handle = ContactName.handle(query)
+        return resolvedDisplayName.localizedCaseInsensitiveContains(query)
+            || displayName.localizedCaseInsensitiveContains(query)
+            || (!handle.isEmpty && username.localizedCaseInsensitiveContains(handle))
+    }
+
     var trustAlert: ContactTrustAlert? {
         ContactTrustAlert(notice: securityNotice, ktStatus: ktStatus)
     }
