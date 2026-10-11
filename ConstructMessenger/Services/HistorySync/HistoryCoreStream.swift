@@ -291,7 +291,8 @@ extension HistoryQRPin {
 // MARK: - Import
 
 /// Where received events go: transcript records into Core Data through the importer, media into
-/// files. Records are applied on `context`'s queue, one hop per chunk of events.
+/// files. Records are applied on `context`'s queue, one hop per chunk of events — the queue keeps
+/// the importer's calls in order; the importer itself writes through the repositories.
 final class HistoryImportSink {
     private let importer: HistorySnapshotImporter
     private let context: NSManagedObjectContext
@@ -305,7 +306,7 @@ final class HistoryImportSink {
     private(set) var seen = 0
 
     init(expectedUserId: String, context: NSManagedObjectContext) {
-        self.importer = HistorySnapshotImporter(expectedUserId: expectedUserId, context: context)
+        self.importer = HistorySnapshotImporter(expectedUserId: expectedUserId)
         self.context = context
     }
 

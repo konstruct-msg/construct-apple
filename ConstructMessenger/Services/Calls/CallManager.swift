@@ -1128,7 +1128,7 @@ final class CallManager: CallUIManaging {
         PerformanceMetrics.shared.cancelStart(.callSignalOpenStart, label: metricsLabel)
 
         // Determine call status for history
-        let historyStatus: CTCallRecord.Status
+        let historyStatus: CallRecord.Status
         switch reason {
         case .hangup(let r):
             switch r {
