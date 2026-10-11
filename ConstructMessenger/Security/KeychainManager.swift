@@ -27,7 +27,7 @@ class KeychainManager {
         "deviceSigningKey", "deviceIdentityKey",
         APIConstants.privateKeyKey,
         "identity_key", "signed_prekey", "signing_key",
-        "hybrid_sig_private_key", "crypto_private_keys", "crypto_otpks",
+        "hybrid_sig_private_key", KeychainSessionAccounts.keyRecord, "crypto_otpks",
         // v2: written by callers that used to rely on the WhenUnlocked default.
         "construct.kyber_session_state", "tracked_prekey_ids",
         // v3: at-rest key for partial multi-chunk messages (background decrypt must read it).
@@ -117,7 +117,7 @@ class KeychainManager {
             Log.error("Failed to convert deviceId to UTF-8", category: "Keychain")
             return
         }
-        let success = save(data, forKey: "deviceId", accessible: kSecAttrAccessibleAfterFirstUnlock)
+        let success = save(data, forKey: KeychainSessionAccounts.deviceId, accessible: kSecAttrAccessibleAfterFirstUnlock)
         if success {
             Log.info("Device ID saved to Keychain", category: "Keychain")
         }
@@ -125,7 +125,7 @@ class KeychainManager {
     
     /// Load device ID
     func loadDeviceID() -> String? {
-        guard let data = load(forKey: "deviceId") else {
+        guard let data = load(forKey: KeychainSessionAccounts.deviceId) else {
             return nil
         }
         return String(data: data, encoding: .utf8)
@@ -244,7 +244,7 @@ class KeychainManager {
     
     /// Delete all device keys (for logout/reset)
     func deleteDeviceKeys() {
-        delete(forKey: "deviceId")
+        delete(forKey: KeychainSessionAccounts.deviceId)
         deleteLegacyDeviceKeyCopies()
         Log.info("Device keys deleted from Keychain", category: "Keychain")
     }
@@ -257,7 +257,7 @@ class KeychainManager {
             Log.error("Failed to convert userId to UTF-8 data", category: "Keychain")
             return
         }
-        let success = save(data, forKey: "userId", accessible: kSecAttrAccessibleAfterFirstUnlock)
+        let success = save(data, forKey: KeychainSessionAccounts.userId, accessible: kSecAttrAccessibleAfterFirstUnlock)
         if !success {
             Log.error("Failed to save userId to Keychain", category: "Keychain")
         } else {
@@ -267,7 +267,7 @@ class KeychainManager {
     
     /// Load user ID from Keychain
     func loadUserID() -> String? {
-        guard let data = load(forKey: "userId") else {
+        guard let data = load(forKey: KeychainSessionAccounts.userId) else {
             Log.debug("No userId found in Keychain", category: "Keychain")
             return nil
         }
@@ -281,7 +281,7 @@ class KeychainManager {
     
     /// Delete user ID from Keychain
     func deleteUserID() {
-        delete(forKey: "userId")
+        delete(forKey: KeychainSessionAccounts.userId)
         Log.info("User ID deleted from Keychain", category: "Keychain")
     }
     
@@ -376,17 +376,17 @@ class KeychainManager {
     /// Save private keys in CFE binary format.
     @discardableResult
     func savePrivateKeys(_ data: Data) -> Bool {
-        return save(data, forKey: "crypto_private_keys", accessible: Self.cryptoKeyAccessible)
+        return save(data, forKey: KeychainSessionAccounts.keyRecord, accessible: Self.cryptoKeyAccessible)
     }
 
     /// Load raw private key bytes (CFE binary).
     func loadPrivateKeysData() -> Data? {
-        load(forKey: "crypto_private_keys")
+        load(forKey: KeychainSessionAccounts.keyRecord)
     }
 
     /// Delete private keys CFE blob.
     func deletePrivateKeys() {
-        delete(forKey: "crypto_private_keys")
+        delete(forKey: KeychainSessionAccounts.keyRecord)
     }
 
     // MARK: - One-Time Prekeys (OTPK) persistence
@@ -487,7 +487,7 @@ class KeychainManager {
         delete(forKey: "identity_key")
         delete(forKey: "signed_prekey")
         delete(forKey: "signing_key")
-        delete(forKey: "userId")
+        delete(forKey: KeychainSessionAccounts.userId)
         deleteHybridSigPrivateKey()
         deletePrivateKeys()
         deleteAllSessions()
@@ -835,8 +835,8 @@ class KeychainManager {
 
     /// The three-state reads behind the device identity. Their `nil` used to mean "register
     /// a new account", which is why they get the careful API.
-    func readDeviceID() -> KeychainRead { read(forKey: "deviceId") }
-    func readPrivateKeys() -> KeychainRead { read(forKey: "crypto_private_keys") }
+    func readDeviceID() -> KeychainRead { read(forKey: KeychainSessionAccounts.deviceId) }
+    func readPrivateKeys() -> KeychainRead { read(forKey: KeychainSessionAccounts.keyRecord) }
 
     private func delete(forKey key: String) {
         let query: [String: Any] = [

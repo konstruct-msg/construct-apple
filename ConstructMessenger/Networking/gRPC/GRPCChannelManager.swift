@@ -34,6 +34,7 @@ final class GRPCChannelManager: Sendable {
     func setCustomServer(host: String, port: Int) {
         UserDefaults.standard.set(host, forKey: Self.customHostKey)
         UserDefaults.standard.set(port, forKey: Self.customPortKey)
+        publishEndpoint()
         invalidatePersistentClient()
         NotificationCenter.default.post(name: .grpcServerChanged, object: nil)
     }
@@ -41,6 +42,7 @@ final class GRPCChannelManager: Sendable {
     func resetToDefaultServer() {
         UserDefaults.standard.removeObject(forKey: Self.customHostKey)
         UserDefaults.standard.removeObject(forKey: Self.customPortKey)
+        publishEndpoint()
         invalidatePersistentClient()
         NotificationCenter.default.post(name: .grpcServerChanged, object: nil)
     }
@@ -64,7 +66,19 @@ final class GRPCChannelManager: Sendable {
         _overrideProxyPortLock.withLock { _overrideProxyPort }
     }
 
+    /// Stores the endpoint this manager connects to where the notification extension reads it
+    /// (`ServerEndpoint`). Called at start and on every server change: the extension cannot
+    /// resolve it, and a stale one would send its fetch to the wrong server.
+    private func publishEndpoint() {
+        _ = KeychainManager.shared.saveData(
+            Data(ServerEndpoint(host: currentHost, port: currentPort).stored.utf8),
+            forKey: KeychainSessionAccounts.serverEndpoint,
+            accessible: KeychainManager.cryptoKeyAccessible
+        )
+    }
+
     private init() {
+        publishEndpoint()
         #if !os(macOS)
         // Resolve GeoIP in the background so relay region preference is ready
         // before the first connection attempt. Idempotent — uses cached UserDefaults
