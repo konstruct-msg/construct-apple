@@ -339,3 +339,109 @@ extension MessageRecord {
         )
     }
 }
+
+/// The crate's `messages`. Off until step 4 switches macOS over (`LocalRepositories`). The whole
+/// database is encrypted, so the body is stored as it is — no per-row key (`MessageKeyStore`).
+/// The rules — an insert never overwrites, the delivery-status order, the archive outcome, the
+/// retry count — are the crate's statements.
+///
+/// Message ids cross in lowercase: the crate compares exactly, and rows written before ids were
+/// lowercased at the seam exist only in Core Data. Chat ids are not touched.
+final class LocalStoreMessageStore: MessageStore, @unchecked Sendable {
+
+    private let session: LocalStoreSession
+    private var store: LocalStore { session.store }
+
+    init(session: LocalStoreSession) {
+        self.session = session
+    }
+
+    func changes() -> AsyncStream<Set<String>> { session.changes(of: .messages) }
+
+    func message(_ id: String) throws -> MessageRecord? {
+        try store.message(id: id.lowercased()).map { MessageRecord($0) }
+    }
+
+    func messages(inChat chatId: String, before: (orderKey: String, id: String)?, limit: Int) throws -> [MessageRecord] {
+        try store.messagesBefore(
+            chatId: chatId, beforeOrderKey: before?.orderKey, beforeId: before?.id.lowercased(),
+            limit: UInt32(clamping: limit)
+        ).map { MessageRecord($0) }
+    }
+
+    func allMessages(after: (orderKey: String, id: String)?, limit: Int) throws -> [MessageRecord] {
+        try store.allMessagesAfter(
+            afterOrderKey: after?.orderKey, afterId: after?.id.lowercased(), limit: UInt32(clamping: limit)
+        ).map { MessageRecord($0) }
+    }
+
+    // MARK: Writes
+
+    func insert(_ message: MessageRecord, searchText: String?) throws -> Bool {
+        try store.insertMessage(message: Self.row(message), searchText: searchText) == .inserted
+    }
+
+    func insert(_ messages: [(message: MessageRecord, searchText: String?)]) throws -> Set<String> {
+        guard !messages.isEmpty else { return [] }
+        let added = try store.insertMessages(messages: messages.map {
+            LocalMessageInsert(message: Self.row($0.message), searchText: $0.searchText)
+        })
+        return Set(added)
+    }
+
+    func edit(_ id: String, body: Data, searchText: String?, editedAt: Date) throws -> Bool {
+        try store.editMessage(id: id.lowercased(), body: body, searchText: searchText, editedAt: editedAt.unixMs)
+    }
+
+    func setBody(_ id: String, body: Data, searchText: String?) throws -> Bool {
+        try store.setMessageBody(id: id.lowercased(), body: body, searchText: searchText)
+    }
+
+    func setDeliveryStatus(_ id: String, _ status: DeliveryStatus) throws -> Bool {
+        try store.setDeliveryStatus(id: id.lowercased(), status: status.rawValue)
+    }
+
+    func applySessionArchive(_ id: String, maxRetries: Int16) throws -> DeliveryStatusTransition.ArchiveOutcome? {
+        switch try store.applySessionArchive(id: id.lowercased(), maxRetries: maxRetries) {
+        case .keep?: return .keep
+        case .resend?: return .resend
+        case .giveUp?: return .giveUp
+        case nil: return nil
+        }
+    }
+
+    func setRetryCount(_ id: String, _ count: Int16) throws -> Bool {
+        try store.setRetryCount(id: id.lowercased(), count: count)
+    }
+
+    func incrementRetryCount(_ id: String) throws -> Int16? {
+        try store.incrementRetryCount(id: id.lowercased())
+    }
+
+    func setOrderKey(_ id: String, _ orderKey: String) throws -> Bool {
+        try store.setOrderKey(id: id.lowercased(), orderKey: orderKey)
+    }
+
+    func setTranscript(_ id: String, text: String?, language: String?, generatedAt: Date?) throws -> Bool {
+        try store.setTranscript(id: id.lowercased(), text: text, language: language, generatedAt: generatedAt?.unixMs)
+    }
+
+    func delete(_ ids: Set<String>) throws {
+        for id in Set(ids.map { $0.lowercased() }) {
+            try store.deleteMessage(id: id)
+            MessageDisplayCache.shared.evict(messageId: id)
+        }
+    }
+
+    /// The crate's row for `message`: its id lowercased, and a `.regular` body that is a leaked
+    /// control payload typed as one — `MessageContentType.infer`, the same call Core Data's
+    /// `applyStoredEncryption` makes, so a control message never shows as a bubble on either.
+    private static func row(_ message: MessageRecord) -> LocalMessage {
+        var row = message.local
+        row.id = message.id.lowercased()
+        if message.contentType == .regular {
+            row.contentType = MessageContentType.infer(from: message.body).rawValue
+        }
+        return row
+    }
+}
