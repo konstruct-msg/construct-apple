@@ -221,6 +221,71 @@ class ContactStoreTests: XCTestCase {
         XCTAssertEqual(try store.contactsWithPendingAvatar().map(\.id), ["p"])
     }
 
+    // MARK: - Avatar (TODO 139)
+
+    /// A download finishing after a newer profile named another avatar must not land. Mutation:
+    /// drop the `pendingAvatarRef == expected` condition — A's late download replaces the avatar
+    /// and ends B's wait.
+    func testAnAvatarLandsOnlyWhileItIsTheOneWaiting() throws {
+        try store.insert(.new(id: "a", isContact: true, addedAt: nil))
+        try store.setAvatarKeepingPending("a", Data([0]))
+        let a = Data([0xA]), b = Data([0xB])
+        let sinceB = Date(timeIntervalSince1970: 200)
+        XCTAssertTrue(try store.setPendingAvatar("a", ref: a, since: Date(timeIntervalSince1970: 100)))
+        XCTAssertTrue(try store.setPendingAvatar("a", ref: b, since: sinceB))
+
+        XCTAssertFalse(try store.completePendingAvatar("a", expected: a, avatar: Data([1])))
+        var row = try XCTUnwrap(store.contact("a"))
+        XCTAssertEqual(row.avatar, Data([0]))
+        XCTAssertEqual(row.pendingAvatarRef, b)
+        XCTAssertEqual(row.pendingAvatarSince, sinceB)
+
+        XCTAssertTrue(try store.completePendingAvatar("a", expected: b, avatar: Data([2])))
+        row = try XCTUnwrap(store.contact("a"))
+        XCTAssertEqual(row.avatar, Data([2]))
+        XCTAssertNil(row.pendingAvatarRef)
+        XCTAssertNil(row.pendingAvatarSince)
+
+        XCTAssertFalse(try store.completePendingAvatar("nobody", expected: b, avatar: Data([2])))
+        XCTAssertNil(try store.contact("nobody"))
+    }
+
+    /// Mutation: drop the condition from `dropPendingAvatar` — another download's failure ends
+    /// the wait for the avatar announced after it.
+    func testDroppingAnotherReferenceChangesNothing() throws {
+        try store.insert(.new(id: "a", isContact: true, addedAt: nil))
+        try store.setAvatarKeepingPending("a", Data([0]))
+        try store.setPendingAvatar("a", ref: Data([0xB]), since: Date(timeIntervalSince1970: 200))
+
+        XCTAssertFalse(try store.dropPendingAvatar("a", expected: Data([0xA])))
+        XCTAssertEqual(try store.contact("a")?.pendingAvatarRef, Data([0xB]))
+
+        XCTAssertTrue(try store.dropPendingAvatar("a", expected: Data([0xB])))
+        let row = try XCTUnwrap(store.contact("a"))
+        XCTAssertNil(row.pendingAvatarRef)
+        XCTAssertNil(row.pendingAvatarSince)
+        XCTAssertEqual(row.avatar, Data([0]), "the avatar shown stays")
+    }
+
+    /// Mutation: clear the wait in `setAvatarKeepingPending`, or the avatar in `setPendingAvatar`.
+    func testAnAvatarAndAnAnnouncementEachLeaveTheOtherAlone() throws {
+        try store.insert(.new(id: "a", isContact: true, addedAt: nil))
+        let since = Date(timeIntervalSince1970: 300)
+        try store.setPendingAvatar("a", ref: Data([0xC]), since: since)
+        XCTAssertTrue(try store.setAvatarKeepingPending("a", Data([3])))
+        var row = try XCTUnwrap(store.contact("a"))
+        XCTAssertEqual(row.pendingAvatarRef, Data([0xC]))
+        XCTAssertEqual(row.pendingAvatarSince, since)
+
+        XCTAssertTrue(try store.setPendingAvatar("a", ref: Data([0xD]), since: since))
+        row = try XCTUnwrap(store.contact("a"))
+        XCTAssertEqual(row.avatar, Data([3]))
+        XCTAssertEqual(row.pendingAvatarRef, Data([0xD]))
+
+        XCTAssertFalse(try store.setPendingAvatar("nobody", ref: Data([1]), since: since))
+        XCTAssertFalse(try store.setAvatarKeepingPending("nobody", Data([1])))
+    }
+
     /// Our profile: created when absent, replaced when present, and never a contact.
     func testOurProfileIsSavedAsOneRow() throws {
         var me = OwnProfileRecord(accountId: "me", username: "max", displayName: "Max", avatar: nil, profileEditedAtMs: 1)
