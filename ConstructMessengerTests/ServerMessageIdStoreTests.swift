@@ -3,30 +3,26 @@
 //  ConstructMessengerTests
 //
 //  What any `ServerMessageIdStore` must do, and that `ServerMessageIdMap` answers across a
-//  restart. The crate states the same rules in `construct-core/store/tests/store_test.rs`.
+//  restart. Run on both implementations — Core Data here, `LocalStore` in the subclass below. The
+//  crate states the same rules in `construct-core/store/tests/store_test.rs`.
 //
 
-import CoreData
 import XCTest
 @testable import Construct_Messenger
 
-final class ServerMessageIdStoreTests: XCTestCase {
+class ServerMessageIdStoreTests: XCTestCase {
 
-    private var container: NSPersistentContainer!
-
-    override func setUp() {
-        super.setUp()
-        container = PersistenceController(inMemory: true).container
+    func makeStore() -> any ServerMessageIdStore {
+        CoreDataServerMessageIdStore(container: PersistenceController(inMemory: true).container)
     }
 
     override func tearDown() {
         LocalRepositories.useServerMessageIdsForTesting(nil)
-        container = nil
         super.tearDown()
     }
 
     func testAServerIdMapsBackInAnyCaseAndARecordAgainIsACorrection() throws {
-        let store = CoreDataServerMessageIdStore(container: container)
+        let store = makeStore()
         try store.record(serverId: "E474825E-AAAA", localId: "8B403CE9-BBBB", at: Date())
         XCTAssertEqual(try store.localId(forServerId: "e474825e-aaaa"), "8b403ce9-bbbb")
 
@@ -36,7 +32,7 @@ final class ServerMessageIdStoreTests: XCTestCase {
     }
 
     func testOnlyIdsOlderThanTheCutoffAreForgotten() throws {
-        let store = CoreDataServerMessageIdStore(container: container)
+        let store = makeStore()
         try store.record(serverId: "old", localId: "a", at: Date(timeIntervalSince1970: 100))
         try store.record(serverId: "new", localId: "b", at: Date(timeIntervalSince1970: 200))
 
@@ -52,14 +48,21 @@ final class ServerMessageIdStoreTests: XCTestCase {
     ///
     /// Mutation: keep the map in memory again — both halves redden.
     func testTheMapWritesThroughAndReadsWhatAnEarlierProcessWrote() throws {
-        LocalRepositories.useServerMessageIdsForTesting(CoreDataServerMessageIdStore(container: container))
+        let store = makeStore()
+        LocalRepositories.useServerMessageIdsForTesting(store)
 
         ServerMessageIdMap.shared.record(serverId: "SEALED-COPY-1", localId: "our-message-1")
-        let nextProcess = CoreDataServerMessageIdStore(container: container)
-        XCTAssertEqual(try nextProcess.localId(forServerId: "sealed-copy-1"), "our-message-1")
+        XCTAssertEqual(try store.localId(forServerId: "sealed-copy-1"), "our-message-1")
 
-        try nextProcess.record(serverId: "written-before-launch", localId: "our-message-0", at: Date())
+        try store.record(serverId: "written-before-launch", localId: "our-message-0", at: Date())
         XCTAssertEqual(ServerMessageIdMap.shared.localId(for: "WRITTEN-BEFORE-LAUNCH"), "our-message-0")
         XCTAssertEqual(ServerMessageIdMap.shared.localId(for: "never-sent"), "never-sent", "identity when unknown")
+    }
+}
+
+/// The same cases on the crate.
+final class LocalStoreServerMessageIdStoreTests: ServerMessageIdStoreTests {
+    override func makeStore() -> any ServerMessageIdStore {
+        LocalStoreServerMessageIdStore(store: LocalStoreSession.inMemoryForTesting().store)
     }
 }
