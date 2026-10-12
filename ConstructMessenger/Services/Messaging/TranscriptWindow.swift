@@ -14,12 +14,33 @@
 import Foundation
 import Observation
 
+/// Who asked for an older batch. Recorded because the two callers are not equivalent and the
+/// difference is invisible in a log otherwise — see `ChatViewModel.loadMoreMessages(trigger:)` and TODO 34.
+enum LoadMoreTrigger: String {
+    /// Explicit request (tests, any future manual control). Always honored by the store.
+    case user
+    /// Infinite-scroll sentinel / near-top geometry. View layer gates via
+    /// `ChatScrollManager.shouldLoadOlderHistory` so entry-time LazyVStack top materialisation
+    /// does not widen the window; residual hits of the counter mean a real near-top or contentFits fill.
+    case indicatorAppeared
+}
+
 @MainActor
 @Observable
 final class TranscriptWindow {
 
     /// Oldest first; only what a person reads — a control or service row is never one.
-    private(set) var rows: [TranscriptRow] = []
+    ///
+    /// Reassigned only when the set or the order of rows changes. A status, an edit or a body read
+    /// late changes one entry's `row` and nothing else, so the list is not republished for it —
+    /// on a long chat every republish was a visible flicker (`ChatMessageStore` measured four in
+    /// one second for one incoming message, 2026-08-11), and a row draws itself again from its own
+    /// entry (`ObservedTranscriptRow`).
+    private(set) var entries: [TranscriptEntry] = []
+
+    /// The rows, read once. Reading this observes every entry: for a caller outside a list's
+    /// render — a test, playback, the gallery — never for the list itself.
+    var rows: [TranscriptRow] { entries.map(\.row) }
     private(set) var hasMore = true
     private(set) var isLoadingMore = false
 
@@ -126,7 +147,20 @@ final class TranscriptWindow {
         // What was just decrypted is what the bubbles are about to ask for.
         for record in shown { MessageDisplayCache.shared.hold(record) }
         let next = shown.map { TranscriptRow($0, revision: revisions[$0.id, default: 0]) }
-        if next != rows { rows = next }
+        let held = Dictionary(entries.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        var reshaped = next.map(\.id) != entries.map(\.id)
+        let updated = next.map { row -> TranscriptEntry in
+            guard let entry = held[row.id], entry.isSentByMe == row.isSentByMe,
+                  entry.safeTimestamp == row.safeTimestamp else {
+                // What grouping reads is fixed per entry; a row whose sender or time moved is a
+                // new entry, and so a new list.
+                reshaped = true
+                return TranscriptEntry(row)
+            }
+            if entry.row != row { entry.row = row }
+            return entry
+        }
+        if reshaped { entries = updated }
     }
 
     // MARK: - Changes
@@ -154,5 +188,23 @@ final class TranscriptWindow {
             let text = LocalMessagePayload.decode(record.body).displayString
             return !MessageContentType.isControlPayload(text) && !MessageContentType.isLegacyDeliveryReceipt(text)
         }
+    }
+}
+
+/// One transcript row, observed on its own. What grouping reads of it — who sent it and when —
+/// never changes for an entry; everything else lives in `row`.
+@MainActor
+@Observable
+final class TranscriptEntry: Identifiable, TranscriptGroupable {
+    let id: String
+    let isSentByMe: Bool
+    let safeTimestamp: Date
+    var row: TranscriptRow
+
+    init(_ row: TranscriptRow) {
+        id = row.id
+        isSentByMe = row.isSentByMe
+        safeTimestamp = row.safeTimestamp
+        self.row = row
     }
 }

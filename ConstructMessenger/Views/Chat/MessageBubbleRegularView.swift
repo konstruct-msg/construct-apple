@@ -15,25 +15,25 @@ import UIKit
 struct MessageBubbleRegularView: View {
     /// Observed so the view re-renders when deliveryStatusRaw (or any @NSManaged property) changes.
     /// NSManagedObject conforms to ObservableObject via KVO, so SwiftUI subscribes automatically.
-    @ObservedObject var message: Message
+    let message: TranscriptRow
 
     let isLastInGroup: Bool
     let isSelected: Bool
     let isEditMode: Bool
     let containerWidth: CGFloat
 
-    let onRetry: ((Message) -> Void)?
-    let onReply: ((Message) -> Void)?
-    let onDelete: ((Message) -> Void)?
-    let onSelect: ((Message) -> Void)?
-    let onEnterSelectMode: ((Message) -> Void)?
+    let onRetry: ((TranscriptRow) -> Void)?
+    let onReply: ((TranscriptRow) -> Void)?
+    let onDelete: ((TranscriptRow) -> Void)?
+    let onSelect: ((TranscriptRow) -> Void)?
+    let onEnterSelectMode: ((TranscriptRow) -> Void)?
     /// Media open — second argument is the album tile index (0 for single-item).
-    let onTapMedia: ((Message, Int) -> Void)?
-    let onEdit: ((Message) -> Void)?
-    let onReplyWithQuote: ((Message, String) -> Void)?
+    let onTapMedia: ((TranscriptRow, Int) -> Void)?
+    let onEdit: ((TranscriptRow) -> Void)?
+    let onReplyWithQuote: ((TranscriptRow, String) -> Void)?
     /// Tap on the in-bubble reply strip — parent jump + soft focus.
-    let onJumpToReply: ((Message) -> Void)?
-    let onReact: ((Message, String) -> Void)?
+    let onJumpToReply: ((TranscriptRow) -> Void)?
+    let onReact: ((TranscriptRow, String) -> Void)?
 
     @GestureState private var swipeOffset: CGFloat = 0
     @State private var isTranscribingVoice = false

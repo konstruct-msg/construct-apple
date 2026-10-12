@@ -76,6 +76,8 @@ struct TranscriptRow: Equatable, Identifiable, Sendable, TranscriptGroupable {
     /// What the chat list shows for this row.
     var previewText: String { payload.previewHint }
     var stickerReference: StickerReference? { payload.stickerReference }
+    /// The message has a body to show — a row stored undecryptable has none until it is read late.
+    var hasDecryptedContent: Bool { !MessageDisplayCache.shared.payloadData(messageId: id).isEmpty }
 
     var transcript: String? { MessageDisplayCache.shared.text(.transcript, messageId: id) }
     /// The reply's quote in its stored form (`ReplyPreviewPayload`), or nil for no reply.

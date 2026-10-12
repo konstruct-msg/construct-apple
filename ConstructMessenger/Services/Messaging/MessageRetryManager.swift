@@ -21,7 +21,7 @@ class MessageRetryManager {
     ///   - context: Core Data context
     ///   - onError: Callback for error messages
     func retryMessage(
-        _ message: Message,
+        _ message: TranscriptRow,
         recipientId: String,
         context: NSManagedObjectContext,
         onError: @escaping (String) -> Void
@@ -33,7 +33,7 @@ class MessageRetryManager {
         }
 
         // Ensure decrypted content exists before proceeding
-        guard message.hasDecryptedContent else {
+        guard !MessageDisplayCache.shared.payloadData(messageId: message.id).isEmpty else {
             Log.error("Cannot retry - no decrypted content", category: "MessageRetryManager")
             return
         }

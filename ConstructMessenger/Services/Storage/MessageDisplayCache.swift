@@ -110,12 +110,18 @@ final class MessageDisplayCache {
     /// than carried in the row, so the text stays in this cache, which `UnsealedMemory` empties
     /// and zeroes. A miss reads the message from `store` and caches its body and both texts.
     func payload(messageId: String, store: any MessageStore = LocalRepositories.messages) -> LocalMessagePayload {
+        LocalMessagePayload.decode(payloadData(messageId: messageId, store: store))
+    }
+
+    /// The raw payload bytes of message `messageId` (CTM1 or legacy UTF-8); empty when there is no
+    /// such message or it has no body. A miss reads as `payload` does.
+    func payloadData(messageId: String, store: any MessageStore = LocalRepositories.messages) -> Data {
         if let cached = cache.object(forKey: messageId as NSString) {
-            return LocalMessagePayload.decode(cached.data)
+            return cached.data
         }
-        guard let record = try? store.message(messageId) else { return LocalMessagePayload.decode(Data()) }
+        guard let record = try? store.message(messageId) else { return Data() }
         hold(record)
-        return LocalMessagePayload.decode(record.body)
+        return record.body
     }
 
     /// `field` of message `messageId`, nil when it has none. A miss reads as `payload` does.

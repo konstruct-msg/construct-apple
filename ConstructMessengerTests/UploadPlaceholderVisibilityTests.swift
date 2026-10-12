@@ -4,8 +4,8 @@ import CoreData
 
 /// Regression cover for media/voice/file upload placeholders being invisible in the transcript.
 ///
-/// `ChatMessageStore` fetches the transcript with `controlMessageFilterPredicate`, which
-/// requires `contentTypeRaw == 0` (`.regular`). The upload placeholders were stamped
+/// The transcript shows `.regular` rows only (`TranscriptWindow.visible`; until 2026-10-12
+/// `ChatMessageStore`'s `contentTypeRaw == 0` predicate). The upload placeholders were stamped
 /// `.media` (raw 2), so the rows existed in Core Data but were fetched by nothing: the
 /// bubble with the local thumbnail and the percentage badge never appeared, and the media
 /// only showed up once the upload finished and the real `.regular` message replaced the
@@ -16,11 +16,12 @@ import CoreData
 @MainActor
 final class UploadPlaceholderVisibilityTests: XCTestCase {
     private var context: NSManagedObjectContext!
+    private var container: NSPersistentContainer!
     private let service = MessagePersistenceService()
 
     override func setUp() {
         super.setUp()
-        let container = PersistenceController(inMemory: true).container
+        container = PersistenceController(inMemory: true).container
         context = container.viewContext
         // The placeholders are written through the repositories (messages B1); point them here.
         LocalRepositories.useMessagesForTesting(container)
@@ -31,6 +32,7 @@ final class UploadPlaceholderVisibilityTests: XCTestCase {
         LocalRepositories.useMessagesForTesting(nil)
         LocalRepositories.useChatsForTesting(nil)
         context = nil
+        container = nil
         super.tearDown()
     }
 
@@ -43,16 +45,11 @@ final class UploadPlaceholderVisibilityTests: XCTestCase {
         return chat
     }
 
-    /// Fetch the chat's transcript exactly the way `ChatMessageStore` does.
-    private func visibleMessages(in chat: Chat) -> [Message] {
-        let request = Message.fetchRequest()
-        request.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [
-            NSPredicate(format: "chat == %@", chat),
-            ChatMessageStore.controlMessageFilterPredicate
-        ])
-        return ((try? context.fetch(request)) ?? []).filter {
-            !$0.isControlArtifact && !$0.isServiceArtifact
-        }
+    /// The chat's transcript, read the way an open chat reads it.
+    private func visibleMessages(in chat: Chat) -> [TranscriptRow] {
+        let window = TranscriptWindow(chatId: chat.id, store: CoreDataMessageStore(container: container), debounce: .zero)
+        window.start()
+        return window.rows
     }
 
     func testMediaPlaceholderIsVisibleInTranscript() {
@@ -71,7 +68,7 @@ final class UploadPlaceholderVisibilityTests: XCTestCase {
         )
 
         let visible = visibleMessages(in: chat)
-        XCTAssertEqual(visible.count, 1, "Upload placeholder must be fetched by the transcript FRC")
+        XCTAssertEqual(visible.count, 1, "Upload placeholder must be a transcript row")
         XCTAssertEqual(visible.first?.deliveryStatus, .sending)
     }
 
@@ -89,7 +86,7 @@ final class UploadPlaceholderVisibilityTests: XCTestCase {
         )
 
         XCTAssertEqual(visibleMessages(in: chat).count, 1,
-                       "Voice upload placeholder must be fetched by the transcript FRC")
+                       "Voice upload placeholder must be a transcript row")
     }
 
     /// The placeholder must parse as media so `MediaMessageView` renders it (with the
@@ -174,7 +171,7 @@ final class UploadPlaceholderVisibilityTests: XCTestCase {
 
     /// The body the upload writers actually store. Retry rebuilds a text message from any
     /// non-empty `.regular` row; these two must not be one.
-    func testUploadPlaceholderIsNotRecoverableAsText() {
+    func testUploadPlaceholderIsNotRecoverableAsText() throws {
         let chat = makeChat()
         let from = UUID().uuidString
         let to = UUID().uuidString
@@ -203,8 +200,12 @@ final class UploadPlaceholderVisibilityTests: XCTestCase {
         XCTAssertEqual(rows.count, 2)
         for row in rows {
             XCTAssertTrue(UploadPlaceholderBody.isSentinel(row.legacyBody), row.legacyBody)
+            // The queue still retries managed rows.
+            let request = Message.fetchRequest()
+            request.predicate = NSPredicate(format: "id == %@", row.id)
+            let managed = try XCTUnwrap(context.fetch(request).first)
             XCTAssertNil(
-                MessageRetryManager.recoverWirePlaintext(for: row),
+                MessageRetryManager.recoverWirePlaintext(for: managed),
                 "retry would send this JSON as the message text"
             )
         }
