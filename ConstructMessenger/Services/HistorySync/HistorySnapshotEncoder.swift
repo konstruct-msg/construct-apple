@@ -149,7 +149,7 @@ final class HistorySnapshotEncoder {
                 record(HistoryRecordType.chat, historyExportChat(peerId: chat.peerId, isPinned: chat.isPinned))
             }
             for hint in hints { record(HistoryRecordType.peer, historyExportPeerDevice(device: hint.local)) }
-            for call in calls { record(HistoryRecordType.call, historyExportCall(call: Self.local(call))) }
+            for call in calls { record(HistoryRecordType.call, historyExportCall(call: call.local)) }
             for message in lifted { record(HistoryRecordType.message, message.proto) }
             for reaction in reactions {
                 record(HistoryRecordType.reaction, historyExportReaction(reaction: reaction.local))
@@ -284,17 +284,6 @@ final class HistorySnapshotEncoder {
             return lhs.id < rhs.id
         }
         return planned
-    }
-
-    // MARK: - Calls
-
-    private static func local(_ call: CallRecord) -> LocalCall {
-        LocalCall(
-            id: call.id, peerUserId: call.peerUserId, peerName: call.peerName,
-            direction: call.direction.rawValue, status: call.status.rawValue,
-            startedAt: call.startedAt?.unixMs, endedAt: call.endedAt?.unixMs,
-            durationSeconds: call.durationSeconds
-        )
     }
 
     private func makeManifest(

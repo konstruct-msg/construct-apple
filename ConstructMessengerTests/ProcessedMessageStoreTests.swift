@@ -68,3 +68,10 @@ class ProcessedMessageStoreTests: XCTestCase {
         XCTAssertFalse(PersistentACKStore.shared.isProcessedDurably("ack-never-seen"))
     }
 }
+
+/// The same cases on the crate.
+final class LocalStoreProcessedMessageStoreTests: ProcessedMessageStoreTests {
+    override func makeStore() -> any ProcessedMessageStore {
+        LocalStoreProcessedMessageStore(session: .inMemoryForTesting())
+    }
+}

@@ -77,3 +77,25 @@ final class CoreDataProcessedMessageStore: ProcessedMessageStore, @unchecked Sen
         return try context.performAndWait { try body(context) }
     }
 }
+
+/// Processed-envelope marks on the crate (`processed_messages`).
+final class LocalStoreProcessedMessageStore: ProcessedMessageStore, @unchecked Sendable {
+
+    private let session: LocalStoreSession
+
+    init(session: LocalStoreSession) {
+        self.session = session
+    }
+
+    func markProcessed(_ messageId: String, senderId: String, at date: Date) throws -> Bool {
+        try session.store.markProcessed(messageId: messageId, senderId: senderId, processedAt: date.unixMs)
+    }
+
+    func isProcessed(_ messageId: String) throws -> Bool {
+        try session.store.isProcessed(messageId: messageId)
+    }
+
+    func forget(processedBefore date: Date) throws -> Int {
+        Int(clamping: try session.store.forgetProcessedBefore(cutoff: date.unixMs))
+    }
+}
