@@ -6,11 +6,17 @@
 #   ./scripts/build_desktop_dmg.sh --notarize     plus notarization and stapling
 #   ./scripts/build_desktop_dmg.sh --no-build     reuse the last archive
 #   ./scripts/build_desktop_dmg.sh --release      Release instead of Beta
+#   ./scripts/build_desktop_dmg.sh --history-stand  plus -DHISTORY_STAND
 #
 # Beta by default — what TestFlight gets on iOS: Release plus DEBUG
 # (Config/Beta.xcconfig), against the production server. DEBUG is what offers
 # linking another device at onboarding (DeviceLinkOfferPolicy) and the debug
 # surfaces; a Release DMG has neither, so a tester can only restore from a phrase.
+#
+# History after linking is a second gate: DeviceLinkHistorySyncPolicy offers it only
+# in a build with -DHISTORY_STAND, which no configuration defines (docs/HISTORY_STAND.md).
+# Both devices check it — the phone that sends and the Mac that receives — so a
+# --history-stand DMG transfers history only with a phone built with the flag too.
 #
 # Result: build/desktop/Construct Desktop <version> (<build>).dmg
 #
@@ -45,6 +51,7 @@ EXPORT="$OUT/export"
 STAGING="$OUT/dmg-staging"
 
 CONFIGURATION="Beta"
+HISTORY_STAND=0
 BUILD=1
 NOTARIZE=0
 IDENTITY="${CODESIGN_IDENTITY:-}"
@@ -55,6 +62,7 @@ while [ $# -gt 0 ]; do
         --no-build) BUILD=0 ;;
         --notarize) NOTARIZE=1 ;;
         --release) CONFIGURATION="Release" ;;
+        --history-stand) HISTORY_STAND=1 ;;
         --keychain-profile) PROFILE="$2"; shift ;;
         -h|--help) sed -n '2,/^$/p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
         *) echo "unknown argument: $1" >&2; exit 2 ;;
@@ -87,13 +95,20 @@ fi
 
 # --- archive and export -----------------------------------------------------
 
+EXTRA=()
+FLAVOUR="$CONFIGURATION"
+if [ "$HISTORY_STAND" -eq 1 ]; then
+    EXTRA=(OTHER_SWIFT_FLAGS='$(inherited) -DHISTORY_STAND')
+    FLAVOUR="$CONFIGURATION history-stand"
+fi
+
 if [ "$BUILD" -eq 1 ]; then
-    say "archive ($CONFIGURATION, $ARCHS)"
+    say "archive ($FLAVOUR, $ARCHS)"
     rm -rf "${ARCHIVE:?}"
     xcodebuild archive -quiet \
         -project ConstructMessenger.xcodeproj -scheme "$SCHEME" -configuration "$CONFIGURATION" \
         -destination 'generic/platform=macOS' -archivePath "$ARCHIVE" \
-        ARCHS="$ARCHS"
+        ARCHS="$ARCHS" ${EXTRA[@]+"${EXTRA[@]}"}
 fi
 [ -d "$ARCHIVE" ] || { echo "no archive at $ARCHIVE — run without --no-build" >&2; exit 1; }
 
@@ -119,7 +134,7 @@ APP="$EXPORT/$PRODUCT.app"
 codesign --verify --deep --strict "$APP"
 VERSION="$(/usr/libexec/PlistBuddy -c 'Print CFBundleShortVersionString' "$APP/Contents/Info.plist")"
 BUILD_NUMBER="$(/usr/libexec/PlistBuddy -c 'Print CFBundleVersion' "$APP/Contents/Info.plist")"
-DMG="$OUT/$PRODUCT $VERSION ($BUILD_NUMBER) $CONFIGURATION.dmg"
+DMG="$OUT/$PRODUCT $VERSION ($BUILD_NUMBER) $FLAVOUR.dmg"
 
 # --- DMG --------------------------------------------------------------------
 
@@ -146,5 +161,5 @@ if [ "$NOTARIZE" -eq 1 ]; then
 fi
 
 say "done"
-echo "  $DMG ($CONFIGURATION, $ARCHS)"
+echo "  $DMG ($FLAVOUR, $ARCHS)"
 [ "$NOTARIZE" -eq 1 ] || echo "  not notarized — Gatekeeper on another Mac will refuse it; rerun with --notarize"
