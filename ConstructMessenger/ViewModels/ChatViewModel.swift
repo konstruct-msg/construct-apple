@@ -12,10 +12,14 @@ class ChatViewModel {
 
     // MARK: - UI state
 
-    var messages: [Message] = []
-    var isLoadingMore = false
-    var hasMoreMessages = true
-    var editingMessage: Message?
+    /// The open transcript, oldest first, one observed entry a row — what a list renders from
+    /// (`TranscriptWindow.entries`).
+    var entries: [TranscriptEntry] { transcript.entries }
+    /// The rows, read once: observes every entry, so never what a list renders from.
+    var messages: [TranscriptRow] { transcript.rows }
+    var isLoadingMore: Bool { transcript.isLoadingMore }
+    var hasMoreMessages: Bool { transcript.hasMore }
+    var editingMessage: TranscriptRow?
     /// Set by continuous voice playback to ask the view to scroll the now-playing
     /// message into view. The view scrolls on change, then resets it to nil.
     var voicePlaybackScrollTarget: String?
@@ -28,7 +32,8 @@ class ChatViewModel {
 
     // MARK: - Coordinators
 
-    private let messageStore: ChatMessageStore
+    private let transcript: TranscriptWindow
+    private let viewContext: NSManagedObjectContext
     private let sessionManager: ChatSessionManager
     private let sendCoordinator: ChatSendCoordinator
 
@@ -47,7 +52,7 @@ class ChatViewModel {
     init(conversation: Conversation, context: NSManagedObjectContext) {
         self.conversation = conversation
 
-        let store = ChatMessageStore(chatId: conversation.chatId, viewContext: context)
+        let transcript = TranscriptWindow(chatId: conversation.chatId)
         let manager = ChatSessionManager(peerId: conversation.peerId)
         let coordinator = ChatSendCoordinator(
             conversation: conversation,
@@ -55,7 +60,8 @@ class ChatViewModel {
             sessionManager: manager
         )
 
-        self.messageStore = store
+        self.transcript = transcript
+        self.viewContext = context
         self.sessionManager = manager
         self.sendCoordinator = coordinator
     }
@@ -71,10 +77,9 @@ class ChatViewModel {
     func onViewAppear() {
         if !isSetupCalled {
             isSetupCalled = true
-            messageStore.setViewModel(self)
             sessionManager.setViewModel(self)
             sendCoordinator.setViewModel(self)
-            messageStore.setup()
+            transcript.start()
             sessionManager.checkExistingSession()
             setupSubscribers()
             InAppNotificationService.shared.registerActiveChat(conversation.chatId, ownerID: instanceID)
@@ -86,8 +91,7 @@ class ChatViewModel {
     func onPreviewAppear() {
         guard !isSetupCalled else { return }
         isSetupCalled = true
-        messageStore.setViewModel(self)
-        messageStore.setup()
+        transcript.start()
         Log.debug("ChatViewModel preview initialized with sample messages", category: "ChatViewModel")
     }
 
@@ -124,7 +128,7 @@ class ChatViewModel {
         text: String,
         attachments: [MediaAttachment] = [],
         fileURLs: [URL] = [],
-        replyTo: Message? = nil,
+        replyTo: TranscriptRow? = nil,
         replyToContentOverride: String? = nil
     ) {
         sendCoordinator.sendMessage(
@@ -140,21 +144,21 @@ class ChatViewModel {
         sendCoordinator.sendVoiceMessage(url: url, duration: duration, waveform: waveform)
     }
 
-    func sendSticker(_ ref: StickerReference, replyTo: Message? = nil) {
+    func sendSticker(_ ref: StickerReference, replyTo: TranscriptRow? = nil) {
         sendCoordinator.sendSticker(ref, replyTo: replyTo)
     }
 
-    func editMessage(_ message: Message, newText: String) {
+    func editMessage(_ message: TranscriptRow, newText: String) {
         sendCoordinator.editMessage(message, newText: newText) { [weak self] in
             self?.editingMessage = nil
         }
     }
 
-    func sendReaction(_ message: Message, emoji: String = ReactionReducer.likeEmoji) {
+    func sendReaction(_ message: TranscriptRow, emoji: String = ReactionReducer.likeEmoji) {
         sendCoordinator.sendReaction(message, emoji: emoji)
     }
 
-    func retryMessage(_ message: Message) {
+    func retryMessage(_ message: TranscriptRow) {
         sendCoordinator.retryMessage(message)
     }
 
@@ -175,7 +179,7 @@ class ChatViewModel {
         }) else { return }
 
         // First voice message strictly after the one that just finished.
-        var nextMessage: Message?
+        var nextMessage: TranscriptRow?
         for message in messages[messages.index(after: idx)...] {
             if parseVoiceContent(from: message.legacyBody) != nil {
                 nextMessage = message
@@ -204,15 +208,28 @@ class ChatViewModel {
 
     // MARK: - Messages
 
+    /// `trigger` says who asked; the view keeps `.indicatorAppeared` out of opening and of
+    /// following the bottom (`ChatScrollManager.shouldLoadOlderHistory`), so the metric below is the
+    /// residual gauge — it should tick only on a real near-top scroll or a short-window fill.
     func loadMoreMessages(trigger: LoadMoreTrigger = .user) {
-        messageStore.loadMoreMessages(trigger: trigger)
+        guard !isLoadingMore, hasMoreMessages else { return }
+        if trigger == .indicatorAppeared {
+            PerformanceMetrics.shared.record(.loadMoreUnprompted, label: String(messages.count))
+        }
+        transcript.loadMore()
     }
 
-    func deleteMessage(_ message: Message) {
-        messageStore.deleteMessage(message)
+    func deleteMessage(_ message: TranscriptRow) {
+        deleteMessages(withIds: [message.id])
     }
 
     func deleteMessages(withIds messageIds: Set<String>) {
-        messageStore.deleteMessages(withIds: messageIds)
+        do {
+            try MessagePersistenceService().deleteMessages(
+                withIds: messageIds, chatId: conversation.chatId, in: viewContext
+            )
+        } catch {
+            Log.error("Failed to delete messages: \(error)", category: "ChatViewModel")
+        }
     }
 }

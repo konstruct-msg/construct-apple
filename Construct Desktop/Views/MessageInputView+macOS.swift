@@ -15,9 +15,9 @@ struct DesktopMessageInputView: View {
     @Binding var text: String
     @Binding var droppedImages: [PlatformImage]
     @Binding var droppedFileURLs: [URL]
-    let replyingTo: Message?
+    let replyingTo: TranscriptRow?
     let quoteOverride: String?
-    let editingMessage: Message?
+    let editingMessage: TranscriptRow?
     let onSend: ([MediaAttachment], [URL]) -> Void
     var onSendVoice: ((URL, TimeInterval, [Float]) -> Void)? = nil
     let onCancelReply: () -> Void

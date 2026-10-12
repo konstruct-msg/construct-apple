@@ -1,21 +1,20 @@
 //
-//  Message+Grouping.swift
+//  TranscriptGrouping.swift
 //  Construct Messenger
 //
 //  Message grouping logic extracted from ChatView
-//  Created on 30.01.2026 (Week 1 refactoring)
+//  Created on 30.01.2026 (Week 1 refactoring); `Message+Grouping.swift` until the transcript moved
+//  to values (2026-10-12).
 //
 
 import Foundation
 
-/// What grouping reads of a transcript entry. `Message` and `TranscriptRow` both answer it while
-/// the transcript moves from managed objects to values (local-store plan, lane C).
+/// What grouping reads of a transcript entry — the list renders `TranscriptEntry`, whose two are
+/// fixed for its lifetime; `TranscriptRow` answers it too.
 protocol TranscriptGroupable {
     var isSentByMe: Bool { get }
     var safeTimestamp: Date { get }
 }
-
-extension Message: TranscriptGroupable {}
 
 extension TranscriptGroupable {
     /// Determines if this message is the last in a group of consecutive messages from the same sender
@@ -62,21 +61,5 @@ extension TranscriptGroupable {
             return ChatUIConstants.Shell.betweenGroupSpacing
         }
         return ChatUIConstants.Shell.withinGroupSpacing
-    }
-}
-
-// MARK: - Array Extension for Convenience
-
-extension Array where Element: TranscriptGroupable {
-    /// Helper to check if a message at an index is the last in its group
-    func isLastInGroup(at index: Int) -> Bool {
-        guard index < count else { return true }
-        return self[index].isLastInGroup(at: index, in: self)
-    }
-    
-    /// Helper to get spacing after a message at an index
-    func spacingAfterMessage(at index: Int) -> CGFloat {
-        guard index < count else { return ChatUIConstants.Shell.betweenGroupSpacing }
-        return self[index].spacingAfterMessage(at: index, in: self)
     }
 }

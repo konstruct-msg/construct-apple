@@ -15,7 +15,7 @@ import AppKit
 #endif
 
 struct QuoteSelectionSheet: View {
-    let message: Message
+    let message: TranscriptRow
     let onConfirm: (String) -> Void
 
     @Environment(\.dismiss) private var dismiss

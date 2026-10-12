@@ -130,6 +130,27 @@ final class TranscriptWindowTests: XCTestCase {
         XCTAssertEqual(window.rows.first?.readableText, "read late")
     }
 
+    /// A write to a row reaches that row's entry and leaves the list alone: nothing observing
+    /// `entries` hears it, and the entry is the same object. Only a new or a gone row republishes
+    /// the list. Mutation: assign `entries` on every publish — the list observer fires.
+    func testAStatusChangesItsEntryAndNotTheList() async throws {
+        let id = try add(1, status: .sending)
+        try add(2)
+        let window = open()
+        let entry = try XCTUnwrap(window.entries.first)
+
+        var listChanged = false
+        withObservationTracking { _ = window.entries } onChange: { listChanged = true }
+        try store.setDeliveryStatus(id, .sent)
+        await eventually { entry.row.deliveryStatus == .sent }
+        XCTAssertFalse(listChanged, "a status is one row's business")
+        XCTAssertTrue(window.entries.first === entry)
+
+        try add(3)
+        await eventually { window.entries.count == 3 }
+        XCTAssertTrue(listChanged, "a new row is the list's")
+    }
+
     /// A row carries no text: emptied as `UnsealedMemory` empties it, the text is read again from
     /// the store by id. Mutation: return an empty payload on a cache miss — the text is gone.
     func testARowsTextIsReadByIdWhenTheCacheIsEmptied() throws {

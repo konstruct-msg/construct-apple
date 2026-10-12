@@ -33,11 +33,11 @@ struct ChatView: View {
     private let usesOwnedInset: Bool
     private var connectionManager = ConnectionStatusManager.shared
     @State private var messageText = ""
-    @State private var replyingTo: Message?
+    @State private var replyingTo: TranscriptRow?
     /// When non-nil, the user selected a partial quote from `replyingTo` for reply.
     @State private var replyQuoteText: String? = nil
     /// Message opened for "Quote & Reply" selection sheet.
-    @State private var quotingMessage: Message? = nil
+    @State private var quotingMessage: TranscriptRow? = nil
     /// Soft reply focus — lowercased message ids that stay full-opacity; others dim.
     /// Empty = idle chat (no visual change). See ``ChatUIConstants.ReplyFocus``.
     @State private var replyFocusIds: Set<String> = []
@@ -130,7 +130,7 @@ struct ChatView: View {
         let grew = abs(new.contentHeight - old.contentHeight) >= Layout.geometryLogThreshold
         guard moved || grew else { return }
         ChatScrollManager.logGeometry(
-            "SCROLL_GEO content=\(Int(new.contentHeight))pt viewport=[\(Int(new.visibleMinY))…\(Int(new.visibleMinY + (new.contentHeight - new.distanceFromBottom - new.visibleMinY)))] fromBottom=\(Int(new.distanceFromBottom)) msgs=\(viewModel.messages.count) \(viewport.stateDescription)"
+            "SCROLL_GEO content=\(Int(new.contentHeight))pt viewport=[\(Int(new.visibleMinY))…\(Int(new.visibleMinY + (new.contentHeight - new.distanceFromBottom - new.visibleMinY)))] fromBottom=\(Int(new.distanceFromBottom)) msgs=\(viewModel.entries.count) \(viewport.stateDescription)"
         )
     }
 
@@ -162,7 +162,7 @@ struct ChatView: View {
 
             // Message list — base layer, scrolls under the bar and the composer
             transcript(renderedMessages)
-                .onChange(of: viewModel.messages.count) { oldCount, count in
+                .onChange(of: viewModel.entries.count) { oldCount, count in
                     if AppConstants.enableDebugLogging {
                         Log.info("ChatView: messages count changed to \(count)")
                     }
@@ -633,7 +633,7 @@ struct ChatView: View {
     /// The extraction is what keeps the file compilable, and it is why the container's arguments
     /// are named methods rather than inline closures.
     @ViewBuilder
-    private func transcript(_ renderedMessages: [Message]) -> some View {
+    private func transcript(_ renderedMessages: [TranscriptEntry]) -> some View {
         if usesOwnedInset {
             ChatTranscriptScrollView(
                 bottomInset: transcriptBottomPad,
@@ -695,7 +695,7 @@ struct ChatView: View {
     }
 
     @ViewBuilder
-    private func legacyTranscript(_ renderedMessages: [Message]) -> some View {
+    private func legacyTranscript(_ renderedMessages: [TranscriptEntry]) -> some View {
         ChatTranscriptContainer(
             rowSpacing: ChatUIConstants.Shell.listSpacing,
             topContentPad: ChatUIConstants.Shell.scrollContentTopPad + callBarInset,
@@ -782,7 +782,7 @@ struct ChatView: View {
         // here and the opening is armed by the 0 → N change instead. Declaring the opening
         // finished on an empty list is what let load-more growth take the animated branch and
         // blank the chat.
-        viewport.noteTranscriptAppeared(messageCount: viewModel.messages.count)
+        viewport.noteTranscriptAppeared(messageCount: viewModel.entries.count)
     }
 
     private func handleTranscriptGeometry(from old: ChatScrollGeometry, to metrics: ChatScrollGeometry) {
@@ -802,7 +802,7 @@ struct ChatView: View {
                 containerHeight: metrics.containerHeight
             )
         }
-        viewport.updateGeometry(metrics, messageCount: viewModel.messages.count)
+        viewport.updateGeometry(metrics, messageCount: viewModel.entries.count)
         // The blank chat is a *geometry* state and no log has ever shown it: we know where the
         // messages are and nothing about where the viewport is. One line per meaningful move
         // answers "was the offset wrong, or were the cells absent".
@@ -828,7 +828,7 @@ struct ChatView: View {
         //
         // The two cheap checks are not redundant with that authority — they keep `filteredMessages`
         // (an O(n) filter) off the per-frame path, and it has to be that list rather than
-        // `viewModel.messages`: it is what the rows are built from, so it is the only one whose
+        // `viewModel.entries`: it is what the rows are built from, so it is the only one whose
         // first element is guaranteed to be a row that can install the reporter.
         if !viewport.isFollowing, viewport.heldMessageId == nil {
             viewport.bindAnchorRow(filteredMessages.first?.id)
@@ -857,7 +857,7 @@ struct ChatView: View {
     /// reaches the oldest edge. `LazyVStack` materialises this on first layout even when
     /// bottom-anchored; the load is gated by `ChatScrollManager.shouldLoadOlderHistory` (TODO 34).
     @ViewBuilder
-    private func loadMoreSentinel(_ renderedMessages: [Message]) -> some View {
+    private func loadMoreSentinel(_ renderedMessages: [TranscriptEntry]) -> some View {
         if viewModel.hasMoreMessages && !renderedMessages.isEmpty {
             Group {
                 if viewModel.isLoadingMore {
@@ -880,12 +880,12 @@ struct ChatView: View {
     /// The message rows, lifted out of `body` so `ChatTranscriptContainer` owns only the scroll.
     /// Every callback still belongs to `ChatView` — the container never sees a view model.
     @ViewBuilder
-    private func transcriptRows(_ renderedMessages: [Message]) -> some View {
+    private func transcriptRows(_ renderedMessages: [TranscriptEntry]) -> some View {
                 // Messages in oldest-first order (ScrollView anchored to bottom via .defaultScrollAnchor)
                 ForEach(Array(renderedMessages.enumerated()), id: \.element.id) { index, message in
                     VStack(spacing: 0) {
-                        MessageBubble(
-                            message: message,
+                        ObservedTranscriptRow(entry: message) { row in MessageBubble(
+                            message: row,
                             isLastInGroup: message.isLastInGroup(at: index, in: renderedMessages),
                             isSelected: selectedMessages.contains(message.id),
                             isEditMode: isEditMode,
@@ -926,7 +926,7 @@ struct ChatView: View {
                             onReact: { msg, emoji in
                                 viewModel.sendReaction(msg, emoji: emoji)
                             }
-                        )
+                        ) }
                         .id(message.id)
                         // The LAST message only, and no longer just a probe. Auto-scroll
                         // promises the newest message is on screen; this is the only place
@@ -975,7 +975,7 @@ struct ChatView: View {
                                 viewport.noteLastMessageVisible(false, searchActive: isSearchActive)
                             }
                         }
-                        .opacity(replyFocusOpacity(for: message))
+                        .opacity(replyFocusOpacity(for: message.id))
                         .animation(
                             .easeInOut(duration: ChatUIConstants.ReplyFocus.animationDuration),
                             value: replyFocusIds
@@ -1058,22 +1058,21 @@ struct ChatView: View {
 
     // MARK: - Computed Properties
 
-    private var filteredMessages: [Message] {
-        // Guard against accessing deleted/faulted Core Data objects that the FRC
-        // may not have removed from viewModel.messages before SwiftUI re-evaluates.
-        let valid = viewModel.messages.filter { !$0.isDeleted && $0.managedObjectContext != nil }
+    private var filteredMessages: [TranscriptEntry] {
+        let valid = viewModel.entries
         if searchText.isEmpty {
             return valid
         }
-        // The words, not the stored body: "mediaId" would match every photo.
-        return valid.filter { message in
-            message.readableText.localizedCaseInsensitiveContains(searchText)
+        // The words, not the stored body: "mediaId" would match every photo. Reads every row,
+        // so the list follows every row while a search is open — only then.
+        return valid.filter { entry in
+            entry.row.readableText.localizedCaseInsensitiveContains(searchText)
         }
     }
 
     /// All media messages in display order. Upload placeholders are excluded.
-    private func mediaMessages(in messages: [Message]) -> [Message] {
-        messages.filter {
+    private func mediaMessages(in entries: [TranscriptEntry]) -> [TranscriptRow] {
+        entries.map(\.row).filter {
             guard let mc = parseMediaContent(from: $0.legacyBody) else { return false }
             return (mc.media["_placeholder"] as? Bool) != true
         }
@@ -1081,11 +1080,11 @@ struct ChatView: View {
 
     // MARK: - Soft reply focus (dim non-related bubbles)
 
-    private func replyFocusOpacity(for message: Message) -> Double {
+    private func replyFocusOpacity(for messageId: String) -> Double {
         guard !isEditMode, !replyFocusIds.isEmpty else {
             return ChatUIConstants.ReplyFocus.focusedOpacity
         }
-        let id = message.id.lowercased()
+        let id = messageId.lowercased()
         if replyFocusIds.contains(id) {
             return ChatUIConstants.ReplyFocus.focusedOpacity
         }
@@ -1132,7 +1131,7 @@ struct ChatView: View {
     }
 
     /// Tap on in-bubble reply strip: scroll to parent, keep parent + child bright briefly.
-    private func peekReplyChain(for message: Message) {
+    private func peekReplyChain(for message: TranscriptRow) {
         let childId = message.id.lowercased()
         let parentId = (message.replyToMessageId ?? "").lowercased()
         guard !parentId.isEmpty else { return }
@@ -1242,7 +1241,7 @@ struct ChatView: View {
         try? LocalRepositories.chats.setUnread(chatId, 0)
     }
 
-    private func toggleMessageSelection(_ message: Message) {
+    private func toggleMessageSelection(_ message: TranscriptRow) {
         if selectedMessages.contains(message.id) {
             selectedMessages.remove(message.id)
         } else {
