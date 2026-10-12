@@ -16,7 +16,14 @@ import CoreData
 /// Cross-platform wrapper for the shared NSPersistentContainer.
 /// Self-contained: does not depend on any App struct.
 struct PersistenceController {
+    #if os(macOS)
+    /// macOS keeps the account in construct-store (`LocalRepositories`). Core Data there is in
+    /// memory, for the code that still names a context, and the file older builds left is never
+    /// opened again — neither read nor written in the clear.
+    static let shared = PersistenceController(inMemory: true)
+    #else
     static let shared = PersistenceController()
+    #endif
 
     /// In-memory store for SwiftUI previews and unit tests.
     static let preview: PersistenceController = {

@@ -28,6 +28,10 @@ struct Construct_DesktopApp: App {
     @State private var commandBridge = DesktopCommandBridge()
 
     init() {
+        // The store first: every repository stands on it, and a failure must be known before the
+        // first screen and before the stream writes anything (`DesktopRootView`).
+        LocalRepositories.openAppStoreIfNeeded()
+
         // Foreground-state tracker — transport layer reads this to suppress futile VEIL
         // restarts while the app is inactive (mirrors iOS AppDelegate bootstrap).
         _ = AppActivityState.shared
