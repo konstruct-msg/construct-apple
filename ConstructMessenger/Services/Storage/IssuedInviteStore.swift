@@ -106,3 +106,34 @@ final class DefaultsIssuedInviteStore: IssuedInviteStore, @unchecked Sendable {
         return try body()
     }
 }
+
+/// The crate's `issued_invites`, the table Android writes too. Off until step 4. No journal from
+/// before the seam to move: the Desktop never kept one.
+final class LocalStoreIssuedInviteStore: IssuedInviteStore, @unchecked Sendable {
+
+    private let store: LocalStore
+
+    init(session: LocalStoreSession) {
+        self.store = session.store
+    }
+
+    func record(_ invite: IssuedInviteRecord) throws {
+        try store.recordIssuedInvite(invite: LocalIssuedInvite(
+            jti: invite.jti, kind: invite.kind, issuedAt: invite.issuedAt.unixMs,
+            ttlSeconds: invite.ttlSeconds, sitting: invite.sitting
+        ))
+    }
+
+    func all() throws -> [IssuedInviteRecord] {
+        try store.issuedInvites().map {
+            IssuedInviteRecord(
+                jti: $0.jti, kind: $0.kind, issuedAt: Date(unixMs: $0.issuedAt),
+                ttlSeconds: $0.ttlSeconds, sitting: $0.sitting
+            )
+        }
+    }
+
+    func delete(jtis: [String]) throws {
+        try store.deleteIssuedInvites(jtis: jtis)
+    }
+}

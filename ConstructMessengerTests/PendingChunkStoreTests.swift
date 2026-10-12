@@ -61,11 +61,19 @@ class PendingChunkStoreTests: XCTestCase {
     }
 
     /// A message is one sender's: another sender's chunks under the same id are not its chunks.
+    ///
+    /// Mutation: read every chunk as one fixed sender's — the second read reddens.
     func testOneSendersMessageIsNotAnothers() throws {
         let store = makeStore()
         try store.add(chunk(0, message: m1, sender: "alice"))
         try store.add(chunk(1, message: m1, sender: "mallory"))
         XCTAssertEqual(try store.chunks(senderId: "alice", messageId: m1).map(\.chunkIndex), [0])
+        // Whether the other sender's own chunk is held differs: the files refuse it (one directory
+        // per message id), the crate keeps it apart. Either way it never reads this sender's.
+        XCTAssertFalse(
+            try store.chunks(senderId: "mallory", messageId: m1).map(\.chunkIndex).contains(0),
+            "and the other way round"
+        )
         XCTAssertEqual(try store.count(senderId: "alice", messageId: m1), 1)
         try store.delete(senderId: "mallory", messageId: m1)
         XCTAssertEqual(try store.count(senderId: "alice", messageId: m1), 1, "deleting another sender's leaves this one")
@@ -82,5 +90,12 @@ class PendingChunkStoreTests: XCTestCase {
         try store.delete(senderId: "alice", messageId: m1)
         XCTAssertEqual(try store.messages().map(\.messageId), [m2])
         XCTAssertEqual(try store.count(senderId: "alice", messageId: m1), 0)
+    }
+}
+
+/// The same cases on the crate's table.
+final class LocalStorePendingChunkStoreTests: PendingChunkStoreTests {
+    override func makeStore() -> any PendingChunkStore {
+        LocalStorePendingChunkStore(session: .inMemoryForTesting())
     }
 }
