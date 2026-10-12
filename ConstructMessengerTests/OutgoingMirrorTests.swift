@@ -104,30 +104,16 @@ final class OutgoingMirrorTests: XCTestCase {
 ///
 /// The stored wire payload cannot serve: it is ciphertext bound to one ratchet, so a copy for
 /// another device has to be re-encrypted from the message itself.
-@MainActor
 final class RecoveredWirePlaintextTests: XCTestCase {
 
-    private var context: NSManagedObjectContext!
-
-    override func setUp() {
-        super.setUp()
-        context = PersistenceController(inMemory: true).container.viewContext
-    }
-
-    override func tearDown() {
-        context = nil
-        super.tearDown()
-    }
-
-    private func makeMessage(text: String, contentType: MessageContentType = .regular) -> Construct_Messenger.Message {
-        let message = Construct_Messenger.Message(context: context)
-        message.id = UUID().uuidString
-        message.timestamp = Date()
-        // Encrypted at rest, as every row is written now: the reply quote is sealed with the
-        // row's key, and a row without one (the old `decryptedContent` shape) keeps none.
-        message.applyStoredEncryption(plaintext: text, contactId: "peer")
-        message.contentTypeRaw = contentType.rawValue
-        return message
+    private func makeMessage(text: String, contentType: MessageContentType = .regular) -> MessageRecord {
+        MessageRecord(
+            id: UUID().uuidString.lowercased(), chatId: "c", fromUserId: "me", toUserId: "peer",
+            isSentByMe: true, timestamp: Date(), orderKey: "k", body: LocalMessagePayload.encodeText(text),
+            contentType: contentType, deliveryStatus: .failed, retryCount: 0, suiteId: 4, isEdited: false,
+            editedAt: nil, replyToMessageId: nil, replyQuote: nil, transcript: nil,
+            transcriptLanguage: nil, transcriptGeneratedAt: nil
+        )
     }
 
     /// The recovered bytes must be the same shape the primary send used — a `MessageContent`
@@ -141,7 +127,7 @@ final class RecoveredWirePlaintextTests: XCTestCase {
 
     /// A reply keeps its quote: the mirror copy is the message, not an approximation of it.
     func testAReplyKeepsItsQuote() throws {
-        let message = makeMessage(text: "answering")
+        var message = makeMessage(text: "answering")
         message.replyToMessageId = "8a0c1f6e-0000-0000-0000-000000000001"
         message.replyQuote = "the question"
         let recovered = try XCTUnwrap(MessageRetryManager.recoverWirePlaintext(for: message))

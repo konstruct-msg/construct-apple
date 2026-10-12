@@ -200,12 +200,10 @@ final class UploadPlaceholderVisibilityTests: XCTestCase {
         XCTAssertEqual(rows.count, 2)
         for row in rows {
             XCTAssertTrue(UploadPlaceholderBody.isSentinel(row.legacyBody), row.legacyBody)
-            // The queue still retries managed rows.
-            let request = Message.fetchRequest()
-            request.predicate = NSPredicate(format: "id == %@", row.id)
-            let managed = try XCTUnwrap(context.fetch(request).first)
+            // The queue retries the rows the store reads back.
+            let stored = try XCTUnwrap(LocalRepositories.messages.message(row.id))
             XCTAssertNil(
-                MessageRetryManager.recoverWirePlaintext(for: managed),
+                MessageRetryManager.recoverWirePlaintext(for: stored),
                 "retry would send this JSON as the message text"
             )
         }

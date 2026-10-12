@@ -59,8 +59,19 @@ class AuthViewModel {
         hasRegisteredDeviceKeys = KeychainManager.shared.loadDeviceID() != nil
     }
     
-    // ✅ REFACTOR Phase 1.2: Single source of truth - Core Data User entity
-    var currentUser: User?
+    /// Our own profile, read when asked. It is written in several places (settings, profile
+    /// sharing, this model's login) and a copy held here would go stale after the first of them;
+    /// the managed `User` this replaces stayed current by being refreshed under us.
+    var currentUser: OwnProfileRecord? {
+        #if DEBUG
+        if let previewProfile { return previewProfile }
+        #endif
+        guard let currentUserId else { return nil }
+        return try? LocalRepositories.ownProfile.profile(accountId: currentUserId)
+    }
+    #if DEBUG
+    private var previewProfile: OwnProfileRecord?
+    #endif
     
     // ✅ Computed properties for convenience (backwards compatibility)
     var currentUsername: String {
@@ -795,7 +806,6 @@ class AuthViewModel {
         isAuthenticated = false
         hasRegisteredDeviceKeys = false
         currentUserId = nil
-        currentUser = nil
         OrientationStore.reset()
     }
 
@@ -844,7 +854,6 @@ class AuthViewModel {
         deviceDeregistered = false
         isAuthenticated = false
         currentUserId = nil
-        currentUser = nil
         hasRegisteredDeviceKeys = false
         Log.info("Local sign-out complete — routing to onboarding", category: "Auth")
     }
@@ -1073,7 +1082,6 @@ class AuthViewModel {
         // Reset auth state
         isAuthenticated = false
         currentUserId = nil
-        currentUser = nil
         hasRegisteredDeviceKeys = false
 
         // The store is now empty and unowned. Leaving the old owner recorded would make the
@@ -1128,16 +1136,17 @@ class AuthViewModel {
                 Log.info("Created new user in Core Data for ID: \(userId)")
                 Log.info("   username: \(username ?? "")")
             }
-            let user = try User.row(userId, in: viewContext)
+            guard let user = try profiles.profile(accountId: userId) else {
+                throw NSError(domain: "AuthViewModel", code: 1,
+                              userInfo: [NSLocalizedDescriptionKey: "own profile \(userId.prefix(8))… not written"])
+            }
 
-            // Set currentUser - single source of truth!
-            self.currentUserId = user.id
-            self.currentUser = user
-            CryptoManager.shared.setLocalUserId(user.id)
+            self.currentUserId = user.accountId
+            CryptoManager.shared.setLocalUserId(user.accountId)
             AuthSessionManager.shared.saveDisplayName(user.displayName.isEmpty ? (user.username.isEmpty ? "" : user.username) : user.displayName)
             
             Log.info("Restored user data from Core Data:")
-            Log.info("   userId: \(user.id)")
+            Log.info("   userId: \(user.accountId)")
             Log.info("   username: \(user.username)")
             Log.info("   displayName: \(user.displayName)")
             
@@ -1151,15 +1160,6 @@ class AuthViewModel {
 
 #if DEBUG
 extension AuthViewModel {
-    /// Creates a mock User for SwiftUI previews
-    static func createMockUser(context: NSManagedObjectContext, username: String = "john_doe", displayName: String = "John Doe") -> User {
-        let user = User(context: context)
-        user.id = UUID().uuidString
-        user.username = username
-        user.displayName = displayName
-        return user
-    }
-
     static func makePreview(
         context: NSManagedObjectContext,
         username: String = "john_doe",
@@ -1173,9 +1173,12 @@ extension AuthViewModel {
     /// Configures AuthViewModel for previews with mock data
     func configureMockAuth(username: String = "john_doe", displayName: String = "John Doe") {
         self.isAuthenticated = true
-        self.currentUserId = UUID().uuidString
+        let id = UUID().uuidString
+        self.currentUserId = id
         self.hasRegisteredDeviceKeys = true
-        self.currentUser = AuthViewModel.createMockUser(context: viewContext, username: username, displayName: displayName)
+        self.previewProfile = OwnProfileRecord(
+            accountId: id, username: username, displayName: displayName, avatar: nil, profileEditedAtMs: 0
+        )
     }
 }
 #endif

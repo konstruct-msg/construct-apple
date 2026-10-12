@@ -49,6 +49,10 @@ struct MessageRecord: Equatable, Sendable, Identifiable {
 
     /// The account on the other side of this message.
     var peerId: String { isSentByMe ? toUserId : fromUserId }
+
+    /// The body decoded: what `Message.legacyBody` (`displayString`) and `plainText` read on a
+    /// managed row.
+    var payload: LocalMessagePayload { LocalMessagePayload.decode(body) }
 }
 
 protocol MessageStore: Sendable {
@@ -72,6 +76,13 @@ protocol MessageStore: Sendable {
     /// `nil` to start — up to `limit`: a history export reads them page by page
     /// (`all_messages_after`).
     func allMessages(after: (orderKey: String, id: String)?, limit: Int) throws -> [MessageRecord]
+
+    /// Ours waiting to be sent: queued, or failed with `retryCount < retryCeiling`; in one chat,
+    /// or every chat for `nil`. Transcript order (`pending_sends`).
+    func pendingSends(inChat chatId: String?, retryCeiling: Int16, limit: Int) throws -> [MessageRecord]
+
+    /// Ours in `status`, every chat, transcript order (`own_messages_in_status`).
+    func ownMessages(in status: DeliveryStatus, limit: Int) throws -> [MessageRecord]
 
     /// The ids of messages written or deleted, once per save.
     func changes() -> AsyncStream<Set<String>>
@@ -192,6 +203,33 @@ final class CoreDataMessageStore: MessageStore, @unchecked Sendable {
                     after.orderKey, after.orderKey, after.id
                 )
             }
+            req.sortDescriptors = [
+                NSSortDescriptor(key: "serverOrderKey", ascending: true),
+                NSSortDescriptor(key: "id", ascending: true),
+            ]
+            req.fetchLimit = limit
+            return try context.fetch(req).compactMap(MessageRecord.init(row:))
+        }
+    }
+
+    func pendingSends(inChat chatId: String?, retryCeiling: Int16, limit: Int) throws -> [MessageRecord] {
+        try ownMessages(limit: limit, NSCompoundPredicate(orPredicateWithSubpredicates: [
+            NSPredicate(format: "deliveryStatusRaw == %d", DeliveryStatus.queued.rawValue),
+            NSPredicate(
+                format: "deliveryStatusRaw == %d AND retryCount < %d",
+                DeliveryStatus.failed.rawValue, retryCeiling
+            ),
+        ]), chatId.map { NSPredicate(format: "chat.id == %@", $0) })
+    }
+    func ownMessages(in status: DeliveryStatus, limit: Int) throws -> [MessageRecord] {
+        try ownMessages(limit: limit, NSPredicate(format: "deliveryStatusRaw == %d", status.rawValue))
+    }
+    private func ownMessages(limit: Int, _ predicates: NSPredicate?...) throws -> [MessageRecord] {
+        try run { context in
+            let req = Message.fetchRequest()
+            req.predicate = NSCompoundPredicate(
+                andPredicateWithSubpredicates: [NSPredicate(format: "isSentByMe == YES")] + predicates.compactMap { $0 }
+            )
             req.sortDescriptors = [
                 NSSortDescriptor(key: "serverOrderKey", ascending: true),
                 NSSortDescriptor(key: "id", ascending: true),
@@ -419,6 +457,14 @@ final class LocalStoreMessageStore: MessageStore, @unchecked Sendable {
         try store.allMessagesAfter(
             afterOrderKey: after?.orderKey, afterId: after?.id.lowercased(), limit: UInt32(clamping: limit)
         ).map { MessageRecord($0) }
+    }
+    func pendingSends(inChat chatId: String?, retryCeiling: Int16, limit: Int) throws -> [MessageRecord] {
+        try store.pendingSends(chatId: chatId, retryCeiling: retryCeiling, limit: UInt32(clamping: limit))
+            .map { MessageRecord($0) }
+    }
+    func ownMessages(in status: DeliveryStatus, limit: Int) throws -> [MessageRecord] {
+        try store.ownMessagesInStatus(status: status.rawValue, limit: UInt32(clamping: limit))
+            .map { MessageRecord($0) }
     }
 
     // MARK: Writes

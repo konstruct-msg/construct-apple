@@ -231,7 +231,6 @@ final class InviteSystemCompletionTests: XCTestCase {
     // device of the account, not a key change — `ContactTrustAlertTests`.
 
     func testApplyInviteRedeemSetsContactAndPin() throws {
-        let ctx = container.viewContext
         let id = "14f28d31-bbbb-4abc-8def-0123456789ab"
         let key = Data(repeating: 0x33, count: 32)
         let info = ContactInfo(
@@ -242,7 +241,7 @@ final class InviteSystemCompletionTests: XCTestCase {
             identityPublicKey: key,
             accountAddress: Data(repeating: 0x5A, count: AccountAddress.length)
         )
-        let user = try ContactLinkService.shared.applyInviteRedeem(info, context: ctx)
+        let user = try ContactLinkService.shared.applyInviteRedeem(info)
         XCTAssertTrue(user.isContact)
         XCTAssertEqual(user.knownIdentityKey, key)
         XCTAssertEqual(user.accountAddress, Data(repeating: 0x5A, count: AccountAddress.length))
@@ -251,7 +250,6 @@ final class InviteSystemCompletionTests: XCTestCase {
     }
 
     func testCallableContactAfterRedeem() throws {
-        let ctx = container.viewContext
         let id = "14f28d31-cccc-4abc-8def-0123456789ab"
         let info = ContactInfo(
             userId: id,
@@ -261,7 +259,7 @@ final class InviteSystemCompletionTests: XCTestCase {
             identityPublicKey: Data(repeating: 0x44, count: 32),
             accountAddress: nil
         )
-        _ = try ContactLinkService.shared.applyInviteRedeem(info, context: ctx)
+        _ = try ContactLinkService.shared.applyInviteRedeem(info)
         XCTAssertTrue(ContactPolicy.isCallableContact(id))
     }
 
