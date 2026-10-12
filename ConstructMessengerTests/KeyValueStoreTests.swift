@@ -65,3 +65,10 @@ class KeyValueStoreTests: XCTestCase {
         XCTAssertNil(try store.get("construct.fanoutRetryQueue.v1"), "an emptied queue leaves nothing behind")
     }
 }
+
+/// The same cases on the crate's table.
+final class LocalStoreKeyValueStoreTests: KeyValueStoreTests {
+    override func makeStore() -> any KeyValueStore {
+        LocalStoreKeyValueStore(session: .inMemoryForTesting())
+    }
+}

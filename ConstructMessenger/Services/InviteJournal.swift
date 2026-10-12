@@ -171,11 +171,23 @@ final class InviteJournal {
     /// The QR sitting currently on screen, if any. Nil while no sheet is showing, which is
     /// what makes a rotation after dismissal start a new act rather than extend a closed one.
     private var openQRSessionID: UUID?
+    @ObservationIgnored nonisolated(unsafe) private var replaced: NSObjectProtocol?
 
     /// The app's store, resolved on each use so a test or the macOS switch can replace it.
     init() {
         self.store = { LocalRepositories.issuedInvites }
         load()
+        // A wipe replaces the store under a journal that outlives it (`shared`): the acts held
+        // here are the last account's and must not be shown to, or revoked by, the next one.
+        replaced = NotificationCenter.default.addObserver(
+            forName: .localStoreReplaced, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.reload() }
+        }
+    }
+
+    deinit {
+        if let replaced { NotificationCenter.default.removeObserver(replaced) }
     }
 
     /// A journal over `defaults` — a test's own suite.
@@ -249,6 +261,12 @@ final class InviteJournal {
     }
 
     // MARK: Persistence
+
+    /// Forget what is held and read the store again — after it was replaced or emptied.
+    func reload() {
+        openQRSessionID = nil
+        load()
+    }
 
     /// One write, then the codes past their life are dropped and the acts rebuilt from the store.
     private func write(_ body: (any IssuedInviteStore) throws -> Void) {
