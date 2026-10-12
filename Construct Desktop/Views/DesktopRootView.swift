@@ -282,8 +282,8 @@ struct DesktopRootView: View {
     @ViewBuilder
     private var detailPane: some View {
         if let chatId = chatsViewModel.chatToOpen,
-                  let chat = fetchChat(id: chatId) {
-            DesktopChatView(chat: chat, context: viewContext)
+           let conversation = ChatsLive.shared.conversation(chatId) {
+            DesktopChatView(conversation: conversation, context: viewContext)
                 // Identity, not decoration. `DesktopChatView` seeds its `ChatViewModel` and every
                 // editing scrap — draft text, reply target, selection, search — from `@State`, and
                 // `@State` takes its initial value once per identity. The detail column keeps the
@@ -293,7 +293,7 @@ struct DesktopRootView: View {
                 // because it pushes onto a NavigationStack, where every push is a new identity.
                 .id(chatId)
                 .onDrop(of: [.image, .fileURL], isTargeted: nil) { providers in
-                    handleDrop(providers: providers, into: chat)
+                    handleDrop(providers: providers)
                 }
         } else {
             DesktopEmptyStateView(
@@ -359,7 +359,7 @@ struct DesktopRootView: View {
 
     // MARK: - Drag & Drop into chat
 
-    private func handleDrop(providers: [NSItemProvider], into chat: Chat) -> Bool {
+    private func handleDrop(providers: [NSItemProvider]) -> Bool {
         var handled = false
         for provider in providers {
             if provider.hasItemConformingToTypeIdentifier("public.image") {
@@ -383,13 +383,6 @@ struct DesktopRootView: View {
             }
         }
         return handled
-    }
-
-    private func fetchChat(id: String) -> Chat? {
-        let req = Chat.fetchRequest()
-        req.predicate = NSPredicate(format: "id == %@", id)
-        req.fetchLimit = 1
-        return try? viewContext.fetch(req).first
     }
 
     // MARK: - Deep links

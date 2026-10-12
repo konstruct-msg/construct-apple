@@ -14,7 +14,7 @@ class MessagePersistenceService {
     ///   - decryptedContent: Decrypted message text
     ///   - isSentByMe: Whether current user sent this message
     ///   - status: Delivery status
-    ///   - chat: Associated chat
+    ///   - chatId: The chat it belongs to
     ///   - replyTo: Optional reply-to message
     ///   - localThumbnails: Optional thumbnails for media messages
     ///   - suiteId: Crypto suite ID
@@ -25,7 +25,7 @@ class MessagePersistenceService {
         decryptedContent: String,
         isSentByMe: Bool,
         status: DeliveryStatus,
-        chat: Chat,
+        chatId: String,
         replyTo: Message? = nil,
         replyToContentOverride: String? = nil,
         localThumbnails: [Data] = [],
@@ -60,7 +60,7 @@ class MessagePersistenceService {
                try store.setBody(existing.id, body: payload, searchText: LocalMessagePayload.decode(payload).plainText) {
                 Log.info("Recovered undecryptable message \(message.id.prefix(8))… — content now available", category: "MessagePersistence")
                 // Update chat preview if this was the last message showing "unavailable"
-                Self.advancePreview(of: chat, text: previewText, at: existing.timestamp)
+                Self.advancePreview(ofChat: chatId, text: previewText, at: existing.timestamp)
             }
             return false
         }
@@ -72,7 +72,7 @@ class MessagePersistenceService {
             MediaManager.shared.storeThumbnail(thumb, for: message.id, at: index)
         }
         let record = MessageRecord(
-            id: id, chatId: chat.id, fromUserId: message.from, toUserId: message.to,
+            id: id, chatId: chatId, fromUserId: message.from, toUserId: message.to,
             isSentByMe: isSentByMe, timestamp: messageTimestamp,
             orderKey: message.serverOrderKey
                 ?? (isSentByMe
@@ -92,8 +92,8 @@ class MessagePersistenceService {
         // lost if the app is backgrounded or killed before it runs.
         let isNewMessage = try store.insert(record, searchText: LocalMessagePayload.decode(payload).plainText)
         if isNewMessage {
-            if !isSentByMe { Self.incrementUnread(of: chat) }
-            Self.advancePreview(of: chat, text: previewText, at: messageTimestamp)
+            if !isSentByMe { Self.incrementUnread(ofChat: chatId) }
+            Self.advancePreview(ofChat: chatId, text: previewText, at: messageTimestamp)
         }
 
         Log.debug("Message saved to Core Data", category: "MessagePersistence")
@@ -215,7 +215,7 @@ class MessagePersistenceService {
         items: [UploadPlaceholderItem],
         replyTo: Message?,
         replyToContentOverride: String? = nil,
-        chat: Chat,
+        chatId: String,
         in context: NSManagedObjectContext
     ) {
         // The gallery (`ChatView.mediaMessages`) skips this row too, by the same flag.
@@ -234,7 +234,7 @@ class MessagePersistenceService {
         // (`.regular`) message replaced the placeholder. `MessageContentType.infer` deliberately
         // maps media payloads to `.regular` for the same reason.
         insertOwn(MessageRecord(
-            id: rowId, chatId: chat.id, fromUserId: fromUserId, toUserId: toUserId, isSentByMe: true,
+            id: rowId, chatId: chatId, fromUserId: fromUserId, toUserId: toUserId, isSentByMe: true,
             timestamp: now, orderKey: ServerMessageOrder.pending(localMessageId: rowId),
             body: Data(placeholderJson.utf8), contentType: .regular, deliveryStatus: .sending,
             retryCount: 0, suiteId: 0, isEdited: false, editedAt: nil,
@@ -248,7 +248,7 @@ class MessagePersistenceService {
         // Update chat metadata so the preview row shows something sensible.
         let preview = !caption.isEmpty ? caption
             : (items.first?.fileName.map { "📎 \($0)" } ?? "📷 " + NSLocalizedString("photo", comment: ""))
-        Self.advancePreview(of: chat, text: preview, at: now)
+        Self.advancePreview(ofChat: chatId, text: preview, at: now)
 
         Log.debug("Saved upload placeholder \(id.prefix(8))…", category: "MessagePersistence")
     }
@@ -262,7 +262,7 @@ class MessagePersistenceService {
         toUserId: String,
         duration: TimeInterval,
         waveform: [Float],
-        chat: Chat,
+        chatId: String,
         in context: NSManagedObjectContext
     ) {
         let waveformJson = waveform.map { String(format: "%.4f", $0) }.joined(separator: ",")
@@ -276,14 +276,14 @@ class MessagePersistenceService {
         // `.regular` for the same reason as the media placeholder above — the transcript FRC only
         // fetches `contentTypeRaw == 0`. The id keeps its case: the upload tracks it as given.
         insertOwn(MessageRecord(
-            id: id, chatId: chat.id, fromUserId: fromUserId, toUserId: toUserId, isSentByMe: true,
+            id: id, chatId: chatId, fromUserId: fromUserId, toUserId: toUserId, isSentByMe: true,
             timestamp: now, orderKey: ServerMessageOrder.pending(localMessageId: id),
             body: Data(placeholderJson.utf8), contentType: .regular, deliveryStatus: .sending,
             retryCount: 0, suiteId: 0, isEdited: false, editedAt: nil, replyToMessageId: nil,
             replyQuote: nil, transcript: nil, transcriptLanguage: nil, transcriptGeneratedAt: nil
         ))
 
-        Self.advancePreview(of: chat, text: NSLocalizedString("voice_message", comment: ""), at: now)
+        Self.advancePreview(ofChat: chatId, text: NSLocalizedString("voice_message", comment: ""), at: now)
 
         Log.debug("Saved voice upload placeholder \(id.prefix(8))…", category: "MessagePersistence")
     }
@@ -355,35 +355,34 @@ class MessagePersistenceService {
     // The chat's list row — preview and unread count — is written through `ChatStore`, after the
     // message's own save, and never in the message's context (LOCAL_STORE_MIGRATION_PLAN, chats
     // B2). The crate writes them the same way: `insert_message`, then `advance_chat_preview`, two
-    // statements. The message's context holds the chat only to link messages to it; that context
-    // is the view context, which merges the repository's write and, by its property-trump policy,
-    // keeps it when it next saves a link (`ChatStoreTests`).
+    // statements. The message path names a chat by its id; linking a row to its chat is
+    // `CoreDataMessageStore`'s.
 
     /// Move the list's preview to this message, unless the one shown is newer.
-    nonisolated static func advancePreview(of chat: Chat, text: String, at time: Date) {
+    nonisolated static func advancePreview(ofChat chatId: String, text: String, at time: Date) {
         do {
-            if try !LocalRepositories.chats.advancePreview(chat.id, text: Chat.formatPreviewText(text), time: time) {
-                Log.debug("Preview of \(chat.id.prefix(8))… not advanced — a newer one is shown", category: "MessagePersistence")
+            if try !LocalRepositories.chats.advancePreview(chatId, text: Chat.formatPreviewText(text), time: time) {
+                Log.debug("Preview of \(chatId.prefix(8))… not advanced — a newer one is shown", category: "MessagePersistence")
             }
         } catch {
-            Log.error("Preview of \(chat.id.prefix(8))… not written: \(error)", category: "MessagePersistence")
+            Log.error("Preview of \(chatId.prefix(8))… not written: \(error)", category: "MessagePersistence")
         }
     }
 
     /// Set the preview whatever it was — recomputed from the messages left; nil when none is.
-    nonisolated static func setPreview(of chat: Chat, text: String?, at time: Date?) {
+    nonisolated static func setPreview(ofChat chatId: String, text: String?, at time: Date?) {
         do {
-            try LocalRepositories.chats.setPreview(chat.id, text: text.map(Chat.formatPreviewText), time: time)
+            try LocalRepositories.chats.setPreview(chatId, text: text.map(Chat.formatPreviewText), time: time)
         } catch {
-            Log.error("Preview of \(chat.id.prefix(8))… not set: \(error)", category: "MessagePersistence")
+            Log.error("Preview of \(chatId.prefix(8))… not set: \(error)", category: "MessagePersistence")
         }
     }
 
-    nonisolated static func incrementUnread(of chat: Chat) {
+    nonisolated static func incrementUnread(ofChat chatId: String) {
         do {
-            try LocalRepositories.chats.incrementUnread(chat.id)
+            try LocalRepositories.chats.incrementUnread(chatId)
         } catch {
-            Log.error("Unread of \(chat.id.prefix(8))… not counted: \(error)", category: "MessagePersistence")
+            Log.error("Unread of \(chatId.prefix(8))… not counted: \(error)", category: "MessagePersistence")
         }
     }
 
@@ -392,40 +391,40 @@ class MessagePersistenceService {
     /// Delete a single message from Core Data
     /// - Parameters:
     ///   - message: Message to delete
-    ///   - chat: Chat containing the message
+    ///   - chatId: The chat it belongs to
     ///   - context: Core Data context
     /// - Throws: Core Data error if save fails
-    func deleteMessage(_ message: Message, chat: Chat, in context: NSManagedObjectContext) throws {
+    func deleteMessage(_ message: Message, chatId: String, in context: NSManagedObjectContext) throws {
         guard !message.isDeleted else {
             Log.error("Message is already deleted", category: "MessagePersistenceService")
             throw NSError(domain: "MessagePersistence", code: 1, userInfo: [NSLocalizedDescriptionKey: "Invalid message"])
         }
-        try deleteMessages(withIds: [message.id], chat: chat, in: context)
+        try deleteMessages(withIds: [message.id], chatId: chatId, in: context)
     }
 
     /// Delete messages by id, through the repository, then recompute the chat's preview from what
     /// is left. The view context drops the rows when it merges the repository's save.
-    func deleteMessages(withIds messageIds: Set<String>, chat: Chat, in context: NSManagedObjectContext) throws {
+    func deleteMessages(withIds messageIds: Set<String>, chatId: String, in context: NSManagedObjectContext) throws {
         guard !messageIds.isEmpty else { return }
         Log.debug("Deleting \(messageIds.count) messages", category: "MessagePersistenceService")
         try LocalRepositories.messages.delete(messageIds)
         Log.info("\(messageIds.count) message(s) deleted", category: "MessagePersistenceService")
-        try updateChatMetadataAfterDeletion(chat: chat, in: context)
+        try updateChatMetadataAfterDeletion(chatId: chatId, in: context)
     }
     
     // MARK: - Chat Metadata Update
     /// Update chat metadata after message deletion
     /// - Parameters:
-    ///   - chat: Chat to update
+    ///   - chatId: The chat to update
     ///   - context: Managed object context
     func updateChatMetadataAfterDeletion(
-        chat: Chat,
+        chatId: String,
         in context: NSManagedObjectContext
     ) throws {
         // Recomputed from what survives — this is the one case that may move backwards.
-        let newest = try LocalRepositories.messages.messages(inChat: chat.id, before: nil, limit: 1).last
+        let newest = try LocalRepositories.messages.messages(inChat: chatId, before: nil, limit: 1).last
         let text = newest.map { LocalMessagePayload.decode($0.body).previewHint }
-        Self.setPreview(of: chat, text: text, at: newest?.timestamp)
+        Self.setPreview(ofChat: chatId, text: text, at: newest?.timestamp)
         Log.debug("Updated chat metadata after deletion", category: "MessagePersistence")
     }
 

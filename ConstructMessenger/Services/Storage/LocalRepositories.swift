@@ -65,6 +65,11 @@ enum LocalRepositories {
         messages = CoreDataMessageStore(container: container ?? PersistenceController.shared.container)
     }
 
+    /// A store a test wrote itself — one that refuses, say.
+    static func useMessagesForTesting(_ store: any MessageStore) {
+        messages = store
+    }
+
     static func useReactionsForTesting(_ container: NSPersistentContainer?) {
         reactions = CoreDataReactionStore(container: container ?? PersistenceController.shared.container)
     }

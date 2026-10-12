@@ -10,11 +10,12 @@
 //  backfill), and two rows in the same millisecond (the key was `<ms>-<seq>` with `seq` fixed at
 //  zero for anything local).
 //
-//  This is not only a display defect. `MessageRouter.isRepeatOfLastRow` — the check that stops a
-//  notice restating a condition that has not changed — asks for *the newest row*. Among rows that
+//  This is not only a display defect. `MessageRouter.isRepeatOfLastRow` — the check that stopped a
+//  notice restating a condition that had not changed — asked for *the newest row*. Among rows that
 //  compare equal, "newest" was a coin flip, so the suppression sometimes read the wrong row and
 //  let the duplicate through. That is the 2026-08-04 screenshot: five identical "session out of
-//  sync" blocks, stacked.
+//  sync" blocks, stacked. The check went with the notice (2026-09-28); the newest row is still
+//  what a deletion recomputes the chat's preview from.
 //
 
 import XCTest
@@ -106,12 +107,12 @@ final class TranscriptOrderIsTotalTests: XCTestCase {
 
     // MARK: - What it buys
 
-    /// The behaviour the random tie-break was corrupting. Repeated, because a coin flip passes
-    /// once in two: the old code failed this roughly half of every run, which is exactly how
-    /// `SystemNoticeRepeatTests` came to be a "known flake".
+    /// The behaviour the random tie-break was corrupting: which row is the newest. Repeated,
+    /// because a coin flip passes once in two: the old code failed this roughly half of every run,
+    /// which is how `SystemNoticeRepeatTests` (removed with the notice) came to be a "known flake".
     ///
     /// Mutation: give both rows the same `serverOrderKey` — this reddens within a few iterations.
-    func testTheNewestRowIsDecidedByTheKeyAndNotByAUuid() {
+    func testTheNewestRowIsDecidedByTheKeyAndNotByAUuid() throws {
         for _ in 0..<50 {
             let container = PersistenceController(inMemory: true).container
             let context = container.viewContext
@@ -119,6 +120,7 @@ final class TranscriptOrderIsTotalTests: XCTestCase {
             let other = User(context: context)
             other.id = UUID().uuidString
             other.username = "annie"
+            other.displayName = ""
             let chat = Chat(context: context)
             chat.id = UUID().uuidString
             chat.otherUser = other
@@ -126,11 +128,15 @@ final class TranscriptOrderIsTotalTests: XCTestCase {
             let notice = "The encrypted session is out of sync."
             add(notice, from: "SYSTEM", at: Date(timeIntervalSince1970: 1_000), to: chat, in: context)
             add("Привет", from: "annie", at: Date(timeIntervalSince1970: 2_000), to: chat, in: context)
-            try? context.save()
+            // Saved, and checked: the store reads on its own context, so an unsaved fixture would
+            // read as an empty chat rather than fail.
+            try context.save()
 
-            XCTAssertFalse(
-                MessageRouter.isRepeatOfLastRowForTesting(notice, in: chat, context: context),
-                "the message is newer, so the notice is news again — reading a random row loses this"
+            let newest = try CoreDataMessageStore(container: container)
+                .messages(inChat: chat.id, before: nil, limit: 1).last
+            XCTAssertEqual(
+                newest?.fromUserId, "annie",
+                "the message is newer than the notice — reading a random row loses this"
             )
         }
     }
@@ -148,6 +154,7 @@ final class TranscriptOrderIsTotalTests: XCTestCase {
         m.serverOrderKey = ServerMessageOrder.local(timestamp: timestamp, messageId: m.id)
         m.isSentByMe = false
         m.deliveryStatus = .delivered
+        m.retryCount = 0
         m.applyStoredEncryption(plaintext: text, contactId: "annie")
     }
 }

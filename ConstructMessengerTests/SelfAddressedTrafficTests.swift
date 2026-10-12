@@ -123,10 +123,11 @@ final class SelfAddressedTrafficTests: XCTestCase {
 
     /// The guard has to sit **after** the SENDER_SYNC branch and **before** anything that resolves
     /// a peer: SENDER_SYNC is the one carrier that legitimately arrives self-addressed, and the
-    /// chat, the session and the tie-break all come later.
+    /// sender's contact row, its chat and the session all come later.
     ///
     /// Mutation: move the guard above the SENDER_SYNC branch (multi-device sync stops entirely) or
-    /// below `findOrCreateChat` (the chat with ourselves comes back) — this reddens either way.
+    /// below the sender's contact write (a contact, then a chat, with ourselves comes back) —
+    /// this reddens either way.
     func testTheReceivePathDropsOurOwnTrafficAfterSenderSyncAndBeforeTheChat() throws {
         let source = try XCTUnwrap(
             try? String(
@@ -138,14 +139,14 @@ final class SelfAddressedTrafficTests: XCTestCase {
         )
         let senderSync = try XCTUnwrap(source.range(of: "if message.isSenderSync {"))
         let reflection = try XCTUnwrap(source.range(of: "SessionAddressing.isOwnReflection("))
-        let chat = try XCTUnwrap(source.range(of: "try findOrCreateChat(for: otherUserId, in: context)"))
+        let chat = try XCTUnwrap(source.range(of: "try Self.ensureContact(otherUserId)"))
         XCTAssertLessThan(
             senderSync.lowerBound, reflection.lowerBound,
             "SENDER_SYNC is self-addressed by design and must be routed before the drop"
         )
         XCTAssertLessThan(
             reflection.lowerBound, chat.lowerBound,
-            "the drop must precede chat creation, or the chat with ourselves is created first"
+            "the drop must precede the contact write, or a contact and a chat with ourselves are created first"
         )
     }
 

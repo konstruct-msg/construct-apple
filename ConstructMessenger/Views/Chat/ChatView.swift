@@ -18,6 +18,10 @@ struct ChatView: View {
     /// allocate ChatViewModel there or discarded copies spam deinit / waste work.
     @State private var lazyViewModel: LazyChatViewModel
     private var viewModel: ChatViewModel { lazyViewModel.value }
+    private var peerId: String { viewModel.conversation.peerId }
+    private var peerName: String {
+        ContactsLive.shared.contact(peerId)?.resolvedDisplayName ?? DisplayNameGenerator.generate(from: peerId)
+    }
     /// Whoever owns the scroll position on this path. Chosen once, in `init`.
     ///
     /// Sampling the flag in `body` would let a mid-session flip put two owners on screen, which is
@@ -130,9 +134,9 @@ struct ChatView: View {
         )
     }
 
-    init(chat: Chat, context: NSManagedObjectContext) {
+    init(conversation: Conversation, context: NSManagedObjectContext) {
         _lazyViewModel = State(wrappedValue: LazyChatViewModel {
-            ChatViewModel(chat: chat, context: context)
+            ChatViewModel(conversation: conversation, context: context)
         })
         let owned = ChatViewportConfiguration.ownedInsetStackEnabled
         self.usesOwnedInset = owned
@@ -272,25 +276,21 @@ struct ChatView: View {
             ChatDropOverlayView(isVisible: isChatDropTargeted)
         }
         .sheet(isPresented: $showingUserProfile) {
-            if let user = viewModel.chat.otherUser {
-                UserProfileView(
-                    userId: user.id,
-                    showMessageButton: false   // already inside this chat — no loop
-                )
-                .sheetNavigation()
-                .environment(\.managedObjectContext, viewContext)
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
-            }
+            UserProfileView(
+                userId: peerId,
+                showMessageButton: false   // already inside this chat — no loop
+            )
+            .sheetNavigation()
+            .environment(\.managedObjectContext, viewContext)
+            .presentationDetents([.large])
+            .presentationDragIndicator(.visible)
         }
         .sheet(isPresented: $showingSafetyNumbers) {
-            if let user = viewModel.chat.otherUser {
-                SafetyNumberView(
-                    theirDeviceIds: KeyChangeUX.safetyDeviceIds(ofContact: user.id),
-                    theirDisplayName: user.resolvedDisplayName
-                )
-                .sheetNavigation()
-            }
+            SafetyNumberView(
+                theirDeviceIds: KeyChangeUX.safetyDeviceIds(ofContact: peerId),
+                theirDisplayName: peerName
+            )
+            .sheetNavigation()
         }
         .sheet(item: $quotingMessage) { msg in
             QuoteSelectionSheet(message: msg) { selectedQuote in
@@ -308,7 +308,7 @@ struct ChatView: View {
         .onChange(of: viewModel.isInitializingSession) { _, _ in refreshSessionAtRiskState() }
         // Posted when an at-risk session is auto-upgraded — refresh the banner so it disappears.
         .onReceive(NotificationCenter.default.publisher(for: .sessionAtRiskChanged)) { note in
-            if (note.userInfo?["userId"] as? String) == viewModel.chat.otherUser?.id {
+            if (note.userInfo?["userId"] as? String) == peerId {
                 refreshSessionAtRiskState()
             }
         }
@@ -372,8 +372,7 @@ struct ChatView: View {
     private var keyChangeBanner: some View {
         ChatKeyChangeBannerView(
             alert: contactTrustAlert,
-            contactName: viewModel.chat.otherUser?.resolvedDisplayName
-                ?? NSLocalizedString("chat", comment: ""),
+            contactName: peerName,
             onVerify: { showingSafetyNumbers = true },
             onAccept: { acknowledgeContactKeyChange() }
         )
@@ -381,24 +380,18 @@ struct ChatView: View {
     }
 
     private func acknowledgeContactKeyChange() {
-        guard let userId = viewModel.chat.otherUser?.id else { return }
-        if KeyChangeUX.acknowledgeKeyChange(userId: userId) {
+        if KeyChangeUX.acknowledgeKeyChange(userId: peerId) {
             loadContactKTStatus()
         }
     }
 
     /// Refresh the at-risk state from the per-peer Keychain flag set by degraded init.
     private func refreshSessionAtRiskState() {
-        guard let contactId = viewModel.chat.otherUser?.id, !contactId.isEmpty else {
-            isSessionAtRisk = false
-            return
-        }
+        let contactId = peerId
         isSessionAtRisk = KeychainManager.shared.loadSessionAtRiskFlag(for: contactId)
     }
 
-    private var floodSenderId: String {
-        viewModel.chat.otherUser?.id ?? ""
-    }
+    private var floodSenderId: String { peerId }
 
     private var isFloodSenderSuppressed: Bool {
         floodGuard.suppressedSenders.contains(floodSenderId)
@@ -409,17 +402,16 @@ struct ChatView: View {
     }
 
     private func blockAndUnsuppressFloodSender() {
-        if let userId = viewModel.chat.otherUser?.id, !userId.isEmpty {
-            do {
-                try LocalRepositories.contacts.setBlocked(userId, true)
-            } catch {
-                Log.error("Flood block not saved locally for \(userId.prefix(8))…: \(error)", category: "ChatView")
-            }
-            // Durable server-side block (best-effort; local isBlocked already drives the drop).
-            Task {
-                do { _ = try await UserServiceClient.shared.blockUser(userId: userId) }
-                catch { Log.error("Flood block sync failed for \(userId.prefix(8))… (local kept): \(error)", category: "ChatView") }
-            }
+        let userId = peerId
+        do {
+            try LocalRepositories.contacts.setBlocked(userId, true)
+        } catch {
+            Log.error("Flood block not saved locally for \(userId.prefix(8))…: \(error)", category: "ChatView")
+        }
+        // Durable server-side block (best-effort; local isBlocked already drives the drop).
+        Task {
+            do { _ = try await UserServiceClient.shared.blockUser(userId: userId) }
+            catch { Log.error("Flood block sync failed for \(userId.prefix(8))… (local kept): \(error)", category: "ChatView") }
         }
         IncomingFloodGuard.shared.unsuppress(senderId: floodSenderId)
     }
@@ -454,7 +446,7 @@ struct ChatView: View {
                         replyToContentOverride: replyQuoteText
                     )
                     messageText = ""
-                    DraftStore.shared.clear(for: viewModel.chat.id)
+                    DraftStore.shared.clear(for: viewModel.conversation.chatId)
                     replyingTo = nil
                     replyQuoteText = nil
                     clearReplyFocus(animated: true)
@@ -533,11 +525,7 @@ struct ChatView: View {
         // bar of ours whose title is a view, so it sets the bar's title face itself.
         ToolbarItem(placement: .principal) {
             Button { showingUserProfile = true } label: {
-                if let userId = viewModel.chat.otherUser?.id, !userId.isEmpty {
-                    ObservedPeerName(userId: userId) { chatTitle($0) }
-                } else {
-                    chatTitle(NSLocalizedString("chat", comment: ""))
-                }
+                ObservedPeerName(userId: peerId) { chatTitle($0) }
             }
             .buttonStyle(.plain)
             .accessibilityIdentifier(A11y.Chat.title)
@@ -622,8 +610,7 @@ struct ChatView: View {
     /// Load KT status for the contact — as saved, since this runs on the notification a write
     /// posts.
     private func loadContactKTStatus() {
-        guard let userId = viewModel.chat.otherUser?.id, !userId.isEmpty else { return }
-        if let contact = try? LocalRepositories.contacts.contact(userId) {
+        if let contact = try? LocalRepositories.contacts.contact(peerId) {
             contactKTStatus = contact.ktStatus
             contactTrustAlert = contact.trustAlert
         }
@@ -1016,7 +1003,6 @@ struct ChatView: View {
     private var canStartCall: Bool {
         guard CallsFeature.isEnabled,
               let callManager,
-              viewModel.chat.otherUser != nil,
               case .idle = callManager.state else { return false }
         return true
     }
@@ -1042,12 +1028,11 @@ struct ChatView: View {
     }
 
     private func startOutgoingCall(hasVideo: Bool) {
-        guard let otherUser = viewModel.chat.otherUser else { return }
         guard let callManager else { return }
         Task {
             await callManager.startOutgoingCall(
-                to: otherUser.id,
-                displayName: otherUser.resolvedDisplayName,
+                to: peerId,
+                displayName: peerName,
                 hasVideo: hasVideo
             )
         }
@@ -1199,7 +1184,7 @@ struct ChatView: View {
         }
         // Restore an unsent draft saved when we last left this chat.
         if viewModel.editingMessage == nil, messageText.isEmpty {
-            messageText = DraftStore.shared.draft(for: viewModel.chat.id)
+            messageText = DraftStore.shared.draft(for: viewModel.conversation.chatId)
         }
         isOnScreen = true
         markChatAsRead()
@@ -1208,13 +1193,12 @@ struct ChatView: View {
         refreshSessionAtRiskState()
         // Phase 2: if this contact was reached via a degraded session and has since rotated
         // their keys, opportunistically re-key to a fresh session (no-op otherwise).
-        if let contactId = viewModel.chat.otherUser?.id, !contactId.isEmpty {
-            Task { await SessionInitializationService.shared.upgradeAtRiskSessionIfPeerFresh(userId: contactId) }
-            // Who this person's devices are, when nothing recent has said. Opening the chat is the
-            // trigger rather than sending, so the key server is asked once per peer per TTL and
-            // never per message. Best-effort; see `refreshRecipientDevices`.
-            Task { await MultiDeviceSendCoordinator.shared.refreshRecipientDevices(for: contactId) }
-        }
+        let contactId = peerId
+        Task { await SessionInitializationService.shared.upgradeAtRiskSessionIfPeerFresh(userId: contactId) }
+        // Who this person's devices are, when nothing recent has said. Opening the chat is the
+        // trigger rather than sending, so the key server is asked once per peer per TTL and never
+        // per message. Best-effort; see `refreshRecipientDevices`.
+        Task { await MultiDeviceSendCoordinator.shared.refreshRecipientDevices(for: contactId) }
         setActiveChatState(isActive: true)
         // Active chat owns continuous voice playback: advance to the next voice message
         // (older → newer) when one finishes, if the setting is on.
@@ -1234,7 +1218,7 @@ struct ChatView: View {
         // Preserve a half-typed message across navigation. Skip while editing,
         // so the edit buffer never leaks into the new-message draft.
         if viewModel.editingMessage == nil {
-            DraftStore.shared.save(messageText, for: viewModel.chat.id)
+            DraftStore.shared.save(messageText, for: viewModel.conversation.chatId)
         }
         setActiveChatState(isActive: false)
         AudioPlayerService.shared.onTrackFinished = nil
@@ -1242,21 +1226,20 @@ struct ChatView: View {
 
     private func handleContactKeyChanged(_ note: Notification) {
         guard let changedId = note.userInfo?["userId"] as? String,
-              changedId == viewModel.chat.otherUser?.id else { return }
+              changedId == peerId else { return }
         loadContactKTStatus()
     }
 
     private func setActiveChatState(isActive: Bool) {
-        guard let contactId = viewModel.chat.otherUser?.id, !contactId.isEmpty else { return }
-        KeyChangeUX.setActiveChatContact(isActive ? contactId : nil)
+        KeyChangeUX.setActiveChatContact(isActive ? peerId : nil)
     }
 
     // MARK: - Actions
 
     private func markChatAsRead() {
-        let chat = viewModel.chat
-        guard chat.unreadCount > 0 else { return }
-        try? LocalRepositories.chats.setUnread(chat.id, 0)
+        let chatId = viewModel.conversation.chatId
+        guard let unread = try? LocalRepositories.chats.chat(chatId)?.unreadCount, unread > 0 else { return }
+        try? LocalRepositories.chats.setUnread(chatId, 0)
     }
 
     private func toggleMessageSelection(_ message: Message) {
@@ -1332,7 +1315,7 @@ struct ChatView: View {
 
     // SessionLifecycleController.shared is used internally — preview doesn't need DI
     return NavigationStack {
-        ChatView(chat: chat, context: context)
+        ChatView(conversation: Conversation(chatId: chat.id, peerId: user.id), context: context)
             .environment(\.managedObjectContext, context)
     }
 }
