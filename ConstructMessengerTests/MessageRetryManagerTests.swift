@@ -64,8 +64,7 @@ final class MessageRetryManagerTests: XCTestCase {
         try! context.save()
 
         let pendingIds = retryManager.prepareMessagesForGlobalRetry(
-            [sendable, queuedMissingPayload, failedMissingPayload],
-            context: context
+            [sendable, queuedMissingPayload, failedMissingPayload].compactMap(stored)
         )
 
         XCTAssertEqual(pendingIds, [sendable.id])

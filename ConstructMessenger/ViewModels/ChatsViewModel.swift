@@ -60,16 +60,10 @@ class ChatsViewModel {
     }()
 
     private static func stampImportedChatPreviews() async {
-        let context = PersistenceController.shared.newBackgroundContext()
-        await context.perform {
-            let request = Chat.fetchRequest()
-            request.predicate = NSPredicate(format: "lastMessageTime == nil")
-            guard let chats = try? context.fetch(request), !chats.isEmpty else { return }
-            var stamped = 0
-            for chat in chats where chat.reconcilePreviewFromTranscript(in: context) { stamped += 1 }
-            guard stamped > 0 else { return }
-            Log.info("history_import: stamped \(stamped) chat preview(s) so the stream subscribes to them", category: "HistorySync")
-        }
+        let unstamped = ((try? LocalRepositories.chats.chats()) ?? []).filter { $0.lastMessageTime == nil }
+        let stamped = unstamped.filter { MessagePersistenceService.reconcilePreview(ofChat: $0) }.count
+        guard stamped > 0 else { return }
+        Log.info("history_import: stamped \(stamped) chat preview(s) so the stream subscribes to them", category: "HistorySync")
     }
 
     // MARK: - UI state

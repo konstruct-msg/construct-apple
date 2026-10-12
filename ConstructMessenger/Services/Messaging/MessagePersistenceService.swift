@@ -386,6 +386,50 @@ class MessagePersistenceService {
         }
     }
 
+    /// Align the chat's list line with its newest message a list may show — a regular message
+    /// that is not a leaked control or service row — or clear it when there is none. Returns
+    /// whether it wrote. The self-heal for a preview a writer missed or a stamp frozen in the
+    /// future, and the first preview of a chat a history import wrote messages into.
+    @discardableResult
+    nonisolated static func reconcilePreview(
+        ofChat chat: ChatRecord, store: any MessageStore = LocalRepositories.messages
+    ) -> Bool {
+        let newest = newestListed(inChat: chat.id, store: store)
+        guard let newest else {
+            guard chat.lastMessageText != nil || chat.lastMessageTime != nil else { return false }
+            setPreview(ofChat: chat.id, text: nil, at: nil)
+            return true
+        }
+        let preview = newest.payload.previewHint
+        if let current = chat.lastMessageTime,
+           abs(current.timeIntervalSince(newest.timestamp)) < 0.5,
+           (chat.lastMessageText ?? "") == Chat.formatPreviewText(preview) {
+            return false
+        }
+        setPreview(ofChat: chat.id, text: preview, at: newest.timestamp)
+        Log.debug("Preview reconciled for \(chat.id.prefix(8))… ts=\(newest.timestamp)", category: "Chat")
+        return true
+    }
+
+    /// Pages back from the newest until a row qualifies; a run of leaked rows at the tip does not
+    /// pin the line.
+    private nonisolated static func newestListed(inChat chatId: String, store: any MessageStore) -> MessageRecord? {
+        let page = 8
+        var before: (orderKey: String, id: String)?
+        while let rows = try? store.messages(inChat: chatId, before: before, limit: page), !rows.isEmpty {
+            if let shown = rows.last(where: { row in
+                guard row.contentType == .regular, !row.contentType.isEphemeral else { return false }
+                let text = row.payload.displayString
+                return !MessageContentType.isControlPayload(text) && !MessageContentType.isLegacyDeliveryReceipt(text)
+            }) {
+                return shown
+            }
+            guard rows.count == page, let oldest = rows.first else { return nil }
+            before = (oldest.orderKey, oldest.id)
+        }
+        return nil
+    }
+
     // MARK: - Message Deletion
     
     /// Delete messages by id, through the repository, then recompute the chat's preview from what

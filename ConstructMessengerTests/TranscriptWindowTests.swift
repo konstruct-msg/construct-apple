@@ -205,6 +205,12 @@ private final class CountingMessageStore: MessageStore, @unchecked Sendable {
     func allMessages(after: (orderKey: String, id: String)?, limit: Int) throws -> [MessageRecord] {
         try base.allMessages(after: after, limit: limit)
     }
+    func pendingSends(inChat chatId: String?, retryCeiling: Int16, limit: Int) throws -> [MessageRecord] {
+        try base.pendingSends(inChat: chatId, retryCeiling: retryCeiling, limit: limit)
+    }
+    func ownMessages(in status: DeliveryStatus, limit: Int) throws -> [MessageRecord] {
+        try base.ownMessages(in: status, limit: limit)
+    }
     func changes() -> AsyncStream<Set<String>> { base.changes() }
     func insert(_ message: MessageRecord, searchText: String?) throws -> Bool { try base.insert(message, searchText: searchText) }
     func insert(_ messages: [(message: MessageRecord, searchText: String?)]) throws -> Set<String> { try base.insert(messages) }

@@ -433,17 +433,12 @@ final class MultiDeviceSendCoordinator {
                 continue
             }
 
-            // Both answers from one fetch. Asking twice — once for the plaintext, once to tell a
+            // Both answers from one read. Asking twice — once for the plaintext, once to tell a
             // missing row from an unrebuildable one — would let the row be deleted in between and
             // label the outcome by a state that no longer holds.
-            let context = PersistenceController.shared.container.newBackgroundContext()
-            let recovered: (plaintext: Data?, rowExists: Bool) = await context.perform {
-                let fr = Message.fetchRequest()
-                fr.predicate = NSPredicate(format: "id == %@", entry.baseMessageId)
-                fr.fetchLimit = 1
-                guard let row = try? context.fetch(fr).first else { return (nil, false) }
-                return (MessageRetryManager.recoverWirePlaintext(for: row), true)
-            }
+            let row = try? LocalRepositories.messages.message(entry.baseMessageId)
+            let recovered: (plaintext: Data?, rowExists: Bool) =
+                (row.flatMap(MessageRetryManager.recoverWirePlaintext(for:)), row != nil)
 
             guard let plaintext = recovered.plaintext else {
                 // Two different endings sharing one shape, so they are labelled apart: a row that
