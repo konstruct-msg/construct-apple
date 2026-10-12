@@ -726,8 +726,25 @@ class AuthViewModel {
                 Log.error("Failed to wipe \(entityName): \(error)", category: "Auth")
             }
         }
+        // What macOS takes with the store lives outside Core Data here: the invite journal and
+        // the fan-out queue in `UserDefaults`, partial messages in sealed files.
+        Self.forgetServiceRows()
         Log.info("Local store wiped — previous identity's data removed", category: "Auth")
         #endif
+    }
+
+    /// The previous identity's service rows on iOS: issued invites, owed fan-out copies, partial
+    /// messages. Each through its own owner, so none keeps a copy of them in memory.
+    static func forgetServiceRows() {
+        do {
+            let invites = LocalRepositories.issuedInvites
+            try invites.delete(jtis: invites.all().map(\.jti))
+        } catch {
+            Log.error("Ownership gate: issued invites not removed: \(error)", category: "Auth")
+        }
+        InviteJournal.shared.reload()
+        FanoutRetryQueue.shared.removeAll()
+        PendingReassemblyStore.shared.removeAll()
     }
 
     /// Every entity that carries user data. One list, used by both the ownership gate and

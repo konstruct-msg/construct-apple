@@ -180,6 +180,12 @@ final class FanoutRetryQueue {
         }
     }
 
+    /// Every owed copy dropped — the queue was the last account's (`AuthViewModel`'s ownership
+    /// gate). Nothing is retried for an identity that no longer signs in here.
+    func removeAll() {
+        queue.sync { save([]) }
+    }
+
     // MARK: - Reading
 
     /// Entries whose backoff has elapsed, oldest first. Expired ones are dropped on the way past —
