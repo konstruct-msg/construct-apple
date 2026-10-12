@@ -130,6 +130,20 @@ final class PendingReassemblyStore {
         }
     }
 
+    /// Every partial message dropped, without reporting it as a loss — it was the last account's
+    /// (`AuthViewModel`'s ownership gate), and the next one never received it.
+    func removeAll() {
+        queue.sync {
+            do {
+                for message in try store.messages() {
+                    try store.delete(senderId: message.senderId, messageId: message.messageId)
+                }
+            } catch {
+                Log.error("Reassembly store: partial messages not dropped: \(error)", category: "ChunkedDelivery")
+            }
+        }
+    }
+
     /// Test/diagnostic view of what is currently held.
     func pendingCount() -> Int {
         queue.sync { (try? store.messages().count) ?? 0 }
