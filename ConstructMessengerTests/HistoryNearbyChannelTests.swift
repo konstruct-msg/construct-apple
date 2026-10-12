@@ -48,7 +48,6 @@ final class HistoryNearbyChannelTests: XCTestCase {
     func testTranscriptPhaseRoundTripsThroughTheHandshake() async throws {
         let (local, peer) = try keys()
         let offeringStore = PersistenceController(inMemory: true).container.viewContext
-        let receivingStore = PersistenceController(inMemory: true).container.viewContext
         let duplex = HistoryMemoryDuplex()
         let sender = HistoryTransferCoordinator()
         let receiver = HistoryTransferCoordinator()
@@ -61,7 +60,6 @@ final class HistoryNearbyChannelTests: XCTestCase {
             local: local,
             pin: .pinned(historyQrFingerprint(identityPublic: peer.identityPublic, hybridPublic: peer.hybridPublic)),
             coordinator: receiver,
-            context: receivingStore,
             resolvePeer: { hex in
                 XCTAssertEqual(hex, peer.deviceIdHex, "the receiver asks the directory for the device the frame named")
                 return peer
@@ -85,7 +83,7 @@ final class HistoryNearbyChannelTests: XCTestCase {
             .skip, over: duplex.left, peer: peer, local: local, coordinator: sender, context: store
         )
         let outcome = try await HistoryNearbyChannel.runReceive(
-            over: duplex.right, local: local, pin: .bundleOnly, coordinator: receiver, context: store,
+            over: duplex.right, local: local, pin: .bundleOnly, coordinator: receiver,
             resolvePeer: { _ in peer }
         )
         try await offer
@@ -110,7 +108,7 @@ final class HistoryNearbyChannelTests: XCTestCase {
         do {
             _ = try await HistoryNearbyChannel.runReceive(
                 over: duplex.right, local: local, pin: .absent, coordinator: HistoryTransferCoordinator(),
-                context: store, resolvePeer: { _ in peer }
+                resolvePeer: { _ in peer }
             )
             XCTFail("absent pin must refuse")
         } catch {
@@ -144,7 +142,7 @@ final class HistoryNearbyChannelTests: XCTestCase {
         do {
             _ = try await HistoryNearbyChannel.runReceive(
                 over: duplex.right, local: local, pin: .bundleOnly, coordinator: HistoryTransferCoordinator(),
-                context: store, resolvePeer: { _ in other }
+                resolvePeer: { _ in other }
             )
             XCTFail("a directory key that is not the frame's must refuse")
         } catch {
