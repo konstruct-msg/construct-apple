@@ -59,6 +59,7 @@ final class HistorySnapshotEncoderTests: XCTestCase {
         LocalRepositories.useChatsForTesting(container)
         LocalRepositories.useMessagesForTesting(container)
         LocalRepositories.useReactionsForTesting(container)
+        LocalRepositories.useCallsForTesting(container)
     }
 
     override func tearDown() {
@@ -157,7 +158,7 @@ final class HistorySnapshotEncoderTests: XCTestCase {
         let contextB = storeB.viewContext
         // Device B's own tables, or B would re-encode A's rows and prove nothing.
         useRepositories(storeB)
-        _ = try HistorySnapshotImporter(expectedUserId: local, context: contextB).importRecords(fromA.records)
+        _ = try HistorySnapshotImporter(expectedUserId: local).importRecords(fromA.records)
 
         let encoderB = HistorySnapshotEncoder(identity: identity)
         let fromB = try await collect(encoderB.encodeAll(context: contextB))
@@ -255,7 +256,7 @@ final class HistorySnapshotEncoderTests: XCTestCase {
             identityKey: key, firstSeenAt: Date(timeIntervalSince1970: 1_700_000_000)
         )])
 
-        _ = CTCallRecord.create(
+        try LocalRepositories.calls.upsert(CallRecord(
             id: "call-1",
             peerUserId: peer,
             peerName: "should-not-travel",
@@ -263,9 +264,8 @@ final class HistorySnapshotEncoderTests: XCTestCase {
             status: .completed,
             startedAt: Date(timeIntervalSince1970: 1_700_000_000),
             endedAt: Date(timeIntervalSince1970: 1_700_000_030),
-            durationSeconds: 30,
-            in: context
-        )
+            durationSeconds: 30
+        ))
         try context.save()
     }
 

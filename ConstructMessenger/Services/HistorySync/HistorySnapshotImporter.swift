@@ -55,18 +55,20 @@ struct HistoryImportSummary: Equatable {
 
 /// One stream's import. Messages are written in batches of `saveBatchSize` — one write each, not
 /// one per message — and a batch is written before anything that reads it (a reaction asks
-/// whether its message is held). Call `flush()` at the end. Runs on `context`'s queue, which only
-/// the call rows use.
+/// whether its message is held). Call `flush()` at the end. Every write goes through a repository;
+/// until 2026-10-12 the call rows went into a context the caller passed, which was its only use.
 final class HistorySnapshotImporter {
     static let saveBatchSize = 200
 
     private let expectedUserId: String
-    private let context: NSManagedObjectContext
     private let contacts: any ContactStore
     private let chats: any ChatStore
     private let messages: any MessageStore
     private let reactions: any ReactionStore
     private let peerDevices: any PeerDeviceStore
+    private let calls: any CallStore
+    /// The calls already logged here, read at the first call record of the stream.
+    private var knownCallIds: Set<String>?
     private(set) var summary = HistoryImportSummary()
     private var pending: [(message: MessageRecord, searchText: String?)] = []
     /// Chat ids by peer, opened this stream.
@@ -74,20 +76,20 @@ final class HistorySnapshotImporter {
 
     init(
         expectedUserId: String,
-        context: NSManagedObjectContext,
         contacts: any ContactStore = LocalRepositories.contacts,
         chats: any ChatStore = LocalRepositories.chats,
         messages: any MessageStore = LocalRepositories.messages,
         reactions: any ReactionStore = LocalRepositories.reactions,
-        peerDevices: any PeerDeviceStore = LocalRepositories.peerDevices
+        peerDevices: any PeerDeviceStore = LocalRepositories.peerDevices,
+        calls: any CallStore = LocalRepositories.calls
     ) {
         self.expectedUserId = expectedUserId
-        self.context = context
         self.contacts = contacts
         self.chats = chats
         self.messages = messages
         self.reactions = reactions
         self.peerDevices = peerDevices
+        self.calls = calls
     }
 
     /// Apply one record. A refused record aborts the whole phase, and the error alone
@@ -102,10 +104,9 @@ final class HistorySnapshotImporter {
         }
     }
 
-    /// Write the messages waiting, and the call rows.
+    /// Write the messages waiting.
     func flush() throws {
         try writePending()
-        if context.hasChanges { try context.saveOrThrow(category: "HistorySync") }
     }
 
     /// Apply a whole decoded stream and flush; this stream's summary.
@@ -267,21 +268,20 @@ final class HistorySnapshotImporter {
 
     private func applyCall(_ proto: Data) throws -> HistoryApplyResult {
         let unnamed = try historyImportCall(record: proto, peerName: "", nowMs: nowMs)
-        let req = CTCallRecord.fetchRequest()
-        req.fetchLimit = 1
-        req.predicate = NSPredicate(format: "id == %@", unnamed.id)
-        if try context.count(for: req) > 0 { return .conflictKeepExisting }
-        _ = CTCallRecord.create(
+        var known = try knownCallIds ?? Set(calls.calls(limit: Int(Int32.max)).map(\.id))
+        defer { knownCallIds = known }
+        if known.contains(unnamed.id) { return .conflictKeepExisting }
+        try calls.upsert(CallRecord(
             id: unnamed.id,
             peerUserId: unnamed.peerUserId,
             peerName: try contacts.contact(unnamed.peerUserId)?.displayName ?? "",
-            direction: CTCallRecord.Direction(rawValue: unnamed.direction) ?? .incoming,
-            status: CTCallRecord.Status(rawValue: unnamed.status) ?? .completed,
+            direction: CallRecord.Direction(rawValue: unnamed.direction) ?? .incoming,
+            status: CallRecord.Status(rawValue: unnamed.status) ?? .completed,
             startedAt: unnamed.startedAt.map(Date.init(unixMs:)) ?? Date(),
             endedAt: unnamed.endedAt.map(Date.init(unixMs:)),
-            durationSeconds: unnamed.durationSeconds,
-            in: context
-        )
+            durationSeconds: unnamed.durationSeconds
+        ))
+        known.insert(unnamed.id)
         return .applied
     }
 }

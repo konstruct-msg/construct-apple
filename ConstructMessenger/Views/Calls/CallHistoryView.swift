@@ -6,15 +6,11 @@
 //
 
 import SwiftUI
-import CoreData
 
 #if os(iOS)
 struct CallHistoryView: View {
-    @Environment(\.managedObjectContext) private var viewContext
-
-    // iOS 26: @FetchRequest(keyPath:) calls entity(). Using a plain @State array +
-    // manual NSFetchRequest(entityName:) avoids the class-introspection path entirely.
-    @State private var records: [CTCallRecord] = []
+    /// The log as last read from the call store, read again on each of its changes.
+    @State private var records: [CallRecord] = []
     @State private var selectedFilter: CallHistoryFilter = .all
     @State private var showClearConfirm = false
 
@@ -52,10 +48,11 @@ struct CallHistoryView: View {
             }
         }
         .background(Color.CT.bg.ignoresSafeArea())
-        .onAppear { loadRecords() }
-        .onReceive(NotificationCenter.default.publisher(for: .NSManagedObjectContextDidSave)) { note in
-            guard notificationContainsCallRecordChanges(note) else { return }
+        .task {
+            // Subscribed before the first read, so a call logged in between is not missed.
+            let changes = LocalRepositories.calls.changes()
             loadRecords()
+            for await _ in changes { loadRecords() }
         }
         .alert(NSLocalizedString("calls_clear_confirm", comment: ""), isPresented: $showClearConfirm) {
             Button(NSLocalizedString("calls_clear", comment: ""), role: .destructive) {
@@ -78,7 +75,7 @@ struct CallHistoryView: View {
         .padding(.bottom, CTLayout.inlinePad)
     }
 
-    private var filteredRecords: [CTCallRecord] {
+    private var filteredRecords: [CallRecord] {
         switch selectedFilter {
         case .all:
             return records
@@ -95,23 +92,14 @@ struct CallHistoryView: View {
         }
     }
 
-    private func loadRecords() {
-        let req = NSFetchRequest<NSManagedObject>(entityName: "CallRecord")
-        req.sortDescriptors = [NSSortDescriptor(key: "startedAt", ascending: false)]
-        req.fetchLimit = 200
-        let objects = (try? viewContext.fetch(req)) ?? []
-        records = objects.compactMap { $0 as? CTCallRecord }
-    }
+    private static let shownLimit = 200
 
-    private func notificationContainsCallRecordChanges(_ note: Notification) -> Bool {
-        let keys = [NSInsertedObjectsKey, NSUpdatedObjectsKey, NSDeletedObjectsKey]
-        for key in keys {
-            guard let objects = note.userInfo?[key] as? Set<NSManagedObject> else { continue }
-            if objects.contains(where: { $0.entity.name == "CallRecord" }) {
-                return true
-            }
+    private func loadRecords() {
+        do {
+            records = try LocalRepositories.calls.calls(limit: Self.shownLimit)
+        } catch {
+            Log.error("Failed to read call history: \(error)", category: "CallHistory")
         }
-        return false
     }
 
     /// A List, so the rows' swipe actions work — under the ScrollView this used to be, the
@@ -160,12 +148,11 @@ struct CallHistoryView: View {
         }
     }
 
-    private func deleteRecord(_ record: CTCallRecord) {
-        viewContext.delete(record)
-        try? viewContext.save()
+    private func deleteRecord(_ record: CallRecord) {
+        CallHistoryService.shared.delete(record.id)
     }
 
-    private func callBack(_ record: CTCallRecord) {
+    private func callBack(_ record: CallRecord) {
         guard CallsFeature.isEnabled else { return }
         Task {
             await CallManager.shared.startOutgoingCall(
@@ -176,7 +163,7 @@ struct CallHistoryView: View {
         }
     }
 
-    private func sectionKind(for record: CTCallRecord) -> CallHistorySection.Kind {
+    private func sectionKind(for record: CallRecord) -> CallHistorySection.Kind {
         guard let startedAt = record.startedAt else { return .older }
         let calendar = Calendar.current
         if calendar.isDateInToday(startedAt) {
@@ -206,7 +193,7 @@ private struct CallHistorySection: Identifiable {
     }
 
     let kind: Kind
-    let records: [CTCallRecord]
+    let records: [CallRecord]
 
     var id: Kind { kind }
 
@@ -225,7 +212,7 @@ private struct CallHistorySection: Identifiable {
 }
 
 private struct CallHistoryRow: View {
-    let record: CTCallRecord
+    let record: CallRecord
     var onDelete: () -> Void
     var onCallBack: () -> Void
 
@@ -298,8 +285,6 @@ private struct CallHistoryRow: View {
             return "phone.arrow.up.right"
         case .incoming:
             return "phone.arrow.down.left"
-        @unknown default:
-            return "phone"
         }
     }
 
@@ -311,8 +296,6 @@ private struct CallHistoryRow: View {
             return record.direction == .outgoing ? Color.CT.textDim : Color.CT.accent
         case .failed:
             return .orange
-        @unknown default:
-            return Color.CT.textDim
         }
     }
 
@@ -328,8 +311,6 @@ private struct CallHistoryRow: View {
             return NSLocalizedString("call_declined", comment: "")
         case .failed:
             return NSLocalizedString("call_failed", comment: "")
-        @unknown default:
-            return ""
         }
     }
 
@@ -342,9 +323,7 @@ private struct CallHistoryRow: View {
 }
 
 #Preview {
-    let container = PreviewHelpers.createPreviewContainer()
-    return CallHistoryView()
-        .environment(\.managedObjectContext, container.viewContext)
+    CallHistoryView()
         .preferredColorScheme(.dark)
 }
 #endif

@@ -29,6 +29,7 @@ final class HistorySnapshotImporterTests: XCTestCase {
         LocalRepositories.useChatsForTesting(container)
         LocalRepositories.useMessagesForTesting(container)
         LocalRepositories.useReactionsForTesting(container)
+        LocalRepositories.useCallsForTesting(container)
         MessageDisplayCache.shared.evictAll()
     }
 
@@ -38,6 +39,7 @@ final class HistorySnapshotImporterTests: XCTestCase {
         LocalRepositories.useChatsForTesting(nil)
         LocalRepositories.useMessagesForTesting(nil)
         LocalRepositories.useReactionsForTesting(nil)
+        LocalRepositories.useCallsForTesting(nil)
         MessageDisplayCache.shared.evictAll()
         container = nil
         super.tearDown()
@@ -277,7 +279,7 @@ final class HistorySnapshotImporterTests: XCTestCase {
     }
 
     private func importAll(_ records: [HistoryRecord]) throws -> HistoryImportSummary {
-        let summary = try HistorySnapshotImporter(expectedUserId: local, context: context).importRecords(records)
+        let summary = try HistorySnapshotImporter(expectedUserId: local).importRecords(records)
         context.refreshAllObjects()
         return summary
     }

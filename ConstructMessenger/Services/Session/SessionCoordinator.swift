@@ -406,7 +406,7 @@ final class SessionCoordinator: MessageRouterDelegate {
             FailedInitMessageStore.shared.add(id)
             // Belt-and-suspenders alongside the failure store.
             if let context = viewContext {
-                PersistentACKStore.shared.markProcessed(id, senderId: userId, in: context)
+                PersistentACKStore.shared.markProcessed(id, senderId: userId)
             }
         }
         messageRouter.releaseCoreQueued(blamedMessageIds)

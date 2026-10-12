@@ -84,7 +84,9 @@ final class SessionQueueWiringTests: XCTestCase {
             "Crypto core failed to bootstrap — MessageRouter would defer every incoming message and every assertion below would vacuously read zero"
         )
 
-        context = PersistenceController(inMemory: true).container.viewContext
+        let container = PersistenceController(inMemory: true).container
+        LocalRepositories.useProcessedMessagesForTesting(CoreDataProcessedMessageStore(container: container))
+        context = container.viewContext
         router = MessageRouter()
         router.setContext(context)
         delegate = RecordingDelegate()
@@ -95,6 +97,7 @@ final class SessionQueueWiringTests: XCTestCase {
         if let savedUserId, !savedUserId.isEmpty {
             AuthSessionManager.shared.updateUserId(savedUserId)
         }
+        LocalRepositories.useProcessedMessagesForTesting(nil)
         context = nil
         router = nil
         delegate = nil
@@ -183,7 +186,7 @@ final class SessionQueueWiringTests: XCTestCase {
 
             XCTAssertFalse(delegate.openRequests.contains(peer), "nothing opens from a message with no header")
             XCTAssertEqual(queuedInCore(device), 0, "a message nothing can open is not queued")
-            XCTAssertTrue(PersistentACKStore.shared.isProcessed(message.id, in: context),
+            XCTAssertTrue(PersistentACKStore.shared.isProcessed(message.id),
                           "answered and recorded, not held for a redelivery that reads the same")
         }
     }
@@ -225,7 +228,7 @@ final class SessionQueueWiringTests: XCTestCase {
         router.routeIncomingMessage(message, in: context)
 
         XCTAssertTrue(delegate.openRequests.isEmpty, "no open is asked for a device nobody named")
-        XCTAssertTrue(PersistentACKStore.shared.isProcessed(message.id, in: context), "refused and recorded")
+        XCTAssertTrue(PersistentACKStore.shared.isProcessed(message.id), "refused and recorded")
     }
 
     // MARK: - The identity space the delegate is named in
