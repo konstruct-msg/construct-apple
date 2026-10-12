@@ -324,22 +324,20 @@ class MessageRetryManager {
     /// Process queued messages for ALL chats — called from the background service layer
     /// so retry works even when no chat screen is open.
     func processAllQueuedMessages(currentUserId: String, context: NSManagedObjectContext) {
-        let fetchRequest: NSFetchRequest<Chat> = Chat.fetchRequest()
-        guard let chats = try? context.fetch(fetchRequest) else { return }
+        guard let chats = try? LocalRepositories.chats.chats() else { return }
 
         for chat in chats {
-            guard let recipientId = chat.otherUser?.id, !recipientId.isEmpty else { continue }
             let queuedCheck = NSFetchRequest<Message>(entityName: "Message")
             queuedCheck.predicate = NSCompoundPredicate(orPredicateWithSubpredicates: [
-                NSPredicate(format: "chat == %@ AND deliveryStatusRaw == %d", chat, DeliveryStatus.queued.rawValue),
-                NSPredicate(format: "chat == %@ AND deliveryStatusRaw == %d AND retryCount < %d",
-                            chat, DeliveryStatus.failed.rawValue, FeatureFlags.maxMessageRetryAttempts)
+                NSPredicate(format: "chat.id == %@ AND deliveryStatusRaw == %d", chat.id, DeliveryStatus.queued.rawValue),
+                NSPredicate(format: "chat.id == %@ AND deliveryStatusRaw == %d AND retryCount < %d",
+                            chat.id, DeliveryStatus.failed.rawValue, FeatureFlags.maxMessageRetryAttempts)
             ])
             queuedCheck.fetchLimit = 1
             guard (try? context.count(for: queuedCheck)) ?? 0 > 0 else { continue }
             sendQueuedMessages(
-                for: chat,
-                recipientId: recipientId,
+                inChat: chat.id,
+                recipientId: chat.peerId,
                 currentUserId: currentUserId,
                 context: context
             )
@@ -350,22 +348,22 @@ class MessageRetryManager {
     
     /// Send all queued messages for a chat (called when connection is restored)
     /// - Parameters:
-    ///   - chat: Chat to process queued messages for
+    ///   - chatId: The chat to process queued messages for
     ///   - recipientId: Recipient user ID
     ///   - currentUserId: Current user ID
     ///   - context: Core Data context
     func sendQueuedMessages(
-        for chat: Chat,
+        inChat chatId: String,
         recipientId: String,
         currentUserId: String,
         context: NSManagedObjectContext
     ) {
         let fetchRequest = Message.fetchRequest()
         // Also retry failed messages that haven't exceeded the retry cap (e.g. dropped during VEIL startup window)
-        let queuedPredicate = NSPredicate(format: "chat == %@ AND deliveryStatusRaw == %d", chat, DeliveryStatus.queued.rawValue)
+        let queuedPredicate = NSPredicate(format: "chat.id == %@ AND deliveryStatusRaw == %d", chatId, DeliveryStatus.queued.rawValue)
         let retryableFailed = NSPredicate(
-            format: "chat == %@ AND deliveryStatusRaw == %d AND retryCount < %d",
-            chat,
+            format: "chat.id == %@ AND deliveryStatusRaw == %d AND retryCount < %d",
+            chatId,
             DeliveryStatus.failed.rawValue,
             FeatureFlags.maxMessageRetryAttempts
         )

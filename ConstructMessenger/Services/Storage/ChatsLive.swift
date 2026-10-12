@@ -69,6 +69,12 @@ final class ChatsLive {
         chats().first { $0.id == id }
     }
 
+    /// The chat `id` to open. Read from the store when the list has not caught up with it yet — a
+    /// chat opened a moment ago is navigated to before its change event arrives.
+    func conversation(_ id: String) -> Conversation? {
+        (chat(id) ?? (try? store.chat(id)))?.conversation
+    }
+
     /// The badge on the chats tab.
     var totalUnread: Int {
         chats().reduce(0) { $0 + $1.unreadCount }

@@ -86,6 +86,11 @@ final class SessionQueueWiringTests: XCTestCase {
 
         let container = PersistenceController(inMemory: true).container
         LocalRepositories.useProcessedMessagesForTesting(CoreDataProcessedMessageStore(container: container))
+        // The receive path writes the sender's contact, their chat and the message through the
+        // repositories; without these it writes into the test host's own store.
+        LocalRepositories.useContactsForTesting(container)
+        LocalRepositories.useChatsForTesting(container)
+        LocalRepositories.useMessagesForTesting(container)
         context = container.viewContext
         router = MessageRouter()
         router.setContext(context)
@@ -98,6 +103,9 @@ final class SessionQueueWiringTests: XCTestCase {
             AuthSessionManager.shared.updateUserId(savedUserId)
         }
         LocalRepositories.useProcessedMessagesForTesting(nil)
+        LocalRepositories.useContactsForTesting(nil)
+        LocalRepositories.useChatsForTesting(nil)
+        LocalRepositories.useMessagesForTesting(nil)
         context = nil
         router = nil
         delegate = nil

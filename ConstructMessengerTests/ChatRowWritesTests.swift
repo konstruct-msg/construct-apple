@@ -49,12 +49,13 @@ final class ChatRowWritesTests: XCTestCase {
         message.toUserId = "me"
     }
 
-    /// The view context holds the chat only to link messages to it. A repository write lands in
-    /// another context; the view context's next save of a link — before the merge has landed —
-    /// must neither fail nor put back the values it held. A background context with the default
-    /// merge policy does fail here ("Could not merge changes", measured 2026-10-09), which is why
-    /// the message path stays on the view context. Mutation: drop the view context's
-    /// property-trump merge policy in `PersistenceController` — the save throws.
+    /// A repository write lands in another context; the view context's next save of a row linked
+    /// to the chat — before the merge has landed — must neither fail nor put back the values it
+    /// held. The message path writes through the repositories since 2026-10-12, but the view
+    /// context still saves beside them (the transcript's order backfill, the queue's retries). A
+    /// background context with the default merge policy does fail here ("Could not merge
+    /// changes", measured 2026-10-09). Mutation: drop the view context's property-trump merge
+    /// policy in `PersistenceController` — the save throws.
     func testARepositoryWriteSurvivesTheMessageContextsNextSave() throws {
         let chat = try openChat()
         link("one", to: chat)
@@ -80,7 +81,7 @@ final class ChatRowWritesTests: XCTestCase {
         let incoming = ChatMessage(id: UUID().uuidString, from: "peer", to: "me", timestamp: 2_000)
         let isNew = try MessagePersistenceService().saveMessage(
             incoming, decryptedContent: "hello", isSentByMe: false, status: .delivered,
-            chat: chat, suiteId: 1, in: container.viewContext
+            chatId: chat.id, suiteId: 1, in: container.viewContext
         )
         XCTAssertTrue(isNew)
         let read = try XCTUnwrap(chats.chat(chat.id))
@@ -92,7 +93,7 @@ final class ChatRowWritesTests: XCTestCase {
         let outgoing = ChatMessage(id: UUID().uuidString, from: "me", to: "peer", timestamp: 3_000)
         _ = try MessagePersistenceService().saveMessage(
             outgoing, decryptedContent: "hi back", isSentByMe: true, status: .sent,
-            chat: chat, suiteId: 1, in: container.viewContext
+            chatId: chat.id, suiteId: 1, in: container.viewContext
         )
         XCTAssertEqual(try chats.chat(chat.id)?.lastMessageText, "hi back")
         XCTAssertEqual(try chats.chat(chat.id)?.unreadCount, 1)
@@ -108,13 +109,13 @@ final class ChatRowWritesTests: XCTestCase {
             _ = try service.saveMessage(
                 ChatMessage(id: id, from: "peer", to: "me", timestamp: UInt64(at)),
                 decryptedContent: text, isSentByMe: false, status: .delivered,
-                chat: chat, suiteId: 1, in: container.viewContext
+                chatId: chat.id, suiteId: 1, in: container.viewContext
             )
         }
         XCTAssertEqual(try chats.chat(chat.id)?.lastMessageText, "second")
-        try service.deleteMessages(withIds: ["m2"], chat: chat, in: container.viewContext)
+        try service.deleteMessages(withIds: ["m2"], chatId: chat.id, in: container.viewContext)
         XCTAssertEqual(try chats.chat(chat.id)?.lastMessageText, "first")
-        try service.deleteMessages(withIds: ["m1"], chat: chat, in: container.viewContext)
+        try service.deleteMessages(withIds: ["m1"], chatId: chat.id, in: container.viewContext)
         XCTAssertNil(try chats.chat(chat.id)?.lastMessageTime)
     }
 

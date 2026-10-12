@@ -272,7 +272,7 @@ struct DesktopSynapsView: View {
 
     private func fitScale(contacts: [ContactRecord], screenSize: CGSize) -> CGFloat {
         guard !contacts.isEmpty else { return 1.0 }
-        let metrics = ContactMetrics.byContact(contacts.map(\.id), in: context)
+        let metrics = ContactMetrics.byContact(contacts.map(\.id))
         return SynapsCloudLayout(contacts: contacts, metrics: metrics).fitScale(in: screenSize)
     }
 }
@@ -289,7 +289,7 @@ private struct DesktopSynapsCloud: View {
     var onRemove:     (ContactRecord) -> Void
 
     private var metricsMap: [String: ContactMetrics] {
-        ContactMetrics.byContact(contacts.map(\.id), in: context)
+        ContactMetrics.byContact(contacts.map(\.id))
     }
 
     var body: some View {

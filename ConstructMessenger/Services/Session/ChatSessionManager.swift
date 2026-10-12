@@ -11,7 +11,8 @@ final class ChatSessionManager {
 
     // MARK: - Dependencies
 
-    private let chat: Chat
+    /// The account the open chat is with.
+    private let peerId: String
     private let sessionInitService: SessionInitializationService
     private weak var viewModel: ChatViewModel?
 
@@ -28,8 +29,8 @@ final class ChatSessionManager {
 
     // MARK: - Init
 
-    init(chat: Chat) {
-        self.chat = chat
+    init(peerId: String) {
+        self.peerId = peerId
         self.sessionInitService = SessionInitializationService.shared
     }
 
@@ -40,7 +41,7 @@ final class ChatSessionManager {
     // MARK: - Session readiness
 
     func checkExistingSession() {
-        guard let userId = chat.otherUser?.id else { return }
+        let userId = peerId
         let ready = CryptoManager.shared.hasSessionWithAnyDevice(ofPeer: userId)
         viewModel?.isSessionReady = ready
         if ready {
@@ -51,10 +52,7 @@ final class ChatSessionManager {
     }
 
     func fetchRecipientPublicKey() {
-        guard let userId = chat.otherUser?.id else {
-            Log.error("Cannot fetch recipient public key: chat.otherUser?.id is nil", category: "ChatViewModel")
-            return
-        }
+        let userId = peerId
         guard let currentUserId = AuthSessionManager.shared.currentUserId else {
             Log.error("Cannot fetch recipient public key: currentUserId is nil", category: "ChatViewModel")
             return
@@ -128,8 +126,8 @@ final class ChatSessionManager {
     }
 
     private func handlePublicKeyBundle(_ data: PublicKeyBundleData) {
-        Log.debug("Received publicKeyBundle for userId: \(data.userId), chat.otherUser?.id: \(chat.otherUser?.id ?? "nil"), match: \(data.userId == chat.otherUser?.id)", category: "ChatViewModel")
-        guard data.userId == chat.otherUser?.id else { return }
+        Log.debug("Received publicKeyBundle for userId: \(data.userId), peer: \(peerId), match: \(data.userId == peerId)", category: "ChatViewModel")
+        guard data.userId == peerId else { return }
         self.recipientBundle = (data.identityPublic, data.signedPrekeyPublic, data.signature, data.verifyingKey)
         publicKeyFetchTimer?.invalidate()
         publicKeyFetchTimer = nil

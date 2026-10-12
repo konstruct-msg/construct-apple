@@ -66,7 +66,7 @@ final class UploadPlaceholderVisibilityTests: XCTestCase {
             caption: "hello",
             items: [MessagePersistenceService.UploadPlaceholderItem(mimeType: "image/jpeg")],
             replyTo: nil,
-            chat: chat,
+            chatId: chat.id,
             in: context
         )
 
@@ -84,7 +84,7 @@ final class UploadPlaceholderVisibilityTests: XCTestCase {
             toUserId: UUID().uuidString,
             duration: 3.5,
             waveform: [0.1, 0.9, 0.4],
-            chat: chat,
+            chatId: chat.id,
             in: context
         )
 
@@ -108,7 +108,7 @@ final class UploadPlaceholderVisibilityTests: XCTestCase {
                 .init(mimeType: "image/heic")
             ],
             replyTo: nil,
-            chat: chat,
+            chatId: chat.id,
             in: context
         )
 
@@ -139,7 +139,7 @@ final class UploadPlaceholderVisibilityTests: XCTestCase {
             caption: "",
             items: [.init(fileName: "report.pdf", fileSize: 2048), .init(fileName: odd, fileSize: nil)],
             replyTo: nil,
-            chat: chat,
+            chatId: chat.id,
             in: context
         )
 
@@ -164,7 +164,7 @@ final class UploadPlaceholderVisibilityTests: XCTestCase {
             caption: #"say "hi" \ ok"#,
             items: [MessagePersistenceService.UploadPlaceholderItem()],
             replyTo: nil,
-            chat: chat,
+            chatId: chat.id,
             in: context
         )
 
@@ -186,7 +186,7 @@ final class UploadPlaceholderVisibilityTests: XCTestCase {
             caption: "",
             items: [MessagePersistenceService.UploadPlaceholderItem()],
             replyTo: nil,
-            chat: chat,
+            chatId: chat.id,
             in: context
         )
         service.saveVoicePlaceholderMessage(
@@ -195,7 +195,7 @@ final class UploadPlaceholderVisibilityTests: XCTestCase {
             toUserId: to,
             duration: 1.5,
             waveform: [0.2, 0.8],
-            chat: chat,
+            chatId: chat.id,
             in: context
         )
 

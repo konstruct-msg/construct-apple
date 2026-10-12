@@ -17,6 +17,7 @@ struct DesktopChatView: View {
     /// Lazy holder — avoid allocating ChatViewModel in View.init (parent re-render churn).
     @State private var lazyViewModel: LazyChatViewModel
     private var viewModel: ChatViewModel { lazyViewModel.value }
+    private var peerId: String { viewModel.conversation.peerId }
     @State private var scrollManager = ChatScrollManager()
     private var connectionManager = ConnectionStatusManager.shared
     @State private var messageText = ""
@@ -44,9 +45,9 @@ struct DesktopChatView: View {
     @State private var isSessionAtRisk = false
     @State private var containerWidth: CGFloat = 800
 
-    init(chat: Chat, context: NSManagedObjectContext) {
+    init(conversation: Conversation, context: NSManagedObjectContext) {
         _lazyViewModel = State(wrappedValue: LazyChatViewModel {
-            ChatViewModel(chat: chat, context: context)
+            ChatViewModel(conversation: conversation, context: context)
         })
     }
 
@@ -147,12 +148,10 @@ struct DesktopChatView: View {
                 }
             }
             .sheet(isPresented: $showingUserProfile) {
-                if let user = viewModel.chat.otherUser {
-                    UserProfileView(userId: user.id, showMessageButton: false)
-                        .sheetNavigation()
-                        .environment(\.managedObjectContext, viewContext)
-                        .frame(minWidth: 420, minHeight: 480)
-                }
+                UserProfileView(userId: peerId, showMessageButton: false)
+                    .sheetNavigation()
+                    .environment(\.managedObjectContext, viewContext)
+                    .frame(minWidth: 420, minHeight: 480)
             }
             .sheet(item: $quotingMessage) { msg in
                 QuoteSelectionSheet(message: msg) { selectedQuote in
@@ -186,7 +185,7 @@ struct DesktopChatView: View {
             }
             .onChange(of: viewModel.isInitializingSession) { _, _ in refreshSessionAtRiskState() }
             .onReceive(NotificationCenter.default.publisher(for: .sessionAtRiskChanged)) { note in
-                if (note.userInfo?["userId"] as? String) == viewModel.chat.otherUser?.id {
+                if (note.userInfo?["userId"] as? String) == peerId {
                     refreshSessionAtRiskState()
                 }
             }
@@ -199,7 +198,7 @@ struct DesktopChatView: View {
             }
             .onReceive(NotificationCenter.default.publisher(for: .contactKeyChanged)) { note in
                 guard let changedId = note.userInfo?["userId"] as? String,
-                      changedId == viewModel.chat.otherUser?.id else { return }
+                      changedId == peerId else { return }
                 loadContactKTStatus()
             }
             .onDisappear {
@@ -216,7 +215,7 @@ struct DesktopChatView: View {
             }
         }
         .modifier(DesktopChatWindowTitle(
-            userId: viewModel.chat.otherUser?.id,
+            userId: peerId,
             fallback: NSLocalizedString("chat", comment: ""),
             subtitle: navigationStatusSubtitle
         ))
@@ -241,16 +240,13 @@ struct DesktopChatView: View {
     }
 
     private func refreshSessionAtRiskState() {
-        guard let contactId = viewModel.chat.otherUser?.id, !contactId.isEmpty else {
-            isSessionAtRisk = false
-            return
-        }
+        let contactId = peerId
         isSessionAtRisk = KeychainManager.shared.loadSessionAtRiskFlag(for: contactId)
     }
 
     @ViewBuilder
     private var floodBurstBanner: some View {
-        let senderId = viewModel.chat.otherUser?.id ?? ""
+        let senderId = peerId
         if floodGuard.suppressedSenders.contains(senderId) {
             HStack(spacing: 10) {
                 Image(systemName: "exclamationmark.triangle.fill")
@@ -277,9 +273,7 @@ struct DesktopChatView: View {
                 .buttonStyle(.plain)
 
                 Button {
-                    if let userId = viewModel.chat.otherUser?.id, !userId.isEmpty {
-                        try? LocalRepositories.contacts.setBlocked(userId, true)
-                    }
+                    try? LocalRepositories.contacts.setBlocked(peerId, true)
                     IncomingFloodGuard.shared.unsuppress(senderId: senderId)
                 } label: {
                     Label(NSLocalizedString("block_user", comment: ""), systemImage: "hand.raised.fill")
@@ -381,7 +375,7 @@ struct DesktopChatView: View {
                         Image(systemName: "chevron.down.circle.fill")
                             .font(CTFont.ui(32, weight: .semibold))
                             .foregroundStyle(Color.CT.accent, Color.CT.bg.opacity(0.85))
-                        if viewModel.chat.unreadCount > 0 {
+                        if (ChatsLive.shared.chat(viewModel.conversation.chatId)?.unreadCount ?? 0) > 0 {
                             Circle()
                                 .fill(Color.CT.danger)
                                 .frame(width: 10, height: 10)
@@ -415,7 +409,6 @@ struct DesktopChatView: View {
                 Image(systemName: "person.crop.circle")
             }
             .help(NSLocalizedString("profile", comment: ""))
-            .disabled(viewModel.chat.otherUser == nil)
         }
 
         if isEditMode {
@@ -428,14 +421,14 @@ struct DesktopChatView: View {
                 .help(NSLocalizedString("done", comment: ""))
             }
         } else if CallsFeature.isEnabled,
-                  let otherUser = viewModel.chat.otherUser,
                   case .idle = callManager.state {
             ToolbarItem(placement: .primaryAction) {
                 Button {
                     Task {
                         await callManager.startOutgoingCall(
-                            to: otherUser.id,
-                            displayName: otherUser.resolvedDisplayName,
+                            to: peerId,
+                            displayName: ContactsLive.shared.contact(peerId)?.resolvedDisplayName
+                                ?? DisplayNameGenerator.generate(from: peerId),
                             hasVideo: false
                         )
                     }
@@ -545,8 +538,9 @@ struct DesktopChatView: View {
     // MARK: - Actions
 
     private func markChatAsRead() {
-        guard viewModel.chat.unreadCount > 0 else { return }
-        try? LocalRepositories.chats.setUnread(viewModel.chat.id, 0)
+        let chatId = viewModel.conversation.chatId
+        guard let unread = try? LocalRepositories.chats.chat(chatId)?.unreadCount, unread > 0 else { return }
+        try? LocalRepositories.chats.setUnread(chatId, 0)
     }
 
     private func toggleMessageSelection(_ message: Message) {
@@ -682,8 +676,7 @@ struct DesktopChatView: View {
     }
 
     private func loadContactKTStatus() {
-        guard let userId = viewModel.chat.otherUser?.id, !userId.isEmpty else { return }
-        if let contact = try? LocalRepositories.contacts.contact(userId) {
+        if let contact = try? LocalRepositories.contacts.contact(peerId) {
             contactKTStatus = contact.ktStatus
             contactTrustAlert = contact.trustAlert
         }
@@ -761,7 +754,7 @@ private struct DesktopChatWindowTitle: ViewModifier {
         _ = PreviewHelpers.createSampleMessage(context: context, chat: chat, isSentByMe: false, text: "Nice, let me know when it's ready")
     }()
 
-    DesktopChatView(chat: chat, context: context)
+    DesktopChatView(conversation: Conversation(chatId: chat.id, peerId: user.id), context: context)
         .environment(\.managedObjectContext, context)
         .frame(width: 600, height: 500)
 }

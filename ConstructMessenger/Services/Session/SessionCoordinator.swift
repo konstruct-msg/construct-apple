@@ -601,12 +601,10 @@ final class SessionCoordinator: MessageRouterDelegate {
     private func sendSessionQueuedMessages(for userId: String) {
         guard let context = viewContext,
               let myId = AuthSessionManager.shared.currentUserId, !myId.isEmpty else { return }
-        let chatFetch = Chat.fetchRequest()
-        chatFetch.predicate = NSPredicate(format: "otherUser.id == %@", userId)
         do {
-            guard let chat = try context.fetch(chatFetch).first else { return }
+            guard let chat = try LocalRepositories.chats.chat(withPeer: userId) else { return }
             MessageRetryManager.shared.sendQueuedMessages(
-                for: chat,
+                inChat: chat.id,
                 recipientId: userId,
                 currentUserId: myId,
                 context: context
