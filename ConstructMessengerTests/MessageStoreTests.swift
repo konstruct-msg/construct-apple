@@ -23,18 +23,24 @@ class MessageStoreTests: XCTestCase {
     }
 
     private var store: (any MessageStore)!
+    private var chats: (any ChatStore)!
+    private var contacts: (any ContactStore)!
     private var chatId = ""
 
     override func setUp() {
         super.setUp()
         let stores = makeStores()
         store = stores.messages
+        chats = stores.chats
+        contacts = stores.contacts
         try! stores.contacts.insert(.new(id: "peer", isContact: true, addedAt: nil))
         chatId = try! stores.chats.openChat(withPeer: "peer").chat.id
     }
 
     override func tearDown() {
         store = nil
+        chats = nil
+        contacts = nil
         super.tearDown()
     }
 
@@ -176,6 +182,49 @@ class MessageStoreTests: XCTestCase {
         }
         XCTAssertEqual(try store.messages(inChat: chatId, from: ("k2", "c"), limit: 10).map(\.id), ["c", "d"])
         XCTAssertEqual(try store.messages(inChat: chatId, from: ("k1", "a"), limit: 2).map(\.id), ["a", "b"])
+    }
+
+    /// What the queue sends: ours, queued or failed with attempts left; one chat or all, in
+    /// transcript order. The crate's `pending_sends_are_ours_queued_or_failed_with_attempts_left`.
+    /// Mutations (Core Data): drop `retryCount <` — a message out of attempts is sent forever;
+    /// drop `isSentByMe` — a peer's message is sent back to them.
+    func testPendingSendsAreOursQueuedOrFailedWithAttemptsLeft() throws {
+        for i in 1...4 { try store.insert(record("m\(i)", key: "k\(i)"), searchText: nil) }
+        try store.setDeliveryStatus("m1", .queued)
+        try store.setDeliveryStatus("m2", .failed)
+        try store.setDeliveryStatus("m3", .failed)
+        try store.setRetryCount("m3", 3)
+        try store.setDeliveryStatus("m4", .sent)
+        var theirs = record("t1", key: "k0", mine: false)
+        theirs.deliveryStatus = .queued
+        try store.insert(theirs, searchText: nil)
+        try contacts.insert(.new(id: "other", isContact: true, addedAt: nil))
+        let template = record("o1", key: "k5")
+        try store.insert(MessageRecord(
+            id: "o1", chatId: try chats.openChat(withPeer: "other").chat.id, fromUserId: "me",
+            toUserId: "other", isSentByMe: true, timestamp: template.timestamp, orderKey: "k5",
+            body: template.body, contentType: .regular, deliveryStatus: .queued, retryCount: 0,
+            suiteId: 4, isEdited: false, editedAt: nil, replyToMessageId: nil, replyQuote: nil,
+            transcript: nil, transcriptLanguage: nil, transcriptGeneratedAt: nil
+        ), searchText: nil)
+
+        XCTAssertEqual(try store.pendingSends(inChat: chatId, retryCeiling: 3, limit: 50).map(\.id), ["m1", "m2"])
+        XCTAssertEqual(try store.pendingSends(inChat: nil, retryCeiling: 3, limit: 50).map(\.id), ["m1", "m2", "o1"])
+        XCTAssertEqual(try store.pendingSends(inChat: nil, retryCeiling: 3, limit: 1).map(\.id), ["m1"])
+    }
+
+    /// What a launch fails as stuck: ours in the status asked, every chat, nothing else.
+    /// Mutations (Core Data): drop `isSentByMe` — a peer's row is failed; drop the status — a
+    /// sent one is.
+    func testOwnMessagesInAStatusAreOursInThatStatusOnly() throws {
+        for i in 1...4 { try store.insert(record("m\(i)", key: "k\(i)"), searchText: nil) }
+        try store.setDeliveryStatus("m1", .queued)
+        try store.setDeliveryStatus("m3", .sent)
+        try store.insert(record("t1", key: "k0", mine: false), searchText: nil)
+
+        XCTAssertEqual(try store.ownMessages(in: .sending, limit: 50).map(\.id), ["m2", "m4"])
+        XCTAssertEqual(try store.ownMessages(in: .sending, limit: 1).map(\.id), ["m2"])
+        XCTAssertEqual(try store.ownMessages(in: .queued, limit: 50).map(\.id), ["m1"])
     }
 
     /// Deleted messages are gone; others stay. Mutation: delete the whole chat's messages.

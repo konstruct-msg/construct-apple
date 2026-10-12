@@ -28,6 +28,16 @@ struct Construct_DesktopApp: App {
     @State private var commandBridge = DesktopCommandBridge()
 
     init() {
+        // The store first: every repository stands on it, and a failure must be known before the
+        // first screen and before the stream writes anything (`DesktopRootView`).
+        LocalRepositories.openAppStoreIfNeeded()
+        // What Core Data builds left, in the clear. Sandboxed only: unsandboxed, Application
+        // Support is the user's own and shared with other apps (`LocalDataWipe` refuses it too).
+        if ProcessInfo.processInfo.environment["APP_SANDBOX_CONTAINER_ID"] != nil,
+           let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first {
+            PersistenceController.removeLegacyStore(in: support)
+        }
+
         // Foreground-state tracker — transport layer reads this to suppress futile VEIL
         // restarts while the app is inactive (mirrors iOS AppDelegate bootstrap).
         _ = AppActivityState.shared

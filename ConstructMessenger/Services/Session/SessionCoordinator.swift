@@ -597,15 +597,13 @@ final class SessionCoordinator: MessageRouterDelegate {
     /// or a stealth send that could not seal. The re-queue on END_SESSION that fed it too went on
     /// 2026-09-27; a decryption error resends the one message it names instead.
     private func sendSessionQueuedMessages(for userId: String) {
-        guard let context = viewContext,
-              let myId = AuthSessionManager.shared.currentUserId, !myId.isEmpty else { return }
+        guard let myId = AuthSessionManager.shared.currentUserId, !myId.isEmpty else { return }
         do {
             guard let chat = try LocalRepositories.chats.chat(withPeer: userId) else { return }
             MessageRetryManager.shared.sendQueuedMessages(
                 inChat: chat.id,
                 recipientId: userId,
-                currentUserId: myId,
-                context: context
+                currentUserId: myId
             )
         } catch {
             Log.error("Failed to fetch queued-message chat for \(userId.prefix(8))…: \(error)", category: "SessionInit")
@@ -641,8 +639,7 @@ final class SessionCoordinator: MessageRouterDelegate {
     /// Text only, as the path it replaced: a media message's plaintext is not kept to resend.
     private func resendAfterDecryptionError(messageId: String, to peer: PeerAddress) {
         assertMainThread()
-        guard let context = viewContext,
-              let myId = AuthSessionManager.shared.currentUserId, !myId.isEmpty,
+        guard let myId = AuthSessionManager.shared.currentUserId, !myId.isEmpty,
               let device = peer.device, !device.isEmpty else { return }
         // A sealed copy's id is the server's, not ours: the peer names what it received, and the
         // send response is where we learned which of our messages that is. Stand 2026-09-28: the
@@ -650,20 +647,14 @@ final class SessionCoordinator: MessageRouterDelegate {
         // resent. The map is persisted (`ServerMessageIdMap`) so an error answered across a
         // restart still finds the row — in memory, it retired the state and resent nothing.
         let localId = ServerMessageIdMap.shared.localId(for: messageId)
-        let fetch = Message.fetchRequest()
-        fetch.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [
-            NSPredicate(format: "id ==[c] %@", localId),
-            NSPredicate(format: "isSentByMe == YES"),
-            NSPredicate(format: "toUserId == %@", peer.account)
-        ])
-        fetch.fetchLimit = 1
-        guard let msg = (try? context.fetch(fetch))?.first else {
+        guard let msg = try? LocalRepositories.messages.message(localId),
+              msg.isSentByMe, msg.toUserId == peer.account else {
             Log.info("Resend: \(messageId.prefix(8))… for \(peer) is no message of ours here — not resent", category: "SessionInit")
             return
         }
         // Text only, and the type says so: a media row's body is the parsers' JSON, and resent
         // as text it arrives as a bubble of JSON.
-        guard let plaintext = msg.plainText, !plaintext.isEmpty else {
+        guard let plaintext = msg.payload.plainText, !plaintext.isEmpty else {
             Log.info("Resend: \(messageId.prefix(8))… has no text to resend", category: "SessionInit")
             return
         }

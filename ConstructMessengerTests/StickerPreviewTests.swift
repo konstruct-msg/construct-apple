@@ -21,14 +21,18 @@ final class StickerPreviewTests: XCTestCase {
         return LocalMessagePayload.storagePayload(forWireContent: c)
     }
 
-    /// Mutation: point `reconcilePreviewFromTranscript` back at `legacyBody` — the line
+    /// Mutation: point `MessagePersistenceService.reconcilePreview` back at `displayString` — the line
     /// becomes "" and this reddens.
     func testReconcileFromTranscriptKeepsTheStickerLine() throws {
         let container = PersistenceController(inMemory: true).container
         let ctx = container.viewContext
-        // The reconciler writes through `ChatStore` (chats B2); point it at this store.
+        // The reconciler reads and writes through the repositories; point them at this store.
         LocalRepositories.useChatsForTesting(container)
-        defer { LocalRepositories.useChatsForTesting(nil) }
+        LocalRepositories.useMessagesForTesting(container)
+        defer {
+            LocalRepositories.useChatsForTesting(nil)
+            LocalRepositories.useMessagesForTesting(nil)
+        }
 
         let peer = User(context: ctx)
         peer.id = "peer"
@@ -51,7 +55,7 @@ final class StickerPreviewTests: XCTestCase {
         XCTAssertEqual(row.legacyBody, "", "a sticker has no text form")
         XCTAssertEqual(row.previewText, "🟥 \(NSLocalizedString("sticker", comment: ""))")
 
-        XCTAssertTrue(chat.reconcilePreviewFromTranscript(in: ctx))
+        XCTAssertTrue(chat.reconcilePreviewFromTranscript())
         XCTAssertEqual(
             try LocalRepositories.chats.chat(chat.id)?.lastMessageText,
             "🟥 \(NSLocalizedString("sticker", comment: ""))"

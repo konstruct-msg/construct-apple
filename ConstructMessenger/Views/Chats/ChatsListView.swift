@@ -318,7 +318,7 @@ struct ChatsListView: View {
             targets = (try? viewContext.fetch(request)) ?? []
         }
         for chat in targets {
-            chat.reconcilePreviewFromTranscript(in: viewContext)
+            chat.reconcilePreviewFromTranscript()
         }
     }
 

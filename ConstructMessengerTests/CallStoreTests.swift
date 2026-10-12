@@ -106,7 +106,7 @@ class CallStoreTests: XCTestCase {
     /// Mutation: the service writes somewhere else — this reddens.
     @MainActor
     func testTheEndOfACallIsLoggedInTheSeam() throws {
-        LocalRepositories.useCallsForTesting(container)
+        LocalRepositories.useCallsForTesting(makeStore())
         let session = CallSession(id: "call-x", uuid: UUID(), peerUserId: "peer", peerName: "Bob", direction: .outgoing)
         CallHistoryService.shared.record(
             session: session, status: .completed, startedAt: Date(timeIntervalSince1970: 100), durationSeconds: 42
@@ -138,5 +138,24 @@ class CallStoreTests: XCTestCase {
 
         XCTAssertEqual(summary.conflictKeepExisting, 1)
         XCTAssertEqual(try store.calls(limit: 10).map(\.status), [.completed])
+    }
+}
+
+/// The same cases on the crate. One store per test: `makeStore()` is asked more than once.
+final class LocalStoreCallStoreTests: CallStoreTests {
+    private var session: LocalStoreSession!
+
+    override func setUp() {
+        super.setUp()
+        session = .inMemoryForTesting()
+    }
+
+    override func tearDown() {
+        session = nil
+        super.tearDown()
+    }
+
+    override func makeStore() -> any CallStore {
+        LocalStoreCallStore(session: session)
     }
 }

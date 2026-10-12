@@ -47,9 +47,8 @@ final class ContactLinkService {
         userId: String,
         username: String?,
         displayName: String?,
-        identityPublicKey: Data? = nil,
-        context: NSManagedObjectContext
-    ) throws -> User {
+        identityPublicKey: Data? = nil
+    ) throws -> ContactRecord {
         guard !userId.isEmpty else { throw ContactLinkError.emptyUserId }
 
         // Making someone a contact is the user's own act (scan, accept, our invite redeemed), so
@@ -84,16 +83,14 @@ final class ContactLinkService {
             pinKnownIdentityKey(contactId: userId, identityKey: key)
         }
 
-        return try User.row(userId, in: context)
+        guard let saved = try contacts.contact(userId) else { throw ContactLinkError.emptyUserId }
+        return saved
     }
 
     /// Apply a verified invite redeem: ensure contact + optional TOFU identity pin.
     /// Prefer this over raw `startChat` when `ContactInfo.identityPublicKey` is present.
     @discardableResult
-    func applyInviteRedeem(
-        _ info: ContactInfo,
-        context: NSManagedObjectContext
-    ) throws -> User {
+    func applyInviteRedeem(_ info: ContactInfo) throws -> ContactRecord {
         let usernameForStore: String? = {
             let trimmed = info.username.trimmingCharacters(in: .whitespacesAndNewlines)
             if trimmed.isEmpty { return nil }
@@ -107,13 +104,12 @@ final class ContactLinkService {
             userId: info.userId,
             username: usernameForStore,
             displayName: nil,
-            identityPublicKey: info.identityPublicKey,
-            context: context
+            identityPublicKey: info.identityPublicKey
         )
         // Same rule as `ChatManagementService.startChat`: the signed invite outranks a card.
         if let address = info.accountAddress,
            AccountAddress.pin(address, contactId: info.userId, source: .invite) != .unchanged {
-            context.refresh(user, mergeChanges: true)
+            return try LocalRepositories.contacts.contact(info.userId) ?? user
         }
         return user
     }
@@ -242,8 +238,7 @@ final class ContactLinkService {
     /// Creates local contact when someone redeems our invite (`invite_accepted` push).
     /// Needed so both sides have `isContact` for client call mutuality.
     @discardableResult
-    func handleInviteAccepted(peerUserId: String) async -> User? {
-        let context = PersistenceController.shared.container.viewContext
+    func handleInviteAccepted(peerUserId: String) async -> ContactRecord? {
         guard !peerUserId.isEmpty else { return nil }
         if peerUserId == AuthSessionManager.shared.currentUserId { return nil }
 
@@ -251,8 +246,7 @@ final class ContactLinkService {
             let user = try createOrUpdateContact(
                 userId: peerUserId,
                 username: nil,
-                displayName: nil,
-                context: context
+                displayName: nil
             )
             Log.info(
                 "Invite accepted: local contact created for \(peerUserId.prefix(8))…",

@@ -31,13 +31,12 @@ final class ContactRequestService {
     /// from SynapsView.task (foreground poll) — whichever runs first owns the Keychain
     /// mapping; subsequent calls are a no-op for already-processed requests.
     ///
-    /// - Returns: Newly created `User` entities (empty if no new acceptances).
+    /// - Returns: The new contacts' rows (empty if no new acceptances).
     @discardableResult
-    func checkAndCreateContacts() async -> [User] {
-        let context = PersistenceController.shared.container.viewContext
+    func checkAndCreateContacts() async -> [ContactRecord] {
         do {
             let result = try await userServiceClient.getContactRequests()
-            var newContacts: [User] = []
+            var newContacts: [ContactRecord] = []
 
             for sent in result.sent where sent.status == .accepted {
                 let requestId = sent.requestID
@@ -52,8 +51,7 @@ final class ContactRequestService {
                     let user = try ContactLinkService.shared.createOrUpdateContact(
                         userId: toUserId,
                         username: nil,
-                        displayName: nil,
-                        context: context
+                        displayName: nil
                     )
                     newContacts.append(user)
                     Log.info(

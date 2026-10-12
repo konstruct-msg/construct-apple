@@ -125,10 +125,9 @@ final class ContactRequestsViewModel {
     ///
     /// - Parameters:
     ///   - request: The full incoming request (contains fromUserId, displayName, username).
-    ///   - context: CoreData context to write the new User into.
-    /// - Returns: The created or updated `User` entity for the new contact.
+    /// - Returns: The new contact's row.
     @discardableResult
-    func accept(request: IncomingRequest, context: NSManagedObjectContext) async throws -> User {
+    func accept(request: IncomingRequest) async throws -> ContactRecord {
         try await userServiceClient.respondToContactRequest(
             requestId: request.id,
             action: Shared_Proto_Services_V1_ContactRequestAction.accept
@@ -150,8 +149,7 @@ final class ContactRequestsViewModel {
         let user = try ContactLinkService.shared.createOrUpdateContact(
             userId: request.fromUserId,
             username: username,
-            displayName: displayName,
-            context: context
+            displayName: displayName
         )
 
         // Rebuild the message-stream subscription set and prewarm the session for
@@ -248,7 +246,7 @@ extension ContactRequestsViewModel {
     /// - Returns: Newly-created `User` entities. Empty if all acceptances were already
     ///   processed by a background push handler.
     @discardableResult
-    func checkAcceptedRequests(context: NSManagedObjectContext) async -> [User] {
+    func checkAcceptedRequests() async -> [ContactRecord] {
         // Contact creation: handled by service (idempotent, Keychain-backed).
         let newContacts = await ContactRequestService.shared.checkAndCreateContacts()
 
