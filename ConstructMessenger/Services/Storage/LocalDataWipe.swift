@@ -62,6 +62,9 @@ enum LocalDataWipe {
         }
 
         AccountWipeKeys.wipe()
+        // Read again now the journal's rows are gone: on iOS they live in `UserDefaults`, which
+        // the line above clears after `.localStoreReplaced` was already posted.
+        InviteJournal.shared.reload()
         // In the Keychain since 2026-10-11, which `AccountWipeKeys` (UserDefaults) does not reach:
         // the next account must not resume the last one's stream.
         StreamCursorStore.clear()
