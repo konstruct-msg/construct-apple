@@ -50,6 +50,8 @@ protocol CallStore: Sendable {
     func calls(limit: Int) throws -> [CallRecord]
     /// False: no such row.
     @discardableResult func delete(_ id: String) throws -> Bool
+    /// The whole log ("clear history"), in one write; how many entries it held.
+    @discardableResult func deleteAll() throws -> Int
     /// The ids of rows written or deleted, once per save. Subscribe before the first read, or a
     /// write between the two is missed.
     func changes() -> AsyncStream<Set<String>>
@@ -103,6 +105,18 @@ final class CoreDataCallStore: CallStore, @unchecked Sendable {
             context.delete(row)
             try context.saveOrThrow(category: "CallHistory")
             return true
+        }
+    }
+
+    func deleteAll() throws -> Int {
+        // Fetched and deleted in the context rather than by a batch delete, which bypasses the
+        // context and so `changes()` would not hear of it.
+        try run { context in
+            let rows = try context.fetch(CTCallRecord.fetchRequest())
+            guard !rows.isEmpty else { return 0 }
+            rows.forEach(context.delete)
+            try context.saveOrThrow(category: "CallHistory")
+            return rows.count
         }
     }
 

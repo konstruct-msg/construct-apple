@@ -1396,6 +1396,16 @@ public protocol LocalStoreProtocol: AnyObject, Sendable {
      */
     func countResendAttempt(messageId: String, deviceId: String) throws  -> UInt32?
     
+    /**
+     * The whole call log out ("clear history"); how many entries it held.
+     */
+    func deleteAllCalls() throws  -> UInt32
+    
+    /**
+     * One entry out of the call log; false: no such row.
+     */
+    func deleteCall(id: String) throws  -> Bool
+    
     func deleteChat(id: String) throws 
     
     /**
@@ -1960,6 +1970,29 @@ open func countResendAttempt(messageId: String, deviceId: String)throws  -> UInt
             self.uniffiCloneHandle(),
         FfiConverterString.lower(messageId),
         FfiConverterString.lower(deviceId),$0
+    )
+})
+}
+    
+    /**
+     * The whole call log out ("clear history"); how many entries it held.
+     */
+open func deleteAllCalls()throws  -> UInt32  {
+    return try  FfiConverterUInt32.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_delete_all_calls(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+    /**
+     * One entry out of the call log; false: no such row.
+     */
+open func deleteCall(id: String)throws  -> Bool  {
+    return try  FfiConverterBool.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_delete_call(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(id),$0
     )
 })
 }
@@ -14469,6 +14502,12 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_localstore_count_resend_attempt() != 33415) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_delete_all_calls() != 55495) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_delete_call() != 58601) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_localstore_delete_chat() != 62753) {

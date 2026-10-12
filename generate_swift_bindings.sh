@@ -47,7 +47,7 @@ print_error() {
 find_construct_core() {
     # Try to find construct-core: first check ~/Code/construct-core, then sibling directory, then local path
     local home_core="$HOME/Code/construct-core"
-    if [ -n "$CONSTRUCT_CORE_PATH" ] && [ -d "$CONSTRUCT_CORE_PATH" ]; then
+    if [ -n "${CONSTRUCT_CORE_PATH:-}" ] && [ -d "${CONSTRUCT_CORE_PATH:-}" ]; then
         # Another checkout, e.g. a git worktree of construct-core
         echo "$CONSTRUCT_CORE_PATH"
     elif [ -d "$home_core" ]; then
