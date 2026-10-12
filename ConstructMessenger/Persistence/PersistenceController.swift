@@ -118,7 +118,29 @@ struct PersistenceController {
         migrateExistingContactsToSynaps()
         repairFutureTimestamps()
         backfillMissingServerOrderKeys()
+        Self.settleDeliveredPendingRows(in: c.viewContext)
         DuplicateChats.merge(in: c.viewContext)
+    }
+
+    /// Rows of ours the peer confirmed that still carry the `pending` key — written before a
+    /// receipt settled the order (`MessageStore.settleOrder(of:)`), the last ones on 2026-10-12.
+    /// Normally empty.
+    static func settleDeliveredPendingRows(in context: NSManagedObjectContext) {
+        let request = Message.fetchRequest()
+        request.predicate = NSPredicate(
+            format: "isSentByMe == YES AND deliveryStatusRaw == %d AND serverOrderKey BEGINSWITH %@",
+            DeliveryStatus.delivered.rawValue, ServerMessageOrder.pendingPrefix
+        )
+        guard let messages = try? context.fetch(request), !messages.isEmpty else { return }
+        for message in messages {
+            message.serverOrderKey = ServerMessageOrder.local(timestamp: message.safeTimestamp, messageId: message.id)
+        }
+        do {
+            try context.save()
+            Log.info("Settled the order of \(messages.count) delivered message(s) left pending", category: "Persistence")
+        } catch {
+            Log.error("Failed to settle pending order: \(error)", category: "Persistence")
+        }
     }
 
     /// Pull any stored timestamp that lies in the future back to now, and repair the chat

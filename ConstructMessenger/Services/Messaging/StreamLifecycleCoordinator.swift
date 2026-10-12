@@ -557,11 +557,17 @@ final class StreamLifecycleCoordinator {
         // when unmapped, so it costs a dictionary lookup and covers the case where that stops being
         // true, which is not a case anything would notice failing.
         let localIds = messageIds.map { ServerMessageIdMap.shared.localId(for: $0) }
-        // Through the repository (messages B2); the store's rule lets `.delivered` over anything.
-        let store = LocalRepositories.messages
+        Self.markDelivered(localIds, in: LocalRepositories.messages)
+    }
+
+    /// The peer has these messages of ours. Through the repository (messages B2); the store's
+    /// rule lets `.delivered` over anything.
+    static func markDelivered(_ localIds: [String], in store: any MessageStore) {
         for messageId in localIds {
-            guard let message = try? store.message(messageId), message.isSentByMe,
-                  message.deliveryStatus != .delivered else { continue }
+            guard let message = try? store.message(messageId), message.isSentByMe else { continue }
+            // Before the status check: a repeated receipt also settles a row left pending.
+            _ = try? store.settleOrder(of: message)
+            guard message.deliveryStatus != .delivered else { continue }
             let prev = message.deliveryStatus
             _ = try? store.setDeliveryStatus(message.id, .delivered)
             if prev == .failed {

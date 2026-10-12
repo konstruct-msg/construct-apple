@@ -58,17 +58,6 @@ class CallStoreTests: XCTestCase {
         XCTAssertEqual(try store.calls(limit: 2).map(\.id), ["new", "old"])
     }
 
-    /// Clearing the log is one statement that says how much it held. Mutations (Core Data): skip
-    /// the delete — the log stays; answer 0 — the count reddens.
-    func testClearingTheLogRemovesEveryEntryAndCountsThem() throws {
-        let store = makeStore()
-        try store.upsert(call("a", at: 100))
-        try store.upsert(call("b", at: nil))
-        XCTAssertEqual(try store.deleteAll(), 2)
-        XCTAssertEqual(try store.calls(limit: 10), [])
-        XCTAssertEqual(try store.deleteAll(), 0)
-    }
-
     func testACallIsDeletedByIdAndSaysWhetherItWasThere() throws {
         let store = makeStore()
         try store.upsert(call("keep", at: 100))
@@ -88,6 +77,28 @@ class CallStoreTests: XCTestCase {
         try store.delete("c1")
         let deleted = await changes.next()
         XCTAssertEqual(deleted, ["c1"])
+    }
+
+    /// "Clear history": every entry in one write, told once with every id — and an empty log
+    /// clears to nothing and tells nothing (the next change heard is the next write).
+    ///
+    /// Mutations: delete one row per save — the change splits and this reddens; return 0 — the
+    /// count reddens; save an empty log anyway — harmless, `RowChangeFeed` sends no empty set.
+    func testTheLogIsClearedInOneWriteAndToldOnce() async throws {
+        let store = makeStore()
+        try store.upsert(call("a", at: 100))
+        try store.upsert(call("b", at: nil))
+        var changes = store.changes().makeAsyncIterator()
+
+        XCTAssertEqual(try store.deleteAll(), 2)
+        XCTAssertEqual(try store.calls(limit: 10), [])
+        let cleared = await changes.next()
+        XCTAssertEqual(cleared, ["a", "b"])
+
+        XCTAssertEqual(try store.deleteAll(), 0, "nothing left to clear")
+        try store.upsert(call("c", at: 300))
+        let next = await changes.next()
+        XCTAssertEqual(next, ["c"], "clearing an empty log is not a change")
     }
 
     /// The log a call writes when it ends is the seam's store — the path the macOS switch takes.

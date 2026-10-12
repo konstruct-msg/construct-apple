@@ -185,11 +185,10 @@ enum HistoryChannel {
     static func importFile(
         at url: URL,
         local: HistoryLocalKeys,
-        pin: HistoryQRPin,
-        context: NSManagedObjectContext
+        pin: HistoryQRPin
     ) async throws -> HistoryImportSummary {
         let receiver = try CryptoManager.shared.historyCore().historyReceive(userId: local.userIdRaw, fromFile: true)
-        let sink = HistoryImportSink(expectedUserId: local.userIdDashed, context: context)
+        let sink = HistoryImportSink(expectedUserId: local.userIdDashed)
         let outcome: HistoryCoreStream.Outcome
         do {
             outcome = try await HistoryCoreStream.receive(

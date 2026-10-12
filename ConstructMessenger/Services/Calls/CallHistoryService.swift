@@ -56,12 +56,11 @@ final class CallHistoryService {
         }
     }
 
-    /// The whole log. The store has no "delete all": one delete per entry, as the crate's.
+    /// The whole log, in one store write (`CallStore.deleteAll`).
     func deleteAll() {
         do {
-            let count = try store().deleteAll()
-            guard count > 0 else { return }
-            Log.info("Deleted \(count) call history records", category: "CallHistory")
+            let removed = try store().deleteAll()
+            Log.info("Deleted \(removed) call history records", category: "CallHistory")
         } catch {
             Log.error("Failed to delete call history: \(error)", category: "CallHistory")
         }

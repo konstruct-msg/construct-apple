@@ -12,7 +12,6 @@
 //  on its way into the store; a media file crosses in 64 KiB pieces and is never held whole.
 //
 
-import CoreData
 import Foundation
 import SwiftProtobuf
 
@@ -230,7 +229,7 @@ enum HistoryCoreStream {
         do {
             return try await receiveLoop(from: source, into: receiver, sink: sink, pin: pin, resolve: resolve, reply: reply)
         } catch {
-            sink.abandonMedia()
+            await sink.abandonMedia()
             throw error
         }
     }
@@ -290,27 +289,21 @@ extension HistoryQRPin {
 
 // MARK: - Import
 
-/// Where received events go: transcript records into Core Data through the importer, media into
-/// files. Records are applied on `context`'s queue, one hop per chunk of events — the queue keeps
-/// the importer's calls in order; the importer itself writes through the repositories.
-final class HistoryImportSink {
+/// Where received events go: transcript records into the store through the importer, media into
+/// files. An actor, so the importer and the open media file are touched by one caller at a time —
+/// the importer writes through the repositories and needs no context of its own (until
+/// 2026-10-12 a context's queue did this serialising, and the caller had to supply one).
+actor HistoryImportSink {
     private let importer: HistorySnapshotImporter
-    private let context: NSManagedObjectContext
     private let media = HistoryMediaSink()
     private var mediaSummary = HistoryImportSummary()
-    private(set) var manifestPhase: UInt32 = 0
-    var onManifest: ((Construct_Client_History_V1_HistoryManifest) -> Void)?
-    /// Records applied so far, after each chunk's worth.
-    var onProgress: ((Int) -> Void)?
-    /// Records applied so far, for progress.
-    private(set) var seen = 0
+    private var manifestPhase: UInt32 = 0
 
-    init(expectedUserId: String, context: NSManagedObjectContext) {
+    init(expectedUserId: String) {
         self.importer = HistorySnapshotImporter(expectedUserId: expectedUserId)
-        self.context = context
     }
 
-    func consume(_ events: [HistoryEvent]) async throws {
+    func consume(_ events: [HistoryEvent]) throws {
         var records: [HistoryRecord] = []
         for event in events {
             switch event {
@@ -319,7 +312,6 @@ final class HistoryImportSink {
                 if case .manifest(let m) = record {
                     manifestPhase = m.phase
                     Log.info("history_manifest phase=\(m.phase) snapshot=\(HistorySnapshotIdentity.tag(m.snapshotID))", category: "HistorySync")
-                    onManifest?(m)
                 }
                 records.append(record)
             case .skipped(let type):
@@ -334,13 +326,7 @@ final class HistoryImportSink {
                 break
             }
         }
-        guard !records.isEmpty else { return }
-        let importer = importer
-        try await context.perform {
-            for record in records { try importer.apply(record) }
-        }
-        seen += records.count
-        onProgress?(seen)
+        for record in records { try importer.apply(record) }
     }
 
     /// A transfer that failed: drop the blob in progress. Records already written stay — the
@@ -349,10 +335,9 @@ final class HistoryImportSink {
         media.abandon()
     }
 
-    func finish() async throws -> HistoryCoreStream.Outcome {
+    func finish() throws -> HistoryCoreStream.Outcome {
         media.abandon()
-        let importer = importer
-        try await context.perform { try importer.flush() }
+        try importer.flush()
         var summary = importer.summary
         summary.merge(mediaSummary)
         return .imported(summary, manifestPhase: manifestPhase)
