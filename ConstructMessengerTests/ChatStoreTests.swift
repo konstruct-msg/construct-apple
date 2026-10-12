@@ -103,6 +103,45 @@ class ChatStoreTests: XCTestCase {
         XCTAssertEqual(try store.chat("bare")?.lastMessageTime, now)
     }
 
+    /// A chat a message is about to be written into is opened with no time: the message's own,
+    /// older than now, must still move the preview. Mutation: stamp `now` when it is nil (or
+    /// default it) — the received message's time is refused.
+    func testAChatOpenedForAMessageTakesNoTime() throws {
+        try contact("p")
+        let opened = try store.openChat(withPeer: "p", now: nil)
+        XCTAssertTrue(opened.created)
+        XCTAssertNil(try store.chat(opened.chat.id)?.lastMessageTime)
+        let sent = Date(timeIntervalSince1970: 1_000)
+        XCTAssertTrue(try store.advancePreview(opened.chat.id, text: "hi", time: sent))
+        XCTAssertEqual(try store.chat(opened.chat.id)?.lastMessageTime, sent)
+    }
+
+    /// Two first messages from one person, on two threads, open one chat, and both openings
+    /// succeed. Without the lock Core Data adds no second chat either — the later save fails on
+    /// the conflict over the peer's `chats` — but an opening that throws is a received message
+    /// left unwritten, sent again by the server. Rounds, each with a new peer, because one race
+    /// can be won by order alone. Mutation: drop the lock around `CoreDataChatStore.insert` —
+    /// an opening throws.
+    func testOpeningsAtOnceGiveOneChat() throws {
+        let peers = (0..<20).map { "peer-\($0)" }
+        for peer in peers { try contact(peer) }
+        let store = self.store!
+        for peer in peers {
+            let lock = NSLock()
+            var opened: [Result<String, Error>] = []
+            DispatchQueue.concurrentPerform(iterations: 6) { _ in
+                let result = Result { try store.openChat(withPeer: peer, now: nil).chat.id }
+                lock.lock(); opened.append(result); lock.unlock()
+            }
+            let ids = try opened.map { try $0.get() }
+            XCTAssertEqual(Set(ids).count, 1, peer)
+        }
+        let byPeer = Dictionary(grouping: try store.chats(), by: \.peerId)
+        for peer in peers {
+            XCTAssertEqual(byPeer[peer]?.count, 1, peer)
+        }
+    }
+
     /// Messages arrive out of order: the preview moves forward and on an equal time, never back.
     /// Mutation: compare with `<=` — the equal time is dropped; drop the comparison — an older
     /// message replaces the newer preview.
@@ -224,31 +263,70 @@ final class CoreDataChatStoreTests: XCTestCase {
         try contacts.insert(.new(id: id, isContact: true, addedAt: nil))
     }
 
-    /// Among duplicates Core Data still holds, the read names the chat the merge keeps. Mutation:
-    /// return the first fetched — the read and a later `Chat.findOrCreate` disagree on the id.
+    /// Among duplicates Core Data still holds, the read names the chat the launch merge keeps,
+    /// and the merge leaves that one. Mutation: return the first fetched in `best(forPeer:)` —
+    /// the read and the merge disagree on the id.
     func testAmongDuplicatesTheReadNamesTheOneKept() throws {
         // Both insertion orders, so neither the first nor the last row fetched is the answer
         // by accident of the store's order.
         let orders = ["p": [("quiet", 10.0), ("busy", 20.0)], "q": [("busy", 20.0), ("quiet", 10.0)]]
-        let context = container.viewContext
         for (peerId, rows) in orders {
-            try contact(peerId)
-            let peer = try User.row(peerId, in: context)
             for (name, seconds) in rows {
-                let chat = Chat(context: context)
-                chat.id = "\(peerId)-\(name)"
-                chat.otherUser = peer
-                chat.lastMessageTime = Date(timeIntervalSince1970: seconds)
-                // One save each: a context's inserted objects are a set, and one save would
-                // write them in no particular order.
-                try context.save()
+                try duplicate("\(peerId)-\(name)", of: peerId, at: seconds)
             }
         }
         for peerId in orders.keys {
             XCTAssertEqual(try store.chat(withPeer: peerId)?.id, "\(peerId)-busy")
-            let merged = try XCTUnwrap(Chat.findOrCreate(forUserId: peerId, in: context))
-            XCTAssertEqual(merged.chat.id, "\(peerId)-busy")
         }
+        XCTAssertEqual(DuplicateChats.merge(in: container.viewContext), 2)
+        XCTAssertEqual(try store.chats().map(\.id).sorted(), ["p-busy", "q-busy"])
+    }
+
+    /// The merge loses nothing: the messages move, the unread counts add up, the newest preview
+    /// and a pin survive. Mutation: skip any one of those in `DuplicateChats.merge` — this reddens.
+    func testTheLaunchMergeKeepsEverything() throws {
+        try duplicate("kept", of: "p", at: 20, unread: 2)
+        try duplicate("gone", of: "p", at: 10, unread: 3, pinned: true)
+        let context = container.viewContext
+        var messageIds: [String] = []
+        for chat in ["kept", "gone"] {
+            let message = PreviewHelpers.createSampleMessage(
+                context: context, chat: try Chat.row(chat, in: context), isSentByMe: false, text: chat
+            )
+            message.fromUserId = "p"
+            message.toUserId = "me"
+            messageIds.append(message.id)
+        }
+        try context.save()
+
+        XCTAssertEqual(DuplicateChats.merge(in: context), 1)
+        let kept = try XCTUnwrap(store.chat("kept"))
+        XCTAssertNil(try store.chat("gone"))
+        XCTAssertEqual(kept.unreadCount, 5)
+        XCTAssertTrue(kept.isPinned)
+        XCTAssertEqual(kept.lastMessageTime, Date(timeIntervalSince1970: 20))
+        let messages = CoreDataMessageStore(container: container)
+        for id in messageIds {
+            XCTAssertEqual(try messages.message(id)?.chatId, "kept")
+        }
+        XCTAssertEqual(DuplicateChats.merge(in: context), 0, "nothing left to merge")
+    }
+
+    /// A chat row beside the one the store holds for the peer — what builds before 2026-10-12
+    /// could leave. One save each: a context's inserted objects are a set, and one save would
+    /// write them in no particular order.
+    private func duplicate(_ id: String, of peerId: String, at seconds: TimeInterval,
+                           unread: Int16 = 0, pinned: Bool = false) throws {
+        let context = container.viewContext
+        if try contacts.contact(peerId) == nil { try contact(peerId) }
+        let chat = Chat(context: context)
+        chat.id = id
+        chat.otherUser = try User.row(peerId, in: context)
+        chat.lastMessageTime = Date(timeIntervalSince1970: seconds)
+        chat.lastMessageText = id
+        chat.unreadCount = unread
+        chat.isPinned = pinned
+        try context.save()
     }
 
     /// The chat's messages go with it. Mutation: `messages` set to nullify — the message stays.

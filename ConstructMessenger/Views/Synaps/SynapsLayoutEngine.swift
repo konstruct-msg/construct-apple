@@ -292,21 +292,21 @@ struct ZoomableCloud<Content: View>: View {
 }
 
 extension ContactMetrics {
-    /// Each contact's metrics from their chats, found by the peer id each chat names — one fetch
-    /// for all of them. Shared by Synapses on iOS and on the Desktop, which each kept a copy
-    /// walking `User.chats`; the chats are still Core Data, the contacts no longer are.
+    /// Each contact's metrics from their chats, found by the peer each chat names. Shared by
+    /// Synapses on iOS and on the Desktop, which each kept a copy walking `User.chats`. A peer may
+    /// still have two chats until the launch merges them (`DuplicateChats`): the busier one counts.
     @MainActor
-    static func byContact(_ ids: [String], in context: NSManagedObjectContext, now: Date = Date()) -> [String: ContactMetrics] {
+    static func byContact(
+        _ ids: [String],
+        chats: any ChatStore = LocalRepositories.chats,
+        messages: any MessageStore = LocalRepositories.messages,
+        now: Date = Date()
+    ) -> [String: ContactMetrics] {
         guard !ids.isEmpty else { return [:] }
-        let req = Chat.fetchRequest()
-        req.predicate = NSPredicate(format: "otherUser.id IN %@", ids)
-        var chatsByPeer: [String: [Chat]] = [:]
-        for chat in (try? context.fetch(req)) ?? [] {
-            guard let peer = chat.otherUser?.id else { continue }
-            chatsByPeer[peer, default: []].append(chat)
-        }
+        let wanted = Set(ids)
+        let chatsByPeer = Dictionary(grouping: ((try? chats.chats()) ?? []).filter { wanted.contains($0.peerId) }, by: \.peerId)
         let counts = Dictionary(uniqueKeysWithValues: ids.map { id in
-            (id, (chatsByPeer[id] ?? []).map { $0.messages?.count ?? 0 }.max() ?? 0)
+            (id, (chatsByPeer[id] ?? []).map { (try? messages.messageCount(inChat: $0.id)) ?? 0 }.max() ?? 0)
         })
         let maxCount = counts.values.max() ?? 0
         var map: [String: ContactMetrics] = [:]
@@ -323,7 +323,7 @@ extension ContactMetrics {
             map[id] = ContactMetrics(
                 frequencyScore: maxCount > 0 ? CGFloat(count) / CGFloat(maxCount) : 0,
                 recency: recency,
-                unreadCount: chats.reduce(0) { $0 + Int($1.unreadCount) }
+                unreadCount: chats.reduce(0) { $0 + $1.unreadCount }
             )
         }
         return map

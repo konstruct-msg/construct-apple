@@ -17,7 +17,7 @@ import Foundation
 ///
 /// Exactly three things were created, and each is treated differently:
 ///
-/// 1. **A `Chat` whose `otherUser` is our own account** — deleted. `Chat.findOrCreate` promises
+/// 1. **A `Chat` whose `otherUser` is our own account** — deleted. `Chat.findOrCreate` (removed 2026-10-12) promised
 ///    "one chat per peer `User`" in its own header and never checked that the user is a peer.
 /// 2. **A `knownIdentityKey` pinned on our own `User` row** — cleared, but the row is kept. That
 ///    row is the local profile (`AuthViewModel.loadUserFromCoreData` creates it deliberately); only

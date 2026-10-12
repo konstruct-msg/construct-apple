@@ -58,9 +58,9 @@ final class QueuedSendVisibilityTests: XCTestCase {
         try! context.save()
 
         let coordinator = ChatSendCoordinator(
-            chat: chat,
+            conversation: Conversation(chatId: chat.id, peerId: other.id),
             viewContext: context,
-            sessionManager: ChatSessionManager(chat: chat)
+            sessionManager: ChatSessionManager(peerId: other.id)
         )
         return (coordinator, chat)
     }

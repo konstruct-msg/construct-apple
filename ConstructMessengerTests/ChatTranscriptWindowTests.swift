@@ -72,8 +72,8 @@ final class ChatTranscriptWindowTests: XCTestCase {
     }
 
     private func makeStore(for chat: Chat) -> (ChatMessageStore, ChatViewModel) {
-        let store = ChatMessageStore(chat: chat, viewContext: context)
-        let vm = ChatViewModel(chat: chat, context: context)
+        let store = ChatMessageStore(chatId: chat.id, viewContext: context)
+        let vm = ChatViewModel(conversation: Conversation(chatId: chat.id, peerId: chat.otherUser?.id ?? "peer"), context: context)
         store.setViewModel(vm)
         return (store, vm)
     }

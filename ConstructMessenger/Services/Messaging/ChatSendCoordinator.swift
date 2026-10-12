@@ -45,7 +45,7 @@ final class ChatSendCoordinator {
 
     // MARK: - Dependencies
 
-    private let chat: Chat
+    private let conversation: Conversation
     private let viewContext: NSManagedObjectContext
     private let sessionManager: ChatSessionManager
     private weak var viewModel: ChatViewModel?
@@ -77,11 +77,11 @@ final class ChatSendCoordinator {
     // MARK: - Init
 
     init(
-        chat: Chat,
+        conversation: Conversation,
         viewContext: NSManagedObjectContext,
         sessionManager: ChatSessionManager
     ) {
-        self.chat = chat
+        self.conversation = conversation
         self.viewContext = viewContext
         self.sessionManager = sessionManager
     }
@@ -122,10 +122,7 @@ final class ChatSendCoordinator {
             }
             return
         }
-        guard let recipientId = chat.otherUser?.id else {
-            Log.error("No recipient ID", category: "ChatViewModel")
-            return
-        }
+        let recipientId = conversation.peerId
         guard let currentUserId = AuthSessionManager.shared.currentUserId else {
             Log.error("No current user ID", category: "ChatViewModel")
             return
@@ -246,7 +243,7 @@ final class ChatSendCoordinator {
                 items: items,
                 replyTo: replyTo,
                 replyToContentOverride: replyToContentOverride,
-                chat: chat,
+                chatId: conversation.chatId,
                 in: viewContext
             )
             queuedMessages.append(QueuedMessage(
@@ -338,10 +335,10 @@ final class ChatSendCoordinator {
     // MARK: - Queue handling
 
     func sendQueuedMessages() {
-        guard let recipientId = chat.otherUser?.id,
-              let currentUserId = AuthSessionManager.shared.currentUserId else { return }
+        let recipientId = conversation.peerId
+        guard let currentUserId = AuthSessionManager.shared.currentUserId else { return }
         retryManager.sendQueuedMessages(
-            for: chat,
+            inChat: conversation.chatId,
             recipientId: recipientId,
             currentUserId: currentUserId,
             context: viewContext
@@ -397,8 +394,8 @@ final class ChatSendCoordinator {
             persistenceService.updateMessageStatus(messageId: placeholderId, status: .failed, in: viewContext)
         }
 
-        guard let currentUserId = AuthSessionManager.shared.currentUserId,
-              let recipientId = chat.otherUser?.id else {
+        let recipientId = conversation.peerId
+        guard let currentUserId = AuthSessionManager.shared.currentUserId else {
             queuedMessages.removeAll()
             return
         }
@@ -407,7 +404,7 @@ final class ChatSendCoordinator {
             let id = UUID().uuidString
             do {
                 try LocalRepositories.messages.insert(MessageRecord(
-                    id: id, chatId: chat.id, fromUserId: currentUserId, toUserId: recipientId,
+                    id: id, chatId: conversation.chatId, fromUserId: currentUserId, toUserId: recipientId,
                     isSentByMe: true, timestamp: queued.timestamp,
                     orderKey: ServerMessageOrder.pending(localMessageId: id),
                     body: Data(queued.text.utf8), contentType: .regular, deliveryStatus: .failed,
@@ -422,7 +419,7 @@ final class ChatSendCoordinator {
         // here too — otherwise the list keeps showing an older message than the transcript does.
         // After the insert, through the repository; only the newest can be the preview.
         if let newest = queuedMessages.filter({ $0.placeholderId == nil }).max(by: { $0.timestamp < $1.timestamp }) {
-            MessagePersistenceService.advancePreview(of: chat, text: newest.text, at: newest.timestamp)
+            MessagePersistenceService.advancePreview(ofChat: conversation.chatId, text: newest.text, at: newest.timestamp)
         }
         queuedMessages.removeAll()
     }
@@ -457,8 +454,8 @@ final class ChatSendCoordinator {
         wirePlaintext: Data? = nil,
         storagePayload: Data? = nil
     ) {
-        guard let recipientId = chat.otherUser?.id,
-              let currentUserId = AuthSessionManager.shared.currentUserId else {
+        let recipientId = conversation.peerId
+        guard let currentUserId = AuthSessionManager.shared.currentUserId else {
             return
         }
         do {
@@ -678,11 +675,7 @@ final class ChatSendCoordinator {
                 return
             }
             Log.debug("Encryption failed, session was deleted. Reinitializing...", category: "ChatViewModel")
-            guard let toUserId = chat.otherUser?.id else {
-                ErrorRouter.shared.report(error)
-                Log.error("Failed to encrypt message: \(error.localizedDescription)", category: "ChatViewModel")
-                return
-            }
+            let toUserId = conversation.peerId
             viewModel?.isSessionReady = false
             let queued = QueuedMessage(text: text, attachments: [], replyTo: replyTo)
             queuedMessages.append(queued)
@@ -700,8 +693,8 @@ final class ChatSendCoordinator {
         replyTo: Message?,
         replyToContentOverride: String? = nil
     ) {
-        guard let recipientId = chat.otherUser?.id,
-              let currentUserId = AuthSessionManager.shared.currentUserId else {
+        let recipientId = conversation.peerId
+        guard let currentUserId = AuthSessionManager.shared.currentUserId else {
             Log.error("No recipient/user ID for media message", category: "ChatViewModel")
             ErrorRouter.shared.report(.unknown(detail: "media send with no recipient or no account"))
             return
@@ -724,7 +717,7 @@ final class ChatSendCoordinator {
             items: placeholderItems,
             replyTo: replyTo,
             replyToContentOverride: replyToContentOverride,
-            chat: chat,
+            chatId: conversation.chatId,
             in: viewContext
         )
         pendingMediaUploads[placeholderId] = MediaUploadPayload(
@@ -774,8 +767,8 @@ final class ChatSendCoordinator {
     }
 
     func sendVoiceMessage(url: URL, duration: TimeInterval, waveform: [Float]) {
-        guard let recipientId = chat.otherUser?.id,
-              let currentUserId = AuthSessionManager.shared.currentUserId else {
+        let recipientId = conversation.peerId
+        guard let currentUserId = AuthSessionManager.shared.currentUserId else {
             Log.error("No recipient/user ID for voice message", category: "ChatViewModel")
             return
         }
@@ -786,7 +779,7 @@ final class ChatSendCoordinator {
             toUserId: recipientId,
             duration: duration,
             waveform: waveform,
-            chat: chat,
+            chatId: conversation.chatId,
             in: viewContext
         )
         Task { [weak self] in
@@ -821,8 +814,8 @@ final class ChatSendCoordinator {
         replyTo: Message?,
         replyToContentOverride: String? = nil
     ) {
-        guard let recipientId = chat.otherUser?.id,
-              let currentUserId = AuthSessionManager.shared.currentUserId else {
+        let recipientId = conversation.peerId
+        guard let currentUserId = AuthSessionManager.shared.currentUserId else {
             return
         }
         let placeholderId = UUID().uuidString
@@ -839,7 +832,7 @@ final class ChatSendCoordinator {
             },
             replyTo: replyTo,
             replyToContentOverride: replyToContentOverride,
-            chat: chat,
+            chatId: conversation.chatId,
             in: viewContext
         )
         pendingMediaUploads[placeholderId] = MediaUploadPayload(
@@ -902,8 +895,8 @@ final class ChatSendCoordinator {
     /// Optimistic apply, then the same pipeline as `editMessage`. Never a chat row.
     /// Double-tap likes pass `ReactionReducer.likeEmoji`.
     func sendReaction(_ message: Message, emoji: String) {
-        guard let recipientId = chat.otherUser?.id,
-              let currentUserId = AuthSessionManager.shared.currentUserId else { return }
+        let recipientId = conversation.peerId
+        guard let currentUserId = AuthSessionManager.shared.currentUserId else { return }
         let nowMs = Int64(Date().timeIntervalSince1970 * 1000)
         let existing = try? LocalRepositories.reactions.reaction(on: message.id, by: currentUserId)
         guard let plan = ReactionReducer.sendPlan(
@@ -982,8 +975,8 @@ final class ChatSendCoordinator {
     // MARK: - Edit
 
     func editMessage(_ message: Message, newText: String, editingBinding: @escaping () -> Void) {
-        guard let recipientId = chat.otherUser?.id,
-              let currentUserId = AuthSessionManager.shared.currentUserId else { return }
+        let recipientId = conversation.peerId
+        guard let currentUserId = AuthSessionManager.shared.currentUserId else { return }
         // For a media message, editing the caption must rebuild the album (binary wire +
         // local JSON) — sending plain text would replace the descriptor and destroy the media.
         // Read legacyBody here (current actor) before hopping onto the Task.
@@ -1060,10 +1053,7 @@ final class ChatSendCoordinator {
             }
             return
         }
-        guard let recipientId = chat.otherUser?.id else {
-            Log.error("No recipient ID for retry", category: "ChatViewModel")
-            return
-        }
+        let recipientId = conversation.peerId
         retryManager.retryMessage(
             message,
             recipientId: recipientId,
@@ -1106,7 +1096,7 @@ final class ChatSendCoordinator {
                 decryptedContent: decryptedContent,
                 isSentByMe: isSentByMe,
                 status: status,
-                chat: chat,
+                chatId: conversation.chatId,
                 replyTo: replyTo,
                 replyToContentOverride: replyToContentOverride,
                 localThumbnails: localThumbnails,

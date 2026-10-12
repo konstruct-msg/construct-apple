@@ -41,12 +41,10 @@ struct ChatsListView: View {
             NavigationStack(path: $navigationPath) {
                 listColumn
                     .navigationDestination(for: String.self) { chatId in
-                        // The conversation still takes the managed chat — the messages domain
-                        // moves it — so the open chat is the one bridge to it.
-                        if let chat = try? Chat.row(chatId, in: viewContext) {
+                        if let conversation = ChatsLive.shared.conversation(chatId) {
                             // Messenger convention: the bottom tab bar yields to the message
                             // input bar while inside a conversation — `ChatView` hides it.
-                            ChatView(chat: chat, context: viewContext)
+                            ChatView(conversation: conversation, context: viewContext)
                         }
                     }
             }
@@ -57,11 +55,11 @@ struct ChatsListView: View {
     /// one per chat so switching chats starts fresh.
     @ViewBuilder
     private var chatDetail: some View {
-        if let chatId = selectedChatId, let chat = try? Chat.row(chatId, in: viewContext) {
+        if let chatId = selectedChatId, let conversation = ChatsLive.shared.conversation(chatId) {
             NavigationStack {
-                ChatView(chat: chat, context: viewContext)
+                ChatView(conversation: conversation, context: viewContext)
             }
-            .id(chat.id)
+            .id(conversation.chatId)
         } else {
             ContentUnavailableView(
                 String(localized: "select_chat"),
@@ -315,7 +313,9 @@ struct ChatsListView: View {
             targets = chatsTouchedBySave(note)
             guard !targets.isEmpty else { return }
         } else {
-            targets = chats.compactMap { try? Chat.row($0.id, in: viewContext) }
+            let request = Chat.fetchRequest()
+            request.predicate = NSPredicate(format: "id IN %@", chats.map(\.id))
+            targets = (try? viewContext.fetch(request)) ?? []
         }
         for chat in targets {
             chat.reconcilePreviewFromTranscript(in: viewContext)

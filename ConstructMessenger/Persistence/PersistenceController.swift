@@ -111,6 +111,7 @@ struct PersistenceController {
         migrateExistingContactsToSynaps()
         repairFutureTimestamps()
         backfillMissingServerOrderKeys()
+        DuplicateChats.merge(in: c.viewContext)
     }
 
     /// Pull any stored timestamp that lies in the future back to now, and repair the chat
