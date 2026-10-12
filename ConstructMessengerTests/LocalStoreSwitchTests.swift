@@ -93,3 +93,27 @@ final class LocalStoreSwitchTests: XCTestCase {
         XCTAssertTrue(didEnd)
     }
 }
+
+/// The files Core Data builds left go; the store that replaced them and anything else stay.
+final class LegacyStoreRemovalTests: XCTestCase {
+
+    /// Mutation: drop the `-wal` name — the transcript's latest writes stay on disk and this
+    /// reddens.
+    func testTheOldStoreAndItsKeysGoAndNothingElse() throws {
+        let fm = FileManager.default
+        let dir = fm.temporaryDirectory.appendingPathComponent("legacy-\(UUID().uuidString)")
+        defer { try? fm.removeItem(at: dir) }
+        try fm.createDirectory(at: dir.appendingPathComponent("ct_secure"), withIntermediateDirectories: true)
+        try fm.createDirectory(at: dir.appendingPathComponent(".ConstructMessenger_SUPPORT/_EXTERNAL_DATA"),
+                               withIntermediateDirectories: true)
+        for name in ["ConstructMessenger.sqlite", "ConstructMessenger.sqlite-wal", "ConstructMessenger.sqlite-shm",
+                     "ct_secure/message_keys.sqlite", "construct.db", "whisper-models"] {
+            try Data("x".utf8).write(to: dir.appendingPathComponent(name))
+        }
+
+        XCTAssertEqual(PersistenceController.removeLegacyStore(in: dir), 5)
+        XCTAssertEqual(try fm.contentsOfDirectory(atPath: dir.path).sorted(), ["construct.db", "ct_secure", "whisper-models"])
+        XCTAssertEqual(try fm.contentsOfDirectory(atPath: dir.appendingPathComponent("ct_secure").path), [])
+        XCTAssertEqual(PersistenceController.removeLegacyStore(in: dir), 0, "nothing left to remove")
+    }
+}
