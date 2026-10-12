@@ -926,7 +926,7 @@ final class ChatSendCoordinator {
         )
 
         Task { [weak self] in
-            guard let self else { return }
+            guard self != nil else { return }
             do {
                 let actionId = UUID().uuidString.lowercased()
                 let chunkPlan = ChunkedMessageSender.shared.buildPlan(

@@ -405,9 +405,7 @@ final class SessionCoordinator: MessageRouterDelegate {
         for id in blamedMessageIds {
             FailedInitMessageStore.shared.add(id)
             // Belt-and-suspenders alongside the failure store.
-            if let context = viewContext {
-                PersistentACKStore.shared.markProcessed(id, senderId: userId)
-            }
+            PersistentACKStore.shared.markProcessed(id, senderId: userId)
         }
         messageRouter.releaseCoreQueued(blamedMessageIds)
         // Reset the phase to absent. Every caller is the RESPONDER open giving up, and it opened
