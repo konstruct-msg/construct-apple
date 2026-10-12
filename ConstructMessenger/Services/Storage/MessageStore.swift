@@ -60,6 +60,10 @@ protocol MessageStore: Sendable {
     /// held, `nil` for the newest page — oldest first.
     func messages(inChat chatId: String, before: (orderKey: String, id: String)?, limit: Int) throws -> [MessageRecord]
 
+    /// How many messages the chat holds, every kind — the activity Synapses ranks a contact by
+    /// (`chat_message_count`).
+    func messageCount(inChat chatId: String) throws -> Int
+
     /// Every message in transcript order after `after` — `(orderKey, id)` of the last one read,
     /// `nil` to start — up to `limit`: a history export reads them page by page
     /// (`all_messages_after`).
@@ -142,6 +146,14 @@ final class CoreDataMessageStore: MessageStore, @unchecked Sendable {
             ]
             req.fetchLimit = limit
             return try context.fetch(req).compactMap(MessageRecord.init(row:)).reversed()
+        }
+    }
+
+    func messageCount(inChat chatId: String) throws -> Int {
+        try run { context in
+            let req = Message.fetchRequest()
+            req.predicate = NSPredicate(format: "chat.id == %@", chatId)
+            return try context.count(for: req)
         }
     }
 
@@ -367,6 +379,10 @@ final class LocalStoreMessageStore: MessageStore, @unchecked Sendable {
             chatId: chatId, beforeOrderKey: before?.orderKey, beforeId: before?.id.lowercased(),
             limit: UInt32(clamping: limit)
         ).map { MessageRecord($0) }
+    }
+
+    func messageCount(inChat chatId: String) throws -> Int {
+        Int(clamping: try store.chatMessageCount(chatId: chatId))
     }
 
     func allMessages(after: (orderKey: String, id: String)?, limit: Int) throws -> [MessageRecord] {

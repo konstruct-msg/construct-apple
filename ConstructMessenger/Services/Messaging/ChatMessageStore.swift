@@ -22,7 +22,7 @@ final class ChatMessageStore: NSObject {
 
     // MARK: - Dependencies
 
-    private let chat: Chat
+    private let chatId: String
     private let viewContext: NSManagedObjectContext
     private let persistenceService = MessagePersistenceService()
     private weak var viewModel: ChatViewModel?
@@ -88,7 +88,7 @@ final class ChatMessageStore: NSObject {
     private func fetchWindow() -> [Message] {
         let request = Message.fetchRequest()
         var predicates: [NSPredicate] = [
-            NSPredicate(format: "chat == %@", chat),
+            NSPredicate(format: "chat.id == %@", chatId),
             ChatMessageStore.controlMessageFilterPredicate
         ]
         if let oldest = oldestLoadedServerOrderKey {
@@ -126,8 +126,8 @@ final class ChatMessageStore: NSObject {
 
     // MARK: - Init
 
-    init(chat: Chat, viewContext: NSManagedObjectContext) {
-        self.chat = chat
+    init(chatId: String, viewContext: NSManagedObjectContext) {
+        self.chatId = chatId
         self.viewContext = viewContext
     }
 
@@ -139,7 +139,7 @@ final class ChatMessageStore: NSObject {
 
     private func backfillMissingServerOrderKeys() {
         let request = Message.fetchRequest()
-        request.predicate = NSPredicate(format: "chat == %@ AND serverOrderKey == nil", chat)
+        request.predicate = NSPredicate(format: "chat.id == %@ AND serverOrderKey == nil", chatId)
         guard let messages = try? viewContext.fetch(request), !messages.isEmpty else { return }
 
         for message in messages {
@@ -159,7 +159,7 @@ final class ChatMessageStore: NSObject {
     func setup() {
         backfillMissingServerOrderKeys()
         let fetchRequest = Message.fetchRequest()
-        let chatPredicate = NSPredicate(format: "chat == %@", chat)
+        let chatPredicate = NSPredicate(format: "chat.id == %@", chatId)
         fetchRequest.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [
             chatPredicate,
             ChatMessageStore.controlMessageFilterPredicate
@@ -211,7 +211,7 @@ final class ChatMessageStore: NSObject {
         // itself is not spliced into the list. Newest-first so the last element is the oldest we
         // are admitting.
         let fetchRequest = Message.fetchRequest()
-        let chatPredicate = NSPredicate(format: "chat == %@ AND serverOrderKey < %@", chat, oldestKey)
+        let chatPredicate = NSPredicate(format: "chat.id == %@ AND serverOrderKey < %@", chatId, oldestKey)
         fetchRequest.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [
             chatPredicate,
             ChatMessageStore.controlMessageFilterPredicate
@@ -246,7 +246,7 @@ final class ChatMessageStore: NSObject {
             return
         }
         let fetchRequest = Message.fetchRequest()
-        let chatPredicate = NSPredicate(format: "chat == %@ AND serverOrderKey < %@", chat, oldestKey)
+        let chatPredicate = NSPredicate(format: "chat.id == %@ AND serverOrderKey < %@", chatId, oldestKey)
         fetchRequest.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [
             chatPredicate,
             ChatMessageStore.controlMessageFilterPredicate
@@ -259,7 +259,7 @@ final class ChatMessageStore: NSObject {
 
     func deleteMessage(_ message: Message) {
         do {
-            try persistenceService.deleteMessage(message, chat: chat, in: viewContext)
+            try persistenceService.deleteMessage(message, chatId: chatId, in: viewContext)
         } catch {
             Log.error("Failed to delete message: \(error)", category: "ChatViewModel")
         }
@@ -267,7 +267,7 @@ final class ChatMessageStore: NSObject {
 
     func deleteMessages(withIds messageIds: Set<String>) {
         do {
-            try persistenceService.deleteMessages(withIds: messageIds, chat: chat, in: viewContext)
+            try persistenceService.deleteMessages(withIds: messageIds, chatId: chatId, in: viewContext)
         } catch {
             Log.error("Failed to delete messages: \(error)", category: "ChatViewModel")
         }
@@ -277,12 +277,7 @@ final class ChatMessageStore: NSObject {
 
     @MainActor
     private func applyFRCSnapshot(_ controller: NSFetchedResultsController<NSFetchRequestResult>) {
-        guard let vm = viewModel else { return }
-        guard !chat.isDeleted, chat.managedObjectContext != nil else {
-            vm.messages = []
-            lastSnapshotFingerprint = 0
-            return
-        }
+        guard viewModel != nil else { return }
         // `controller` is deliberately unread: the FRC is the change *trigger*, and reading the
         // transcript off `fetchedObjects` is what this method used to do wrong. Its `fetchLimit`
         // is not re-applied on incremental updates, so its contents drift under us.

@@ -100,7 +100,8 @@ final class HistorySnapshotImporterTests: XCTestCase {
     // MARK: - Conflict
 
     func testLiveMessageIsNotOverwritten() throws {
-        _ = try Chat.findOrCreate(forUserId: peer, in: context)
+        try LocalRepositories.contacts.insert(.new(id: peer, isContact: true, addedAt: nil))
+        _ = try LocalRepositories.chats.openChat(withPeer: peer, now: nil)
         let live = Message(context: context)
         live.id = messageId
         live.fromUserId = local

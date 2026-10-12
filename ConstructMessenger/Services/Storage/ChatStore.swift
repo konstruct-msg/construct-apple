@@ -7,9 +7,9 @@
 //  answers today; `LocalStore` (construct-store schema 3, construct-core 0.36.0) takes over on
 //  macOS in step 3, with `chat`, `chat_for_peer`, `chats`, `insert_chat` and the field writes.
 //
-//  One chat per peer. The crate holds that with a unique index; Core Data has none, so a chat for
-//  a peer is chosen among duplicates here and merged by `Chat.findOrCreate`, which the message
-//  path still uses until the messages domain moves.
+//  One chat per peer. The crate holds that with a unique index; Core Data has none, so an insert
+//  here is checked and written under one lock, and duplicates left by builds before that are merged
+//  at launch (`DuplicateChats`).
 //
 
 import Foundation
@@ -28,6 +28,19 @@ struct ChatRecord: Equatable, Sendable, Identifiable {
     var lastMessageTime: Date?
     var isPinned: Bool
     var unreadCount: Int
+}
+
+/// A conversation as the message path and an open chat name it: the chat's row and the account at
+/// the other end. The row's preview and unread count are not carried — they change under whoever
+/// holds this, and are read from `ChatStore` when shown.
+struct Conversation: Hashable, Sendable {
+    let chatId: String
+    /// A `ServerUserId`.
+    let peerId: String
+}
+
+extension ChatRecord {
+    var conversation: Conversation { Conversation(chatId: id, peerId: peerId) }
 }
 
 protocol ChatStore: Sendable {
@@ -66,11 +79,15 @@ extension ChatStore {
     /// chat just opened sits at the top of the list before anything is said in it; an existing
     /// one with no time gets `now` too, for the same reason.
     ///
+    /// `now: nil` is for a chat a message is about to be written into — received, synced from a
+    /// sibling, imported: the preview only moves forward, and that message may be older than now.
+    ///
     /// Two callers opening a chat with one person get one chat: an insert that loses the race
     /// reads the winner's.
-    func openChat(withPeer peerId: String, now: Date = Date()) throws -> (chat: ChatRecord, created: Bool) {
+    func openChat(withPeer peerId: String, now: Date? = Date()) throws -> (chat: ChatRecord, created: Bool) {
         if var existing = try chat(withPeer: peerId) {
-            if existing.lastMessageTime == nil, try setPreview(existing.id, text: existing.lastMessageText, time: now) {
+            if let now, existing.lastMessageTime == nil,
+               try setPreview(existing.id, text: existing.lastMessageText, time: now) {
                 existing.lastMessageTime = now
             }
             return (existing, false)
@@ -101,6 +118,8 @@ final class CoreDataChatStore: ChatStore, @unchecked Sendable {
 
     private let container: NSPersistentContainer
     private let feed: RowChangeFeed
+    /// One for every instance: tests make several over one container.
+    private static let insertLock = NSLock()
 
     init(container: NSPersistentContainer) {
         self.container = container
@@ -133,8 +152,12 @@ final class CoreDataChatStore: ChatStore, @unchecked Sendable {
 
     // MARK: Writes
 
+    /// Checked and written under one lock: Core Data has no unique index on the peer, and two
+    /// first messages from one person on two contexts would each find no chat and add one.
     func insert(_ chat: ChatRecord) throws -> Bool {
-        try run { context in
+        Self.insertLock.lock()
+        defer { Self.insertLock.unlock() }
+        return try run { context in
             if try Self.row(chat.id, in: context) != nil { return false }
             if try Self.best(forPeer: chat.peerId, in: context) != nil { return false }
             let users = User.fetchRequest()
@@ -210,13 +233,13 @@ final class CoreDataChatStore: ChatStore, @unchecked Sendable {
         return try context.fetch(req).first
     }
 
-    /// The chat for `peerId` — among duplicates, the one `Chat.findOrCreate` keeps when it merges
-    /// them, so a read here and a merge there agree on which id survives.
+    /// The chat for `peerId` — among duplicates not yet merged, the one `DuplicateChats` keeps, so
+    /// a message written before the next launch goes where the merge leaves it.
     private static func best(forPeer peerId: String, in context: NSManagedObjectContext) throws -> Chat? {
         let req = Chat.fetchRequest()
         req.predicate = NSPredicate(format: "otherUser.id == %@", peerId)
         let rows = try context.fetch(req)
-        return rows.count > 1 ? Chat.selectBestChat(among: rows) : rows.first
+        return rows.count > 1 ? DuplicateChats.kept(among: rows) : rows.first
     }
 
     private func run<T>(_ body: (NSManagedObjectContext) throws -> T) throws -> T {
@@ -247,22 +270,6 @@ extension ChatRecord {
         case (nil, _?): return false
         default: return a.id < b.id
         }
-    }
-}
-
-extension Chat {
-    /// The row `id` in `context`, as last saved — for a caller that still needs the managed object
-    /// (messages to link, a screen to open) after writing through `ChatStore`. Refreshed, for the
-    /// reason `User.row` gives. Disappears with the messages domain.
-    static func row(_ id: String, in context: NSManagedObjectContext) throws -> Chat {
-        let req = Chat.fetchRequest()
-        req.predicate = NSPredicate(format: "id == %@", id)
-        req.fetchLimit = 1
-        req.shouldRefreshRefetchedObjects = true
-        guard let chat = try context.fetch(req).first else {
-            throw NSError(domain: "ChatStore", code: 1, userInfo: [NSLocalizedDescriptionKey: "no Chat row \(id.prefix(8))…"])
-        }
-        return chat
     }
 }
 

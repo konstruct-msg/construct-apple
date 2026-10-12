@@ -24,7 +24,7 @@ class ChatViewModel {
 
     // MARK: - Core
 
-    let chat: Chat
+    let conversation: Conversation
 
     // MARK: - Coordinators
 
@@ -44,13 +44,13 @@ class ChatViewModel {
 
     // MARK: - Init
 
-    init(chat: Chat, context: NSManagedObjectContext) {
-        self.chat = chat
+    init(conversation: Conversation, context: NSManagedObjectContext) {
+        self.conversation = conversation
 
-        let store = ChatMessageStore(chat: chat, viewContext: context)
-        let manager = ChatSessionManager(chat: chat)
+        let store = ChatMessageStore(chatId: conversation.chatId, viewContext: context)
+        let manager = ChatSessionManager(peerId: conversation.peerId)
         let coordinator = ChatSendCoordinator(
-            chat: chat,
+            conversation: conversation,
             viewContext: context,
             sessionManager: manager
         )
@@ -77,7 +77,7 @@ class ChatViewModel {
             messageStore.setup()
             sessionManager.checkExistingSession()
             setupSubscribers()
-            InAppNotificationService.shared.registerActiveChat(chat.id, ownerID: instanceID)
+            InAppNotificationService.shared.registerActiveChat(conversation.chatId, ownerID: instanceID)
             Log.debug("ChatViewModel initialized with viewContext", category: "ChatViewModel")
         }
         sessionManager.fetchRecipientPublicKey()

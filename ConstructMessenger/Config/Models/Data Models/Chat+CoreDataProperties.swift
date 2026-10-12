@@ -122,7 +122,7 @@ extension Chat {
 
         guard let newest else {
             if lastMessageText != nil || lastMessageTime != nil {
-                MessagePersistenceService.setPreview(of: self, text: nil, at: nil)
+                MessagePersistenceService.setPreview(ofChat: id, text: nil, at: nil)
                 return true
             }
             return false
@@ -135,7 +135,7 @@ extension Chat {
             return false
         }
 
-        MessagePersistenceService.setPreview(of: self, text: newest.previewText, at: newest.timestamp)
+        MessagePersistenceService.setPreview(ofChat: id, text: newest.previewText, at: newest.timestamp)
         Log.debug(
             "Preview reconciled for \(id.prefix(8))… → '\(text.prefix(40))' ts=\(newest.timestamp)",
             category: "Chat"

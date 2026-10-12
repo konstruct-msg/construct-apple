@@ -111,8 +111,8 @@ final class MessageRouter {
             guard case .messageDecrypted(_, let messageId, _) = action,
                   let held = coreQueuedEnvelopes.removeValue(forKey: messageId) else { continue }
             do {
-                let (chat, _) = try findOrCreateChat(for: held.otherUserId, in: context)
-                _ = executeRustActions([action], for: held.message, chat: chat, otherUserId: held.otherUserId, in: context)
+                try Self.ensureContact(held.otherUserId)
+                _ = executeRustActions([action], for: held.message, otherUserId: held.otherUserId, in: context)
                 if PersistentACKStore.shared.settleDurableWrite(messageId) {
                     Log.error(
                         "PersistAck unmet for \(messageId.prefix(8))… after a core drain (\(site)) — saved, but nothing durable remembers handling it",
@@ -126,7 +126,7 @@ final class MessageRouter {
                 )
             } catch {
                 Log.error(
-                    "Core drain (\(site)) opened \(messageId.prefix(8))… but its chat could not be found or created: \(error)",
+                    "Core drain (\(site)) opened \(messageId.prefix(8))… but its sender's contact could not be written: \(error)",
                     category: "MessageRouter"
                 )
             }
@@ -629,7 +629,7 @@ final class MessageRouter {
         // 4. Handle messages from contacts whose chat was explicitly deleted.
         //    A real handshake means the sender fetched our *current* public keys (via a fresh
         //    invite) and started a new session — a legitimate re-contact, so clear the deleted flag
-        //    and process normally (a new chat will be created by findOrCreateChat below).
+        //    and process normally (the chat is made again when the message is written).
         //    Anything else is an old session we no longer have keys for — skip it.
         //    Exception: if this exact message is already in our pending queue (a previous heal
         //    attempt started and failed), the server is re-delivering a stuck undecryptable message.
@@ -671,13 +671,12 @@ final class MessageRouter {
             }
         }
 
-        // 5. Find or create chat
-        let chat: Chat
-        let isNewChat: Bool
+        // 5. The sender's contact row. Their chat is made when a message is written into it, so a
+        //    control frame or a refused message leaves no empty chat behind.
         do {
-            (chat, isNewChat) = try findOrCreateChat(for: otherUserId, in: context)
+            try Self.ensureContact(otherUserId)
         } catch {
-            Log.error("Failed to resolve chat for \(otherUserId.prefix(8))…: \(error)", category: "MessageRouter")
+            Log.error("Failed to write the contact for \(otherUserId.prefix(8))…: \(error)", category: "MessageRouter")
             return
         }
         
@@ -716,8 +715,6 @@ final class MessageRouter {
                 message,
                 from: otherUserId,
                 claimed: namedSenderDevice,
-                chat: chat,
-                isNewChat: isNewChat,
                 in: context
             ) {
                 streamOutcome = outcome
@@ -737,7 +734,6 @@ final class MessageRouter {
         }
         guard CryptoManager.shared.orchestratorCore != nil else {
             Log.error("OrchestratorCore still nil after reload — holding \(message.id.prefix(8))… from \(otherUserId.prefix(8))… for redelivery", category: "MessageRouter")
-            if isNewChat { context.delete(chat) }
             // Transient (Keychain locked / core not loaded): don't advance — let the server
             // re-deliver after the core recovers rather than acking an unprocessed message.
             streamOutcome = .deferred
@@ -754,7 +750,6 @@ final class MessageRouter {
               let event = buildIncomingEvent(message: message, otherUserId: otherUserId, asDevice: device)
         else {
             Log.error("Cannot build incoming event for \(message.id.prefix(8))… — skipping", category: "MessageRouter")
-            if isNewChat { context.delete(chat) }
             return
         }
         var actions: [CfeAction]
@@ -769,7 +764,6 @@ final class MessageRouter {
             // Core Data validation errors). A throw is the core refusing the event, not a
             // session failing to read it, so there is no state to name in a decryption error.
             PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId)
-            if isNewChat { context.delete(chat) }
             return
         }
 
@@ -788,7 +782,6 @@ final class MessageRouter {
                 followup = try CryptoManager.shared.handleOrchestratorEvent(ackResult, tag: "ack_db_result")
             } catch {
                 Log.error("ACK DB result follow-up failed for \(ackMsgId.prefix(8))…: \(error)", category: "MessageRouter")
-                if isNewChat { context.delete(chat) }
                 return
             }
 
@@ -815,7 +808,6 @@ final class MessageRouter {
                     .duplicateAfterAckCheck,
                     label: "msgNum=\(message.messageNumber)"
                 )
-                if isNewChat { context.delete(chat) }
                 return
 
             case .droppedPendingRedelivery:
@@ -847,7 +839,6 @@ final class MessageRouter {
                 // would need the core to hold the init lock forever, which is its own bug and would
                 // now be visible as a stuck watermark rather than as vanished messages.
                 streamOutcome = .deferred
-                if isNewChat { context.delete(chat) }
                 return
             }
         }
@@ -858,7 +849,7 @@ final class MessageRouter {
             // NOT hold the stream watermark (one partial media message would stall every
             // later cursor for the device). Reassembly that never completes is reported by
             // `.chunkReassemblyExpired`; durable reassembly is the real fix.
-            _ = executeRustActions(actions, for: message, chat: chat, otherUserId: otherUserId, in: context)
+            _ = executeRustActions(actions, for: message, otherUserId: otherUserId, in: context)
             return
         case .callSignalDecrypted:
             // A call signal, named by the core — by the envelope's type or, since core 0.29, by
@@ -868,14 +859,14 @@ final class MessageRouter {
             // gate (blocked, callable contact) reads an account — handed the device id it dropped
             // every signal (2026-10-02, after core 0.29). Recorded as processed: the core asked
             // for a durable record, and this path wrote none until 0.29 sent every signal here.
-            _ = executeRustActions(actions, for: message, chat: chat, otherUserId: otherUserId, in: context)
+            _ = executeRustActions(actions, for: message, otherUserId: otherUserId, in: context)
             Self.dispatchCallSignals(in: actions, from: otherUserId)
             PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId)
             return
         case .controlFrameDecrypted:
             // A receipt, a card, a profile, a heartbeat — named by the core from the KNST frame
             // (core 0.30). Never a transcript row.
-            _ = executeRustActions(actions, for: message, chat: chat, otherUserId: otherUserId, in: context)
+            _ = executeRustActions(actions, for: message, otherUserId: otherUserId, in: context)
             handleControlFrames(in: actions, messageId: message.id, from: otherUserId, in: context)
             return
         case .unreadable:
@@ -887,7 +878,6 @@ final class MessageRouter {
             PerformanceMetrics.shared.record(.undeliveredNoReceipt, label: "unreadable")
             SessionActionExecutor.shared.execute(actions)
             PersistentACKStore.shared.markProcessed(message.id, senderId: otherUserId)
-            if isNewChat { context.delete(chat) }
             return
         case .openReceiving(let lostDevice):
             // The core queued this message under `lostDevice` — the device the sender certificate
@@ -905,7 +895,6 @@ final class MessageRouter {
             )
             // Held in the core until the open drains it or drops it — hold the cursor.
             streamOutcome = .deferred
-            if isNewChat { context.delete(chat) }
             return
         case .duplicate:
             // Handled before: in the core's ACK cache, in our DB, or — since the ratchet names
@@ -919,7 +908,6 @@ final class MessageRouter {
                 "Duplicate named by the core — \(message.id.prefix(8))… msgNum=\(message.messageNumber), recorded and dropped",
                 category: "MessageRouter"
             )
-            if isNewChat { context.delete(chat) }
             return
         case .malformed:
             // Can never open: decrypt uses the parser that just refused it. Recorded and passed,
@@ -931,7 +919,6 @@ final class MessageRouter {
                 "Malformed payload named by the core — \(message.id.prefix(8))…, recorded and dropped",
                 category: "MessageRouter"
             )
-            if isNewChat { context.delete(chat) }
             return
         case .messageQueuedPendingInit(let contactId, let queuedCount):
             // Held inside the core, drained on SessionInitCompleted or NetworkReconnected. The
@@ -944,7 +931,6 @@ final class MessageRouter {
                 category: "SessionInit"
             )
             streamOutcome = .deferred
-            if isNewChat { context.delete(chat) }
             return
         case .none:
             break
@@ -1004,7 +990,6 @@ final class MessageRouter {
             )
         }
         PerformanceMetrics.shared.record(.undeliveredNoReceipt, label: "fallthrough")
-        if isNewChat { context.delete(chat) }
         return
     }
 
@@ -1080,7 +1065,6 @@ final class MessageRouter {
     private func executeRustActions(
         _ actions: [CfeAction],
         for message: ChatMessage,
-        chat: Chat,
         otherUserId: String,
         in context: NSManagedObjectContext
     ) -> DecryptBodyDisposition {
@@ -1092,7 +1076,7 @@ final class MessageRouter {
         var disposition: DecryptBodyDisposition = .terminal
 
         // Router-state-bound actions: only .messageDecrypted needs chunkReassembler,
-        // chat, message, context, and delegate. Handled inline.
+        // message, context, and delegate. Handled inline.
         for action in actions {
             if case .messageDecrypted(_, _, let plaintext) = action {
                 // The action names the peer by device, because that is what the core keeps the
@@ -1100,7 +1084,7 @@ final class MessageRouter {
                 // the receipt, the intake key — is keyed by account, and this function was called
                 // with that account id. Taking the action's contact id would file the message
                 // under a device nothing else in the app knows about.
-                checkUsernameUpdate(for: otherUserId, chat: chat, in: context)
+                checkUsernameUpdate(for: otherUserId)
 
                 // Client-side block enforcement (decrypt-but-suppress). The ratchet has
                 // already advanced (handleOrchestratorEvent + SessionActionExecutor above),
@@ -1176,7 +1160,6 @@ final class MessageRouter {
                         e2eMessageId: e2eMessageId,
                         for: message,
                         from: otherUserId,
-                        chat: chat,
                         in: context
                     )
                 case .legacy(let text):
@@ -1187,7 +1170,6 @@ final class MessageRouter {
                         e2eMessageId: nil,
                         for: message,
                         from: otherUserId,
-                        chat: chat,
                         in: context
                     )
                 case .profile(let profileData):
@@ -1312,7 +1294,6 @@ final class MessageRouter {
         e2eMessageId: String?,
         for message: ChatMessage,
         from otherUserId: String,
-        chat: Chat,
         in context: NSManagedObjectContext
     ) {
         // HEARTBEAT announced on the OUTER envelope — a sender running a build from before
@@ -1359,7 +1340,7 @@ final class MessageRouter {
         // reply targets) resolve on our side. Transport-level ACKs stay on the envelope id.
         let canonicalId: String
         do {
-            canonicalId = try saveMessage(for: chat, with: message, decryptedContent: decryptedContent,
+            canonicalId = try saveMessage(from: otherUserId, with: message, decryptedContent: decryptedContent,
                                           quotedMessage: quotedMessage, mediaAlbum: mediaAlbum,
                                           storagePayload: storagePayload,
                                           e2eMessageId: e2eMessageId, in: context)
@@ -1383,35 +1364,22 @@ final class MessageRouter {
     
     // MARK: - Chat Management
     
-    /// Find or create chat for user
-    /// - Parameters:
-    ///   - userId: User ID
-    ///   - context: Core Data context
-    /// - Returns: Tuple of (chat, isNewChat)
-    private func findOrCreateChat(
-        for userId: String,
-        in context: NSManagedObjectContext
-    ) throws -> (Chat, Bool) {
-        do {
-            guard let result = try Chat.findOrCreate(
-                forUserId: userId,
-                in: context,
-                missingUserPolicy: .createContact
-            ) else {
-                // createContact never returns nil — defensive
-                throw NSError(
-                    domain: "MessageRouter",
-                    code: 1,
-                    userInfo: [NSLocalizedDescriptionKey: "findOrCreateChat returned nil for \(userId)"]
-                )
-            }
-            return (result.chat, result.created)
-        } catch {
-            Log.error("Failed to findOrCreate chat for \(userId.prefix(8))…: \(error)", category: "MessageRouter")
-            throw error
+    /// The contact row for `userId`, made when there is none — a first message from someone we
+    /// hold nothing for.
+    private static func ensureContact(_ userId: String) throws {
+        let contacts = LocalRepositories.contacts
+        if try contacts.contact(userId) == nil {
+            try contacts.insert(.new(id: userId, isContact: true, addedAt: Date()))
         }
     }
-    
+
+    /// The chat a message with `peerId` is written into, with its contact row, made if missing —
+    /// with no time, so the message's own time moves the preview.
+    private static func chatId(forPeer peerId: String) throws -> String {
+        try ensureContact(peerId)
+        return try LocalRepositories.chats.openChat(withPeer: peerId, now: nil).chat.id
+    }
+
     // MARK: - First Message Handling
 
     /// What happens to a message with no session **before** it goes to the core — the facts the
@@ -1427,15 +1395,12 @@ final class MessageRouter {
         _ message: ChatMessage,
         from userId: String,
         claimed: String?,
-        chat: Chat,
-        isNewChat: Bool,
         in context: NSManagedObjectContext
     ) -> StreamCursorTracker.Outcome? {
         // Already processed on an earlier pass: re-ACK, and do not open from it again.
         if PersistentACKStore.shared.isProcessed(message.id) {
             Log.info("SESSION_STATE[first_message_dedup]: \(message.id.prefix(8))… from \(userId.prefix(8))… already processed — re-ACKing, no open", category: "SessionInit")
             OutboundSessionService.sendDeliveryReceipt(for: [message.id], to: userId, in: context)
-            if isNewChat { context.delete(chat) }
             return .durable
         }
 
@@ -1448,7 +1413,6 @@ final class MessageRouter {
             Log.info("SESSION_STATE[first_contact_unattributed]: \(message.id.prefix(8))… from \(userId.prefix(8))… names no device — refused", category: "SessionInit")
             PersistentACKStore.shared.markProcessed(message.id, senderId: userId)
             PerformanceMetrics.shared.record(.undeliveredNoReceipt, label: "first_contact_unattributed")
-            if isNewChat { context.delete(chat) }
             return .durable
         }
 
@@ -1467,7 +1431,6 @@ final class MessageRouter {
             Log.debug("Discarding \(initKind) from vanished peer \(userId.prefix(8))… — no session is possible", category: "MessageRouter")
             PersistentACKStore.shared.markProcessed(message.id, senderId: userId)
             PerformanceMetrics.shared.record(.undeliveredNoReceipt, label: "peer_vanished")
-            if isNewChat { context.delete(chat) }
             // `.durable` on purpose: nothing will revisit this message — see `VanishedPeerStore`.
             return .durable
         }
@@ -1477,15 +1440,11 @@ final class MessageRouter {
     // MARK: - Session Message Handling
     
     /// Check if username needs updating
-    private func checkUsernameUpdate(
-        for userId: String,
-        chat: Chat,
-        in context: NSManagedObjectContext
-    ) {
-        guard let user = chat.otherUser else { return }
-        
-        let usernameIsGuid = user.username == user.id || user.username == userId
-        let displayNameIsGuid = user.displayName == user.id || user.displayName == userId
+    private func checkUsernameUpdate(for userId: String) {
+        guard let user = try? LocalRepositories.contacts.contact(userId) else { return }
+
+        let usernameIsGuid = user.username == userId
+        let displayNameIsGuid = user.displayName == userId
         
         if usernameIsGuid || displayNameIsGuid {
             Log.info("Username for \(userId) is still UUID, requesting update", category: "MessageRouter")
@@ -1731,39 +1690,6 @@ final class MessageRouter {
         AccountAddress.pin(address, contactId: accountId, source: .card)
     }
 
-    /// True when the newest row in `chat` is a system row carrying exactly `text`.
-    ///
-    /// Fetches one row, not the transcript — this runs on every notice. Compares the decrypted
-    /// text rather than a stored marker so it stays correct if the wording changes: two rows are
-    /// duplicates when the user would read them as duplicates.
-    private static func isRepeatOfLastRow(
-        _ text: String,
-        in chat: Chat,
-        context: NSManagedObjectContext
-    ) -> Bool {
-        let fetch = Message.fetchRequest()
-        fetch.predicate = NSPredicate(format: "chat == %@", chat)
-        fetch.sortDescriptors = [
-            NSSortDescriptor(key: "serverOrderKey", ascending: false),
-            NSSortDescriptor(key: "id", ascending: false)
-        ]
-        fetch.fetchLimit = 1
-        guard let last = try? context.fetch(fetch).first else { return false }
-        return last.fromUserId == "SYSTEM" && last.legacyBody == text
-    }
-
-    #if DEBUG
-    /// Test seam for `isRepeatOfLastRow`. The rule is about what the user sees in a transcript,
-    /// so it is worth testing directly rather than through the whole routing path.
-    static func isRepeatOfLastRowForTesting(
-        _ text: String,
-        in chat: Chat,
-        context: NSManagedObjectContext
-    ) -> Bool {
-        isRepeatOfLastRow(text, in: chat, context: context)
-    }
-    #endif
-
     // MARK: - Message Persistence
     
     /// Save message to Core Data
@@ -1774,7 +1700,7 @@ final class MessageRouter {
     /// to a different author's message (collision guard).
     @discardableResult
     private func saveMessage(
-        for chat: Chat,
+        from peerId: String,
         with messageData: ChatMessage,
         decryptedContent: String,
         quotedMessage: Shared_Proto_Messaging_V1_QuotedMessage?,
@@ -1823,11 +1749,11 @@ final class MessageRouter {
                     // Forced when the preview is blank: a message that was stored undecryptable
                     // left an empty preview behind, and recovering its text must fill that in
                     // even though a newer message has since moved the preview's time forward.
-                    let shown = (try? LocalRepositories.chats.chat(chat.id))?.lastMessageText ?? ""
+                    let shown = (try? LocalRepositories.chats.chat(existing.chatId))?.lastMessageText ?? ""
                     if shown.isEmpty {
-                        MessagePersistenceService.setPreview(of: chat, text: previewSource, at: at)
+                        MessagePersistenceService.setPreview(ofChat: existing.chatId, text: previewSource, at: at)
                     } else {
-                        MessagePersistenceService.advancePreview(of: chat, text: previewSource, at: at)
+                        MessagePersistenceService.advancePreview(ofChat: existing.chatId, text: previewSource, at: at)
                     }
                 }
                 return canonicalId  // Message already exists
@@ -1867,8 +1793,9 @@ final class MessageRouter {
 
         // Create new message — through the repository, whole, in one write.
         let timestamp = Date.fromRemoteTimestamp(messageData.timestamp)
+        let chatId = try Self.chatId(forPeer: peerId)
         try store.insert(MessageRecord(
-            id: canonicalId, chatId: chat.id, fromUserId: messageData.from, toUserId: messageData.to,
+            id: canonicalId, chatId: chatId, fromUserId: messageData.from, toUserId: messageData.to,
             isSentByMe: false, timestamp: timestamp,
             orderKey: messageData.serverOrderKey
                 ?? ServerMessageOrder.local(timestamp: timestamp, messageId: canonicalId),
@@ -1877,13 +1804,13 @@ final class MessageRouter {
             replyQuote: replyQuote, transcript: nil, transcriptLanguage: nil, transcriptGeneratedAt: nil
         ), searchText: LocalMessagePayload.decode(storagePayload).plainText)
         // The list row, after the message is saved — through the repository, never in this context.
-        MessagePersistenceService.advancePreview(of: chat, text: previewSource, at: timestamp)
+        MessagePersistenceService.advancePreview(ofChat: chatId, text: previewSource, at: timestamp)
         // Same "can the user actually see this?" test the banner uses — an open chat behind a
         // backgrounded app is not visible, and used to keep unreadCount pinned at 0.
-        if !InAppNotificationService.isChatVisible(chat.id) {
-            MessagePersistenceService.incrementUnread(of: chat)
+        if !InAppNotificationService.isChatVisible(chatId) {
+            MessagePersistenceService.incrementUnread(ofChat: chatId)
         }
-        Log.debug("Chat metadata updated chatId=\(chat.id.prefix(8))…", category: "MessageRouter")
+        Log.debug("Chat metadata updated chatId=\(chatId.prefix(8))…", category: "MessageRouter")
         PerformanceMetrics.shared.messageUIDisplayed(messageId: messageData.id)
 
         let senderId = messageData.from
@@ -1894,12 +1821,12 @@ final class MessageRouter {
         // ── Lockdown check ──────────────────────────────────────────────────
         let lockdownSuppressed = LockdownManager.shared.shouldSuppress(senderId: senderId)
 
-        // Decide whether to show notification
-        let chatId    = chat.id
-        let isMuted   = chat.isMuted
-        let senderName = (chat.otherUser?.displayName.trimmingCharacters(in: .whitespacesAndNewlines))
+        // Decide whether to show notification. No chat is muted: nothing sets the flag, and
+        // `ChatRecord` leaves it out.
+        let sender = try? LocalRepositories.contacts.contact(peerId)
+        let senderName = (sender?.displayName.trimmingCharacters(in: .whitespacesAndNewlines))
                             .flatMap { $0.isEmpty ? nil : $0 }
-                        ?? chat.otherUser?.username
+                        ?? sender?.username
                         ?? "Unknown"
         let preview   = Chat.formatPreviewText(previewSource)
 
@@ -1909,13 +1836,11 @@ final class MessageRouter {
             // of the regular message preview. Subsequent messages are silently dropped
             // from notifications until the user reviews.
             Log.info("Burst detected: \(count) msgs/30s from \(senderId.prefix(8))…", category: "FloodGuard")
-            if !isMuted {
-                InAppNotificationService.shared.handleFloodAlert(
-                    chatId: chatId,
-                    senderName: senderName,
-                    messageCount: count
-                )
-            }
+            InAppNotificationService.shared.handleFloodAlert(
+                chatId: chatId,
+                senderName: senderName,
+                messageCount: count
+            )
 
         case .alreadySuppressed:
             // Silently save; no notification
@@ -1924,7 +1849,7 @@ final class MessageRouter {
         case .normal:
             if lockdownSuppressed {
                 Log.debug("Lockdown: suppressed notification from new sender \(senderId.prefix(8))…", category: "LockdownManager")
-            } else if !isMuted {
+            } else {
                 InAppNotificationService.shared.handle(
                     chatId: chatId,
                     isMuted: false,
@@ -2205,15 +2130,6 @@ final class MessageRouter {
         e2eMessageId: String?,
         in context: NSManagedObjectContext
     ) {
-        let chat: Chat
-        do {
-            let resolved = try findOrCreateChat(for: partnerUserId, in: context)
-            chat = resolved.0
-        } catch {
-            Log.error("SENDER_SYNC: failed to resolve chat for \(partnerUserId.prefix(8))…: \(error)", category: "MessageRouter")
-            return
-        }
-
         // Decode wire bytes through the same pipeline as inbound chat messages.
         let storagePayload: Data
         let previewText: String
@@ -2295,9 +2211,11 @@ final class MessageRouter {
             MediaWireCodec.receiveAlbum(mediaAlbum, for: rowId)
         }
         let timestamp = Date.fromRemoteTimestamp(original.timestamp)
+        let chatId: String
         do {
+            chatId = try Self.chatId(forPeer: partnerUserId)
             try LocalRepositories.messages.insert(MessageRecord(
-                id: rowId, chatId: chat.id, fromUserId: original.from, toUserId: partnerUserId,
+                id: rowId, chatId: chatId, fromUserId: original.from, toUserId: partnerUserId,
                 isSentByMe: true, timestamp: timestamp,
                 orderKey: original.serverOrderKey
                     ?? ServerMessageOrder.local(timestamp: timestamp, messageId: rowId),
@@ -2309,7 +2227,7 @@ final class MessageRouter {
             Log.error("SENDER_SYNC: message \(rowId.prefix(8))… not saved: \(error)", category: "MessageRouter")
             return
         }
-        MessagePersistenceService.advancePreview(of: chat, text: previewText, at: timestamp)
+        MessagePersistenceService.advancePreview(ofChat: chatId, text: previewText, at: timestamp)
 
         if !original.senderDeviceId.isEmpty {
             CryptoManager.shared.saveSessionToKeychain(
@@ -2381,11 +2299,10 @@ extension MessageRouter {
         _ decryptedContent: String,
         message: ChatMessage,
         from otherUserId: String,
-        chat: Chat,
         in context: NSManagedObjectContext
     ) throws {
         try saveMessage(
-            for: chat,
+            from: otherUserId,
             with: message,
             decryptedContent: decryptedContent,
             quotedMessage: nil,

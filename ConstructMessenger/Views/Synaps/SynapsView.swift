@@ -301,7 +301,7 @@ struct SynapsView: View {
     }
 
     private func rebuildContactMetrics() {
-        contactMetricsByUser = ContactMetrics.byContact(contacts.map(\.id), in: context)
+        contactMetricsByUser = ContactMetrics.byContact(contacts.map(\.id))
     }
 
     private func notificationContainsSynapsesMetricChanges(_ note: Notification) -> Bool {
