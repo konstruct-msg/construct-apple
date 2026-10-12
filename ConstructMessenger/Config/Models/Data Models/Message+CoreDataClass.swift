@@ -64,13 +64,7 @@ public class Message: NSManagedObject {
     /// never render as a chat bubble. Cheap string pre-check gates the JSON parse so
     /// normal messages cost almost nothing.
     var isServiceArtifact: Bool {
-        let text = legacyBody
-        guard text.hasPrefix("{"), text.contains("\"delivery_receipt\"") else { return false }
-        guard let data = text.data(using: .utf8),
-              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              (json["type"] as? String) == "delivery_receipt"
-        else { return false }
-        return true
+        MessageContentType.isLegacyDeliveryReceipt(legacyBody)
     }
 
     /// True if this row is an internal session-control signal (`session_ready`,

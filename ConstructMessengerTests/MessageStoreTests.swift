@@ -167,6 +167,17 @@ class MessageStoreTests: XCTestCase {
         XCTAssertEqual(earlier.map(\.id), ["m2", "m3"])
     }
 
+    /// The window an open transcript holds, read forward from its oldest row: that row included,
+    /// a row sharing its key but with a smaller id not, then everything after, in order.
+    /// Mutation: compare the id with `>` — the window's own first row drops out.
+    func testAWindowReadsForwardFromItsOldestRow() throws {
+        for (id, key) in [("a", "k1"), ("b", "k2"), ("c", "k2"), ("d", "k3")] {
+            try store.insert(record(id, key: key), searchText: nil)
+        }
+        XCTAssertEqual(try store.messages(inChat: chatId, from: ("k2", "c"), limit: 10).map(\.id), ["c", "d"])
+        XCTAssertEqual(try store.messages(inChat: chatId, from: ("k1", "a"), limit: 2).map(\.id), ["a", "b"])
+    }
+
     /// Deleted messages are gone; others stay. Mutation: delete the whole chat's messages.
     func testDeletingRemovesOnlyTheNamed() throws {
         for i in 1...3 { try store.insert(record("m\(i)", key: "k\(i)"), searchText: nil) }
