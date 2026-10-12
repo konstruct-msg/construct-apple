@@ -331,12 +331,19 @@ struct PersistenceController {
     }
 
     /// Removes SQLite main file + WAL + SHM so a fresh empty store can be created.
-    private static func nukeSQLiteFiles(at storeURL: URL) {
+    static func nukeSQLiteFiles(at storeURL: URL) {
         let fm = FileManager.default
-        let walURL = storeURL.appendingPathExtension("wal")
-        let shmURL = storeURL.appendingPathExtension("shm")
-        for url in [storeURL, walURL, shmURL] {
+        for url in sqliteFiles(of: storeURL) {
             try? fm.removeItem(at: url)
         }
+    }
+
+    /// The store and its two sidecars. SQLite names them by appending `-wal` and `-shm` to the
+    /// file name, not as an extension: until 2026-10-12 this removed `….sqlite.wal`, a file that
+    /// never exists, and left the WAL behind — the recovery's new store then opened onto it.
+    static func sqliteFiles(of storeURL: URL) -> [URL] {
+        let dir = storeURL.deletingLastPathComponent()
+        let name = storeURL.lastPathComponent
+        return [storeURL, dir.appendingPathComponent(name + "-wal"), dir.appendingPathComponent(name + "-shm")]
     }
 }
