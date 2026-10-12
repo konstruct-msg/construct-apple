@@ -100,13 +100,11 @@ struct HistoryTransferOfferView: View {
             errorMessage = HistoryTransferUserMessage.text(for: error)
             return
         }
-        let context = PersistenceController.shared.container.newBackgroundContext()
         do {
             let summary = try await HistoryChannel.importFile(
                 at: staging,
                 local: local,
-                pin: DeviceLinkPendingPin.trust(forUserId: userId),
-                context: context
+                pin: DeviceLinkPendingPin.trust(forUserId: userId)
             )
             DeviceLinkPendingPin.clear(forUserId: userId)
             importedSummary = summary

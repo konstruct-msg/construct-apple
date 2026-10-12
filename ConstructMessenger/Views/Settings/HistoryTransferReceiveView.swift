@@ -78,10 +78,9 @@ struct HistoryTransferReceiveView: View {
         do {
             let local = try HistoryChannel.localKeys()
             let pin = DeviceLinkPendingPin.trust(forUserId: userId)
-            let background = PersistenceController.shared.container.newBackgroundContext()
             var expectMedia = true
             while expectMedia {
-                let outcome = try await channel.receive(local: local, pin: pin, coordinator: coordinator, context: background)
+                let outcome = try await channel.receive(local: local, pin: pin, coordinator: coordinator)
                 switch outcome {
                 case .skipped:
                     expectMedia = false
