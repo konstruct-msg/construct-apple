@@ -15,9 +15,9 @@ struct MessageInputView: View {
     #if os(macOS)
     @Binding var droppedFileURLs: [URL]
     #endif
-    let replyingTo: Message?
+    let replyingTo: TranscriptRow?
     let quoteOverride: String?
-    let editingMessage: Message?
+    let editingMessage: TranscriptRow?
     let onSend: ([MediaAttachment], [URL]) -> Void
     var onSendVoice: ((URL, TimeInterval, [Float]) -> Void)? = nil
     let onCancelReply: () -> Void

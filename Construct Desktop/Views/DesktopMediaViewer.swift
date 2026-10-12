@@ -12,7 +12,7 @@ import SwiftUI
 import AppKit
 
 struct DesktopMediaViewer: View {
-    let messages: [Message]
+    let messages: [TranscriptRow]
     @Binding var isPresented: Bool
 
     @State private var currentId: String
@@ -25,7 +25,7 @@ struct DesktopMediaViewer: View {
     private static let idealSize = CGSize(width: 960, height: 700)
     private static let statusDuration: TimeInterval = 2
 
-    init(messages: [Message], initialMessageId: String, initialItemIndex: Int, isPresented: Binding<Bool>) {
+    init(messages: [TranscriptRow], initialMessageId: String, initialItemIndex: Int, isPresented: Binding<Bool>) {
         self.messages = messages
         self._isPresented = isPresented
         self._currentId = State(

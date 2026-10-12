@@ -17,7 +17,7 @@ import AVFoundation
 
 struct VideoNoteBubbleView: View {
     let item: [String: Any]
-    let message: Message
+    let message: TranscriptRow
     let itemIndex: Int
     let isPlaceholder: Bool
     let isSelected: Bool

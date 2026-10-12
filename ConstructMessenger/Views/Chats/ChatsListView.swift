@@ -293,11 +293,11 @@ struct ChatsListView: View {
     // MARK: - Actions
 
     private func togglePin(_ chat: ChatRecord) {
-        try? LocalRepositories.chats.setPinned(chat.id, !chat.isPinned)
+        _ = try? LocalRepositories.chats.setPinned(chat.id, !chat.isPinned)
     }
 
     private func toggleMarkUnread(_ chat: ChatRecord) {
-        try? LocalRepositories.chats.setUnread(chat.id, chat.unreadCount > 0 ? 0 : 1)
+        _ = try? LocalRepositories.chats.setUnread(chat.id, chat.unreadCount > 0 ? 0 : 1)
     }
 
     private func updateTotalUnreadCount() {

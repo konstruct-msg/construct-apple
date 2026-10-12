@@ -42,7 +42,7 @@ private enum MediaPreviewLayout {
 
 struct MediaMessageView: View {
     let mediaContent: MediaMessageContent
-    let message: Message
+    let message: TranscriptRow
     let isSelected: Bool
     /// Album item index the user tapped (0 for a single-photo message).
     let onTapFullScreen: ((Int) -> Void)?
@@ -133,7 +133,7 @@ struct MediaCaptionText: View {
 
 private struct SingleMediaCell: View {
     let mediaContent: MediaMessageContent
-    let message: Message
+    let message: TranscriptRow
     let itemIndex: Int
     let isPlaceholder: Bool
     let isSelected: Bool
@@ -657,7 +657,7 @@ private struct SingleMediaCell: View {
 
 private struct MediaGridView: View {
     let mediaContent: MediaMessageContent
-    let message: Message
+    let message: TranscriptRow
     let isPlaceholder: Bool
     let isSelected: Bool
     let onTapItem: (Int) -> Void
@@ -792,7 +792,7 @@ enum MediaAlbumGridLayout {
 
 private struct GridCell: View {
     let mediaContent: MediaMessageContent
-    let message: Message
+    let message: TranscriptRow
     let itemIndex: Int
     let isPlaceholder: Bool
     let extraCount: Int

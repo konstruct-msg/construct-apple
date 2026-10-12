@@ -182,6 +182,7 @@ private struct RefusingMessageStore: MessageStore {
     struct Refused: Error {}
     func message(_ id: String) throws -> MessageRecord? { nil }
     func messages(inChat chatId: String, before: (orderKey: String, id: String)?, limit: Int) throws -> [MessageRecord] { [] }
+    func messages(inChat chatId: String, from: (orderKey: String, id: String), limit: Int) throws -> [MessageRecord] { [] }
     func messageCount(inChat chatId: String) throws -> Int { 0 }
     func allMessages(after: (orderKey: String, id: String)?, limit: Int) throws -> [MessageRecord] { [] }
     func changes() -> AsyncStream<Set<String>> { AsyncStream { $0.finish() } }

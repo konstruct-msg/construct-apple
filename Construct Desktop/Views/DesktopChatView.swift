@@ -21,9 +21,9 @@ struct DesktopChatView: View {
     @State private var scrollManager = ChatScrollManager()
     private var connectionManager = ConnectionStatusManager.shared
     @State private var messageText = ""
-    @State private var replyingTo: Message?
+    @State private var replyingTo: TranscriptRow?
     @State private var replyQuoteText: String? = nil
-    @State private var quotingMessage: Message? = nil
+    @State private var quotingMessage: TranscriptRow? = nil
     @State private var replyFocusIds: Set<String> = []
     @State private var replyFocusPeekTask: Task<Void, Never>?
     @State private var showingUserProfile = false
@@ -69,7 +69,7 @@ struct DesktopChatView: View {
                 rows: { transcriptRows }
             )
             .environment(\.containerWidth, containerWidth)
-                .onChange(of: viewModel.messages.count) { oldCount, count in
+                .onChange(of: viewModel.entries.count) { oldCount, count in
                     // Shared with iOS ChatView: open / corrective pin / animated follow.
                     scrollManager.handleTranscriptCountChange(
                         oldCount: oldCount,
@@ -465,16 +465,16 @@ struct DesktopChatView: View {
 
     // MARK: - Computed Properties
 
-    private var filteredMessages: [Message] {
-        let valid = viewModel.messages.filter { !$0.isDeleted && $0.managedObjectContext != nil }
+    private var filteredMessages: [TranscriptEntry] {
+        let valid = viewModel.entries
         guard !searchText.isEmpty else { return valid }
-        // The words, not the stored body: "mediaId" would match every photo.
-        return valid.filter { $0.readableText.localizedCaseInsensitiveContains(searchText) }
+        // The words, not the stored body: "mediaId" would match every photo. Reads every row, so
+        // the list follows every row while a search is open — only then.
+        return valid.filter { $0.row.readableText.localizedCaseInsensitiveContains(searchText) }
     }
 
-    private var mediaMessages: [Message] {
+    private var mediaMessages: [TranscriptRow] {
         viewModel.messages.filter {
-            guard !$0.isDeleted, $0.managedObjectContext != nil else { return false }
             if let mc = parseMediaContent(from: $0.legacyBody) {
                 return (mc.media["_placeholder"] as? Bool) != true
             }
@@ -484,11 +484,11 @@ struct DesktopChatView: View {
 
     // MARK: - Soft reply focus
 
-    private func replyFocusOpacity(for message: Message) -> Double {
+    private func replyFocusOpacity(for messageId: String) -> Double {
         guard !isEditMode, !replyFocusIds.isEmpty else {
             return ChatUIConstants.ReplyFocus.focusedOpacity
         }
-        if replyFocusIds.contains(message.id.lowercased()) {
+        if replyFocusIds.contains(messageId.lowercased()) {
             return ChatUIConstants.ReplyFocus.focusedOpacity
         }
         return ChatUIConstants.ReplyFocus.dimmedOpacity
@@ -502,7 +502,7 @@ struct DesktopChatView: View {
         }
     }
 
-    private func peekReplyChain(for message: Message) {
+    private func peekReplyChain(for message: TranscriptRow) {
         let childId = message.id.lowercased()
         let parentId = (message.replyToMessageId ?? "").lowercased()
         guard !parentId.isEmpty else { return }
@@ -543,7 +543,7 @@ struct DesktopChatView: View {
         try? LocalRepositories.chats.setUnread(chatId, 0)
     }
 
-    private func toggleMessageSelection(_ message: Message) {
+    private func toggleMessageSelection(_ message: TranscriptRow) {
         if selectedMessages.contains(message.id) {
             selectedMessages.remove(message.id)
         } else {
@@ -565,7 +565,7 @@ struct DesktopChatView: View {
         LocalNotificationManager.shared.clearBadge()
         // Same as iOS: only arm opening when a transcript is already present.
         // Empty → 0→N is handled by handleTranscriptCountChange.
-        if !viewModel.messages.isEmpty {
+        if !viewModel.entries.isEmpty {
             scrollManager.beginOpening()
         }
     }
@@ -617,8 +617,8 @@ struct DesktopChatView: View {
     private var transcriptRows: some View {
                 ForEach(Array(filteredMessages.enumerated()), id: \.element.id) { index, message in
                     VStack(spacing: 0) {
-                        MessageBubble(
-                            message: message,
+                        ObservedTranscriptRow(entry: message) { row in MessageBubble(
+                            message: row,
                             isLastInGroup: message.isLastInGroup(at: index, in: filteredMessages),
                             isSelected: selectedMessages.contains(message.id),
                             isEditMode: isEditMode,
@@ -640,7 +640,7 @@ struct DesktopChatView: View {
                             onReact: { msg, emoji in
                                 viewModel.sendReaction(msg, emoji: emoji)
                             }
-                        )
+                        ) }
                         .id(message.id)
                         .onAppear {
                             if index == filteredMessages.count - 1 {
@@ -652,7 +652,7 @@ struct DesktopChatView: View {
                                 scrollManager.noteLastMessageVisible(false, searchActive: isSearchActive)
                             }
                         }
-                        .opacity(replyFocusOpacity(for: message))
+                        .opacity(replyFocusOpacity(for: message.id))
                         .animation(
                             .easeInOut(duration: ChatUIConstants.ReplyFocus.animationDuration),
                             value: replyFocusIds

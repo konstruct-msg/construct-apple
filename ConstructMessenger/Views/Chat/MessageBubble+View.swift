@@ -10,13 +10,7 @@ import SwiftUI
 extension MessageBubble {
     var body: some View {
         Group {
-            // Guard against accessing a deleted or faulted Core Data object.
-            // This can happen when a placeholder is deleted while SwiftUI still
-            // holds a stale reference to it (between FRC delete notification and
-            // the next SwiftUI layout pass).
-            if message.isDeleted || message.managedObjectContext == nil {
-                EmptyView()
-            } else if message.isServiceArtifact || message.isControlArtifact {
+            if message.isServiceArtifact || message.isControlArtifact {
                 // A service/control payload (delivery_receipt JSON, or a session-control
                 // signal like `session_ready`/`session_ping`) that leaked into the
                 // transcript. These are for logs, not the chat — never render a bubble.

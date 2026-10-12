@@ -18,7 +18,7 @@ struct QueuedMessage {
     /// session initialises is replayed through `sendMessage`, and anything this struct drops
     /// is dropped silently — the caption arrives, the files never do.
     let fileURLs: [URL]
-    let replyTo: Message?
+    let replyTo: TranscriptRow?
     let replyToContentOverride: String?
     let timestamp: Date
 
@@ -29,7 +29,7 @@ struct QueuedMessage {
     let placeholderId: String?
 
     init(text: String, attachments: [MediaAttachment] = [], fileURLs: [URL] = [],
-         replyTo: Message? = nil, replyToContentOverride: String? = nil, placeholderId: String? = nil) {
+         replyTo: TranscriptRow? = nil, replyToContentOverride: String? = nil, placeholderId: String? = nil) {
         self.text = text
         self.attachments = attachments
         self.fileURLs = fileURLs
@@ -70,7 +70,7 @@ final class ChatSendCoordinator {
         let attachments: [MediaAttachment]
         let fileURLs: [URL]
         let caption: String
-        let replyTo: Message?
+        let replyTo: TranscriptRow?
     }
     private var pendingMediaUploads: [String: MediaUploadPayload] = [:]
 
@@ -105,7 +105,7 @@ final class ChatSendCoordinator {
         text: String,
         attachments: [MediaAttachment] = [],
         fileURLs: [URL] = [],
-        replyTo: Message? = nil,
+        replyTo: TranscriptRow? = nil,
         replyToContentOverride: String? = nil
     ) {
         Log.info("sendMessage called with \(attachments.count) images, \(fileURLs.count) files", category: "ChatViewModel")
@@ -207,7 +207,7 @@ final class ChatSendCoordinator {
         text: String,
         attachments: [MediaAttachment],
         fileURLs: [URL],
-        replyTo: Message?,
+        replyTo: TranscriptRow?,
         replyToContentOverride: String?,
         recipientId: String,
         currentUserId: String,
@@ -291,7 +291,7 @@ final class ChatSendCoordinator {
         text: String,
         attachments: [MediaAttachment],
         fileURLs: [URL],
-        replyTo: Message?,
+        replyTo: TranscriptRow?,
         replyToContentOverride: String?
     ) {
         if !fileURLs.isEmpty {
@@ -427,7 +427,7 @@ final class ChatSendCoordinator {
     // MARK: - Text message
 
     /// Build a QuotedMessage for a reply, or nil. Shared by text and media sends.
-    func buildQuoted(replyTo: Message?, replyToContentOverride: String?) -> Shared_Proto_Messaging_V1_QuotedMessage? {
+    func buildQuoted(replyTo: TranscriptRow?, replyToContentOverride: String?) -> Shared_Proto_Messaging_V1_QuotedMessage? {
         guard let reply = replyTo else { return nil }
         var quoted = Shared_Proto_Messaging_V1_QuotedMessage()
         quoted.messageID = reply.id
@@ -448,7 +448,7 @@ final class ChatSendCoordinator {
     ///   SenderSync uses the same wire `plaintextData` (not display JSON) — C1c.
     func sendTextMessage(
         text: String,
-        replyTo: Message?,
+        replyTo: TranscriptRow?,
         replyToContentOverride: String? = nil,
         localThumbnails: [Data] = [],
         wirePlaintext: Data? = nil,
@@ -690,7 +690,7 @@ final class ChatSendCoordinator {
     func sendMediaMessage(
         attachments: [MediaAttachment],
         caption: String,
-        replyTo: Message?,
+        replyTo: TranscriptRow?,
         replyToContentOverride: String? = nil
     ) {
         let recipientId = conversation.peerId
@@ -811,7 +811,7 @@ final class ChatSendCoordinator {
     private func sendFileMessage(
         fileURLs: [URL],
         caption: String,
-        replyTo: Message?,
+        replyTo: TranscriptRow?,
         replyToContentOverride: String? = nil
     ) {
         let recipientId = conversation.peerId
@@ -874,7 +874,7 @@ final class ChatSendCoordinator {
     /// uploaded — the pack is public and the recipient fetches it by hash — so there is no
     /// placeholder and no upload task, and the reference is stored typed (CTM1 `messageContent`),
     /// never as a JSON shape in the text.
-    func sendSticker(_ ref: StickerReference, replyTo: Message? = nil) {
+    func sendSticker(_ ref: StickerReference, replyTo: TranscriptRow? = nil) {
         var content = Shared_Proto_Messaging_V1_MessageContent()
         content.sticker = ref.wire
         guard let wirePlaintext = try? content.serializedData(), !wirePlaintext.isEmpty else {
@@ -894,7 +894,7 @@ final class ChatSendCoordinator {
 
     /// Optimistic apply, then the same pipeline as `editMessage`. Never a chat row.
     /// Double-tap likes pass `ReactionReducer.likeEmoji`.
-    func sendReaction(_ message: Message, emoji: String) {
+    func sendReaction(_ message: TranscriptRow, emoji: String) {
         let recipientId = conversation.peerId
         guard let currentUserId = AuthSessionManager.shared.currentUserId else { return }
         let nowMs = Int64(Date().timeIntervalSince1970 * 1000)
@@ -926,7 +926,7 @@ final class ChatSendCoordinator {
         )
 
         Task { [weak self] in
-            guard let self else { return }
+            guard self != nil else { return }
             do {
                 let actionId = UUID().uuidString.lowercased()
                 let chunkPlan = ChunkedMessageSender.shared.buildPlan(
@@ -974,13 +974,13 @@ final class ChatSendCoordinator {
 
     // MARK: - Edit
 
-    func editMessage(_ message: Message, newText: String, editingBinding: @escaping () -> Void) {
+    func editMessage(_ message: TranscriptRow, newText: String, editingBinding: @escaping () -> Void) {
         let recipientId = conversation.peerId
         guard let currentUserId = AuthSessionManager.shared.currentUserId else { return }
         // For a media message, editing the caption must rebuild the album (binary wire +
         // local JSON) — sending plain text would replace the descriptor and destroy the media.
         // Read legacyBody here (current actor) before hopping onto the Task.
-        let storedPayload = MessageDisplayCache.shared.payloadData(for: message)
+        let storedPayload = MessageDisplayCache.shared.payloadData(messageId: message.id)
         let mediaEdit = MediaWireCodec.editedCaptionPayload(storedPlaintext: storedPayload, newCaption: newText)
         Task { [weak self] in
             guard let self else { return }
@@ -1042,7 +1042,7 @@ final class ChatSendCoordinator {
 
     // MARK: - Retry
 
-    func retryMessage(_ message: Message) {
+    func retryMessage(_ message: TranscriptRow) {
         if let payload = pendingMediaUploads[message.id] {
             pendingMediaUploads.removeValue(forKey: message.id)
             persistenceService.deleteMessage(id: message.id, in: viewContext)
@@ -1084,7 +1084,7 @@ final class ChatSendCoordinator {
         decryptedContent: String,
         isSentByMe: Bool,
         status: DeliveryStatus,
-        replyTo: Message? = nil,
+        replyTo: TranscriptRow? = nil,
         replyToContentOverride: String? = nil,
         localThumbnails: [Data] = [],
         suiteId: UInt16,
