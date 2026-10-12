@@ -199,12 +199,12 @@ struct GalleryStartItem: Identifiable {
 
 struct GalleryEntry: Identifiable {
     let id: String          // "\(messageId)_\(itemIndex)"
-    let message: Message
+    let message: TranscriptRow
     let itemIndex: Int
     let mediaItem: [String: Any]
 
     /// Expand each message into per-item entries. Images and videos are shown; audio is skipped.
-    static func expand(_ messages: [Message]) -> [GalleryEntry] {
+    static func expand(_ messages: [TranscriptRow]) -> [GalleryEntry] {
         messages.flatMap { msg -> [GalleryEntry] in
             guard let mc = parseMediaContent(from: msg.legacyBody), !mc.mediaItems.isEmpty else {
                 return [GalleryEntry(id: "\(msg.id)_0", message: msg, itemIndex: 0, mediaItem: [:])]
@@ -221,7 +221,7 @@ struct GalleryEntry: Identifiable {
     var isVideo: Bool { (mediaItem["mediaType"] as? String)?.hasPrefix("video/") == true }
 
     /// Prefer the tapped album tile; fall back to first page of that message if the index is gone.
-    static func initialId(messageId: String, itemIndex: Int, in messages: [Message]) -> String {
+    static func initialId(messageId: String, itemIndex: Int, in messages: [TranscriptRow]) -> String {
         let preferred = "\(messageId)_\(itemIndex)"
         let validIds = Set(expand(messages).map(\.id))
         if validIds.contains(preferred) { return preferred }
@@ -233,7 +233,7 @@ struct GalleryEntry: Identifiable {
 // MARK: - Gallery Viewer
 
 struct MediaGalleryViewer: View {
-    let messages: [Message]
+    let messages: [TranscriptRow]
     let initialMessageId: String
     let initialItemIndex: Int
     @Binding var isPresented: Bool
@@ -253,7 +253,7 @@ struct MediaGalleryViewer: View {
     private static func isVideoEntry(_ entry: GalleryEntry) -> Bool { entry.isVideo }
 
     init(
-        messages: [Message],
+        messages: [TranscriptRow],
         initialMessageId: String,
         initialItemIndex: Int = 0,
         isPresented: Binding<Bool>
@@ -449,7 +449,7 @@ struct MediaGalleryViewer: View {
 // MARK: - Gallery Page
 
 struct MediaGalleryPage: View {
-    let message: Message
+    let message: TranscriptRow
     let itemIndex: Int
     let mediaItem: [String: Any]
     /// Shared with the gallery container — drives the drag-to-dismiss offset/opacity.
@@ -466,9 +466,6 @@ struct MediaGalleryPage: View {
     @State private var lastOffset: CGSize = .zero
 
     var body: some View {
-        guard !message.isDeleted, message.managedObjectContext != nil else {
-            return AnyView(Color.black)
-        }
         return AnyView(GeometryReader { geo in
             ZStack {
                 Color.black
@@ -559,8 +556,6 @@ struct MediaGalleryPage: View {
     // MARK: Loading
 
     private func loadImage() {
-        guard !message.isDeleted, message.managedObjectContext != nil else { return }
-
         // Already cached
         if let cached = MediaImageCache.shared.original(for: message.id, at: itemIndex) {
             image = cached
@@ -662,7 +657,7 @@ private struct DragToDismiss: ViewModifier {
 /// Full-screen video playback page. Downloads + decrypts the clip to a temp file (AVPlayer
 /// needs a URL), showing download progress, then autoplays with native transport controls.
 struct GalleryVideoPage: View {
-    let message: Message
+    let message: TranscriptRow
     let itemIndex: Int
     let mediaItem: [String: Any]
     /// Playback speed; applied to the player whenever it changes.
@@ -684,9 +679,6 @@ struct GalleryVideoPage: View {
     @State private var failed = false
 
     var body: some View {
-        guard !message.isDeleted, message.managedObjectContext != nil else {
-            return AnyView(Color.black)
-        }
         return AnyView(
             ZStack {
                 Color.black.ignoresSafeArea()

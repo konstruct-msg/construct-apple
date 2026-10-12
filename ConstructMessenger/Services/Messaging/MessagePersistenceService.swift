@@ -26,7 +26,7 @@ class MessagePersistenceService {
         isSentByMe: Bool,
         status: DeliveryStatus,
         chatId: String,
-        replyTo: Message? = nil,
+        replyTo: TranscriptRow? = nil,
         replyToContentOverride: String? = nil,
         localThumbnails: [Data] = [],
         suiteId: UInt16,
@@ -213,7 +213,7 @@ class MessagePersistenceService {
         toUserId: String,
         caption: String,
         items: [UploadPlaceholderItem],
-        replyTo: Message?,
+        replyTo: TranscriptRow?,
         replyToContentOverride: String? = nil,
         chatId: String,
         in context: NSManagedObjectContext
@@ -388,20 +388,6 @@ class MessagePersistenceService {
 
     // MARK: - Message Deletion
     
-    /// Delete a single message from Core Data
-    /// - Parameters:
-    ///   - message: Message to delete
-    ///   - chatId: The chat it belongs to
-    ///   - context: Core Data context
-    /// - Throws: Core Data error if save fails
-    func deleteMessage(_ message: Message, chatId: String, in context: NSManagedObjectContext) throws {
-        guard !message.isDeleted else {
-            Log.error("Message is already deleted", category: "MessagePersistenceService")
-            throw NSError(domain: "MessagePersistence", code: 1, userInfo: [NSLocalizedDescriptionKey: "Invalid message"])
-        }
-        try deleteMessages(withIds: [message.id], chatId: chatId, in: context)
-    }
-
     /// Delete messages by id, through the repository, then recompute the chat's preview from what
     /// is left. The view context drops the rows when it merges the repository's save.
     func deleteMessages(withIds messageIds: Set<String>, chatId: String, in context: NSManagedObjectContext) throws {

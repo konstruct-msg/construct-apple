@@ -60,6 +60,10 @@ protocol MessageStore: Sendable {
     /// held, `nil` for the newest page — oldest first.
     func messages(inChat chatId: String, before: (orderKey: String, id: String)?, limit: Int) throws -> [MessageRecord]
 
+    /// Up to `limit` messages of a chat from `from` — `(orderKey, id)`, included — onwards, oldest
+    /// first: the window an open transcript holds, read again after a write (`messages_from`).
+    func messages(inChat chatId: String, from: (orderKey: String, id: String), limit: Int) throws -> [MessageRecord]
+
     /// How many messages the chat holds, every kind — the activity Synapses ranks a contact by
     /// (`chat_message_count`).
     func messageCount(inChat chatId: String) throws -> Int
@@ -146,6 +150,25 @@ final class CoreDataMessageStore: MessageStore, @unchecked Sendable {
             ]
             req.fetchLimit = limit
             return try context.fetch(req).compactMap(MessageRecord.init(row:)).reversed()
+        }
+    }
+
+    func messages(inChat chatId: String, from: (orderKey: String, id: String), limit: Int) throws -> [MessageRecord] {
+        try run { context in
+            let req = Message.fetchRequest()
+            req.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [
+                NSPredicate(format: "chat.id == %@", chatId),
+                NSPredicate(
+                    format: "serverOrderKey > %@ OR (serverOrderKey == %@ AND id >= %@)",
+                    from.orderKey, from.orderKey, from.id
+                ),
+            ])
+            req.sortDescriptors = [
+                NSSortDescriptor(key: "serverOrderKey", ascending: true),
+                NSSortDescriptor(key: "id", ascending: true),
+            ]
+            req.fetchLimit = limit
+            return try context.fetch(req).compactMap(MessageRecord.init(row:))
         }
     }
 
@@ -377,6 +400,13 @@ final class LocalStoreMessageStore: MessageStore, @unchecked Sendable {
     func messages(inChat chatId: String, before: (orderKey: String, id: String)?, limit: Int) throws -> [MessageRecord] {
         try store.messagesBefore(
             chatId: chatId, beforeOrderKey: before?.orderKey, beforeId: before?.id.lowercased(),
+            limit: UInt32(clamping: limit)
+        ).map { MessageRecord($0) }
+    }
+
+    func messages(inChat chatId: String, from: (orderKey: String, id: String), limit: Int) throws -> [MessageRecord] {
+        try store.messagesFrom(
+            chatId: chatId, fromOrderKey: from.orderKey, fromId: from.id.lowercased(),
             limit: UInt32(clamping: limit)
         ).map { MessageRecord($0) }
     }

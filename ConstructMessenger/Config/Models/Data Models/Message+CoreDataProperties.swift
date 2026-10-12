@@ -82,6 +82,17 @@ enum MessageContentType: Int16 {
         return .regular
     }
 
+    /// A delivery receipt persisted as text — `{"type":"delivery_receipt",…}` — by a build from
+    /// before receipts were routed by content type. Never a bubble. The string pre-check keeps
+    /// the JSON parse off ordinary messages.
+    static func isLegacyDeliveryReceipt(_ text: String) -> Bool {
+        guard text.hasPrefix("{"), text.contains("\"delivery_receipt\"") else { return false }
+        guard let data = text.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else { return false }
+        return (json["type"] as? String) == "delivery_receipt"
+    }
+
     /// Single source of truth for "this decrypted plaintext is an internal control
     /// signal that must NEVER render as a chat bubble". Covers every handshake/session
     /// marker emitted by current and legacy clients (with or without `__` framing).

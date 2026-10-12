@@ -21,7 +21,7 @@ class MessageRetryManager {
     ///   - context: Core Data context
     ///   - onError: Callback for error messages
     func retryMessage(
-        _ message: Message,
+        _ message: TranscriptRow,
         recipientId: String,
         context: NSManagedObjectContext,
         onError: @escaping (String) -> Void
@@ -33,7 +33,7 @@ class MessageRetryManager {
         }
 
         // Ensure decrypted content exists before proceeding
-        guard message.hasDecryptedContent else {
+        guard !MessageDisplayCache.shared.payloadData(messageId: message.id).isEmpty else {
             Log.error("Cannot retry - no decrypted content", category: "MessageRetryManager")
             return
         }
@@ -524,7 +524,7 @@ class MessageRetryManager {
                     await MainActor.run {
                         // The message must still be there; everything below acts on it.
                         guard (try? LocalRepositories.messages.message(messageId)) != nil else { return }
-                        recordOutcome(messageId, .queued)
+                        self.recordOutcome(messageId, .queued)
                         Log.info("Batch retry: sealed send blocked (cannot seal) — queued \(messageId.prefix(8))…, nudging bundle fetch", category: "MessageRetryManager")
                         SessionLifecycleController.shared.reestablishSessionForQueuedOutbound(to: recipientId)
                     }
@@ -540,7 +540,7 @@ class MessageRetryManager {
                             }
                             return false
                         }()
-                        recordOutcome(messageId, isRetryableTransport ? .queued : .failed)
+                        self.recordOutcome(messageId, isRetryableTransport ? .queued : .failed)
                     }
                 }
             }
@@ -551,7 +551,7 @@ class MessageRetryManager {
                 await MainActor.run {
                     // The message must still be there; everything below acts on it.
                     guard (try? LocalRepositories.messages.message(messageId)) != nil else { return }
-                    recordOutcome(messageId, status)
+                    self.recordOutcome(messageId, status)
                     if status == .sent || status == .delivered || status == .failed {
                         OutgoingWirePayloadStore.shared.remove(baseMessageId: messageId)
                     }
