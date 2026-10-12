@@ -49,6 +49,22 @@ enum LocalStoreKey {
         return cached
     }
 
+    /// Drops the in-memory copy; the next `current()` reads the Keychain again. CryptoKit zeroes a
+    /// `SymmetricKey`'s storage when it is released. Called when the app leaves the screen
+    /// (`UnsealedMemory`), so a suspended app does not hold the key that opens its whole store.
+    /// Whether the key is held in memory now — for tests of `UnsealedMemory`.
+    static var isCached: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return cached != nil
+    }
+
+    static func forgetCached() {
+        lock.lock()
+        defer { lock.unlock() }
+        cached = nil
+    }
+
     static func destroy() {
         lock.lock()
         defer { lock.unlock() }
