@@ -113,6 +113,18 @@ protocol MessageStore: Sendable {
     func delete(_ ids: Set<String>) throws
 }
 
+extension MessageStore {
+    /// The peer has the message, so it is not waiting for a position any more: a row of ours
+    /// still on the `pending` key moves to its own time. Without this a send whose acknowledgement
+    /// was lost — the receipt came, the RPC then failed — kept the pending key for good and sat
+    /// below every later message (2026-10-12). The acknowledgement, if it still comes, moves the
+    /// row on to the server's key. False when the row was not pending.
+    @discardableResult func settleOrder(of record: MessageRecord) throws -> Bool {
+        guard ServerMessageOrder.isPending(record.orderKey) else { return false }
+        return try setOrderKey(record.id, ServerMessageOrder.local(timestamp: record.timestamp, messageId: record.id))
+    }
+}
+
 /// `Message` rows. Each call runs on a fresh background context, for the reason
 /// `CoreDataPeerDeviceStore` gives.
 final class CoreDataMessageStore: MessageStore, @unchecked Sendable {
