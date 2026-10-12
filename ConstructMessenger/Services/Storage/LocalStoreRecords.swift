@@ -126,3 +126,24 @@ extension ChatRecord {
         )
     }
 }
+
+extension CallRecord {
+    init(_ row: LocalCall) {
+        self.init(
+            id: row.id, peerUserId: row.peerUserId, peerName: row.peerName,
+            direction: Direction(rawValue: row.direction) ?? .outgoing,
+            status: Status(rawValue: row.status) ?? .completed,
+            startedAt: row.startedAt.map(Date.init(unixMs:)), endedAt: row.endedAt.map(Date.init(unixMs:)),
+            durationSeconds: row.durationSeconds
+        )
+    }
+
+    var local: LocalCall {
+        LocalCall(
+            id: id, peerUserId: peerUserId, peerName: peerName,
+            direction: direction.rawValue, status: status.rawValue,
+            startedAt: startedAt?.unixMs, endedAt: endedAt?.unixMs,
+            durationSeconds: durationSeconds
+        )
+    }
+}

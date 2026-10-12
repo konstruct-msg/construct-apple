@@ -82,6 +82,10 @@ enum LocalRepositories {
         calls = CoreDataCallStore(container: container ?? PersistenceController.shared.container)
     }
 
+    static func useCallsForTesting(_ store: any CallStore) {
+        calls = store
+    }
+
     static func useIssuedInvitesForTesting(_ store: (any IssuedInviteStore)?) {
         issuedInvites = store ?? DefaultsIssuedInviteStore()
     }

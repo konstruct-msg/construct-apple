@@ -58,6 +58,17 @@ class CallStoreTests: XCTestCase {
         XCTAssertEqual(try store.calls(limit: 2).map(\.id), ["new", "old"])
     }
 
+    /// Clearing the log is one statement that says how much it held. Mutations (Core Data): skip
+    /// the delete — the log stays; answer 0 — the count reddens.
+    func testClearingTheLogRemovesEveryEntryAndCountsThem() throws {
+        let store = makeStore()
+        try store.upsert(call("a", at: 100))
+        try store.upsert(call("b", at: nil))
+        XCTAssertEqual(try store.deleteAll(), 2)
+        XCTAssertEqual(try store.calls(limit: 10), [])
+        XCTAssertEqual(try store.deleteAll(), 0)
+    }
+
     func testACallIsDeletedByIdAndSaysWhetherItWasThere() throws {
         let store = makeStore()
         try store.upsert(call("keep", at: 100))
@@ -84,7 +95,7 @@ class CallStoreTests: XCTestCase {
     /// Mutation: the service writes somewhere else — this reddens.
     @MainActor
     func testTheEndOfACallIsLoggedInTheSeam() throws {
-        LocalRepositories.useCallsForTesting(container)
+        LocalRepositories.useCallsForTesting(makeStore())
         let session = CallSession(id: "call-x", uuid: UUID(), peerUserId: "peer", peerName: "Bob", direction: .outgoing)
         CallHistoryService.shared.record(
             session: session, status: .completed, startedAt: Date(timeIntervalSince1970: 100), durationSeconds: 42
@@ -116,5 +127,24 @@ class CallStoreTests: XCTestCase {
 
         XCTAssertEqual(summary.conflictKeepExisting, 1)
         XCTAssertEqual(try store.calls(limit: 10).map(\.status), [.completed])
+    }
+}
+
+/// The same cases on the crate. One store per test: `makeStore()` is asked more than once.
+final class LocalStoreCallStoreTests: CallStoreTests {
+    private var session: LocalStoreSession!
+
+    override func setUp() {
+        super.setUp()
+        session = .inMemoryForTesting()
+    }
+
+    override func tearDown() {
+        session = nil
+        super.tearDown()
+    }
+
+    override func makeStore() -> any CallStore {
+        LocalStoreCallStore(session: session)
     }
 }
