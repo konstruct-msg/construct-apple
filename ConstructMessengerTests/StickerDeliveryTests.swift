@@ -52,7 +52,7 @@ final class StickerDeliveryTests: XCTestCase {
         for site in ["assembled", "raw"] {
             let result = site == "assembled"
                 ? ChunkedMessageReassembler.shared.decodeAssembled(content(bad), e2eMessageId: nil)
-                : ChunkedMessageReassembler.shared.process(data: content(bad), envelopeId: "env-\(UUID().uuidString)")
+                : ChunkedMessageReassembler.shared.process(data: content(bad), senderId: "sender-\(UUID().uuidString)")
             guard case .invalid(let why) = result else {
                 XCTFail("\(site): expected .invalid, got \(result)"); continue
             }

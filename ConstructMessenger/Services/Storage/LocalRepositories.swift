@@ -33,6 +33,17 @@ enum LocalRepositories {
     private(set) nonisolated(unsafe) static var reactions: any ReactionStore =
         CoreDataReactionStore(container: PersistenceController.shared.container)
 
+    private(set) nonisolated(unsafe) static var processedMessages: any ProcessedMessageStore =
+        CoreDataProcessedMessageStore(container: PersistenceController.shared.container)
+
+    private(set) nonisolated(unsafe) static var calls: any CallStore =
+        CoreDataCallStore(container: PersistenceController.shared.container)
+    private(set) nonisolated(unsafe) static var pendingChunks: any PendingChunkStore = FilePendingChunkStore()
+
+    private(set) nonisolated(unsafe) static var keyValue: any KeyValueStore = DefaultsKeyValueStore()
+
+    private(set) nonisolated(unsafe) static var issuedInvites: any IssuedInviteStore = DefaultsIssuedInviteStore()
+
     #if DEBUG
     /// A test's own store (an in-memory container); `nil` restores the app's.
     static func usePeerDevicesForTesting(_ store: (any PeerDeviceStore)?) {
@@ -56,6 +67,26 @@ enum LocalRepositories {
 
     static func useReactionsForTesting(_ container: NSPersistentContainer?) {
         reactions = CoreDataReactionStore(container: container ?? PersistenceController.shared.container)
+    }
+
+    static func useProcessedMessagesForTesting(_ store: (any ProcessedMessageStore)?) {
+        processedMessages = store ?? CoreDataProcessedMessageStore(container: PersistenceController.shared.container)
+    }
+
+    static func useCallsForTesting(_ container: NSPersistentContainer?) {
+        calls = CoreDataCallStore(container: container ?? PersistenceController.shared.container)
+    }
+
+    static func useIssuedInvitesForTesting(_ store: (any IssuedInviteStore)?) {
+        issuedInvites = store ?? DefaultsIssuedInviteStore()
+    }
+
+    static func useKeyValueForTesting(_ store: (any KeyValueStore)?) {
+        keyValue = store ?? DefaultsKeyValueStore()
+    }
+
+    static func usePendingChunksForTesting(_ store: (any PendingChunkStore)?) {
+        pendingChunks = store ?? FilePendingChunkStore()
     }
 
     static func useServerMessageIdsForTesting(_ store: (any ServerMessageIdStore)?) {
