@@ -116,6 +116,24 @@ final class LocalStoreSwitchTests: XCTestCase {
         )))
     }
 
+    /// A journal that outlives its store (`InviteJournal.shared`) forgets the last account's codes
+    /// when the store is replaced, rather than showing them to the next one until a restart.
+    ///
+    /// Mutation: drop the journal's `.localStoreReplaced` observer — the old code stays listed and
+    /// this reddens.
+    @MainActor
+    func testAReplacedStoreLeavesTheJournalWithNothingOfTheLastAccount() {
+        LocalRepositories.useLocalStoreForTesting(.inMemoryForTesting())
+        let journal = InviteJournal()
+        journal.recordCopiedLink(jti: UUID().uuidString.lowercased(), at: Date(), ttl: 600)
+        XCTAssertEqual(journal.live().count, 1, "fixture: one act held")
+
+        LocalRepositories.useLocalStoreForTesting(.inMemoryForTesting())
+        NotificationCenter.default.post(name: .localStoreReplaced, object: nil)
+
+        XCTAssertEqual(journal.live().count, 0, "the new store holds no code, and neither does the journal")
+    }
+
     /// A wiped store ends the streams the screens read: a list waiting on the old store's changes
     /// is not left waiting forever after the store under it was replaced.
     ///
