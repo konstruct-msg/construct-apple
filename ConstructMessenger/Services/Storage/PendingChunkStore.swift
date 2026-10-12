@@ -203,3 +203,49 @@ final class FilePendingChunkStore: PendingChunkStore, @unchecked Sendable {
         return try body()
     }
 }
+
+/// The crate's `pending_chunks`, keyed by sender and message as here. Off until step 4.
+final class LocalStorePendingChunkStore: PendingChunkStore, @unchecked Sendable {
+
+    private let store: LocalStore
+
+    init(session: LocalStoreSession) {
+        self.store = session.store
+    }
+
+    func add(_ chunk: PendingChunkRecord) throws -> Bool {
+        try store.addPendingChunk(chunk: LocalPendingChunk(
+            senderId: chunk.senderId, messageId: chunk.messageId,
+            chunkIndex: UInt32(chunk.chunkIndex), totalChunks: UInt32(chunk.totalChunks),
+            plaintextLength: UInt64(chunk.plaintextLength), contentType: chunk.contentType,
+            payload: chunk.payload,
+            // Left out on purpose: `PendingChunkRecord` does not carry the envelope, and nothing
+            // here reads it back.
+            envelopeId: nil,
+            receivedAt: chunk.receivedAt.unixMs
+        ))
+    }
+
+    func chunks(senderId: String, messageId: String) throws -> [PendingChunkRecord] {
+        try store.pendingChunks(senderId: senderId, messageId: messageId).map {
+            PendingChunkRecord(
+                senderId: $0.senderId, messageId: $0.messageId,
+                chunkIndex: UInt16(clamping: $0.chunkIndex), totalChunks: UInt16(clamping: $0.totalChunks),
+                plaintextLength: Int(clamping: $0.plaintextLength), contentType: $0.contentType,
+                payload: $0.payload, receivedAt: Date(unixMs: $0.receivedAt)
+            )
+        }
+    }
+
+    func count(senderId: String, messageId: String) throws -> Int {
+        Int(try store.pendingChunkCount(senderId: senderId, messageId: messageId))
+    }
+
+    func messages() throws -> [PendingChunkMessage] {
+        try store.pendingChunkMessages().map { PendingChunkMessage(senderId: $0.senderId, messageId: $0.messageId) }
+    }
+
+    func delete(senderId: String, messageId: String) throws {
+        try store.deletePendingChunks(senderId: senderId, messageId: messageId)
+    }
+}
