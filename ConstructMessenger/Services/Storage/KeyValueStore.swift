@@ -52,3 +52,29 @@ final class DefaultsKeyValueStore: KeyValueStore, @unchecked Sendable {
             .sorted { $0.key < $1.key }
     }
 }
+
+/// The crate's `kv`, encrypted with the rest of the store. Off until step 4.
+final class LocalStoreKeyValueStore: KeyValueStore, @unchecked Sendable {
+
+    private let store: LocalStore
+
+    init(session: LocalStoreSession) {
+        self.store = session.store
+    }
+
+    func put(_ key: String, _ value: Data) throws {
+        try store.put(key: key, value: value)
+    }
+
+    func get(_ key: String) throws -> Data? {
+        try store.get(key: key)
+    }
+
+    func remove(_ key: String) throws {
+        try store.remove(key: key)
+    }
+
+    func entries(withPrefix prefix: String) throws -> [(key: String, value: Data)] {
+        try store.entriesWithPrefix(prefix: prefix).map { (key: $0.key, value: $0.value) }
+    }
+}

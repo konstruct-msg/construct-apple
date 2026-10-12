@@ -72,6 +72,68 @@ final class LocalStoreSwitchTests: XCTestCase {
         XCTAssertFalse(PersistentACKStore.shared.isProcessedInMemory(messageId))
     }
 
+    /// The service tables are on the crate too: the fan-out retry queue's kv entry, an issued
+    /// invite and a pending chunk land in the one store, not in `UserDefaults` or sealed files.
+    ///
+    /// Mutation: leave any of the three on its iOS store in `Backing.localStore` — its assertion
+    /// reddens.
+    @MainActor
+    func testTheServiceTablesLandOnTheCrate() throws {
+        let session = LocalStoreSession.inMemoryForTesting()
+        LocalRepositories.useLocalStoreForTesting(session)
+
+        FanoutRetryQueue().enqueue(baseMessageId: "m-1", recipientUserId: "account-1", senderUserId: "me", owed: ["device-1"])
+        XCTAssertNotNil(try session.store.get(key: "construct.fanoutRetryQueue.v1"), "the fan-out queue is in the store's kv")
+
+        InviteJournal().recordCopiedLink(jti: "jti-\(UUID().uuidString.lowercased())", at: Date(), ttl: 600)
+        XCTAssertEqual(try session.store.issuedInvites().count, 1, "the invite is a row of the store")
+
+        let messageId = UUID().uuidString.lowercased()
+        try LocalRepositories.pendingChunks.add(PendingChunkRecord(
+            senderId: "alice", messageId: messageId, chunkIndex: 0, totalChunks: 2, plaintextLength: 8,
+            contentType: 1, payload: Data(repeating: 1, count: 4), receivedAt: Date()
+        ))
+        XCTAssertEqual(try session.store.pendingChunkCount(senderId: "alice", messageId: messageId), 1, "the chunk is in the store")
+    }
+
+    /// A store that would not open takes no service write either: it throws, rather than the
+    /// write going to `UserDefaults` or a file while the screen says the store is unreadable.
+    ///
+    /// Mutation: build the three from their iOS stores in `Backing.localStore` — the writes succeed
+    /// and this reddens.
+    func testAClosedStoreTakesNoServiceWrite() {
+        LocalRepositories.useLocalStoreForTesting(.closed())
+        let key = "closed-store-probe-\(UUID().uuidString)"
+        defer { UserDefaults.standard.removeObject(forKey: key) }
+
+        XCTAssertThrowsError(try LocalRepositories.keyValue.put(key, Data([1])))
+        XCTAssertThrowsError(try LocalRepositories.issuedInvites.record(IssuedInviteRecord(
+            jti: key, kind: IssuedInviteRecord.link, issuedAt: Date(), ttlSeconds: 600, sitting: nil
+        )))
+        XCTAssertThrowsError(try LocalRepositories.pendingChunks.add(PendingChunkRecord(
+            senderId: "alice", messageId: UUID().uuidString.lowercased(), chunkIndex: 0, totalChunks: 2,
+            plaintextLength: 8, contentType: 1, payload: Data([1]), receivedAt: Date()
+        )))
+    }
+
+    /// A journal that outlives its store (`InviteJournal.shared`) forgets the last account's codes
+    /// when the store is replaced, rather than showing them to the next one until a restart.
+    ///
+    /// Mutation: drop the journal's `.localStoreReplaced` observer — the old code stays listed and
+    /// this reddens.
+    @MainActor
+    func testAReplacedStoreLeavesTheJournalWithNothingOfTheLastAccount() {
+        LocalRepositories.useLocalStoreForTesting(.inMemoryForTesting())
+        let journal = InviteJournal()
+        journal.recordCopiedLink(jti: UUID().uuidString.lowercased(), at: Date(), ttl: 600)
+        XCTAssertEqual(journal.live().count, 1, "fixture: one act held")
+
+        LocalRepositories.useLocalStoreForTesting(.inMemoryForTesting())
+        NotificationCenter.default.post(name: .localStoreReplaced, object: nil)
+
+        XCTAssertEqual(journal.live().count, 0, "the new store holds no code, and neither does the journal")
+    }
+
     /// A wiped store ends the streams the screens read: a list waiting on the old store's changes
     /// is not left waiting forever after the store under it was replaced.
     ///

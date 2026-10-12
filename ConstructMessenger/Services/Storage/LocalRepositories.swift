@@ -25,7 +25,12 @@ enum LocalRepositories {
         let reactions: any ReactionStore
         let processedMessages: any ProcessedMessageStore
         let calls: any CallStore
+        let pendingChunks: any PendingChunkStore
+        let keyValue: any KeyValueStore
+        let issuedInvites: any IssuedInviteStore
 
+        /// iOS: Core Data, and the three service stores where they have always been — sealed files
+        /// for chunks, `UserDefaults` for the key-value pairs and the invite journal.
         static func coreData(_ container: NSPersistentContainer) -> Backing {
             let contacts = CoreDataContactStore(container: container)
             return Backing(
@@ -36,7 +41,10 @@ enum LocalRepositories {
                 messages: CoreDataMessageStore(container: container),
                 reactions: CoreDataReactionStore(container: container),
                 processedMessages: CoreDataProcessedMessageStore(container: container),
-                calls: CoreDataCallStore(container: container)
+                calls: CoreDataCallStore(container: container),
+                pendingChunks: FilePendingChunkStore(),
+                keyValue: DefaultsKeyValueStore(),
+                issuedInvites: DefaultsIssuedInviteStore()
             )
         }
 
@@ -50,7 +58,10 @@ enum LocalRepositories {
                 messages: LocalStoreMessageStore(session: session),
                 reactions: LocalStoreReactionStore(session: session),
                 processedMessages: LocalStoreProcessedMessageStore(session: session),
-                calls: LocalStoreCallStore(session: session)
+                calls: LocalStoreCallStore(session: session),
+                pendingChunks: LocalStorePendingChunkStore(session: session),
+                keyValue: LocalStoreKeyValueStore(session: session),
+                issuedInvites: LocalStoreIssuedInviteStore(session: session)
             )
         }
     }
@@ -137,6 +148,9 @@ enum LocalRepositories {
         _reactions = backing.reactions
         _processedMessages = backing.processedMessages
         _calls = backing.calls
+        _pendingChunks = backing.pendingChunks
+        _keyValue = backing.keyValue
+        _issuedInvites = backing.issuedInvites
     }
 
     // Read under the lock: `replaceAppStore` swaps them all while the app runs, and an
@@ -150,6 +164,9 @@ enum LocalRepositories {
     static var reactions: any ReactionStore { lock.withLock { _reactions } }
     static var processedMessages: any ProcessedMessageStore { lock.withLock { _processedMessages } }
     static var calls: any CallStore { lock.withLock { _calls } }
+    static var pendingChunks: any PendingChunkStore { lock.withLock { _pendingChunks } }
+    static var keyValue: any KeyValueStore { lock.withLock { _keyValue } }
+    static var issuedInvites: any IssuedInviteStore { lock.withLock { _issuedInvites } }
 
     nonisolated(unsafe) private static var _peerDevices: any PeerDeviceStore = initial.peerDevices
     nonisolated(unsafe) private static var _serverMessageIds: any ServerMessageIdStore = initial.serverMessageIds
@@ -160,12 +177,9 @@ enum LocalRepositories {
     nonisolated(unsafe) private static var _reactions: any ReactionStore = initial.reactions
     nonisolated(unsafe) private static var _processedMessages: any ProcessedMessageStore = initial.processedMessages
     nonisolated(unsafe) private static var _calls: any CallStore = initial.calls
-
-    private(set) nonisolated(unsafe) static var pendingChunks: any PendingChunkStore = FilePendingChunkStore()
-
-    private(set) nonisolated(unsafe) static var keyValue: any KeyValueStore = DefaultsKeyValueStore()
-
-    private(set) nonisolated(unsafe) static var issuedInvites: any IssuedInviteStore = DefaultsIssuedInviteStore()
+    nonisolated(unsafe) private static var _pendingChunks: any PendingChunkStore = initial.pendingChunks
+    nonisolated(unsafe) private static var _keyValue: any KeyValueStore = initial.keyValue
+    nonisolated(unsafe) private static var _issuedInvites: any IssuedInviteStore = initial.issuedInvites
 
     #if DEBUG
     /// Every repository on `session`, as macOS runs — a test that drives a whole path on the
@@ -216,15 +230,15 @@ enum LocalRepositories {
     }
 
     static func useIssuedInvitesForTesting(_ store: (any IssuedInviteStore)?) {
-        issuedInvites = store ?? DefaultsIssuedInviteStore()
+        _issuedInvites = store ?? initial.issuedInvites
     }
 
     static func useKeyValueForTesting(_ store: (any KeyValueStore)?) {
-        keyValue = store ?? DefaultsKeyValueStore()
+        _keyValue = store ?? initial.keyValue
     }
 
     static func usePendingChunksForTesting(_ store: (any PendingChunkStore)?) {
-        pendingChunks = store ?? FilePendingChunkStore()
+        _pendingChunks = store ?? initial.pendingChunks
     }
 
     static func useServerMessageIdsForTesting(_ store: (any ServerMessageIdStore)?) {

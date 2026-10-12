@@ -102,3 +102,10 @@ class IssuedInviteStoreTests: XCTestCase {
         XCTAssertEqual(reopened.live(at: now.addingTimeInterval(90)).map(\.mints.count).sorted(), [1, 2])
     }
 }
+
+/// The same cases on the crate's table.
+final class LocalStoreIssuedInviteStoreTests: IssuedInviteStoreTests {
+    override func makeStore() -> any IssuedInviteStore {
+        LocalStoreIssuedInviteStore(session: .inMemoryForTesting())
+    }
+}
