@@ -48,7 +48,13 @@ enum LocalDataWipe {
         LocalStoreKey.destroy()
         // Open handles next: a file removed under an open SQLite handle keeps being written.
         MessageKeyStore.shared.close()
+        #if os(macOS)
+        // The account's store is construct-store: closed and removed, the sweep, then an empty
+        // store under a new key for whoever signs in next. Core Data is in memory here.
+        LocalRepositories.replaceAppStore(between: sweepContainer)
+        #else
         PersistenceController.shared.replaceStoreWithEmpty { sweepContainer() }
+        #endif
 
         LogCollector.shared.clearLogs()
         if let logs = directory(.documents)?.appendingPathComponent("Logs", isDirectory: true) {

@@ -664,7 +664,7 @@ class AuthViewModel {
         guard !userId.isEmpty else { return }
 
         let stored = LocalStoreOwnership.storedOwner()
-        let hasData = localStoreHasUserData()
+        let hasData = localStoreHasUserData(previousOwner: stored)
 
         switch LocalStoreOwnership.disposition(
             storedOwner: stored,
@@ -686,16 +686,14 @@ class AuthViewModel {
 
     /// True when the store holds anything that identifies people or conversations.
     ///
-    /// Deliberately narrow: these three are what leaked. Counting `Message` alone would miss a
-    /// contact list with no transcript, which is the more sensitive half.
-    private func localStoreHasUserData() -> Bool {
-        guard let context = PersistenceController.shared.safeViewContext else { return false }
-        for entityName in ["User", "Chat", "Message"] {
-            let request = NSFetchRequest<NSFetchRequestResult>(entityName: entityName)
-            request.fetchLimit = 1
-            if let count = try? context.count(for: request), count > 0 { return true }
-        }
-        return false
+    /// Deliberately narrow: people (a contact list with no transcript is the more sensitive half),
+    /// chats (a message needs its chat), and the last owner's own profile, which the crate keeps
+    /// apart from the people and Core Data keeps among them.
+    private func localStoreHasUserData(previousOwner: String?) -> Bool {
+        let people = (try? LocalRepositories.contacts.everyContact(except: nil)) ?? []
+        let chats = (try? LocalRepositories.chats.chats()) ?? []
+        let ownProfile = previousOwner.flatMap { try? LocalRepositories.ownProfile.profile(accountId: $0) }
+        return !people.isEmpty || !chats.isEmpty || ownProfile != nil
     }
 
     /// Deletes every entity the previous identity could have left behind.
@@ -704,6 +702,10 @@ class AuthViewModel {
     /// paths having three different lists is how `performLocalSignOut` ended up never clearing
     /// Core Data at all.
     private func wipeLocalStoreContents() {
+        #if os(macOS)
+        // The store goes whole, under its key, and an empty one replaces it.
+        LocalRepositories.replaceAppStore()
+        #else
         guard let context = PersistenceController.shared.safeViewContext else {
             Log.error("Local store wipe skipped — no persistent store", category: "Auth")
             return
@@ -725,6 +727,7 @@ class AuthViewModel {
             }
         }
         Log.info("Local store wiped — previous identity's data removed", category: "Auth")
+        #endif
     }
 
     /// Every entity that carries user data. One list, used by both the ownership gate and

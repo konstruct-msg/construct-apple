@@ -803,6 +803,9 @@
 "device_deregistered_warning_title" = "⚠ デバイスが未登録です";
 "device_deregistered_warning_body" = "コンストラクトはこのデバイスを認識できなくなりました。サーバーの問題が発生した後や、他の端末でデバイスが取り消された場合に起こります。\n\n鍵はこの端末に残っており、何も削除されていません。下で再試行するか、シードフレーズからアイデンティティを復元してください。";
 "device_deregistered_retry_hint" = "拒否は一時的なサーバーの問題かもしれません。もう一度認証してみてください。";
+"local_store_unreadable_title" = "このデバイスのチャットを開けません";
+"local_store_unreadable_body" = "このデバイスに保存されているチャット、メッセージ、人を開けませんでした。何も削除されておらず、再び開けるまで新しいものは保存されません。\n\n多くの場合、キーチェーンがまだ応答していないことが原因です（デバイスのロック解除前など）。";
+"local_store_unreadable_retry_hint" = "ロック解除後などに、もう一度開いてみてください。";
 
 // MARK: - Logout
 "logout_row" = "サインアウト";
