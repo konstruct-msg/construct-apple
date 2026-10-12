@@ -612,12 +612,9 @@ final class MessageRouter {
             return
         }
 
-        // 3. Skip if already saved to Core Data (deduplication for duplicate deliveries)
-        let existingFetch = Message.fetchRequest()
-        existingFetch.predicate = NSPredicate(format: "id == %@", message.id)
-        existingFetch.fetchLimit = 1
+        // 3. Skip if already saved (deduplication for duplicate deliveries)
         do {
-            if try context.fetch(existingFetch).first != nil {
+            if try LocalRepositories.messages.message(message.id) != nil {
                 Log.debug("Skipping already-saved message \(message.id.prefix(8))…", category: "MessageRouter")
                 return
             }

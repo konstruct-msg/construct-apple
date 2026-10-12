@@ -39,7 +39,7 @@ final class ContactLinkDeletedFlagTests: XCTestCase {
         XCTAssertTrue(DeletedContactsStore.shared.isDeleted(peer), "precondition: the prune shields")
 
         try ContactLinkService.shared.createOrUpdateContact(
-            userId: peer, username: nil, displayName: nil, context: context
+            userId: peer, username: nil, displayName: nil
         )
 
         XCTAssertFalse(
@@ -54,7 +54,7 @@ final class ContactLinkDeletedFlagTests: XCTestCase {
         defer { DeletedContactsStore.shared.remove(other) }
 
         try ContactLinkService.shared.createOrUpdateContact(
-            userId: peer, username: nil, displayName: nil, context: context
+            userId: peer, username: nil, displayName: nil
         )
 
         XCTAssertTrue(DeletedContactsStore.shared.isDeleted(other))

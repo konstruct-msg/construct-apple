@@ -215,7 +215,7 @@ struct SynapsView: View {
                     ContactRequestSheet(
                         request: request,
                         onAccept: {
-                            let user = try await vm.accept(request: request, context: context)
+                            let user = try await vm.accept(request: request)
                             chatsViewModel.openOrCreateChat(withContact: user.id)
                         },
                         onDeclineBlock: { try await vm.declineAndBlock(requestId: request.id) },
@@ -342,7 +342,7 @@ struct SynapsView: View {
 
         let pendingId = ContactRequestService.shared.consumePendingNavigationUserIds().first { !$0.isEmpty }
 
-        let accepted = await vm.checkAcceptedRequests(context: context)
+        let accepted = await vm.checkAcceptedRequests()
         if let first = accepted.first {
             chatsViewModel.openOrCreateChat(withContact: first.id)
         } else if let pendingId {
@@ -606,8 +606,7 @@ struct SynapsView: View {
             let user = try ContactLinkService.shared.createOrUpdateContact(
                 userId: profile.userID,
                 username: profile.hasUsername ? profile.username : nil,
-                displayName: profile.hasDisplayName ? profile.displayName : nil,
-                context: context
+                displayName: profile.hasDisplayName ? profile.displayName : nil
             )
             searchText = ""
             remoteState = .idle

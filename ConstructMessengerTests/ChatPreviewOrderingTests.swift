@@ -20,10 +20,12 @@ final class ChatPreviewOrderingTests: XCTestCase {
         context = container.viewContext
         // The reconciler writes through `ChatStore` (chats B2); point it at this store.
         LocalRepositories.useChatsForTesting(container)
+        LocalRepositories.useMessagesForTesting(container)
     }
 
     override func tearDown() {
         LocalRepositories.useChatsForTesting(nil)
+        LocalRepositories.useMessagesForTesting(nil)
         context = nil
         super.tearDown()
     }
@@ -145,7 +147,7 @@ final class ChatPreviewOrderingTests: XCTestCase {
         msg.applyStoredEncryption(plaintext: "По прежнему никаких обновлений", contactId: "peer")
         try context.save()
 
-        XCTAssertTrue(chat.reconcilePreviewFromTranscript(in: context))
+        XCTAssertTrue(chat.reconcilePreviewFromTranscript())
         XCTAssertEqual(try stored(chat).lastMessageText, "По прежнему никаких обновлений")
         XCTAssertEqual(try stored(chat).lastMessageTime, newer)
     }
@@ -168,7 +170,7 @@ final class ChatPreviewOrderingTests: XCTestCase {
         msg.applyStoredEncryption(plaintext: "hello", contactId: "peer")
         try context.save()
 
-        XCTAssertFalse(chat.reconcilePreviewFromTranscript(in: context))
+        XCTAssertFalse(chat.reconcilePreviewFromTranscript())
         XCTAssertEqual(try stored(chat).lastMessageText, "hello")
     }
 
@@ -196,7 +198,7 @@ final class ChatPreviewOrderingTests: XCTestCase {
         XCTAssertEqual(chat.lastMessageText, "frozen future")
         try context.save()
 
-        XCTAssertTrue(chat.reconcilePreviewFromTranscript(in: context))
+        XCTAssertTrue(chat.reconcilePreviewFromTranscript())
         XCTAssertEqual(try stored(chat).lastMessageText, "real tip")
         XCTAssertEqual(try stored(chat).lastMessageTime, real)
     }

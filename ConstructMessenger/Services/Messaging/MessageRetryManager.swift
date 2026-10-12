@@ -18,12 +18,10 @@ class MessageRetryManager {
     /// - Parameters:
     ///   - message: Message to retry
     ///   - recipientId: Recipient user ID
-    ///   - context: Core Data context
     ///   - onError: Callback for error messages
     func retryMessage(
         _ message: TranscriptRow,
         recipientId: String,
-        context: NSManagedObjectContext,
         onError: @escaping (String) -> Void
     ) {
         // Retry for failed or queued messages
@@ -59,7 +57,7 @@ class MessageRetryManager {
 
         // Prefer re-sending the exact same encrypted payload bytes.
         if let chunks = OutgoingWirePayloadStore.shared.loadChunks(baseMessageId: capturedMessageId) {
-            let stored = storedCopies(chunks, recipientId: recipientId, context: context)
+            let stored = storedCopies(chunks, recipientId: recipientId)
             Task { [weak self] in
                 guard let self else { return }
                 do {
@@ -136,7 +134,7 @@ class MessageRetryManager {
         Log.info("Retry: wire payload gone for \(capturedMessageId.prefix(8))… — re-encrypting under current session", category: "MessageRetryManager")
         Task { [weak self] in
             guard let self else { return }
-            let status = await self.reencryptAndSend(messageId: capturedMessageId, recipientId: recipientId, senderId: capturedSenderId, context: context)
+            let status = await self.reencryptAndSend(messageId: capturedMessageId, recipientId: recipientId, senderId: capturedSenderId)
             await MainActor.run {
                 // The message must still be there; everything below acts on it.
                 guard (try? LocalRepositories.messages.message(capturedMessageId)) != nil else { return }
@@ -167,8 +165,7 @@ class MessageRetryManager {
 
     private func storedCopies(
         _ chunks: [OutgoingWirePayloadStore.StoredChunk],
-        recipientId: String,
-        context: NSManagedObjectContext
+        recipientId: String
     ) -> [StoredCopy] {
         let pinnedDevice = SessionAddressing.pinnedDevice(ofPeer: recipientId)
         var copies: [StoredCopy] = []
@@ -323,26 +320,19 @@ class MessageRetryManager {
 
     /// Process queued messages for ALL chats — called from the background service layer
     /// so retry works even when no chat screen is open.
-    func processAllQueuedMessages(currentUserId: String, context: NSManagedObjectContext) {
-        guard let chats = try? LocalRepositories.chats.chats() else { return }
-
-        for chat in chats {
-            let queuedCheck = NSFetchRequest<Message>(entityName: "Message")
-            queuedCheck.predicate = NSCompoundPredicate(orPredicateWithSubpredicates: [
-                NSPredicate(format: "chat.id == %@ AND deliveryStatusRaw == %d", chat.id, DeliveryStatus.queued.rawValue),
-                NSPredicate(format: "chat.id == %@ AND deliveryStatusRaw == %d AND retryCount < %d",
-                            chat.id, DeliveryStatus.failed.rawValue, FeatureFlags.maxMessageRetryAttempts)
-            ])
-            queuedCheck.fetchLimit = 1
-            guard (try? context.count(for: queuedCheck)) ?? 0 > 0 else { continue }
-            sendQueuedMessages(
-                inChat: chat.id,
-                recipientId: chat.peerId,
-                currentUserId: currentUserId,
-                context: context
-            )
+    func processAllQueuedMessages(currentUserId: String) {
+        let owed = (try? LocalRepositories.messages.pendingSends(
+            inChat: nil, retryCeiling: Self.retryCeiling, limit: .max
+        )) ?? []
+        guard !owed.isEmpty, let chats = try? LocalRepositories.chats.chats() else { return }
+        let chatsOwed = Set(owed.map(\.chatId))
+        for chat in chats where chatsOwed.contains(chat.id) {
+            sendQueuedMessages(inChat: chat.id, recipientId: chat.peerId, currentUserId: currentUserId)
         }
     }
+
+    /// `retryCount` below this, a failed message is sent again.
+    private static var retryCeiling: Int16 { Int16(clamping: FeatureFlags.maxMessageRetryAttempts) }
 
     // MARK: - Queued Messages Processing
     
@@ -351,29 +341,15 @@ class MessageRetryManager {
     ///   - chatId: The chat to process queued messages for
     ///   - recipientId: Recipient user ID
     ///   - currentUserId: Current user ID
-    ///   - context: Core Data context
     func sendQueuedMessages(
         inChat chatId: String,
         recipientId: String,
-        currentUserId: String,
-        context: NSManagedObjectContext
+        currentUserId: String
     ) {
-        let fetchRequest = Message.fetchRequest()
         // Also retry failed messages that haven't exceeded the retry cap (e.g. dropped during VEIL startup window)
-        let queuedPredicate = NSPredicate(format: "chat.id == %@ AND deliveryStatusRaw == %d", chatId, DeliveryStatus.queued.rawValue)
-        let retryableFailed = NSPredicate(
-            format: "chat.id == %@ AND deliveryStatusRaw == %d AND retryCount < %d",
-            chatId,
-            DeliveryStatus.failed.rawValue,
-            FeatureFlags.maxMessageRetryAttempts
-        )
-        fetchRequest.predicate = NSCompoundPredicate(orPredicateWithSubpredicates: [queuedPredicate, retryableFailed])
-        fetchRequest.sortDescriptors = [
-            NSSortDescriptor(key: "serverOrderKey", ascending: true),
-            NSSortDescriptor(key: "id", ascending: true)
-        ]
-
-        guard let queuedMessages = try? context.fetch(fetchRequest) else {
+        guard let queuedMessages = try? LocalRepositories.messages.pendingSends(
+            inChat: chatId, retryCeiling: Self.retryCeiling, limit: .max
+        ) else {
             return
         }
 
@@ -396,7 +372,7 @@ class MessageRetryManager {
         // Before the session guard. A placeholder has decrypted content and no wire payload, so
         // everything below would treat it as a text message — including opening a session for a
         // queue that owes nothing. A launch that already ran the old reset has these at `.queued`.
-        let sendable = withoutUploadPlaceholders(queuedMessages, context: context)
+        let sendable = withoutUploadPlaceholders(queuedMessages)
         guard !sendable.isEmpty else { return }
 
         // Guard: no live session for this contact.
@@ -424,7 +400,7 @@ class MessageRetryManager {
             return
         }
 
-        let pendingIds = prepareMessagesForGlobalRetry(sendable, context: context)
+        let pendingIds = prepareMessagesForGlobalRetry(sendable)
 
         // Messages whose stored wire payload is gone — TTL expiry, or purged above after a
         // zombie-session re-establishment — but whose plaintext is still recoverable. The session
@@ -432,8 +408,8 @@ class MessageRetryManager {
         let reencryptIds = sendable
             .filter {
                 OutgoingWirePayloadStore.shared.loadChunks(baseMessageId: $0.id) == nil
-                    && $0.hasDecryptedContent
-                    && !UploadPlaceholderBody.isSentinel($0.legacyBody)
+                    && !$0.body.isEmpty
+                    && !UploadPlaceholderBody.isSentinel($0.payload.displayString)
             }
             .map { $0.id }
 
@@ -481,7 +457,7 @@ class MessageRetryManager {
                     var serverOrderKey: String?
                     if let chunks = OutgoingWirePayloadStore.shared.loadChunks(baseMessageId: messageId) {
                         let report = try await self.resendStored(
-                            self.storedCopies(chunks, recipientId: recipientId, context: context),
+                            self.storedCopies(chunks, recipientId: recipientId),
                             baseMessageId: messageId,
                             recipientId: recipientId,
                             senderId: currentUserId,
@@ -518,7 +494,7 @@ class MessageRetryManager {
                     // the peer's ratchets. So the copy is rebuilt from the row's plaintext.
                     if finalStatus == .sent || finalStatus == .delivered {
                         await self.mirrorStoredResend(messageId: messageId, recipientId: recipientId,
-                                                      senderId: currentUserId, context: context)
+                                                      senderId: currentUserId)
                     }
                 } catch is StealthDowngradeBlocked {
                     await MainActor.run {
@@ -547,7 +523,7 @@ class MessageRetryManager {
 
             // Re-encrypt pass: messages whose ciphertext was orphaned by a dead session.
             for messageId in reencryptIds {
-                let status = await self.reencryptAndSend(messageId: messageId, recipientId: recipientId, senderId: currentUserId, context: context)
+                let status = await self.reencryptAndSend(messageId: messageId, recipientId: recipientId, senderId: currentUserId)
                 await MainActor.run {
                     // The message must still be there; everything below acts on it.
                     guard (try? LocalRepositories.messages.message(messageId)) != nil else { return }
@@ -571,13 +547,9 @@ class MessageRetryManager {
     private func mirrorStoredResend(
         messageId: String,
         recipientId: String,
-        senderId: String,
-        context: NSManagedObjectContext
+        senderId: String
     ) async {
-        let fr = Message.fetchRequest()
-        fr.predicate = NSPredicate(format: "id == %@", messageId)
-        fr.fetchLimit = 1
-        guard let message = try? context.fetch(fr).first else { return }
+        guard let message = try? LocalRepositories.messages.message(messageId) else { return }
         guard let plaintext = Self.recoverWirePlaintext(for: message) else {
             Log.info(
                 "Retry mirror skipped for \(messageId.prefix(8))… — reason=plaintext not reconstructable " +
@@ -596,13 +568,11 @@ class MessageRetryManager {
     /// cannot reconstruct. Both retry branches need this — one to re-encrypt, the other only to
     /// mirror — so it lives in one place rather than being inlined at the first caller and
     /// forgotten at the second, which is how the mirror went missing in the first place.
-    /// Reads the row on whatever queue owns it (often a background `perform`). The
-    /// type is `@MainActor` for retry UI; this reconstruction is pure on the
-    /// `Message` fields and must not hop — hopping would touch a background-context
-    /// object on the main thread.
-    nonisolated static func recoverWirePlaintext(for message: Message) -> Data? {
+    /// The type is `@MainActor` for retry UI; this reconstruction is pure on the record and
+    /// callable from any queue.
+    nonisolated static func recoverWirePlaintext(for message: MessageRecord) -> Data? {
         guard message.contentType != .media else { return nil }
-        let text = message.legacyBody
+        let text = message.payload.displayString
         guard !text.isEmpty, !MessageContentType.isControlPayload(text) else { return nil }
         // An upload placeholder is `.regular` and its decrypted body is non-empty, so without
         // this it is a text message whose text is the sentinel JSON.
@@ -665,15 +635,9 @@ class MessageRetryManager {
     private func reencryptAndSend(
         messageId: String,
         recipientId: String,
-        senderId: String,
-        context: NSManagedObjectContext
+        senderId: String
     ) async -> DeliveryStatus {
-        // Fetch on MainActor (this method is @MainActor); the Message stays local so no
-        // non-Sendable NSManagedObject ever crosses the await boundary into the caller.
-        let fr = Message.fetchRequest()
-        fr.predicate = NSPredicate(format: "id == %@", messageId)
-        fr.fetchLimit = 1
-        guard let message = try? context.fetch(fr).first else {
+        guard let message = try? LocalRepositories.messages.message(messageId) else {
             Log.error("reencryptAndSend: message \(messageId.prefix(8))… vanished before re-encrypt", category: "MessageRetryManager")
             return .failed
         }
@@ -747,16 +711,13 @@ class MessageRetryManager {
     /// nothing sendable. Spending the budget is what makes the next tick's
     /// `retryCount < ceiling` predicate miss the row; `recoverWirePlaintext` still refuses the
     /// body if something selects it anyway.
-    private func withoutUploadPlaceholders(
-        _ messages: [Message],
-        context: NSManagedObjectContext
-    ) -> [Message] {
-        let ceiling = Int16(clamping: FeatureFlags.maxMessageRetryAttempts)
-        var sendable: [Message] = []
+    private func withoutUploadPlaceholders(_ messages: [MessageRecord]) -> [MessageRecord] {
+        let ceiling = Self.retryCeiling
+        var sendable: [MessageRecord] = []
         sendable.reserveCapacity(messages.count)
         var retired = 0
         for message in messages {
-            if UploadPlaceholderBody.isSentinel(message.legacyBody),
+            if UploadPlaceholderBody.isSentinel(message.payload.displayString),
                let stored = StuckSend.write(
                    disposition: .retirePlaceholder,
                    retryCount: message.retryCount,
@@ -779,11 +740,11 @@ class MessageRetryManager {
         return sendable
     }
 
-    func prepareMessagesForGlobalRetry(_ messages: [Message], context: NSManagedObjectContext) -> [String] {
+    func prepareMessagesForGlobalRetry(_ messages: [MessageRecord]) -> [String] {
         var pendingIds: [String] = []
         pendingIds.reserveCapacity(messages.count)
 
-        for message in messages where message.hasDecryptedContent && !UploadPlaceholderBody.isSentinel(message.legacyBody) {
+        for message in messages where !message.body.isEmpty && !UploadPlaceholderBody.isSentinel(message.payload.displayString) {
             guard OutgoingWirePayloadStore.shared.loadChunks(baseMessageId: message.id) != nil else {
                 switch message.deliveryStatus {
                 case .queued:

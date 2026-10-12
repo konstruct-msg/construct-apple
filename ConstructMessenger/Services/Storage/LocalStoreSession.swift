@@ -71,10 +71,23 @@ final class LocalStoreSession: Sendable {
         }
     }
 
-    /// Closes the store and deletes its files; every later call on `store` throws `Closed`. The
-    /// key is the caller's: `LocalDataWipe` deletes it.
+    /// Closes the store and deletes its files; every later call on `store` throws `Closed`, and
+    /// every `changes` stream ends. The key is the caller's: `LocalRepositories.replaceAppStore`
+    /// deletes it first.
     func wipe() throws {
+        defer { feed.finishAll() }
         try store.wipe()
+    }
+
+    /// A store every call on throws `Closed`: what the repositories stand on when the app's store
+    /// would not open, so a write fails where it is made — a delivery is then not acknowledged as
+    /// stored — instead of landing somewhere that is not the account's store.
+    static func closed() -> LocalStoreSession {
+        // Any key: the store is closed before anything is written to it.
+        let store = try? LocalStore.inMemory(key: Data(SymmetricKey(size: .bits256).withUnsafeBytes { Array($0) }))
+        try? store?.wipe()
+        guard let store else { preconditionFailure("an in-memory store did not open") }
+        return LocalStoreSession(store: store)
     }
 
     #if DEBUG
@@ -100,6 +113,14 @@ private final class LocalStoreFeed: LocalStoreObserver, @unchecked Sendable {
                 self?.lock.withLock { _ = self?.subscribers.removeValue(forKey: key) }
             }
         }
+    }
+
+    func finishAll() {
+        let all = lock.withLock {
+            defer { subscribers.removeAll() }
+            return Array(subscribers.values)
+        }
+        all.forEach { $0.continuation.finish() }
     }
 
     func onChange(change: LocalStoreChange) {

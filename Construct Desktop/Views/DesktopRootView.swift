@@ -41,6 +41,9 @@ struct DesktopRootView: View {
     @State private var hasAccountAddress = AccountAddress.own() != nil
     @State private var callManager = CallManager.shared
     @State private var showReceiveHistorySync = false
+    /// Why the store is not open, or nil (`LocalRepositories.storeFailure`): read at launch, after
+    /// a retry, and whenever the store is replaced.
+    @State private var storeFailure = LocalRepositories.storeFailure
     @State private var historySyncPendingDeviceId: String? = nil
 
     private var orientationCompletedForCurrentUser: Bool {
@@ -52,7 +55,15 @@ struct DesktopRootView: View {
 
     var body: some View {
         Group {
-            if authViewModel.hasRegisteredDeviceKeys == nil {
+            if storeFailure != nil {
+                // Before anything else: no screen of the app runs on a store that is not open.
+                NavigationStack {
+                    KeysRecoveryView(reason: .storeUnreadable) {
+                        storeFailure = LocalRepositories.openAppStoreIfNeeded()
+                    }
+                }
+                .environment(authViewModel)
+            } else if authViewModel.hasRegisteredDeviceKeys == nil {
                 SplashView()
             } else if authViewModel.deviceKeysUnavailable {
                 // A screen of its own, so it brings the stack its title needs.
@@ -82,6 +93,7 @@ struct DesktopRootView: View {
         // that was just replaced; the next redraw raises. Close it with the data it was showing.
         .onReceive(NotificationCenter.default.publisher(for: .localStoreReplaced).receive(on: DispatchQueue.main)) { _ in
             dismissWindow(id: DesktopWindowID.synaps)
+            storeFailure = LocalRepositories.storeFailure
         }
         .onChange(of: orientationCompletedForCurrentUser) { _, completed in
             if completed, AccountAddress.own() == nil {

@@ -340,8 +340,7 @@ final class ChatSendCoordinator {
         retryManager.sendQueuedMessages(
             inChat: conversation.chatId,
             recipientId: recipientId,
-            currentUserId: currentUserId,
-            context: viewContext
+            currentUserId: currentUserId
         )
     }
 
@@ -1057,7 +1056,6 @@ final class ChatSendCoordinator {
         retryManager.retryMessage(
             message,
             recipientId: recipientId,
-            context: viewContext,
             onError: { [weak self] error in
                 guard let self else { return }
                 if error == "payload_expired" {

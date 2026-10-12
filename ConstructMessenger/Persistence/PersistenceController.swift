@@ -16,7 +16,14 @@ import CoreData
 /// Cross-platform wrapper for the shared NSPersistentContainer.
 /// Self-contained: does not depend on any App struct.
 struct PersistenceController {
+    #if os(macOS)
+    /// macOS keeps the account in construct-store (`LocalRepositories`). Core Data there is in
+    /// memory, for the code that still names a context, and the file older builds left is never
+    /// opened again — neither read nor written in the clear.
+    static let shared = PersistenceController(inMemory: true)
+    #else
     static let shared = PersistenceController()
+    #endif
 
     /// In-memory store for SwiftUI previews and unit tests.
     static let preview: PersistenceController = {
@@ -294,6 +301,33 @@ struct PersistenceController {
         FileManager.default
             .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("ConstructMessenger.sqlite")
+    }
+
+    /// The files a Core Data build kept the account in, below `dir` (Application Support): the
+    /// store with its WAL, shared memory and external blobs, and the per-row key database
+    /// (`MessageKeyStore`) that opens its bodies. macOS stopped using them at TODO 137 step 4 and
+    /// the owner chose to remove what older Desktop builds left, in the clear, rather than keep
+    /// it unopened. Returns how many were there.
+    @discardableResult
+    static func removeLegacyStore(in dir: URL) -> Int {
+        let names = [
+            "ConstructMessenger.sqlite", "ConstructMessenger.sqlite-wal", "ConstructMessenger.sqlite-shm",
+            ".ConstructMessenger_SUPPORT",
+            "ct_secure/message_keys.sqlite", "ct_secure/message_keys.sqlite-journal",
+        ]
+        var removed = 0
+        for name in names {
+            let url = dir.appendingPathComponent(name)
+            guard FileManager.default.fileExists(atPath: url.path) else { continue }
+            do {
+                try FileManager.default.removeItem(at: url)
+                removed += 1
+            } catch {
+                Log.error("Legacy store: could not remove \(name): \(error)", category: "Persistence")
+            }
+        }
+        if removed > 0 { Log.info("Legacy store: removed \(removed) file(s)", category: "Persistence") }
+        return removed
     }
 
     /// Removes SQLite main file + WAL + SHM so a fresh empty store can be created.

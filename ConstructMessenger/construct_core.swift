@@ -1524,6 +1524,11 @@ public protocol LocalStoreProtocol: AnyObject, Sendable {
      */
     func messagesFrom(chatId: String, fromOrderKey: String, fromId: String, limit: UInt32) throws  -> [LocalMessage]
     
+    /**
+     * Ours in `status`, every chat, transcript order.
+     */
+    func ownMessagesInStatus(status: Int16, limit: UInt32) throws  -> [LocalMessage]
+    
     func ownProfile() throws  -> LocalOwnProfile?
     
     func peerDevice(deviceId: String) throws  -> LocalPeerDevice?
@@ -2349,6 +2354,19 @@ open func messagesFrom(chatId: String, fromOrderKey: String, fromId: String, lim
         FfiConverterString.lower(chatId),
         FfiConverterString.lower(fromOrderKey),
         FfiConverterString.lower(fromId),
+        FfiConverterUInt32.lower(limit),$0
+    )
+})
+}
+    
+    /**
+     * Ours in `status`, every chat, transcript order.
+     */
+open func ownMessagesInStatus(status: Int16, limit: UInt32)throws  -> [LocalMessage]  {
+    return try  FfiConverterSequenceTypeLocalMessage.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_own_messages_in_status(
+            self.uniffiCloneHandle(),
+        FfiConverterInt16.lower(status),
         FfiConverterUInt32.lower(limit),$0
     )
 })
@@ -14607,6 +14625,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_localstore_messages_from() != 53099) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_own_messages_in_status() != 26389) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_localstore_own_profile() != 283) {

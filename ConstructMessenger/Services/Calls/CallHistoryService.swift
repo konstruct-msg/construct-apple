@@ -56,7 +56,7 @@ final class CallHistoryService {
         }
     }
 
-    /// The whole log. The store has no "delete all": one delete per entry, as the crate's.
+    /// The whole log, in one store write (`CallStore.deleteAll`).
     func deleteAll() {
         do {
             let removed = try store().deleteAll()

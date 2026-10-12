@@ -133,6 +133,34 @@ final class CoreDataCallStore: CallStore, @unchecked Sendable {
     }
 }
 
+/// The call log on the crate (`calls`).
+final class LocalStoreCallStore: CallStore, @unchecked Sendable {
+
+    private let session: LocalStoreSession
+
+    init(session: LocalStoreSession) {
+        self.session = session
+    }
+
+    func changes() -> AsyncStream<Set<String>> { session.changes(of: .calls) }
+
+    func upsert(_ call: CallRecord) throws {
+        try session.store.upsertCall(call: call.local)
+    }
+
+    func calls(limit: Int) throws -> [CallRecord] {
+        try session.store.calls(limit: UInt32(clamping: limit)).map { CallRecord($0) }
+    }
+
+    func delete(_ id: String) throws -> Bool {
+        try session.store.deleteCall(id: id)
+    }
+
+    func deleteAll() throws -> Int {
+        Int(try session.store.deleteAllCalls())
+    }
+}
+
 private extension CallRecord {
     init(_ row: CTCallRecord) {
         self.init(
