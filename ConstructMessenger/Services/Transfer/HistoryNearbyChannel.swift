@@ -252,8 +252,7 @@ final class HistoryNearbyChannel {
     func receive(
         local: HistoryLocalKeys,
         pin: HistoryQRPin,
-        coordinator: HistoryTransferCoordinator,
-        context: NSManagedObjectContext
+        coordinator: HistoryTransferCoordinator
     ) async throws -> ReceiveOutcome {
         let tag = historyDiscoveryTag(userIdDashed: local.userIdDashed, deviceIdHex: local.deviceIdHex)
         let instanceName = historyDiscoveryInstanceName(tag: tag)
@@ -266,7 +265,6 @@ final class HistoryNearbyChannel {
             local: local,
             pin: pin,
             coordinator: coordinator,
-            context: context,
             resolvePeer: Self.directoryResolver(ownUserId: local.userIdDashed)
         )
     }
@@ -277,7 +275,6 @@ final class HistoryNearbyChannel {
         local: HistoryLocalKeys,
         pin: HistoryQRPin,
         coordinator: HistoryTransferCoordinator,
-        context: NSManagedObjectContext,
         resolvePeer: PeerResolver
     ) async throws -> ReceiveOutcome {
         let receiver = try CryptoManager.shared.historyCore().historyReceive(userId: local.userIdRaw, fromFile: false)
@@ -288,7 +285,6 @@ final class HistoryNearbyChannel {
                 into: receiver,
                 pin: pin,
                 expectedUserId: local.userIdDashed,
-                context: context,
                 // The frame names the offering device; its keys come from our own account's
                 // directory entry, never from the frame.
                 resolve: { deviceIdHex in try await resolvePeer(deviceIdHex).knownKeys },
