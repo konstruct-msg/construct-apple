@@ -20,7 +20,8 @@ final class MessageDisplayCache {
     private let cache = NSCache<NSString, WipedOnRelease>()
 
     private init() {
-        cache.countLimit = 500
+        // 500 messages: a body, a transcript and a quote each.
+        cache.countLimit = 1_500
     }
 
     // MARK: - Write
@@ -36,6 +37,9 @@ final class MessageDisplayCache {
 
     func evict(messageId: String) {
         cache.removeObject(forKey: messageId as NSString)
+        for field in SealedText.allCases {
+            cache.removeObject(forKey: field.key(messageId) as NSString)
+        }
     }
 
     func evictAll() {
@@ -86,6 +90,61 @@ final class MessageDisplayCache {
     /// Media CTM1 rehydrates to legacy media JSON only at this edge (not re-stored).
     func plaintext(for message: Message) -> String {
         payload(for: message).displayString
+    }
+
+    // MARK: - By id
+
+    /// The two texts a row carries beside its body, sealed in the store like it.
+    enum SealedText: CaseIterable {
+        case transcript, replyQuote
+
+        fileprivate func key(_ messageId: String) -> String {
+            switch self {
+            case .transcript: "\(messageId)#transcript"
+            case .replyQuote: "\(messageId)#quote"
+            }
+        }
+    }
+
+    /// The payload of message `messageId` — what a transcript row shows, read when shown rather
+    /// than carried in the row, so the text stays in this cache, which `UnsealedMemory` empties
+    /// and zeroes. A miss reads the message from `store` and caches its body and both texts.
+    func payload(messageId: String, store: any MessageStore = LocalRepositories.messages) -> LocalMessagePayload {
+        if let cached = cache.object(forKey: messageId as NSString) {
+            return LocalMessagePayload.decode(cached.data)
+        }
+        guard let record = try? store.message(messageId) else { return LocalMessagePayload.decode(Data()) }
+        hold(record)
+        return LocalMessagePayload.decode(record.body)
+    }
+
+    /// `field` of message `messageId`, nil when it has none. A miss reads as `payload` does.
+    func text(_ field: SealedText, messageId: String, store: any MessageStore = LocalRepositories.messages) -> String? {
+        if let cached = cache.object(forKey: field.key(messageId) as NSString) {
+            return Self.unmark(cached.data)
+        }
+        guard let record = try? store.message(messageId) else { return nil }
+        hold(record)
+        return field == .transcript ? record.transcript : record.replyQuote
+    }
+
+    /// What a transcript read already decrypted, so the rows it lists open without a second read.
+    func hold(_ record: MessageRecord) {
+        store(messageId: record.id, plaintextData: record.body)
+        cache.setObject(WipedOnRelease(Self.mark(record.transcript)), forKey: SealedText.transcript.key(record.id) as NSString)
+        cache.setObject(WipedOnRelease(Self.mark(record.replyQuote)), forKey: SealedText.replyQuote.key(record.id) as NSString)
+    }
+
+    /// A held absence is a value too: one leading byte says whether a text follows, so a row with
+    /// no quote is not read from the store again on every render.
+    private static func mark(_ text: String?) -> Data {
+        guard let text else { return Data([0]) }
+        return Data([1]) + Data(text.utf8)
+    }
+
+    private static func unmark(_ data: Data) -> String? {
+        guard data.first == 1 else { return nil }
+        return String(decoding: data.dropFirst(), as: UTF8.self)
     }
 }
 

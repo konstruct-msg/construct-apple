@@ -8,7 +8,16 @@
 
 import Foundation
 
-extension Message {
+/// What grouping reads of a transcript entry. `Message` and `TranscriptRow` both answer it while
+/// the transcript moves from managed objects to values (local-store plan, lane C).
+protocol TranscriptGroupable {
+    var isSentByMe: Bool { get }
+    var safeTimestamp: Date { get }
+}
+
+extension Message: TranscriptGroupable {}
+
+extension TranscriptGroupable {
     /// Determines if this message is the last in a group of consecutive messages from the same sender
     ///
     /// Messages are grouped when:
@@ -19,7 +28,7 @@ extension Message {
     ///   - index: Index of this message in the array
     ///   - messages: Array of messages (newest-first order expected)
     /// - Returns: `true` if this is the last message in the group
-    func isLastInGroup(at index: Int, in messages: [Message]) -> Bool {
+    func isLastInGroup(at index: Int, in messages: [some TranscriptGroupable]) -> Bool {
         // If this is the last message in the array, it's always the last in its group
         guard index < messages.count - 1 else {
             return true
@@ -48,7 +57,7 @@ extension Message {
     ///   - messages: Array of messages (newest-first order expected)
     /// - Returns: ``ChatUIConstants.Shell.betweenGroupSpacing`` at group end,
     ///   ``ChatUIConstants.Shell.withinGroupSpacing`` inside a group
-    func spacingAfterMessage(at index: Int, in messages: [Message]) -> CGFloat {
+    func spacingAfterMessage(at index: Int, in messages: [some TranscriptGroupable]) -> CGFloat {
         if self.isLastInGroup(at: index, in: messages) {
             return ChatUIConstants.Shell.betweenGroupSpacing
         }
@@ -58,7 +67,7 @@ extension Message {
 
 // MARK: - Array Extension for Convenience
 
-extension Array where Element == Message {
+extension Array where Element: TranscriptGroupable {
     /// Helper to check if a message at an index is the last in its group
     func isLastInGroup(at index: Int) -> Bool {
         guard index < count else { return true }
