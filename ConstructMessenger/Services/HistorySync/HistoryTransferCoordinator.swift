@@ -7,7 +7,6 @@
 //  in phase 2 leaves phase-1 rows. Skip is type 0x03, not an inner CTH1 record.
 //
 
-import CoreData
 import Foundation
 #if canImport(UIKit)
 import UIKit
@@ -28,7 +27,6 @@ enum HistoryTransferPhase: Equatable {
 @Observable
 final class HistoryTransferCoordinator {
     private(set) var phase: HistoryTransferPhase = .idle
-    var progress: Double = 0
 
     /// How long a finished transfer shows its result before its screen closes itself. The
     /// outcomes that leave something to do — a file to save, media to retry — stay open.
@@ -70,14 +68,10 @@ final class HistoryTransferCoordinator {
         into receiver: HistoryReceiver,
         pin: HistoryQRPin,
         expectedUserId: String,
-        context: NSManagedObjectContext,
         resolve: (_ deviceIdHex: String) async throws -> HistoryKnownKeys,
-        reply: ((Data) async throws -> Void)?,
-        onManifest: ((Construct_Client_History_V1_HistoryManifest) -> Void)? = nil
+        reply: ((Data) async throws -> Void)?
     ) async throws -> HistoryCoreStream.Outcome {
-        let sink = HistoryImportSink(expectedUserId: expectedUserId, context: context)
-        sink.onManifest = onManifest
-        sink.onProgress = { [weak self] seen in self?.progress = Double(seen) }
+        let sink = HistoryImportSink(expectedUserId: expectedUserId)
         return try await HistoryCoreStream.receive(
             from: source,
             into: receiver,

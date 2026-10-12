@@ -51,8 +51,13 @@ enum ServerMessageOrder {
     /// after every real server key keeps the optimistic bubble at the bottom and lets it snap to
     /// its authoritative position when the ACK arrives.
     static func pending(localMessageId: String) -> String {
-        "\(pendingTimestamp)\(separator)\(pendingSequence)\(separator)\(localMessageId.lowercased())"
+        "\(pendingPrefix)\(localMessageId.lowercased())"
     }
+
+    /// Everything a `pending` key starts with — what a store predicate matches on.
+    static var pendingPrefix: String { "\(pendingTimestamp)\(separator)\(pendingSequence)\(separator)" }
+
+    static func isPending(_ key: String) -> Bool { key.hasPrefix(pendingPrefix) }
 
     /// A row that has no server position and never will: a locally written system notice, an
     /// imported history row, or one written before this column existed. It sits at its own

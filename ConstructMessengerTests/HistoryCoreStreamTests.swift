@@ -119,8 +119,8 @@ final class HistoryCoreStreamTests: XCTestCase {
         return url
     }
 
-    private func importFile(_ url: URL, into new: Device, from old: Device, context: NSManagedObjectContext) async throws -> HistoryCoreStream.Outcome {
-        let sink = HistoryImportSink(expectedUserId: userId, context: context)
+    private func importFile(_ url: URL, into new: Device, from old: Device) async throws -> HistoryCoreStream.Outcome {
+        let sink = HistoryImportSink(expectedUserId: userId)
         return try await HistoryCoreStream.receive(
             from: try HistoryFileSource(url: url),
             into: new.core.historyReceive(userId: userRaw, fromFile: true),
@@ -145,7 +145,7 @@ final class HistoryCoreStreamTests: XCTestCase {
         try FileManager.default.removeItem(at: MediaManager.onDiskURL(for: media.id))
 
         let context = freshStore()
-        let outcome = try await importFile(url, into: new, from: old, context: context)
+        let outcome = try await importFile(url, into: new, from: old)
 
         guard case .imported(let summary, let phase) = outcome else { return XCTFail("\(outcome)") }
         XCTAssertEqual(phase, 3)
@@ -166,7 +166,7 @@ final class HistoryCoreStreamTests: XCTestCase {
         try Data("kept".utf8).write(to: MediaManager.onDiskURL(for: media.id))
 
         let context = freshStore()
-        guard case .imported(let summary, _) = try await importFile(url, into: new, from: old, context: context) else {
+        guard case .imported(let summary, _) = try await importFile(url, into: new, from: old) else {
             return XCTFail("expected an import")
         }
         XCTAssertEqual(summary.skipped[.mediaAlreadyPresent], 1)
@@ -186,7 +186,7 @@ final class HistoryCoreStreamTests: XCTestCase {
 
         let context = freshStore()
         do {
-            _ = try await importFile(url, into: new, from: old, context: context)
+            _ = try await importFile(url, into: new, from: old)
             XCTFail("a cut file must not import")
         } catch {
             guard case .Truncated = error as? HistoryError else { return XCTFail("\(error)") }
@@ -223,15 +223,13 @@ final class HistoryCoreStreamTests: XCTestCase {
         into new: Device,
         from old: Device,
         over transport: HistoryByteTransport,
-        coordinator: HistoryTransferCoordinator,
-        context: NSManagedObjectContext
+        coordinator: HistoryTransferCoordinator
     ) async throws -> HistoryCoreStream.Outcome {
         try await coordinator.receive(
             from: HistoryTransportSource(transport),
             into: new.core.historyReceive(userId: userRaw, fromFile: false),
             pin: .bundleOnly,
             expectedUserId: userId,
-            context: context,
             resolve: { _ in old.known },
             reply: { try await transport.send($0) }
         )
@@ -252,7 +250,7 @@ final class HistoryCoreStreamTests: XCTestCase {
             items: { [self] snapshot in [.record(manifest(snapshotId: snapshot, phase: 1))] + contacts(40) },
             over: phase1.left, coordinator: sending, media: false
         )
-        let first = try await receive(into: new, from: old, over: phase1.right, coordinator: receiving, context: context)
+        let first = try await receive(into: new, from: old, over: phase1.right, coordinator: receiving)
         try await sent
         guard case .imported(_, 1) = first else { return XCTFail("\(first)") }
         XCTAssertEqual(sending.phase, .chatsTransferred)
@@ -270,7 +268,7 @@ final class HistoryCoreStreamTests: XCTestCase {
             )
         }
         let receiveTask = Task { @MainActor in
-            try await self.receive(into: new, from: old, over: phase2.right, coordinator: receiving, context: context)
+            try await self.receive(into: new, from: old, over: phase2.right, coordinator: receiving)
         }
         _ = await sendTask.result
         phase2.right.close()
