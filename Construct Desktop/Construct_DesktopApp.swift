@@ -106,8 +106,8 @@ struct Construct_DesktopApp: App {
             ConstructCommands(bridge: commandBridge)
         }
 
-        // People / Synaps is its own window — not a tab that replaces the open chat (D2).
-        Window(LocalizedStringKey("people"), id: DesktopWindowID.synaps) {
+        // Synapses is its own window — not a tab that replaces the open chat (D2).
+        Window(LocalizedStringKey("synapses"), id: DesktopWindowID.synaps) {
             DesktopSynapsView()
                 .environment(\.managedObjectContext, PersistenceController.shared.container.viewContext)
                 .environment(chatsViewModel)

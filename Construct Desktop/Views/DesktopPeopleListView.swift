@@ -72,7 +72,7 @@ struct DesktopPeopleListView: View {
 
     private var emptyState: some View {
         VStack(spacing: CTLayout.sectionGap) {
-            Image(systemName: "person.2")
+            Image(systemName: "circle.grid.cross")
                 .font(CTFont.ui(30, weight: .light))
                 .foregroundStyle(Color.CT.textDim)
 
