@@ -390,7 +390,7 @@ class MediaManager {
         let optimized = try MediaOptimizer.optimizeImage(image)
 
         // Upload with 1 automatic retry on stream failure
-        let uploadResult = try await Self.uploadWithRetry(data: optimized.data, mimeType: optimized.metadata.mimeType, reuse: attachment.uploadReuse, onProgress: onProgress)
+        let uploadResult = try await Self.uploadWithRetry(data: optimized.data, mimeType: optimized.metadata.mimeType, reuse: .forSend(to: recipientId, forwarded: attachment.isForwarded), onProgress: onProgress)
         Log.info("Image uploaded: \(uploadResult.mediaId)", category: "MediaManager")
 
         let width = optimized.metadata.width
@@ -430,7 +430,7 @@ class MediaManager {
         guard Int64(data.count) <= MessageSizeLimits.maxImageBytes else {
             throw MediaUploadError.fileTooLarge(data.count, Int(MessageSizeLimits.maxImageBytes))
         }
-        let uploadResult = try await Self.uploadWithRetry(data: data, mimeType: attachment.mimeType, reuse: attachment.uploadReuse, onProgress: onProgress)
+        let uploadResult = try await Self.uploadWithRetry(data: data, mimeType: attachment.mimeType, reuse: .forSend(to: recipientId, forwarded: attachment.isForwarded), onProgress: onProgress)
         Log.info("Original image uploaded: \(uploadResult.mediaId)", category: "MediaManager")
 
         // Wire budget: this thumbnail's only consumer is `MediaWireCodec.albumContent`. The local
@@ -496,7 +496,7 @@ class MediaManager {
         let uploadResult = try await Self.uploadWithRetry(
             data: videoData,
             mimeType: "video/mp4",
-            reuse: attachment.uploadReuse,
+            reuse: .forSend(to: recipientId, forwarded: attachment.isForwarded),
             onProgress: onProgress.map { cb in { @Sendable v in cb(0.5 + v * 0.5) } }
         )
         Log.info("Video uploaded: \(uploadResult.mediaId) (\(videoData.count) bytes)", category: "MediaManager")
@@ -721,7 +721,7 @@ class MediaManager {
     static func uploadWithRetry(
         data: Data,
         mimeType: String,
-        reuse: MediaUploadReuse = .sameBytesSameObject,
+        reuse: MediaUploadReuse,
         onProgress: (@Sendable (Double) -> Void)? = nil
     ) async throws -> MediaServiceClient.UploadedMedia {
         // Cache hit: same plaintext already uploaded recently → reuse mediaId + AES key.
@@ -814,7 +814,7 @@ class MediaManager {
     /// Text-based files are transparently compressed with ZLIB before encryption if beneficial.
     /// - Parameter url: Security-scoped URL of the file
     /// - Returns: Media metadata for message content
-    func uploadFile(_ url: URL) async throws -> MediaMessageData {
+    func uploadFile(_ url: URL, for recipientId: String) async throws -> MediaMessageData {
         let filename = url.lastPathComponent
         Log.info("Uploading file: \(filename)", category: "MediaManager")
 
@@ -833,7 +833,7 @@ class MediaManager {
         // trying to inflate). Compression before encryption would also let the sealed size speak
         // for the contents.
         let uploadResult = try await Self.uploadWithRetry(
-            data: originalData, mimeType: detectedMimeType, reuse: ForwardStaging.reuse(for: url))
+            data: originalData, mimeType: detectedMimeType, reuse: ForwardStaging.reuse(for: url, to: recipientId))
         Log.info("File uploaded: \(uploadResult.mediaId)", category: "MediaManager")
         // A forward's copy has served its purpose; until now a failed upload could still retry it.
         ForwardStaging.discard(url)
@@ -861,11 +861,11 @@ class MediaManager {
     ///   - duration: Recording duration in seconds
     ///   - waveform: ~100 normalized amplitude samples (0.0–1.0) for waveform display
     /// - Returns: `VoiceMessageContent` ready to be JSON-encoded as the message payload
-    func uploadAudio(_ url: URL, duration: TimeInterval, waveform: [Float]) async throws -> VoiceMessageContent {
+    func uploadAudio(_ url: URL, duration: TimeInterval, waveform: [Float], for recipientId: String) async throws -> VoiceMessageContent {
         Log.info("Uploading voice message (duration \(Int(duration))s)", category: "MediaManager")
         let data = try Data(contentsOf: url)
         let uploadResult = try await Self.uploadWithRetry(
-            data: data, mimeType: "audio/m4a", reuse: ForwardStaging.reuse(for: url))
+            data: data, mimeType: "audio/m4a", reuse: ForwardStaging.reuse(for: url, to: recipientId))
         ForwardStaging.discard(url)
         Log.info("Voice uploaded: \(uploadResult.mediaId)", category: "MediaManager")
         return VoiceMessageContent(
@@ -892,9 +892,12 @@ class MediaManager {
             throw MediaManagerError.optimizationFailed
         }
         
+        // One upload goes to every contact the profile is sent to, so there is no one
+        // conversation to keep a reuse inside.
         let uploadResult = try await Self.uploadWithRetry(
                 data: avatarData,
-                mimeType: "image/jpeg"
+                mimeType: "image/jpeg",
+                reuse: .freshObject
             )
         Log.info("Avatar uploaded: \(uploadResult.mediaId)", category: "MediaManager")
         

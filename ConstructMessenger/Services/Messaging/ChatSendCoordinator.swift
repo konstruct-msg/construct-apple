@@ -784,7 +784,8 @@ final class ChatSendCoordinator {
         Task { [weak self] in
             guard let self else { return }
             do {
-                let voiceContent = try await MediaManager.shared.uploadAudio(url, duration: duration, waveform: waveform)
+                let voiceContent = try await MediaManager.shared.uploadAudio(
+                    url, duration: duration, waveform: waveform, for: recipientId)
                 let wireContent = MediaWireCodec.voiceMessageContent(from: voiceContent)
                 let wirePlaintext = try wireContent.serializedData()
                 let storagePayload = LocalMessagePayload.storagePayload(forWireContent: wireContent)
@@ -842,7 +843,8 @@ final class ChatSendCoordinator {
             do {
                 let result = try await mediaUploadManager.uploadFilesAndBuildContent(
                     urls: fileURLs,
-                    caption: caption
+                    caption: caption,
+                    for: recipientId
                 )
                 pendingMediaUploads.removeValue(forKey: placeholderId)
                 persistenceService.deleteMessage(id: placeholderId, in: viewContext, autoSave: false)
