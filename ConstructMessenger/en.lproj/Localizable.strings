@@ -1190,6 +1190,9 @@
 "net_status_protected" = "Protected";
 "net_status_connecting" = "Connecting…";
 "file" = "File";
+"audio_file" = "Audio";
+"audio_play" = "Play";
+"audio_pause" = "Pause";
 
 /* Chat system bubble: the encrypted session broke and incoming messages cannot be read. */
 

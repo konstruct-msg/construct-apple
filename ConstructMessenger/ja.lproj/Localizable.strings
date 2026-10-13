@@ -1200,6 +1200,9 @@
 "identity_fingerprint_copy_hint" = "フィンガープリントをクリップボードにコピーします";
 "identity_fingerprint_copied" = "コピーしました";
 "file" = "ファイル";
+"audio_file" = "オーディオ";
+"audio_play" = "再生";
+"audio_pause" = "一時停止";
 "msg_status_sending" = "送信中";
 "msg_status_sent" = "送信済み";
 "msg_status_delivered" = "配信済み";
