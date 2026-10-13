@@ -887,13 +887,14 @@ class MediaManager {
     func uploadAvatar(_ image: PlatformImage) async throws -> AvatarUploadResult {
         Log.info("Uploading avatar", category: "MediaManager")
         
-        // Optimize avatar (resize + compress) using ImageHelper
-        guard let avatarData = ImageHelper.prepareAvatarImage(image) else {
+        // Optimize avatar (resize + compress) using ImageHelper, then bring it to the one length
+        // every avatar has on the wire (`AvatarPadding`).
+        guard let avatarData = ImageHelper.prepareAvatarImage(image).map(AvatarPadding.padded) else {
             throw MediaManagerError.optimizationFailed
         }
         
-        // One upload goes to every contact the profile is sent to, so there is no one
-        // conversation to keep a reuse inside.
+        // One new object per contact the profile goes to (`ProfileShareViewModel`): never a reuse,
+        // or the cache would hand every contact the same object again.
         let uploadResult = try await Self.uploadWithRetry(
                 data: avatarData,
                 mimeType: "image/jpeg",
