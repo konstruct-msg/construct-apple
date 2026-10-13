@@ -27,38 +27,30 @@ import XCTest
 
 final class StreamHeartbeatScheduleTests: XCTestCase {
 
-    private let interval: TimeInterval = 25
-
     func testTheFirstHeartbeatIsImmediate() {
         // The whole incident in one assertion: 25s of client silence on a fresh stream is 25s in
         // which a quiet server has no reason to flush headers, against a 2s accept budget.
-        XCTAssertEqual(StreamHeartbeatSchedule.delayBeforeHeartbeat(index: 0, interval: interval), 0)
+        XCTAssertEqual(StreamHeartbeatSchedule.delayBeforeHeartbeat(index: 0), 0)
     }
 
-    func testEverySubsequentHeartbeatKeepsTheInterval() {
-        // Must NOT turn into a busy loop: the interval is what keeps a long-lived stream alive
-        // without spending battery, and the H2 keepalive constants are tuned around it
-        // (keepaliveTimeDirect 10s < heartbeatInterval 25s is deliberate).
+    /// After the first, the client says nothing on its own (2026-10-13): the server sends
+    /// heartbeats itself, and a second fixed period on the wire is one more for an observer.
+    func testThereIsNoSecondHeartbeat() {
         for index in 1...10 {
-            XCTAssertEqual(
-                StreamHeartbeatSchedule.delayBeforeHeartbeat(index: index, interval: interval),
-                interval,
-                "heartbeat #\(index) must wait a full interval"
-            )
+            XCTAssertNil(StreamHeartbeatSchedule.delayBeforeHeartbeat(index: index), "heartbeat #\(index)")
         }
     }
 
     func testTheScheduleIsDefinedForADegenerateIndex() {
-        // A negative index can only come from a caller bug, but returning `interval` there would
-        // reintroduce exactly the 25s silence this exists to remove.
-        XCTAssertEqual(StreamHeartbeatSchedule.delayBeforeHeartbeat(index: -1, interval: interval), 0)
+        // A negative index can only come from a caller bug; it must not delay the one that matters.
+        XCTAssertEqual(StreamHeartbeatSchedule.delayBeforeHeartbeat(index: -1), 0)
     }
 
-    func testTheFirstSendHappensBeforeAnyIntervalElapses() {
+    func testTheFirstSendHappensBeforeTheAcceptTimeout() {
         // Stated as elapsed time rather than as a delay, because that is the property the server
-        // cares about: it must hear from us inside the accept budget, not inside the heartbeat
-        // interval. 2.0s is NetworkTiming.GRPC.streamOpenAcceptTimeout.
-        let elapsedBeforeFirstSend = StreamHeartbeatSchedule.delayBeforeHeartbeat(index: 0, interval: interval)
+        // cares about: it must hear from us inside the accept budget. 2.0s is
+        // NetworkTiming.GRPC.streamOpenAcceptTimeout.
+        let elapsedBeforeFirstSend = StreamHeartbeatSchedule.delayBeforeHeartbeat(index: 0) ?? .infinity
         XCTAssertLessThan(
             elapsedBeforeFirstSend,
             NetworkTiming.GRPC.streamOpenAcceptTimeout,
