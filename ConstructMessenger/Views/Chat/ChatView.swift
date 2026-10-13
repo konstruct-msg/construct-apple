@@ -52,6 +52,11 @@ struct ChatView: View {
     @State private var isSearchActive = false
     @State private var isEditMode = false
     @State private var selectedMessages: Set<String> = []
+    /// What the forward picker on screen will send.
+    @State private var forwarding: [TranscriptRow] = []
+    @State private var showingForwardPicker = false
+    @State private var forwardFailed = false
+    @Environment(ChatsViewModel.self) private var chatsViewModel
     @State private var galleryStartItem: GalleryStartItem?  // media gallery presenter
 
     // Drop target for drag-and-drop from Finder (macOS) over the whole chat area
@@ -285,6 +290,16 @@ struct ChatView: View {
             .presentationDetents([.large])
             .presentationDragIndicator(.visible)
         }
+        .sheet(isPresented: $showingForwardPicker) {
+            ForwardPickerView(onPick: finishForward(to:))
+                .sheetNavigation()
+        }
+        .task(id: ForwardDrafts.shared.pending[viewModel.conversation.chatId]?.count ?? 0) {
+            await sendForwardedHere()
+        }
+        .alert(NSLocalizedString("forward_failed", comment: ""), isPresented: $forwardFailed) {
+            Button(NSLocalizedString("ok", comment: ""), role: .cancel) {}
+        }
         .sheet(isPresented: $showingSafetyNumbers) {
             SafetyNumberView(
                 theirDeviceIds: KeyChangeUX.safetyDeviceIds(ofContact: peerId),
@@ -421,7 +436,8 @@ struct ChatView: View {
         if isEditMode && !selectedMessages.isEmpty {
             ChatSelectionBarView(
                 selectedCount: selectedMessages.count,
-                onDelete: deleteSelectedMessages
+                onDelete: deleteSelectedMessages,
+                onForward: forwardSelectedMessages
             )
         }
     }
@@ -925,7 +941,8 @@ struct ChatView: View {
                             },
                             onReact: { msg, emoji in
                                 viewModel.sendReaction(msg, emoji: emoji)
-                            }
+                            },
+                            onForward: { msg in startForward([msg]) }
                         ) }
                         .id(message.id)
                         // The LAST message only, and no longer just a probe. Auto-scroll
@@ -1249,6 +1266,37 @@ struct ChatView: View {
         }
     }
     
+    // MARK: - Forward
+
+    private func startForward(_ rows: [TranscriptRow]) {
+        forwarding = rows
+        showingForwardPicker = true
+    }
+
+    private func forwardSelectedMessages() {
+        startForward(viewModel.entries.map(\.row).filter { selectedMessages.contains($0.id) })
+    }
+
+    /// The picked chat sends it: this one at once, any other when it opens.
+    private func finishForward(to chat: ChatRecord) {
+        ForwardDrafts.shared.hand(ForwardItem.content(of: forwarding), to: chat.id)
+        forwarding = []
+        withAnimation {
+            selectedMessages.removeAll()
+            isEditMode = false
+        }
+        if chat.id != viewModel.conversation.chatId {
+            chatsViewModel.chatToOpen = chat.id
+        }
+    }
+
+    private func sendForwardedHere() async {
+        let items = ForwardDrafts.shared.take(for: viewModel.conversation.chatId)
+        guard !items.isEmpty else { return }
+        let failures = await viewModel.forward(items)
+        if !failures.isEmpty { forwardFailed = true }
+    }
+
     private func deleteSelectedMessages() {
         guard !selectedMessages.isEmpty else { return }
         
@@ -1316,6 +1364,7 @@ struct ChatView: View {
     return NavigationStack {
         ChatView(conversation: Conversation(chatId: chat.id, peerId: user.id), context: context)
             .environment(\.managedObjectContext, context)
+            .environment(ChatsViewModel())
     }
 }
 #endif

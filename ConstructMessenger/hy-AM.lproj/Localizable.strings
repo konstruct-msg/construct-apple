@@ -1190,6 +1190,9 @@
 "net_status_protected" = "Պաշտպանված";
 "net_status_connecting" = "Միացում…";
 "file" = "Ֆայլ";
+"forward" = "Փոխանցել";
+"forward_to" = "Փոխանցել";
+"forward_failed" = "Որոշ կցորդներ չեն փոխանցվել. դրանք այլևս չկան ո՛չ այս սարքում, ո՛չ սերվերում։";
 
 /* Chat system bubble: the encrypted session broke and incoming messages cannot be read. */
 
