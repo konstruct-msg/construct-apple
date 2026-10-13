@@ -372,6 +372,10 @@ final class GRPCChannelManager: Sendable {
             )
             return GRPCClient(transport: transport, interceptors: [AuthInterceptor()])
         }
+        guard VeilProxyStore.loadMode().allowsDirectPath else {
+            Log.info("gRPC: VEIL on and no tunnel — not connecting directly", category: "gRPC")
+            throw VeilTunnelNotUp()
+        }
 
         let host = currentHost
         let port = currentPort
@@ -434,6 +438,10 @@ final class GRPCChannelManager: Sendable {
                 }
             )
             return GRPCClient(transport: transport, interceptors: [])
+        }
+        guard VeilProxyStore.loadMode().allowsDirectPath else {
+            Log.info("gRPC sealed: VEIL on and no tunnel — not connecting directly", category: "gRPC")
+            throw VeilTunnelNotUp()
         }
 
         let host = currentHost
@@ -545,6 +553,8 @@ final class GRPCChannelManager: Sendable {
     /// when the experiment is off; callers MUST fall back
     /// to the H2 path (`acquirePersistentClient()`) on `nil` or on any RPC failure.
     func acquireEngineQuicChannel() -> GRPCClient<QuicClientTransport>? {
+        // QUIC is a direct path to the gateway; under VEIL `on` there is none.
+        guard VeilProxyStore.loadMode().allowsDirectPath else { return nil }
         _eqConnLock.lock()
         defer { _eqConnLock.unlock() }
 

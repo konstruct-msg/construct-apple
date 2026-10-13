@@ -44,6 +44,14 @@ enum TransportReducer {
             if !outcome.effects.contains(.requestProxyStop) { outcome.effects.append(.requestProxyStop) }
             if !outcome.effects.contains(.setVeilPort(nil)) { outcome.effects.append(.setVeilPort(nil)) }
         }
+
+        // On never goes direct (decisions/veil-on-never-goes-direct.md). Whatever would have put
+        // it on the direct path — a cooldown that elapsed, a manual reset — sends it back to the
+        // front instead. Until 2026-10-13 a cooldown ended in .direct whatever the mode.
+        if case .on = mode, case .direct = outcome.state {
+            outcome.state = .veilProbing
+            if !outcome.effects.contains(.requestProxyStart) { outcome.effects.append(.requestProxyStart) }
+        }
         return outcome
     }
 
