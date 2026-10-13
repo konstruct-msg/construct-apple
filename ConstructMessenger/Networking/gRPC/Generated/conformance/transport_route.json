@@ -1103,6 +1103,87 @@
           "kind": "invalidate_grpc_client"
         }
       ]
+    },
+    {
+      "name": "on_cooldown_ends_probing_not_direct",
+      "state": {
+        "kind": "veil_cooldown",
+        "until_ms": 1000000
+      },
+      "mode": "on",
+      "events": [
+        {
+          "kind": "cooldown_elapsed"
+        }
+      ],
+      "expect_state": {
+        "kind": "veil_probing"
+      },
+      "expect_effects": [
+        {
+          "kind": "invalidate_grpc_client"
+        },
+        {
+          "kind": "request_proxy_start"
+        }
+      ]
+    },
+    {
+      "name": "on_manual_reset_probes_again",
+      "state": {
+        "kind": "veil_active",
+        "relay": "relay.example:443",
+        "port": 49262,
+        "since_ms": 1
+      },
+      "mode": "on",
+      "events": [
+        {
+          "kind": "manual_reset"
+        }
+      ],
+      "expect_state": {
+        "kind": "veil_probing"
+      },
+      "expect_effects": [
+        {
+          "kind": "request_proxy_stop"
+        },
+        {
+          "kind": "set_veil_port",
+          "port": null
+        },
+        {
+          "kind": "invalidate_grpc_client"
+        },
+        {
+          "kind": "request_proxy_start"
+        }
+      ]
+    },
+    {
+      "name": "on_manual_reset_from_direct_probes",
+      "state": {
+        "kind": "direct",
+        "fails": 0
+      },
+      "mode": "on",
+      "events": [
+        {
+          "kind": "manual_reset"
+        }
+      ],
+      "expect_state": {
+        "kind": "veil_probing"
+      },
+      "expect_effects": [
+        {
+          "kind": "invalidate_grpc_client"
+        },
+        {
+          "kind": "request_proxy_start"
+        }
+      ]
     }
   ]
 }
