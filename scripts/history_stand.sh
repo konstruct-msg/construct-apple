@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 #
-# history_stand.sh — стенд переноса истории: телефон ↔ Mac, одна сборка с -DHISTORY_STAND.
+# history_stand.sh — стенд переноса истории: телефон ↔ Mac, обе стороны в Debug.
 #
-# Перенос истории выключен в продукте (DeviceLinkHistorySyncPolicy.isPostLinkEnabled = false)
-# до прогона этого стенда (DEVICE_LINK_HISTORY_TRANSFER_PLAN §8). Стендовая сборка включает его
-# флагом компилятора, которого нет ни в одной конфигурации проекта — в том числе в Beta, которая
-# держит DEBUG и уходит в TestFlight. Документация: docs/HISTORY_STAND.md.
+# Перенос истории выключен в Release (DeviceLinkHistorySyncPolicy.isPostLinkEnabled = false)
+# до прогона этого стенда (DEVICE_LINK_HISTORY_TRANSFER_PLAN §8) и предлагается везде, где
+# предлагается привязка, — в Debug и Beta. Отдельного флага сборки больше нет (до 2026-10-13
+# был -DHISTORY_STAND). Документация: docs/HISTORY_STAND.md.
 #
 # Использование:
 #   ./scripts/history_stand.sh mac          # собрать Desktop, перезапустить, лог → logs/history_stand/mac.log
@@ -31,7 +31,6 @@ MAC_SCHEME="Construct Desktop"
 MAC_APP_NAME="Construct Desktop"
 OUT="$REPO_ROOT/logs/history_stand"
 DD="$OUT/DerivedData"
-STAND_FLAGS=(OTHER_SWIFT_FLAGS='$(inherited) -DHISTORY_STAND')
 
 # Строки, по которым читается прогон: link, доверие, фазы, отказ.
 PATTERN='history_|DeviceLink|NearbyTransfer'
@@ -63,7 +62,7 @@ sys.exit("нет симулятора " + name)
 built_app() {
   local scheme="$1"; shift
   xcodebuild -project "$PROJECT" -scheme "$scheme" -configuration Debug -derivedDataPath "$DD" \
-    "$@" "${STAND_FLAGS[@]}" -showBuildSettings -json 2>/dev/null | python3 -c '
+    "$@" -showBuildSettings -json 2>/dev/null | python3 -c '
 import json, sys
 for entry in json.load(sys.stdin):
     s = entry.get("buildSettings", {})
@@ -75,9 +74,9 @@ sys.exit("не нашёл .app")
 
 build() {
   local scheme="$1"; shift
-  info "сборка $scheme (-DHISTORY_STAND)"
+  info "сборка $scheme (Debug)"
   xcodebuild -project "$PROJECT" -scheme "$scheme" -configuration Debug -derivedDataPath "$DD" \
-    -allowProvisioningUpdates "$@" "${STAND_FLAGS[@]}" build -quiet \
+    -allowProvisioningUpdates "$@" build -quiet \
     || die "сборка $scheme упала"
 }
 

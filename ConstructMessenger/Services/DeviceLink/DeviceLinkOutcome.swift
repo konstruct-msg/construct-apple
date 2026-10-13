@@ -30,24 +30,21 @@ enum DeviceLinkPhase: Equatable {
     case historySyncSend(pendingDeviceId: String)
 }
 
-/// Runtime gate for automatic post-link history transfer.
+/// Whether a link offers to transfer history — asked on both devices, the one that sends and the
+/// one that receives.
 ///
-/// Nearby history transfer remains implemented, but account linking currently enters the app
-/// without prompting for history so multi-device fan-out can be verified independently.
+/// History follows linking: a build that offers a link offers the history with it, which is
+/// Debug and Beta (TestFlight) until `DEVICE_LINK_HISTORY_TRANSFER_PLAN` stage 8 passes and
+/// `isPostLinkEnabled` turns it on in Release.
+///
+/// Until 2026-10-13 a second flag, `-DHISTORY_STAND`, gated it apart from the link, and no
+/// configuration defined it. A phone run from Xcode (Debug) linked a Mac built with it and
+/// offered nothing, and neither side said why: one decision, two carriers, and the devices
+/// disagreed. Both devices now read the same condition from the same kind of build.
 enum DeviceLinkHistorySyncPolicy {
     static let isPostLinkEnabled = false
 
-    /// The two-device stand's build: `scripts/history_stand.sh` compiles with
-    /// `-DHISTORY_STAND`, and no configuration in the project defines it — not Beta, which keeps
-    /// `DEBUG` and reaches TestFlight. Until 2026-09-29 this was a `DEBUG` static nothing could
-    /// set, so the stand had no way in short of editing this line.
-    #if HISTORY_STAND
-    static let isStandBuild = true
-    #else
-    static let isStandBuild = false
-    #endif
-
-    static var isOffered: Bool { isPostLinkEnabled || isStandBuild }
+    static var isOffered: Bool { isPostLinkEnabled || DeviceLinkOfferPolicy.isLinkingOffered }
 }
 
 /// Whether the UI offers to link a second device at all.

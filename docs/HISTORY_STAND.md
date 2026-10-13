@@ -5,12 +5,18 @@ and Construct Desktop, and reads both sides' logs of one transfer side by side. 
 their pass criteria are stage 8 of `client/specs/DEVICE_LINK_HISTORY_TRANSFER_PLAN.md` in the
 vault; this file documents the script, and the two change together.
 
-## Why a build flag
+## Which builds offer it
 
-Post-link transfer is off in the product (`DeviceLinkHistorySyncPolicy.isPostLinkEnabled = false`)
-until this stand passes. The stand build turns it on with `-DHISTORY_STAND`, which the script
-passes and **no configuration in the project defines** — Beta keeps `DEBUG` and goes to TestFlight,
-so `DEBUG` cannot be the gate. Until 2026-09-29 the gate was a `DEBUG` static nothing could set.
+History follows linking: `DeviceLinkHistorySyncPolicy.isOffered` is true wherever
+`DeviceLinkOfferPolicy.isLinkingOffered` is — Debug and Beta, so TestFlight too — and Release
+waits for `isPostLinkEnabled`, which turns on when this stand passes. Both devices ask it, so any
+two Debug or Beta builds agree; the script builds both sides in Debug and passes no flag.
+
+Until 2026-10-13 the stand build needed `-DHISTORY_STAND`, which no configuration defined, so
+that TestFlight would not offer the transfer. A phone run from Xcode (Debug, no flag) then linked
+a Mac built with it, offered nothing and logged only `Post-link history sync disabled`; the link
+was offered and the history was not, by two flags nobody could see side by side. Before
+2026-09-29 the gate was a `DEBUG` static nothing could set.
 
 ```bash
 ./scripts/history_stand.sh mac        # build Desktop, relaunch it, log → logs/history_stand/mac.log
