@@ -63,33 +63,16 @@ final class ChatSessionManager {
             Log.debug("Blocked attempt to initialize session with self", category: "ChatViewModel")
             return
         }
-        // Whether this fetch is allowed to burn one of the peer's one-time pre-keys.
-        //
-        // `getPreKeyBundle` is destructive: the server DELETEs an OTPK and hands it out.
-        // `onViewAppear` calls this on every chat open, so an unnecessary consuming fetch
-        // drains a real contact's pool — device logs showed 10 fetches in 5.5 minutes, every
-        // one landing on "session already established". That is what emptied the peer's pool
-        // and left new inbound sessions running X3DH with no one-time pre-key.
-        //
-        // The old guard was `isSessionReady == true && hasUsername`, which conflated key
-        // material with a *profile* concern: a contact whose username we never stored slipped
-        // through on every open, and since a key bundle carries no username the condition
-        // could never become true — a permanent loop. Ask the crypto core instead
-        // (authoritative; `isSessionReady` is per-ViewModel view state that resets on each
-        // chat open) and leave username backfill to the profile path, which owns it.
+        // Ask the crypto core whether a session exists (authoritative; `isSessionReady` is
+        // per-ViewModel view state that resets on each chat open), and leave username backfill
+        // to the profile path, which owns it.
         let sessionExists = CryptoManager.shared.hasSessionWithAnyDevice(ofPeer: userId)
-        if sessionExists {
-            viewModel?.isSessionReady = true
-            // Skip the network entirely only when the identity key is already available —
-            // stealth sealing needs it, and under stealth-on a missing key is fail-closed
-            // (`StealthDowngradeBlocked` → queue + retry), so silently skipping would stall
-            // sends for a contact we only ever responded to. Otherwise fall through to a
-            // NON-consuming fetch: same long-lived material, no OTPK burned.
-            if recipientBundle != nil || StealthSenderService.recipientIdentityKey(recipientId: userId) != nil {
-                return
-            }
-            Log.debug("Session exists but no cached identity key for \(userId.prefix(8))… — non-consuming bundle fetch", category: "ChatViewModel")
-        }
+        if sessionExists { viewModel?.isSessionReady = true }
+        let identityKeyKnown = recipientBundle != nil
+            || StealthSenderService.recipientIdentityKey(recipientId: userId) != nil
+        guard case .fetch(let consumeOneTimePrekey) = Self.bundleFetchOnOpen(
+            sessionExists: sessionExists, identityKeyKnown: identityKeyKnown
+        ) else { return }
 
         publicKeyFetchTimer?.invalidate()
         publicKeyFetchTimer = Timer.scheduledTimer(withTimeInterval: publicKeyFetchTimeout, repeats: false) { [weak self] _ in
@@ -108,7 +91,7 @@ final class ChatSessionManager {
             do {
                 let publicKeyBundle = try await sessionInitService.fetchPublicKeyWithRetry(
                     userId: userId,
-                    consumeOneTimePrekey: !sessionExists
+                    consumeOneTimePrekey: consumeOneTimePrekey
                 )
                 publicKeyFetchTimer?.invalidate()
                 publicKeyFetchTimer = nil
@@ -123,6 +106,32 @@ final class ChatSessionManager {
                 viewModel?.isSessionReady = false
             }
         }
+    }
+
+    enum BundleFetchOnOpen: Equatable {
+        case skip
+        case fetch(consumeOneTimePrekey: Bool)
+    }
+
+    /// What opening a chat fetches. Never a one-time pre-key: `getPreKeyBundle` with
+    /// `consume` makes the server delete one of the peer's OTPKs and hand it out, and this
+    /// bundle runs no X3DH — it warms the identity key stealth sealing needs and readies the
+    /// composer. The session is made at send, by `initializeSessionProactively`, which fetches
+    /// its own consuming bundle right before it uses it.
+    ///
+    /// Skip the network only when a session exists and the identity key is known: under
+    /// stealth-on a missing key is fail-closed (`StealthDowngradeBlocked` → queue + retry), so
+    /// a contact we only ever answered still needs the fetch.
+    ///
+    /// Until 2026-10-13 a chat with no session fetched with `consume: true` on every open, and
+    /// the bundle went into `recipientBundle`, which session creation never reads — so each
+    /// open spent one of the peer's keys for nothing and the first send spent another. A Mac
+    /// linked with history has no sessions and spent six of one peer's keys in minutes. The
+    /// fix of 2026-07-28 (10 fetches in 5.5 minutes, all with a session) covered only the
+    /// branch where a session exists.
+    nonisolated static func bundleFetchOnOpen(sessionExists: Bool, identityKeyKnown: Bool) -> BundleFetchOnOpen {
+        if sessionExists && identityKeyKnown { return .skip }
+        return .fetch(consumeOneTimePrekey: false)
     }
 
     private func handlePublicKeyBundle(_ data: PublicKeyBundleData) {
