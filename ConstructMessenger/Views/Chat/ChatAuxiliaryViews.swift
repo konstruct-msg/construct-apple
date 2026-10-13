@@ -33,6 +33,7 @@ struct ChatDropOverlayView: View {
 struct ChatSelectionBarView: View {
     let selectedCount: Int
     let onDelete: () -> Void
+    var onForward: (() -> Void)? = nil
 
     var body: some View {
         HStack(alignment: .center, spacing: CTLayout.chromeGap) {
@@ -49,6 +50,14 @@ struct ChatSelectionBarView: View {
             )
             .font(CTFont.secondary)
             .foregroundStyle(Color.CT.textDim)
+            if let onForward {
+                Spacer()
+                Button(action: onForward) {
+                    Label(NSLocalizedString("forward", comment: ""), systemImage: "arrowshape.turn.up.right")
+                        .frame(minHeight: CTLayout.hitTarget)
+                }
+                .disabled(selectedCount == 0)
+            }
         }
         .padding(.horizontal, CTLayout.edgePad)
         .frame(minHeight: CTLayout.controlHeight)

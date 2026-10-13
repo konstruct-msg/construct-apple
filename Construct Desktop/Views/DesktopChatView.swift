@@ -33,6 +33,10 @@ struct DesktopChatView: View {
     @State private var isSearchActive = false
     @State private var isEditMode = false
     @State private var selectedMessages: Set<String> = []
+    /// What the forward picker on screen will send.
+    @State private var forwarding: [TranscriptRow] = []
+    @State private var showingForwardPicker = false
+    @State private var forwardFailed = false
     @State private var galleryStartItem: GalleryStartItem?
 
     @State private var chatDropImages: [PlatformImage] = []
@@ -146,6 +150,17 @@ struct DesktopChatView: View {
                         .allowsHitTesting(false)
                         .padding(8)
                 }
+            }
+            .sheet(isPresented: $showingForwardPicker) {
+                ForwardPickerView(onPick: finishForward(to:))
+                    .sheetNavigation()
+                    .frame(minWidth: 420, minHeight: 480)
+            }
+            .task(id: ForwardDrafts.shared.pending[viewModel.conversation.chatId]?.count ?? 0) {
+                await sendForwardedHere()
+            }
+            .alert(NSLocalizedString("forward_failed", comment: ""), isPresented: $forwardFailed) {
+                Button(NSLocalizedString("ok", comment: ""), role: .cancel) {}
             }
             .sheet(isPresented: $showingUserProfile) {
                 UserProfileView(userId: peerId, showMessageButton: false)
@@ -303,6 +318,12 @@ struct DesktopChatView: View {
                 )
                     .font(CTFont.secondary)
                     .foregroundStyle(Color.CT.textDim)
+                Spacer()
+                Button {
+                    startForward(viewModel.entries.map(\.row).filter { selectedMessages.contains($0.id) })
+                } label: {
+                    Label(NSLocalizedString("forward", comment: ""), systemImage: "arrowshape.turn.up.right")
+                }
             }
             .padding()
             .background(Color.CT.bg)
@@ -599,6 +620,30 @@ struct DesktopChatView: View {
         }
     }
 
+    // MARK: - Forward
+
+    private func startForward(_ rows: [TranscriptRow]) {
+        forwarding = rows
+        showingForwardPicker = true
+    }
+
+    /// The picked chat sends it: this one at once, any other when it opens.
+    private func finishForward(to chat: ChatRecord) {
+        ForwardDrafts.shared.hand(ForwardItem.content(of: forwarding), to: chat.id)
+        forwarding = []
+        withAnimation { selectedMessages.removeAll(); isEditMode = false }
+        if chat.id != viewModel.conversation.chatId {
+            chatsViewModel.chatToOpen = chat.id
+        }
+    }
+
+    private func sendForwardedHere() async {
+        let items = ForwardDrafts.shared.take(for: viewModel.conversation.chatId)
+        guard !items.isEmpty else { return }
+        let failures = await viewModel.forward(items)
+        if !failures.isEmpty { forwardFailed = true }
+    }
+
     private func deleteSelectedMessages() {
         guard !selectedMessages.isEmpty else { return }
         viewModel.deleteMessages(withIds: selectedMessages)
@@ -687,7 +732,8 @@ struct DesktopChatView: View {
                             onJumpToReply: { msg in peekReplyChain(for: msg) },
                             onReact: { msg, emoji in
                                 viewModel.sendReaction(msg, emoji: emoji)
-                            }
+                            },
+                            onForward: { msg in startForward([msg]) }
                         ) }
                         .id(message.id)
                         .onAppear {
