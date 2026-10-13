@@ -486,6 +486,7 @@
 "veil_footer_off" = "トラフィック保護が無効です。直接接続のみ。";
 "veil_footer_auto" = "ネットワークの遮断が検出されると、VEILが自動的に有効になります。";
 "veil_footer_on" = "すべてのトラフィックがVEILリレーを経由します。";
+"veil_footer_on_no_front" = "リレーが応答していません。応答するまで送受信は行われません。「オン」ではVEILが直接接続することはありません。リレーに届かない間も直接接続するには「自動」を選んでください。";
 "veil_auto_active" = "自動有効化中 ・ 直接接続遮断";
 "veil_direct_probe_ok" = "直接接続: OK (%@)";
 "veil_direct_probe_blocked" = "直接接続: 遮断";
