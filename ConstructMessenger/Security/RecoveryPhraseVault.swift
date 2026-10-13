@@ -150,12 +150,15 @@ final class RecoveryPhraseVault: RecoveryPhraseStore {
     }
 
     /// Generic-password items here carry no service, like every other item this app writes
-    /// (`KeychainManager.save` — adding one would orphan them).
+    /// (`KeychainManager.save` — adding one would orphan them). The data protection keychain on
+    /// macOS too (`KeychainPlacement`): an access-controlled item needs it, and nothing reads
+    /// through to the login keychain here because the Mac has never written a phrase — the only
+    /// caller that provisions one, `ContentView`, is not built for it.
     private func base(_ item: String) -> [String: Any] {
-        [
+        KeychainPlacement.current([
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrAccount as String: item
-        ]
+        ])
     }
 
     private static func account(of item: [String: Any]) -> String? {
