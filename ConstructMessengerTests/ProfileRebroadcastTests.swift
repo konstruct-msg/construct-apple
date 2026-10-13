@@ -59,7 +59,7 @@ final class ProfileRebroadcastTests: XCTestCase {
         await ProfileShareViewModel(context: context, deliver: { profile, contactId in
             delivered.append((contactId, profile.data.displayName))
             return (true, nil)
-        }).rebroadcastProfileToSharedContacts()
+        }, pause: { _ in }).rebroadcastProfileToSharedContacts()
 
         XCTAssertEqual(Set(delivered.map(\.0)), Set(shared), "every contact the profile is shared with, and only those")
         XCTAssertEqual(delivered.count, shared.count, "each once")
@@ -102,6 +102,87 @@ final class ProfileRebroadcastTests: XCTestCase {
         try? context.save()
         await vm.rebroadcastProfileToSharedContacts()
         XCTAssertGreaterThan(sent[2].editedAtMs, sent[1].editedAtMs, "an edit is a newer version")
+    }
+
+    // MARK: - TODO 144: the avatar must not show whom we share the profile with
+
+    private func sharedContacts(_ count: Int, avatar: Data?, in context: NSManagedObjectContext) -> [String] {
+        let self_ = User(context: context)
+        self_.id = me
+        self_.username = "me"
+        self_.displayName = "Alice"
+        self_.avatarData = avatar
+        var ids: [String] = []
+        for i in 0..<count {
+            let contact = User(context: context)
+            contact.id = UUID().uuidString
+            contact.username = "c\(i)"
+            contact.displayName = ""
+            contact.amISharingWith = true
+            ids.append(contact.id)
+        }
+        try? context.save()
+        return ids
+    }
+
+    private func jpeg() -> Data {
+        UIGraphicsImageRenderer(size: CGSize(width: 64, height: 64)).jpegData(withCompressionQuality: 0.8) { ctx in
+            UIColor.systemTeal.setFill()
+            ctx.fill(CGRect(x: 0, y: 0, width: 64, height: 64))
+        }
+    }
+
+    /// One object fetched from N connections says "the same thing to these N people". Each contact
+    /// gets its own upload, so its own media id.
+    func testEachContactGetsItsOwnUploadOfTheAvatar() async {
+        let container = PersistenceController(inMemory: true).container
+        LocalRepositories.useContactsForTesting(container)
+        let context = container.viewContext
+        let contacts = sharedContacts(3, avatar: jpeg(), in: context)
+
+        var uploads = 0
+        var mediaIds: [String: String] = [:]
+        await ProfileShareViewModel(context: context, deliver: { profile, contactId in
+            if case .set(let ref) = profile.data.avatar { mediaIds[contactId] = ref.mediaId }
+            return (true, nil)
+        }, uploadAvatar: { _ in
+            uploads += 1
+            return AvatarUploadResult(mediaUrl: "u", encryptionKey: Data(repeating: 1, count: 32),
+                                      mediaId: UUID().uuidString, hash: "00")
+        }, pause: { _ in }).rebroadcastProfileToSharedContacts()
+
+        XCTAssertEqual(uploads, contacts.count)
+        XCTAssertEqual(Set(mediaIds.keys), Set(contacts))
+        XCTAssertEqual(Set(mediaIds.values).count, contacts.count, "no two contacts share an object")
+    }
+
+    /// Sends in one burst say "one account, N recipients, now".
+    func testContactsAreSentApart() async {
+        let container = PersistenceController(inMemory: true).container
+        LocalRepositories.useContactsForTesting(container)
+        let context = container.viewContext
+        let contacts = sharedContacts(4, avatar: nil, in: context)
+
+        var pauses: [Duration] = []
+        await ProfileShareViewModel(context: context, deliver: { _, _ in (true, nil) },
+                                    pause: { pauses.append($0) }).rebroadcastProfileToSharedContacts()
+
+        XCTAssertEqual(pauses.count, contacts.count - 1, "between contacts, not before the first")
+        let range = ProfileShareViewModel.rebroadcastSpacing
+        XCTAssertTrue(pauses.allSatisfy { $0 >= .seconds(range.lowerBound) && $0 <= .seconds(range.upperBound) })
+    }
+
+    func testEveryAvatarHasOneLengthAndStillShows() throws {
+        let small = jpeg()
+        let padded = AvatarPadding.padded(small)
+        XCTAssertEqual(padded.count, AvatarPadding.size)
+        XCTAssertEqual(padded.prefix(small.count), small, "the picture itself is untouched")
+        let image = try XCTUnwrap(UIImage(data: padded), "a decoder stops at the end of the image")
+        XCTAssertEqual(image.size, UIImage(data: small)?.size, "the same picture as before padding")
+
+        let large = Data(count: AvatarPadding.size + 1)
+        XCTAssertEqual(AvatarPadding.padded(large).count, 2 * AvatarPadding.size)
+        XCTAssertEqual(AvatarPadding.padded(Data(count: AvatarPadding.size)).count, AvatarPadding.size)
     }
 
     /// Removing our photo is an edit: the avatar goes, the version moves, and the profile that
