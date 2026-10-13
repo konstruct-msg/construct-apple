@@ -37,3 +37,16 @@ final class DeviceLinkCheckpointTests: XCTestCase {
         )
     }
 }
+
+final class DeviceLinkHistoryOfferTests: XCTestCase {
+
+    /// A build that offers a link offers the history with it. Both devices ask this, so the
+    /// phone that sends and the Mac that receives agree whenever they are the same kind of build.
+    ///
+    /// Mutation: `isOffered` reads `isPostLinkEnabled` alone, as it effectively did in any build
+    /// without `-DHISTORY_STAND` until 2026-10-13 — this reddens.
+    func testABuildThatOffersALinkOffersTheHistory() {
+        XCTAssertTrue(DeviceLinkOfferPolicy.isLinkingOffered, "the tests run in Debug, which offers a link")
+        XCTAssertTrue(DeviceLinkHistorySyncPolicy.isOffered)
+    }
+}
