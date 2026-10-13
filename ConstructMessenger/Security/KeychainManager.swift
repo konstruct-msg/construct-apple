@@ -773,18 +773,28 @@ class KeychainManager {
         return found.count
     }
 
+    /// Both keychains on macOS: an item not yet read since the move to the data protection
+    /// keychain is still in the login one, and a listing must not lose it. Attributes only, so
+    /// the login keychain lists without a prompt.
     private func accounts(withPrefix prefix: String) -> [String] {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecMatchLimit as String: kSecMatchLimitAll,
             kSecReturnAttributes as String: true
         ]
+        var found = Self.accounts(matching: KeychainPlacement.current(query))
+        if KeychainPlacement.hasLegacyKeychain {
+            let moved = Set(found)
+            found += Self.accounts(matching: KeychainPlacement.legacy(query)).filter { !moved.contains($0) }
+        }
+        return found.filter { $0.hasPrefix(prefix) }
+    }
+
+    private static func accounts(matching query: [String: Any]) -> [String] {
         var result: CFTypeRef?
         guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess,
               let items = result as? [[String: Any]] else { return [] }
-
         return items.compactMap { $0[kSecAttrAccount as String] as? String }
-                    .filter { $0.hasPrefix(prefix) }
     }
 
     private func save(_ data: Data, forKey key: String, accessible: CFString) -> Bool {
@@ -794,10 +804,10 @@ class KeychainManager {
             return true
         }
 
-        let searchQuery: [String: Any] = [
+        let searchQuery = KeychainPlacement.current([
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrAccount as String: key
-        ]
+        ])
         let attributes: [String: Any] = [
             kSecValueData as String: data,
             kSecAttrAccessible as String: accessible
@@ -821,16 +831,47 @@ class KeychainManager {
     /// Use this wherever acting on a wrong answer is destructive — see `KeychainRead` and the
     /// 2026-08-09 account-reset incident. `load` remains correct for the many callers that only
     /// need the value.
+    ///
+    /// On macOS an item still in the login keychain is read there once and moved
+    /// (`KeychainPlacement`).
     func read(forKey key: String) -> KeychainRead {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrAccount as String: key,
             kSecReturnData as String: true
         ]
+        let outcome = KeychainPlacement.read(
+            current: Self.copy(KeychainPlacement.current(query)),
+            currentUsable: KeychainPlacement.isCurrentUsable,
+            hasLegacy: KeychainPlacement.hasLegacyKeychain,
+            legacy: { Self.copy(KeychainPlacement.legacy(query)) }
+        )
+        if outcome.moveFromLegacy, let data = outcome.answer.data {
+            moveFromLegacy(data, forKey: key)
+        }
+        return outcome.answer
+    }
 
+    private static func copy(_ query: [String: Any]) -> KeychainRead {
         var result: AnyObject?
         let status = SecItemCopyMatching(query as CFDictionary, &result)
         return KeychainRead.classify(status: status, data: result as? Data)
+    }
+
+    /// The login keychain's copy goes only once the data protection keychain holds the value.
+    /// The class the item was written with is not known here; the strictest one any caller
+    /// uses for state read in the background is taken, and the next save sets the caller's own.
+    private func moveFromLegacy(_ data: Data, forKey key: String) {
+        guard save(data, forKey: key, accessible: Self.cryptoKeyAccessible) else {
+            Log.error("Keychain item could not move to the data protection keychain; the login keychain keeps it",
+                      category: "Keychain")
+            return
+        }
+        SecItemDelete(KeychainPlacement.legacy([
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrAccount as String: key
+        ]) as CFDictionary)
+        Log.info("Keychain item moved to the data protection keychain", category: "Keychain")
     }
 
     /// The three-state reads behind the device identity. Their `nil` used to mean "register
@@ -843,6 +884,9 @@ class KeychainManager {
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrAccount as String: key
         ]
-        SecItemDelete(query as CFDictionary)
+        SecItemDelete(KeychainPlacement.current(query) as CFDictionary)
+        if KeychainPlacement.hasLegacyKeychain {
+            SecItemDelete(KeychainPlacement.legacy(query) as CFDictionary)
+        }
     }
 }
