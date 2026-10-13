@@ -35,6 +35,9 @@ final class AudioPlayerService: NSObject, ObservableObject {
 
     private var player: AVAudioPlayer?
     private var progressTimer: Timer?
+    /// The loaded track is music, not speech: it plays at its own speed, whatever was chosen for
+    /// voice messages.
+    private var playsAtNaturalRate = false
 
     private override init() {}
 
@@ -60,7 +63,7 @@ final class AudioPlayerService: NSObject, ObservableObject {
     func cycleRate() {
         rate = Self.nextRate(after: rate)
         UserDefaults.standard.set(rate, forKey: Self.rateKey)
-        player?.rate = rate
+        if !playsAtNaturalRate { player?.rate = rate }
     }
 
     private static func storedRate() -> Float {
@@ -72,11 +75,11 @@ final class AudioPlayerService: NSObject, ObservableObject {
 
     /// Move to `fraction` (0…1) of the track. The current track keeps playing or stays paused;
     /// another one starts there.
-    func seek(mediaId: String, data: Data, to fraction: Double) {
+    func seek(mediaId: String, data: Data, to fraction: Double, naturalRate: Bool = false) {
         let fraction = min(max(fraction, 0), 1)
         if playingMediaId != mediaId {
             stop()
-            play(mediaId: mediaId, data: data)
+            play(mediaId: mediaId, data: data, naturalRate: naturalRate)
         }
         guard let p = player, playingMediaId == mediaId else { return }
         p.currentTime = fraction * p.duration
@@ -84,8 +87,9 @@ final class AudioPlayerService: NSObject, ObservableObject {
         progress = fraction
     }
 
-    /// Toggle play/pause for the given mediaId, loading audio from `data`.
-    func togglePlay(mediaId: String, data: Data) {
+    /// Toggle play/pause for the given mediaId, loading audio from `data`. `naturalRate` for a
+    /// music file: the voice-message speed does not apply to it.
+    func togglePlay(mediaId: String, data: Data, naturalRate: Bool = false) {
         if playingMediaId == mediaId {
             // Pause or resume
             if let p = player {
@@ -95,7 +99,7 @@ final class AudioPlayerService: NSObject, ObservableObject {
         }
         // New track — stop previous
         stop()
-        play(mediaId: mediaId, data: data)
+        play(mediaId: mediaId, data: data, naturalRate: naturalRate)
     }
 
     func stop() {
@@ -112,7 +116,7 @@ final class AudioPlayerService: NSObject, ObservableObject {
 
     // MARK: - Private playback
 
-    private func play(mediaId: String, data: Data) {
+    private func play(mediaId: String, data: Data, naturalRate: Bool) {
         // One sound at a time: a video note playing in place folds back.
         VideoNotePlayback.shared.collapse()
         do {
@@ -121,8 +125,9 @@ final class AudioPlayerService: NSObject, ObservableObject {
             p.delegate = self
             p.enableRate = true
             p.prepareToPlay()
-            p.rate = rate
+            p.rate = naturalRate ? 1 : rate
             p.play()
+            playsAtNaturalRate = naturalRate
 
             player        = p
             playingMediaId = mediaId

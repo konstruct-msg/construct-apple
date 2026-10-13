@@ -1190,6 +1190,9 @@
 "net_status_protected" = "Պաշտպանված";
 "net_status_connecting" = "Միացում…";
 "file" = "Ֆայլ";
+"audio_file" = "Աուդիո";
+"audio_play" = "Նվագարկել";
+"audio_pause" = "Դադար";
 
 /* Chat system bubble: the encrypted session broke and incoming messages cannot be read. */
 

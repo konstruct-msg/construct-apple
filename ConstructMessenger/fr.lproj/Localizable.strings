@@ -1118,6 +1118,9 @@
 "net_status_protected" = "Protégé";
 "net_status_connecting" = "Connexion…";
 "file" = "Fichier";
+"audio_file" = "Audio";
+"audio_play" = "Lire";
+"audio_pause" = "Pause";
 "msg_status_sending" = "Envoi";
 "msg_status_sent" = "Envoyé";
 "msg_status_delivered" = "Remis";
