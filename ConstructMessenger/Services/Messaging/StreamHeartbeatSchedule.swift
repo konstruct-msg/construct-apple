@@ -31,18 +31,26 @@
 //  answer within one round-trip, which makes "accepted" a measurement of the transport instead of
 //  a measurement of whether anyone happened to have mail waiting.
 //
+//  And only then (2026-10-13). The client also sent one every 25 s, which nothing needed: the
+//  server answers the open itself (`send_initial_heartbeat_ack`) and then sends its own heartbeat
+//  on an idle stream (messaging-service `grpc.rs`), and the stale-stream watchdog is fed by any
+//  heartbeat from the server, not by answers to ours. What the periodic one did add was a second
+//  fixed period on the wire — a small record every 25.0 s beside the server's — that an observer
+//  can match without reading anything (vault `security/konstrukt-unobservability-map.md`). The
+//  one at open stays: it costs nothing and covers a server older than its own first heartbeat.
+//
 
 import Foundation
 
 enum StreamHeartbeatSchedule {
 
     /// How long to wait before emitting heartbeat number `index` (0-based) on a stream that has
-    /// just opened.
+    /// just opened; nil when there is no such heartbeat.
     ///
-    /// Zero for the first one. That is the entire fix, and it is a separate function because the
-    /// bug was a `sleep` sitting one line above a `send` — invisible in review, and fatal only in
+    /// Zero for the first one, and nothing after it. A separate function because the original bug
+    /// was a `sleep` sitting one line above a `send` — invisible in review, and fatal only in
     /// combination with a timeout defined in a different file.
-    static func delayBeforeHeartbeat(index: Int, interval: TimeInterval) -> TimeInterval {
-        index <= 0 ? 0 : interval
+    static func delayBeforeHeartbeat(index: Int) -> TimeInterval? {
+        index <= 0 ? 0 : nil
     }
 }
