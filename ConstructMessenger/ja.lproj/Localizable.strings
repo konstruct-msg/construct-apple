@@ -1200,6 +1200,9 @@
 "identity_fingerprint_copy_hint" = "フィンガープリントをクリップボードにコピーします";
 "identity_fingerprint_copied" = "コピーしました";
 "file" = "ファイル";
+"forward" = "転送";
+"forward_to" = "転送先";
+"forward_failed" = "一部の添付ファイルは転送されませんでした。このデバイスにもサーバーにも残っていません。";
 "msg_status_sending" = "送信中";
 "msg_status_sent" = "送信済み";
 "msg_status_delivered" = "配信済み";

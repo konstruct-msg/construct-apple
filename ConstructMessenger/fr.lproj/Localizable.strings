@@ -1118,6 +1118,9 @@
 "net_status_protected" = "Protégé";
 "net_status_connecting" = "Connexion…";
 "file" = "Fichier";
+"forward" = "Transférer";
+"forward_to" = "Transférer à";
+"forward_failed" = "Certaines pièces jointes n’ont pas été transférées : elles ne sont plus ni sur cet appareil ni sur le serveur.";
 "msg_status_sending" = "Envoi";
 "msg_status_sent" = "Envoyé";
 "msg_status_delivered" = "Remis";

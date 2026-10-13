@@ -390,7 +390,7 @@ class MediaManager {
         let optimized = try MediaOptimizer.optimizeImage(image)
 
         // Upload with 1 automatic retry on stream failure
-        let uploadResult = try await Self.uploadWithRetry(data: optimized.data, mimeType: optimized.metadata.mimeType, onProgress: onProgress)
+        let uploadResult = try await Self.uploadWithRetry(data: optimized.data, mimeType: optimized.metadata.mimeType, reuse: attachment.uploadReuse, onProgress: onProgress)
         Log.info("Image uploaded: \(uploadResult.mediaId)", category: "MediaManager")
 
         let width = optimized.metadata.width
@@ -430,7 +430,7 @@ class MediaManager {
         guard Int64(data.count) <= MessageSizeLimits.maxImageBytes else {
             throw MediaUploadError.fileTooLarge(data.count, Int(MessageSizeLimits.maxImageBytes))
         }
-        let uploadResult = try await Self.uploadWithRetry(data: data, mimeType: attachment.mimeType, onProgress: onProgress)
+        let uploadResult = try await Self.uploadWithRetry(data: data, mimeType: attachment.mimeType, reuse: attachment.uploadReuse, onProgress: onProgress)
         Log.info("Original image uploaded: \(uploadResult.mediaId)", category: "MediaManager")
 
         // Wire budget: this thumbnail's only consumer is `MediaWireCodec.albumContent`. The local
@@ -496,6 +496,7 @@ class MediaManager {
         let uploadResult = try await Self.uploadWithRetry(
             data: videoData,
             mimeType: "video/mp4",
+            reuse: attachment.uploadReuse,
             onProgress: onProgress.map { cb in { @Sendable v in cb(0.5 + v * 0.5) } }
         )
         Log.info("Video uploaded: \(uploadResult.mediaId) (\(videoData.count) bytes)", category: "MediaManager")
@@ -720,12 +721,13 @@ class MediaManager {
     static func uploadWithRetry(
         data: Data,
         mimeType: String,
+        reuse: MediaUploadReuse = .sameBytesSameObject,
         onProgress: (@Sendable (Double) -> Void)? = nil
     ) async throws -> MediaServiceClient.UploadedMedia {
         // Cache hit: same plaintext already uploaded recently → reuse mediaId + AES key.
         // Safe: the key is carried inside the DR-encrypted message payload, so each
         // recipient still gets an independent encrypted envelope.
-        if let cached = await MediaSendCache.shared.cachedUpload(for: data) {
+        if let cached = await MediaSendCache.shared.cachedUpload(for: data, reuse: reuse) {
             Log.info("Media send cache hit — reusing \(cached.mediaId)", category: "MediaManager")
             onProgress?(1.0)
             MediaManager.shared.cacheSentMedia(data, mediaId: cached.mediaId)
@@ -749,7 +751,7 @@ class MediaManager {
                 }
                 let result = try await MediaServiceClient.shared.uploadData(data, mimeType: mimeType, onProgress: onProgress)
                 onProgress?(1.0)
-                await MediaSendCache.shared.storeUpload(result, for: data)
+                await MediaSendCache.shared.storeUpload(result, for: data, reuse: reuse)
                 // Keep the plaintext locally so the SENDER never re-downloads their own upload.
                 //
                 // This used to be the caller's job, and three of the six upload paths did it while
@@ -816,10 +818,11 @@ class MediaManager {
         let filename = url.lastPathComponent
         Log.info("Uploading file: \(filename)", category: "MediaManager")
 
-        guard url.startAccessingSecurityScopedResource() else {
-            throw MediaUploadError.uploadFailed("Cannot access file")
-        }
-        defer { url.stopAccessingSecurityScopedResource() }
+        // A picked file is security-scoped; a forwarded one is the app's own temporary copy and
+        // is not, which `startAccessingSecurityScopedResource` answers with false. Unreadable
+        // files still fail, at the read below.
+        let scoped = url.startAccessingSecurityScopedResource()
+        defer { if scoped { url.stopAccessingSecurityScopedResource() } }
 
         let originalData = try Data(contentsOf: url)
         let detectedMimeType = UTType(filenameExtension: url.pathExtension)?.preferredMIMEType
@@ -829,8 +832,11 @@ class MediaManager {
         // field on the wire said so: receivers showed the compressed bytes (Android now guesses by
         // trying to inflate). Compression before encryption would also let the sealed size speak
         // for the contents.
-        let uploadResult = try await Self.uploadWithRetry(data: originalData, mimeType: detectedMimeType)
+        let uploadResult = try await Self.uploadWithRetry(
+            data: originalData, mimeType: detectedMimeType, reuse: ForwardStaging.reuse(for: url))
         Log.info("File uploaded: \(uploadResult.mediaId)", category: "MediaManager")
+        // A forward's copy has served its purpose; until now a failed upload could still retry it.
+        ForwardStaging.discard(url)
 
         return MediaMessageData(
             mediaId: uploadResult.mediaId,
@@ -858,7 +864,9 @@ class MediaManager {
     func uploadAudio(_ url: URL, duration: TimeInterval, waveform: [Float]) async throws -> VoiceMessageContent {
         Log.info("Uploading voice message (duration \(Int(duration))s)", category: "MediaManager")
         let data = try Data(contentsOf: url)
-        let uploadResult = try await Self.uploadWithRetry(data: data, mimeType: "audio/m4a")
+        let uploadResult = try await Self.uploadWithRetry(
+            data: data, mimeType: "audio/m4a", reuse: ForwardStaging.reuse(for: url))
+        ForwardStaging.discard(url)
         Log.info("Voice uploaded: \(uploadResult.mediaId)", category: "MediaManager")
         return VoiceMessageContent(
             type: "voice",

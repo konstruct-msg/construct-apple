@@ -1190,6 +1190,9 @@
 "net_status_protected" = "Protected";
 "net_status_connecting" = "Connecting…";
 "file" = "File";
+"forward" = "Forward";
+"forward_to" = "Forward to";
+"forward_failed" = "Some items were not forwarded: they are no longer on this device or the server.";
 
 /* Chat system bubble: the encrypted session broke and incoming messages cannot be read. */
 

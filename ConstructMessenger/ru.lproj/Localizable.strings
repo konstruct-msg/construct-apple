@@ -1201,6 +1201,9 @@
 "net_status_protected" = "Защищено";
 "net_status_connecting" = "Подключение…";
 "file" = "Файл";
+"forward" = "Переслать";
+"forward_to" = "Переслать в";
+"forward_failed" = "Часть вложений не переслана: их уже нет ни на устройстве, ни на сервере.";
 
 /* Chat system bubble: the encrypted session broke and incoming messages cannot be read. */
 

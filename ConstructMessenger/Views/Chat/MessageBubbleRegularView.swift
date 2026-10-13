@@ -34,6 +34,7 @@ struct MessageBubbleRegularView: View {
     /// Tap on the in-bubble reply strip — parent jump + soft focus.
     let onJumpToReply: ((TranscriptRow) -> Void)?
     let onReact: ((TranscriptRow, String) -> Void)?
+    let onForward: ((TranscriptRow) -> Void)?
 
     @GestureState private var swipeOffset: CGFloat = 0
     @State private var isTranscribingVoice = false
@@ -351,6 +352,14 @@ struct MessageBubbleRegularView: View {
                     if hasActionableText {
                         Button { PlatformClipboard.copy(message.readableText) } label: {
                             Label("copy", systemImage: "doc.on.doc")
+                        }
+                    }
+
+                    // Any message a person wrote, except a shared profile: its meaning is who shared
+                    // it. What goes is the content alone (`ForwardItem`).
+                    if let onForward, profileData == nil, ForwardItem.isForwardable(message) {
+                        Button { onForward(message) } label: {
+                            Label("forward", systemImage: "arrowshape.turn.up.right")
                         }
                     }
 
