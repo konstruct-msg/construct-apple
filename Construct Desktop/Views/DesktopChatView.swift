@@ -216,16 +216,12 @@ struct DesktopChatView: View {
         }
         .modifier(DesktopChatWindowTitle(
             userId: peerId,
-            fallback: NSLocalizedString("chat", comment: ""),
-            subtitle: navigationStatusSubtitle
+            fallback: NSLocalizedString("chat", comment: "")
         ))
+        // The window keeps its title (the Window menu, Mission Control); the toolbar shows
+        // `chatTitle` instead, so the key status can stand next to the name.
+        .toolbar(removing: .title)
         .toolbar { chatToolbar }
-        .searchable(
-            text: $searchText,
-            isPresented: $isSearchActive,
-            placement: .toolbar,
-            prompt: LocalizedStringKey("search_messages")
-        )
         .onChange(of: chatsViewModel.chatSearchPresented) { _, presented in
             guard presented else { return }
             isSearchActive = true
@@ -394,11 +390,36 @@ struct DesktopChatView: View {
 
     // MARK: - Window toolbar (D1)
 
+    //
+    // The name, our own connection state under it, and the key status beside it are the title —
+    // status, not controls, so no glass under them (macOS 26 groups neighbouring items into one
+    // capsule, and the badge read as a second button next to the profile). Nothing about the
+    // peer's presence: there is none to show. The right side is only controls.
+
     @ToolbarContentBuilder
     private var chatToolbar: some ToolbarContent {
-        if contactTrustAlert != nil || contactKTStatus == .verified {
-            ToolbarItem(placement: .automatic) {
-                ktBadge
+        if #available(macOS 26.0, *) {
+            ToolbarItem(placement: .navigation) { chatTitle }
+                .sharedBackgroundVisibility(.hidden)
+        } else {
+            ToolbarItem(placement: .navigation) { chatTitle }
+        }
+
+        ToolbarItem(placement: .primaryAction) {
+            if isSearchActive {
+                DesktopToolbarSearchField(
+                    text: $searchText,
+                    prompt: NSLocalizedString("search_messages", comment: ""),
+                    onEnd: { isSearchActive = false }
+                )
+                .frame(width: Self.searchFieldWidth)
+            } else {
+                Button {
+                    isSearchActive = true
+                } label: {
+                    Image(systemName: "magnifyingglass")
+                }
+                .help(NSLocalizedString("search_messages", comment: ""))
             }
         }
 
@@ -406,7 +427,7 @@ struct DesktopChatView: View {
             Button {
                 showingUserProfile = true
             } label: {
-                Image(systemName: "person.crop.circle")
+                Image(systemName: "info.circle")
             }
             .help(NSLocalizedString("profile", comment: ""))
         }
@@ -438,6 +459,33 @@ struct DesktopChatView: View {
                 .help(NSLocalizedString("call_voice", comment: ""))
             }
         }
+    }
+
+    private static let searchFieldWidth: CGFloat = 220
+
+    private var chatTitle: some View {
+        HStack(spacing: CTSpace.s) {
+            VStack(alignment: .leading, spacing: 0) {
+                Text(titleName)
+                    .font(CTFont.headline)
+                    .foregroundStyle(Color.CT.text)
+                    .lineLimit(1)
+                if let subtitle = navigationStatusSubtitle {
+                    Text(subtitle)
+                        .font(CTFont.caption)
+                        .foregroundStyle(Color.CT.textDim)
+                        .lineLimit(1)
+                }
+            }
+            ktBadge
+        }
+        .padding(.horizontal, CTSpace.xs)
+    }
+
+    private var titleName: String {
+        guard !peerId.isEmpty else { return NSLocalizedString("chat", comment: "") }
+        return ContactsLive.shared.contact(peerId)?.resolvedDisplayName
+            ?? DisplayNameGenerator.generate(from: peerId)
     }
 
     @ViewBuilder private var ktBadge: some View {
@@ -724,14 +772,12 @@ struct DesktopChatView: View {
 private struct DesktopChatWindowTitle: ViewModifier {
     var userId: String?
     let fallback: String
-    let subtitle: String?
 
     func body(content: Content) -> some View {
         if let userId, !userId.isEmpty {
             content
                 .navigationTitle(ContactsLive.shared.contact(userId)?.resolvedDisplayName
                     ?? DisplayNameGenerator.generate(from: userId))
-                .navigationSubtitle(subtitle ?? "")
         } else {
             content
                 .navigationTitle(fallback)
