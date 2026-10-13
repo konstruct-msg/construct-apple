@@ -23,10 +23,15 @@ struct DesktopChatsListView: View {
 
     var body: some View {
         @Bindable var chatsViewModel = chatsViewModel
-        VStack(spacing: 0) {
-            searchBar
-            chatList(selection: $chatsViewModel.chatToOpen)
-        }
+        chatList(selection: $chatsViewModel.chatToOpen)
+        // The sidebar's own search field — the system draws it, as it draws the selection (D3).
+        // Until 2026-10-13 this was `CTSearchBar`, the iOS glass capsule, inside the pane.
+        .searchable(
+            text: $searchQuery,
+            placement: .sidebar,
+            prompt: LocalizedStringKey("search_prompt")
+        )
+        .searchFocused($searchFocused)
         .ctBackground()
         .sheet(isPresented: $showingQRScanner) {
             RecoveryGated { QRScannerView { contactURL in handleScannedContact(contactURL) } }
@@ -93,15 +98,7 @@ struct DesktopChatsListView: View {
         .ctBorderBottom()
     }
 
-    // MARK: - Search Bar
-
-    private var searchBar: some View {
-        CTSearchBar(text: $searchQuery, focused: $searchFocused)
-            .padding(.horizontal, CTLayout.edgePad)
-            .padding(.vertical, 7)
-            .background(Color.CT.bg)
-            .ctBorderBottom()
-    }
+    // MARK: - Search
 
     private func consumeSidebarSearchFocus() {
         guard chatsViewModel.sidebarSearchFocused else { return }
@@ -121,7 +118,6 @@ struct DesktopChatsListView: View {
             ForEach(filteredChats, id: \.id) { chat in
                 ChatRowView(chat: chat)
                     .tag(chat.id)
-                    .desktopActiveRow(chatsViewModel.chatToOpen == chat.id)
                     .listRowSeparatorTint(Color.CT.noise)
                     .contextMenu {
                         Button(role: .destructive) {
@@ -148,10 +144,12 @@ struct DesktopChatsListView: View {
                     }
             }
         }
-        .listStyle(.plain)
+        // Selection is the platform's (affordance-is-native-identity-is-ours): the sidebar style
+        // draws the Mac's own highlight. Until 2026-10-13 the system highlight was switched off
+        // on the NSTableView and replaced by an accent fill with a 1 pt outline.
+        .listStyle(.sidebar)
         .scrollContentBackground(.hidden)
         .background(Color.CT.bg)
-        .desktopSuppressSystemListSelection()
     }
 
     // MARK: - Actions
