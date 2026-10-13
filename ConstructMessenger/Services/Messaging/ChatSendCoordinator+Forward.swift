@@ -83,14 +83,14 @@ extension ChatSendCoordinator {
             let url = try await stagedCopy(of: entry, named: "video.mp4")
             var attachment = MediaAttachment(
                 videoURL: url, poster: nil, duration: entry.duration, presentation: entry.presentation)
-            attachment.uploadReuse = .freshObject
+            attachment.isForwarded = true
             return attachment
         }
         let data = try await bytes(of: entry)
         // Sent as the bytes it arrived as — compressing again would only lose more of it.
         var attachment = MediaAttachment(
             originalData: data, mimeType: entry.mimeType, displayImage: PlatformImage(data: data), quality: .original)
-        attachment.uploadReuse = .freshObject
+        attachment.isForwarded = true
         return attachment
     }
 }
