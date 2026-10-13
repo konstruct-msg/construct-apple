@@ -1312,7 +1312,8 @@ final class CallManager: CallUIManaging {
         guard let active else { throw RPCError(code: .failedPrecondition, message: "No active call") }
         if active.webrtc != nil { return }
 
-        let webrtc = try WebRTCSession(role: role, turn: active.turn, video: CallsFeature.isVideoEnabled)
+        let webrtc = try WebRTCSession(role: role, turn: active.turn, video: CallsFeature.isVideoEnabled,
+                                       veilOn: VeilProxyManager.shared.mode == .on)
         webrtc.onLocalIceCandidate = { [weak self] c in
             Task { @MainActor in
                 self?.sendIceCandidate(c)
