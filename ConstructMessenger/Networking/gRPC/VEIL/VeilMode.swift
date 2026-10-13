@@ -16,14 +16,11 @@ enum VeilMode: String, CaseIterable, Identifiable {
     /// UserDefaults key for storing the mode. Kept for existing callers.
     static var defaultsKey: String { VeilProxyStore.modeKey }
 
-    /// Platform default: macOS -> .on, iOS -> .auto.
-    static var platformDefault: VeilMode {
-        #if os(macOS)
-        return .on
-        #else
-        return .auto
-        #endif
-    }
+    /// Auto on every platform. macOS defaulted to `.on` until 2026-10-13, when `on` stopped
+    /// falling back to the direct path (`allowsDirectPath`): a Mac with no front would have gone
+    /// offline without anyone having chosen to hide. `on` is a choice the person makes; a stored
+    /// choice is kept.
+    static var platformDefault: VeilMode { .auto }
 
     /// Migrate from the old boolean `veil_enabled` + `veil_auto_detected_dpi` to `VeilMode`.
     static func migrateFromLegacy() -> VeilMode {

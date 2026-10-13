@@ -34,6 +34,12 @@ final class VeilOnNeverDirectTests: XCTestCase {
         XCTAssertTrue(VeilMode.off.allowsDirectPath)
     }
 
+    /// `on` is a choice the person makes. As a silent default (macOS until 2026-10-13) it would
+    /// leave a Mac with no front offline without anyone having chosen to hide.
+    func testNoPlatformDefaultsToOn() {
+        XCTAssertEqual(VeilMode.platformDefault, .auto)
+    }
+
     func testWithOnAndNoTunnelNoChannelDialsTheServer() throws {
         UserDefaults.standard.set(VeilMode.on.rawValue, forKey: VeilProxyStore.modeKey)
         let manager = GRPCChannelManager.shared
