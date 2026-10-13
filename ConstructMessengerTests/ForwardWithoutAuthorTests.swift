@@ -86,14 +86,14 @@ final class ForwardWithoutAuthorTests: XCTestCase {
         let staged = try ForwardStaging.newFileURL(named: "song.mp3")
         defer { ForwardStaging.discard(staged) }
         XCTAssertEqual(staged.lastPathComponent, "song.mp3", "the name is what the recipient sees")
-        XCTAssertEqual(ForwardStaging.reuse(for: staged), .freshObject)
+        XCTAssertEqual(ForwardStaging.reuse(for: staged, to: "peer"), .freshObject)
     }
 
     func testAFileThePersonPickedMayReuseAnEarlierUpload() {
         let picked = FileManager.default.temporaryDirectory.appendingPathComponent("picked.mp3")
-        XCTAssertEqual(ForwardStaging.reuse(for: picked), .sameBytesSameObject)
+        XCTAssertEqual(ForwardStaging.reuse(for: picked, to: "peer"), .withinConversation(peerId: "peer"))
         let lookalike = FileManager.default.temporaryDirectory.appendingPathComponent("forwarded/x.mp3")
-        XCTAssertEqual(ForwardStaging.reuse(for: lookalike), .sameBytesSameObject)
+        XCTAssertEqual(ForwardStaging.reuse(for: lookalike, to: "peer"), .withinConversation(peerId: "peer"))
     }
 
     func testDiscardRemovesOnlyStagedCopies() throws {
@@ -114,7 +114,7 @@ final class ForwardWithoutAuthorTests: XCTestCase {
         let upload = MediaServiceClient.UploadedMedia(
             mediaId: UUID().uuidString, mediaUrl: "u", encryptionKey: key, encryptedSize: 1, hash: "00", mimeType: "image/jpeg")
         await MediaSendCache.shared.storeUpload(upload, for: bytes, reuse: .freshObject)
-        let found = await MediaSendCache.shared.cachedUpload(for: bytes)
+        let found = await MediaSendCache.shared.cachedUpload(for: bytes, reuse: .withinConversation(peerId: "peer"))
         XCTAssertNil(found, "a later ordinary send of the same bytes would reuse the forward's object")
     }
 
@@ -122,10 +122,40 @@ final class ForwardWithoutAuthorTests: XCTestCase {
         let bytes = Data(UUID().uuidString.utf8)
         let earlier = MediaServiceClient.UploadedMedia(
             mediaId: UUID().uuidString, mediaUrl: "u", encryptionKey: key, encryptedSize: 1, hash: "00", mimeType: "image/jpeg")
-        await MediaSendCache.shared.storeUpload(earlier, for: bytes)
-        let ordinary = await MediaSendCache.shared.cachedUpload(for: bytes)
+        await MediaSendCache.shared.storeUpload(earlier, for: bytes, reuse: .withinConversation(peerId: "peer"))
+        let ordinary = await MediaSendCache.shared.cachedUpload(for: bytes, reuse: .withinConversation(peerId: "peer"))
         XCTAssertEqual(ordinary?.mediaId, earlier.mediaId, "the fixture must be in the cache")
         let forward = await MediaSendCache.shared.cachedUpload(for: bytes, reuse: .freshObject)
         XCTAssertNil(forward)
+    }
+
+    // MARK: - Ordinary sends: reuse stays inside one conversation
+
+    /// One object fetched in two chats tells the server one person sent the same thing to both.
+    func testTheSameBytesToAnotherPersonAreANewObject() async {
+        let bytes = Data(UUID().uuidString.utf8)
+        let toAnna = MediaServiceClient.UploadedMedia(
+            mediaId: UUID().uuidString, mediaUrl: "u", encryptionKey: key, encryptedSize: 1, hash: "00", mimeType: "image/jpeg")
+        await MediaSendCache.shared.storeUpload(toAnna, for: bytes, reuse: .withinConversation(peerId: "anna"))
+
+        let toBoris = await MediaSendCache.shared.cachedUpload(for: bytes, reuse: .withinConversation(peerId: "boris"))
+        XCTAssertNil(toBoris)
+        let againToAnna = await MediaSendCache.shared.cachedUpload(for: bytes, reuse: .withinConversation(peerId: "anna"))
+        XCTAssertEqual(againToAnna?.mediaId, toAnna.mediaId, "a retry to the same person still reuses its upload")
+    }
+
+    func testTheKeyTiesBytesToTheirConversation() {
+        let bytes = Data("same".utf8)
+        XCTAssertNotEqual(MediaSendCache.cacheKey(bytes, .withinConversation(peerId: "a")),
+                          MediaSendCache.cacheKey(bytes, .withinConversation(peerId: "b")))
+        XCTAssertNil(MediaSendCache.cacheKey(bytes, .freshObject))
+        // "ab" + "c" and "a" + "bc" must not collide: the separator is what keeps them apart.
+        XCTAssertNotEqual(MediaSendCache.cacheKey(Data("c".utf8), .withinConversation(peerId: "ab")),
+                          MediaSendCache.cacheKey(Data("bc".utf8), .withinConversation(peerId: "a")))
+    }
+
+    func testAForwardReusesNothingAndASendReusesOnlyItsOwnChat() {
+        XCTAssertEqual(MediaUploadReuse.forSend(to: "p", forwarded: true), .freshObject)
+        XCTAssertEqual(MediaUploadReuse.forSend(to: "p", forwarded: false), .withinConversation(peerId: "p"))
     }
 }
