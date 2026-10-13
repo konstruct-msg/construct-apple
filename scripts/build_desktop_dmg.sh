@@ -96,7 +96,7 @@ if [ "$BUILD" -eq 1 ]; then
     rm -rf "${ARCHIVE:?}"
     xcodebuild archive -quiet \
         -project ConstructMessenger.xcodeproj -scheme "$SCHEME" -configuration "$CONFIGURATION" \
-        -destination 'generic/platform=macOS' -archivePath "$ARCHIVE" \
+        -destination 'generic/platform=macOS' -archivePath "$ARCHIVE" -allowProvisioningUpdates \
         ARCHS="$ARCHS"
 fi
 [ -d "$ARCHIVE" ] || { echo "no archive at $ARCHIVE — run without --no-build" >&2; exit 1; }

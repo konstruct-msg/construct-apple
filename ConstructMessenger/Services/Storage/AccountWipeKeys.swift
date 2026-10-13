@@ -249,6 +249,9 @@ enum AccountWipeKeys {
         // wipe removes the file with the container sweep, after destroying its key
         // (`LocalDataWipe.run`).
         "construct.db",
+        // A Keychain item `KeychainPlacement` writes and deletes in the same breath to learn
+        // whether the build may use the data protection keychain. Never left behind.
+        "construct.keychain.placement_probe",
 
         // Notification names.
         "construct.reaction.didChange"
