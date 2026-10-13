@@ -34,6 +34,16 @@ import CryptoKit
 import Foundation
 import Security
 
+/// Whether an upload may stand for, or be stood for by, another upload of the same bytes.
+enum MediaUploadReuse: Sendable {
+    /// An ordinary send: the same bytes sent again within the TTL reuse one object.
+    case sameBytesSameObject
+    /// A forward: a new object under a new key, never looked up and never recorded. Reuse would
+    /// hand the second chat the object the first one fetched, and the server would see one media
+    /// object reach two conversations — the link a forward must not make (`ForwardItem`).
+    case freshObject
+}
+
 actor MediaSendCache {
     static let shared = MediaSendCache()
     private init() {}
@@ -55,7 +65,8 @@ actor MediaSendCache {
     // MARK: - Public API
 
     /// Returns a cached upload result for `data` if one exists and is not expired.
-    func cachedUpload(for data: Data) -> MediaServiceClient.UploadedMedia? {
+    func cachedUpload(for data: Data, reuse: MediaUploadReuse = .sameBytesSameObject) -> MediaServiceClient.UploadedMedia? {
+        guard reuse == .sameBytesSameObject else { return nil }
         loadIfNeeded()
         let key = plaintextKey(data)
         guard let entry = store[key] else { return nil }
@@ -68,7 +79,9 @@ actor MediaSendCache {
     }
 
     /// Stores an upload result so it can be reused for identical plaintext.
-    func storeUpload(_ result: MediaServiceClient.UploadedMedia, for data: Data) {
+    func storeUpload(_ result: MediaServiceClient.UploadedMedia, for data: Data,
+                     reuse: MediaUploadReuse = .sameBytesSameObject) {
+        guard reuse == .sameBytesSameObject else { return }
         loadIfNeeded()
         evictExpired()
         if store.count >= Self.maxEntries { evictOldest() }

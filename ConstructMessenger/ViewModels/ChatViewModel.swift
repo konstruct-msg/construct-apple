@@ -144,6 +144,11 @@ class ChatViewModel {
         sendCoordinator.sendVoiceMessage(url: url, duration: duration, waveform: waveform)
     }
 
+    /// Sends forwarded content here, as this chat's own messages (`ForwardItem`).
+    func forward(_ items: [ForwardItem]) async -> [ChatSendCoordinator.ForwardFailure] {
+        await sendCoordinator.forward(items)
+    }
+
     func sendSticker(_ ref: StickerReference, replyTo: TranscriptRow? = nil) {
         sendCoordinator.sendSticker(ref, replyTo: replyTo)
     }

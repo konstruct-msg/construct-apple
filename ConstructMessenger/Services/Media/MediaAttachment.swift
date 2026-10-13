@@ -106,6 +106,9 @@ struct MediaAttachment: Identifiable, @unchecked Sendable {
     let presentation: MediaPresentation?
     /// The stretch of `videoURL` to send — a trim; nil is all of it.
     let timeRange: CMTimeRange?
+    /// `.freshObject` for a forward: uploaded under a new key, never matched to an earlier upload
+    /// of the same bytes (`MediaUploadReuse`).
+    var uploadReuse: MediaUploadReuse = .sameBytesSameObject
 
     // MARK: - Image initializers
 

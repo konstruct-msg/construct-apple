@@ -28,6 +28,8 @@ struct MessageBubble: View {
     let onJumpToReply: ((TranscriptRow) -> Void)?
     /// Double-tap like / badge tap. Second argument is the emoji (`ReactionReducer.likeEmoji` on double-tap).
     let onReact: ((TranscriptRow, String) -> Void)?
+    /// "Forward" — the host asks where to (`ForwardPickerView`).
+    let onForward: ((TranscriptRow) -> Void)?
 
     @Environment(\.containerWidth) var containerWidth
 
@@ -45,7 +47,8 @@ struct MessageBubble: View {
         onEdit: ((TranscriptRow) -> Void)? = nil,
         onReplyWithQuote: ((TranscriptRow, String) -> Void)? = nil,
         onJumpToReply: ((TranscriptRow) -> Void)? = nil,
-        onReact: ((TranscriptRow, String) -> Void)? = nil
+        onReact: ((TranscriptRow, String) -> Void)? = nil,
+        onForward: ((TranscriptRow) -> Void)? = nil
     ) {
         self.message = message
         self.isLastInGroup = isLastInGroup
@@ -61,5 +64,6 @@ struct MessageBubble: View {
         self.onReplyWithQuote = onReplyWithQuote
         self.onJumpToReply = onJumpToReply
         self.onReact = onReact
+        self.onForward = onForward
     }
 }
