@@ -21,13 +21,26 @@ class ProfileShareViewModel {
     /// be checked to reach every contact without a server.
     typealias Deliver = (OutgoingProfile, String) async -> (Bool, String?)
     private var deliverOverride: Deliver?
+    /// Puts our avatar on the media server — one new object per call. A test stands in.
+    typealias UploadAvatar = (PlatformImage) async throws -> AvatarUploadResult
+    private var uploadAvatar: UploadAvatar = { try await MediaManager.shared.uploadAvatar($0) }
+    /// Waits between two contacts of a rebroadcast. A test stands in.
+    typealias Pause = (Duration) async -> Void
+    private var pause: Pause = { try? await Task.sleep(for: $0) }
 
     init() {}
 
-    init(context: NSManagedObjectContext, deliver: Deliver? = nil) {
+    init(context: NSManagedObjectContext, deliver: Deliver? = nil,
+         uploadAvatar: UploadAvatar? = nil, pause: Pause? = nil) {
         self.viewContext = context
         self.deliverOverride = deliver
+        if let uploadAvatar { self.uploadAvatar = uploadAvatar }
+        if let pause { self.pause = pause }
     }
+
+    /// The wait before each contact after the first. Sends in one burst would tell the server
+    /// "one account, N recipients, now" even with every avatar a separate object (TODO 144).
+    static let rebroadcastSpacing: ClosedRange<Double> = 2...12
 
     func setContext(_ context: NSManagedObjectContext) {
         self.viewContext = context
@@ -116,7 +129,7 @@ class ProfileShareViewModel {
         let avatar: ProfileShare.Avatar
         if let avatarImage {
             do {
-                let upload = try await MediaManager.shared.uploadAvatar(avatarImage)
+                let upload = try await uploadAvatar(avatarImage)
                 avatar = .set(ProfileShare.AvatarRef(
                     mediaId: upload.mediaId,
                     mediaUrl: upload.mediaUrl,
@@ -201,9 +214,16 @@ class ProfileShareViewModel {
     /// Re-send current profile (including updated avatar) to all contacts we are sharing with.
     /// Call this whenever the user changes their avatar or display name so contacts stay in sync.
     ///
-    /// One profile, the avatar uploaded once, then each contact in turn — awaited, so the caller's
-    /// `Task` keeps this view model alive until the last one is sent. Failures are logged and do
-    /// not stop the others.
+    /// Each contact in turn, in a random order, a few seconds apart, and each with its own upload of
+    /// the avatar — awaited, so the caller's `Task` keeps this view model alive until the last one
+    /// is sent. Failures are logged and do not stop the others.
+    ///
+    /// Until 2026-10-13 the avatar was uploaded once and that one object went to every contact:
+    /// the server saw one object of ours fetched from N connections — not just who our contacts
+    /// are, but whom we share our profile with (owner, TODO 144). A separate, equally long object
+    /// per contact, sent apart, takes away "the same thing to N people at once". It does not take
+    /// away that each upload is ours: the upload token names the account — that is the anonymous
+    /// upload decision, not this.
     func rebroadcastProfileToSharedContacts() async {
         guard viewContext != nil,
               let currentUserId = AuthSessionManager.shared.currentUserId else { return }
@@ -217,11 +237,14 @@ class ProfileShareViewModel {
 
         Log.info("Rebroadcasting profile to \(contactIds.count) contact(s)", category: "ProfileShare")
 
-        guard let profile = await prepareProfile() else {
-            Log.error("Profile rebroadcast: no signed-in user", category: "ProfileShare")
-            return
-        }
-        for contactId in contactIds {
+        for (index, contactId) in contactIds.shuffled().enumerated() {
+            if index > 0 {
+                await pause(.seconds(Double.random(in: Self.rebroadcastSpacing)))
+            }
+            guard let profile = await prepareProfile() else {
+                Log.error("Profile rebroadcast: no signed-in user", category: "ProfileShare")
+                return
+            }
             let (success, error): (Bool, String?)
             if let deliverOverride {
                 (success, error) = await deliverOverride(profile, contactId)
