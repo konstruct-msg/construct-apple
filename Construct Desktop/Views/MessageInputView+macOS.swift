@@ -207,8 +207,8 @@ struct DesktopMessageInputView: View {
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
         .background(Color.CT.outMsgBg)
-        .clipShape(Capsule())
-        .overlay(Capsule().stroke(Color.CT.noise, lineWidth: 1))
+        .clipShape(CTShape.pill())
+        .overlay(CTShape.pill().stroke(Color.CT.noise, lineWidth: 1))
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
     }
@@ -245,8 +245,8 @@ struct DesktopMessageInputView: View {
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
         .background(Color.CT.outMsgBg)
-        .clipShape(Capsule())
-        .overlay(Capsule().stroke(Color.CT.noise, lineWidth: 1))
+        .clipShape(CTShape.pill())
+        .overlay(CTShape.pill().stroke(Color.CT.noise, lineWidth: 1))
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
     }

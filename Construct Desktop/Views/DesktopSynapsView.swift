@@ -91,7 +91,7 @@ struct DesktopSynapsView: View {
             }
         }
         .background(Color.CT.bg)
-        .navigationTitle(NSLocalizedString("people", comment: ""))
+        .navigationTitle(NSLocalizedString("synapses", comment: ""))
         .searchable(
             text: $searchText,
             placement: .toolbar,
