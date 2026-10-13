@@ -172,7 +172,8 @@ enum MediaWireCodec {
             let storage = LocalMessagePayload.encodeMediaAlbum(album)
             var wire = Shared_Proto_Messaging_V1_MessageContent()
             wire.mediaAlbum = album
-            let preview = newCaption.isEmpty ? NSLocalizedString("photo", comment: "") : newCaption
+            // Named the way the chat list names the album: a file or a track is not a "Photo".
+            let preview = LocalMessagePayload.decode(storage).previewHint
             return (storage, wire, preview)
         case .legacyUTF8, .text:
             let localJSON = LocalMessagePayload.decode(storedPlaintext).displayString
@@ -356,13 +357,25 @@ enum MediaWireCodec {
         return json
     }
 
-    /// Prefer album of non-image/video items as file JSON for dual-read parsers.
+    /// An album with no picture and no video in it is files, shown as file rows.
+    ///
+    /// A music file is a file. Until 2026-10-13 `audio/` was excluded here as well, which sent a
+    /// sent mp3 to the picture bubble: an empty image, no player, "Photo" in the chat list. The
+    /// photo bubble has no audio case; the file row has one (`FileAttachmentBubbleView`). A voice
+    /// message is not an album at all (`MessageContent.voice`), so nothing it does changes.
+    /// Android copied the exclusion as canon (`MessageMedia.Album.isFiles`).
     static func looksLikeFileAlbum(_ album: Shared_Proto_Messaging_V1_MediaAlbumMessage) -> Bool {
         guard !album.items.isEmpty else { return false }
         return album.items.allSatisfy { item in
             let mime = item.mimeType.lowercased()
             return !mime.hasPrefix("image/") && !mime.hasPrefix("video/")
-                && !mime.hasPrefix("audio/")
         }
     }
+
+    /// Every item is an audio file — named "Audio" in the chat list rather than "File".
+    static func isAudioAlbum(_ album: Shared_Proto_Messaging_V1_MediaAlbumMessage) -> Bool {
+        !album.items.isEmpty && album.items.allSatisfy { isAudio(mime: $0.mimeType) }
+    }
+
+    static func isAudio(mime: String) -> Bool { mime.lowercased().hasPrefix("audio/") }
 }

@@ -246,7 +246,7 @@ struct MessageSizeLimits {
     static let supportedImageTypes: Set<String> = ["jpg", "jpeg", "png", "gif", "heic", "heif", "webp"]
     static let supportedVideoTypes: Set<String> = ["mp4", "mov", "m4v", "avi", "mkv"]
     static let supportedDocumentTypes: Set<String> = ["pdf", "doc", "docx", "txt", "rtf", "pages", "numbers", "key"]
-    static let supportedAudioTypes: Set<String> = ["mp3", "m4a", "wav", "aac", "flac", "ogg"]
+    static let supportedAudioTypes: Set<String> = ["mp3", "m4a", "wav", "aac", "flac", "ogg", "opus", "aiff", "aif", "caf", "m4b"]
 
     // Helper functions
     static func maxSizeForFileType(_ fileExtension: String) -> Int64 {

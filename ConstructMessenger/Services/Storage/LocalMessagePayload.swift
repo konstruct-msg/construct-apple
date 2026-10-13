@@ -252,7 +252,7 @@ enum LocalMessagePayload: Equatable {
         let caption = album.hasCaption ? album.caption : ""
         if !caption.isEmpty { return caption }
         if MediaWireCodec.looksLikeFileAlbum(album) {
-            return NSLocalizedString("file", comment: "")
+            return NSLocalizedString(MediaWireCodec.isAudioAlbum(album) ? "audio_file" : "file", comment: "")
         }
         // Named by the first item, as the bubble is. A video read "Photo" here until 2026-10-04.
         if let first = album.items.first {

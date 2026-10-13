@@ -30,6 +30,17 @@ struct FileAttachmentBubbleView: View {
             ForEach(fileContent.files, id: \.mediaId) { file in
                 if isVideoFile(file.filename) {
                     videoRow(file)
+                } else if MediaWireCodec.isAudio(mime: file.mediaType) {
+                    AudioFileRow(
+                        file: file,
+                        isSentByMe: isSentByMe,
+                        isDownloading: downloading.contains(file.mediaId),
+                        load: { try await loadAudio(file) },
+                        open: { openOrDownload(file) }
+                    )
+                    #if os(macOS)
+                    .contextMenu { saveAsButton(file) }
+                    #endif
                 } else {
                     fileRow(file)
                 }
@@ -272,6 +283,17 @@ struct FileAttachmentBubbleView: View {
         }
     }
 
+    /// The track's bytes for the player, through the same download the row's other actions use.
+    @MainActor
+    private func loadAudio(_ file: FileMessageContent.FileEntry) async throws -> Data {
+        if let url = downloadedURLs[file.mediaId] { return try Data(contentsOf: url) }
+        downloading.insert(file.mediaId)
+        defer { downloading.remove(file.mediaId) }
+        let url = try await downloadFile(file)
+        downloadedURLs[file.mediaId] = url
+        return try Data(contentsOf: url)
+    }
+
     /// Shared download helper — saves decrypted data to a stable temp file.
     private func downloadFile(_ file: FileMessageContent.FileEntry) async throws -> URL {
         let data = try await MediaManager.shared.downloadAndDecryptMedia(
@@ -314,11 +336,12 @@ struct FileAttachmentBubbleView: View {
     /// The symbol for a file by its extension; the upload placeholder draws the same one.
     static func symbolName(for filename: String) -> String {
         let ext = (filename as NSString).pathExtension.lowercased()
+        // The formats a file may be sent as audio in, from the list that admits them.
+        if MessageSizeLimits.supportedAudioTypes.contains(ext) { return "waveform" }
         switch ext {
         case "pdf":                          return "doc.richtext"
         case "md", "markdown", "txt":        return "doc.text"
         case "zip", "gz", "tar", "7z":       return "doc.zipper"
-        case "mp3", "aac", "m4a", "wav":     return "waveform"
         case "mp4", "mov", "m4v":            return "film"
         case "xlsx", "xls":                  return "tablecells"
         case "docx", "doc":                  return "doc"
@@ -328,6 +351,85 @@ struct FileAttachmentBubbleView: View {
 }
 
 // MARK: - Video Player Support
+
+/// A music file in a chat: played in place, at its own speed, by the player voice messages use —
+/// so a track and a voice message never sound together. The name opens the system preview
+/// (sharing, saving) as any other file does.
+private struct AudioFileRow: View {
+    let file: FileMessageContent.FileEntry
+    let isSentByMe: Bool
+    let isDownloading: Bool
+    let load: () async throws -> Data
+    let open: () -> Void
+
+    @ObservedObject private var player = AudioPlayerService.shared
+    @State private var data: Data?
+
+    private var foreground: Color { isSentByMe ? Color.CT.outMsgText : Color.CT.text }
+    private var secondary: Color { isSentByMe ? Color.CT.outMsgText.opacity(0.7) : Color.CT.textDim }
+    private var tint: Color { isSentByMe ? Color.CT.outMsgText : Color.CT.accent }
+
+    var body: some View {
+        HStack(spacing: CTLayout.chromeGap) {
+            Button(action: toggle) {
+                Group {
+                    if isDownloading {
+                        ProgressView().scaleEffect(0.8)
+                    } else {
+                        Image(systemName: player.isPlaying(file.mediaId) ? "pause.circle.fill" : "play.circle.fill")
+                            .font(CTIcon.font(CTIcon.overlay, weight: .regular))
+                    }
+                }
+                .foregroundStyle(tint)
+                .frame(width: CTIcon.overlay, height: CTIcon.overlay)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(Text(NSLocalizedString(
+                player.isPlaying(file.mediaId) ? "audio_pause" : "audio_play", comment: "")))
+
+            Button(action: open) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(file.filename)
+                        .font(CTFont.ui(13, weight: .medium))
+                        .foregroundColor(foreground)
+                        .lineLimit(1)
+                    if player.isActive(file.mediaId) {
+                        ProgressView(value: player.progress)
+                            .progressViewStyle(.linear)
+                            .tint(tint)
+                        Text("\(formatMediaDuration(player.elapsed)) / \(formatMediaDuration(player.totalDuration))")
+                            .font(CTFont.mono(ChatUIConstants.Typography.systemSize))
+                            .foregroundColor(secondary)
+                    } else {
+                        Text(ByteCountFormatter.string(fromByteCount: Int64(file.size), countStyle: .file))
+                            .font(CTFont.mono(ChatUIConstants.Typography.systemSize))
+                            .foregroundColor(secondary)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    private func toggle() {
+        if let data {
+            player.togglePlay(mediaId: file.mediaId, data: data, naturalRate: true)
+            return
+        }
+        guard !isDownloading else { return }
+        Task { @MainActor in
+            do {
+                let bytes = try await load()
+                data = bytes
+                player.togglePlay(mediaId: file.mediaId, data: bytes, naturalRate: true)
+            } catch {
+                Log.error("Audio file download failed: \(error)", category: "FileAttachment")
+            }
+        }
+    }
+}
 
 private struct VideoPlayerItem: Identifiable {
     let id = UUID()
