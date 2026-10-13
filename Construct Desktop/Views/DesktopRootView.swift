@@ -323,16 +323,26 @@ struct DesktopRootView: View {
             .environment(chatsViewModel)
             .background(Color.CT.bg)
             .navigationTitle(NSLocalizedString("chats", comment: ""))
-            .toolbar {
-                ToolbarItem(placement: .primaryAction) {
-                    Button {
-                        openWindow(id: DesktopWindowID.synaps)
-                    } label: {
-                        Image(systemName: "person.2")
-                    }
-                    .help(NSLocalizedString("people", comment: ""))
-                }
-            }
+            .safeAreaInset(edge: .bottom, spacing: 0) { synapsesBar }
+    }
+
+    /// The door to Synapses, under the chats — where iOS keeps its tab, with the tab's symbol
+    /// and name. Synapses stays its own window (D2); until 2026-10-13 the door was an unlabeled
+    /// `person.2` in the sidebar's title bar, a symbol iOS uses nowhere for it.
+    private var synapsesBar: some View {
+        Button {
+            openWindow(id: DesktopWindowID.synaps)
+        } label: {
+            Label(NSLocalizedString("synapses", comment: ""), systemImage: "circle.grid.cross")
+                .font(CTFont.body)
+                .foregroundStyle(Color.CT.text)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .padding(.horizontal, CTLayout.edgePad)
+        .padding(.vertical, CTLayout.navVPad)
+        .ctBorderTop()
     }
 
     // MARK: - Call state helpers

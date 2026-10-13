@@ -67,7 +67,7 @@ struct ConstructCommands: Commands {
 
             Divider()
 
-            Button(NSLocalizedString("people", comment: "")) {
+            Button(NSLocalizedString("synapses", comment: "")) {
                 bridge.openPeople()
             }
 

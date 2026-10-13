@@ -216,7 +216,7 @@ private struct SingleMediaCell: View {
         }
         // Outer clip so every state — photo, video poster, loading/error/empty placeholder —
         // rounds identically to the album grid, regardless of which branch renders.
-        .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
+        .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
         .animation(.easeInOut(duration: 0.25), value: thumbnailImage != nil)
         .onAppear {
             if isVideo {
