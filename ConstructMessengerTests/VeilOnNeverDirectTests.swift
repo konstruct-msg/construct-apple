@@ -58,4 +58,27 @@ final class VeilOnNeverDirectTests: XCTestCase {
         try XCTSkipIf(manager.veilProxyPort() != nil, "a tunnel is up in this host; the case needs none")
         XCTAssertNoThrow(try manager.makeClient(), "auto is direct-first; only on refuses")
     }
+
+    // MARK: - The well-known is plain HTTPS, outside the tunnel
+
+    func testWithOnNeitherWellKnownFetchHasASource() {
+        XCTAssertTrue(VeilCertFetcher.manifestSources(mode: .on).isEmpty)
+        XCTAssertNil(ServerKeyManager.wellKnownURL(host: "example.invalid", mode: .on))
+    }
+
+    func testOffTheManifestStillComesFromOneSource() {
+        for mode in [VeilMode.auto, .off] {
+            XCTAssertEqual(VeilCertFetcher.manifestSources(mode: mode).count, 1)
+            XCTAssertNotNil(ServerKeyManager.wellKnownURL(host: "example.invalid", mode: mode))
+        }
+    }
+
+    /// A request to the project's repository says by itself whose app is asking (owner, 2026-10-13).
+    func testNoManifestSourceIsTheRepositoryMirror() {
+        for mode in [VeilMode.auto, .off, .on] {
+            for url in VeilCertFetcher.manifestSources(mode: mode) {
+                XCTAssertFalse(url.host?.contains("github") ?? true, "\(url)")
+            }
+        }
+    }
 }

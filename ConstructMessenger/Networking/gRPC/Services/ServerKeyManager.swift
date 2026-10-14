@@ -86,22 +86,33 @@ actor ServerKeyManager {
     }
 
     /// Fetch the token encryption key from the server if the cache is stale or missing.
+    ///
+    /// Under VEIL `on` this does nothing: it is a plain HTTPS request to the API host, outside the
+    /// tunnel (`decisions/veil-on-never-goes-direct.md`). The token key still arrives over gRPC
+    /// (`cacheFromGRPC`); the delegations stay as cached until the server-trust RPC carries them.
     func prefetch() async {
+        guard let url = Self.wellKnownURL(host: GRPCChannelManager.shared.currentHost,
+                                          mode: VeilProxyStore.loadMode()) else {
+            Log.debug("ServerKeyManager: VEIL on — well-known not fetched outside the tunnel", category: "Stealth")
+            return
+        }
         let fetchedAt = UserDefaults.standard.double(forKey: Self.cacheAgeKey)
         let age = Date().timeIntervalSince1970 - fetchedAt
         guard age > Self.cacheTTL || UserDefaults.standard.data(forKey: Self.cacheKey) == nil else {
             return
         }
-        await fetchAndCache()
+        await fetchAndCache(url)
+    }
+
+    /// Where the well-known may be fetched from in `mode`; nil under `on`.
+    nonisolated static func wellKnownURL(host: String, mode: VeilMode) -> URL? {
+        guard mode.allowsDirectPath else { return nil }
+        return URL(string: "https://\(host)/.well-known/construct-server")
     }
 
     // MARK: - Fetch
 
-    private func fetchAndCache() async {
-        let host = GRPCChannelManager.shared.currentHost
-        let urlString = "https://\(host)/.well-known/construct-server"
-        guard let url = URL(string: urlString) else { return }
-
+    private func fetchAndCache(_ url: URL) async {
         do {
             var request = URLRequest(url: url, timeoutInterval: 10)
             request.cachePolicy = .reloadIgnoringLocalCacheData

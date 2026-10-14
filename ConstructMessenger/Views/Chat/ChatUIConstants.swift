@@ -16,9 +16,9 @@ enum ChatUIConstants {
     // MARK: - Typography
 
     enum Typography {
+        /// Message text in a bubble and in the composer that fills it, on every platform. The
+        /// macOS composer had its own 13 until 2026-10-14 and typed smaller than it sent.
         static let messageTextSize: CGFloat = 15
-        static let iOSmessageTextSize: CGFloat = 15
-        static let macOSmessageTextSize: CGFloat = 13
         /// Timestamp, edited label, delivery icons under a bubble group.
         static let metaSize: CGFloat = 10
         /// Media captions, load-more, secondary labels.
