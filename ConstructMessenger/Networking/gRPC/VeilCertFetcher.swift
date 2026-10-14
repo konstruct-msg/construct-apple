@@ -196,43 +196,42 @@ actor VeilCertFetcher {
 
     /// Fetch, verify, and cache the relay config from `.well-known/construct-server`.
     ///
-    /// Tries the mirror URL(s) in parallel. The first response that
-    /// - returns HTTP 200, AND
-    /// - passes Ed25519 signature verification
-    /// wins and is persisted to UserDefaults.
+    /// The response must return HTTP 200 and pass Ed25519 signature verification, and is then
+    /// persisted to UserDefaults.
     ///
-    /// Source: konstruct.cc primary, `raw.githubusercontent.com` mirror.
+    /// The GitHub-raw mirror is gone for good (owner, 2026-10-13): a request to the project's
+    /// repository says by itself whose app is asking, and since
+    /// `veil-front-coordinates-are-not-public` the manifest carries no fronts a censored person
+    /// would need from it. The freshness rule (`RelayManifestFreshness`) stays: it is what keeps
+    /// an older signed manifest from replacing a newer one, whatever served it.
     ///
-    /// A GitHub-raw mirror existed and was dropped on 2026-06-12, when obfs4/WebTunnel gave way to
-    /// veil-front and the manifest stopped carrying anything a censored user needed urgently. That
-    /// left one fetch location for a file the client cannot start cleanly without — including
-    /// `bundle_signing_key`, which is not relay business at all. One name, one registrar, one
-    /// hosting account: a domain problem and a config problem became the same problem.
-    ///
-    /// The mirror is not a second source of truth. The manifest is Ed25519-signed and verified
-    /// against a key in the binary, so both hosts serve bytes we signed and neither is trusted for
-    /// being itself. What the mirror adds is a second failure domain — different DNS, different
-    /// registrar, different operator. What it costs is a freshness rule, because the race below
-    /// takes the first response that verifies: see `RelayManifestFreshness`.
+    /// With VEIL `on` nothing is fetched: this is a plain HTTPS request to the project's domain,
+    /// outside the tunnel (`decisions/veil-on-never-goes-direct.md`). The cache and the build's
+    /// pins stand until the server-trust RPC carries the same bytes through the tunnel.
     @discardableResult
     func fetchAndCacheRelayConfig() async -> [RelayInfo]? {
-        let mirrorURLs: [String] = [
-            "https://\(ServerConfig.inviteHost)/.well-known/construct-server",
-            "https://raw.githubusercontent.com/konstruct-msg/construct-server/main/.well-known/construct-server",
-        ]
-
-        if let relays = await fetchVerifiedRelayConfig(from: mirrorURLs) {
+        let sources = Self.manifestSources(mode: VeilProxyStore.loadMode())
+        guard !sources.isEmpty else {
+            Log.debug("VEIL on — manifest not fetched outside the tunnel, using cache", category: "VEIL")
+            return Self.cachedRelayInfosSync()
+        }
+        if let relays = await fetchVerifiedRelayConfig(from: sources) {
             return relays
         }
-        Log.debug("All construct-server mirrors failed — using cache", category: "ICE")
+        Log.debug("Manifest fetch failed — using cache", category: "VEIL")
         return Self.cachedRelayInfosSync()
     }
 
+    /// Where the signed manifest may be fetched from in `mode`. Empty under `on`.
+    static func manifestSources(mode: VeilMode) -> [URL] {
+        guard mode.allowsDirectPath else { return [] }
+        return [URL(string: "https://\(ServerConfig.inviteHost)/.well-known/construct-server")!]
+    }
+
     /// Races all provided URLs; returns the first verified result, nil if all fail.
-    private func fetchVerifiedRelayConfig(from urls: [String]) async -> [RelayInfo]? {
+    private func fetchVerifiedRelayConfig(from urls: [URL]) async -> [RelayInfo]? {
         return await withTaskGroup(of: [RelayInfo]?.self) { group in
-            for urlString in urls {
-                guard let url = URL(string: urlString) else { continue }
+            for url in urls {
                 group.addTask { [self] in
                     do {
                         var request = URLRequest(url: url, timeoutInterval: self.timeout)
@@ -413,15 +412,6 @@ actor VeilCertFetcher {
     /// (caller should fall back to `.enabled`).
     static func iatModeSync(for address: String) -> VeilIATMode? {
         cachedRelayInfosSync()?.first(where: { $0.addressWithPort == address })?.iatMode
-    }
-
-    // MARK: - Legacy shim (backward compat)
-
-    /// Deprecated: use `fetchAndCacheRelayConfig()`. Kept for callers not yet migrated.
-    @discardableResult
-    func fetchAndCacheRelayList() async -> [String]? {
-        let relays = await fetchAndCacheRelayConfig()
-        return relays?.map(\.addressWithPort)
     }
 
     // MARK: - Ed25519 signature verification
