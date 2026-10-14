@@ -796,9 +796,11 @@ struct DesktopChatView: View {
                     guard let data = item as? Data,
                           let url = URL(dataRepresentation: data, relativeTo: nil) else { return }
                     DispatchQueue.global(qos: .userInitiated).async {
-                        let imgData = try? Data(contentsOf: url)
+                        let image = MessageInputAttachmentStore.sendsAsImage(url)
+                            ? (try? Data(contentsOf: url)).flatMap(PlatformImage.init(data:))
+                            : nil
                         DispatchQueue.main.async {
-                            if let imgData, let image = PlatformImage(data: imgData) {
+                            if let image {
                                 chatDropImages.append(image)
                             } else {
                                 chatDropFileURLs.append(url)
