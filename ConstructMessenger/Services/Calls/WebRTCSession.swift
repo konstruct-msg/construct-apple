@@ -22,6 +22,8 @@ enum WebRTCSessionRole: Sendable {
 enum WebRTCSessionError: Error {
     case webRTCLibraryMissing
     case invalidState(String)
+    /// VEIL is `on` and there is no TURN to relay through (`CallIcePlan`).
+    case noRelayWhileVeilOn
 }
 
 @MainActor
@@ -176,15 +178,25 @@ final class WebRTCSession: NSObject, WebRTCSessionProtocol {
     private var remoteDescriptionSet = false
     private var pendingRemoteCandidates: [WebRTCIceCandidate] = []
 
-    init(role: WebRTCSessionRole, turn: Shared_Proto_Signaling_V1_TurnCredentials?, video: Bool) throws {
+    init(role: WebRTCSessionRole, turn: Shared_Proto_Signaling_V1_TurnCredentials?, video: Bool,
+         veilOn: Bool) throws {
         self.role = role
         self.videoEnabled = video
 
         self.factory = WebRTCFactory.shared.factory
 
+        guard let plan = CallIcePlan.make(
+            turnURLs: turn?.urls, username: turn?.username ?? "", credential: turn?.credential ?? "", veilOn: veilOn
+        ) else {
+            Log.error("ICE config → none: VEIL is on and no TURN credentials — not placing a direct call", category: "Calls")
+            throw WebRTCSessionError.noRelayWhileVeilOn
+        }
+        Log.info("ICE config → \(plan.servers.flatMap(\.urls)) policy=\(plan.policy)", category: "Calls")
         let config = RTCConfiguration()
-        config.iceServers = Self.buildIceServers(turn: turn)
-        config.iceTransportPolicy = .all
+        config.iceServers = plan.servers.map {
+            RTCIceServer(urlStrings: $0.urls, username: $0.username, credential: $0.credential)
+        }
+        config.iceTransportPolicy = plan.policy == .relay ? .relay : .all
         config.sdpSemantics = .unifiedPlan
         config.bundlePolicy = .maxBundle
         config.rtcpMuxPolicy = .require
@@ -491,25 +503,6 @@ final class WebRTCSession: NSObject, WebRTCSessionProtocol {
         }
     }
 
-    private static func buildIceServers(turn: Shared_Proto_Signaling_V1_TurnCredentials?) -> [RTCIceServer] {
-        var servers: [RTCIceServer] = []
-        if let turn, !turn.urls.isEmpty {
-            // Server-provided TURN credentials (AMS coturn).
-            // TURN servers also handle STUN binding requests, so no separate STUN needed.
-            Log.info(
-                "ICE config → TURN urls=\(turn.urls) username='\(turn.username)' credential.len=\(turn.credential.count)",
-                category: "Calls"
-            )
-            servers.append(RTCIceServer(urlStrings: turn.urls, username: turn.username, credential: turn.credential))
-        } else {
-            // TURN unavailable (credentials fetch failed). Fall back to own STUN server (AMS).
-            // Never use public STUN servers — call metadata must not leak to Google/Cloudflare.
-            Log.info("ICE config → STUN-only fallback (turn=nil)", category: "Calls")
-            servers.append(RTCIceServer(urlStrings: ["stun:ams.konstruct.cc:3478"]))
-        }
-        return servers
-    }
-
     private static func makeLocalAudioTrack(factory: RTCPeerConnectionFactory) -> RTCAudioTrack {
         let source = factory.audioSource(with: RTCMediaConstraints(mandatoryConstraints: nil, optionalConstraints: nil))
         return factory.audioTrack(with: source, trackId: "audio0")
@@ -692,7 +685,8 @@ final class WebRTCSession: WebRTCSessionProtocol {
     var onConnected: (@Sendable () -> Void)?
     var onQualityChanged: (@Sendable (CallQuality) -> Void)?
 
-    init(role: WebRTCSessionRole, turn: Shared_Proto_Signaling_V1_TurnCredentials?, video: Bool) throws {
+    init(role: WebRTCSessionRole, turn: Shared_Proto_Signaling_V1_TurnCredentials?, video: Bool,
+         veilOn: Bool) throws {
         throw WebRTCSessionError.webRTCLibraryMissing
     }
 
