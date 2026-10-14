@@ -27,8 +27,7 @@ enum ForwardStaging {
     static func newFileURL(named filename: String) throws -> URL {
         let folder = directory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-        let name = (filename as NSString).lastPathComponent
-        return folder.appendingPathComponent(name.isEmpty ? "file" : name)
+        return folder.appendingPathComponent(OpenedFiles.safeName(filename))
     }
 
     static func contains(_ url: URL) -> Bool {
