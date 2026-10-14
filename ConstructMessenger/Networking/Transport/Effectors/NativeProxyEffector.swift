@@ -70,7 +70,16 @@ actor NativeProxyEffector: ProxyEffector {
     }
 
     func updateRelays(_ relays: [VeilRelay]) async {
-        // Preserve any persistent penalties carried by the existing pool.
-        pool = RelayPool(relays: relays, blockedPenalty: pool.blockedPenalty)
+        // Penalties and failure counts both carry over for the relays still listed. The counts
+        // did not until 2026-10-14: the pool is rebuilt on every VEIL enable, every change in
+        // local discovery and every voucher, and each rebuild put a front this network cannot
+        // reach back at the head of the list — one phone retried it for 16 minutes with three
+        // working fronts configured beside it.
+        pool = RelayPool(relays: relays, blockedPenalty: pool.blockedPenalty, failures: pool.failureCounts)
     }
+
+    #if DEBUG
+    func recordFailureForTesting(address: String) { pool.recordFailure(address: address) }
+    func bestForTesting() -> String? { pool.best()?.address }
+    #endif
 }

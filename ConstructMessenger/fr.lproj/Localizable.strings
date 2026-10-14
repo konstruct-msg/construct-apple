@@ -515,6 +515,7 @@
 "veil_footer_auto" = "VEIL s'active automatiquement lorsqu'un blocage réseau est détecté.";
 "veil_footer_on" = "Tout le trafic est routé via le relais VEIL.";
 "veil_footer_on_no_front" = "Le relais ne répond pas. Tant qu’il ne répond pas, rien n’est envoyé ni reçu : en mode Activé, VEIL ne se connecte jamais directement. Choisissez Automatique pour vous connecter directement tant que le relais est injoignable.";
+"veil_tunnel_not_up" = "Aucun relais VEIL ne répond — pas de connexion directe.";
 "veil_auto_active" = "Auto-activé · direct bloqué";
 "veil_direct_probe_ok" = "Direct : OK (%@)";
 "veil_direct_probe_blocked" = "Direct : bloqué";
