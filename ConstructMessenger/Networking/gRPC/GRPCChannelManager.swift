@@ -79,6 +79,7 @@ final class GRPCChannelManager: Sendable {
 
     private init() {
         publishEndpoint()
+        VeilProxyStore.publishForExtension(VeilProxyStore.loadMode())
         #if !os(macOS)
         // Resolve GeoIP in the background so relay region preference is ready
         // before the first connection attempt. Idempotent — uses cached UserDefaults

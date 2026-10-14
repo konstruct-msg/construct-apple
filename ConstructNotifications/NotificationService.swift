@@ -49,6 +49,9 @@ final class NotificationService: UNNotificationServiceExtension {
     }
 
     private static func decide() async -> AlertDecision {
+        guard ExtensionDirectPath.permits(AppKeychain.data(KeychainSessionAccounts.extensionDirectPath)) else {
+            return .show(reason: "no direct path")
+        }
         guard let snapshot = KeychainSnapshot.read() else {
             return .show(reason: "keychain incomplete")
         }

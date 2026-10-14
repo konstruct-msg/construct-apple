@@ -60,6 +60,18 @@ enum VeilProxyStore {
         UserDefaults.standard.set(mode.rawValue, forKey: modeKey)
         // Keep the legacy key in sync for older fast-path readers and migration safety.
         UserDefaults.standard.set(mode == .on, forKey: legacyEnabledKey)
+        publishForExtension(mode)
+    }
+
+    /// Tells the notification extension whether it may connect directly — it cannot read this
+    /// app's defaults, and its fetch would go around the tunnel. Written on every change and at
+    /// launch (`GRPCChannelManager`), so a mode set before this existed is published too.
+    static func publishForExtension(_ mode: VeilMode) {
+        _ = KeychainManager.shared.saveData(
+            ExtensionDirectPath.published(allowed: mode.allowsDirectPath),
+            forKey: KeychainSessionAccounts.extensionDirectPath,
+            accessible: KeychainManager.cryptoKeyAccessible
+        )
     }
 
     static var modeMigrationKey: String {
