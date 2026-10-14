@@ -33,3 +33,13 @@ struct ServerEndpoint: Equatable {
 
     var stored: String { "\(host):\(port)" }
 }
+
+/// Whether the extension may fetch at all, as the app published it. The fetch is a direct TLS
+/// connection to the API host — the VEIL tunnel lives in the app's process, out of reach here — so
+/// under VEIL `on` it must not run (decisions/veil-on-never-goes-direct.md). Only an explicit yes
+/// permits it: nothing published (an app not launched since the update) is no, and the alert is
+/// shown as it came, which is what a failed fetch does anyway.
+enum ExtensionDirectPath {
+    static func published(allowed: Bool) -> Data { Data([allowed ? 1 : 0]) }
+    static func permits(_ stored: Data?) -> Bool { stored == published(allowed: true) }
+}
