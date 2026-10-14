@@ -80,6 +80,8 @@ enum VeilConfigImporter {
     static func importBlob(_ blobBase64URL: String) -> Result<String, Error> {
         do {
             let cfg = try parseAndVerify(blobBase64URL: blobBase64URL)
+            // Its names leave the logs before this path logs them (TODO 135).
+            LogRedaction.register([cfg.relay, cfg.sni])
 
             // The outer signature proves the issuer authored the blob. The capability
             // inside carries its own issuer signature and validity window — the same

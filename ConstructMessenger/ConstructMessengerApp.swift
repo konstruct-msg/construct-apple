@@ -37,6 +37,8 @@ struct Construct_MessengerApp: App {
         let isPreview = PreviewDetector.isRunningInPreview
         // Before Core Data is touched: once moved, its old files are not opened again.
         LocalStoreImport.removeCoreDataLeftovers()
+        // Every front this install knows leaves the logs before the first line could name one.
+        LogRedaction.registerKnownFronts()
         let importPending = !isPreview && LocalStoreImport.isDueAtLaunch
         _storeImportPending = State(initialValue: importPending)
         let container = isPreview

@@ -300,6 +300,11 @@ actor VeilCertFetcher {
             UserDefaults.standard.set(keyData, forKey: Self.cachedBundleSigningKeyKey)
         }
 
+        // A manifest's fronts leave the logs before any line names them (TODO 135).
+        for relay in parsed.veil?.relays ?? [] {
+            LogRedaction.register([relay.addressWithPort, relay.domain, relay.sni, relay.wtHostHeader].compactMap { $0 }
+                                  + (relay.alternativeSNIs ?? []))
+        }
         guard let relays = parsed.veil?.relays, !relays.isEmpty else {
             Log.info("Manifest via \(source) verified — no relay list (bundle key cached)", category: "VEIL")
             return nil
