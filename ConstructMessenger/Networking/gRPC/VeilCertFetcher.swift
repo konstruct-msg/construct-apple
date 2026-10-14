@@ -205,15 +205,14 @@ actor VeilCertFetcher {
     /// would need from it. The freshness rule (`RelayManifestFreshness`) stays: it is what keeps
     /// an older signed manifest from replacing a newer one, whatever served it.
     ///
-    /// With VEIL `on` nothing is fetched: this is a plain HTTPS request to the project's domain,
-    /// outside the tunnel (`decisions/veil-on-never-goes-direct.md`). The cache and the build's
-    /// pins stand until the server-trust RPC carries the same bytes through the tunnel.
+    /// With VEIL `on` this is not fetched over HTTPS — a plain request to the project's domain,
+    /// outside the tunnel (`decisions/veil-on-never-goes-direct.md`). The same signed bytes are
+    /// asked of `ServerTrustService` instead, over the channel that under `on` is the tunnel.
     @discardableResult
     func fetchAndCacheRelayConfig() async -> [RelayInfo]? {
         let sources = Self.manifestSources(mode: VeilProxyStore.loadMode())
         guard !sources.isEmpty else {
-            Log.debug("VEIL on — manifest not fetched outside the tunnel, using cache", category: "VEIL")
-            return Self.cachedRelayInfosSync()
+            return await ServerTrustClient.refresh() ?? Self.cachedRelayInfosSync()
         }
         if let relays = await fetchVerifiedRelayConfig(from: sources) {
             return relays
@@ -241,67 +240,7 @@ actor VeilCertFetcher {
                             Log.debug("\(url.host ?? "") returned non-200", category: "ICE")
                             return nil
                         }
-                        guard try self.verifySignature(data) else {
-                            Log.error("\(url.host ?? "") signature invalid — ignoring", category: "ICE")
-                            return nil
-                        }
-                        let parsed = try JSONDecoder().decode(ConstructServerWellKnown.self, from: data)
-
-                        // Freshness before ANY persistence. A correct signature proves authorship,
-                        // never recency, so with two hosts racing, the slower one holding an older
-                        // manifest would otherwise install it — including the bundle-signing key
-                        // below, which is exactly what a rollback would want.
-                        let cachedSignedAt = UserDefaults.standard.string(forKey: Self.cachedSignedAtKey)
-                        switch RelayManifestFreshness.verdict(candidateSignedAt: parsed.signedAt,
-                                                              cachedSignedAt: cachedSignedAt) {
-                        case .accept:
-                            break
-                        case .rejectOlder:
-                            Log.info("Manifest via \(url.host ?? "?") is older than cached (\(parsed.signedAt ?? "nil") < \(cachedSignedAt ?? "nil")) — ignoring", category: "VEIL")
-                            return nil
-                        case .rejectUndatable:
-                            Log.error("Manifest via \(url.host ?? "?") has no usable signed_at while a dated one is cached — ignoring", category: "VEIL")
-                            return nil
-                        }
-                        if let signedAt = parsed.signedAt {
-                            UserDefaults.standard.set(signedAt, forKey: Self.cachedSignedAtKey)
-                        }
-
-                        // Persist the bundle-signing key BEFORE the relay guard: stealth
-                        // sender-certificate verification and prekey-bundle/KT checks depend
-                        // on it, and the manifest may legitimately ship without a relay list
-                        // (veil-front relay is hardcoded, tickets arrive out-of-band).
-                        let keyB64 = parsed.bundleSigningKey ?? parsed.bundleVerificationKey
-                        if let keyB64 = keyB64,
-                           let keyData = Data(base64Encoded: keyB64),
-                           keyData.count == 32 {
-                            UserDefaults.standard.set(keyData, forKey: Self.cachedBundleSigningKeyKey)
-                        }
-
-                        guard let relays = parsed.veil?.relays, !relays.isEmpty else {
-                            Log.info("Manifest via \(url.host ?? "?") verified — no relay list (bundle key cached)", category: "VEIL")
-                            return nil
-                        }
-
-                        // Persist to UserDefaults — safe from any task since UserDefaults is thread-safe
-                        if let encoded = try? JSONEncoder().encode(relays) {
-                            UserDefaults.standard.set(encoded, forKey: Self.cachedRelayInfosKey)
-                        }
-                        let addressList = relays.map(\.addressWithPort)
-                        UserDefaults.standard.set(addressList, forKey: VEILConfig.cachedRelayListKey)
-                        if let regions = parsed.veil?.relayRegions,
-                           let regionsData = try? JSONEncoder().encode(regions) {
-                            UserDefaults.standard.set(regionsData, forKey: VEILConfig.cachedRelayRegionsKey)
-                        }
-                        // Persist deprecated relay IDs so loadStoredRelay() can evict stale cache.
-                        let deprecatedIds = parsed.veil?.deprecatedIds ?? []
-                        if let encodedDeprecated = try? JSONEncoder().encode(deprecatedIds) {
-                            UserDefaults.standard.set(encodedDeprecated, forKey: Self.cachedDeprecatedIdsKey)
-                        }
-
-                        let deprecatedNote = deprecatedIds.isEmpty ? "" : " (deprecated: \(deprecatedIds.joined(separator: ", ")))"
-                        Log.info("Relay config via \(url.host ?? "?"): \(relays.count) relay(s)\(deprecatedNote)", category: "VEIL")
-                        return relays
+                        return try self.acceptManifest(data, source: url.host ?? "?")
                     } catch {
                         Log.debug("\(url.host ?? "") fetch error: \(error)", category: "VEIL")
                         return nil
@@ -318,6 +257,73 @@ actor VeilCertFetcher {
             }
             return nil
         }
+    }
+
+    /// Verify, freshness-check and persist one signed manifest, whatever carried it — the HTTPS
+    /// fetch or `ServerTrustService` through the tunnel. Returns the relay list, or nil when the
+    /// manifest is refused or carries none (the bundle key is cached either way).
+    nonisolated func acceptManifest(_ data: Data, source: String) throws -> [RelayInfo]? {
+        guard try verifySignature(data) else {
+            Log.error("\(source) signature invalid — ignoring", category: "ICE")
+            return nil
+        }
+        let parsed = try JSONDecoder().decode(ConstructServerWellKnown.self, from: data)
+
+        // Freshness before ANY persistence. A correct signature proves authorship,
+        // never recency, so with two hosts racing, the slower one holding an older
+        // manifest would otherwise install it — including the bundle-signing key
+        // below, which is exactly what a rollback would want.
+        let cachedSignedAt = UserDefaults.standard.string(forKey: Self.cachedSignedAtKey)
+        switch RelayManifestFreshness.verdict(candidateSignedAt: parsed.signedAt,
+                                              cachedSignedAt: cachedSignedAt) {
+        case .accept:
+            break
+        case .rejectOlder:
+            Log.info("Manifest via \(source) is older than cached (\(parsed.signedAt ?? "nil") < \(cachedSignedAt ?? "nil")) — ignoring", category: "VEIL")
+            return nil
+        case .rejectUndatable:
+            Log.error("Manifest via \(source) has no usable signed_at while a dated one is cached — ignoring", category: "VEIL")
+            return nil
+        }
+        if let signedAt = parsed.signedAt {
+            UserDefaults.standard.set(signedAt, forKey: Self.cachedSignedAtKey)
+        }
+
+        // Persist the bundle-signing key BEFORE the relay guard: stealth
+        // sender-certificate verification and prekey-bundle/KT checks depend
+        // on it, and the manifest may legitimately ship without a relay list
+        // (veil-front relay is hardcoded, tickets arrive out-of-band).
+        let keyB64 = parsed.bundleSigningKey ?? parsed.bundleVerificationKey
+        if let keyB64 = keyB64,
+           let keyData = Data(base64Encoded: keyB64),
+           keyData.count == 32 {
+            UserDefaults.standard.set(keyData, forKey: Self.cachedBundleSigningKeyKey)
+        }
+
+        guard let relays = parsed.veil?.relays, !relays.isEmpty else {
+            Log.info("Manifest via \(source) verified — no relay list (bundle key cached)", category: "VEIL")
+            return nil
+        }
+
+        // Persist to UserDefaults — safe from any task since UserDefaults is thread-safe
+        if let encoded = try? JSONEncoder().encode(relays) {
+            UserDefaults.standard.set(encoded, forKey: Self.cachedRelayInfosKey)
+        }
+        let addressList = relays.map(\.addressWithPort)
+        UserDefaults.standard.set(addressList, forKey: VEILConfig.cachedRelayListKey)
+        if let regions = parsed.veil?.relayRegions,
+           let regionsData = try? JSONEncoder().encode(regions) {
+            UserDefaults.standard.set(regionsData, forKey: VEILConfig.cachedRelayRegionsKey)
+        }
+        // Persist deprecated relay IDs so loadStoredRelay() can evict stale cache.
+        let deprecatedIds = parsed.veil?.deprecatedIds ?? []
+        if let encodedDeprecated = try? JSONEncoder().encode(deprecatedIds) {
+            UserDefaults.standard.set(encodedDeprecated, forKey: Self.cachedDeprecatedIdsKey)
+        }
+
+        let deprecatedNote = deprecatedIds.isEmpty ? "" : " (deprecated: \(deprecatedIds.joined(separator: ", ")))"
+        Log.info("Relay config via \(source): \(relays.count) relay(s)\(deprecatedNote)", category: "VEIL")
+        return relays
     }
 
     /// Synchronous read of cached relay infos directly from UserDefaults.
