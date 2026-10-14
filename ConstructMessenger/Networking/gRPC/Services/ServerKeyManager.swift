@@ -32,6 +32,15 @@ actor ServerKeyManager {
         UserDefaults.standard.array(forKey: delegationsKey) as? [Data] ?? []
     }
 
+    /// Replaced whole when served: the server serves every delegation a client may still need.
+    /// Kept when nothing is served — a server that does not serve them yet says nothing. The same
+    /// rule for both carriers, `/.well-known` and `ServerTrustService`.
+    nonisolated static func storeServerDelegations(_ delegations: [Data]) {
+        guard !delegations.isEmpty else { return }
+        UserDefaults.standard.set(delegations, forKey: delegationsKey)
+        Log.info("ServerKeyManager: \(delegations.count) server key delegation(s) cached", category: "Stealth")
+    }
+
     // MARK: - Public API
 
     /// Returns the cached X25519 public key for token encryption, or nil if unavailable.
@@ -87,13 +96,13 @@ actor ServerKeyManager {
 
     /// Fetch the token encryption key from the server if the cache is stale or missing.
     ///
-    /// Under VEIL `on` this does nothing: it is a plain HTTPS request to the API host, outside the
-    /// tunnel (`decisions/veil-on-never-goes-direct.md`). The token key still arrives over gRPC
-    /// (`cacheFromGRPC`); the delegations stay as cached until the server-trust RPC carries them.
+    /// Under VEIL `on` the well-known is not fetched: it is a plain HTTPS request to the API host,
+    /// outside the tunnel (`decisions/veil-on-never-goes-direct.md`). The delegations are asked of
+    /// `ServerTrustService` instead; the token key arrives over gRPC anyway (`cacheFromGRPC`).
     func prefetch() async {
         guard let url = Self.wellKnownURL(host: GRPCChannelManager.shared.currentHost,
                                           mode: VeilProxyStore.loadMode()) else {
-            Log.debug("ServerKeyManager: VEIL on — well-known not fetched outside the tunnel", category: "Stealth")
+            await ServerTrustClient.refresh()
             return
         }
         let fetchedAt = UserDefaults.standard.double(forKey: Self.cacheAgeKey)
@@ -123,12 +132,8 @@ actor ServerKeyManager {
                 Log.debug("ServerKeyManager: token_encryption_key missing or invalid in well-known", category: "Stealth")
                 return
             }
-            // Replaced whole when served: the gateway serves every delegation a client may still
-            // need. Kept when absent — a server that does not serve them yet says nothing.
             if let list = (json["server_trust"] as? [String: Any])?["delegations"] as? [String] {
-                let delegations = list.compactMap { Data(base64Encoded: $0) }
-                UserDefaults.standard.set(delegations, forKey: Self.delegationsKey)
-                Log.info("ServerKeyManager: \(delegations.count) server key delegation(s) cached", category: "Stealth")
+                Self.storeServerDelegations(list.compactMap { Data(base64Encoded: $0) })
             }
             let rootKey = json["token_encryption_key"] as? String
             let serverSection = json["server"] as? [String: Any]
