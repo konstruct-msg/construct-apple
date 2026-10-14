@@ -189,6 +189,13 @@ final class GRPCChannelManager: Sendable {
         _connLock.lock()
         defer { _connLock.unlock() }
 
+        // A channel opened on the direct path before VEIL `on` was chosen is not reused — the
+        // never-direct rule was checked only where a channel is made (2026-10-14).
+        if veilProxyPort() == nil, !VeilProxyStore.loadMode().allowsDirectPath {
+            _conn?.client.beginGracefulShutdown()
+            _conn = nil
+            throw VeilTunnelNotUp()
+        }
         let key = routingKey()
         if let conn = _conn, conn.key == key, !conn.task.isCancelled {
             return conn.client
@@ -307,6 +314,19 @@ final class GRPCChannelManager: Sendable {
         // engine-QUIC is only valid on the direct path — a routing change that kills H2 kills it too.
 #if canImport(Network)
 #endif
+    }
+
+    /// VEIL `on` with no tunnel: nothing open on the direct path may carry another byte — the
+    /// cached channels, the QUIC connection under the message stream, and the stream itself,
+    /// told the route changed so it reconnects (and finds the tunnel, or waits for it).
+    func dropDirectPath() {
+        invalidatePersistentClient()
+        invalidateSealedPersistentClient()
+        #if os(iOS)
+        forceInvalidateEngineQuicConnection()
+        #endif
+        NotificationCenter.default.post(name: .grpcServerChanged, object: nil)
+        Log.info("VEIL on — direct connections closed", category: "GRPCChannel")
     }
 
     /// Invalidates only if the current connection generation matches `gen`.
@@ -464,6 +484,11 @@ final class GRPCChannelManager: Sendable {
         _sealedConnLock.lock()
         defer { _sealedConnLock.unlock() }
 
+        if veilProxyPort() == nil, !VeilProxyStore.loadMode().allowsDirectPath {
+            _sealedConn?.client.beginGracefulShutdown()
+            _sealedConn = nil
+            throw VeilTunnelNotUp()
+        }
         let key = routingKey()
         if let conn = _sealedConn, conn.key == key, !conn.task.isCancelled {
             return conn.client

@@ -636,6 +636,10 @@ final class ChatSendCoordinator {
                     SessionLifecycleController.shared.reestablishSessionForQueuedOutbound(to: recipientId)
                 } catch {
                     let isRetryableTransportFailure: Bool = {
+                        // VEIL `on` with the tunnel still coming up: nothing went wrong with the
+                        // message, it waits for the tunnel (2026-10-14: a send in those seconds
+                        // was marked failed and its payload dropped).
+                        if error is VeilTunnelNotUp { return true }
                         if let rpcError = error as? RPCError {
                             let code = String(describing: rpcError.code).lowercased()
                             return code == "deadlineexceeded" || code == "unavailable" || code == "cancelled"
@@ -837,6 +841,10 @@ final class ChatSendCoordinator {
         )
         pendingMediaUploads[placeholderId] = MediaUploadPayload(
             attachments: [], fileURLs: fileURLs, caption: caption, replyTo: replyTo)
+        // A percentage, as images have: a spinner alone said nothing about an 11 MB track, and
+        // on macOS it stopped turning when the row was drawn again after the chat was reopened
+        // (2026-10-14) — the upload looked dead while it ran.
+        MediaUploadProgressTracker.shared.set(0, for: placeholderId)
         Log.info("Uploading \(fileURLs.count) file(s) (placeholder \(placeholderId.prefix(8))…)", category: "ChatViewModel")
         Task { [weak self] in
             guard let self else { return }
@@ -844,8 +852,12 @@ final class ChatSendCoordinator {
                 let result = try await mediaUploadManager.uploadFilesAndBuildContent(
                     urls: fileURLs,
                     caption: caption,
-                    for: recipientId
+                    for: recipientId,
+                    onProgress: { fraction in
+                        Task { @MainActor in MediaUploadProgressTracker.shared.set(fraction, for: placeholderId) }
+                    }
                 )
+                MediaUploadProgressTracker.shared.clear(placeholderId)
                 pendingMediaUploads.removeValue(forKey: placeholderId)
                 persistenceService.deleteMessage(id: placeholderId, in: viewContext, autoSave: false)
                 let wireContent = MediaWireCodec.fileAlbumContent(
@@ -863,6 +875,7 @@ final class ChatSendCoordinator {
                 )
             } catch {
                 Log.error("File upload failed: \(error.localizedDescription)", category: "ChatViewModel")
+                MediaUploadProgressTracker.shared.clear(placeholderId)
                 // The placeholder shows the failure and its retry; no toast besides.
                 updateMessageStatus(messageId: placeholderId, status: .failed)
             }

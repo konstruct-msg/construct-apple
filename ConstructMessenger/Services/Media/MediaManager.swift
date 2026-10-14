@@ -734,6 +734,40 @@ class MediaManager {
             return cached
         }
 
+        let result = try await retryingUpload(
+            delays: NetworkTiming.Media.retryDelaysNs,
+            waitForTunnel: { await VeilTunnelWait.untilRouted() }
+        ) {
+            try await MediaServiceClient.shared.uploadData(data, mimeType: mimeType, onProgress: onProgress)
+        }
+        onProgress?(1.0)
+        await MediaSendCache.shared.storeUpload(result, for: data, reuse: reuse)
+        // Keep the plaintext locally so the SENDER never re-downloads their own upload.
+        //
+        // This used to be the caller's job, and three of the six upload paths did it while
+        // three did not — so playing back your own voice note fetched it from the server,
+        // seconds after the microphone produced it. There is nothing to decide here and no
+        // reason for a caller to know about it: every successful upload passes through this
+        // function, so the cache is seeded here and the per-path calls are gone.
+        //
+        // `data` is exactly what went to the server on every path (video: the transcoded
+        // bytes; file: the possibly-ZLIB-compressed bytes), which is also exactly what
+        // `downloadAndDecryptMedia` returns — so a cache hit and a download are the same
+        // value, not merely similar ones.
+        MediaManager.shared.cacheSentMedia(data, mediaId: result.mediaId)
+        return result
+    }
+
+    static let maxTunnelWaits = 3
+
+    /// The upload's retry rule, apart from the network. A dropped RPC is tried again after each
+    /// delay; VEIL `on` with no tunnel yet waits for the tunnel and does not spend a try — the
+    /// upload has not started, so nothing about it failed.
+    static func retryingUpload<T>(
+        delays: [UInt64],
+        waitForTunnel: () async -> Bool,
+        _ upload: () async throws -> T
+    ) async throws -> T {
         // .cancelled       → in-flight RPC killed when the persistent connection was torn down
         // .unavailable     → server/transport unreachable
         // .deadlineExceeded → upload timed out (large file on slow link)
@@ -741,35 +775,27 @@ class MediaManager {
         //                     when VEIL proxy restarts mid-stream (e.g. foreground wake)
         //                     log: unknown: "The transport threw an unexpected error." (cause: "CancellationError()")
         let retryableCodes: Set<RPCError.Code> = [.cancelled, .unavailable, .deadlineExceeded, .unknown]
-        let delays: [UInt64] = NetworkTiming.Media.retryDelaysNs
-
         var lastError: Error?
-        for delay in ([0] + delays.map { Optional($0) }) as [UInt64?] {
+        var attempt = 0
+        // A tunnel that comes up and drops again before the upload starts is waited for again,
+        // a few times — not without end.
+        var tunnelWaits = 0
+        while attempt <= delays.count {
             do {
-                if let ns = delay {
-                    try await Task.sleep(nanoseconds: ns)
+                if attempt > 0 {
+                    try await Task.sleep(nanoseconds: delays[attempt - 1])
                 }
-                let result = try await MediaServiceClient.shared.uploadData(data, mimeType: mimeType, onProgress: onProgress)
-                onProgress?(1.0)
-                await MediaSendCache.shared.storeUpload(result, for: data, reuse: reuse)
-                // Keep the plaintext locally so the SENDER never re-downloads their own upload.
-                //
-                // This used to be the caller's job, and three of the six upload paths did it while
-                // three did not — so playing back your own voice note fetched it from the server,
-                // seconds after the microphone produced it. There is nothing to decide here and no
-                // reason for a caller to know about it: every successful upload passes through this
-                // function, so the cache is seeded here and the per-path calls are gone.
-                //
-                // `data` is exactly what went to the server on every path (video: the transcoded
-                // bytes; file: the possibly-ZLIB-compressed bytes), which is also exactly what
-                // `downloadAndDecryptMedia` returns — so a cache hit and a download are the same
-                // value, not merely similar ones.
-                MediaManager.shared.cacheSentMedia(data, mediaId: result.mediaId)
-                return result
+                return try await upload()
+            } catch let notUp as VeilTunnelNotUp {
+                Log.info("Upload waits for the VEIL tunnel", category: "MediaManager")
+                tunnelWaits += 1
+                guard tunnelWaits <= maxTunnelWaits, await waitForTunnel() else { throw notUp }
+                continue
             } catch let error as GRPCCore.RPCError where retryableCodes.contains(error.code) {
                 lastError = error
                 Log.info("Upload dropped (code=\(error.code)) — will retry", category: "MediaManager")
             }
+            attempt += 1
         }
         throw lastError ?? RPCError(code: .unknown, message: "Upload failed: no error captured")
     }
@@ -814,7 +840,11 @@ class MediaManager {
     /// Text-based files are transparently compressed with ZLIB before encryption if beneficial.
     /// - Parameter url: Security-scoped URL of the file
     /// - Returns: Media metadata for message content
-    func uploadFile(_ url: URL, for recipientId: String) async throws -> MediaMessageData {
+    func uploadFile(
+        _ url: URL,
+        for recipientId: String,
+        onProgress: (@Sendable (Double) -> Void)? = nil
+    ) async throws -> MediaMessageData {
         let filename = url.lastPathComponent
         Log.info("Uploading file: \(filename)", category: "MediaManager")
 
@@ -833,7 +863,8 @@ class MediaManager {
         // trying to inflate). Compression before encryption would also let the sealed size speak
         // for the contents.
         let uploadResult = try await Self.uploadWithRetry(
-            data: originalData, mimeType: detectedMimeType, reuse: ForwardStaging.reuse(for: url, to: recipientId))
+            data: originalData, mimeType: detectedMimeType, reuse: ForwardStaging.reuse(for: url, to: recipientId),
+            onProgress: onProgress)
         Log.info("File uploaded: \(uploadResult.mediaId)", category: "MediaManager")
         // A forward's copy has served its purpose; until now a failed upload could still retry it.
         ForwardStaging.discard(url)
