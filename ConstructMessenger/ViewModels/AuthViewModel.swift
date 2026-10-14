@@ -105,6 +105,23 @@ class AuthViewModel {
             refreshDeviceKeyState()
             return
         }
+        beginRuntime()
+    }
+
+    private var runtimeStarted = false
+
+    /// The runtime of a model created with `startRuntime: false` — on iOS once the store import
+    /// at launch has finished (`StoreImportView`): nothing may write to Core Data while it copies.
+    /// Idempotent.
+    func startDeferredRuntime() {
+        beginRuntime()
+    }
+
+    private func beginRuntime() {
+        guard !runtimeStarted else { return }
+        runtimeStarted = true
+        // Back to Splash while the session restores, as on a launch that started it at once.
+        hasRegisteredDeviceKeys = nil
         setupSubscribers()
         startTokenRefreshMonitoring()
         setupSessionExpiredListener()
@@ -702,10 +719,12 @@ class AuthViewModel {
     /// paths having three different lists is how `performLocalSignOut` ended up never clearing
     /// Core Data at all.
     private func wipeLocalStoreContents() {
-        #if os(macOS)
-        // The store goes whole, under its key, and an empty one replaces it.
-        LocalRepositories.replaceAppStore()
-        #else
+        // The store goes whole, under its key, and an empty one replaces it — macOS, and iOS once
+        // the install has moved to `construct.db`.
+        if LocalRepositories.isOnStore {
+            LocalRepositories.replaceAppStore()
+            return
+        }
         guard let context = PersistenceController.shared.safeViewContext else {
             Log.error("Local store wipe skipped — no persistent store", category: "Auth")
             return
@@ -730,7 +749,6 @@ class AuthViewModel {
         // the fan-out queue in `UserDefaults`, partial messages in sealed files.
         Self.forgetServiceRows()
         Log.info("Local store wiped — previous identity's data removed", category: "Auth")
-        #endif
     }
 
     /// The previous identity's service rows on iOS: issued invites, owed fan-out copies, partial

@@ -51,6 +51,63 @@ enum LocalStoreImport {
         case mismatch(String)
     }
 
+    /// Whether this install stands on `construct.db`: always on macOS; on iOS from the import
+    /// on. Set only after the store holds `completedKey`, so it never names a half-written store;
+    /// read before the store can be opened — a background launch before the first unlock must
+    /// still know which store it may not fall back from.
+    static var hasMoved: Bool {
+        #if os(macOS)
+        true
+        #else
+        UserDefaults.standard.bool(forKey: movedKey)
+        #endif
+    }
+
+    static let movedKey = "construct.localStore.active.v1"
+
+    /// Whether this launch moves the install. Not in a unit-test host: the tests run inside the
+    /// app on the simulator, and an import there would move the simulator's store under them —
+    /// every test after it on a store it did not set up. The import itself is tested directly
+    /// (`LocalStoreImportTests`).
+    static var isDueAtLaunch: Bool {
+        !hasMoved && ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil
+    }
+
+    static func markMoved() {
+        UserDefaults.standard.set(true, forKey: movedKey)
+    }
+
+    #if os(iOS)
+    /// After the move, what Core Data and the iOS service stores left behind: the SQLite store,
+    /// the per-message key database, partial-message files, the invite journal and retry queue
+    /// in `UserDefaults`. Run at launch, before anything opens them — Core Data is in memory from
+    /// the move on (`PersistenceController.shared`). Media stay: they are sealed under
+    /// `LocalStoreKey`, which the store uses too.
+    static func removeCoreDataLeftovers() {
+        guard hasMoved else { return }
+        let fm = FileManager.default
+        let store = NSPersistentContainer.defaultDirectoryURL().appendingPathComponent("ConstructMessenger.sqlite")
+        let keyDatabase = MessageKeyStore.storageURL
+        let leftovers = PersistenceController.sqliteFiles(of: store) + PersistenceController.sqliteFiles(of: keyDatabase)
+            + [FilePendingChunkStore.defaultRoot]
+        var removed = 0
+        for url in leftovers where fm.fileExists(atPath: url.path) {
+            do {
+                try fm.removeItem(at: url)
+                removed += 1
+            } catch {
+                Log.error("LocalStoreImport: could not remove \(url.lastPathComponent) — \(error)", category: "Storage")
+            }
+        }
+        for key in keyValueKeys + [DefaultsIssuedInviteStore.storageKey] {
+            UserDefaults.standard.removeObject(forKey: key)
+        }
+        if removed > 0 {
+            Log.info("LocalStoreImport: removed \(removed) Core Data leftover(s)", category: "Storage")
+        }
+    }
+    #endif
+
     static func isComplete(_ store: LocalRepositories.Backing) -> Bool {
         (try? store.keyValue.get(completedKey)) != nil
     }
