@@ -116,7 +116,7 @@ struct DesktopChatsListView: View {
     private func chatList(selection: Binding<String?>) -> some View {
         List(selection: selection) {
             ForEach(filteredChats, id: \.id) { chat in
-                ChatRowView(chat: chat)
+                ChatRowView(chat: chat, isSelected: chat.id == selection.wrappedValue)
                     .tag(chat.id)
                     .listRowSeparatorTint(Color.CT.noise)
                     .contextMenu {
