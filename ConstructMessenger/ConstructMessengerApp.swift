@@ -28,15 +28,22 @@ struct Construct_MessengerApp: App {
     /// change observer. Build 712 crashed that way on the first message after deleting the
     /// account and registering again.
     @State private var storeGeneration = 0
+    /// The launch moves this install to construct-store first (`StoreImportView`); the runtime
+    /// and the launch task wait for it.
+    @State private var storeImportPending: Bool
     private let rootContainer: NSPersistentContainer
 
     init() {
         let isPreview = PreviewDetector.isRunningInPreview
+        // Before Core Data is touched: once moved, its old files are not opened again.
+        LocalStoreImport.removeCoreDataLeftovers()
+        let importPending = !isPreview && LocalStoreImport.isDueAtLaunch
+        _storeImportPending = State(initialValue: importPending)
         let container = isPreview
             ? PersistenceController.preview.container
             : PersistenceController.shared.container
         self.rootContainer = container
-        _authViewModel = State(initialValue: AuthViewModel(context: container.viewContext, startRuntime: !isPreview))
+        _authViewModel = State(initialValue: AuthViewModel(context: container.viewContext, startRuntime: !isPreview && !importPending))
         _securityViewModel = State(initialValue: SecurityViewModel())
         _recoveryViewModel = State(initialValue: AccountRecoveryViewModel())
         _socialRecoveryService = State(initialValue: SocialRecoveryService())
@@ -59,6 +66,18 @@ struct Construct_MessengerApp: App {
 
     var body: some Scene {
         WindowGroup {
+            if storeImportPending {
+                StoreImportView {
+                    storeImportPending = false
+                    authViewModel.startDeferredRuntime()
+                }
+            } else {
+                appRoot
+            }
+        }
+    }
+
+    private var appRoot: some View {
             SecurityGateView {
                 ContentView()
                     .environment(\.managedObjectContext, rootContainer.viewContext)
@@ -95,7 +114,6 @@ struct Construct_MessengerApp: App {
                 // Post-auth key maintenance lives in AuthViewModel; this task can run before
                 // async session restore completes.
             }
-        }
     }
 
     // MARK: - Global UIKit appearance
