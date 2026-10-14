@@ -358,6 +358,15 @@ public nonisolated struct Shared_Proto_Services_V1_MessageStreamResponse: Sendab
     set {response = .p2PHandoff(newValue)}
   }
 
+  /// The mailbox lost messages after the Subscribe cursor; sent once, before the first delivery.
+  public var mailboxGap: Shared_Proto_Services_V1_MailboxGap {
+    get {
+      if case .mailboxGap(let v)? = response {return v}
+      return Shared_Proto_Services_V1_MailboxGap()
+    }
+    set {response = .mailboxGap(newValue)}
+  }
+
   /// Response ID (correlates to request_id)
   public var responseID: String {
     get {_responseID ?? String()}
@@ -424,6 +433,8 @@ public nonisolated struct Shared_Proto_Services_V1_MessageStreamResponse: Sendab
     /// Only sent when both peers have DEVICE_CAPABILITIES_P2P_MESSAGING capability.
     /// See: signaling/p2p.proto
     case p2PHandoff(Shared_Proto_Signaling_V1_P2PHandoffRequest)
+    /// The mailbox lost messages after the Subscribe cursor; sent once, before the first delivery.
+    case mailboxGap(Shared_Proto_Services_V1_MailboxGap)
 
   }
 
@@ -1098,6 +1109,41 @@ public nonisolated struct Shared_Proto_Services_V1_GetPendingMessagesResponse: S
   /// Whether more messages are available
   public var hasMore_p: Bool = false
 
+  /// Set when the mailbox no longer holds everything after `since_cursor` (see MailboxGap).
+  public var gap: Shared_Proto_Services_V1_MailboxGap {
+    get {_gap ?? Shared_Proto_Services_V1_MailboxGap()}
+    set {_gap = newValue}
+  }
+  /// Returns true if `gap` has been explicitly set.
+  public var hasGap: Bool {self._gap != nil}
+  /// Clears the value of `gap`. Subsequent reads from it will return its default value.
+  public mutating func clearGap() {self._gap = nil}
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+
+  fileprivate var _gap: Shared_Proto_Services_V1_MailboxGap? = nil
+}
+
+/// The device's mailbox lost messages it never delivered: the queue keeps them a limited time and
+/// up to a limited count, and what it trimmed after the cursor the client asked from is gone.
+/// The server cannot say whose messages they were — only the interval. The client tells the
+/// person (construct-docs decisions/mailbox-gap-is-reported.md); it does not refetch.
+///
+/// Set when the stream's largest deleted id is newer than the cursor. Deletions other than
+/// trimming (a blocked sender's messages purged) count too; that over-reports, never hides.
+public nonisolated struct Shared_Proto_Services_V1_MailboxGap: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// The cursor the client asked from: the last position it had.
+  public var afterCursor: String = String()
+
+  /// The oldest position still held, where delivery resumes; empty when nothing is held.
+  public var resumesAt: String = String()
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -1368,7 +1414,7 @@ nonisolated extension Shared_Proto_Services_V1_MessageStreamRequest: SwiftProtob
 
 nonisolated extension Shared_Proto_Services_V1_MessageStreamResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".MessageStreamResponse"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}message\0\u{1}receipt\0\u{1}typing\0\u{1}ack\0\u{1}error\0\u{1}presence\0\u{3}heartbeat_ack\0\u{3}p2p_handoff\0\u{4}\u{2}response_id\0\u{3}stream_cursor\0\u{4}\u{a}rate_limit_challenge\0\u{3}attempt_id\0\u{c}\u{9}\u{1}\u{c}\u{c}\u{9}")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}message\0\u{1}receipt\0\u{1}typing\0\u{1}ack\0\u{1}error\0\u{1}presence\0\u{3}heartbeat_ack\0\u{3}p2p_handoff\0\u{4}\u{2}response_id\0\u{3}stream_cursor\0\u{4}\u{a}rate_limit_challenge\0\u{3}attempt_id\0\u{3}mailbox_gap\0\u{c}\u{9}\u{1}\u{c}\u{c}\u{9}")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -1484,6 +1530,19 @@ nonisolated extension Shared_Proto_Services_V1_MessageStreamResponse: SwiftProto
       case 11: try { try decoder.decodeSingularStringField(value: &self._streamCursor) }()
       case 21: try { try decoder.decodeSingularMessageField(value: &self._rateLimitChallenge) }()
       case 22: try { try decoder.decodeSingularStringField(value: &self._attemptID) }()
+      case 23: try {
+        var v: Shared_Proto_Services_V1_MailboxGap?
+        var hadOneofValue = false
+        if let current = self.response {
+          hadOneofValue = true
+          if case .mailboxGap(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.response = .mailboxGap(v)
+        }
+      }()
       default: break
       }
     }
@@ -1527,7 +1586,7 @@ nonisolated extension Shared_Proto_Services_V1_MessageStreamResponse: SwiftProto
       guard case .p2PHandoff(let v)? = self.response else { preconditionFailure() }
       try visitor.visitSingularMessageField(value: v, fieldNumber: 8)
     }()
-    case nil: break
+    default: break
     }
     try { if let v = self._responseID {
       try visitor.visitSingularStringField(value: v, fieldNumber: 10)
@@ -1540,6 +1599,9 @@ nonisolated extension Shared_Proto_Services_V1_MessageStreamResponse: SwiftProto
     } }()
     try { if let v = self._attemptID {
       try visitor.visitSingularStringField(value: v, fieldNumber: 22)
+    } }()
+    try { if case .mailboxGap(let v)? = self.response {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 23)
     } }()
     try unknownFields.traverse(visitor: &visitor)
   }
@@ -2394,7 +2456,7 @@ nonisolated extension Shared_Proto_Services_V1_PendingMessage: SwiftProtobuf.Mes
 
 nonisolated extension Shared_Proto_Services_V1_GetPendingMessagesResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".GetPendingMessagesResponse"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}messages\0\u{3}next_cursor\0\u{3}has_more\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}messages\0\u{3}next_cursor\0\u{3}has_more\0\u{1}gap\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -2405,12 +2467,17 @@ nonisolated extension Shared_Proto_Services_V1_GetPendingMessagesResponse: Swift
       case 1: try { try decoder.decodeRepeatedMessageField(value: &self.messages) }()
       case 2: try { try decoder.decodeSingularStringField(value: &self.nextCursor) }()
       case 3: try { try decoder.decodeSingularBoolField(value: &self.hasMore_p) }()
+      case 4: try { try decoder.decodeSingularMessageField(value: &self._gap) }()
       default: break
       }
     }
   }
 
   public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
     if !self.messages.isEmpty {
       try visitor.visitRepeatedMessageField(value: self.messages, fieldNumber: 1)
     }
@@ -2420,6 +2487,9 @@ nonisolated extension Shared_Proto_Services_V1_GetPendingMessagesResponse: Swift
     if self.hasMore_p != false {
       try visitor.visitSingularBoolField(value: self.hasMore_p, fieldNumber: 3)
     }
+    try { if let v = self._gap {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 4)
+    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -2427,6 +2497,42 @@ nonisolated extension Shared_Proto_Services_V1_GetPendingMessagesResponse: Swift
     if lhs.messages != rhs.messages {return false}
     if lhs.nextCursor != rhs.nextCursor {return false}
     if lhs.hasMore_p != rhs.hasMore_p {return false}
+    if lhs._gap != rhs._gap {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Shared_Proto_Services_V1_MailboxGap: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".MailboxGap"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}after_cursor\0\u{3}resumes_at\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.afterCursor) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.resumesAt) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.afterCursor.isEmpty {
+      try visitor.visitSingularStringField(value: self.afterCursor, fieldNumber: 1)
+    }
+    if !self.resumesAt.isEmpty {
+      try visitor.visitSingularStringField(value: self.resumesAt, fieldNumber: 2)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Shared_Proto_Services_V1_MailboxGap, rhs: Shared_Proto_Services_V1_MailboxGap) -> Bool {
+    if lhs.afterCursor != rhs.afterCursor {return false}
+    if lhs.resumesAt != rhs.resumesAt {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
