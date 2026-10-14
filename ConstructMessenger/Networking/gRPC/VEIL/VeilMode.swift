@@ -37,4 +37,8 @@ enum VeilMode: String, CaseIterable, Identifiable {
 }
 
 /// A connection was refused because VEIL is `on` and the tunnel is not up.
-struct VeilTunnelNotUp: Error {}
+struct VeilTunnelNotUp: LocalizedError {
+    // Shown where the last connection error is shown (Settings → Network). Until 2026-10-14
+    // it read "Construct_Messenger.VeilTunnelNotUp error 1." there.
+    var errorDescription: String? { NSLocalizedString("veil_tunnel_not_up", comment: "") }
+}

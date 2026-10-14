@@ -33,9 +33,11 @@ struct RelayPool {
 
     // MARK: - Init
 
-    init(relays: [VeilRelay], blockedPenalty: [String: Int] = [:]) {
+    init(relays: [VeilRelay], blockedPenalty: [String: Int] = [:], failures: [String: Int] = [:]) {
         self.relays = relays
         self.webTunnelBlockedPenalty = blockedPenalty
+        let present = Set(relays.map(\.address))
+        self.failures = failures.filter { present.contains($0.key) }
     }
 
     // MARK: - Selection
@@ -95,6 +97,9 @@ struct RelayPool {
 
     var isEmpty: Bool { relays.isEmpty }
     var count: Int { relays.count }
+
+    /// Consecutive failures per relay — carried into a rebuilt pool (`NativeProxyEffector.updateRelays`).
+    var failureCounts: [String: Int] { failures }
 
     /// Current WebTunnel block penalties — read by `ConnectionLoop` to persist across launches.
     var blockedPenalty: [String: Int] { webTunnelBlockedPenalty }

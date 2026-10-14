@@ -427,6 +427,7 @@ final class VeilProxyManager: ObservableObject {
     /// iOS may kill background threads; `isRunning` may be stale. Restarts if dead.
     func stop() {
         isRunning = false; proxyPort = 0; isWebTunnelActive = false
+        VeilFailurePolicy.webTunnelActive = false
         activeRelay = nil
         // Tear down Source 3 discovery when VEIL is torn down: discovered relays are only
         // valid on the current LAN, and browsing costs battery + keeps the local-net prompt live.
@@ -513,6 +514,7 @@ final class VeilProxyManager: ObservableObject {
         self.proxyPort = port
         self.activeRelay = relay
         self.isWebTunnelActive = isWebTunnel
+        VeilFailurePolicy.webTunnelActive = isRunning && isWebTunnel
     }
 
     /// Record the most recent proxy-start failure reason (from `veil_last_error`,
