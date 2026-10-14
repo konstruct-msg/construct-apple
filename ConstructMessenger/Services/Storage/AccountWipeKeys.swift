@@ -162,6 +162,10 @@ enum AccountWipeKeys {
         "construct.selfAddressedResidue.cleared.v1",
         "construct.media_send_cache_v1",
         "construct.manifest_signed_at",
+        // The mailbox-gap notice not yet closed (`MailboxGapNotice`): about this account's
+        // messages. Lives in the key-value store — `UserDefaults` on an iOS install that has not
+        // moved to construct.db, where this wipe is what removes it.
+        "construct.mailboxGap.v1",
         // The public IP and region the removed GeoIP lookup cached. `GRPCChannelManager` already
         // deletes them at launch; listed so a wipe says the same about where the person was.
         "construct.geoip_ip_v1",

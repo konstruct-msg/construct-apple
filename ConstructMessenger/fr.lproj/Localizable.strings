@@ -310,6 +310,9 @@
 "device_deregistered_warning_title" = "⚠ APPAREIL NON ENREGISTRÉ";
 "device_deregistered_warning_body" = "Konstruct ne reconnaît plus cet appareil. Cela peut se produire après une panne temporaire ou si l’appareil a été retiré depuis un autre appareil.\n\nVos clés sont toujours sur ce téléphone — rien n’a été supprimé. Réessayez ci-dessous ou restaurez votre identité avec votre phrase de récupération.";
 "device_deregistered_retry_hint" = "Le rejet peut être un problème serveur temporaire. Réessayez de vous authentifier.";
+"mailbox_gap_title" = "Certains messages ne sont peut-être pas arrivés";
+"mailbox_gap_body" = "Les messages qui vous ont été envoyés entre %1$@ et %2$@ ont été supprimés du serveur avant que cet appareil ne les récupère. Le serveur ne conserve les messages non distribués que pendant un temps limité.";
+"mailbox_gap_body_open" = "Les messages qui vous ont été envoyés depuis %@ ont été supprimés du serveur avant que cet appareil ne les récupère. Le serveur ne conserve les messages non distribués que pendant un temps limité.";
 "store_import_title" = "Transfert de vos discussions";
 "store_import_body" = "Une seule fois, après la mise à jour. Gardez Konstruct ouvert — cela prend quelques secondes.";
 "local_store_unreadable_title" = "IMPOSSIBLE D’OUVRIR LES DISCUSSIONS DE CET APPAREIL";

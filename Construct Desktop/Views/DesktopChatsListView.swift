@@ -115,6 +115,10 @@ struct DesktopChatsListView: View {
 
     private func chatList(selection: Binding<String?>) -> some View {
         List(selection: selection) {
+            if let gap = MailboxGapNotice.shared.interval {
+                MailboxGapRow(interval: gap, onDismiss: { MailboxGapNotice.shared.dismiss() })
+                    .listRowSeparator(.hidden)
+            }
             ForEach(filteredChats, id: \.id) { chat in
                 ChatRowView(chat: chat, isSelected: chat.id == selection.wrappedValue)
                     .tag(chat.id)
