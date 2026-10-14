@@ -38,6 +38,8 @@ final class AudioPlayerService: NSObject, ObservableObject {
     /// The loaded track is music, not speech: it plays at its own speed, whatever was chosen for
     /// voice messages.
     private var playsAtNaturalRate = false
+    /// The file name of a music track, which goes to the lock screen; nil for a voice message.
+    private var nowPlayingTitle: String?
 
     private override init() {}
 
@@ -75,21 +77,23 @@ final class AudioPlayerService: NSObject, ObservableObject {
 
     /// Move to `fraction` (0…1) of the track. The current track keeps playing or stays paused;
     /// another one starts there.
-    func seek(mediaId: String, data: Data, to fraction: Double, naturalRate: Bool = false) {
+    func seek(mediaId: String, data: Data, to fraction: Double, naturalRate: Bool = false, title: String? = nil) {
         let fraction = min(max(fraction, 0), 1)
         if playingMediaId != mediaId {
             stop()
-            play(mediaId: mediaId, data: data, naturalRate: naturalRate)
+            play(mediaId: mediaId, data: data, naturalRate: naturalRate, title: title)
         }
         guard let p = player, playingMediaId == mediaId else { return }
         p.currentTime = fraction * p.duration
         elapsed = p.currentTime
         progress = fraction
+        publishNowPlaying()
     }
 
     /// Toggle play/pause for the given mediaId, loading audio from `data`. `naturalRate` for a
     /// music file: the voice-message speed does not apply to it.
-    func togglePlay(mediaId: String, data: Data, naturalRate: Bool = false) {
+    /// `title`: a music file's name, for the lock screen; leave it nil for a voice message.
+    func togglePlay(mediaId: String, data: Data, naturalRate: Bool = false, title: String? = nil) {
         if playingMediaId == mediaId {
             // Pause or resume
             if let p = player {
@@ -99,7 +103,43 @@ final class AudioPlayerService: NSObject, ObservableObject {
         }
         // New track — stop previous
         stop()
-        play(mediaId: mediaId, data: data, naturalRate: naturalRate)
+        play(mediaId: mediaId, data: data, naturalRate: naturalRate, title: title)
+    }
+
+    // MARK: Lock screen
+
+    /// The loaded track, from the lock screen. False when nothing is loaded.
+    func resumeCurrent() -> Bool {
+        guard player != nil else { return false }
+        if isPaused { resume() }
+        return true
+    }
+
+    func pauseCurrent() -> Bool {
+        guard player != nil else { return false }
+        if !isPaused { pause() }
+        return true
+    }
+
+    func toggleCurrent() -> Bool {
+        isPaused ? resumeCurrent() : pauseCurrent()
+    }
+
+    func seekCurrent(to seconds: TimeInterval) -> Bool {
+        guard let p = player, p.duration > 0 else { return false }
+        p.currentTime = min(max(seconds, 0), p.duration)
+        elapsed = p.currentTime
+        progress = p.currentTime / p.duration
+        publishNowPlaying()
+        return true
+    }
+
+    /// The speed the loaded track plays at; 0 with nothing loaded.
+    var currentRate: Float { player?.rate ?? 0 }
+
+    private func publishNowPlaying() {
+        guard let title = nowPlayingTitle, let p = player else { return }
+        NowPlaying.publish(.init(title: title, duration: p.duration, elapsed: p.currentTime, isPlaying: !isPaused))
     }
 
     func stop() {
@@ -111,12 +151,14 @@ final class AudioPlayerService: NSObject, ObservableObject {
         progress       = 0
         elapsed        = 0
         totalDuration  = 0
+        if nowPlayingTitle != nil { NowPlaying.publish(nil) }
+        nowPlayingTitle = nil
         deactivateSession()
     }
 
     // MARK: - Private playback
 
-    private func play(mediaId: String, data: Data, naturalRate: Bool) {
+    private func play(mediaId: String, data: Data, naturalRate: Bool, title: String?) {
         // One sound at a time: a video note playing in place folds back.
         VideoNotePlayback.shared.collapse()
         do {
@@ -128,6 +170,7 @@ final class AudioPlayerService: NSObject, ObservableObject {
             p.rate = naturalRate ? 1 : rate
             p.play()
             playsAtNaturalRate = naturalRate
+            nowPlayingTitle = title
 
             player        = p
             playingMediaId = mediaId
@@ -136,6 +179,15 @@ final class AudioPlayerService: NSObject, ObservableObject {
             progress       = 0
             elapsed        = 0
             startProgressTimer()
+            if title != nil {
+                NowPlaying.install(.init(
+                    play: { AudioPlayerService.shared.resumeCurrent() },
+                    pause: { AudioPlayerService.shared.pauseCurrent() },
+                    toggle: { AudioPlayerService.shared.toggleCurrent() },
+                    seek: { AudioPlayerService.shared.seekCurrent(to: $0) }
+                ))
+                publishNowPlaying()
+            }
         } catch {
             Log.info("AudioPlayerService: failed to play \(mediaId) — \(error)")
         }
@@ -145,13 +197,16 @@ final class AudioPlayerService: NSObject, ObservableObject {
         player?.pause()
         isPaused = true
         stopProgressTimer()
+        publishNowPlaying()
     }
 
     private func resume() {
-        player?.rate = rate
+        // A music track resumes at its own speed. Until 2026-10-14 it took the voice speed here.
+        player?.rate = playsAtNaturalRate ? 1 : rate
         player?.play()
         isPaused = false
         startProgressTimer()
+        publishNowPlaying()
     }
 
     // MARK: - Progress timer
@@ -208,6 +263,8 @@ extension AudioPlayerService: AVAudioPlayerDelegate {
             self.isPaused       = false
             self.playingMediaId = nil
             self.player         = nil
+            if self.nowPlayingTitle != nil { NowPlaying.publish(nil) }
+            self.nowPlayingTitle = nil
             self.deactivateSession()
             if flag, let finishedId { self.onTrackFinished?(finishedId) }
         }
