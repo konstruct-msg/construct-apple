@@ -68,6 +68,8 @@ enum KeychainSessionAccounts {
     static let streamCursor = "stream_cursor"
     /// The endpoint the app connects to, as `host:port` (`ServerEndpoint`).
     static let serverEndpoint = "server_endpoint"
+    /// Whether the extension may reach the server directly (`ExtensionDirectPath`).
+    static let extensionDirectPath = "extension_direct_path"
 
     /// The account a core `SecureStoreSlot` is stored under on this platform.
     ///

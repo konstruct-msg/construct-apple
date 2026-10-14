@@ -64,4 +64,34 @@ final class AlertDecisionTests: XCTestCase {
             XCTAssertNil(ServerEndpoint(stored), stored)
         }
     }
+
+    // MARK: - Whether the extension may fetch at all
+
+    /// Its fetch goes around the tunnel, so only the app's explicit yes permits it; nothing
+    /// published yet is no (decisions/veil-on-never-goes-direct.md).
+    func testOnlyAnExplicitYesPermitsTheExtensionToFetch() {
+        XCTAssertTrue(ExtensionDirectPath.permits(ExtensionDirectPath.published(allowed: true)))
+        XCTAssertFalse(ExtensionDirectPath.permits(ExtensionDirectPath.published(allowed: false)))
+        XCTAssertFalse(ExtensionDirectPath.permits(nil))
+        XCTAssertFalse(ExtensionDirectPath.permits(Data()))
+    }
+
+    /// What the app writes on a mode change is what the extension reads.
+    func testSavingTheModePublishesItForTheExtension() {
+        let key = KeychainSessionAccounts.extensionDirectPath
+        let saved = UserDefaults.standard.string(forKey: VeilProxyStore.modeKey)
+        let published = KeychainManager.shared.loadData(forKey: key)
+        defer {
+            if let saved { UserDefaults.standard.set(saved, forKey: VeilProxyStore.modeKey) }
+            else { UserDefaults.standard.removeObject(forKey: VeilProxyStore.modeKey) }
+            if let published {
+                _ = KeychainManager.shared.saveData(published, forKey: key, accessible: KeychainManager.cryptoKeyAccessible)
+            }
+        }
+
+        VeilProxyStore.saveMode(.on)
+        XCTAssertFalse(ExtensionDirectPath.permits(KeychainManager.shared.loadData(forKey: key)))
+        VeilProxyStore.saveMode(.auto)
+        XCTAssertTrue(ExtensionDirectPath.permits(KeychainManager.shared.loadData(forKey: key)))
+    }
 }
