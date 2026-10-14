@@ -23,10 +23,10 @@
 # "ambiguous". Override with CODESIGN_IDENTITY.
 #
 # Notarization reads a notarytool keychain profile (NOTARY_PROFILE, default
-# konstruct-notary). The profile belongs to an Apple ID and team, not to an app, so
+# construct-notary). The profile belongs to an Apple ID and team, not to an app, so
 # one saved for another project of the same team works too. To save one:
 #
-#   xcrun notarytool store-credentials konstruct-notary \
+#   xcrun notarytool store-credentials construct-notary \
 #       --apple-id <Apple ID> --team-id <team> --password <app-specific password>
 #
 # Architectures follow the xcframeworks: the macOS slices of ConstructCore and
@@ -52,7 +52,7 @@ CONFIGURATION="Beta"
 BUILD=1
 NOTARIZE=0
 IDENTITY="${CODESIGN_IDENTITY:-}"
-PROFILE="${NOTARY_PROFILE:-konstruct-notary}"
+PROFILE="${NOTARY_PROFILE:-construct-notary}"
 
 while [ $# -gt 0 ]; do
     case "$1" in
