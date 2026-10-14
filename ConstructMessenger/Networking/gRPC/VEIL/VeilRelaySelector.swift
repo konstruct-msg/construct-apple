@@ -38,6 +38,8 @@ enum VeilRelaySelector {
         for address in allAddresses where seen.insert(address).inserted {
             candidates.append(address)
         }
+        // Probed and logged before any `VeilRelay` is made of them (TODO 135).
+        LogRedaction.register(candidates)
         return candidates
     }
 
@@ -54,6 +56,8 @@ enum VeilRelaySelector {
         // A learned front that is dead loses this on its first failure and the pool
         // rotates, so leading costs at most one probe.
         let learned = VeilLearnedFrontStore.shared.addresses()
+        // Probed and logged before any `VeilRelay` is made of them (TODO 135).
+        LogRedaction.register(learned + base + discovered)
         guard !learned.isEmpty || !discovered.isEmpty else { return base }
         var seen = Set<String>()
         return (learned + base + discovered).filter { seen.insert($0).inserted }
