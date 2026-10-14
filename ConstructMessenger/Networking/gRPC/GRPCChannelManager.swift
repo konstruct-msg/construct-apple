@@ -80,12 +80,6 @@ final class GRPCChannelManager: Sendable {
     private init() {
         publishEndpoint()
         VeilProxyStore.publishForExtension(VeilProxyStore.loadMode())
-        #if !os(macOS)
-        // Resolve GeoIP in the background so relay region preference is ready
-        // before the first connection attempt. Idempotent — uses cached UserDefaults
-        // result on subsequent launches. Desktop skips GeoIP entirely.
-        Task { await GeoIPManager.shared.resolve() }
-        #endif
         // Builds that ran the GeoIP lookup (removed 2026-10-14) kept the public IP a STUN
         // query returned. Nothing reads it any more, and it should not outlive the code.
         UserDefaults.standard.removeObject(forKey: "construct.geoip_ip_v1")
