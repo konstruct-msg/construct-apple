@@ -301,10 +301,7 @@ struct FileAttachmentBubbleView: View {
             mediaUrl: file.mediaUrl,
             mediaKey: file.mediaKey
         )
-        let tmpURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent(file.filename)
-        try data.write(to: tmpURL)
-        return tmpURL
+        return try OpenedFiles.write(data, mediaId: file.mediaId, name: file.filename)
     }
 
     #if canImport(UIKit)
