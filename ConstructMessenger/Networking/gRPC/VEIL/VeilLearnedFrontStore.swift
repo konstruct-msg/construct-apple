@@ -208,6 +208,8 @@ final class VeilLearnedFrontStore: @unchecked Sendable {
     /// refusal to import, never as a reason to dial the address unpinned.
     @discardableResult
     func save(address: String, sni: String, spki: String, now: Date = Date()) -> Bool {
+        // Before either log line below names it — refused or not, it is a front (TODO 135).
+        LogRedaction.register([address, sni])
         guard let entry = VeilLearnedFrontCore.normalize(
             address: address, sni: sni, spki: spki, now: now
         ) else {
