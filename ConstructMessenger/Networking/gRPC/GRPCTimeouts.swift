@@ -18,6 +18,8 @@ enum GRPCTimeouts {
 
     // VEIL capability renewal (in-band, short unary call)
     static let issueVeilCapability: TimeInterval = NetworkTiming.GRPC.Timeouts.refreshToken
+    /// `ServerTrustService.GetServerTrust` — a small read, the same budget as a token refresh.
+    static let serverTrust: TimeInterval = NetworkTiming.GRPC.Timeouts.refreshToken
 
     // Device linking
     static let initiateDeviceLink: TimeInterval = NetworkTiming.GRPC.Timeouts.initiateDeviceLink
