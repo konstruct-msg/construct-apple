@@ -79,12 +79,10 @@ final class GRPCChannelManager: Sendable {
 
     private init() {
         publishEndpoint()
-        #if !os(macOS)
-        // Resolve GeoIP in the background so relay region preference is ready
-        // before the first connection attempt. Idempotent — uses cached UserDefaults
-        // result on subsequent launches. Desktop skips GeoIP entirely.
-        Task { await GeoIPManager.shared.resolve() }
-        #endif
+        // Builds that ran the GeoIP lookup (removed 2026-10-14) kept the public IP a STUN
+        // query returned. Nothing reads it any more, and it should not outlive the code.
+        UserDefaults.standard.removeObject(forKey: "construct.geoip_ip_v1")
+        UserDefaults.standard.removeObject(forKey: "construct.geoip_region_v1")
 
         // Invalidate the persistent connection whenever the network path changes
         // (cellular ↔ WiFi switch, VPN on/off, etc.).  The old TCP connection is dead
@@ -99,10 +97,6 @@ final class GRPCChannelManager: Sendable {
             Log.info("Network path changed — invalidating persistent gRPC connection", category: "gRPC")
             self.invalidatePersistentClient()
             Task {
-                #if !os(macOS)
-                await GeoIPManager.shared.invalidate()
-                await GeoIPManager.shared.resolve()
-                #endif
                 let reachable = NetworkReachabilityManager.shared.isReachable
                 let censored = CensoredNetworkDetector.isCensored
                 let mode = VeilProxyStore.loadMode()

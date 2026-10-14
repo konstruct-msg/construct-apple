@@ -77,8 +77,8 @@ ConstructTransport.xcframework/**/*.a
 screenshots/
 
 # ── GeoIP databases ───────────────────────────────────────────────────────────
-# Downloaded automatically by scripts/fetch_geoip.sh (or the Xcode Build Phase).
-# Never committed — updated monthly from P3TERX/GeoLite.mmdb.
+# The GeoIP lookup was removed 2026-10-14; old checkouts may still have the
+# downloaded databases (~20 MB) at the root. Never committed.
 GeoLite2-Country.mmdb
 GeoLite2-ASN.mmdb
 
