@@ -11,11 +11,14 @@ struct ChatRowView: View {
     /// this observed the managed `Chat`, and an `.id(...)` of every preview field forced a redraw
     /// whenever its `objectWillChange` stayed silent.
     let chat: ChatRecord
+    /// The macOS sidebar's selection, drawn by the platform under the row (accent while the
+    /// list has focus, grey otherwise). iOS lists never select a row and leave it false.
+    var isSelected: Bool = false
 
     var body: some View {
         // The person is read from `ContactsLive`, whose changes redraw the row too — a profile
         // share updates the contact, not the chat.
-        ChatRowLayout(chat: chat, user: ContactsLive.shared.contact(chat.peerId))
+        ChatRowLayout(chat: chat, user: ContactsLive.shared.contact(chat.peerId), isSelected: isSelected)
     }
 
     private static let rowTimeFormatter: DateFormatter = {
@@ -54,6 +57,16 @@ struct ChatRowView: View {
 private struct ChatRowLayout: View {
     let chat: ChatRecord
     var user: ContactRecord?
+    var isSelected: Bool = false
+
+    /// On a selected row the dim token reads grey on the accent. The row's own text colour,
+    /// softened, reads on both selections the platform draws — accent and inactive grey. Not
+    /// `backgroundProminence`: this list never reports `.increased` (measured 2026-10-14).
+    private static let selectedDimOpacity = 0.75
+    private var onSelection: Bool { isSelected }
+    private var dimStyle: AnyShapeStyle {
+        onSelection ? AnyShapeStyle(Color.CT.text.opacity(Self.selectedDimOpacity)) : AnyShapeStyle(Color.CT.textDim)
+    }
 
     var body: some View {
         HStack(alignment: .center, spacing: CTLayout.chromeGap) {
@@ -76,13 +89,13 @@ private struct ChatRowLayout: View {
                     if let ts = chat.lastMessageTime {
                         Text(ChatRowView.rowTimestampText(ts))
                             .font(CTFont.caption)
-                            .foregroundColor(Color.CT.textDim)
+                            .foregroundStyle(dimStyle)
                             .lineLimit(1)
                     }
                     if chat.isPinned && chat.unreadCount == 0 {
                         Image(systemName: "pin.fill")
                             .font(CTIcon.font(CTIcon.caption, weight: .regular))
-                            .foregroundColor(Color.CT.textDim)
+                            .foregroundStyle(dimStyle)
                     }
                 }
 
@@ -90,7 +103,7 @@ private struct ChatRowLayout: View {
                     if let lastMessage = chat.lastMessageText {
                         Text(Chat.formatPreviewText(lastMessage))
                             .font(CTFont.secondary)
-                            .foregroundColor(Color.CT.textDim)
+                            .foregroundStyle(dimStyle)
                             .lineLimit(1)
                             // Explicit dependency so SwiftUI cannot elide the Text when
                             // only the denormalized preview string changes.
@@ -100,10 +113,11 @@ private struct ChatRowLayout: View {
                     if chat.unreadCount > 0 {
                         Text(chat.unreadCount < 10000 ? "\(chat.unreadCount)" : "9999+")
                             .font(CTFont.badge)
-                            .foregroundColor(Color.CT.bg)
+                            // Inverted on a selected row: an accent badge on the accent vanishes.
+                            .foregroundStyle(onSelection ? Color.CT.accent : Color.CT.bg)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
-                            .background(Color.CT.accent)
+                            .background(onSelection ? Color.CT.text : Color.CT.accent)
                             .clipShape(CTShape.badge())
                             .animation(.easeInOut(duration: 0.2), value: chat.unreadCount)
                     }
