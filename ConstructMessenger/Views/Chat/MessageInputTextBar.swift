@@ -72,11 +72,7 @@ struct MessageInputTextBar: View {
     @ViewBuilder
     private var textField: some View {
         TextField(LocalizedStringKey("message_placeholder"), text: $text, axis: .vertical)
-            #if os(macOS)
-            .font(CTFont.message(ChatUIConstants.Typography.macOSmessageTextSize))
-            #else
-            .font(CTFont.message(ChatUIConstants.Typography.iOSmessageTextSize))
-            #endif
+            .font(CTFont.message(ChatUIConstants.Typography.messageTextSize))
             .foregroundColor(Color.CT.text)
             .textFieldStyle(.plain)
             .lineLimit(1...8)
