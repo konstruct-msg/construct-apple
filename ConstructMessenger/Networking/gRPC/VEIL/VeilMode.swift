@@ -42,3 +42,26 @@ struct VeilTunnelNotUp: LocalizedError {
     // it read "Construct_Messenger.VeilTunnelNotUp error 1." there.
     var errorDescription: String? { NSLocalizedString("veil_tunnel_not_up", comment: "") }
 }
+
+/// VEIL `on` and the tunnel still coming up: a send waits for it rather than failing. On
+/// 2026-10-14 a file dropped into a chat in those seconds turned red at once.
+enum VeilTunnelWait {
+    /// Longer than one cooldown after every front failed (29 s) and the next round of tries.
+    static let limit: TimeInterval = 120
+    private static let pollNs: UInt64 = 500_000_000
+
+    /// True as soon as a route is allowed — the tunnel up, or a mode that may go direct; false
+    /// at the limit or on cancellation.
+    static func untilRouted(
+        limit: TimeInterval = limit,
+        isRouted: @Sendable () -> Bool = {
+            GRPCChannelManager.shared.veilProxyPort() != nil || VeilProxyStore.loadMode().allowsDirectPath
+        }
+    ) async -> Bool {
+        let deadline = Date().addingTimeInterval(limit)
+        while !isRouted() {
+            guard Date() < deadline, (try? await Task.sleep(nanoseconds: pollNs)) != nil else { return false }
+        }
+        return true
+    }
+}

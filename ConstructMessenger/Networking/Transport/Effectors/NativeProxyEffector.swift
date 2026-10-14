@@ -16,11 +16,28 @@ import Foundation
 actor NativeProxyEffector: ProxyEffector {
     private let proxy: VeilProxy
     private var pool: RelayPool
+    /// Brings the proxy up on one relay — `proxy.ensure`, or a test's stand-in.
+    private let ensure: @Sendable (VeilRelay) async throws -> VeilProxyEnsureResult
+    /// Tells `VeilProxyManager` about failures and errors; off in a test, where that would start
+    /// the front-floor maintainer on made-up addresses.
+    private let reportsToManager: Bool
 
     init(initialRelays: [VeilRelay], blockedPenalty: [String: Int]) {
-        self.proxy = VeilProxy()
+        let proxy = VeilProxy()
+        self.proxy = proxy
         self.pool = RelayPool(relays: initialRelays, blockedPenalty: blockedPenalty)
+        self.ensure = { try await proxy.ensure(relay: $0) }
+        self.reportsToManager = true
     }
+
+    #if DEBUG
+    init(initialRelays: [VeilRelay], ensure: @escaping @Sendable (VeilRelay) async throws -> VeilProxyEnsureResult) {
+        self.proxy = VeilProxy()
+        self.pool = RelayPool(relays: initialRelays)
+        self.ensure = ensure
+        self.reportsToManager = false
+    }
+    #endif
 
     /// Whether the port the proxy gave us is still held. Not `veil_is_alive`: it misses a port
     /// iOS reclaimed during a suspend, and on the native-TLS path — where Swift, not the Rust
@@ -32,13 +49,25 @@ actor NativeProxyEffector: ProxyEffector {
         return LocalListenerProbe.isHeld(port: port)
     }
 
+    /// Bring the proxy up on the best relay, and on a failure try the next one at once — each
+    /// relay once per call. Only when every one has failed does the router see a failure and
+    /// cool down: on 2026-10-14 a phone sat out a 29 s cooldown after its first front failed,
+    /// with three working fronts configured beside it.
     func start() async -> TransportEvent {
         guard !pool.isEmpty else {
             return .proxyStartFailed(relay: nil, reason: "relay pool empty")
         }
-        guard let relay = pool.best() else {
-            return .proxyStartFailed(relay: nil, reason: "no usable relay")
+        var tried = Set<String>()
+        var last: TransportEvent = .proxyStartFailed(relay: nil, reason: "no usable relay")
+        while let relay = pool.best(), !tried.contains(relay.address) {
+            tried.insert(relay.address)
+            last = await start(relay)
+            if case .proxyStarted = last { return last }
         }
+        return last
+    }
+
+    private func start(_ relay: VeilRelay) async -> TransportEvent {
         // Last gate before `veil_start`. If this device learned a pin for the address, the
         // relay handed to the proxy must carry that exact pin — anything else means the
         // pin was lost or overwritten somewhere in the build path, and dialing a vouched
@@ -47,20 +76,21 @@ actor NativeProxyEffector: ProxyEffector {
         if let learnedPin = VeilLearnedFrontStore.shared.pin(for: relay.address),
            (relay.pinnedSpki ?? "").lowercased() != learnedPin {
             pool.recordFailure(relay)
-            await VeilProxyManager.shared.handleRelayUnavailable(relay.address)
+            if reportsToManager { await VeilProxyManager.shared.handleRelayUnavailable(relay.address) }
             return .proxyStartFailed(relay: relay.address, reason: "learned front offered without its pin")
         }
         do {
-            let result = try await proxy.ensure(relay: relay)
-            await VeilProxyManager.shared.reportLastError(nil)
+            let result = try await ensure(relay)
+            if reportsToManager { await VeilProxyManager.shared.reportLastError(nil) }
             return .proxyStarted(relay: relay.address, port: result.port, restarted: result.restarted)
         } catch {
             pool.recordFailure(relay)
-            await VeilProxyManager.shared.handleRelayUnavailable(relay.address)
+            if reportsToManager { await VeilProxyManager.shared.handleRelayUnavailable(relay.address) }
             // Prefer the clean, real reason (veil_last_error → VeilProxyRuntimeError)
             // over the raw nested enum description.
             let reason = (error as? VeilProxyError)?.localizedDescription ?? "\(error)"
-            await VeilProxyManager.shared.reportLastError(reason)
+            if reportsToManager { await VeilProxyManager.shared.reportLastError(reason) }
+            Log.info("VEIL: \(relay.address) failed — \(reason)", category: "VEIL")
             return .proxyStartFailed(relay: relay.address, reason: reason)
         }
     }

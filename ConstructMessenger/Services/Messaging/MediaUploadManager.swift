@@ -120,13 +120,21 @@ class MediaUploadManager {
     }
 
     /// Uploads file attachments. Wire/local prefer mediaAlbum proto (CTM1); JSON remains for dual-read.
-    func uploadFilesAndBuildContent(urls: [URL], caption: String, for recipientId: String) async throws -> FileUploadResult {
+    func uploadFilesAndBuildContent(
+        urls: [URL],
+        caption: String,
+        for recipientId: String,
+        onProgress: (@Sendable (Double) -> Void)? = nil
+    ) async throws -> FileUploadResult {
         var mediaList: [MediaMessageData] = []
         mediaList.reserveCapacity(urls.count)
 
-        for url in urls {
+        for (index, url) in urls.enumerated() {
             Log.info("Uploading file: \(url.lastPathComponent)", category: "MediaUploadManager")
-            let mediaData = try await MediaManager.shared.uploadFile(url, for: recipientId)
+            let count = Double(urls.count)
+            let mediaData = try await MediaManager.shared.uploadFile(url, for: recipientId) { fraction in
+                onProgress?((Double(index) + fraction) / count)
+            }
             mediaList.append(MediaMessageData(
                 mediaId: mediaData.mediaId,
                 mediaUrl: mediaData.mediaUrl,
