@@ -39,4 +39,13 @@ final class ComposerPasteTests: XCTestCase {
         XCTAssertEqual(kind([.utf8PlainText, .pdf]), .text)
         XCTAssertEqual(kind([]), .text)
     }
+
+    /// A dropped PDF went as a picture of its first page: the drop asked whether the bytes draw,
+    /// and `NSImage` draws a PDF (2026-10-14). The name decides.
+    func testAFileGoesAsAPhotoByItsNameOnly() {
+        XCTAssertTrue(MessageInputAttachmentStore.sendsAsImage(URL(fileURLWithPath: "/tmp/a.PNG")))
+        XCTAssertTrue(MessageInputAttachmentStore.sendsAsImage(URL(fileURLWithPath: "/tmp/a.heic")))
+        XCTAssertFalse(MessageInputAttachmentStore.sendsAsImage(URL(fileURLWithPath: "/tmp/a.pdf")))
+        XCTAssertFalse(MessageInputAttachmentStore.sendsAsImage(URL(fileURLWithPath: "/tmp/a.mp3")))
+    }
 }
