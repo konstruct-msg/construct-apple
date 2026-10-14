@@ -333,6 +333,18 @@ struct VideoNoteBubbleView: View {
 /// come from `downloadAndDecryptMedia`, which checks memory and disk before the network, and the
 /// file is remembered in `MediaVideoCache` for the message and item.
 enum MediaVideoFile {
+    /// Whether the video plays without the network: a file already made for this message, or its
+    /// bytes in the media cache — where a sent video lands at upload (`cacheSentMedia`) and a
+    /// received one after its first download. A bubble shows play for it, not download: the
+    /// sender's own video showed a download arrow until 2026-10-14, as did any video after a
+    /// relaunch emptied the in-memory `MediaVideoCache`.
+    @MainActor
+    static func isLocal(item: [String: Any], messageId: String, itemIndex: Int) -> Bool {
+        if MediaVideoCache.shared.url(for: messageId, at: itemIndex) != nil { return true }
+        guard let mediaId = item["mediaId"] as? String, !mediaId.isEmpty else { return false }
+        return MediaManager.hasOnDiskFile(mediaId: mediaId)
+    }
+
     static func fetch(
         item: [String: Any],
         messageId: String,
