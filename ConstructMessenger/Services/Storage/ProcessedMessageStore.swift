@@ -54,6 +54,14 @@ final class CoreDataProcessedMessageStore: ProcessedMessageStore, @unchecked Sen
         try run { try self.row(messageId, in: $0) != nil }
     }
 
+    /// Every mark — for the one-time import into `construct.db` (`LocalStoreImport`), the only
+    /// reader; the protocol has no listing because nothing else needs one.
+    func everyMark() throws -> [(messageId: String, senderId: String, at: Date)] {
+        try run { context in
+            try context.fetch(ProcessedMessage.fetchRequest()).map { ($0.messageId, $0.senderId, $0.processedAt) }
+        }
+    }
+
     func forget(processedBefore date: Date) throws -> Int {
         try run { context in
             let req = ProcessedMessage.fetchRequest()

@@ -15,7 +15,7 @@ enum LocalRepositories {
 
     /// Every repository over one store, so they are installed and replaced together: a message
     /// names its chat and the chat its contact, and half of them on another store is broken links.
-    private struct Backing {
+    struct Backing {
         let peerDevices: any PeerDeviceStore
         let serverMessageIds: any ServerMessageIdStore
         let contacts: any ContactStore

@@ -53,6 +53,14 @@ final class CoreDataServerMessageIdStore: ServerMessageIdStore, @unchecked Senda
         try run { try self.row(serverId.lowercased(), in: $0)?.localId }
     }
 
+    /// Every mapping — for the one-time import into `construct.db` (`LocalStoreImport`), the only
+    /// reader.
+    func everyMapping() throws -> [(serverId: String, localId: String, at: Date)] {
+        try run { context in
+            try context.fetch(ServerMessageId.fetchRequest()).map { ($0.serverId, $0.localId, $0.recordedAt) }
+        }
+    }
+
     func forget(recordedBefore date: Date) throws -> Int {
         try run { context in
             let req = ServerMessageId.fetchRequest()
