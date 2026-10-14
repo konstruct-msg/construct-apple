@@ -66,21 +66,19 @@ final class ChatSendCoordinator {
     /// waiting on a different event and are still perfectly live.
     private var queuedTextRowIds: Set<String> = []
 
-    private struct MediaUploadPayload {
-        let attachments: [MediaAttachment]
-        let fileURLs: [URL]
-        let caption: String
-        let replyTo: TranscriptRow?
-    }
-    private var pendingMediaUploads: [String: MediaUploadPayload] = [:]
+    /// Where an upload's retry finds its files — shared, so a chat reopened after its upload
+    /// failed can still retry it.
+    private let pendingUploads: PendingUploads
 
     // MARK: - Init
 
     init(
         conversation: Conversation,
         viewContext: NSManagedObjectContext,
-        sessionManager: ChatSessionManager
+        sessionManager: ChatSessionManager,
+        pendingUploads: PendingUploads = .shared
     ) {
+        self.pendingUploads = pendingUploads
         self.conversation = conversation
         self.viewContext = viewContext
         self.sessionManager = sessionManager
@@ -723,8 +721,8 @@ final class ChatSendCoordinator {
             chatId: conversation.chatId,
             in: viewContext
         )
-        pendingMediaUploads[placeholderId] = MediaUploadPayload(
-            attachments: attachments, fileURLs: [], caption: caption, replyTo: replyTo)
+        pendingUploads.store(.init(
+            attachments: attachments, fileURLs: [], caption: caption, replyTo: replyTo), for: placeholderId)
         MediaUploadProgressTracker.shared.set(0, for: placeholderId)
         Log.info("Uploading \(attachments.count) image(s) (placeholder \(placeholderId.prefix(8))…)", category: "ChatViewModel")
         Task { [weak self] in
@@ -739,7 +737,7 @@ final class ChatSendCoordinator {
                     }
                 )
                 MediaUploadProgressTracker.shared.clear(placeholderId)
-                pendingMediaUploads.removeValue(forKey: placeholderId)
+                pendingUploads.remove(placeholderId)
                 persistenceService.deleteMessage(id: placeholderId, in: viewContext, autoSave: false)
                 // Binary wire: send the album as a protobuf `.mediaAlbum` MessageContent.
                 // Local display stays the JSON (`result.messageContent`) so the view layer
@@ -839,8 +837,8 @@ final class ChatSendCoordinator {
             chatId: conversation.chatId,
             in: viewContext
         )
-        pendingMediaUploads[placeholderId] = MediaUploadPayload(
-            attachments: [], fileURLs: fileURLs, caption: caption, replyTo: replyTo)
+        pendingUploads.store(.init(
+            attachments: [], fileURLs: fileURLs, caption: caption, replyTo: replyTo), for: placeholderId)
         // A percentage, as images have: a spinner alone said nothing about an 11 MB track, and
         // on macOS it stopped turning when the row was drawn again after the chat was reopened
         // (2026-10-14) — the upload looked dead while it ran.
@@ -858,7 +856,7 @@ final class ChatSendCoordinator {
                     }
                 )
                 MediaUploadProgressTracker.shared.clear(placeholderId)
-                pendingMediaUploads.removeValue(forKey: placeholderId)
+                pendingUploads.remove(placeholderId)
                 persistenceService.deleteMessage(id: placeholderId, in: viewContext, autoSave: false)
                 let wireContent = MediaWireCodec.fileAlbumContent(
                     mediaList: result.mediaList,
@@ -1057,8 +1055,7 @@ final class ChatSendCoordinator {
     // MARK: - Retry
 
     func retryMessage(_ message: TranscriptRow) {
-        if let payload = pendingMediaUploads[message.id] {
-            pendingMediaUploads.removeValue(forKey: message.id)
+        if let payload = pendingUploads.take(message.id) {
             persistenceService.deleteMessage(id: message.id, in: viewContext)
             if !payload.attachments.isEmpty {
                 sendMediaMessage(attachments: payload.attachments, caption: payload.caption, replyTo: payload.replyTo)

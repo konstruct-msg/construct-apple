@@ -194,4 +194,31 @@ final class QueuedSendVisibilityTests: XCTestCase {
         XCTAssertEqual(coordinator.inMemoryQueueCountForTesting, 1,
                        "nothing else would ever send this — the queued flush skips media")
     }
+
+    /// An upload outlives its chat screen; its retry must too. The payload is stored where
+    /// any coordinator finds it — here one that never saw the upload, as the reopened chat's is
+    /// (2026-10-14: the retry found nothing and the files were lost).
+    func testARetryFromANewChatScreenFindsTheUpload() throws {
+        let uploads = PendingUploads()
+        let placeholderId = UUID().uuidString
+        let missing = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("\(UUID().uuidString).mp3")
+        uploads.store(.init(attachments: [], fileURLs: [missing], caption: "", replyTo: nil), for: placeholderId)
+
+        let (_, chat) = makeCoordinator()
+        let reopened = ChatSendCoordinator(
+            conversation: Conversation(chatId: chat.id, peerId: peer),
+            viewContext: context,
+            sessionManager: ChatSessionManager(peerId: peer),
+            pendingUploads: uploads
+        )
+        let row = TranscriptRow(MessageRecord(
+            id: placeholderId, chatId: chat.id, fromUserId: me, toUserId: peer,
+            isSentByMe: true, timestamp: Date(), orderKey: "k1",
+            body: LocalMessagePayload.encodeText(""), contentType: .regular, deliveryStatus: .failed,
+            retryCount: 0, suiteId: 0, isEdited: false, editedAt: nil, replyToMessageId: nil,
+            replyQuote: nil, transcript: nil, transcriptLanguage: nil, transcriptGeneratedAt: nil
+        ), revision: 0)
+        reopened.retryMessage(row)
+        XCTAssertNil(uploads.take(placeholderId), "the retry did not take the stored upload")
+    }
 }
