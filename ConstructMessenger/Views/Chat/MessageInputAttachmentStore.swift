@@ -182,11 +182,16 @@ final class MessageInputAttachmentStore: ObservableObject {
         #endif
     }
 
-    func handlePickedFiles(_ urls: [URL]) {
-        let imageExtensions: Set<String> = ["jpg", "jpeg", "png", "heic", "gif", "webp", "bmp", "tiff"]
+    /// Whether a picked, pasted or dropped file goes as a photo — by its name, never by whether
+    /// the bytes draw: `NSImage` draws a PDF's first page, so a dropped PDF went as a picture of
+    /// it (2026-10-14).
+    nonisolated static func sendsAsImage(_ url: URL) -> Bool {
+        ["jpg", "jpeg", "png", "heic", "gif", "webp", "bmp", "tiff"].contains(url.pathExtension.lowercased())
+    }
 
+    func handlePickedFiles(_ urls: [URL]) {
         for url in urls {
-            if imageExtensions.contains(url.pathExtension.lowercased()) {
+            if Self.sendsAsImage(url) {
                 loadImages(from: [url])
             } else {
                 do {
