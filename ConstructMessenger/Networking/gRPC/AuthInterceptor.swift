@@ -26,8 +26,15 @@ struct AuthInterceptor: ClientInterceptor {
         // no-interceptor channel (GRPCChannelManager.acquireSealedPersistentClient),
         // but listed here too as defence-in-depth in case it's ever invoked
         // over the authenticated channel by mistake.
-        "SendSealedMessage"
+        "SendSealedMessage",
+        // ServerTrustService: public material, asked before there is a session (identity-service
+        // serves it unauthenticated).
+        "GetServerTrust"
     ]
+
+    static func isUnauthenticated(method: String) -> Bool {
+        unauthenticatedMethods.contains(method)
+    }
 
     func intercept<Input: Sendable, Output: Sendable>(
         request: StreamingClientRequest<Input>,
@@ -40,7 +47,7 @@ struct AuthInterceptor: ClientInterceptor {
         let methodName = context.descriptor.method
         var request = request
 
-        if !Self.unauthenticatedMethods.contains(methodName) {
+        if !Self.isUnauthenticated(method: methodName) {
             // Read from the lock-protected cache — no actor hop needed.
             let snap = GRPCAuthCache.shared.snapshot
             guard let token = snap.token, snap.isValid else {
