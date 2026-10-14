@@ -61,4 +61,21 @@ final class LogRedactionTests: XCTestCase {
         XCTAssertNil(LogRedaction.host(of: "127.0.0.1:9050"))
         XCTAssertNil(LogRedaction.host(of: ""))
     }
+
+    /// `[…]:port` is an address too; loopback is not.
+    func testABracketedIPv6IsLabelled() {
+        let out = redact("dial [2001:db8::7]:443 and [::1]:9050")
+        XCTAssertFalse(out.contains("2001:db8"))
+        XCTAssertTrue(out.contains("ip#"))
+        XCTAssertTrue(out.contains("[::1]:9050"))
+        XCTAssertEqual(LogRedaction.host(of: "[2001:DB8::7]:443"), "2001:db8::7")
+        XCTAssertNil(LogRedaction.host(of: "[::1]:9050"))
+    }
+
+    /// A veil-config link names its front inside the query (base64url JSON) — hidden whether or
+    /// not the front was registered before the line was logged.
+    func testAVeilConfigLinkLosesItsQuery() {
+        let line = "Received URL Scheme: konstruct://veil-config?d=eyJyZWxheSI6ImZyb250LmV4YW1wbGUub3JnOjQ0MyJ9&v=2 done"
+        XCTAssertEqual(LogRedaction.redact(line, names: [], key: key), "Received URL Scheme: konstruct://veil-config?… done")
+    }
 }
