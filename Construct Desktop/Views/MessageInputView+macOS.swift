@@ -159,7 +159,8 @@ struct DesktopMessageInputView: View {
                 sendOnReturn: sendOnEnter,
                 onSend: sendMessage,
                 onStartVoice: startVoiceRecording,
-                onPasteAttachment: attachFromClipboard
+                onPasteAttachment: attachFromClipboard,
+                focusOnAppear: true
             )
         }
         .padding(.horizontal, 16)

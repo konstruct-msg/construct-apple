@@ -25,6 +25,10 @@ struct MessageInputTextBar: View {
     /// attached what the clipboard holds (`ComposerPaste`), false to let the field paste text.
     /// macOS only — on iOS the system's paste menu is the field's.
     let onPasteAttachment: (() -> Bool)?
+    /// Take focus when the bar appears. Desktop opens every chat into its composer — typing or
+    /// ⌘V should not need a click first (2026-10-14). iOS leaves it off: focus there raises the
+    /// keyboard over the conversation the person came to read.
+    let focusOnAppear: Bool
 
     @FocusState private var focused: Bool
     #if os(macOS)
@@ -44,7 +48,8 @@ struct MessageInputTextBar: View {
         onSend: @escaping () -> Void,
         onStartVoice: (() -> Void)? = nil,
         onStartVideoNote: (() -> Void)? = nil,
-        onPasteAttachment: (() -> Bool)? = nil
+        onPasteAttachment: (() -> Bool)? = nil,
+        focusOnAppear: Bool = false
     ) {
         self._text = text
         self.canSend = canSend
@@ -53,6 +58,7 @@ struct MessageInputTextBar: View {
         self.onStartVoice = onStartVoice
         self.onStartVideoNote = onStartVideoNote
         self.onPasteAttachment = onPasteAttachment
+        self.focusOnAppear = focusOnAppear
     }
 
     var body: some View {
@@ -123,6 +129,12 @@ struct MessageInputTextBar: View {
                 #if os(macOS)
                 setPasteMonitor(isFocused)
                 #endif
+            }
+            .onAppear {
+                guard focusOnAppear else { return }
+                // A turn later: in the same pass the field is not in the window yet, and the
+                // focus request is dropped.
+                DispatchQueue.main.async { focused = true }
             }
             #if os(macOS)
             .onDisappear { setPasteMonitor(false) }
