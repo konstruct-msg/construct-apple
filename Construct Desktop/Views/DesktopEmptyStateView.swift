@@ -34,11 +34,15 @@ struct DesktopEmptyStateView: View {
                         .font(CTFont.headline)
                         .foregroundStyle(Color.CT.text)
                         .multilineTextAlignment(.center)
+                    // No `.fixedSize(vertical:)`: asked for its ideal height at the narrow width
+                    // the split view proposes while it lays out at launch, the text answered one
+                    // word per line, and the whole split — sidebar search field included — was
+                    // laid out 235 pt taller than the window until a chat replaced this view
+                    // (measured 2026-10-14). The VStack already gives the text its height.
                     Text(LocalizedStringKey(hasAddress ? "select_chat_description" : "recovery_intro_body"))
                         .font(CTFont.secondary)
                         .foregroundStyle(Color.CT.textDim)
                         .multilineTextAlignment(.center)
-                        .fixedSize(horizontal: false, vertical: true)
                 }
 
                 HStack(spacing: CTLayout.chromeGap) {
