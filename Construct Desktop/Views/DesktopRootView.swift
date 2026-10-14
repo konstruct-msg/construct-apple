@@ -314,8 +314,31 @@ struct DesktopRootView: View {
                 onSetUpRecovery: { showingRecoveryPrompt = true }
             )
                 .navigationTitle(NSLocalizedString("construct_title", comment: ""))
+                // The same toolbar shape as an open chat (`DesktopChatView`): the system title
+                // removed and the name as a navigation item. With the title alone the window drew
+                // a different toolbar, and in it the sidebar lost its search field and let the top
+                // chat run under the title bar until a chat was opened (2026-10-14).
+                .toolbar(removing: .title)
+                .toolbar { emptyStateToolbar }
                 .onDrop(of: [.fileURL], isTargeted: nil) { _ in false }
         }
+    }
+
+    @ToolbarContentBuilder
+    private var emptyStateToolbar: some ToolbarContent {
+        if #available(macOS 26.0, *) {
+            ToolbarItem(placement: .navigation) { emptyStateTitle }
+                .sharedBackgroundVisibility(.hidden)
+        } else {
+            ToolbarItem(placement: .navigation) { emptyStateTitle }
+        }
+    }
+
+    private var emptyStateTitle: some View {
+        Text(NSLocalizedString("construct_title", comment: ""))
+            .font(CTFont.headline)
+            .foregroundStyle(Color.CT.text)
+            .lineLimit(1)
     }
 
     private var sidebarPane: some View {
