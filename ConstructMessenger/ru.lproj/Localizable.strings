@@ -1210,6 +1210,7 @@
 "file" = "Файл";
 "audio_file" = "Аудио";
 "audio_play" = "Воспроизвести";
+"audio_position" = "Позиция";
 "audio_pause" = "Пауза";
 "forward" = "Переслать";
 "forward_to" = "Переслать в";

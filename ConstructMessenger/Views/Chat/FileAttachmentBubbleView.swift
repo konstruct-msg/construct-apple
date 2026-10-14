@@ -352,6 +352,8 @@ struct FileAttachmentBubbleView: View {
 /// A music file in a chat: played in place, at its own speed, by the player voice messages use —
 /// so a track and a voice message never sound together. The name opens the system preview
 /// (sharing, saving) as any other file does.
+/// A music file: play, the native position slider, the time gone and left. The track goes to
+/// the lock screen under its file name (`NowPlaying`).
 private struct AudioFileRow: View {
     let file: FileMessageContent.FileEntry
     let isSentByMe: Bool
@@ -361,13 +363,16 @@ private struct AudioFileRow: View {
 
     @ObservedObject private var player = AudioPlayerService.shared
     @State private var data: Data?
+    /// Where the slider is while a finger holds it; the seek lands when it lets go.
+    @State private var scrub: Double?
 
     private var foreground: Color { isSentByMe ? Color.CT.outMsgText : Color.CT.text }
     private var secondary: Color { isSentByMe ? Color.CT.outMsgText.opacity(0.7) : Color.CT.textDim }
     private var tint: Color { isSentByMe ? Color.CT.outMsgText : Color.CT.accent }
+    private var isActive: Bool { player.isActive(file.mediaId) }
 
     var body: some View {
-        HStack(spacing: CTLayout.chromeGap) {
+        HStack(alignment: isActive ? .top : .center, spacing: CTLayout.chromeGap) {
             Button(action: toggle) {
                 Group {
                     if isDownloading {
@@ -384,35 +389,61 @@ private struct AudioFileRow: View {
             .accessibilityLabel(Text(NSLocalizedString(
                 player.isPlaying(file.mediaId) ? "audio_pause" : "audio_play", comment: "")))
 
-            Button(action: open) {
-                VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 2) {
+                Button(action: open) {
                     Text(file.filename)
                         .font(CTFont.ui(13, weight: .medium))
                         .foregroundColor(foreground)
                         .lineLimit(1)
-                    if player.isActive(file.mediaId) {
-                        ProgressView(value: player.progress)
-                            .progressViewStyle(.linear)
-                            .tint(tint)
-                        Text("\(formatMediaDuration(player.elapsed)) / \(formatMediaDuration(player.totalDuration))")
-                            .font(CTFont.mono(ChatUIConstants.Typography.systemSize))
-                            .foregroundColor(secondary)
-                    } else {
-                        Text(ByteCountFormatter.string(fromByteCount: Int64(file.size), countStyle: .file))
-                            .font(CTFont.mono(ChatUIConstants.Typography.systemSize))
-                            .foregroundColor(secondary)
-                    }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(Rectangle())
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .contentShape(Rectangle())
+                .buttonStyle(.plain)
+                if isActive {
+                    position
+                } else {
+                    Text(ByteCountFormatter.string(fromByteCount: Int64(file.size), countStyle: .file))
+                        .font(CTFont.mono(ChatUIConstants.Typography.systemSize))
+                        .foregroundColor(secondary)
+                }
             }
-            .buttonStyle(.plain)
         }
+    }
+
+    @ViewBuilder
+    private var position: some View {
+        let times = AudioPosition.times(fraction: scrub ?? player.progress, duration: player.totalDuration)
+        Slider(
+            value: Binding(get: { scrub ?? player.progress }, set: { scrub = $0 }),
+            in: 0...1,
+            onEditingChanged: { editing in
+                guard !editing, let fraction = scrub else { return }
+                seek(to: fraction)
+                scrub = nil
+            }
+        )
+        .controlSize(.small)
+        .tint(tint)
+        .accessibilityLabel(Text(NSLocalizedString("audio_position", comment: "")))
+        .accessibilityValue(Text(formatMediaDuration(times.elapsed)))
+        HStack {
+            Text(formatMediaDuration(times.elapsed))
+            Spacer(minLength: CTLayout.chromeGap)
+            Text("−" + formatMediaDuration(times.remaining))
+        }
+        .font(CTFont.mono(ChatUIConstants.Typography.systemSize))
+        .foregroundColor(secondary)
+        .monospacedDigit()
+    }
+
+    private func seek(to fraction: Double) {
+        guard let data else { return }
+        player.seek(mediaId: file.mediaId, data: data, to: fraction, naturalRate: true, title: file.filename)
     }
 
     private func toggle() {
         if let data {
-            player.togglePlay(mediaId: file.mediaId, data: data, naturalRate: true)
+            player.togglePlay(mediaId: file.mediaId, data: data, naturalRate: true, title: file.filename)
             return
         }
         guard !isDownloading else { return }
@@ -420,11 +451,20 @@ private struct AudioFileRow: View {
             do {
                 let bytes = try await load()
                 data = bytes
-                player.togglePlay(mediaId: file.mediaId, data: bytes, naturalRate: true)
+                player.togglePlay(mediaId: file.mediaId, data: bytes, naturalRate: true, title: file.filename)
             } catch {
                 Log.error("Audio file download failed: \(error)", category: "FileAttachment")
             }
         }
+    }
+}
+
+/// The two times under a track's slider, from where the slider stands.
+enum AudioPosition {
+    static func times(fraction: Double, duration: TimeInterval) -> (elapsed: TimeInterval, remaining: TimeInterval) {
+        let total = max(duration, 0)
+        let elapsed = min(max(fraction, 0), 1) * total
+        return (elapsed, total - elapsed)
     }
 }
 

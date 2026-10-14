@@ -1127,6 +1127,7 @@
 "file" = "Fichier";
 "audio_file" = "Audio";
 "audio_play" = "Lire";
+"audio_position" = "Position";
 "audio_pause" = "Pause";
 "forward" = "Transférer";
 "forward_to" = "Transférer à";

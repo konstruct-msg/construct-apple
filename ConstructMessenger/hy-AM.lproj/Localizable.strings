@@ -1199,6 +1199,7 @@
 "file" = "Ֆայլ";
 "audio_file" = "Աուդիո";
 "audio_play" = "Նվագարկել";
+"audio_position" = "Դիրք";
 "audio_pause" = "Դադար";
 "forward" = "Փոխանցել";
 "forward_to" = "Փոխանցել";

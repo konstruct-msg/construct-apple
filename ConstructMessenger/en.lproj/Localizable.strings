@@ -1199,6 +1199,7 @@
 "file" = "File";
 "audio_file" = "Audio";
 "audio_play" = "Play";
+"audio_position" = "Position";
 "audio_pause" = "Pause";
 "forward" = "Forward";
 "forward_to" = "Forward to";
