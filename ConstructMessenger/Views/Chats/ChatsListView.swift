@@ -174,6 +174,12 @@ struct ChatsListView: View {
                 .listRowSeparator(.hidden)
             }
 
+            if let gap = MailboxGapNotice.shared.interval {
+                MailboxGapRow(interval: gap, onDismiss: { MailboxGapNotice.shared.dismiss() })
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+            }
+
             if renderedChats.isEmpty {
                 streamsEmptyState
                     .listRowBackground(Color.clear)

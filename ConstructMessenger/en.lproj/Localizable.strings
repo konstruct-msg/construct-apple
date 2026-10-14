@@ -907,6 +907,9 @@
 "device_deregistered_warning_title" = "⚠ DEVICE NOT REGISTERED";
 "device_deregistered_warning_body" = "Konstruct no longer recognizes this device. This can happen after a temporary outage or if the device was removed elsewhere.\n\nYour keys are still on this phone — nothing has been deleted. Retry below, or restore your identity from your recovery phrase.";
 "device_deregistered_retry_hint" = "The rejection may be a temporary server issue. Try authenticating again.";
+"mailbox_gap_title" = "Some messages may not have arrived";
+"mailbox_gap_body" = "Messages sent to you between %1$@ and %2$@ were removed from the server before this device collected them. The server keeps undelivered messages for a limited time.";
+"mailbox_gap_body_open" = "Messages sent to you since %@ were removed from the server before this device collected them. The server keeps undelivered messages for a limited time.";
 "store_import_title" = "Moving your chats";
 "store_import_body" = "Once, after the update. Keep Konstruct open — it takes a few seconds.";
 "local_store_unreadable_title" = "THE CHATS ON THIS DEVICE CAN'T BE OPENED";

@@ -154,6 +154,11 @@ enum MessageStreamParser {
                 ConnectionStatusManager.shared.markRequestSucceeded()
             }
             return .heartbeat(cursor: cursor)
+        case .mailboxGap(let gap):
+            // The queue trimmed messages after our cursor before we came back for them: they are
+            // gone, and the person is told (`MailboxGapNotice`).
+            MailboxGapNotice.record(afterCursor: gap.afterCursor, resumesAt: gap.resumesAt)
+            return nil
         case .p2PHandoff(let request):
             // P2P handoff request from server — not yet handled at the stream layer.
             Log.debug("P2P handoff request: session=\(request.p2PSessionID)", category: "MessageStream")
