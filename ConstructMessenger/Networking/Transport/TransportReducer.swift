@@ -168,7 +168,9 @@ enum TransportReducer {
             case .veilActive, .veilProbing:
                 return (state, [])
             default:
-                return (.veilProbing, [.requestProxyStart])
+                // What is open on the direct path goes first: a channel or stream opened under
+                // `auto` must not carry traffic once never-direct was chosen (2026-10-14).
+                return (.veilProbing, [.invalidateGRPCClient, .requestProxyStart])
             }
         case .auto:
             // Auto never force-starts VEIL from the censored heuristic. It means "stay
