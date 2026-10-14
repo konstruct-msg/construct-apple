@@ -80,6 +80,17 @@ struct MessageInputTextBar: View {
     }
 
     #if os(macOS)
+    /// The V key by character or by position. Under a Cyrillic layout the key reports "м", and
+    /// the Edit menu still answers ⌘V by matching the Latin layout — so a check on the
+    /// character alone never fired for a Russian-speaking user (2026-10-14). Position alone
+    /// would miss Dvorak, where V sits elsewhere.
+    private static func isPasteKey(_ event: NSEvent) -> Bool {
+        event.charactersIgnoringModifiers?.lowercased() == "v" || event.keyCode == kVKANSIV
+    }
+
+    /// `kVK_ANSI_V` from Carbon's Events.h, without importing Carbon for one constant.
+    private static let kVKANSIV: UInt16 = 9
+
     /// The field editor takes ⌘V through the Edit menu before any SwiftUI modifier sees it, and
     /// drops what is not text without a word — so the composer is asked first, from a local
     /// event monitor that exists only while this field has focus.
@@ -89,7 +100,7 @@ struct MessageInputTextBar: View {
         guard on, let onPasteAttachment else { return }
         pasteMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
             let modifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
-            guard modifiers == .command, event.charactersIgnoringModifiers == "v" else { return event }
+            guard modifiers == .command, Self.isPasteKey(event) else { return event }
             return onPasteAttachment() ? nil : event
         }
     }
