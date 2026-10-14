@@ -160,7 +160,7 @@ final class VeilProxyManager: ObservableObject {
     // MARK: - VEIL Mode (tri-state)
 
     /// The current VEIL operation mode. Persists across launches via UserDefaults.
-    /// `.off` = no VEIL, `.auto` = DPI auto-detect (default iOS), `.on` = always VEIL (default macOS).
+    /// `.off` = no VEIL, `.auto` = DPI auto-detect (default), `.on` = always VEIL, never direct.
     @Published var mode: VeilMode {
         didSet {
             VeilProxyStore.saveMode(mode)
