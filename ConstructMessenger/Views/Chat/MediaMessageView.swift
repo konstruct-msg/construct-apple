@@ -355,7 +355,8 @@ private struct SingleMediaCell: View {
                 .black.opacity(0.55),
                 in: RoundedRectangle(cornerRadius: ChatUIConstants.Media.overlayChipRadius, style: .continuous)
             )
-        } else if downloadedVideoURL != nil {
+        } else if downloadedVideoURL != nil
+                    || MediaVideoFile.isLocal(item: itemDict, messageId: message.id, itemIndex: itemIndex) {
             Image(systemName: "play.fill")
                 .font(CTIcon.font(CTIcon.navLg, weight: .regular))
                 .foregroundColor(.white)
@@ -963,7 +964,8 @@ private struct GridCell: View {
                 .black.opacity(0.55),
                 in: RoundedRectangle(cornerRadius: ChatUIConstants.Media.cornerRadius, style: .continuous)
             )
-        } else if downloadedVideoURL != nil {
+        } else if downloadedVideoURL != nil
+                    || MediaVideoFile.isLocal(item: itemDict, messageId: message.id, itemIndex: itemIndex) {
             Image(systemName: "play.fill")
                 .font(CTIcon.font(CTIcon.row, weight: .regular))
                 .foregroundColor(.white)
