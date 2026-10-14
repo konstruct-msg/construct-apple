@@ -1,0 +1,108 @@
+{
+  "$schema_version": 2,
+  "$authority": "messaging/content.proto :: shared.proto.messaging.v1.StickerRef (MessageContent.sticker = 11)",
+  "$spec": "construct-docs/client/specs/STICKER_CLIENT_SPEC.md §2",
+  "$decision": "construct-docs/decisions/sticker-packs-content-addressed.md (shape) · sticker-id-wire-not-media.md (carrier)",
+  "$purpose": "A sticker on the wire is a pack hash, an index and an emoji inside the E2EE plaintext, never pixels. Every client must (1) decode these bytes to the same fields and (2) apply the same validator, because a reference one client accepts and another rejects is a bubble on one screen and nothing on the other. The outer envelope stays CONTENT_TYPE_E2EE_SIGNAL; there is no row for stickers in knst_content_types.json and there must not be.",
+  "$fields": {
+    "vectors[].message_content_hex": "serialized shared.proto.messaging.v1.MessageContent with the sticker oneof set, produced by protoc --encode",
+    "vectors[].pack_id_hex / index / emoji": "what a decoder must read back (pack_id shown as hex here; it is bytes on the wire)",
+    "rules": "the one validator every client applies before the fields are used for anything",
+    "cases[]": "candidate (pack_id_hex, emoji) pairs and what the validator must answer; index is not validated here"
+  },
+  "vectors": [
+    {
+      "id": "S01",
+      "note": "ordinary sticker: index 4, one-codepoint emoji",
+      "pack_id_hex": "82e2106ca3d8e72c910c003c0ce8ce9fa8a5a2d3ad41d021ea35d34d21a1a8c4",
+      "index": 4,
+      "emoji": "😀",
+      "message_content_hex": "5a2a0a2082e2106ca3d8e72c910c003c0ce8ce9fa8a5a2d3ad41d021ea35d34d21a1a8c410041a04f09f9880"
+    },
+    {
+      "id": "S02",
+      "note": "index 0 is the proto3 default and is not encoded; still the first sticker",
+      "pack_id_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+      "index": 0,
+      "emoji": "🐈",
+      "message_content_hex": "5a280a20000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f1a04f09f9088"
+    },
+    {
+      "id": "S03",
+      "note": "emoji that is one grapheme but several scalars (ZWJ sequence, 25 bytes)",
+      "pack_id_hex": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "index": 119,
+      "emoji": "👨‍👩‍👧‍👦",
+      "message_content_hex": "5a3f0a20ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff10771a19f09f91a8e2808df09f91a9e2808df09f91a7e2808df09f91a6"
+    },
+    {
+      "id": "S04",
+      "note": "emoji with a skin-tone modifier (8 bytes)",
+      "pack_id_hex": "82e2106ca3d8e72c910c003c0ce8ce9fa8a5a2d3ad41d021ea35d34d21a1a8c4",
+      "index": 1,
+      "emoji": "👍🏽",
+      "message_content_hex": "5a2e0a2082e2106ca3d8e72c910c003c0ce8ce9fa8a5a2d3ad41d021ea35d34d21a1a8c410011a08f09f918df09f8fbd"
+    }
+  ],
+  "rules": {
+    "pack_id_bytes": 32,
+    "emoji_min_bytes": 1,
+    "emoji_max_bytes": 32,
+    "note": "pack_id is exactly 32 bytes — a SHA-256 — nothing about its content is checked, it is a cache key and a lookup key. emoji is measured in UTF-8 bytes, not graphemes or scalars, so every client counts the same thing; 32 bytes fits any single emoji grapheme including ZWJ families and flags. index is validated against the manifest's sticker count once the pack is present, and only then. A reference that fails is a corrupt message: not rendered as a sticker, never used as a cache path; a reference that passes but whose pack is absent renders the emoji, because the message did arrive."
+  },
+  "cases": [
+    {
+      "pack_id_hex": "82e2106ca3d8e72c910c003c0ce8ce9fa8a5a2d3ad41d021ea35d34d21a1a8c4",
+      "emoji": "😀",
+      "valid": true
+    },
+    {
+      "pack_id_hex": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "emoji": "👨‍👩‍👧‍👦",
+      "valid": true,
+      "why": "25 bytes, one grapheme"
+    },
+    {
+      "pack_id_hex": "82e2106ca3d8e72c910c003c0ce8ce9fa8a5a2d3ad41d021ea35d34d21a1a8c4",
+      "emoji": "🏴󠁧󠁢󠁳󠁣󠁴󠁿",
+      "valid": true,
+      "why": "tag-sequence flag, 28 bytes"
+    },
+    {
+      "pack_id_hex": "82e2106ca3d8e72c910c003c0ce8ce9fa8a5a2d3ad41d021ea35d34d21a1a8c4",
+      "emoji": "a",
+      "valid": true,
+      "why": "the validator does not know what an emoji is; one byte is in range"
+    },
+    {
+      "pack_id_hex": "",
+      "emoji": "😀",
+      "valid": false,
+      "why": "pack_id empty"
+    },
+    {
+      "pack_id_hex": "82e2106ca3d8e72c910c003c0ce8ce9fa8a5a2d3ad41d021ea35d34d21a1a8",
+      "emoji": "😀",
+      "valid": false,
+      "why": "pack_id 31 bytes"
+    },
+    {
+      "pack_id_hex": "82e2106ca3d8e72c910c003c0ce8ce9fa8a5a2d3ad41d021ea35d34d21a1a8c400",
+      "emoji": "😀",
+      "valid": false,
+      "why": "pack_id 33 bytes"
+    },
+    {
+      "pack_id_hex": "82e2106ca3d8e72c910c003c0ce8ce9fa8a5a2d3ad41d021ea35d34d21a1a8c4",
+      "emoji": "",
+      "valid": false,
+      "why": "emoji empty — the fallback render would be nothing"
+    },
+    {
+      "pack_id_hex": "82e2106ca3d8e72c910c003c0ce8ce9fa8a5a2d3ad41d021ea35d34d21a1a8c4",
+      "emoji": "😀😀😀😀😀😀😀😀😀",
+      "valid": false,
+      "why": "36 bytes, above emoji_max_bytes"
+    }
+  ]
+}

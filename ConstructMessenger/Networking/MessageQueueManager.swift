@@ -6,7 +6,6 @@
 //
 
 import Foundation
-import CoreData
 import os.log
 
 @MainActor
@@ -32,29 +31,49 @@ class MessageQueueManager {
 
     // MARK: - Setup
 
-    /// Reset any messages left in `sending` state from a previous app run.
-    /// On force-quit the in-memory `pendingSends` is lost, so those messages
-    /// would never time-out.  Resetting them to `queued` on startup guarantees
-    /// they enter the normal retry pipeline.
+    /// A `.sending` row at launch belongs to a process that is gone: `pendingSends` does not
+    /// survive it, so the live timeout never sees the row. A real message is marked `.failed`,
+    /// which the retry fetch already selects. An upload placeholder is retired instead — writing
+    /// `.queued` here is how its sentinel JSON became a text message.
+    ///
+    /// No age threshold. The owner is this process, and every `.sending` row it does not have in
+    /// `pendingSends` is already orphaned. Waiting N minutes would leave a kill from a few seconds
+    /// ago spinning until a later launch.
     private func resetStuckSendingMessages() {
-        let context = PersistenceController.shared.container.viewContext
-        context.perform {
-            let fetchRequest: NSFetchRequest<Message> = Message.fetchRequest()
-            fetchRequest.predicate = NSPredicate(
-                format: "deliveryStatusRaw == %d",
-                DeliveryStatus.sending.rawValue
+        let ceiling = Int16(clamping: FeatureFlags.maxMessageRetryAttempts)
+        // On the main actor, as every send that registers in `pendingSends` is: none lands
+        // between this read and the writes below.
+        let owned = Set(pendingSends.keys)
+        guard let stuck = try? LocalRepositories.messages.ownMessages(in: .sending, limit: .max),
+              !stuck.isEmpty else { return }
+        var failed = 0
+        var retired = 0
+        for message in stuck {
+            let disposition = StuckSend.disposition(
+                statusIsSending: message.deliveryStatus == .sending,
+                ownedByThisProcess: owned.contains(message.id),
+                bodyIsUploadSentinel: UploadPlaceholderBody.isSentinel(message.payload.displayString)
             )
-            guard let stuck = try? context.fetch(fetchRequest), !stuck.isEmpty else { return }
-            for message in stuck {
-                message.deliveryStatus = .queued
-            }
-            do {
-                try context.save()
-                Log.info("Reset \(stuck.count) stuck-sending message(s) to queued on launch", category: "MessageQueue")
-            } catch {
-                Log.error("Failed to reset stuck-sending messages: \(error)", category: "MessageQueue")
+            guard let stored = StuckSend.write(
+                disposition: disposition,
+                retryCount: message.retryCount,
+                retryCeiling: ceiling
+            ) else { continue }
+            // Through the repository (messages B2): the status under the store's rule, then
+            // the retry budget.
+            _ = try? LocalRepositories.messages.setDeliveryStatus(message.id, stored.status)
+            _ = try? LocalRepositories.messages.setRetryCount(message.id, stored.retryCount)
+            switch disposition {
+            case .leave: break
+            case .failForRetry: failed += 1
+            case .retirePlaceholder: retired += 1
             }
         }
+        guard failed > 0 || retired > 0 else { return }
+        Log.info(
+            "Orphaned sends: \(failed) marked failed for retry, \(retired) upload placeholder(s) retired",
+            category: "MessageQueue"
+        )
     }
 
     private func setupSubscribers() {
@@ -107,13 +126,6 @@ class MessageQueueManager {
 
     /// Check for messages that have been stuck in sending state too long
     private func checkForStuckMessages() {
-        // Safety check: ensure Core Data is available
-        let context = PersistenceController.shared.container.viewContext
-        guard context.persistentStoreCoordinator != nil else {
-            Log.info("Core Data store coordinator unavailable, skipping stuck message check", category: "MessageQueue")
-            return
-        }
-
         let timeout = APIConstants.messageSendTimeout
         let now = Date()
 
@@ -124,45 +136,26 @@ class MessageQueueManager {
             now.timeIntervalSince(startedAt) > timeout ? messageId : nil
         }
         if !timedOutIds.isEmpty {
-            handleTimedOutMessages(timedOutIds, context: context)
+            handleTimedOutMessages(timedOutIds)
         }
     }
 
-    private func handleTimedOutMessages(_ messageIds: [String], context: NSManagedObjectContext) {
-        // Outer perform already holds a strong self for its lifetime; nesting [weak self]
-        // on the MainActor hops would warn about mismatched ownership.
-        context.perform { [self] in
-            for messageId in messageIds {
-                let fetchRequest: NSFetchRequest<Message> = Message.fetchRequest()
-                fetchRequest.predicate = NSPredicate(format: "id == %@", messageId)
-
-                if let message = try? context.fetch(fetchRequest).first {
-                    if message.deliveryStatus == .sending {
-                        Log.info("Message \(messageId) timed out, marking as queued", category: "MessageQueue")
-                        message.deliveryStatus = .queued
-                        Task { @MainActor in self.markMessageAsFailed(messageId) }
-                    }
-                }
-            }
-
-            do {
-                try context.save()
-            } catch {
-                Log.error("MessageQueueManager: failed to save timed-out message statuses: \(error)", category: "MessageQueue")
-            }
-            // Try to resend if network is available (gRPC reconnects automatically)
-            Task { @MainActor in
-                if self.networkManager.isReachable { self.processQueuedMessages() }
+    private func handleTimedOutMessages(_ messageIds: [String]) {
+        for messageId in messageIds {
+            // Read and written through the repository (messages B2).
+            if (try? LocalRepositories.messages.message(messageId))?.deliveryStatus == .sending {
+                Log.info("Message \(messageId) timed out, marking as queued", category: "MessageQueue")
+                _ = try? LocalRepositories.messages.setDeliveryStatus(messageId, .queued)
+                markMessageAsFailed(messageId)
             }
         }
+        // Try to resend if network is available (gRPC reconnects automatically)
+        if networkManager.isReachable { processQueuedMessages() }
     }
 
     // MARK: - Process Queued Messages
 
     /// Process all queued messages (called when network is restored).
-    // NOTE: Uses viewContext because MessageRetryManager internally switches to MainActor
-    // for Core Data operations. Full background-context migration requires refactoring
-    // MessageRetryManager's MainActor.run { context.fetch } pattern first.
     func processQueuedMessages() {
         guard networkManager.isReachable else {
             Log.debug("Cannot process queued messages - network not reachable", category: "MessageQueue")
@@ -172,10 +165,7 @@ class MessageQueueManager {
             Log.debug("Cannot process queued messages - no current user", category: "MessageQueue")
             return
         }
-        MessageRetryManager.shared.processAllQueuedMessages(
-            currentUserId: currentUserId,
-            context: PersistenceController.shared.container.viewContext
-        )
+        MessageRetryManager.shared.processAllQueuedMessages(currentUserId: currentUserId)
         // The second queue, and a different question. The one above asks whether a message reached
         // the recipient; this one asks whether it reached all of their devices, which a message
         // marked `sent` can still fail. Before 2026-08-31 nothing asked it: a device skipped by a
@@ -183,18 +173,6 @@ class MessageQueueManager {
         // reported success. See §C of the multi-device plan.
         Task { @MainActor in
             await MultiDeviceSendCoordinator.shared.drainRetryQueue(currentUserId: currentUserId)
-        }
-    }
-
-    /// Get count of queued messages — uses async fetch on background context to avoid
-    /// blocking the main thread with large Core Data queries.
-    func getQueuedMessageCount() async -> Int {
-        let context = PersistenceController.shared.container.newBackgroundContext()
-        return await context.perform {
-            guard context.persistentStoreCoordinator != nil else { return 0 }
-            let fetchRequest: NSFetchRequest<Message> = Message.fetchRequest()
-            fetchRequest.predicate = NSPredicate(format: "deliveryStatusRaw == %d", DeliveryStatus.queued.rawValue)
-            return (try? context.count(for: fetchRequest)) ?? 0
         }
     }
 }

@@ -89,8 +89,8 @@ enum DeviceMetadataService {
         var sealed = Shared_Proto_Services_V1_SealedDeviceMetadata()
         for key in keys {
             guard let copy = try? sealToDeviceKey(
-                plaintext: [UInt8](plaintext),
-                deviceIdentityKey: [UInt8](key)
+                plaintext: plaintext,
+                deviceIdentityPublic: key
             ) else {
                 // One unusable key must not cost the other devices their copy: a bundle can carry
                 // a key of the wrong length, and dropping the whole blob for it would leave every
@@ -118,20 +118,21 @@ enum DeviceMetadataService {
     /// `nil` is an ordinary answer, not a failure: a device linked after the last re-seal has no
     /// copy in a sibling's blob and stays unnamed until they re-seal. The list falls back to the
     /// device id, which identifies it regardless.
+    ///
+    /// `openBox` opens one copy with this device's identity key — the core's
+    /// `openSealedToDevice`, so the key never leaves it.
     nonisolated static func open(
         _ blob: Data,
-        withIdentityPrivateKey ourKey: Data
+        openingWith openBox: (Data) throws -> Data
     ) -> Shared_Proto_Services_V1_DeviceMetadata? {
-        guard !blob.isEmpty, !ourKey.isEmpty,
+        guard !blob.isEmpty,
               let sealed = try? Shared_Proto_Services_V1_SealedDeviceMetadata(serializedBytes: blob)
         else { return nil }
 
         for copy in sealed.copies {
-            guard let plaintext = try? openWithDeviceKey(
-                sealedBox: [UInt8](copy),
-                ourIdentityPriv: [UInt8](ourKey)
-            ) else { continue }  // sealed to a sibling — the expected way to find our own
-            return try? Shared_Proto_Services_V1_DeviceMetadata(serializedBytes: Data(plaintext))
+            // A copy sealed to a sibling throws — the expected way to find our own.
+            guard let plaintext = try? openBox(copy) else { continue }
+            return try? Shared_Proto_Services_V1_DeviceMetadata(serializedBytes: plaintext)
         }
         return nil
     }
@@ -166,11 +167,6 @@ enum DeviceMetadataService {
     @MainActor
     static func publish(myUserId: String, reason: String) async {
         guard !myUserId.isEmpty else { return }
-        guard let ourPrivate = KeychainManager.shared.loadDeviceIdentityKey(), !ourPrivate.isEmpty else {
-            Log.error("DeviceMetadata: no identity key in Keychain — not publishing (\(reason))", category: "DeviceLink")
-            return
-        }
-
         let devices = MultiDeviceSendCoordinator.shared.knownOwnDevices(myUserId: myUserId)
         guard !devices.isEmpty else {
             // Not "the account has no devices" — the cache is cold or the fetch failed. Publishing
@@ -186,7 +182,7 @@ enum DeviceMetadataService {
             return
         }
 
-        guard let blob = seal(selfDescription(), toIdentityKeys: devices.map { Data($0.bundle.identityPublic) }) else {
+        guard let blob = seal(selfDescription(), toIdentityKeys: devices.map { $0.bundle.identityPublic }) else {
             return
         }
 

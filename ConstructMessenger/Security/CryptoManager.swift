@@ -80,7 +80,6 @@ class CryptoManager {
     let sessionRestoreService = SessionRestoreService()
     
     // MARK: - Prekey ID Tracking
-    private let preKeyTracker = PreKeyTrackingStore()
 
     /// True when core was loaded from saved Keychain keys (not freshly generated).
     /// On startup the server's OTPK set may not match the restored core's state,
@@ -99,6 +98,11 @@ class CryptoManager {
         let (loadedCore, restoredFromKeychain) = coreProvider.loadCore()
         self._bootstrapCore = loadedCore
         self.wasRestoredFromKeychain = restoredFromKeychain
+        // The core loaded from the key record, so the raw copies older builds kept beside it
+        // have nothing left to back up: nothing reads them since 2026-09-29.
+        if loadedCore != nil {
+            KeychainManager.shared.deleteLegacyDeviceKeyCopies()
+        }
 
         // Defer GC and timer to avoid accessing Core Data before stores are loaded.
         // Session restore is intentionally NOT done here — orchestratorCore is not yet
@@ -137,20 +141,71 @@ class CryptoManager {
     
     // MARK: - Device Registration
 
-    /// Export signing secret key from current core (for device-signed flows).
-    func exportSigningSecretKey() throws -> [UInt8] {
-        let keyBytes: Data
-        if let oc = orchestratorCore {
-            keyBytes = try oc.getSigningKeyBytes()
-        } else if let bc = _bootstrapCore {
-            keyBytes = try bc.getSigningKeyBytes()
-        } else {
+    // MARK: - Operations with this device's own keys
+    //
+    // The core does them; the secrets never come out. Until 2026-09-29 each caller read the key
+    // (`getSigningKeyBytes`, a Keychain copy of the identity key) and did the operation in
+    // CryptoKit or through a free function taking the secret.
+
+    /// Ed25519 over `message` with the device signing key — device auth, invites.
+    ///
+    /// Before the orchestrator exists (device auth at launch, right after registration) the key
+    /// record in the Keychain signs, through the core, so there is no path that needs the raw key.
+    func signWithDeviceKey(_ message: Data) throws -> Data {
+        coreLock.lock()
+        defer { coreLock.unlock() }
+        if let core = orchestratorCore {
+            return try core.signWithDeviceKey(message: message)
+        }
+        // `signBundleData` is plain Ed25519 with the signing key; the name is its first use.
+        if let bootstrap = _bootstrapCore {
+            return try bootstrap.signBundleData(bundleDataJson: message)
+        }
+        guard let record = KeychainManager.shared.loadPrivateKeysData() else {
             throw CryptoManagerError.coreNotInitialized
         }
-        guard !keyBytes.isEmpty else {
-            throw CryptoError.InvalidKeyData(message: "getSigningKeyBytes returned empty")
-        }
-        return [UInt8](keyBytes)
+        return try signBundleDataWithKeys(keys: record, bundleDataJson: message)
+    }
+
+    /// The core a history transfer runs on. `HistorySender` / `HistoryReceiver` sign, decapsulate
+    /// and derive keys inside it; nothing here hands them a key.
+    func historyCore() throws -> OrchestratorCore {
+        coreLock.lock()
+        defer { coreLock.unlock() }
+        guard let core = orchestratorCore else { throw CryptoManagerError.coreNotInitialized }
+        return core
+    }
+
+    /// This device's social-recovery bundle sealed under `vaultKey`. The bundle is the backup of
+    /// the device keys, so the core packs and seals them; only the ciphertext comes out.
+    func sealOwnRecoveryBundle(vaultKey: Data, createdAt: Int64) throws -> Data {
+        coreLock.lock()
+        defer { coreLock.unlock() }
+        guard let core = orchestratorCore else { throw CryptoManagerError.coreNotInitialized }
+        return try core.sealOwnRecoveryBundle(vaultKey: vaultKey, createdAt: createdAt)
+    }
+
+    /// The history-file (CTHF) channel key on the receiving side, derived in the core from the
+    /// identity key and the Kyber prekey — see `OrchestratorCore.historyFileChannelKey`.
+    func historyFileChannelKey(senderEphPub: Data, kemKeyId: UInt32, kemCiphertext: Data, snapshotId: Data) throws -> Data {
+        coreLock.lock()
+        defer { coreLock.unlock() }
+        guard let core = orchestratorCore else { throw CryptoManagerError.coreNotInitialized }
+        return try core.historyFileChannelKey(
+            senderEphPub: senderEphPub,
+            kemKeyId: kemKeyId,
+            kemCiphertext: kemCiphertext,
+            snapshotId: snapshotId
+        )
+    }
+
+    /// Open a box sealed to this device's identity key: a sender certificate, a sibling's
+    /// device metadata. Throws when the box is sealed to another key.
+    func openSealedToDevice(_ sealedBox: Data) throws -> Data {
+        coreLock.lock()
+        defer { coreLock.unlock() }
+        guard let core = orchestratorCore else { throw CryptoManagerError.coreNotInitialized }
+        return try core.openSealedToDevice(sealedBox: sealedBox)
     }
     
     /// Expose local public key fields for server consistency checks.
@@ -159,12 +214,13 @@ class CryptoManager {
         defer { coreLock.unlock() }
         guard let core = orchestratorCore else { throw CryptoManagerError.coreNotInitialized }
         let fields = try core.getRegistrationBundleFields()
-        return (Data(fields.identityPublic), Data(fields.signedPrekeyPublic))
+        return (fields.identityPublic, fields.signedPrekeyPublic)
     }
 
     /// Generate a complete registration bundle for device-based authentication
-    /// Returns: (deviceId, registrationBundle fields, signing key bytes, identity key bytes)
-    func generateRegistrationBundle() throws -> (deviceId: String, bundle: RegistrationBundleFields, signingKey: Data, identityKey: Data) {
+    /// Returns the device id and the public bundle. The keys stay in the core and in the key
+    /// record saved here; until 2026-09-29 the secrets were returned too, for Keychain copies.
+    func generateRegistrationBundle() throws -> (deviceId: String, bundle: RegistrationBundleFields) {
         Log.info("Generating registration bundle...", category: "CryptoManager")
 
         // Always generate fresh keys for registration — never reuse an existing core
@@ -173,7 +229,7 @@ class CryptoManager {
         self._bootstrapCore = activeCore
 
         // Persist in CFE binary format immediately (no JSON fallback)
-        let cfeData = try Data(activeCore.exportPrivateKeys())
+        let cfeData = try activeCore.exportPrivateKeys()
         let saved = KeychainManager.shared.savePrivateKeys(cfeData)
         if saved {
             Log.info("Saved registration private keys (CFE) to Keychain", category: "CryptoManager")
@@ -186,45 +242,11 @@ class CryptoManager {
         let identityHexPreview = bundle.identityPublic.prefix(8).map { String(format: "%02x", $0) }.joined()
         Log.debug("Registration bundle: identity=\(identityHexPreview)… suiteId=\(bundle.suiteId)", category: "CryptoManager")
 
-        // Key bytes — no JSON parsing
-        let signingKeyData = try activeCore.getSigningKeyBytes()
-        let identityKeyData = try activeCore.getIdentityKeyBytes()
-        guard !signingKeyData.isEmpty, !identityKeyData.isEmpty else {
-            throw CryptoError.InvalidKeyData(message: "getSigningKeyBytes or getIdentityKeyBytes returned empty")
-        }
-
         // Derive device_id from identity public key bytes directly.
         let deviceId = deriveDeviceId(identityPublicKey: bundle.identityPublic)
 
         Log.info("Generated registration bundle: device_id=\(deviceId)", category: "CryptoManager")
-        return (deviceId, bundle, signingKeyData, identityKeyData)
-    }
-
-    // MARK: - Prekey ID Tracking
-    
-    /// Track a prekey ID for a user and detect reinstall
-    /// Returns true if prekey changed (potential reinstall detected)
-    public func trackPreKeyId(_ preKeyId: String, for userId: String) -> Bool {
-        let result = preKeyTracker.track(preKeyId: preKeyId, for: userId)
-        switch result {
-        case .firstSeen:
-            Log.debug("Tracking prekey for \(userId): \(preKeyId.prefix(8))...", category: "CryptoManager")
-            return false
-        case .unchanged:
-            return false
-        case .changed(let previous):
-            let previousPrefix = previous.isEmpty ? "unknown" : String(previous.prefix(8))
-            Log.info("Prekey changed for \(userId): \(previousPrefix)... -> \(preKeyId.prefix(8))...", category: "CryptoManager")
-            Log.info("This indicates app reinstall or key rotation", category: "CryptoManager")
-            
-            // Archive existing session (if any)
-            if hasSession(for: userId) {
-                archiveSession(for: userId, reason: .preKeyChanged)
-                Log.info("Session archived due to prekey change", category: "CryptoManager")
-            }
-            
-            return true
-        }
+        return (deviceId, bundle)
     }
 
     // MARK: - Session Persistence
@@ -236,29 +258,29 @@ class CryptoManager {
     /// (`MessageCryptoService.encryptMessage`) gates the release of a ciphertext on this so an
     /// un-persisted sending-chain advance never reaches the peer (message-number-reuse desync).
     @discardableResult
-    func saveSessionToKeychain(for userId: String) -> Bool {
+    func saveSessionToKeychain(forDevice deviceId: String) -> Bool {
         coreLock.lock()
         defer { coreLock.unlock() }
         guard let core = orchestratorCore else { return false }
         do {
-            guard let contactId = SessionAddressing.contactId(forPeer: userId) else { return false }
-            let sessionData = Data(try core.exportSession(contactId: contactId))
+            guard let contactId = SessionAddressing.asDevice(deviceId) else { return false }
+            let sessionData = try core.exportSession(contactId: contactId)
             var saved = false
             for attempt in 1...3 {
                 saved = KeychainManager.shared.saveSessionData(sessionData, for: contactId)
                 guard saved else {
-                    Log.error("Keychain write failed (attempt \(attempt)/3): \(userId)", category: "CryptoManager")
+                    Log.error("Keychain write failed (attempt \(attempt)/3): \(contactId)", category: "CryptoManager")
                     continue
                 }
                 // Verify round-trip: read back and compare byte count.
                 if let readBack = KeychainManager.shared.loadSessionData(for: contactId),
                    readBack.count == sessionData.count {
-                    Log.debug("Session saved+verified (\(sessionData.count)B): \(userId)", category: "CryptoManager")
+                    Log.debug("Session saved+verified (\(sessionData.count)B): \(contactId)", category: "CryptoManager")
                     return true
                 }
-                Log.error("Session verify-after-write mismatch (attempt \(attempt)/3): \(userId)", category: "CryptoManager")
+                Log.error("Session verify-after-write mismatch (attempt \(attempt)/3): \(contactId)", category: "CryptoManager")
             }
-            Log.error("Failed to save session to Keychain after 3 attempts: \(userId)", category: "CryptoManager")
+            Log.error("Failed to save session to Keychain after 3 attempts: \(contactId)", category: "CryptoManager")
             return false
         } catch {
             Log.error("Session export failed: \(error)", category: "CryptoManager")
@@ -282,7 +304,7 @@ class CryptoManager {
             return false
         }
         do {
-            let data = Data(try core.exportPrivateKeys())
+            let data = try core.exportPrivateKeys()
             let saved = KeychainManager.shared.savePrivateKeys(data)
             if saved {
                 Log.info("Persisted Rust core state (CFE) to Keychain", category: "CryptoManager")
@@ -312,10 +334,10 @@ class CryptoManager {
         }
         let cryptoId = cryptoLocalUserId
         do {
-            let newCore = try createOrchestratorCoreFromKeys(keysData: [UInt8](keysData), myUserId: cryptoId)
+            let newCore = try createOrchestratorCoreFromKeys(keysData: keysData, myUserId: cryptoId)
             if let otpksData = KeychainManager.shared.loadOtpksData() {
                 do {
-                    try newCore.importOneTimePrekeys(data: [UInt8](otpksData))
+                    try newCore.importOneTimePrekeys(data: otpksData)
                     Log.debug("Imported OTPKs on core reload (\(newCore.oneTimePrekeyCount()) keys)", category: "CryptoManager")
                 } catch {
                     // CFE decode of the persisted OTPK blob failed → the core's private OTPK
@@ -328,7 +350,9 @@ class CryptoManager {
                     needsFullOtpkReplacement = true
                 }
             }
-            PQCKeyManager.loadCFESnapshot(into: newCore)
+            if !KyberPrekeyService.restore(into: newCore) {
+                needsFullOtpkReplacement = true
+            }
             loadOrchestratorStateCFE(into: newCore)
             orchestratorCore = newCore
             Log.info("Rust core reloaded from Keychain (CFE)", category: "CryptoManager")
@@ -402,7 +426,7 @@ class CryptoManager {
             return
         }
         do {
-            try core.importOrchestratorState(data: [UInt8](data))
+            try core.importOrchestratorState(data: data)
             Log.info("Orchestrator state restored (CFE, \(data.count)B)", category: "CryptoManager")
         } catch {
             Log.error("Orchestrator state CFE import failed: \(error) — starting fresh", category: "CryptoManager")
@@ -451,17 +475,32 @@ class CryptoManager {
         orchestratorCore?.ackMarkProcessed(messageId: messageId)
     }
 
-    /// The NEGOTIATED crypto suite of the live session with `userId` — read from the
+    /// The NEGOTIATED crypto suite of the session with one device — read from the
     /// Rust core (authoritative; suite 3 is negotiated, the bundle only ever says 1/2).
     /// Falls back to the Keychain copy when the session isn't loaded into the core yet.
     /// Returns 0 when no session is known at all.
-    func sessionSuiteId(for userId: String) -> UInt16 {
+    func sessionSuiteId(forDevice deviceId: String) -> UInt16 {
+        guard let contactId = SessionAddressing.asDevice(deviceId) else { return 0 }
         coreLock.lock()
-        let coreSuite = SessionAddressing.contactId(forPeer: userId)
-            .map { orchestratorCore?.getSessionSuiteId(contactId: $0) ?? 0 } ?? 0
+        let coreSuite = orchestratorCore?.getSessionSuiteId(contactId: contactId) ?? 0
         coreLock.unlock()
         if coreSuite > 0 { return coreSuite }
-        return KeychainManager.shared.loadSessionSuiteId(userId: userId) ?? 0
+        return KeychainManager.shared.loadSessionSuiteId(userId: contactId) ?? 0
+    }
+
+    /// The suite a **conversation** runs at: the weakest of the suites we hold with the person's
+    /// devices, ignoring devices we have no session with.
+    ///
+    /// The weakest and not the first, because that is what the answer is used for — the badge on
+    /// the profile screen tells a reader what protects what they send, and what they send goes to
+    /// every device. A person reading "suite 3" while one of their peer's two devices is on
+    /// suite 1 has been told the strength of a copy, not of the conversation.
+    ///
+    /// 0 means we hold no session with any of them, the same as the per-device answer.
+    func sessionSuiteIdAcrossDevices(ofPeer peerId: String) -> UInt16 {
+        let suites = SessionAddressing.deviceIds(ofPeer: peerId)
+            .map { sessionSuiteId(forDevice: $0) }.filter { $0 > 0 }
+        return suites.min() ?? 0
     }
 
     // MARK: - Orchestrator Event Bridge
@@ -490,6 +529,12 @@ class CryptoManager {
             throw CryptoManagerError.coreNotInitialized
         }
 
+        // Before every event, not only before an open: an unread message is answered with a
+        // DECRYPTION_ERROR only to a writer whose certificate the core can check, and the answer
+        // may be decided on the message or on the ACK lookup that follows it. Handed over only in
+        // `openReceiving`, a process that had opened no receiving session answered
+        // `decrypt_failed` instead, and the writer never learned (TODO 80, stand 2026-09-30).
+        handOverTrustedServerKeys(to: core)
         let actions = try core.handleEvent(event: event)
         logOrchestratorEvent(event, actions: actions, tag: tag)
         return actions
@@ -501,12 +546,11 @@ class CryptoManager {
     // External callers MUST use these instead of accessing orchestratorCore directly.
 
     /// Sign binary data using the device Ed25519 identity key.
-    func signBundleData(_ bundleData: [UInt8]) throws -> Data {
+    func signBundleData(_ bundleData: Data) throws -> Data {
         coreLock.lock()
         defer { coreLock.unlock() }
         guard let core = orchestratorCore else { throw CryptoManagerError.coreNotInitialized }
-        let sigBytes = try core.signBundleData(bundleDataJson: bundleData)
-        return Data(sigBytes)
+        return try core.signBundleData(bundleDataJson: bundleData)
     }
 
     // MARK: - Hybrid PQ Identity Signatures (Ed25519 + ML-DSA-65)
@@ -534,7 +578,7 @@ class CryptoManager {
            let oldPriv = KeychainManager.shared.loadHybridSigPrivateKey(),
            !oldPriv.isEmpty {
             do {
-                try core.importHybridSignaturePrivateKey(privBytes: [UInt8](oldPriv))
+                try core.importHybridSignaturePrivateKey(privBytes: oldPriv)
                 // Fail-closed: until the CFE blob is durably written, the legacy item is the
                 // ONLY copy of this key. Deleting it after an unchecked persist destroyed the
                 // device's hybrid identity outright. Keep it and let the next call retry —
@@ -578,28 +622,23 @@ class CryptoManager {
     }
 
     /// Signs a message with the device hybrid identity key (core-owned).
-    func signHybrid(_ message: [UInt8]) throws -> Data {
+    /// The secret stays in the core — never `getSigningKeyBytes`.
+    func signHybrid(_ message: Data) throws -> Data {
         coreLock.lock()
         defer { coreLock.unlock() }
         guard let core = orchestratorCore else { throw CryptoManagerError.coreNotInitialized }
-        let sig = try core.signHybrid(message: message)
-        return Data(sig)
-    }
-
-    /// Transfer / CTHF path. The secret stays in the core — never `getSigningKeyBytes`.
-    func signHybrid(_ message: Data) throws -> Data {
-        try signHybrid([UInt8](message))
+        return try core.signHybrid(message: message)
     }
 
     /// Verifies a hybrid signature against a peer's hybrid public key. Both the
     /// Ed25519 and ML-DSA-65 components must validate. Stateless.
-    func verifyHybrid(publicKey: [UInt8], message: [UInt8], signature: [UInt8]) throws -> Bool {
+    func verifyHybrid(publicKey: Data, message: Data, signature: Data) throws -> Bool {
         return try hybridVerify(publicKey: publicKey, message: message, signature: signature)
     }
 
     // MARK: - Core-delegated hybrid helpers (fully switched after bindings regen)
 
-    func buildX3dhSignMessage(suiteId: UInt8, publicKey: Data) -> [UInt8] {
+    func buildX3dhSignMessage(suiteId: UInt8, publicKey: Data) -> Data {
         coreLock.lock()
         defer { coreLock.unlock() }
         guard let core = orchestratorCore else {
@@ -608,20 +647,20 @@ class CryptoManager {
             m.append(0x00)
             m.append(suiteId)
             m.append(publicKey)
-            return [UInt8](m)
+            return m
         }
-        return core.buildX3dhSignMessage(suiteId: suiteId, publicKey: [UInt8](publicKey))
+        return core.buildX3dhSignMessage(suiteId: suiteId, publicKey: publicKey)
     }
 
-    func buildHybridIdentityBindMessage(hybridPublic: Data) -> [UInt8] {
+    func buildHybridIdentityBindMessage(hybridPublic: Data) -> Data {
         coreLock.lock()
         defer { coreLock.unlock() }
         guard let core = orchestratorCore else {
             var m = Data("KonstruktHybridId-v1".utf8)
             m.append(hybridPublic)
-            return [UInt8](m)
+            return m
         }
-        return core.buildHybridIdentityBindMessage(hybridPublicKey: [UInt8](hybridPublic))
+        return core.buildHybridIdentityBindMessage(hybridPublicKey: hybridPublic)
     }
 
     /// High-level: ensure hybrid key (if needed) + produce hybrid signature over the
@@ -630,7 +669,7 @@ class CryptoManager {
         coreLock.lock()
         defer { coreLock.unlock() }
         guard let core = orchestratorCore else { throw CryptoManagerError.coreNotInitialized }
-        let sig = try core.signHybridPrekey(suiteId: suiteId, publicKey: [UInt8](publicKey))
+        let sig = try core.signHybridPrekey(suiteId: suiteId, publicKey: publicKey)
         return Data(sig)
     }
 
@@ -657,57 +696,11 @@ class CryptoManager {
         let spk: Data? = (try? localBundlePublicKeys().signedPrekeyPublic).flatMap { pub in
             try? signHybridPrekey(suiteId: 0x01, publicKey: pub)
         }
-        // Kyber SPK is managed outside main KeyManager for now.
-        let kyber: Data? = (try? PQCKeyManager.shared.kyberSPKPublic()).flatMap { pub in
-            try? signHybridPrekey(suiteId: 0x10, publicKey: pub)
-        }
+        // The Kyber SPK's hybrid signature is the core's, made when the key was: it covers the
+        // signed `created_at` as well as the key (PQXDH v2), so it cannot be produced from the
+        // public key here.
+        let kyber: Data? = (try? currentKyberSpkUpload()).map { $0.hybridSignature }
         return (spk, kyber)
-    }
-
-    /// Apply a Kyber KEM shared secret to the named DR session.
-    func applyPqContribution(contactId: String, kemSharedSecret: [UInt8]) throws {
-        coreLock.lock()
-        defer { coreLock.unlock() }
-        guard let core = orchestratorCore else { throw CryptoManagerError.coreNotInitialized }
-        guard let resolved = SessionAddressing.contactId(forPeer: contactId) else {
-            throw CryptoManagerError.sessionNotFound
-        }
-        try core.applyPqContribution(contactId: resolved, kemSharedSecret: kemSharedSecret)
-    }
-
-    /// Register a Kyber KEM shared secret for deferred application and persist CFE snapshot.
-    @discardableResult
-    func registerPqDeferred(contactId: String, otpkId: UInt32, sharedSecret: [UInt8]) -> Bool {
-        coreLock.lock()
-        defer { coreLock.unlock() }
-        guard let core = orchestratorCore else { return false }
-        guard let resolved = SessionAddressing.contactId(forPeer: contactId) else { return false }
-        core.registerPqDeferred(contactId: resolved, otpkId: otpkId, sharedSecret: sharedSecret)
-        PQCKeyManager.saveCFESnapshot(to: core)
-        return true
-    }
-
-    /// Export the Kyber session state as a CFE blob.
-    func exportKyberSessionState() -> [UInt8]? {
-        coreLock.lock()
-        defer { coreLock.unlock() }
-        return try? orchestratorCore?.exportKyberSessionState()
-    }
-
-    /// Import Kyber session state from a CFE blob.
-    func importKyberSessionState(_ data: [UInt8]) throws {
-        coreLock.lock()
-        defer { coreLock.unlock() }
-        guard let core = orchestratorCore else { throw CryptoManagerError.coreNotInitialized }
-        try core.importKyberSessionState(data: data)
-    }
-
-    /// Persist the current Kyber CFE snapshot to Keychain.
-    func savePQCSnapshot() {
-        coreLock.lock()
-        defer { coreLock.unlock() }
-        guard let core = orchestratorCore else { return }
-        PQCKeyManager.saveCFESnapshot(to: core)
     }
 
     /// Rotate the signed pre-key and return the new public material.
@@ -727,7 +720,7 @@ class CryptoManager {
     }
 
     /// Export all OTPK private keys as a CFE blob.
-    func exportOneTimePrekeys() throws -> [UInt8] {
+    func exportOneTimePrekeys() throws -> Data {
         coreLock.lock()
         defer { coreLock.unlock() }
         guard let core = orchestratorCore else { throw CryptoManagerError.coreNotInitialized }
@@ -750,31 +743,86 @@ class CryptoManager {
         return orchestratorCore?.pruneOneTimePrekeysBelow(minKeepId: minKeepId) ?? 0
     }
 
-    /// Store the ML-KEM-768 SPK in the core key-state (serialized via coreLock).
-    /// Commit-after-confirm: call only once the server confirmed the public upload,
-    /// then `persistCoreState()` — the key persists inside the private-keys CFE blob.
-    /// Returns false when the core is not initialized.
-    func setKyberSpk(keyId: UInt32, secretKey: Data, publicKey: Data) -> Bool {
-        coreLock.lock()
-        defer { coreLock.unlock() }
-        guard let core = orchestratorCore else { return false }
-        core.setKyberSpk(keyId: keyId, secretKey: [UInt8](secretKey), publicKey: [UInt8](publicKey))
-        return true
-    }
+    // MARK: - Kyber prekeys (ML-KEM-1024, PQXDH v2)
+    //
+    // The core generates, signs and holds them; the seeds never leave it. Every call that changes
+    // them is followed by `KyberPrekeyService.persist()`, as with the classic OTPKs.
 
-    /// The ML-KEM-768 SPK held in the core key-state, or nil if none committed yet.
-    func kyberSpk() -> KyberSpkRecord? {
-        coreLock.lock()
-        defer { coreLock.unlock() }
-        return orchestratorCore?.kyberSpk()
-    }
-
-    /// Export a session's wire bytes (for session init completed notification).
-    func exportSession(contactId: String) throws -> [UInt8] {
+    func generateKyberOneTimePrekeys(count: UInt32) throws -> [KyberPrekeyUpload] {
         coreLock.lock()
         defer { coreLock.unlock() }
         guard let core = orchestratorCore else { throw CryptoManagerError.coreNotInitialized }
-        guard let resolved = SessionAddressing.contactId(forPeer: contactId) else {
+        return try core.generateKyberOneTimePrekeys(count: count)
+    }
+
+    func kyberOneTimePrekeyCount() -> UInt32 {
+        coreLock.lock()
+        defer { coreLock.unlock() }
+        return orchestratorCore?.kyberOneTimePrekeyCount() ?? 0
+    }
+
+    /// Same rule as `pruneOneTimePrekeys(below:)`: only after a replace-all upload.
+    func pruneKyberOneTimePrekeys(below minKeepId: UInt32) -> UInt32 {
+        coreLock.lock()
+        defer { coreLock.unlock() }
+        return orchestratorCore?.pruneKyberOneTimePrekeysBelow(minKeepId: minKeepId) ?? 0
+    }
+
+    /// The Kyber SPK to upload with a rotation. Asked again before commit/rollback, it returns the
+    /// same key, so a retried upload uploads the same key.
+    func beginKyberSpkRotation() throws -> KyberPrekeyUpload {
+        coreLock.lock()
+        defer { coreLock.unlock() }
+        guard let core = orchestratorCore else { throw CryptoManagerError.coreNotInitialized }
+        return try core.beginKyberSpkRotation()
+    }
+
+    /// The server confirmed the Kyber SPK from `beginKyberSpkRotation`. False if none was pending.
+    @discardableResult
+    func commitKyberSpkRotation() -> Bool {
+        coreLock.lock()
+        defer { coreLock.unlock() }
+        return orchestratorCore?.commitKyberSpkRotation() ?? false
+    }
+
+    /// The server refused the pending Kyber SPK outright (it stored nothing): forget it, so the
+    /// next rotation starts from a fresh key instead of resending one the server will refuse again.
+    func rollbackKyberSpkRotation() {
+        coreLock.lock()
+        defer { coreLock.unlock() }
+        orchestratorCore?.rollbackKyberSpkRotation()
+    }
+
+    /// The current Kyber SPK's upload record, or nil before the first commit.
+    func currentKyberSpkUpload() throws -> KyberPrekeyUpload? {
+        coreLock.lock()
+        defer { coreLock.unlock() }
+        guard let core = orchestratorCore else { throw CryptoManagerError.coreNotInitialized }
+        return try core.currentKyberSpkUpload()
+    }
+
+    /// Decapsulate with our Kyber prekey `keyId` (0 = the current SPK). History transfer only —
+    /// the session handshake decapsulates inside the core.
+    func kyberPrekeyDecapsulate(keyId: UInt32, ciphertext: Data) throws -> Data {
+        coreLock.lock()
+        defer { coreLock.unlock() }
+        guard let core = orchestratorCore else { throw CryptoManagerError.coreNotInitialized }
+        return try core.kyberPrekeyDecapsulate(keyId: keyId, ciphertext: ciphertext)
+    }
+
+    func exportKyberPrekeys() throws -> Data {
+        coreLock.lock()
+        defer { coreLock.unlock() }
+        guard let core = orchestratorCore else { throw CryptoManagerError.coreNotInitialized }
+        return try core.exportKyberPrekeys()
+    }
+
+    /// Export a session's wire bytes (for session init completed notification).
+    func exportSession(contactId: String) throws -> Data {
+        coreLock.lock()
+        defer { coreLock.unlock() }
+        guard let core = orchestratorCore else { throw CryptoManagerError.coreNotInitialized }
+        guard let resolved = SessionAddressing.asDevice(contactId) else {
             throw CryptoManagerError.sessionNotFound
         }
         return try core.exportSession(contactId: resolved)
@@ -791,9 +839,12 @@ class CryptoManager {
         KeychainManager.shared.deleteData(forKey: Self.orchestratorStateCFEKey)
         KeychainManager.shared.deleteAllE2EESessions()
         KeychainManager.shared.deleteOtpks()
+        // Kyber prekeys belong to the identity being replaced, like the classic OTPKs above.
+        KeychainManager.shared.deleteKyberPrekeys()
         // The new identity hasn't published a hybrid PQ key yet — drop the previous identity's
         // published flag so SPK rotation doesn't attach a hybrid signature the server can't verify.
         HybridIdentityService.resetPublishState()
+        KyberPrekeyService.resetPublishState()
         Log.info("Prepared clean crypto state for device link", category: "CryptoManager")
     }
 
@@ -824,15 +875,18 @@ class CryptoManager {
         // Delete all individual keys and ALL sessions
         KeychainManager.shared.deleteAllKeys()
         KeychainManager.shared.deleteOtpks()
+        KeychainManager.shared.deleteKyberPrekeys()
         KeychainManager.shared.deleteData(forKey: Self.orchestratorStateCFEKey)
-        KeychainManager.shared.deleteData(forKey: "construct.kyber.spk.public")
-        KeychainManager.shared.deleteData(forKey: "construct.kyber.spk.secret")
-        KeychainManager.shared.deleteData(forKey: "construct.kyber.spk.id")
-        // Ghost-identity audit (2026-07-26): session-scoped state that must not survive an
-        // identity change, else a re-registered identity inherits the old one's PQ session state
-        // and heal queue. (deleteData clears items written via saveData OR saveRawData — same key.)
-        KeychainManager.shared.deleteData(forKey: "construct.kyber_session_state")
-        SessionHealingService.shared.clearAll()
+        // What builds before PQXDH v2 kept outside the core: the ML-KEM-768 SPK triple and the
+        // deferred-contribution snapshot. Nothing reads them any more; a fresh identity must not
+        // inherit them either (ghost-identity audit, 2026-07-26).
+        KyberPrekeyService.deleteLegacyItems()
+        // The heal queue this app kept for itself, gone 2026-09-23 with the second
+        // `RustHealingQueue`. The blob is still deleted because a build that predates the change
+        // may have written one, and a stale queue restored onto a fresh identity is the
+        // ghost-identity audit of 2026-07-26. The core's own queue goes with `forgetContactState`
+        // / the orchestrator state this teardown already clears.
+        KeychainManager.shared.deleteData(forKey: "construct.healing_queue_state")
 
         // MLS store is signed by the identity key being deleted — a fresh identity
         // can never operate the old groups, so drop the snapshot with the keys.
@@ -847,29 +901,20 @@ class CryptoManager {
         // MARK: - Session Management
 
     /// Initializes a secure session with a recipient using the Rust core.
-    func initializeSession(for userId: String, recipientBundle: (identityPublic: Data, signedPrekeyPublic: Data, signature: Data, verifyingKey: Data, suiteId: String), oneTimePreKeyPublic: Data? = nil, oneTimePreKeyId: UInt32? = nil, kyberPreKeyPublic: Data? = nil, kyberOneTimePreKeyPublic: Data? = nil, kyberOneTimePreKeyId: UInt32? = nil, spkUploadedAt: UInt64 = 0, spkRotationEpoch: UInt32 = 0, kyberSpkUploadedAt: UInt64 = 0, kyberSpkRotationEpoch: UInt32 = 0, supportsPqRatchet: Bool = false, allowStale: Bool = false) throws {
+    func initializeSession(for userId: String, bundle: PublicKeyBundleData, withoutOneTimePrekey: Bool = false, allowStale: Bool = false) throws {
         do {
             try sessionInitService.initializeSession(
                 for: userId,
-                recipientBundle: recipientBundle,
-                oneTimePreKeyPublic: oneTimePreKeyPublic,
-                oneTimePreKeyId: oneTimePreKeyId,
-                kyberPreKeyPublic: kyberPreKeyPublic,
-                kyberOneTimePreKeyPublic: kyberOneTimePreKeyPublic,
-                kyberOneTimePreKeyId: kyberOneTimePreKeyId,
-                spkUploadedAt: spkUploadedAt,
-                spkRotationEpoch: spkRotationEpoch,
-                kyberSpkUploadedAt: kyberSpkUploadedAt,
-                kyberSpkRotationEpoch: kyberSpkRotationEpoch,
-                supportsPqRatchet: supportsPqRatchet,
+                bundle: bundle,
+                withoutOneTimePrekey: withoutOneTimePrekey,
                 allowStale: allowStale,
                 core: orchestratorCore,
-                archiveSession: { [weak self] userId, reason in
-                    Log.info("Existing session found for \(userId) - archiving before reinitialization to prevent desync", category: "CryptoManager")
-                    self?.archiveSession(for: userId, reason: reason)
+                archiveSession: { [weak self] deviceId, reason in
+                    Log.info("Existing session found for \(deviceId) - archiving before reinitialization to prevent desync", category: "CryptoManager")
+                    self?.archiveSession(for: deviceId, reason: reason)
                 },
-                saveSession: { [weak self] userId in
-                    self?.saveSessionToKeychain(for: userId)
+                saveSession: { [weak self] deviceId in
+                    self?.saveSessionToKeychain(forDevice: deviceId)
                 }
             )
             Log.info("Session initialized for user: \(userId)", category: "CryptoManager")
@@ -913,9 +958,9 @@ class CryptoManager {
         }
 
         // Build OrchestratorCore from Keychain or bootstrap core keys.
-        let keysData: [UInt8]?
+        let keysData: Data?
         if let d = KeychainManager.shared.loadPrivateKeysData() {
-            keysData = [UInt8](d)
+            keysData = d
         } else if let bootstrapData = try? _bootstrapCore?.exportPrivateKeys() {
             keysData = bootstrapData
         } else {
@@ -930,7 +975,7 @@ class CryptoManager {
             // Import OTPKs if available
             if let otpksData = KeychainManager.shared.loadOtpksData() {
                 do {
-                    try newCore.importOneTimePrekeys(data: [UInt8](otpksData))
+                    try newCore.importOneTimePrekeys(data: otpksData)
                     Log.debug("Imported OTPKs into OrchestratorCore (\(newCore.oneTimePrekeyCount()) keys)", category: "CryptoManager")
                 } catch {
                     // See reloadCoreFromKeychain: a silent empty OTPK store + high next_otpk_id +
@@ -942,8 +987,12 @@ class CryptoManager {
             } else {
                 Log.info("No OTPKs found in Keychain — key_manager will have empty OTPK store", category: "CryptoManager")
             }
-            // Restore Kyber deferred contribution state from CFE snapshot.
-            PQCKeyManager.loadCFESnapshot(into: newCore)
+            // Restore the Kyber prekeys. A blob that will not import leaves the core without the
+            // one-time keys the server still serves, and the next ids it issues collide with
+            // theirs — the same state a lost classic OTPK blob is, with the same repair.
+            if !KyberPrekeyService.restore(into: newCore) {
+                needsFullOtpkReplacement = true
+            }
             // Restore ACK cache, healing queue, and init locks.
             loadOrchestratorStateCFE(into: newCore)
             migrateSessionsIfNeeded(core: newCore)
@@ -991,9 +1040,28 @@ class CryptoManager {
         UserDefaults.standard.set(true, forKey: migrationKey)
     }
 
-    func hasSession(for userId: String) -> Bool {
-        guard let contactId = SessionAddressing.contactId(forPeer: userId) else { return false }
+    /// Whether the core holds a live ratchet with **one device**.
+    ///
+    /// Takes a device id: a ratchet is between two devices, so "do we have a session with this
+    /// person" is a different question and has its own name below. Until step 6 this resolved an
+    /// account to the pinned device and answered about that one, which read as the whole person —
+    /// a peer whose second device had a session and whose first did not was reported sessionless,
+    /// and the paths that act on "no session" are the destructive ones.
+    func hasSession(for deviceId: String) -> Bool {
+        guard let contactId = SessionAddressing.asDevice(deviceId) else { return false }
         return orchestratorCore?.hasSession(contactId: contactId) ?? false
+    }
+
+    /// Whether we hold a live ratchet with **any** device of a person.
+    ///
+    /// The account-shaped question, and the one every "is this chat ready", "may I encrypt",
+    /// "should I prewarm" gate is actually asking. It folds the set with `contains` rather than
+    /// picking a device, so nothing downstream inherits a choice nobody made.
+    ///
+    /// A caller that then *acts* on one session must name which device it means; this answers
+    /// only whether there is anything to act on.
+    func hasSessionWithAnyDevice(ofPeer peerId: String) -> Bool {
+        SessionAddressing.deviceIds(ofPeer: peerId).contains { hasSession(for: $0) }
     }
 
     /// Whether session state exists for `userId` **anywhere** — loaded in the core, or on disk.
@@ -1006,8 +1074,8 @@ class CryptoManager {
     ///
     /// Ask this one wherever the question is "is there anything here to put away", never the
     /// other one.
-    func hasStoredSessionState(for userId: String) -> Bool {
-        guard let contactId = SessionAddressing.contactId(forPeer: userId) else { return false }
+    func hasStoredSessionState(for deviceId: String) -> Bool {
+        guard let contactId = SessionAddressing.asDevice(deviceId) else { return false }
         if orchestratorCore?.hasSession(contactId: contactId) == true { return true }
         return KeychainManager.shared.loadSessionData(for: contactId) != nil
     }
@@ -1027,15 +1095,82 @@ class CryptoManager {
     /// `restoreRecentSessions` has imported the on-disk session — which otherwise looks
     /// like a missing session and triggers a destructive END_SESSION + fresh re-init,
     /// discarding the ratchet and breaking decryption of the peer's in-flight messages.
-    func hasOrRestoreSession(for userId: String) -> Bool {
+    func hasOrRestoreSession(for deviceId: String) -> Bool {
         guard isCoreReady else { return false }
-        return restoreSession(for: userId)
+        return restoreSession(for: deviceId)
     }
 
-    /// Return a read-only health snapshot for the session with `userId`.
+    /// Restore-aware `hasSessionWithAnyDevice`: the same fold, with the lazy Keychain import each
+    /// device gets from `restoreSession`.
+    func hasOrRestoreSessionWithAnyDevice(ofPeer peerId: String) -> Bool {
+        guard isCoreReady else { return false }
+        return SessionAddressing.deviceIds(ofPeer: peerId).contains { restoreSession(for: $0) }
+    }
+
+    /// Seal a wire payload just encrypted for `deviceId` as a session envelope, or `nil` when it
+    /// must go with a certificate: the session's first flight (the peer cannot find a tag yet),
+    /// or a session made before the envelope. The core decides
+    /// (`decisions/sealed-envelope-keyed-by-the-session.md`).
+    func sealEnvelope(forDevice deviceId: String, wirePayload: Data) -> Data? {
+        coreLock.lock()
+        defer { coreLock.unlock() }
+        guard let core = orchestratorCore, let contactId = SessionAddressing.asDevice(deviceId) else {
+            return nil
+        }
+        return core.sealEnvelope(contactId: contactId, wirePayload: wirePayload)
+    }
+
+    /// Who wrote a session envelope, found by its tag, and its opened body; `nil` when no pair this
+    /// device holds matches.
+    func openEnvelope(_ envelope: Data) -> EnvelopeOpened? {
+        coreLock.lock()
+        defer { coreLock.unlock() }
+        return orchestratorCore?.openEnvelope(envelope: envelope)
+    }
+
+    /// Seal a first flight — a wire payload written on a session `deviceId` has not answered yet —
+    /// whole, with the sender certificate, under the handshake's hybrid key
+    /// (`decisions/first-flight-sealed-whole.md`). `nil` when the payload is not a first flight: it
+    /// goes with a certificate. Throws for a first flight that cannot be sealed, which must not go
+    /// any other way — its header names the sender.
+    func sealFirstFlight(
+        forDevice deviceId: String,
+        recipientIdentityKey: Data,
+        wirePayload: Data,
+        certificate: Data
+    ) throws -> Data? {
+        coreLock.lock()
+        defer { coreLock.unlock() }
+        guard let core = orchestratorCore else { throw CryptoManagerError.coreNotInitialized }
+        guard let contactId = SessionAddressing.asDevice(deviceId) else {
+            throw CryptoManagerError.invalidKeyData
+        }
+        return try core.sealFirstFlight(
+            contactId: contactId,
+            recipientIdentity: recipientIdentityKey,
+            wirePayload: wirePayload,
+            certificate: certificate
+        )
+    }
+
+    /// Open a `SealedInner.first_flight` sealed to this device: the certificate and the wire
+    /// payload, as a first message always carried them.
+    func openFirstFlight(_ sealed: Data) throws -> FirstFlightOpened {
+        coreLock.lock()
+        defer { coreLock.unlock() }
+        guard let core = orchestratorCore else { throw CryptoManagerError.coreNotInitialized }
+        return try core.openFirstFlight(sealed: sealed)
+    }
+
+    /// How late messages have arrived since launch (PQR-4) — `nil` before the core is up.
+    func reorderStats() -> ReorderStats? {
+        orchestratorCore?.reorderStats()
+    }
+
+    /// Return a read-only health snapshot for the session with one device.
     /// Returns `nil` if no session exists or the core is not initialized.
-    func getSessionHealth(for userId: String) -> SessionHealthReport? {
-        guard let contactId = SessionAddressing.contactId(forPeer: userId) else { return nil }
+    func getSessionHealth(for deviceId: String) -> SessionHealthReport? {
+        guard let contactId = SessionAddressing.asDevice(deviceId) else { return nil }
         return orchestratorCore?.getSessionHealth(contactId: contactId)
     }
 
@@ -1047,13 +1182,89 @@ class CryptoManager {
     /// identical on both sides, so it means the same thing across the wire.
     ///
     /// `nil` means there is no session (or the core is not ready) — never "unknown".
-    func sessionEpoch(for userId: String) -> SessionEpoch? {
-        guard let sessionId = getSessionHealth(for: userId)?.sessionId else { return nil }
+    func sessionEpoch(for deviceId: String) -> SessionEpoch? {
+        guard let sessionId = getSessionHealth(for: deviceId)?.sessionId else { return nil }
         return SessionEpoch(rawValue: sessionId)
     }
 
-    /// Get all user IDs with active sessions
-    /// Used for sending END_SESSION to all contacts on logout
+    // MARK: - The core's queue of messages waiting for a session
+
+    /// Open a receiving session from what the core holds under `device`. Each queued message
+    /// opens with the key its own sender certificate names, once the core has checked it — nothing
+    /// is fetched (`decisions/first-message-opens-without-the-server.md`). `nil` only when there is
+    /// no core to ask.
+    func openReceiving(device: String) -> ReceivingOpenResult? {
+        coreLock.lock()
+        defer { coreLock.unlock() }
+        guard let core = orchestratorCore else { return nil }
+        handOverTrustedServerKeys(to: core)
+        return core.openReceiving(device: device)
+    }
+
+    /// The server keys a sender certificate is checked against, as this app resolves them (the
+    /// well-known key and the build pins, `BundleSigningTrust`). Handed over before every open and
+    /// every orchestrator event rather than once: the fetched key can arrive or rotate while the
+    /// app runs, and a stale copy in the core would refuse certificates the app itself accepts.
+    /// Caller holds `coreLock`.
+    private func handOverTrustedServerKeys(to core: OrchestratorCore, extraKeys: [Data] = []) {
+        core.setTrustedServerKeys(keys: BundleSigningTrust.trustedKeyBytes() + extraKeys)
+        // Delegations of the server's hybrid keys. The core keeps only those a root pinned in this
+        // build signed, so where they came from does not matter; one it already holds is kept once.
+        _ = core.admitServerDelegations(delegations: ServerKeyManager.cachedServerDelegations())
+    }
+
+    /// The core's verdict on a sender certificate — signature, device and age, judged as an open
+    /// would (`decisions/server-keys-rooted-offline-and-hybrid.md`). Until 2026-10-03 this app
+    /// checked the Ed25519 signature itself, beside the core's check, and the two disagreed on age
+    /// and on the device. `nil` only when there is no core to ask. `extraKeys` is a test seam.
+    func certificateVerdict(_ certificate: SenderCertificate, extraKeys: [Data] = []) -> CertificateVerdict? {
+        coreLock.lock()
+        defer { coreLock.unlock() }
+        guard let core = orchestratorCore else { return nil }
+        handOverTrustedServerKeys(to: core, extraKeys: extraKeys)
+        return core.certificateVerdict(certificate: certificate)
+    }
+
+    /// The core's verdicts on a bundle's KT proofs. `nil` only when there is no core to ask.
+    func verifyKtProofs(
+        deviceId: String,
+        identityKey: Data,
+        identityProof: KtInclusionProof,
+        hybridIdentityKey: Data?,
+        hybridProof: KtInclusionProof?,
+        treeHead: KtSignedTreeHead?
+    ) -> KtVerdicts? {
+        coreLock.lock()
+        defer { coreLock.unlock() }
+        guard let core = orchestratorCore else { return nil }
+        handOverTrustedServerKeys(to: core)
+        return core.verifyKtProofs(
+            deviceId: deviceId,
+            identityKey: identityKey,
+            identityProof: identityProof,
+            hybridIdentityKey: hybridIdentityKey,
+            hybridProof: hybridProof,
+            treeHead: treeHead
+        )
+    }
+
+    /// Whether any of `devices` is opening a session with us right now (a handshake of theirs
+    /// queued in the core within the last 20 s).
+    func peerHandshakeHeld(devices: [String]) -> Bool {
+        guard !devices.isEmpty else { return false }
+        coreLock.lock()
+        defer { coreLock.unlock() }
+        return orchestratorCore?.peerHandshakeHeld(devices: devices) ?? false
+    }
+
+    /// How many messages the core holds waiting for a session with `deviceId`.
+    func pendingMessageCount(forDevice deviceId: String) -> Int {
+        coreLock.lock()
+        defer { coreLock.unlock() }
+        return Int(orchestratorCore?.pendingMessageCount(contactId: deviceId) ?? 0)
+    }
+
+    /// Every session we hold, by device.
     /// Every **device** we hold a ratchet with — the core's contact ids, which are
     /// `CryptoDeviceId`, never account UUIDs.
     ///
@@ -1065,49 +1276,30 @@ class CryptoManager {
         return orchestratorCore?.getAllSessionContactIds() ?? []
     }
 
-    /// Initialize a receiving session (for responder/Bob) using sender's bundle + first message.
-    /// Returns the raw decrypted bytes of the first message (KNST frame, protobuf, or UTF-8 control string).
-    /// Callers must decode via `ChunkedMessageReassembler.process(data:)` — do NOT convert to String here.
-    func initReceivingSession(
-        for userId: String,
-        recipientBundle: (identityPublic: Data, signedPrekeyPublic: Data, signature: Data, verifyingKey: Data, suiteId: String),
-        firstMessage: ChatMessage,
-        spkUploadedAt: UInt64 = 0,
-        spkRotationEpoch: UInt32 = 0,
-        kyberSpkUploadedAt: UInt64 = 0,
-        kyberSpkRotationEpoch: UInt32 = 0
-    ) throws -> Data {
+    /// Open a receiving session from one message that does not wait in the core's queue — a
+    /// sibling's SENDER_SYNC — with the key its sender certificate names. Returns the device the
+    /// session opened with and the first message's raw bytes (KNST frame, protobuf or control
+    /// string; callers decode via `ChunkedMessageReassembler.process(data:)`).
+    func openReceiving(singleMessage message: ChatMessage) throws -> (device: String, plaintext: Data) {
+        coreLock.lock()
+        let core = orchestratorCore
+        if let core { handOverTrustedServerKeys(to: core) }
+        coreLock.unlock()
         do {
-            let plaintext = try sessionInitService.initReceivingSession(
-                for: userId,
-                recipientBundle: recipientBundle,
-                firstMessage: firstMessage,
-                spkUploadedAt: spkUploadedAt,
-                spkRotationEpoch: spkRotationEpoch,
-                kyberSpkUploadedAt: kyberSpkUploadedAt,
-                kyberSpkRotationEpoch: kyberSpkRotationEpoch,
-                core: orchestratorCore,
-                archiveSession: { [weak self] userId, reason in
-                    Log.info("Existing session found for \(userId) - archiving before receiving session init to prevent desync", category: "CryptoManager")
-                    self?.archiveSession(for: userId, reason: reason)
+            return try sessionInitService.openReceiving(
+                message,
+                core: core,
+                archiveSession: { [weak self] deviceId, reason in
+                    self?.archiveSession(for: deviceId, reason: reason)
                 },
-                saveSession: { [weak self] userId in
-                    self?.saveSessionToKeychain(for: userId)
+                saveSession: { [weak self] deviceId in
+                    self?.saveSessionToKeychain(forDevice: deviceId)
                 }
             )
-            Log.info("Receiving session initialized for user: \(userId), decrypted message length: \(plaintext.count)", category: "CryptoManager")
-            return plaintext
-        } catch CryptoManagerError.invalidKeyData {
-            Log.error("Failed to decode base64-encoded keys from bundle", category: "CryptoManager")
-            throw CryptoManagerError.invalidKeyData
-        } catch CryptoManagerError.sessionInitializationFailed {
-            Log.error("Failed to initialize receiving session", category: "CryptoManager")
-            logLocalKeyDiagnostics()
-            throw CryptoManagerError.sessionInitializationFailed
         } catch SessionError.notAHandshakeCarrier {
             throw SessionError.notAHandshakeCarrier
         } catch {
-            Log.error("Unexpected error initializing receiving session: \(error)", category: "CryptoManager")
+            Log.error("Receiving open of \(message.id.prefix(8))… failed: \(error)", category: "CryptoManager")
             logLocalKeyDiagnostics()
             throw CryptoManagerError.sessionInitializationFailed
         }
@@ -1121,7 +1313,7 @@ class CryptoManager {
         guard let core = orchestratorCore else { return }
         do {
             let fields = try core.getRegistrationBundleFields()
-            func hexPrefix(_ bytes: [UInt8]) -> String {
+            func hexPrefix(_ bytes: Data) -> String {
                 bytes.prefix(8).map { String(format: "%02x", $0) }.joined()
             }
             let ik = hexPrefix(fields.identityPublic)
@@ -1135,40 +1327,35 @@ class CryptoManager {
 
     // MARK: - Encryption / Decryption
 
-    /// Result of message encryption with separate fields per server ChatMessage spec
-    typealias EncryptedMessageComponents = MessageCryptoService.EncryptedMessageComponents
-
-    /// Encrypts a plaintext message using the session for a specific user
-    /// Returns separate components per server ChatMessage format
-    func encryptMessage(_ message: String, for userId: String) throws -> EncryptedMessageComponents {
+    /// Encrypts a plaintext message for **one device** of the recipient and returns the wire
+    /// payload, sent as it is.
+    ///
+    /// One call, one copy, one ratchet — `OutboundMessagePipeline` loops the recipient's device
+    /// set and calls this once per device. See `decisions/a-peer-is-a-set-of-devices.md`.
+    func encryptMessage(_ message: String, forDevice deviceId: String) throws -> Data {
         // coreLock serializes Rust FFI calls so that a background task and the main
         // actor cannot advance the DR ratchet concurrently (would corrupt chain state).
         coreLock.lock()
         defer { coreLock.unlock() }
-        let components = try messageCrypto.encryptMessage(
+        let wire = try messageCrypto.encryptMessage(
             message,
-            for: userId,
+            forDevice: deviceId,
             core: orchestratorCore,
-            restoreSession: { [weak self] userId in
-                Log.info("Session not in memory, attempting restore: \(userId)", category: "CryptoManager")
-                return self?.restoreSession(for: userId) ?? false
+            restoreSession: { [weak self] device in
+                Log.info("Session not in memory, attempting restore: \(device)", category: "CryptoManager")
+                return self?.restoreSession(for: device) ?? false
             },
-            saveSession: { [weak self] userId in
-                self?.saveSessionToKeychain(for: userId) ?? false
+            saveSession: { [weak self] device in
+                self?.saveSessionToKeychain(forDevice: device) ?? false
             },
-            archiveSession: { [weak self] userId, reason in
-                Log.debug("Archiving session for \(userId) to allow reinitialization", category: "CryptoManager")
-                self?.archiveSession(for: userId, reason: reason)
+            archiveSession: { [weak self] device, reason in
+                Log.debug("Archiving session for \(device) to allow reinitialization", category: "CryptoManager")
+                self?.archiveSession(for: device, reason: reason)
             }
         )
 
-        // Hex preview only materializes when Log.debug evaluates (DEBUG builds).
-        Log.debug(
-            "ENCRYPT: msgNum=\(components.messageNumber), otpkId=\(components.oneTimePreKeyId), ephemKey=\(components.ephemeralPublicKey.prefix(8).map { String(format: "%02x", $0) }.joined()), content=\(components.content.count) bytes",
-            category: "CryptoManager"
-        )
-
-        return components
+        Log.debug("ENCRYPT: \(wire.count)-byte wire payload for \(deviceId.prefix(8))…", category: "CryptoManager")
+        return wire
     }
 
     /// Decrypt a ChatMessage directly using clean API
@@ -1193,9 +1380,7 @@ class CryptoManager {
     ) throws -> MessageDecryptResult {
         let logContactId = contactIdOverride ?? message.from
         Log.debug("Decrypting message \(message.id.prefix(8))... contactId=\(logContactId.prefix(16))...", category: "CryptoManager")
-        Log.debug("messageNumber: \(message.messageNumber)", category: "CryptoManager")
-        Log.debug("ephemeralPublicKey: \(message.ephemeralPublicKey.count) bytes", category: "CryptoManager")
-        Log.debug("content length: \(message.content.count) bytes", category: "CryptoManager")
+        Log.debug("messageNumber: \(message.messageNumber) payload: \(message.rawPayload.count)B", category: "CryptoManager")
 
         // Last-resort duplicate guard: if this message was already processed in this launch,
         // the DR state has already advanced past it. Attempting to decrypt would fail and
@@ -1234,8 +1419,8 @@ class CryptoManager {
                     Log.info("Session not in memory, attempting restore: \(userId)", category: "CryptoManager")
                     return self?.restoreSession(for: userId) ?? false
                 },
-                saveSession: { [weak self] userId in
-                    self?.saveSessionToKeychain(for: userId)
+                saveSession: { [weak self] deviceId in
+                    self?.saveSessionToKeychain(forDevice: deviceId)
                 },
                 archiveSession: { [weak self] userId, reason in
                     // ERROR-level so this appears in exported logs even at INFO filter.
@@ -1262,22 +1447,10 @@ class CryptoManager {
         return MessageDecryptResult(plaintext: decryptResult.plaintext, storageKey: decryptResult.storageKey)
     }
 
-    /// Background-safe DR decrypt — no `archiveSession` callback on failure.
-    ///
-    /// Called exclusively from `BackgroundFetchManager` (private BG queue, hopped to main
-    /// via `DispatchQueue.main.sync`). Unlike the foreground `decryptMessage`, this method
-    /// never archives the session on failure — it simply throws `.decryptionFailedNoArchive`
-    /// so the caller can skip the message.  The foreground stream will handle recovery
-    /// (END_SESSION, re-init, healing) when the app becomes active.
-    ///
-    /// Precondition: the caller must restore the session with `restoreSession(for:)` before
-    /// calling this method.  If no session exists, throws `.sessionNotFound`.
-    func decryptMessageForBackground(_ message: ChatMessage) throws -> MessageDecryptResult {
-        // Fast duplicate guard — no I/O, protects DR state.
-        if PersistentACKStore.shared.isProcessedInMemory(message.id) {
-            throw CryptoManagerError.duplicateMessage
-        }
-
+    /// Decrypt a call-signal field — a wire payload the core packed (`encryptMessage(_:forDevice:)`).
+    /// Returns UTF-8 (call signals are always valid UTF-8). Restores the session from Keychain if
+    /// needed; does not try archived sessions.
+    func decryptCallSignal(contactId: String, wirePayload: Data) throws -> String {
         coreLock.lock()
         defer { coreLock.unlock() }
 
@@ -1285,125 +1458,11 @@ class CryptoManager {
             throw CryptoManagerError.coreNotInitialized
         }
 
-        guard let contactId = SessionAddressing.contactId(forPeer: message.from),
-              core.hasSession(contactId: contactId) else {
-            throw CryptoManagerError.sessionNotFound
-        }
-
-        let contentForDecrypt = message.content
-
-        do {
-            let result = try core.decryptMessage(
-                contactId: contactId,
-                ephemeralPublicKey: [UInt8](message.ephemeralPublicKey),
-                messageNumber: message.messageNumber,
-                content: [UInt8](contentForDecrypt),
-                suiteId: message.suiteId,
-                pqMessageEpoch: message.pqMessageEpoch,
-                pqRatchetField: [UInt8](message.pqRatchetField)
-            )
-            saveSessionToKeychain(for: message.from)
-            Log.info("BG decrypt OK \(message.id.prefix(8))… msgNum=\(message.messageNumber) (\(result.plaintext.count) bytes)", category: "CryptoManager")
-            return MessageDecryptResult(plaintext: Data(result.plaintext), storageKey: Data(result.storageKey))
-        } catch {
-            // Do NOT call archiveSession here. The session may still be healthy —
-            // failure here is likely a race (duplicate), a skipped key, or a stale
-            // message from before session re-init. The foreground stream owns recovery.
-            Log.info("BG decrypt failed \(message.id.prefix(8))… msgNum=\(message.messageNumber): \(error) — session preserved", category: "CryptoManager")
-            throw CryptoManagerError.decryptionFailedNoArchive(reason: error.localizedDescription)
-        }
-    }
-
-    /// Batch offline decrypt — single Rust mutex acquisition for the entire batch.
-    ///
-    /// Maps each `ChatMessage` to an `OfflineBatchMessage`, calls the Rust
-    /// `decrypt_offline_batch` method, then returns typed `OfflineBatchDecryptResult`
-    /// values.  Per-message failures do NOT abort the batch and do NOT archive any session.
-    ///
-    /// The caller is responsible for:
-    ///   - session restore (call `restoreSession(for:)` per contactId before calling this)
-    ///   - storing returned `storageKey` values in `MessageKeyStore`
-    ///   - calling `PersistentACKStore.markProcessedInCache` for successfully decrypted messages
-    func decryptOfflineBatch(_ messages: [ChatMessage]) -> [OfflineBatchDecryptResult] {
-        // Fast pre-filter: drop anything already in the in-memory ACK cache.
-        let filtered = messages.filter { !PersistentACKStore.shared.isProcessedInMemory($0.id) }
-        guard !filtered.isEmpty else { return [] }
-
-        coreLock.lock()
-        defer { coreLock.unlock() }
-
-        guard let core = orchestratorCore else {
-            return filtered.map { OfflineBatchDecryptResult(message: $0, plaintext: nil,
-                error: CryptoManagerError.coreNotInitialized, storageKey: Data()) }
-        }
-
-        let inputs: [OfflineBatchMessage] = filtered.map { msg in
-            OfflineBatchMessage(
-                id: msg.id,
-                contactId: msg.from,
-                ephemeralPublicKey: [UInt8](msg.ephemeralPublicKey),
-                messageNumber: msg.messageNumber,
-                content: [UInt8](msg.content),
-                suiteId: msg.suiteId,
-                pqMessageEpoch: msg.pqMessageEpoch,
-                pqRatchetField: [UInt8](msg.pqRatchetField)
-            )
-        }
-
-        let results = core.decryptOfflineBatch(messages: inputs)
-
-        // Zip back to ChatMessage for the caller.
-        return zip(filtered, results).map { (chatMsg, batchResult) in
-            if let plaintext = batchResult.plaintext {
-                saveSessionToKeychain(for: chatMsg.from)
-                Log.info("Batch BG decrypt OK \(chatMsg.id.prefix(8))… msgNum=\(chatMsg.messageNumber) (\(plaintext.count) bytes)", category: "CryptoManager")
-                return OfflineBatchDecryptResult(
-                    message: chatMsg,
-                    plaintext: Data(plaintext),
-                    error: nil,
-                    storageKey: Data(batchResult.storageKey)
-                )
-            } else {
-                let reason = batchResult.error ?? "unknown"
-                Log.info("Batch BG decrypt failed \(chatMsg.id.prefix(8))… msgNum=\(chatMsg.messageNumber): \(reason) — session preserved", category: "CryptoManager")
-                return OfflineBatchDecryptResult(
-                    message: chatMsg,
-                    plaintext: nil,
-                    error: CryptoManagerError.decryptionFailedNoArchive(reason: reason),
-                    storageKey: Data()
-                )
-            }
-        }
-    }
-
-    /// Decrypt raw Double Ratchet components — used for call signaling fields, not ChatMessage.
-    /// Returns UTF-8 string (call signals are always valid UTF-8).
-    /// Handles session restore from Keychain if needed. Does not try archived sessions.
-    func decryptRawComponents(
-        contactId: String,
-        ephemeralPublicKey: Data,
-        messageNumber: UInt32,
-        content: Data,
-        // The call-signal V2 frame does not yet carry these — it only supports
-        // classic (suite 1) sessions. TODO: extend the frame to carry suite_id /
-        // pq_message_epoch / pq_ratchet_field so call signals work over suite-3
-        // sessions (same fix as WirePayload; tracked separately).
-        suiteId: UInt16 = 1,
-        pqMessageEpoch: UInt32 = 0,
-        pqRatchetField: Data = Data()
-    ) throws -> String {
-        coreLock.lock()
-        defer { coreLock.unlock() }
-
-        guard let core = orchestratorCore else {
-            throw CryptoManagerError.coreNotInitialized
-        }
-
-        guard let resolved = SessionAddressing.contactId(forPeer: contactId) else {
+        guard let resolved = SessionAddressing.asDevice(contactId) else {
             throw CryptoManagerError.sessionNotFound
         }
         if !core.hasSession(contactId: resolved) {
-            if !restoreSession(for: contactId) {
+            if !restoreSession(for: resolved) {
                 throw CryptoManagerError.sessionNotFound
             }
         }
@@ -1412,18 +1471,9 @@ class CryptoManager {
             throw CryptoManagerError.sessionNotFound
         }
 
-        let contentForDecrypt = content
-        let result = try core.decryptMessage(
-            contactId: resolved,
-            ephemeralPublicKey: [UInt8](ephemeralPublicKey),
-            messageNumber: messageNumber,
-            content: [UInt8](contentForDecrypt),
-            suiteId: suiteId,
-            pqMessageEpoch: pqMessageEpoch,
-            pqRatchetField: [UInt8](pqRatchetField)
-        )
-        saveSessionToKeychain(for: contactId)
-        return String(data: Data(result.plaintext), encoding: .utf8) ?? ""
+        let result = try core.decryptWirePayload(contactId: resolved, wirePayload: wirePayload)
+        saveSessionToKeychain(forDevice: resolved)
+        return String(data: result.plaintext, encoding: .utf8) ?? ""
     }
 
 }

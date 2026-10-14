@@ -4,8 +4,9 @@ import CoreData
 
 /// §B.4: the session heartbeat is addressed to an account and sealed like everything else.
 ///
-/// It was neither. `sendSessionHeartbeat` is reached from `getAllSessionContactIds()` and from
-/// the core's `.sendHeartbeat` action, and both hand it a `CryptoDeviceId`. That id went straight
+/// It was neither. `sendSessionHeartbeat` is reached from `getAllSessionContactIds()` (and was, until
+/// the core's heartbeat was removed on 2026-09-26, from its `.sendHeartbeat` action), and both
+/// hand it a `CryptoDeviceId`. That id went straight
 /// into `Envelope.recipient`, where the server parses a UUID: it got none, `fetch_recipient_device_ids`
 /// returned an empty list, and the envelope was written to a stream keyed by 32 hex characters
 /// that nothing subscribes to. Accepted, acknowledged, delivered nowhere.
@@ -24,10 +25,15 @@ final class HeartbeatAddressingTests: XCTestCase {
 
     override func setUp() {
         super.setUp()
-        context = PersistenceController(inMemory: true).container.viewContext
+        let container = PersistenceController(inMemory: true).container
+        context = container.viewContext
+        LocalRepositories.usePeerDevicesForTesting(CoreDataPeerDeviceStore(container: container))
+        LocalRepositories.useContactsForTesting(container)
     }
 
     override func tearDown() {
+        LocalRepositories.usePeerDevicesForTesting(nil)
+        LocalRepositories.useContactsForTesting(nil)
         context = nil
         super.tearDown()
     }
@@ -37,7 +43,9 @@ final class HeartbeatAddressingTests: XCTestCase {
         let user = User(context: context)
         user.id = id
         user.knownIdentityKey = key
-        try? context.save()
+        user.username = ""
+        user.displayName = ""
+        try! context.save()
         return user
     }
 
@@ -47,7 +55,7 @@ final class HeartbeatAddressingTests: XCTestCase {
         makeContact(id: accountId, key: key)
 
         let device = try XCTUnwrap(SessionAddressing.cryptoIdentity(ofIdentityKey: key))
-        let peer = try XCTUnwrap(SessionAddressing.peer(ofDevice: device, in: context))
+        let peer = try XCTUnwrap(SessionAddressing.peer(ofDevice: device))
 
         XCTAssertEqual(peer.accountId, accountId)
         XCTAssertEqual(peer.identityKey, key)
@@ -72,8 +80,8 @@ final class HeartbeatAddressingTests: XCTestCase {
 
         let deviceA = try XCTUnwrap(SessionAddressing.cryptoIdentity(ofIdentityKey: keyA))
         let deviceB = try XCTUnwrap(SessionAddressing.cryptoIdentity(ofIdentityKey: keyB))
-        let peerA = try XCTUnwrap(SessionAddressing.peer(ofDevice: deviceA, in: context))
-        let peerB = try XCTUnwrap(SessionAddressing.peer(ofDevice: deviceB, in: context))
+        let peerA = try XCTUnwrap(SessionAddressing.peer(ofDevice: deviceA))
+        let peerB = try XCTUnwrap(SessionAddressing.peer(ofDevice: deviceB))
 
         XCTAssertEqual(peerA.accountId, accountA)
         XCTAssertEqual(peerA.identityKey, keyA)
@@ -87,7 +95,7 @@ final class HeartbeatAddressingTests: XCTestCase {
         makeContact(id: "14f28d31-0000-0000-0000-0000000000aa", key: Data(repeating: 0x11, count: 32))
         let stranger = String(repeating: "ab", count: 16)
 
-        XCTAssertNil(SessionAddressing.peer(ofDevice: stranger, in: context))
+        XCTAssertNil(SessionAddressing.peer(ofDevice: stranger))
     }
 
     /// An account id must never resolve to a peer. What this pins is the answer, not the route to
@@ -100,6 +108,6 @@ final class HeartbeatAddressingTests: XCTestCase {
         let accountId = "14f28d31-0000-0000-0000-0000000000aa"
         makeContact(id: accountId, key: Data(repeating: 0x11, count: 32))
 
-        XCTAssertNil(SessionAddressing.peer(ofDevice: accountId, in: context))
+        XCTAssertNil(SessionAddressing.peer(ofDevice: accountId))
     }
 }

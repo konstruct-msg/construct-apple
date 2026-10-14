@@ -34,6 +34,7 @@ final class GRPCChannelManager: Sendable {
     func setCustomServer(host: String, port: Int) {
         UserDefaults.standard.set(host, forKey: Self.customHostKey)
         UserDefaults.standard.set(port, forKey: Self.customPortKey)
+        publishEndpoint()
         invalidatePersistentClient()
         NotificationCenter.default.post(name: .grpcServerChanged, object: nil)
     }
@@ -41,6 +42,7 @@ final class GRPCChannelManager: Sendable {
     func resetToDefaultServer() {
         UserDefaults.standard.removeObject(forKey: Self.customHostKey)
         UserDefaults.standard.removeObject(forKey: Self.customPortKey)
+        publishEndpoint()
         invalidatePersistentClient()
         NotificationCenter.default.post(name: .grpcServerChanged, object: nil)
     }
@@ -64,13 +66,24 @@ final class GRPCChannelManager: Sendable {
         _overrideProxyPortLock.withLock { _overrideProxyPort }
     }
 
+    /// Stores the endpoint this manager connects to where the notification extension reads it
+    /// (`ServerEndpoint`). Called at start and on every server change: the extension cannot
+    /// resolve it, and a stale one would send its fetch to the wrong server.
+    private func publishEndpoint() {
+        _ = KeychainManager.shared.saveData(
+            Data(ServerEndpoint(host: currentHost, port: currentPort).stored.utf8),
+            forKey: KeychainSessionAccounts.serverEndpoint,
+            accessible: KeychainManager.cryptoKeyAccessible
+        )
+    }
+
     private init() {
-        #if !os(macOS)
-        // Resolve GeoIP in the background so relay region preference is ready
-        // before the first connection attempt. Idempotent — uses cached UserDefaults
-        // result on subsequent launches. Desktop skips GeoIP entirely.
-        Task { await GeoIPManager.shared.resolve() }
-        #endif
+        publishEndpoint()
+        VeilProxyStore.publishForExtension(VeilProxyStore.loadMode())
+        // Builds that ran the GeoIP lookup (removed 2026-10-14) kept the public IP a STUN
+        // query returned. Nothing reads it any more, and it should not outlive the code.
+        UserDefaults.standard.removeObject(forKey: "construct.geoip_ip_v1")
+        UserDefaults.standard.removeObject(forKey: "construct.geoip_region_v1")
 
         // Invalidate the persistent connection whenever the network path changes
         // (cellular ↔ WiFi switch, VPN on/off, etc.).  The old TCP connection is dead
@@ -85,10 +98,6 @@ final class GRPCChannelManager: Sendable {
             Log.info("Network path changed — invalidating persistent gRPC connection", category: "gRPC")
             self.invalidatePersistentClient()
             Task {
-                #if !os(macOS)
-                await GeoIPManager.shared.invalidate()
-                await GeoIPManager.shared.resolve()
-                #endif
                 let reachable = NetworkReachabilityManager.shared.isReachable
                 let censored = CensoredNetworkDetector.isCensored
                 let mode = VeilProxyStore.loadMode()
@@ -358,6 +367,10 @@ final class GRPCChannelManager: Sendable {
             )
             return GRPCClient(transport: transport, interceptors: [AuthInterceptor()])
         }
+        guard VeilProxyStore.loadMode().allowsDirectPath else {
+            Log.info("gRPC: VEIL on and no tunnel — not connecting directly", category: "gRPC")
+            throw VeilTunnelNotUp()
+        }
 
         let host = currentHost
         let port = currentPort
@@ -420,6 +433,10 @@ final class GRPCChannelManager: Sendable {
                 }
             )
             return GRPCClient(transport: transport, interceptors: [])
+        }
+        guard VeilProxyStore.loadMode().allowsDirectPath else {
+            Log.info("gRPC sealed: VEIL on and no tunnel — not connecting directly", category: "gRPC")
+            throw VeilTunnelNotUp()
         }
 
         let host = currentHost
@@ -531,6 +548,8 @@ final class GRPCChannelManager: Sendable {
     /// when the experiment is off; callers MUST fall back
     /// to the H2 path (`acquirePersistentClient()`) on `nil` or on any RPC failure.
     func acquireEngineQuicChannel() -> GRPCClient<QuicClientTransport>? {
+        // QUIC is a direct path to the gateway; under VEIL `on` there is none.
+        guard VeilProxyStore.loadMode().allowsDirectPath else { return nil }
         _eqConnLock.lock()
         defer { _eqConnLock.unlock() }
 
@@ -639,33 +658,15 @@ final class GRPCChannelManager: Sendable {
         )
     }
 
-    /// Route an RPC over the unauthenticated sealed channel (`sealed == true`) or the
-    /// authenticated channel. Lets a sensitive read RPC — the prekey bundle fetch that
-    /// precedes a session init — move to the anonymous transport under the Phase-4 flag
-    /// without duplicating the call site. The sealed channel carries no `AuthInterceptor`,
-    /// so no `x-user-id`/Bearer is sent and the server/gateway never learns who is fetching
-    /// whose bundle (closes the session-init correlation leak; see
-    /// construct-docs/client/specs/SEALED_SENDER_PRODUCTION_PLAN.md Phase 6).
-    func performRPC<Result: Sendable>(
-        sealed: Bool,
-        timeout: TimeInterval? = nil,
-        _ operation: @Sendable @escaping (GRPCClient<HTTP2ClientTransport.TransportServices>) async throws -> Result
-    ) async throws -> Result {
-        if sealed {
-            return try await performSealedRPC(timeout: timeout, operation)
-        } else {
-            return try await performRPC(timeout: timeout, operation)
-        }
-    }
-
     /// Execute a gRPC operation on the unauthenticated sealed-sender channel
     /// (stealth-sealed-sender-v2 Phase 2).
     ///
     /// Deliberately simpler than `performRPC`/`GRPCCallExecutor`: there is no auth to
-    /// refresh on this channel, and VEIL-aware relay rotation is left to the message
-    /// layer above (sends already retry there). On a transport failure the sealed
-    /// connection is invalidated and the operation is retried once with a fresh client;
-    /// a second failure propagates to the caller.
+    /// refresh on this channel, and VEIL-aware relay rotation is left to the layer above.
+    /// On a failure the sealed connection is invalidated and the operation is retried once
+    /// with a fresh client; a second failure propagates to the caller. A failure the server
+    /// answered (`sealedFailureKeepsConnection`) propagates at once: the connection worked,
+    /// and a second try would get the same answer.
     func performSealedRPC<Result: Sendable>(
         timeout: TimeInterval? = nil,
         _ operation: @Sendable @escaping (GRPCClient<HTTP2ClientTransport.TransportServices>) async throws -> Result
@@ -692,12 +693,24 @@ final class GRPCChannelManager: Sendable {
                     return try await operation(client)
                 }
             } catch {
+                if Self.sealedFailureKeepsConnection(error) { throw error }
                 lastError = error
                 invalidateSealedPersistentClient()
                 if attempt == 1 { throw error }
             }
         }
         throw lastError ?? NetworkError.connectionFailed
+    }
+
+    /// The server answered — a status such as NOT_FOUND for expired media, or a refused
+    /// token. Until 2026-09-30 every failure replaced the sealed connection and asked again,
+    /// which was harmless while only sends used it; a media download that finds its item
+    /// expired would tear down the channel sends are using, every time.
+    nonisolated static func sealedFailureKeepsConnection(_ error: Error) -> Bool {
+        switch RPCFailureClassifier.classify(error) {
+        case .applicationError, .authRejected: return true
+        default: return false
+        }
     }
 }
 

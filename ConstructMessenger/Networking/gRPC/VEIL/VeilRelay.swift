@@ -90,6 +90,9 @@ struct VeilRelay: Codable, Identifiable {
         self.veilFrontTicket = veilFrontTicket
         self.veilCapabilityV2 = veilCapabilityV2
         self.veilSkHex = veilSkHex
+        // Every front that can be dialled is a `VeilRelay` first: its names leave the logs from
+        // here on (TODO 135).
+        LogRedaction.register(self)
     }
 
     enum CodingKeys: String, CodingKey {
@@ -117,6 +120,7 @@ struct VeilRelay: Codable, Identifiable {
         veilFrontTicket = try? c.decode(String.self, forKey: .veilFrontTicket)
         veilCapabilityV2 = try? c.decode(String.self, forKey: .veilCapabilityV2)
         veilSkHex = try? c.decode(String.self, forKey: .veilSkHex)
+        LogRedaction.register(self)
     }
 
     func encode(to encoder: Encoder) throws {

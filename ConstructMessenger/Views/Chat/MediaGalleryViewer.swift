@@ -6,11 +6,6 @@
 import SwiftUI
 import Combine
 import AVKit
-#if os(iOS)
-import Photos
-#else
-import UniformTypeIdentifiers
-#endif
 
 // MARK: - Shared Image Cache
 
@@ -202,17 +197,43 @@ struct GalleryStartItem: Identifiable {
 
 // MARK: - Flat gallery entry (message + item index)
 
-private struct GalleryEntry: Identifiable {
+struct GalleryEntry: Identifiable {
     let id: String          // "\(messageId)_\(itemIndex)"
-    let message: Message
+    let message: TranscriptRow
     let itemIndex: Int
     let mediaItem: [String: Any]
+
+    /// Expand each message into per-item entries. Images and videos are shown; audio is skipped.
+    static func expand(_ messages: [TranscriptRow]) -> [GalleryEntry] {
+        messages.flatMap { msg -> [GalleryEntry] in
+            guard let mc = parseMediaContent(from: msg.legacyBody), !mc.mediaItems.isEmpty else {
+                return [GalleryEntry(id: "\(msg.id)_0", message: msg, itemIndex: 0, mediaItem: [:])]
+            }
+            return mc.mediaItems.enumerated().compactMap { idx, item in
+                // Show images + videos; skip audio (no visual page for it).
+                if let mimeType = item["mediaType"] as? String,
+                   !mimeType.hasPrefix("image/"), !mimeType.hasPrefix("video/") { return nil }
+                return GalleryEntry(id: "\(msg.id)_\(idx)", message: msg, itemIndex: idx, mediaItem: item)
+            }
+        }.filter { !$0.mediaItem.isEmpty || parseMediaContent(from: $0.message.legacyBody) == nil }
+    }
+
+    var isVideo: Bool { (mediaItem["mediaType"] as? String)?.hasPrefix("video/") == true }
+
+    /// Prefer the tapped album tile; fall back to first page of that message if the index is gone.
+    static func initialId(messageId: String, itemIndex: Int, in messages: [TranscriptRow]) -> String {
+        let preferred = "\(messageId)_\(itemIndex)"
+        let validIds = Set(expand(messages).map(\.id))
+        if validIds.contains(preferred) { return preferred }
+        if validIds.contains("\(messageId)_0") { return "\(messageId)_0" }
+        return preferred
+    }
 }
 
 // MARK: - Gallery Viewer
 
 struct MediaGalleryViewer: View {
-    let messages: [Message]
+    let messages: [TranscriptRow]
     let initialMessageId: String
     let initialItemIndex: Int
     @Binding var isPresented: Bool
@@ -223,51 +244,16 @@ struct MediaGalleryViewer: View {
     enum SaveStatus { case idle, saving, saved, failed }
 
     @State private var dismissOffset: CGFloat = 0
+    /// Video playback speed, remembered across videos and launches — a viewer's preference,
+    /// like the system players keep it.
+    @AppStorage("gallery.videoPlaybackRate") private var videoRate: Double = 1
 
-    /// Expand each message into per-item entries. Images and videos are shown; audio is skipped.
-    private var entries: [GalleryEntry] {
-        messages.flatMap { msg -> [GalleryEntry] in
-            guard let mc = parseMediaContent(from: msg.displayText), !mc.mediaItems.isEmpty else {
-                return [GalleryEntry(id: "\(msg.id)_0", message: msg, itemIndex: 0, mediaItem: [:])]
-            }
-            return mc.mediaItems.enumerated().compactMap { idx, item in
-                // Show images + videos; skip audio (no visual page for it).
-                if let mimeType = item["mediaType"] as? String,
-                   !mimeType.hasPrefix("image/"), !mimeType.hasPrefix("video/") { return nil }
-                return GalleryEntry(id: "\(msg.id)_\(idx)", message: msg, itemIndex: idx, mediaItem: item)
-            }
-        }.filter { !$0.mediaItem.isEmpty || parseMediaContent(from: $0.message.displayText) == nil }
-    }
+    private var entries: [GalleryEntry] { GalleryEntry.expand(messages) }
 
-    private static func isVideoEntry(_ entry: GalleryEntry) -> Bool {
-        (entry.mediaItem["mediaType"] as? String)?.hasPrefix("video/") == true
-    }
-
-    /// Prefer the tapped album tile; fall back to first page of that message if the index is gone.
-    private static func initialEntryId(
-        messageId: String,
-        itemIndex: Int,
-        messages: [Message]
-    ) -> String {
-        let preferred = "\(messageId)_\(itemIndex)"
-        // Build the same id set as `entries` without storing `self` in init.
-        let validIds: Set<String> = Set(messages.flatMap { msg -> [String] in
-            guard let mc = parseMediaContent(from: msg.displayText), !mc.mediaItems.isEmpty else {
-                return ["\(msg.id)_0"]
-            }
-            return mc.mediaItems.enumerated().compactMap { idx, item in
-                if let mimeType = item["mediaType"] as? String,
-                   !mimeType.hasPrefix("image/"), !mimeType.hasPrefix("video/") { return nil }
-                return "\(msg.id)_\(idx)"
-            }
-        })
-        if validIds.contains(preferred) { return preferred }
-        if validIds.contains("\(messageId)_0") { return "\(messageId)_0" }
-        return preferred
-    }
+    private static func isVideoEntry(_ entry: GalleryEntry) -> Bool { entry.isVideo }
 
     init(
-        messages: [Message],
+        messages: [TranscriptRow],
         initialMessageId: String,
         initialItemIndex: Int = 0,
         isPresented: Binding<Bool>
@@ -277,10 +263,10 @@ struct MediaGalleryViewer: View {
         self.initialItemIndex = max(0, initialItemIndex)
         self._isPresented = isPresented
         self._currentEntryId = State(
-            initialValue: Self.initialEntryId(
+            initialValue: GalleryEntry.initialId(
                 messageId: initialMessageId,
                 itemIndex: max(0, initialItemIndex),
-                messages: messages
+                in: messages
             )
         )
     }
@@ -301,6 +287,7 @@ struct MediaGalleryViewer: View {
                                 message: entry.message,
                                 itemIndex: entry.itemIndex,
                                 mediaItem: entry.mediaItem,
+                                rate: videoRate,
                                 dismissOffset: $dismissOffset,
                                 onDismiss: performDismiss
                             )
@@ -326,7 +313,7 @@ struct MediaGalleryViewer: View {
             HStack(alignment: .center) {
                 Button { isPresented = false } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .font(CTFont.regular(20))
+                        .font(CTFont.ui(20))
                         .foregroundColor(.white.opacity(0.9))
                         .frame(width: CTLayout.hitTarget, height: CTLayout.hitTarget)
                         .contentShape(Rectangle())
@@ -337,15 +324,17 @@ struct MediaGalleryViewer: View {
 
                 if entries.count > 1 {
                     Text("\(currentPosition) / \(entries.count)")
-                        .font(CTFont.medium(13))
+                        .font(CTFont.mono(13, weight: .medium))
                         .foregroundColor(.white.opacity(0.8))
                 }
 
                 Spacer()
 
+                if currentIsVideo { speedMenu }
+
                 Button { shareCurrentImage() } label: {
                     Image(systemName: "ellipsis.circle.fill")
-                        .font(CTFont.regular(20))
+                        .font(CTFont.ui(20))
                         .foregroundColor(.white.opacity(0.9))
                         .frame(width: CTLayout.hitTarget, height: CTLayout.hitTarget)
                         .contentShape(Rectangle())
@@ -368,6 +357,32 @@ struct MediaGalleryViewer: View {
         .opacity(Double(1.0 - dismissOffset / 350))
         // Drag-to-dismiss is driven per-page (only when not zoomed, vertical-dominant) so
         // it never competes with TabView horizontal paging or pinch-pan. See MediaGalleryPage.
+    }
+
+    private var currentIsVideo: Bool {
+        entries.first { $0.id == currentEntryId }.map(Self.isVideoEntry) ?? false
+    }
+
+    /// 1× / 1.5× / 2×. A native menu: the system player's own controls offer no speed here.
+    private var speedMenu: some View {
+        Menu {
+            Picker(selection: $videoRate) {
+                ForEach(GalleryVideoPage.rates, id: \.self) { rate in
+                    Text(GalleryVideoPage.label(for: rate)).tag(rate)
+                }
+            } label: {
+                Text(LocalizedStringKey("playback_speed"))
+            }
+        } label: {
+            Text(GalleryVideoPage.label(for: videoRate))
+                .font(CTFont.ui(14, weight: .semibold))
+                .monospacedDigit()
+                .foregroundColor(.white.opacity(0.9))
+                .frame(minWidth: CTLayout.hitTarget, minHeight: CTLayout.hitTarget)
+                .contentShape(Rectangle())
+        }
+        .accessibilityLabel(Text(LocalizedStringKey("playback_speed")))
+        .accessibilityValue(Text(GalleryVideoPage.label(for: videoRate)))
     }
 
     /// Animate the whole gallery off-screen, then dismiss. Called by a page's
@@ -407,38 +422,10 @@ struct MediaGalleryViewer: View {
               !Self.isVideoEntry(entry),
               let img = MediaImageCache.shared.original(for: entry.message.id, at: entry.itemIndex) else { return }
         saveStatus = .saving
-
-        #if os(iOS)
-        PHPhotoLibrary.requestAuthorization(for: .addOnly) { status in
-            DispatchQueue.main.async {
-                guard status == .authorized || status == .limited else {
-                    saveStatus = .failed
-                    resetSaveStatus()
-                    return
-                }
-                UIImageWriteToSavedPhotosAlbum(img, nil, nil, nil)
-                saveStatus = .saved
-                resetSaveStatus()
-            }
+        Task { @MainActor in
+            saveStatus = await MediaSaver.save(img) ? .saved : .failed
+            resetSaveStatus()
         }
-        #else
-        if let tiffData = img.tiffRepresentation,
-           let bitmapRep = NSBitmapImageRep(data: tiffData),
-           let pngData = bitmapRep.representation(using: .png, properties: [:]) {
-            let panel = NSSavePanel()
-            panel.allowedContentTypes = [.png]
-            panel.nameFieldStringValue = "image.png"
-            if panel.runModal() == .OK, let url = panel.url {
-                try? pngData.write(to: url)
-                saveStatus = .saved
-            } else {
-                saveStatus = .failed
-            }
-        } else {
-            saveStatus = .failed
-        }
-        resetSaveStatus()
-        #endif
     }
 
     private func resetSaveStatus() {
@@ -462,7 +449,7 @@ struct MediaGalleryViewer: View {
 // MARK: - Gallery Page
 
 struct MediaGalleryPage: View {
-    let message: Message
+    let message: TranscriptRow
     let itemIndex: Int
     let mediaItem: [String: Any]
     /// Shared with the gallery container — drives the drag-to-dismiss offset/opacity.
@@ -479,9 +466,6 @@ struct MediaGalleryPage: View {
     @State private var lastOffset: CGSize = .zero
 
     var body: some View {
-        guard !message.isDeleted, message.managedObjectContext != nil else {
-            return AnyView(Color.black)
-        }
         return AnyView(GeometryReader { geo in
             ZStack {
                 Color.black
@@ -511,10 +495,10 @@ struct MediaGalleryPage: View {
                         .tint(.white)
                         .scaleEffect(1.5)
                 } else {
-                    Text("[img]")
-                        .font(CTFont.regular(28))
-                        .foregroundColor(.white.opacity(0.3))
-                        .lineLimit(1).fixedSize()
+                    Image(systemName: "photo")
+                        .font(CTIcon.font(CTIcon.overlay, weight: .light))
+                        .foregroundStyle(.white.opacity(0.3))
+                        .accessibilityHidden(true)
                 }
             }
         }
@@ -572,8 +556,6 @@ struct MediaGalleryPage: View {
     // MARK: Loading
 
     private func loadImage() {
-        guard !message.isDeleted, message.managedObjectContext != nil else { return }
-
         // Already cached
         if let cached = MediaImageCache.shared.original(for: message.id, at: itemIndex) {
             image = cached
@@ -596,8 +578,8 @@ struct MediaGalleryPage: View {
         // Download using mediaItem dict (already extracted from JSON by caller); for our own sends
         // this resolves from cache without touching the network.
         let item = mediaItem.isEmpty
-            ? (parseMediaContent(from: message.displayText)?.mediaItems.indices.contains(itemIndex) == true
-               ? parseMediaContent(from: message.displayText)!.mediaItems[itemIndex]
+            ? (parseMediaContent(from: message.legacyBody)?.mediaItems.indices.contains(itemIndex) == true
+               ? parseMediaContent(from: message.legacyBody)!.mediaItems[itemIndex]
                : [:])
             : mediaItem
 
@@ -675,9 +657,18 @@ private struct DragToDismiss: ViewModifier {
 /// Full-screen video playback page. Downloads + decrypts the clip to a temp file (AVPlayer
 /// needs a URL), showing download progress, then autoplays with native transport controls.
 struct GalleryVideoPage: View {
-    let message: Message
+    let message: TranscriptRow
     let itemIndex: Int
     let mediaItem: [String: Any]
+    /// Playback speed; applied to the player whenever it changes.
+    var rate: Double = 1
+
+    static let rates: [Double] = [1, 1.5, 2]
+
+    /// "1×", "1.5×" — the number in the reader's locale.
+    static func label(for rate: Double) -> String {
+        rate.formatted(.number.precision(.fractionLength(0...1))) + "×"
+    }
     @Binding var dismissOffset: CGFloat
     let onDismiss: () -> Void
 
@@ -688,9 +679,6 @@ struct GalleryVideoPage: View {
     @State private var failed = false
 
     var body: some View {
-        guard !message.isDeleted, message.managedObjectContext != nil else {
-            return AnyView(Color.black)
-        }
         return AnyView(
             ZStack {
                 Color.black.ignoresSafeArea()
@@ -700,8 +688,8 @@ struct GalleryVideoPage: View {
                 } else if failed {
                     Button { load(forceRetry: true) } label: {
                         VStack(spacing: 10) {
-                            Image(systemName: "arrow.clockwise").font(.system(size: 28))
-                            Text(LocalizedStringKey("retry")).font(CTFont.regular(13))
+                            Image(systemName: "arrow.clockwise").font(CTIcon.font(CTIcon.overlay, weight: .regular))
+                            Text(LocalizedStringKey("retry")).font(CTFont.body)
                         }
                         .foregroundColor(.white.opacity(0.85))
                     }
@@ -711,17 +699,25 @@ struct GalleryVideoPage: View {
                         ProgressView().tint(.white).scaleEffect(1.3)
                         if progress > 0 {
                             Text("\(Int(progress * 100))%")
-                                .font(CTFont.regular(13)).foregroundColor(.white.opacity(0.8)).monospacedDigit()
+                                .font(CTFont.mono(13)).foregroundColor(.white.opacity(0.8)).monospacedDigit()
                         }
                     }
                 }
             }
             .modifier(DragToDismiss(dismissOffset: $dismissOffset, isEnabled: true, onDismiss: onDismiss))
             .onAppear { load() }
+            .onChange(of: rate) { _, rate in apply(rate) }
             .onDisappear {
                 player?.pause()
             }
         )
+    }
+
+    /// `defaultRate` is what `play()` starts at; a playing player also moves now.
+    private func apply(_ rate: Double) {
+        guard let player else { return }
+        player.defaultRate = Float(rate)
+        if player.rate != 0 { player.rate = Float(rate) }
     }
 
     private func load(forceRetry: Bool = false) {
@@ -733,13 +729,14 @@ struct GalleryVideoPage: View {
             let cachedPlayer = AVPlayer(url: cachedURL)
             tempURL = cachedURL
             player = cachedPlayer
+            apply(rate)
             cachedPlayer.play()
             return
         }
 
         let item = mediaItem.isEmpty
-            ? (parseMediaContent(from: message.displayText)?.mediaItems.indices.contains(itemIndex) == true
-               ? parseMediaContent(from: message.displayText)!.mediaItems[itemIndex]
+            ? (parseMediaContent(from: message.legacyBody)?.mediaItems.indices.contains(itemIndex) == true
+               ? parseMediaContent(from: message.legacyBody)!.mediaItems[itemIndex]
                : [:])
             : mediaItem
 
@@ -772,6 +769,7 @@ struct GalleryVideoPage: View {
                     tempURL = url
                     player = p
                     isLoading = false
+                    apply(rate)
                     p.play()
                 }
                 await Self.cacheFirstFramePoster(from: url, messageId: message.id, itemIndex: itemIndex)

@@ -36,12 +36,17 @@ final class DeviceDeliveryPlanTests: XCTestCase {
         )
     }
 
+    /// The recipient side of the plan is built from the local device set, not from bundles.
+    private func device(_ deviceId: String) -> PlannedRecipientDevice {
+        PlannedRecipientDevice(bundle(deviceId))
+    }
+
     // MARK: - Who is a target
 
     /// The ordinary case: the person we write to has two devices, we have one replica.
     func testEveryDeviceOnBothSidesGetsACopy() {
         let targets = DeviceDeliveryPlan.targets(
-            recipientDevices: [bundle("r1"), bundle("r2")],
+            recipientDevices: [device("r1"), device("r2")],
             ownDevices: [bundle("me"), bundle("mine2")],
             ourDeviceId: "me",
             recipientIsSelf: false
@@ -75,7 +80,7 @@ final class DeviceDeliveryPlanTests: XCTestCase {
     func testNoOwnDeviceIdMeansNoReplicaCopies() {
         for ourId in [nil, ""] {
             let targets = DeviceDeliveryPlan.targets(
-                recipientDevices: [bundle("r1")],
+                recipientDevices: [device("r1")],
                 ownDevices: [bundle("me"), bundle("mine2")],
                 ourDeviceId: ourId,
                 recipientIsSelf: false
@@ -90,7 +95,7 @@ final class DeviceDeliveryPlanTests: XCTestCase {
     /// Mutation: drop the `recipientIsSelf` early return — the replica appears twice, this reddens.
     func testWritingToOurselvesPlansEachReplicaOnce() {
         let targets = DeviceDeliveryPlan.targets(
-            recipientDevices: [bundle("me"), bundle("mine2")],
+            recipientDevices: [device("me"), device("mine2")],
             ownDevices: [bundle("me"), bundle("mine2")],
             ourDeviceId: "me",
             recipientIsSelf: true
@@ -102,7 +107,7 @@ final class DeviceDeliveryPlanTests: XCTestCase {
     /// A single-device account on both sides still plans the one real target.
     func testASingleDeviceRecipientIsStillATarget() {
         let targets = DeviceDeliveryPlan.targets(
-            recipientDevices: [bundle("r1")],
+            recipientDevices: [device("r1")],
             ownDevices: [bundle("me")],
             ourDeviceId: "me",
             recipientIsSelf: false
@@ -114,7 +119,7 @@ final class DeviceDeliveryPlanTests: XCTestCase {
     /// asserts on a set cannot notice when it stops.
     func testRecipientCopiesComeBeforeOwnReplicas() {
         let targets = DeviceDeliveryPlan.targets(
-            recipientDevices: [bundle("r1")],
+            recipientDevices: [device("r1")],
             ownDevices: [bundle("me"), bundle("mine2")],
             ourDeviceId: "me",
             recipientIsSelf: false
@@ -123,38 +128,111 @@ final class DeviceDeliveryPlanTests: XCTestCase {
         XCTAssertEqual(targets.last?.audience, .ownReplica)
     }
 
-    /// The primary send already reached the device the recipient's pinned key names, and after
-    /// the addressing flip that is the *same session* a per-device copy would use. Planning one
-    /// would put two ciphertexts of one message through one ratchet, and the peer would render it
-    /// twice.
+    /// There is no primary send, so there is no device the plan leaves out for it: every device
+    /// of the recipient is a target, in the order the set gives them.
     ///
-    /// Mutation: drop the `primarySendCovered` filter — this reddens.
-    func testTheDeviceThePrimarySendReachedIsNotPlannedAgain() {
+    /// Until 2026-09-22 the plan subtracted `primarySendCovered` — the device the ordinary send
+    /// had reached by the pinned key — which is what made one of the recipient's devices a
+    /// different kind of recipient from the others. The parameter is gone from the core as well
+    /// now, so the guard below is on the name rather than on its value.
+    ///
+    /// Mutation: drop a recipient device from the plan — this reddens.
+    func testEveryRecipientDeviceIsPlannedAndNoneIsPrivileged() {
         let targets = DeviceDeliveryPlan.targets(
-            recipientDevices: [bundle("r1"), bundle("r2"), bundle("r3")],
+            recipientDevices: [device("r1"), device("r2"), device("r3")],
             ownDevices: [bundle("me")],
             ourDeviceId: "me",
-            recipientIsSelf: false,
-            primarySendCovered: "r2"
+            recipientIsSelf: false
         )
-        XCTAssertEqual(targets.map(\.deviceId), ["r1", "r3"])
+        XCTAssertEqual(targets.map(\.deviceId), ["r1", "r2", "r3"])
     }
 
-    /// Not knowing which device the primary send reached must not silently drop a target: the
-    /// cost of one extra copy is a failed decrypt, the cost of a missing one is a device that
-    /// never sees the message.
-    func testAnUnknownPrimaryTargetPlansEveryDevice() {
-        for covered in [nil, ""] {
-            let targets = DeviceDeliveryPlan.targets(
-                recipientDevices: [bundle("r1"), bundle("r2")],
-                ownDevices: [],
-                ourDeviceId: "me",
-                recipientIsSelf: false,
-                primarySendCovered: covered
-            )
-            XCTAssertEqual(targets.map(\.deviceId), ["r1", "r2"],
-                           "primarySendCovered = \(String(describing: covered))")
+    /// A target from the local set carries the device's identity key and no bundle; one from a
+    /// fetch carries both. The sender opens a session from the bundle only when it has none, so
+    /// a missing bundle is the ordinary shape, not a defect.
+    func testALocalDeviceCarriesItsKeyAndNoBundle() {
+        let key = Curve25519.KeyAgreement.PrivateKey().publicKey.rawRepresentation
+        let targets = DeviceDeliveryPlan.targets(
+            recipientDevices: [PlannedRecipientDevice(deviceId: "r1", identityPublic: key), device("r2")],
+            ownDevices: [],
+            ourDeviceId: "me",
+            recipientIsSelf: false
+        )
+        XCTAssertEqual(targets.map(\.deviceId), ["r1", "r2"])
+        XCTAssertEqual(targets[0].identityPublic, key)
+        XCTAssertNil(targets[0].bundle)
+        XCTAssertNotNil(targets[1].bundle)
+        XCTAssertEqual(targets[1].identityPublic, targets[1].bundle?.identityPublic)
+    }
+
+    /// The source guard for the above: nothing in the app names a covered device at all. The
+    /// parameter no longer exists in the core, so a line mentioning it is either a call that will
+    /// not compile or the primary send being written back in by hand.
+    func testNothingInTheAppNamesACoveredDevice() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("ConstructMessenger")
+        var sites: [String] = []
+        let walker = FileManager.default.enumerator(at: root, includingPropertiesForKeys: nil)
+        while let url = walker?.nextObject() as? URL {
+            guard url.pathExtension == "swift", url.lastPathComponent != "construct_core.swift" else { continue }
+            guard let text = try? String(contentsOf: url, encoding: .utf8) else { continue }
+            for line in text.split(separator: "\n") where line.contains("primarySendCovered:") {
+                let t = line.trimmingCharacters(in: .whitespaces)
+                guard !t.hasPrefix("//") else { continue }
+                sites.append("\(url.lastPathComponent): \(t)")
+            }
         }
+        XCTAssertEqual(sites, [], "\(sites)")
+    }
+
+    // MARK: - Where the device set comes from
+
+    /// The device the peer linked after we pinned their set. Nothing local names it — it has never
+    /// written to us — so if the directory's answer does not enter the plan, it never gets a copy.
+    ///
+    /// Mutation: return `local` unconditionally — this reddens.
+    func testADeviceOnlyTheDirectoryKnowsIsPlanned() {
+        let known = device("r1")
+        let newlyLinked = bundle("r2")
+        let merged = PlannedRecipientDevice.merge(local: [known], directory: [newlyLinked])
+        XCTAssertEqual(merged.map(\.deviceId), ["r1", "r2"])
+    }
+
+    /// A device we hold and the directory does not name is **kept**. The answer is narrowed by the
+    /// request and again by this client dropping a device whose hybrid-PQ bundle failed to verify;
+    /// that device is alive and we may hold a live session with it. Only `active_devices` removes
+    /// a device, in `reconcileDevices`.
+    ///
+    /// Mutation: build the result from `directory` alone — this reddens.
+    func testADeviceTheDirectoryDidNotNameIsKept() {
+        // A row as the send path builds it from `PeerDevice`: a key, no bundle.
+        let held = PlannedRecipientDevice(deviceId: "r1", identityPublic: Data(repeating: 7, count: 32))
+        let merged = PlannedRecipientDevice.merge(local: [held], directory: [bundle("r2")])
+        XCTAssertEqual(merged.map(\.deviceId), ["r1", "r2"])
+        XCTAssertNil(merged.first { $0.deviceId == "r1" }?.bundle, "the local row is carried as it is")
+    }
+
+    /// Where both name a device, the directory entry wins — it carries the bundle, and a caller
+    /// with one opens a session without a second fetch.
+    func testTheDirectoryEntryCarriesTheBundleForADeviceWeAlreadyHold() {
+        let merged = PlannedRecipientDevice.merge(local: [device("r1")], directory: [bundle("r1")])
+        XCTAssertEqual(merged.map(\.deviceId), ["r1"])
+        XCTAssertNotNil(merged.first?.bundle)
+    }
+
+    /// No answer from the key server is not an empty device set: it is no answer. Planning from
+    /// nothing would drop every copy to a peer whose bundles are momentarily unavailable.
+    func testAnEmptyDirectoryLeavesTheLocalSetAlone() {
+        let merged = PlannedRecipientDevice.merge(local: [device("r1"), device("r2")], directory: [])
+        XCTAssertEqual(merged.map(\.deviceId), ["r1", "r2"])
+    }
+
+    /// First contact: nothing local, and the plan is the account's devices — all of them.
+    func testFirstContactPlansEveryDeviceTheDirectoryNames() {
+        let merged = PlannedRecipientDevice.merge(local: [], directory: [bundle("r1"), bundle("r2")])
+        XCTAssertEqual(merged.map(\.deviceId), ["r1", "r2"])
+        XCTAssertTrue(merged.allSatisfy { $0.bundle != nil })
     }
 
     // MARK: - What the copy says out loud

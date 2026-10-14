@@ -26,25 +26,23 @@ struct DeviceLinkShowQRView: View {
     @State private var receiveUserId: String = ""
 
     var body: some View {
-        NavigationStack {
-            VStack(spacing: 0) {
-                CTNavBar(
-                    title: NSLocalizedString("device_link_request_title", comment: ""),
-                    showBack: true,
-                    backAction: { vm.cancelPolling(); dismiss() }
-                ) {
-                    EmptyView()
-                } trailing: {
-                    EmptyView()
-                }
-                Rectangle().fill(Color.CT.noise).frame(height: 1)
-
-                content
+        content
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color.CT.bg.ignoresSafeArea())
+        .screenTitle(NSLocalizedString("device_link_request_title", comment: ""))
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                CloseButton { vm.cancelPolling(); dismiss() }
             }
-            .background(Color.CT.bg.ignoresSafeArea())
         }
         .task { await vm.generateJoinRequestQR() }
-        .onDisappear { vm.cancelPolling() }
+        // The join request saves keys the server does not know until the phone approves; a
+        // restore in that window reads "Device not found" and replaces this screen with recovery.
+        .onAppear { authViewModel.isRegistrationInProgress = true }
+        .onDisappear {
+            vm.cancelPolling()
+            authViewModel.isRegistrationInProgress = false
+        }
         .alert(vm.errorMessage ?? "", isPresented: $showError) {
             Button(LocalizedStringKey("ok"), role: .cancel) { vm.errorMessage = nil }
             Button(LocalizedStringKey("device_link_refresh")) {
@@ -77,6 +75,7 @@ struct DeviceLinkShowQRView: View {
                     dismiss()
                 }
             )
+            .sheetNavigation(closes: false)
             .environment(\.managedObjectContext, PersistenceController.shared.container.viewContext)
                 .onDisappear {
                     authViewModel.clearDeviceLinkPhase()
@@ -104,11 +103,11 @@ struct DeviceLinkShowQRView: View {
             VStack(spacing: CTLayout.sectionGap) {
                 HStack(spacing: 6) {
                     Text(">")
-                        .font(CTFont.bold(11))
-                        .foregroundColor(Color.CT.accentDim)
+                        .font(CTFont.badge)
+                        .foregroundColor(Color.CT.accent)
                     Text(NSLocalizedString("device_link_section", comment: "").uppercased())
-                        .font(CTFont.bold(11))
-                        .foregroundColor(Color.CT.accentDim)
+                        .font(CTFont.badge)
+                        .foregroundColor(Color.CT.accent)
                         .tracking(2)
                     Spacer()
                 }
@@ -116,7 +115,7 @@ struct DeviceLinkShowQRView: View {
                 .padding(.top, CTLayout.sectionGap)
 
                 Text(NSLocalizedString("device_link_request_instruction", comment: ""))
-                    .font(CTFont.regular(13))
+                    .font(CTFont.body)
                     .foregroundColor(Color.CT.textDim)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, CTLayout.sectionGap)
@@ -136,7 +135,7 @@ struct DeviceLinkShowQRView: View {
                             ? "device_link_waiting_approval"
                             : "device_link_request_steps"
                     ))
-                    .font(CTFont.regular(11))
+                    .font(CTFont.caption)
                     .foregroundColor(Color.CT.textDim)
                     .multilineTextAlignment(.center)
                 }

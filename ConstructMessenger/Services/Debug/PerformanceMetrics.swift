@@ -184,6 +184,15 @@ enum MetricEvent: String {
     /// handshake, and its largest single contributor was the peer's own `session_ready`.
     case confirmHold = "confirm_hold"
 
+    /// A message with no session arrived without its sending device named — no sender certificate
+    /// (an identified delivery) and no wire-id tag we could read. `label` = what stood in for the
+    /// name: `pinned` (the account's pinned device) or `none` (a true first contact).
+    ///
+    /// Counted ahead of `decisions/first-contact-queue-keyed-by-claimed-device.md`, which keys the
+    /// core's queue by the named device and refuses `none` instead of guessing. The code says
+    /// only TUI and a DEBUG stealth override produce it; this is what says so in the field.
+    case firstContactUnattributed = "first_contact_unattributed"
+
     /// The confirm hold hit its per-peer cap (100) and a message was genuinely dropped. This is
     /// the only losing branch left in the hold path, so it is the one that must be loud — the
     /// distinction rule 1a exists for: `confirmHold` is "not yet", this is "never".
@@ -227,21 +236,19 @@ enum MetricEvent: String {
     /// second device linked at 11:14, the single bundle fetch after it timed out at 11:18, there
     /// was no retry, and the copy simply never existed.
     ///
-    /// `label` = why, a closed set of five:
-    /// `bundle_fetch_failed` (the fetch threw — the 2026-08-28 shape) · `no_bundles` (it returned
-    /// an empty list) · `send_failed` (one device's send threw, the others still went) ·
-    /// `no_sender_device` · `no_chunks`.
+    /// `label` = why, a closed set of three since 2026-09-22:
+    /// `send_failed` (a device's copy did not go — no session and no bundle for it, the encrypt,
+    /// the transport, or a server refusal; one per device, from `OutboundMessagePipeline`, which
+    /// is now the only place a recipient device is reached) · `retry_send_failed` (a whole retry
+    /// attempt threw before or across every device) · `sync_send_failed` (a device of *ours*,
+    /// SENDER_SYNC — labelled apart because "the peer never saw it" and "my iPad never saw it"
+    /// are different failures with the same shape).
     ///
-    /// **Counts occurrences, not devices**, and the distinction is the point rather than a
-    /// shortcut: on `send_failed` the loop knows exactly which device it lost, but on the three
-    /// fetch-side reasons the call that would have named the devices is the one that failed, so a
-    /// device count there could only be a guess dressed as a measurement. The log line beside each
-    /// one carries how many devices we believe the account has, from `PeerDevice`, which is a
-    /// belief and is written as one.
-    ///
-    /// Not recorded when the plan is legitimately empty — a single-device recipient the primary
-    /// send already covered is the overwhelmingly common case and is not a skip. Keeping those
-    /// apart is why "no targets" logs at `debug` and does not come here.
+    /// Until then it had five, three of them fetch-side (`bundle_fetch_failed`, `no_bundles`, …)
+    /// that counted occurrences rather than devices because the call that would have named the
+    /// devices was the one that failed. The device set comes from `PeerDevice` now and a bundle is
+    /// fetched per device that needs one, so every loss is a named device and the count is a
+    /// device count.
     case fanoutDeviceSkipped = "fanout_device_skipped"
 
     /// A copy owed to a recipient's device will never be sent, and the queue has stopped trying.
@@ -260,23 +267,6 @@ enum MetricEvent: String {
     /// `not_retryable` (the retry hit a missing device id or an empty chunk plan — not a transport
     /// failure, so trying again would meet the same wall).
     case fanoutRetryGaveUp = "fanout_retry_gave_up"
-
-    /// An incoming message was tried against more than one of the sender's device sessions.
-    ///
-    /// A peer's account has several devices and each has its own ratchet, so "which session
-    /// decrypts this" has as many answers as they have devices. Until 2026-08-31 it had exactly
-    /// one, and a message from the second device failed AEAD against the first device's session —
-    /// indistinguishable from a broken session, and treated as one.
-    ///
-    /// `label` = `attemptN` when the Nth device opened it · `exhausted` when none did. Recorded
-    /// only when the walk actually went past the first candidate, so a single-device account —
-    /// the overwhelming majority — contributes nothing and the count reads as "how often does
-    /// multi-device cost us an extra attempt".
-    ///
-    /// This is the number that prices §D. Naming the sending device on the wire removes the walk;
-    /// until then this says what the walk is worth. A rising `exhausted` means something other
-    /// than device choice is wrong, because every session we hold was tried.
-    case decryptDeviceWalk = "decrypt_device_walk"
 
     /// A sealed envelope that names one of our **other** devices, dropped without an unseal
     /// attempt.
@@ -378,12 +368,6 @@ enum MetricEvent: String {
     /// purpose: the previous behaviour (answer from a detached Task, discard the verdict) could
     /// consume the core's buffered message and throw its routing decision away. `label` = handler.
     case ackCheckOutsideRouter = "ack_check_outside_router"
-
-    /// Rust asked us to tell the user's other devices that a session was reset, and we did not —
-    /// the feature has no consumer (see `MultiDeviceSendCoordinator.broadcastSessionReset`).
-    /// Counted so the gap is a number rather than a silent no-op: this is how often a working
-    /// implementation would have fired, which is what decides whether it is worth building.
-    case linkedDeviceResetNotifyUnimplemented = "linked_device_reset_notify_unimplemented"
 
     /// A terminal disposition that did NOT put the message in front of the user: dropped,
     /// undecryptable, superseded, or given up on. No receipt is sent — the stream cursor

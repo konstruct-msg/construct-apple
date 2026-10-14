@@ -10,42 +10,45 @@ import SwiftUI
 struct MessageBubble: View {
     /// Observed so the view re-renders when deliveryStatusRaw (or any @NSManaged property) changes.
     /// NSManagedObject conforms to ObservableObject via KVO, so SwiftUI subscribes automatically.
-    @ObservedObject var message: Message
+    let message: TranscriptRow
     let isLastInGroup: Bool
     let isSelected: Bool
     let isEditMode: Bool
-    let onRetry: ((Message) -> Void)?
-    let onReply: ((Message) -> Void)?
-    let onDelete: ((Message) -> Void)?
-    let onSelect: ((Message) -> Void)?
-    let onEnterSelectMode: ((Message) -> Void)?
+    let onRetry: ((TranscriptRow) -> Void)?
+    let onReply: ((TranscriptRow) -> Void)?
+    let onDelete: ((TranscriptRow) -> Void)?
+    let onSelect: ((TranscriptRow) -> Void)?
+    let onEnterSelectMode: ((TranscriptRow) -> Void)?
     /// Media open — second argument is the album tile index (0 for single-item).
-    let onTapMedia: ((Message, Int) -> Void)?
-    let onEdit: ((Message) -> Void)?
+    let onTapMedia: ((TranscriptRow, Int) -> Void)?
+    let onEdit: ((TranscriptRow) -> Void)?
     /// Called when the user chooses "Quote & Reply" — provides the message and the selected quote text.
-    let onReplyWithQuote: ((Message, String) -> Void)?
+    let onReplyWithQuote: ((TranscriptRow, String) -> Void)?
     /// Tap on the in-bubble reply strip — jump to the parent message and soft-focus the pair.
-    let onJumpToReply: ((Message) -> Void)?
+    let onJumpToReply: ((TranscriptRow) -> Void)?
     /// Double-tap like / badge tap. Second argument is the emoji (`ReactionReducer.likeEmoji` on double-tap).
-    let onReact: ((Message, String) -> Void)?
+    let onReact: ((TranscriptRow, String) -> Void)?
+    /// "Forward" — the host asks where to (`ForwardPickerView`).
+    let onForward: ((TranscriptRow) -> Void)?
 
     @Environment(\.containerWidth) var containerWidth
 
     init(
-        message: Message,
+        message: TranscriptRow,
         isLastInGroup: Bool = true,
         isSelected: Bool = false,
         isEditMode: Bool = false,
-        onRetry: ((Message) -> Void)? = nil,
-        onReply: ((Message) -> Void)? = nil,
-        onDelete: ((Message) -> Void)? = nil,
-        onSelect: ((Message) -> Void)? = nil,
-        onEnterSelectMode: ((Message) -> Void)? = nil,
-        onTapMedia: ((Message, Int) -> Void)? = nil,
-        onEdit: ((Message) -> Void)? = nil,
-        onReplyWithQuote: ((Message, String) -> Void)? = nil,
-        onJumpToReply: ((Message) -> Void)? = nil,
-        onReact: ((Message, String) -> Void)? = nil
+        onRetry: ((TranscriptRow) -> Void)? = nil,
+        onReply: ((TranscriptRow) -> Void)? = nil,
+        onDelete: ((TranscriptRow) -> Void)? = nil,
+        onSelect: ((TranscriptRow) -> Void)? = nil,
+        onEnterSelectMode: ((TranscriptRow) -> Void)? = nil,
+        onTapMedia: ((TranscriptRow, Int) -> Void)? = nil,
+        onEdit: ((TranscriptRow) -> Void)? = nil,
+        onReplyWithQuote: ((TranscriptRow, String) -> Void)? = nil,
+        onJumpToReply: ((TranscriptRow) -> Void)? = nil,
+        onReact: ((TranscriptRow, String) -> Void)? = nil,
+        onForward: ((TranscriptRow) -> Void)? = nil
     ) {
         self.message = message
         self.isLastInGroup = isLastInGroup
@@ -61,5 +64,6 @@ struct MessageBubble: View {
         self.onReplyWithQuote = onReplyWithQuote
         self.onJumpToReply = onJumpToReply
         self.onReact = onReact
+        self.onForward = onForward
     }
 }

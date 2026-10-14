@@ -140,7 +140,7 @@ final class ContentTypeConformanceTests: XCTestCase {
 
     /// The narrowest of the five and the one with a privacy consequence: `SealedInner` is a
     /// plaintext proto the relay parses, so a value that appears here is a value the server can
-    /// read off every sealed send. Only 0 (absence), 21 and 24 may.
+    /// read off every sealed send. Only 0 (absence), 24 and 28 may (21 until 2026-09-27).
     ///
     /// Mutation: return `.e2EeSignal` from `SealedEnvelopeType.generic` — the server can again
     /// tell conversation from control, which is what 2026-08-17 found.

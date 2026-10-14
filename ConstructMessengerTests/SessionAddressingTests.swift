@@ -19,7 +19,7 @@ final class SessionAddressingTests: XCTestCase {
     override func setUp() {
         super.setUp()
         identityKey = Curve25519.KeyAgreement.PrivateKey().publicKey.rawRepresentation
-        expectedDeviceId = deriveDeviceId(identityPublicKey: [UInt8](identityKey))
+        expectedDeviceId = deriveDeviceId(identityPublicKey: identityKey)
         SessionAddressing.pinnedIdentityKeyOverrideForTesting = { [identityKey, userId] asked in
             asked == userId ? identityKey : nil
         }
@@ -56,18 +56,18 @@ final class SessionAddressingTests: XCTestCase {
     ///
     /// Mutation: return the input unchanged — this reddens.
     func testAUserIdResolvesToThePinnedDevice() {
-        XCTAssertEqual(SessionAddressing.contactId(forPeer: userId), expectedDeviceId)
+        XCTAssertEqual(SessionAddressing.pinnedDevice(ofPeer: userId), expectedDeviceId)
     }
 
     /// The per-device paths already hold a device id when they reach the seam, and it must come
     /// out the same.
     ///
-    /// This pins the value, not the branch: dropping the pass-through in `contactId(forPeer:)`
+    /// This pins the value, not the branch: dropping the pass-through in `pinnedDevice(ofPeer:)`
     /// reddens nothing, because a device id has no `User` row and the resolution below returns it
     /// unchanged anyway. That branch is a fetch the receive path does not take, and it is
     /// documented as such rather than given a test that cannot fail.
     func testADeviceIdPassesThroughUnchanged() {
-        XCTAssertEqual(SessionAddressing.contactId(forPeer: expectedDeviceId), expectedDeviceId)
+        XCTAssertEqual(SessionAddressing.pinnedDevice(ofPeer: expectedDeviceId), expectedDeviceId)
     }
 
     /// No pinned key means we have never verified this contact — the same state in which no
@@ -81,16 +81,16 @@ final class SessionAddressingTests: XCTestCase {
     /// Mutation: return the input for an unknown peer — this reddens.
     func testAnUnpinnedPeerIsNamedByNothingAtAll() {
         let stranger = "8c1f0b2e-0000-4000-8000-000000000001"
-        XCTAssertNil(SessionAddressing.contactId(forPeer: stranger))
+        XCTAssertNil(SessionAddressing.pinnedDevice(ofPeer: stranger))
         XCTAssertNil(SessionAddressing.cryptoIdentity(ofUser: stranger))
     }
 
     /// Translation is idempotent, which is what lets the seam sit at several layers at once —
     /// `restoreSession` translates, and so does the `encryptMessage` that called it.
     func testTranslatingTwiceIsTranslatingOnce() {
-        let once = try? XCTUnwrap(SessionAddressing.contactId(forPeer: userId))
+        let once = try? XCTUnwrap(SessionAddressing.pinnedDevice(ofPeer: userId))
         let unwrapped = try? XCTUnwrap(once)
-        XCTAssertEqual(SessionAddressing.contactId(forPeer: unwrapped ?? ""), unwrapped)
+        XCTAssertEqual(SessionAddressing.pinnedDevice(ofPeer: unwrapped ?? ""), unwrapped)
     }
 
     /// Whatever the seam produces is a crypto identity — never a composite, never an account id.
@@ -100,7 +100,7 @@ final class SessionAddressingTests: XCTestCase {
     /// Mutation: have the seam join the two ids, or return its input — this reddens.
     func testEverythingTheSeamProducesIsACryptoIdentity() {
         for input in [userId, expectedDeviceId] {
-            guard let out = SessionAddressing.contactId(forPeer: input) else {
+            guard let out = SessionAddressing.pinnedDevice(ofPeer: input) else {
                 XCTFail("\(input) should resolve")
                 continue
             }
@@ -135,7 +135,7 @@ final class SessionAddressingTests: XCTestCase {
     /// three-simulator stand 2026-08-26.
     func testAKeyInHandNamesTheDeviceWithoutAPinnedRow() {
         let stranger = Curve25519.KeyAgreement.PrivateKey().publicKey.rawRepresentation
-        let expected = deriveDeviceId(identityPublicKey: [UInt8](stranger))
+        let expected = deriveDeviceId(identityPublicKey: stranger)
         XCTAssertEqual(SessionAddressing.cryptoIdentity(ofIdentityKey: stranger), expected)
         XCTAssertTrue(SessionAddressing.isCryptoIdentity(expected))
         // The same key resolves the same way whether or not the contact list knows the peer.

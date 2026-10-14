@@ -42,7 +42,7 @@ struct DesktopAccountSettingsView: View {
                 CTSep(style: .thick)
 
                 Text(NSLocalizedString("changes_encrypted_footer", comment: ""))
-                    .font(CTFont.regular(11))
+                    .font(CTFont.caption)
                     .foregroundStyle(Color.CT.accent.opacity(0.6))
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 12)
@@ -58,7 +58,7 @@ struct DesktopAccountSettingsView: View {
         }
         .task { await recoveryVM.loadStatus() }
         .sheet(isPresented: $showingRecoverySetup) {
-            RecoverySetupView()
+            RecoverySetupView().sheetNavigation(closes: false)
                 .environment(recoveryVM)
                 .frame(minWidth: 480, minHeight: 520)
                 .onDisappear { Task { await recoveryVM.refreshStatus() } }
@@ -85,21 +85,21 @@ struct DesktopAccountSettingsView: View {
     private var recoveryBanner: some View {
         HStack(alignment: .top, spacing: 10) {
             Image(systemName: "exclamationmark.circle.fill")
-                .font(.system(size: 16, weight: .semibold))
+                .font(CTFont.ui(16, weight: .semibold))
                 .foregroundStyle(Color.CT.danger)
             VStack(alignment: .leading, spacing: 6) {
                 Text(NSLocalizedString("recovery_not_configured_title", comment: "").uppercased())
-                    .font(CTFont.bold(11))
+                    .font(CTFont.badge)
                     .foregroundStyle(Color.CT.danger)
                 Text(NSLocalizedString("recovery_banner_subtitle", comment: ""))
-                    .font(CTFont.regular(11))
+                    .font(CTFont.caption)
                     .foregroundStyle(Color.CT.textDim)
                 Button { showingRecoverySetup = true } label: {
                     HStack(spacing: 4) {
                         Text(NSLocalizedString("recovery_setup_action", comment: ""))
-                            .font(CTFont.bold(11))
+                            .font(CTFont.badge)
                         Image(systemName: "chevron.right")
-                            .font(.system(size: 10, weight: .semibold))
+                            .font(CTFont.ui(10, weight: .semibold))
                     }
                     .foregroundStyle(Color.CT.accent)
                 }
@@ -111,7 +111,7 @@ struct DesktopAccountSettingsView: View {
                 UserDefaults.standard.set(true, forKey: "recovery_banner_dismissed")
             } label: {
                 Image(systemName: "xmark")
-                    .font(.system(size: 11))
+                    .font(CTFont.ui(11))
                     .foregroundStyle(Color.CT.textDim)
             }
             .buttonStyle(.plain)
@@ -139,17 +139,17 @@ struct DesktopAccountSettingsView: View {
             if let img = viewModel.profileImage {
                 CTHexAvatar(initials: initials,
                             image: Image(nsImage: img),
-                            size: .large,
+                            size: CTAvatarSize.header,
                             colorSeed: seed)
                     .onTapGesture { pickAvatar() }
             } else {
-                CTHexAvatar(initials: initials, size: .large, colorSeed: seed)
+                CTHexAvatar(initials: initials, size: CTAvatarSize.header, colorSeed: seed)
                     .onTapGesture { pickAvatar() }
             }
 
             Button { pickAvatar() } label: {
                 Text("[\(NSLocalizedString("change_photo", comment: ""))]")
-                    .font(CTFont.regular(13))
+                    .font(CTFont.body)
                     .foregroundStyle(Color.CT.accent)
             }
             .buttonStyle(.plain)
@@ -157,7 +157,7 @@ struct DesktopAccountSettingsView: View {
             if viewModel.profileImage != nil {
                 Button { removeAvatar() } label: {
                     Text("[\(NSLocalizedString("remove_avatar", comment: ""))]")
-                        .font(CTFont.regular(12))
+                        .font(CTFont.secondary)
                         .foregroundStyle(Color.CT.danger)
                 }
                 .buttonStyle(.plain)
@@ -177,13 +177,13 @@ struct DesktopAccountSettingsView: View {
             // User ID (read-only)
             HStack {
                 Text(NSLocalizedString("user_id", comment: ""))
-                    .font(CTFont.regular(13))
+                    .font(CTFont.body)
                     .foregroundStyle(Color.CT.textDim)
                     .frame(width: 120, alignment: .leading)
                 let uid = viewModel.userId
                 let short = uid.count > 16 ? "\(uid.prefix(8))…\(uid.suffix(4))" : uid
                 Text(short.isEmpty ? "—" : short)
-                    .font(CTFont.regular(11))
+                    .font(CTFont.mono(11))
                     .foregroundStyle(Color.CT.textDim)
                     .textSelection(.enabled)
                 Spacer()
@@ -195,11 +195,11 @@ struct DesktopAccountSettingsView: View {
             // Display Name (editable)
             HStack {
                 Text(NSLocalizedString("display_name", comment: ""))
-                    .font(CTFont.regular(13))
+                    .font(CTFont.body)
                     .foregroundStyle(Color.CT.textDim)
                     .frame(width: 120, alignment: .leading)
                 TextField("", text: $vm.displayName)
-                    .font(CTFont.regular(13))
+                    .font(CTFont.body)
                     .foregroundStyle(Color.CT.text)
                     .textFieldStyle(.plain)
                     .ctInputChrome(.compact)
@@ -214,11 +214,11 @@ struct DesktopAccountSettingsView: View {
             // Username (editable, server-validated)
             HStack {
                 Text(NSLocalizedString("username", comment: ""))
-                    .font(CTFont.regular(13))
+                    .font(CTFont.body)
                     .foregroundStyle(Color.CT.textDim)
                     .frame(width: 120, alignment: .leading)
                 TextField("", text: $vm.username)
-                    .font(CTFont.regular(13))
+                    .font(CTFont.body)
                     .foregroundStyle(Color.CT.text)
                     .textFieldStyle(.plain)
                     .ctInputChrome(
@@ -234,20 +234,18 @@ struct DesktopAccountSettingsView: View {
                     Button(NSLocalizedString("save", comment: "")) {
                         Task { await saveUsernameIfNeeded() }
                     }
-                    .font(CTFont.regular(11))
+                    .font(CTFont.caption)
                     .foregroundStyle(Color.CT.accent)
                     .buttonStyle(.plain)
                 } else if viewModel.usernameSaved {
-                    Text("[ok]")
-                        .font(CTFont.regular(11))
-                        .foregroundStyle(Color.CT.accent)
+                    CTStatusBadge(status: .ok, size: 13)
                 }
             }
             .padding(.horizontal, 12).padding(.vertical, 10)
 
             if let error = viewModel.usernameSaveError {
                 Text(error)
-                    .font(CTFont.regular(11))
+                    .font(CTFont.caption)
                     .foregroundStyle(Color.CT.danger)
                     .padding(.horizontal, 12)
                     .padding(.bottom, 8)
@@ -264,10 +262,13 @@ struct DesktopAccountSettingsView: View {
             Button { showExportAlert = true } label: {
                 HStack {
                     Text(NSLocalizedString("export_my_data", comment: ""))
-                        .font(CTFont.regular(13))
+                        .font(CTFont.body)
                         .foregroundStyle(Color.CT.text)
                     Spacer()
-                    Text("[→]").font(CTFont.regular(12)).foregroundStyle(Color.CT.textDim)
+                    Image(systemName: "chevron.right")
+                        .font(CTFont.ui(12, weight: .semibold))
+                        .foregroundStyle(Color.CT.textDim)
+                        .accessibilityHidden(true)
                 }
                 .padding(.horizontal, 12).padding(.vertical, 10)
                 .contentShape(Rectangle())
@@ -285,11 +286,11 @@ struct DesktopAccountSettingsView: View {
             Button { showDeleteConfirm = true } label: {
                 HStack {
                     Text(NSLocalizedString("delete_account_row", comment: ""))
-                        .font(CTFont.regular(13))
+                        .font(CTFont.body)
                         .foregroundStyle(Color.CT.danger)
                     Spacer()
                     Text("[\(NSLocalizedString("delete_action", comment: ""))]")
-                        .font(CTFont.regular(12))
+                        .font(CTFont.secondary)
                         .foregroundStyle(Color.CT.danger.opacity(AccountSettingsLayout.dangerSecondaryOpacity))
                 }
                 .padding(.horizontal, 12).padding(.vertical, 10)
@@ -312,16 +313,11 @@ struct DesktopAccountSettingsView: View {
         viewModel.saveAvatar(image, authViewModel: authViewModel)
     }
 
+    /// The shared path: the avatar goes, the profile version moves, and contacts are sent
+    /// "removed". Until 2026-10-02 this cleared the picture here only — no version, no rebroadcast —
+    /// so every contact kept showing it.
     private func removeAvatar() {
-        guard let context = viewModel.viewContextPublic, !viewModel.userId.isEmpty else { return }
-        let req = User.fetchRequest()
-        req.predicate = NSPredicate(format: "id == %@", viewModel.userId)
-        req.fetchLimit = 1
-        if let user = try? context.fetch(req).first {
-            user.avatarData = nil
-            try? context.save()
-            viewModel.profileImage = nil
-        }
+        viewModel.removeAvatar()
     }
 
     private func saveUsernameIfNeeded() async {

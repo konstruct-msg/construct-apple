@@ -11,9 +11,8 @@
 //  The toast slides in from the top, auto-dismisses info/warning,
 //  and shows a retry button for critical errors.
 //
-//  Placement: below the standard / floating nav band so invite safety,
-//  key-change, and network toasts never stack on top of ChatNavBar /
-//  CTNavBar (same vertical slot under the status bar).
+//  Placement: below the navigation bar band so invite safety, key-change,
+//  and network toasts never cover a screen's title or its bar items.
 //
 
 import SwiftUI
@@ -24,8 +23,8 @@ struct ErrorToastView: View {
 
     @ObservedObject private var router = ErrorRouter.shared
 
-    /// Clears floating ChatNavBar (44 + 4 top chrome) and flat CTNavBar alike.
-    /// ContentView’s ZStack already sits under the status-bar safe area.
+    /// Clears the navigation bar. ContentView’s ZStack already sits under the status-bar safe
+    /// area.
     private static let topChromeClearance: CGFloat =
         CTLayout.navBarHeight + CTLayout.chromeGap
 
@@ -42,19 +41,14 @@ struct ErrorToastView: View {
     private func toast(for error: AppError) -> some View {
         HStack(spacing: 10) {
             Text(icon(for: error))
-                .font(CTFont.bold(14))
+                .font(CTFont.headline)
                 .foregroundColor(tintColor(for: error))
                 .lineLimit(1).fixedSize()
             VStack(alignment: .leading, spacing: 2) {
-                Text(error.errorDescription ?? "An error occurred")
-                    .font(CTFont.regular(13))
+                Text(error.errorDescription ?? UserText("error_generic").resolved)
+                    .font(CTFont.body)
                     .foregroundColor(Color.CT.text)
                     .lineLimit(2)
-                if let suggestion = error.recoverySuggestion {
-                    Text(suggestion)
-                        .font(CTFont.regular(11))
-                        .foregroundColor(Color.CT.textDim)
-                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -62,14 +56,14 @@ struct ErrorToastView: View {
                 Button(actionTitle) {
                     router.executeRecovery()
                 }
-                .font(CTFont.regular(13))
+                .font(CTFont.body)
                 .foregroundColor(tintColor(for: error))
             } else {
                 Button {
                     router.dismiss()
                 } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .font(CTFont.regular(14))
+                        .font(CTFont.ui(14))
                         .foregroundColor(Color.CT.textDim)
                         .frame(width: 36, height: 36)
                         .contentShape(Rectangle())
@@ -111,19 +105,23 @@ struct ErrorToastView: View {
         switch error {
         case .network, .streamDisconnected:
             return Image(systemName: "wifi.slash")
+        case .serverRefused, .rateLimited:
+            return Image(systemName: "exclamationmark.icloud.fill")
         case .sessionInitFailed, .decryptionFailed,
              .cryptoCoreUnavailable, .keyOperationFailed:
             return Image(systemName: "exclamationmark.triangle.fill")
         case .mediaUploadFailed, .mediaDownloadFailed,
                 .mediaOptimizationFailed:
             return Image(systemName: "exclamationmark.icloud.fill")
+        case .noSpace:
+            return Image(systemName: "externaldrive.fill.badge.exclamationmark")
         case .validation:
             return Image(systemName: "exclamationmark.bubble.fill")
-        case .authFailed, .sessionExpired:
+        case .sessionExpired:
             return Image(systemName: "lock.rotation")
         case .notice:
             return Image(systemName: "person.badge.plus")
-        case .unknown:
+        case .said, .unknown:
             return Image(systemName: "exclamationmark.bubble.fill")
         }
     }
@@ -166,7 +164,7 @@ private func errorToastPreview(_ error: AppError, recovery: (() -> Void)? = nil)
 }
 
 #Preview("Critical · action") {
-    // .sessionExpired → "Log in again" button + recovery suggestion line
+    // .sessionExpired → the sign-in button
     errorToastPreview(.sessionExpired, recovery: {})
 }
 
@@ -177,6 +175,6 @@ private func errorToastPreview(_ error: AppError, recovery: (() -> Void)? = nil)
 
 #Preview("Critical · dismissable") {
     // No recovery handler → the × dismiss button branch
-    errorToastPreview(.unknown("Server error (code 13)"))
+    errorToastPreview(.unknown(detail: "Server error (code 13)"))
 }
 #endif

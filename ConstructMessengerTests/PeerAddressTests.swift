@@ -23,10 +23,15 @@ final class PeerAddressTests: XCTestCase {
 
     override func setUp() {
         super.setUp()
-        context = PersistenceController(inMemory: true).container.viewContext
+        let container = PersistenceController(inMemory: true).container
+        context = container.viewContext
+        LocalRepositories.usePeerDevicesForTesting(CoreDataPeerDeviceStore(container: container))
+        LocalRepositories.useContactsForTesting(container)
     }
 
     override func tearDown() {
+        LocalRepositories.usePeerDevicesForTesting(nil)
+        LocalRepositories.useContactsForTesting(nil)
         SessionAddressing.pinnedIdentityKeyOverrideForTesting = nil
         context = nil
         super.tearDown()
@@ -38,7 +43,7 @@ final class PeerAddressTests: XCTestCase {
     /// A key and the device id that is a function of it.
     private func device(_ byte: UInt8) -> (deviceId: String, identityKey: Data) {
         let key = Data(repeating: byte, count: 32)
-        return (deviceId: deriveDeviceId(identityPublicKey: [UInt8](key)), identityKey: key)
+        return (deviceId: deriveDeviceId(identityPublicKey: key), identityKey: key)
     }
 
     @discardableResult
@@ -46,7 +51,9 @@ final class PeerAddressTests: XCTestCase {
         let user = User(context: context)
         user.id = id
         user.knownIdentityKey = key
-        try? context.save()
+        user.username = ""
+        user.displayName = ""
+        try! context.save()
         return user
     }
 
@@ -94,7 +101,7 @@ final class PeerAddressTests: XCTestCase {
         }
 
         XCTAssertEqual(
-            SessionAddressing.contactId(forPeer: accountA), pinned.deviceId,
+            SessionAddressing.pinnedDevice(ofPeer: accountA), pinned.deviceId,
             "pre-condition: the account resolves to the pinned device, which is NOT the diverged one"
         )
         XCTAssertEqual(
@@ -125,7 +132,7 @@ final class PeerAddressTests: XCTestCase {
         let d = device(0x11)
         makeContact(id: accountA, key: d.identityKey)
 
-        let peer = PeerAddress.resolving(device: d.deviceId, in: context)
+        let peer = PeerAddress.resolving(device: d.deviceId)
         XCTAssertEqual(peer?.account, accountA)
         XCTAssertEqual(peer?.device, d.deviceId, "the device that was asked about is the device named")
     }
@@ -136,15 +143,13 @@ final class PeerAddressTests: XCTestCase {
         makeContact(id: accountA, key: pinned.identityKey)
 
         XCTAssertNil(
-            PeerAddress.resolving(device: second.deviceId, in: context),
+            PeerAddress.resolving(device: second.deviceId),
             "pre-condition: an unrecorded second device is attributable to nobody"
         )
         SessionAddressing.recordDevices(
             [(deviceId: second.deviceId, identityKey: second.identityKey)],
-            ofPeer: accountA,
-            in: context
-        )
-        XCTAssertEqual(PeerAddress.resolving(device: second.deviceId, in: context)?.account, accountA)
+            ofPeer: accountA)
+        XCTAssertEqual(PeerAddress.resolving(device: second.deviceId)?.account, accountA)
     }
 
     /// The failure mode this type exists to make impossible: an unresolvable device must not
@@ -152,15 +157,15 @@ final class PeerAddressTests: XCTestCase {
     /// the original defect wearing the new type.
     func testAnUnknownDeviceNeverBecomesAnAccount() {
         let unknown = device(0x33)
-        XCTAssertNil(PeerAddress.resolving(device: unknown.deviceId, in: context))
+        XCTAssertNil(PeerAddress.resolving(device: unknown.deviceId))
     }
 
     func testResolvingRefusesAnAccountId() {
         makeContact(id: accountA, key: device(0x11).identityKey)
         // An account id is not a device id, and reading the seam backwards from one is a caller
         // that already had the answer. `peer(ofDevice:)` declines it; so does this.
-        XCTAssertNil(PeerAddress.resolving(device: accountA, in: context))
-        XCTAssertNil(PeerAddress.resolving(device: accountB, in: context))
+        XCTAssertNil(PeerAddress.resolving(device: accountA))
+        XCTAssertNil(PeerAddress.resolving(device: accountB))
     }
 
     // MARK: - The invariant, stated
@@ -176,7 +181,7 @@ final class PeerAddressTests: XCTestCase {
         let addresses = [
             PeerAddress.account(accountA),
             PeerAddress(account: accountA, device: d.deviceId),
-            PeerAddress.resolving(device: d.deviceId, in: context)
+            PeerAddress.resolving(device: d.deviceId)
         ].compactMap { $0 }
 
         XCTAssertEqual(addresses.count, 3, "resolving must have answered, or this test reads nothing")

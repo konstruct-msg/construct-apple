@@ -90,7 +90,7 @@ struct OrientationView: View {
     private var topBar: some View {
         HStack {
             Text(NSLocalizedString("orientation_section_label", comment: "").uppercased())
-                .font(CTFont.regular(11))
+                .font(CTFont.caption)
                 .foregroundColor(Color.CT.accent)
                 .tracking(2)
 
@@ -100,7 +100,7 @@ struct OrientationView: View {
                 finish()
             } label: {
                 Text(NSLocalizedString("orientation_skip", comment: "").uppercased())
-                    .font(CTFont.regular(13))
+                    .font(CTFont.body)
                     .foregroundColor(Color.CT.textDim)
             }
             .buttonStyle(.plain)
@@ -119,7 +119,7 @@ struct OrientationView: View {
                 label: NSLocalizedString(
                     isLastPage ? "orientation_enter" : "orientation_next",
                     comment: ""
-                ).uppercased()
+                )
             ) {
                 if isLastPage {
                     finish()
@@ -167,20 +167,20 @@ struct OrientationView: View {
 
                 VStack(spacing: 12) {
                     Text(NSLocalizedString(p.titleKey, comment: "").uppercased())
-                        .font(CTFont.bold(18))
+                        .font(CTFont.title)
                         .foregroundColor(Color.CT.text)
                         .tracking(2)
                         .multilineTextAlignment(.center)
 
                     Text(NSLocalizedString(p.bodyKey, comment: ""))
-                        .font(CTFont.regular(13))
+                        .font(CTFont.body)
                         .foregroundColor(Color.CT.text)
                         .multilineTextAlignment(.center)
                         .lineSpacing(4)
                         .fixedSize(horizontal: false, vertical: true)
 
                     Text(NSLocalizedString(p.captionKey, comment: ""))
-                        .font(CTFont.regular(11))
+                        .font(CTFont.caption)
                         .foregroundColor(Color.CT.textDim)
                         .multilineTextAlignment(.center)
                         .padding(.top, 4)
@@ -216,14 +216,14 @@ struct OrientationView: View {
                     .fill(Color.CT.bgMsg)
                     .frame(width: 72, height: 72)
                 Image(systemName: "key.fill")
-                    .font(.system(size: 28, weight: .medium))
+                    .font(CTIcon.font(CTIcon.overlay))
                     .foregroundColor(Color.CT.accent)
             }
             HStack(spacing: 6) {
                 Image(systemName: "iphone")
-                    .font(.system(size: 12, weight: .medium))
+                    .font(CTIcon.font(CTIcon.caption))
                 Text(NSLocalizedString("orientation_page1_visual_label", comment: "").uppercased())
-                    .font(CTFont.regular(10))
+                    .font(CTFont.micro)
                     .tracking(1)
             }
             .foregroundColor(Color.CT.textDim)
@@ -238,7 +238,7 @@ struct OrientationView: View {
                 subtitleKey: "orientation_page2_path_qr_sub"
             )
             Text(NSLocalizedString("orientation_or", comment: "").uppercased())
-                .font(CTFont.regular(10))
+                .font(CTFont.micro)
                 .foregroundColor(Color.CT.textDim)
             orientationPathCard(
                 icon: "magnifyingglass",
@@ -252,16 +252,16 @@ struct OrientationView: View {
     private func orientationPathCard(icon: String, titleKey: String, subtitleKey: String) -> some View {
         VStack(spacing: 10) {
             Image(systemName: icon)
-                .font(.system(size: 22, weight: .medium))
+                .font(CTIcon.font(CTIcon.navLg))
                 .foregroundColor(Color.CT.accent)
                 .frame(height: 28)
             Text(NSLocalizedString(titleKey, comment: "").uppercased())
-                .font(CTFont.bold(11))
+                .font(CTFont.badge)
                 .foregroundColor(Color.CT.text)
                 .tracking(1)
                 .multilineTextAlignment(.center)
             Text(NSLocalizedString(subtitleKey, comment: ""))
-                .font(CTFont.regular(10))
+                .font(CTFont.micro)
                 .foregroundColor(Color.CT.textDim)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
@@ -294,16 +294,16 @@ struct OrientationView: View {
     private func mapRow(icon: String, titleKey: String, subKey: String) -> some View {
         HStack(spacing: 14) {
             Image(systemName: icon)
-                .font(.system(size: 16, weight: .medium))
+                .font(CTIcon.font(CTIcon.row))
                 .foregroundColor(Color.CT.accent)
                 .frame(width: 24)
             VStack(alignment: .leading, spacing: 2) {
                 Text(NSLocalizedString(titleKey, comment: "").uppercased())
-                    .font(CTFont.bold(12))
+                    .font(CTFont.ui(12, weight: .bold))
                     .foregroundColor(Color.CT.text)
                     .tracking(1)
                 Text(NSLocalizedString(subKey, comment: ""))
-                    .font(CTFont.regular(11))
+                    .font(CTFont.caption)
                     .foregroundColor(Color.CT.textDim)
             }
             Spacer(minLength: 0)

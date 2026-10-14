@@ -133,3 +133,51 @@ enum DeliveryStatusTransition {
         }
     }
 }
+
+/// A `.sending` row whose process is gone, and an upload placeholder the retry fetch selected.
+///
+/// The launch reset wrote `.queued` for every `.sending` row. That is the right retry entry for
+/// a real message and the wrong one for an upload: its stored body is the sentinel
+/// `UploadPlaceholderBody` names, so the re-encrypt filter ("no wire payload, and the row has
+/// decrypted content") sent that JSON to the peer as text. `.failed` is what the retry fetch
+/// already selects for a real message. A placeholder spends the retry budget instead, because a
+/// body that is not a message has no attempt that can succeed.
+enum StuckSend {
+    enum Disposition: Equatable {
+        case leave
+        case failForRetry
+        case retirePlaceholder
+    }
+
+    struct Write: Equatable {
+        var status: DeliveryStatus
+        var retryCount: Int16
+    }
+
+    static func disposition(
+        statusIsSending: Bool,
+        ownedByThisProcess: Bool,
+        bodyIsUploadSentinel: Bool
+    ) -> Disposition {
+        guard statusIsSending, !ownedByThisProcess else { return .leave }
+        return bodyIsUploadSentinel ? .retirePlaceholder : .failForRetry
+    }
+
+    /// `nil` leaves the row alone. `retryCeiling` is the same constant the retry fetch compares
+    /// with `retryCount < ceiling`; a retired placeholder stores that ceiling so the next tick
+    /// does not select it.
+    static func write(
+        disposition: Disposition,
+        retryCount: Int16,
+        retryCeiling: Int16
+    ) -> Write? {
+        switch disposition {
+        case .leave:
+            return nil
+        case .failForRetry:
+            return Write(status: .failed, retryCount: retryCount)
+        case .retirePlaceholder:
+            return Write(status: .failed, retryCount: max(retryCount, retryCeiling))
+        }
+    }
+}

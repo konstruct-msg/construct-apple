@@ -23,8 +23,7 @@ final class ControlCarrierGuardTests: XCTestCase {
     private func message(contentType: UInt8) -> ChatMessage {
         ChatMessage(
             id: UUID().uuidString, from: "peer", to: "me",
-            ephemeralPublicKey: Data(), messageNumber: 1, content: Data(),
-            suiteId: 1, timestamp: 1_000_000, contentType: contentType
+            timestamp: 1_000_000, contentType: contentType
         )
     }
 
@@ -36,18 +35,20 @@ final class ControlCarrierGuardTests: XCTestCase {
         return PerformanceMetrics.shared.count(event: .controlCarrierReachedWirePath) > before
     }
 
-    /// The two carriers that must never reach the wire path. END_SESSION has no wire payload at
-    /// all, and an SRI that is decrypted instead of archived leaves the old session alive.
-    func testGuardFiresForEndSessionAndResetInit() {
+    /// The two carriers that must never reach the wire path, because neither is a wire payload:
+    /// END_SESSION (21, from older builds) and DECRYPTION_ERROR (28, a box sealed to our identity
+    /// key). SESSION_RESET_INIT (24) was the second until 2026-09-27; it is an ordinary message
+    /// with a handshake header since, and opens like one.
+    func testGuardFiresForTheCarriersReadBeforeDecryption() {
         XCTAssertTrue(guardFires(contentType: 21), "END_SESSION must be reported if it gets here")
-        XCTAssertTrue(guardFires(contentType: 24), "SESSION_RESET_INIT must be reported if it gets here")
+        XCTAssertTrue(guardFires(contentType: 28), "DECRYPTION_ERROR must be reported if it gets here")
     }
 
     /// Everything else is an ordinary carrier and must pass silently — including the control
     /// *kinds* that legitimately travel as wire payloads. A guard that fired on these would be the
     /// content-type derivation this design deliberately rejected, arriving through the back door.
     func testGuardStaysSilentForOrdinaryCarriers() {
-        for contentType: UInt8 in [0, 1, 12, 13, 14, 23, 25, 26] {
+        for contentType: UInt8 in [0, 1, 12, 13, 14, 23, 24, 25, 26] {
             XCTAssertFalse(guardFires(contentType: contentType),
                            "ct=\(contentType) is a normal carrier here and must not be reported")
         }

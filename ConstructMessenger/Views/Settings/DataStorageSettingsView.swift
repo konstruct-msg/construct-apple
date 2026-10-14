@@ -40,7 +40,6 @@ struct DataStorageSettingsView: View {
     @State private var quotaSliderIndex: Double = 0
     @State private var hasLoadedInitialCacheState = false
 
-    @Environment(\.dismiss) private var dismiss
 
     // MARK: - Options
 
@@ -78,17 +77,6 @@ struct DataStorageSettingsView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 0) {
-                if showNavBar {
-                    CTNavBar(
-                        title: NSLocalizedString("data_and_storage", comment: ""),
-                        showBack: true,
-                        backAction: { dismiss() }
-                    ) {
-                        EmptyView()
-                    } trailing: {
-                        EmptyView()
-                    }
-                }
 
                 VStack(spacing: 0) {
 
@@ -98,16 +86,16 @@ struct DataStorageSettingsView: View {
                         // Usage row
                         HStack(spacing: DataStorageSettingsLayout.rowContentSpacing) {
                             Image(systemName: "internaldrive")
-                                .font(CTFont.regular(DataStorageSettingsLayout.usageIconFontSize))
+                                .font(CTFont.ui(DataStorageSettingsLayout.usageIconFontSize))
                                 .foregroundStyle(Color.CT.textDim)
                                 .frame(width: SettingsLayout.rowIconMinWidth)
-                            Text(NSLocalizedString("storage_media_cache", comment: "").uppercased())
-                                .font(CTFont.regular(13))
+                            Text(NSLocalizedString("storage_media_cache", comment: ""))
+                                .font(CTFont.body)
                                 .foregroundStyle(Color.CT.text)
                                 .tracking(DataStorageSettingsLayout.sectionTitleTracking)
                             Spacer()
                             Text(formatBytes(cacheSize))
-                                .font(CTFont.bold(14))
+                                .font(CTFont.mono(14, weight: .bold))
                                 .foregroundStyle(cacheSize > 0 ? Color.CT.accent : Color.CT.textDim)
                                 .monospacedDigit()
                         }
@@ -148,14 +136,14 @@ struct DataStorageSettingsView: View {
                                 .frame(height: DataStorageSettingsLayout.usageBarHeight)
                                 Text(String(format: NSLocalizedString("storage_of_quota", comment: ""),
                                             formatBytes(cacheSize), formatBytes(Int64(maxDiskCacheBytesRaw))))
-                                    .font(CTFont.regular(10))
+                                    .font(CTFont.micro)
                                     .foregroundStyle(Color.CT.textDim)
                             }
                             .padding(.horizontal, DataStorageSettingsLayout.rowHorizontalPadding)
                             .padding(.bottom, DataStorageSettingsLayout.usageRowBottomPaddingWithoutQuota)
                         }
 
-                        CTSep(style: .thin)
+                        ConstructRowDivider(indent: CTLayout.edgePad)
 
                         ConstructActionRow(
                             systemImage: "trash",
@@ -174,20 +162,20 @@ struct DataStorageSettingsView: View {
                             : 1
                         )
                     }
-                    sectionFooter("storage_media_cache_footer")
+                    CTSectionFooter("storage_media_cache_footer")
 
                     // MARK: Storage Limit
                     CTSettingsSectionHeader(title: NSLocalizedString("storage_limit", comment: ""))
                     CTSectionGroup {
                         VStack(alignment: .leading, spacing: DataStorageSettingsLayout.quotaSectionSpacing) {
                             HStack {
-                                Text(NSLocalizedString("storage_limit", comment: "").uppercased())
-                                    .font(CTFont.regular(13))
+                                Text(NSLocalizedString("storage_limit", comment: ""))
+                                    .font(CTFont.body)
                                     .foregroundStyle(Color.CT.textDim)
                                     .tracking(DataStorageSettingsLayout.sectionTitleTracking)
                                 Spacer()
                                 Text(currentQuotaLabel)
-                                    .font(CTFont.bold(14))
+                                    .font(CTFont.headline)
                                     .foregroundStyle(Color.CT.accent)
                             }
 
@@ -207,7 +195,7 @@ struct DataStorageSettingsView: View {
                                 ForEach(Array(quotas.enumerated()), id: \.offset) { pair in
                                     let i = pair.offset
                                     Text(pair.element.label)
-                                        .font(CTFont.regular(DataStorageSettingsLayout.quotaTickFontSize))
+                                        .font(CTFont.mono(DataStorageSettingsLayout.quotaTickFontSize))
                                         .foregroundStyle(
                                             selectedQuotaIndex == i
                                                 ? Color.CT.accent : Color.CT.textDim
@@ -222,24 +210,24 @@ struct DataStorageSettingsView: View {
                         .padding(.horizontal, DataStorageSettingsLayout.rowHorizontalPadding)
                         .padding(.vertical, SettingsLayout.rowVerticalPadding)
                     }
-                    sectionFooter(maxDiskCacheBytesRaw == 0 ? "storage_no_limit_footer" : "storage_limit_footer")
+                    CTSectionFooter(maxDiskCacheBytesRaw == 0 ? "storage_no_limit_footer" : "storage_limit_footer")
 
                     // MARK: Auto-download
                     CTSettingsSectionHeader(title: NSLocalizedString("media_autodownload", comment: ""))
                     CTSectionGroup {
                         ForEach(Array(autoDownloadOptions.enumerated()), id: \.offset) { pair in
-                            if pair.offset > 0 { CTSep(style: .thin) }
+                            if pair.offset > 0 { ConstructRowDivider(indent: CTLayout.edgePad) }
                             let isSelected = autoDownloadRaw == pair.element.setting.rawValue
                             Button {
                                 autoDownloadRaw = pair.element.setting.rawValue
                             } label: {
                                 HStack(spacing: DataStorageSettingsLayout.rowContentSpacing) {
                                     Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                                        .font(CTFont.regular(DataStorageSettingsLayout.autoEvictionCheckIconSize))
+                                        .font(CTFont.ui(DataStorageSettingsLayout.autoEvictionCheckIconSize))
                                         .foregroundStyle(isSelected ? Color.CT.accent : Color.CT.textDim)
                                         .frame(width: SettingsLayout.rowIconMinWidth)
-                                    Text(pair.element.label.uppercased())
-                                        .font(CTFont.regular(13))
+                                    Text(pair.element.label)
+                                        .font(CTFont.body)
                                         .foregroundStyle(Color.CT.text)
                                         .tracking(DataStorageSettingsLayout.sectionTitleTracking)
                                     Spacer()
@@ -250,7 +238,7 @@ struct DataStorageSettingsView: View {
                             .buttonStyle(.plain)
                         }
                     }
-                    sectionFooter("media_autodownload_footer")
+                    CTSectionFooter("media_autodownload_footer")
 
                     // MARK: Auto-eviction
                     CTSettingsSectionHeader(title: NSLocalizedString("storage_auto_clear", comment: ""))
@@ -258,21 +246,21 @@ struct DataStorageSettingsView: View {
                         let evicts = evictOptions
                         ForEach(Array(evicts.enumerated()), id: \.offset) { pair in
                             let i = pair.offset
-                            if i > 0 { CTSep(style: .thin) }
+                            if i > 0 { ConstructRowDivider(indent: CTLayout.edgePad) }
                             Button {
                                 evictAfterDays = pair.element.days
                             } label: {
                                 HStack(spacing: DataStorageSettingsLayout.rowContentSpacing) {
                                     Image(systemName: evictAfterDays == pair.element.days
                                           ? "checkmark.circle.fill" : "circle")
-                                        .font(CTFont.regular(DataStorageSettingsLayout.autoEvictionCheckIconSize))
+                                        .font(CTFont.ui(DataStorageSettingsLayout.autoEvictionCheckIconSize))
                                         .foregroundStyle(
                                             evictAfterDays == pair.element.days
                                                 ? Color.CT.accent : Color.CT.textDim
                                         )
                                         .frame(width: SettingsLayout.rowIconMinWidth)
-                                    Text(pair.element.label.uppercased())
-                                        .font(CTFont.regular(13))
+                                    Text(pair.element.label)
+                                        .font(CTFont.body)
                                         .foregroundStyle(Color.CT.text)
                                         .tracking(DataStorageSettingsLayout.sectionTitleTracking)
                                     Spacer()
@@ -283,7 +271,7 @@ struct DataStorageSettingsView: View {
                             .buttonStyle(.plain)
                         }
                     }
-                    sectionFooter("storage_auto_clear_footer")
+                    CTSectionFooter("storage_auto_clear_footer")
 
                    
                 }
@@ -291,10 +279,8 @@ struct DataStorageSettingsView: View {
             }
         }
         .background(Color.CT.bg.ignoresSafeArea())
-        .navigationTitle("")
         #if os(iOS)
-        .navigationBarTitleDisplayMode(.inline)
-        .hideSystemNavBar()
+        .screenTitle(NSLocalizedString("data_and_storage", comment: ""), shown: showNavBar)
         #endif
         .task {
             guard !hasLoadedInitialCacheState else { return }
@@ -319,15 +305,6 @@ struct DataStorageSettingsView: View {
 
     // MARK: - Helpers
 
-    @ViewBuilder
-    private func sectionFooter(_ key: String) -> some View {
-        Text(LocalizedStringKey(key))
-            .font(CTFont.regular(11))
-            .foregroundStyle(Color.CT.textDim)
-            .padding(.horizontal, SettingsLayout.footerHorizontalPadding)
-            .padding(.top, DataStorageSettingsLayout.footerTopPadding)
-            .frame(maxWidth: .infinity, alignment: .leading)
-    }
 
     private func clearCache() async {
         isClearing = true

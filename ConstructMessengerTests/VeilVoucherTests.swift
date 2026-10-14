@@ -179,19 +179,20 @@ final class VeilVoucherTests: XCTestCase {
         // minutes: the pipeline asked for `VEILConfig.ruRelayAddress` no matter which
         // relay the device was actually on, so the learned front's B2 expired with no
         // replacement ever requested.
-        let store = VeilLearnedFrontStore.shared
+        //
+        // An empty store of its own, not `.shared`: the shared one is the Keychain, and a
+        // stand simulator that has learned a front made "nothing learned" false (TODO 84).
+        let store = VeilLearnedFrontStore(persistence: MemoryLearnedFrontPersistence())
         let address = "target.example:443"
-        try XCTSkipUnless(store.pin(for: address) == nil, "address must start unlearned")
-        defer { store.remove(address) }
 
-        let seed = VeilProxyManager.shared.capabilityTargetAddress()
+        let seed = VeilProxyManager.shared.capabilityTargetAddress(learnedFronts: store)
         XCTAssertEqual(seed, VEILConfig.hardcodedRelayAddresses.first,
                        "with nothing learned and no active relay, the seed is the target")
 
         XCTAssertTrue(store.save(
             address: address, sni: "target.example", spki: String(repeating: "e", count: 64)
         ))
-        XCTAssertEqual(VeilProxyManager.shared.capabilityTargetAddress(), address,
+        XCTAssertEqual(VeilProxyManager.shared.capabilityTargetAddress(learnedFronts: store), address,
                        "a learned front must be the pipeline's target, not the seed")
     }
 
@@ -218,14 +219,17 @@ final class VeilVoucherTests: XCTestCase {
                        "the relay that just proved it works is tried first")
         XCTAssertTrue(candidates.contains(learned),
                       "a learned front stays in the queue even when it is not the active relay")
-        XCTAssertEqual(candidates.last, VEILConfig.hardcodedRelayAddresses.last,
-                       "the seed pool is the floor, never the head")
+        if let floor = VEILConfig.hardcodedRelayAddresses.last {
+            XCTAssertEqual(candidates.last, floor, "the seed pool is the floor, never the head")
+        }
         XCTAssertEqual(Set(candidates).count, candidates.count, "no duplicates")
     }
 
     @MainActor
     func testCapabilityCandidatesDoNotRepeatTheSeedWhenItIsAlsoPreferred() throws {
-        let seed = try XCTUnwrap(VEILConfig.hardcodedRelayAddresses.first)
+        guard let seed = VEILConfig.hardcodedRelayAddresses.first else {
+            throw XCTSkip("no bundled front since 2026-10-02 — nothing to repeat (VeilBundledFrontPolicyTests)")
+        }
         let candidates = VeilProxyManager.shared.capabilityCandidateAddresses(preferring: seed)
         XCTAssertEqual(candidates.filter { $0 == seed }.count, 1)
     }
@@ -241,7 +245,10 @@ final class VeilVoucherTests: XCTestCase {
             XCTAssertTrue(candidates.contains(seed), "every bundled seed belongs in the queue")
         }
         if VEILConfig.hardcodedRelayAddresses.isEmpty {
-            XCTAssertNil(VeilProxyManager.shared.capabilityTargetAddress(),
+            // Its own empty store: the shared one is the Keychain, where a stand simulator
+            // may have learned a front (TODO 84).
+            let empty = VeilLearnedFrontStore(persistence: MemoryLearnedFrontPersistence())
+            XCTAssertNil(VeilProxyManager.shared.capabilityTargetAddress(learnedFronts: empty),
                          "no seeds and nothing learned means there is nothing to ask for")
         }
     }
@@ -259,8 +266,9 @@ final class VeilVoucherTests: XCTestCase {
     func testAMalformedVoucherLinkIsClaimedAndReportedAsAVoucher() {
         // Claimed (so the contact parser never sees it) but refused, with the importer's
         // own message rather than "scan a Konstruct contact code".
-        let message = VeilVoucherRedemption.messageIfVoucher("konstruct://veil-config?d=!!!")
-        XCTAssertNotNil(message)
-        XCTAssertNotEqual(message, NSLocalizedString("veil_config_import_ok", comment: ""))
+        let outcome = try? XCTUnwrap(VeilVoucherRedemption.messageIfVoucher("konstruct://veil-config?d=!!!"))
+        XCTAssertNotNil(outcome)
+        if case .notice = outcome { XCTFail("a refused voucher is not the import notice") }
+        XCTAssertEqual(outcome?.userText, UserText("veil_import_err_malformed"))
     }
 }

@@ -9,14 +9,24 @@ import SwiftUI
 import CoreData
 
 struct ContentView: View {
+    /// Why construct.db is not open, or nil (`LocalRepositories.storeFailure`) — an install that
+    /// has moved to it, opened before the first unlock. Read at launch, on return to the
+    /// foreground, after a retry, and whenever the store is replaced.
+    @State private var storeFailure = LocalRepositories.storeFailure
     @Environment(AuthViewModel.self) var authViewModel
     @Environment(DeepLinkHandler.self) var deepLinkHandler
+    @Environment(AccountRecoveryViewModel.self) private var recoveryViewModel
     @Environment(\.managedObjectContext) private var viewContext
     @AppStorage("appTheme") private var appTheme: AppTheme = .dark
     /// Per-identity orientation completion list (see `OrientationStore`).
     @AppStorage(OrientationStore.completedUserIdsKey) private var orientationCompletedUserIds = ""
 
     @State private var chatsViewModel = ChatsViewModel()
+    /// The recovery setup, shown after the first orientation only when the key could not be made
+    /// silently — no passcode on this device, or the account has a key this device has not seen.
+    /// Everyone else gets the key without a screen and copies it later from Settings
+    /// (`RecoveryKeyProvisioner`, `decisions/recovery-key-backup-is-deferred-not-skipped.md`).
+    @State private var showingRecoveryPrompt = false
 
     /// Orientation is product education for **this** ServerUserId — not a global device flag.
     private var orientationCompletedForCurrentUser: Bool {
@@ -26,9 +36,31 @@ struct ContentView: View {
         )
     }
 
+    private func provisionRecoveryKey(promptIfNeeded: Bool) async {
+        guard let userId = authViewModel.currentUserId ?? AuthSessionManager.shared.currentUserId else {
+            return
+        }
+        switch await RecoveryKeyProvisioner.shared.ensureKey(userId: userId) {
+        case .provisioned:
+            await recoveryViewModel.refreshStatus()
+        case .needsVisibleSetup, .setElsewhere:
+            if promptIfNeeded, AccountAddress.own() == nil { showingRecoveryPrompt = true }
+        case .alreadyKnown, .deferred:
+            break
+        }
+    }
+
     var body: some View {
         Group {
-            if authViewModel.hasRegisteredDeviceKeys == nil {
+            if storeFailure != nil {
+                // Before anything else: no screen of the app runs on a store that is not open.
+                NavigationStack {
+                    KeysRecoveryView(reason: .storeUnreadable) {
+                        storeFailure = LocalRepositories.openAppStoreIfNeeded()
+                    }
+                }
+                .environment(authViewModel)
+            } else if authViewModel.hasRegisteredDeviceKeys == nil {
                 // Auth state not yet resolved — show splash while Keychain is read.
                 // This happens on cold launch AND when coming to foreground with a locked
                 // device (SecurityGateView sits in ZStack so onAppear fires immediately).
@@ -36,12 +68,13 @@ struct ContentView: View {
             } else if authViewModel.deviceKeysUnavailable {
                 // Authenticated but crypto keys couldn't be loaded — show recovery screen.
                 // Keys are NOT wiped; user can retry, recover via seed phrase, or register new.
-                KeysRecoveryView()
+                // A screen of its own, so it brings the stack its title needs.
+                NavigationStack { KeysRecoveryView() }
                     .environment(authViewModel)
             } else if authViewModel.deviceDeregistered {
                 // Server rejected this device as unregistered but the keys are still present.
                 // Same recovery screen (retry / seed / new account) — never a silent wipe.
-                KeysRecoveryView(reason: .deviceDeregistered)
+                NavigationStack { KeysRecoveryView(reason: .deviceDeregistered) }
                     .environment(authViewModel)
             } else if authViewModel.isAuthenticated || authViewModel.hasRegisteredDeviceKeys == true {
                 // Authenticated OR definitively registered — main app or first-run orientation.
@@ -68,12 +101,33 @@ struct ContentView: View {
         }
         .errorToast()
         .preferredColorScheme(appTheme.colorScheme)
+        .onChange(of: orientationCompletedForCurrentUser) { _, completed in
+            if completed {
+                Task { await provisionRecoveryKey(promptIfNeeded: true) }
+            }
+        }
+        // Every launch of a signed-in account: accounts registered before the silent key get
+        // theirs here, and a key whose upload never got an answer is retried. Never prompts —
+        // a launch is not the moment for a setup screen.
+        .task(id: authViewModel.isAuthenticated && orientationCompletedForCurrentUser) {
+            if authViewModel.isAuthenticated && orientationCompletedForCurrentUser {
+                await provisionRecoveryKey(promptIfNeeded: false)
+            }
+        }
+        .sheet(isPresented: $showingRecoveryPrompt) {
+            RecoveryGateView(reason: .afterRegistration).sheetNavigation(closes: false)
+        }
         .onAppear {
             authViewModel.refreshDeviceKeyState()
             chatsViewModel.setContext(viewContext)
             handleDeepLink(deepLinkHandler.deepLink)
         }
+        .onReceive(NotificationCenter.default.publisher(for: .localStoreReplaced).receive(on: DispatchQueue.main)) { _ in
+            storeFailure = LocalRepositories.storeFailure
+        }
         .onReceive(NotificationCenter.default.publisher(for: .appWillEnterForeground)) { _ in
+            // Unlocked now, if the store would not open in a launch before the first unlock.
+            if storeFailure != nil { storeFailure = LocalRepositories.openAppStoreIfNeeded() }
             // Fires only when returning from true background — not for brief interruptions
             // (Control Center, alerts, biometrics). scenePhase == .active would fire for all of those.
             //
@@ -84,7 +138,13 @@ struct ContentView: View {
             if AuthSessionManager.shared.sessionToken == nil || !AuthSessionManager.shared.isSessionValid
                 || !CryptoManager.shared.isInitialized {
                 Log.info("App returning to foreground — restoring session (token missing, expired, or crypto uninitialised)", category: "Auth")
-                authViewModel.restoreSession()
+                // The listener first: this runs before `didBecomeActive`, when a refused connect to
+                // the suspended proxy is ignored as a background failure, and a restore that fails
+                // there leaves no token for the stream that would have replaced it.
+                Task {
+                    await VeilProxyManager.shared.verifyAliveOrRestart()
+                    authViewModel.restoreSession()
+                }
             }
 
             // Foreground trigger for the token wallet. No balance threshold here on purpose:
@@ -112,13 +172,7 @@ struct ContentView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .openChatForKeyChange)) { note in
             guard let userId = note.userInfo?["userId"] as? String, !userId.isEmpty else { return }
-            let ctx = viewContext
-            let fetch = User.fetchRequest()
-            fetch.predicate = NSPredicate(format: "id == %@", userId)
-            fetch.fetchLimit = 1
-            if let user = try? ctx.fetch(fetch).first {
-                chatsViewModel.openOrCreateChat(with: user)
-            }
+            chatsViewModel.openOrCreateChat(withContact: userId)
         }
         .onOpenURL { url in
             // Handle Universal Links in SwiftUI (iOS 13+)
@@ -134,17 +188,8 @@ struct ContentView: View {
             Log.info("ContentView: Creating chat directly for userId: \(contactInfo.userId), username: \(contactInfo.username)", category: "DeepLink")
 
             // Create chat directly instead of opening modal
-            let publicUserInfo = PublicUserInfo(
-                id: contactInfo.userId,
-                username: contactInfo.username,
-                avatarUrl: nil,
-                bio: nil,
-                deviceId: contactInfo.deviceId
-            )
-
             if let chat = chatsViewModel.startChat(
-                with: publicUserInfo,
-                identityPublicKey: contactInfo.identityPublicKey,
+                redeeming: contactInfo,
                 // The only redeem entry point: a scanned QR or an opened invite link lands here as
                 // a `.contact` deep link. Every other `startChat` caller is opening a chat with a
                 // contact that already exists, where an existing session is the one to keep.

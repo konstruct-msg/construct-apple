@@ -7,7 +7,6 @@
 //
 
 import Foundation
-import CryptoKit
 #if canImport(UIKit)
 import UIKit
 #endif
@@ -44,8 +43,10 @@ struct MediaMessageData: Codable {
     let thumbnail: Data?    // JPEG thumbnail — JSONEncoder emits base64 transparently
     let hash: String        // SHA-256 of encrypted file
     let filename: String?   // Original filename for document attachments
-    let compressed: Bool?   // true = ZLIB-compressed before AES encryption; decompress after decrypt
     let blurhash: String?   // Compact blurred-preview string (shown before full download)
+    /// How the item is shown; nil is the ordinary bubble for `mediaType`. Optional so a value
+    /// encoded before it existed still decodes.
+    let presentation: MediaPresentation?
 
     init(
         mediaId: String,
@@ -59,8 +60,8 @@ struct MediaMessageData: Codable {
         thumbnail: Data?,
         hash: String,
         filename: String?,
-        compressed: Bool?,
-        blurhash: String? = nil
+        blurhash: String? = nil,
+        presentation: MediaPresentation? = nil
     ) {
         self.mediaId = mediaId
         self.mediaUrl = mediaUrl
@@ -73,25 +74,20 @@ struct MediaMessageData: Codable {
         self.thumbnail = thumbnail
         self.hash = hash
         self.filename = filename
-        self.compressed = compressed
         self.blurhash = blurhash
+        self.presentation = presentation
     }
 }
 
 // MARK: - CryptoManager Media Extension
 extension CryptoManager {
-    /// Decrypt media data using raw 32-byte AES-256-GCM key
-    /// Format: [12 bytes nonce][ciphertext][16 bytes tag]
+    /// The file in a media blob — the padded format or the pre-0.33 one; the core tells them
+    /// apart (construct-core `media.rs`).
     func decryptMediaData(_ encryptedData: Data, with keyData: Data) throws -> Data {
-        guard keyData.count == 32 else {
-            Log.error("Invalid key size: \(keyData.count) (expected 32)", category: "MediaUpload")
-            throw MediaUploadError.encryptionFailed
-        }
         do {
-            let sealedBox = try AES.GCM.SealedBox(combined: encryptedData)
-            return try AES.GCM.open(sealedBox, using: SymmetricKey(data: keyData))
+            return try openMedia(key: keyData, blob: encryptedData)
         } catch {
-            Log.error("AES-GCM decryption failed: \(error)", category: "MediaUpload")
+            Log.error("Media blob did not open: \(error)", category: "MediaUpload")
             throw MediaUploadError.encryptionFailed
         }
     }

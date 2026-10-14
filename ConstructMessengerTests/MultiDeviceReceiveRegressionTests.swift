@@ -20,10 +20,15 @@ final class MultiDeviceReceiveRegressionTests: XCTestCase {
 
     override func setUp() {
         super.setUp()
-        context = PersistenceController(inMemory: true).container.viewContext
+        let container = PersistenceController(inMemory: true).container
+        context = container.viewContext
+        LocalRepositories.usePeerDevicesForTesting(CoreDataPeerDeviceStore(container: container))
+        LocalRepositories.useContactsForTesting(container)
     }
 
     override func tearDown() {
+        LocalRepositories.usePeerDevicesForTesting(nil)
+        LocalRepositories.useContactsForTesting(nil)
         context = nil
         SessionAddressing.pinnedIdentityKeyOverrideForTesting = nil
         super.tearDown()
@@ -35,8 +40,10 @@ final class MultiDeviceReceiveRegressionTests: XCTestCase {
         let user = User(context: context)
         user.id = accountId
         user.knownIdentityKey = key
-        try? context.save()
-        return (user, key, deriveDeviceId(identityPublicKey: [UInt8](key)))
+        user.username = ""
+        user.displayName = ""
+        try! context.save()
+        return (user, key, deriveDeviceId(identityPublicKey: key))
     }
 
     // MARK: - A device id reaching an account-space lookup
@@ -52,7 +59,7 @@ final class MultiDeviceReceiveRegressionTests: XCTestCase {
     /// reddens, and so does the sealed-send test below.
     func testAPinnedKeyIsReachableFromItsDeviceId() {
         let pinned = pinnedUser(accountId: "289b95ca-8260-4b99-a79a-acaba5681b71")
-        XCTAssertEqual(SessionAddressing.identityKey(ofDevice: pinned.deviceId, in: context), pinned.key)
+        XCTAssertEqual(SessionAddressing.identityKey(ofDevice: pinned.deviceId), pinned.key)
     }
 
     /// The one that actually broke: the sealed send resolves its recipient key whichever space the
@@ -63,11 +70,11 @@ final class MultiDeviceReceiveRegressionTests: XCTestCase {
     func testTheSealedSendResolvesAPeerNamedByDeviceOrAccount() {
         let pinned = pinnedUser(accountId: "289b95ca-8260-4b99-a79a-acaba5681b71")
         XCTAssertEqual(
-            StealthSenderService.recipientIdentityKey(recipientId: pinned.user.id, context: context),
+            StealthSenderService.recipientIdentityKey(recipientId: pinned.user.id),
             pinned.key, "the account-space path is the one that always worked"
         )
         XCTAssertEqual(
-            StealthSenderService.recipientIdentityKey(recipientId: pinned.deviceId, context: context),
+            StealthSenderService.recipientIdentityKey(recipientId: pinned.deviceId),
             pinned.key, "a device id must reach the same pin, or every sealed send to it fails closed"
         )
     }
@@ -79,8 +86,8 @@ final class MultiDeviceReceiveRegressionTests: XCTestCase {
         let a = pinnedUser(accountId: "289b95ca-8260-4b99-a79a-acaba5681b71")
         let b = pinnedUser(accountId: "8c1f0b2e-0000-4000-8000-000000000001")
         XCTAssertNotEqual(a.deviceId, b.deviceId)
-        XCTAssertEqual(SessionAddressing.identityKey(ofDevice: a.deviceId, in: context), a.key)
-        XCTAssertEqual(SessionAddressing.identityKey(ofDevice: b.deviceId, in: context), b.key)
+        XCTAssertEqual(SessionAddressing.identityKey(ofDevice: a.deviceId), a.key)
+        XCTAssertEqual(SessionAddressing.identityKey(ofDevice: b.deviceId), b.key)
     }
 
     /// An unknown device is not resolvable, and an account id is not a device id. Answering here
@@ -91,11 +98,11 @@ final class MultiDeviceReceiveRegressionTests: XCTestCase {
     func testAnUnknownDeviceResolvesToNothing() {
         let pinned = pinnedUser(accountId: "289b95ca-8260-4b99-a79a-acaba5681b71")
         let stranger = deriveDeviceId(
-            identityPublicKey: [UInt8](Curve25519.KeyAgreement.PrivateKey().publicKey.rawRepresentation)
+            identityPublicKey: Curve25519.KeyAgreement.PrivateKey().publicKey.rawRepresentation
         )
-        XCTAssertNil(SessionAddressing.identityKey(ofDevice: stranger, in: context))
-        XCTAssertNil(SessionAddressing.identityKey(ofDevice: pinned.user.id, in: context))
-        XCTAssertNil(SessionAddressing.identityKey(ofDevice: "", in: context))
+        XCTAssertNil(SessionAddressing.identityKey(ofDevice: stranger))
+        XCTAssertNil(SessionAddressing.identityKey(ofDevice: pinned.user.id))
+        XCTAssertNil(SessionAddressing.identityKey(ofDevice: ""))
     }
 
     // MARK: - The duplicate guard refusing the handler that armed it

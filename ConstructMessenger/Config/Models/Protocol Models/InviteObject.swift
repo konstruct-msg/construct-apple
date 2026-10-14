@@ -7,136 +7,66 @@
 
 import Foundation
 
-/// Dynamic contact invite with cryptographic security
+/// A signed, one-time contact invite — protocol v5, the only version.
 ///
 /// Security model:
-/// - Ed25519 signature from sender's identity key (client verifies locally)
-/// - JTI (JWT ID) for one-time use tracking
-/// - Bounded time-to-live (`InviteConfig.ttlSeconds`, mirrored server-side)
-/// - v4+: no unused ephKey; pure signed capability
+/// - Ed25519 signature by the issuing device (the redeemer verifies locally, then pins)
+/// - JTI for one-time use (burned by the server on redeem)
+/// - Signed per-invite `ttl`, clamped to the server maximum
+/// - Signed `addr`: the issuing account's address, its Ed25519 recovery public key. The
+///   redeemer addresses every later message to it, so it reaches the redeemer from the
+///   issuer's device and never from the server.
+///
+/// v1–v4 are refused since 2026-09-28 (`decisions/invite-carries-the-account-address.md`):
+/// invites live minutes to hours, there was no installed base, and nobody had minted a v5 yet,
+/// so its layout could change without a v6.
 ///
 /// On-the-wire transport (not the in-memory field model):
 /// - QR: compact binary (`CIv1…`) in QR **byte mode**
 /// - URL/deep link: `base64url(compact binary)` on the text boundary
-/// - Dual-read: legacy base64(JSON) still decodes for the short TTL window
-struct InviteObject: Codable, Equatable {
-    /// Protocol version (1–4)
+///
+/// Byte-level agreement with Android and the server is fixed by
+/// `Generated/conformance/knst_invite.json` (`InviteConformanceTests`).
+struct InviteObject: Equatable {
+    /// Protocol version — always `InviteConfig.version`.
     let v: Int
 
-    /// JTI - unique invite ID for one-time use tracking
-    /// UUIDv4 format, tracked by server to prevent reuse
+    /// JTI - unique invite ID for one-time use tracking (UUIDv4)
     let jti: String
 
     /// Sender's user UUID (for chat creation)
     let uuid: String
 
-    /// Sender's device ID (for fetching public keys)
-    /// 32-char hex string from SHA256(identity_public)[0..16]
+    /// Sender's device ID — 32-char hex, SHA256(identity_public)[0..16]. Signs the invite.
     let deviceId: String
 
     /// Server FQDN (e.g., "konstruct.cc")
-    /// Enables federation support
     let server: String
 
-    /// Ephemeral X25519 public key (Base64) — **v1–v3 only**, unused for ECDH.
-    /// Empty string on v4+ (field dropped from wire and canonical string).
-    let ephKey: String
-
     /// Unix timestamp when invite was created
-    /// Used to calculate expiry (current + TTL)
     let ts: Int
 
-    /// Ed25519 signature (Base64)
-    /// Signs all fields above with sender's identity key
-    /// 64 bytes, proves authenticity
+    /// Ed25519 signature (Base64) over `canonicalString()`, by the issuing device.
     let sig: String
 
-    /// Sender's username or display name (V3+, optional)
-    /// Included in the Ed25519 canonical string — cryptographically authenticated.
-    /// Allows the recipient to see the sender's name immediately without a server roundtrip.
-    /// Server stores only a username hash, so the plaintext travels here peer-to-peer.
+    /// Sender's username or display name, optional. Signed. Lets the recipient see a name
+    /// before any session exists; the server stores only a hash of it.
     let un: String?
 
-    /// Maximum age in seconds, stated by the issuer — **v5 only**, `nil` below it.
-    ///
-    /// Signed (the canonical string ends with it), because a TTL a third party can edit is
-    /// not a TTL. The server takes `min(INVITE_TTL_SECONDS, ttl)`, so this can only ask for
-    /// a shorter life, never a longer one; read it through `InviteConfig.effectiveTTL` so
-    /// the clamp happens on both sides.
-    ///
-    /// Not optional-by-convenience: the initializer requires it so that every place
-    /// rebuilding an invite has to decide, rather than dropping it by omission the way
-    /// `InviteVerifier`'s server-normalization rebuild would have.
-    let ttl: UInt32?
+    /// Maximum age in seconds, stated by the issuer and signed. The server takes
+    /// `min(INVITE_TTL_SECONDS, ttl)`, so this can only shorten an invite's life; read it
+    /// through `effectiveTTLSeconds`.
+    let ttl: UInt32
 
-    // MARK: - Codable (omit nil `un`, empty v4 `ephKey`, and pre-v5 `ttl`)
-
-    enum CodingKeys: String, CodingKey {
-        case v, jti, uuid, deviceId, server, ephKey, ts, sig, un, ttl
-    }
-
-    init(
-        v: Int,
-        jti: String,
-        uuid: String,
-        deviceId: String,
-        server: String,
-        ephKey: String,
-        ts: Int,
-        sig: String,
-        un: String?,
-        ttl: UInt32?
-    ) {
-        self.ttl = ttl
-        self.v = v
-        self.jti = jti
-        self.uuid = uuid
-        self.deviceId = deviceId
-        self.server = server
-        self.ephKey = ephKey
-        self.ts = ts
-        self.sig = sig
-        self.un = un
-    }
-
-    init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: CodingKeys.self)
-        v = try c.decode(Int.self, forKey: .v)
-        jti = try c.decode(String.self, forKey: .jti)
-        uuid = try c.decode(String.self, forKey: .uuid)
-        deviceId = try c.decode(String.self, forKey: .deviceId)
-        server = try c.decode(String.self, forKey: .server)
-        ephKey = try c.decodeIfPresent(String.self, forKey: .ephKey) ?? ""
-        ts = try c.decode(Int.self, forKey: .ts)
-        sig = try c.decode(String.self, forKey: .sig)
-        un = try c.decodeIfPresent(String.self, forKey: .un)
-        ttl = try c.decodeIfPresent(UInt32.self, forKey: .ttl)
-    }
-
-    func encode(to encoder: Encoder) throws {
-        var c = encoder.container(keyedBy: CodingKeys.self)
-        try c.encode(v, forKey: .v)
-        try c.encode(jti, forKey: .jti)
-        try c.encode(uuid, forKey: .uuid)
-        try c.encode(deviceId, forKey: .deviceId)
-        try c.encode(server, forKey: .server)
-        if InviteConfig.carriesEphKey(version: v), !ephKey.isEmpty {
-            try c.encode(ephKey, forKey: .ephKey)
-        }
-        try c.encode(ts, forKey: .ts)
-        try c.encode(sig, forKey: .sig)
-        try c.encodeIfPresent(un, forKey: .un)
-        if InviteConfig.carriesTTL(version: v) {
-            try c.encodeIfPresent(ttl, forKey: .ttl)
-        }
-    }
+    /// The issuing account's address: its 32-byte Ed25519 recovery public key. Signed.
+    let addr: Data
 
     // MARK: - Validation
 
     /// Validate invite object structure
     /// - Throws: InviteValidationError if invalid
     func validate() throws {
-        guard InviteConfig.supportedVersions.contains(v) else {
+        guard v == InviteConfig.version else {
             throw InviteValidationError.unsupportedVersion(v)
         }
 
@@ -148,26 +78,13 @@ struct InviteObject: Codable, Equatable {
             throw InviteValidationError.invalidUserUUID
         }
 
-        // Device ID required for v2+
-        if v >= 2 {
-            guard deviceId.count == InviteConfig.deviceIdLength,
-                  deviceId.range(of: InviteConfig.deviceIdRegex, options: .regularExpression) != nil else {
-                throw InviteValidationError.invalidDeviceID
-            }
+        guard deviceId.count == InviteConfig.deviceIdLength,
+              deviceId.range(of: InviteConfig.deviceIdRegex, options: .regularExpression) != nil else {
+            throw InviteValidationError.invalidDeviceID
         }
 
         guard !server.isEmpty, server.contains(".") else {
             throw InviteValidationError.invalidServer
-        }
-
-        if InviteConfig.carriesEphKey(version: v) {
-            guard let ephKeyData = Data(base64Encoded: ephKey),
-                  ephKeyData.count == InviteConfig.ephKeyLengthBytes else {
-                throw InviteValidationError.invalidEphemeralKey
-            }
-        } else if !ephKey.isEmpty {
-            // v4+ must not carry dead crypto material
-            throw InviteValidationError.invalidEphemeralKey
         }
 
         let now = Int(Date().timeIntervalSince1970)
@@ -180,24 +97,18 @@ struct InviteObject: Codable, Equatable {
             throw InviteValidationError.invalidSignature
         }
 
-        // Mirrors the server (`INVITE_LIST_REVOKE_SERVER_SPEC` §4 rules 4–6). Absent on v5
-        // is an error rather than a silent fall back to the maximum: a missing value that
-        // means "twelve hours" is the dual meaning the whole field exists to remove. An
-        // overshoot is *not* an error — rule 7 clamps it — so it is accepted here and
-        // narrowed by `InviteConfig.effectiveTTL`.
-        if InviteConfig.carriesTTL(version: v) {
-            guard let ttl else { throw InviteValidationError.missingTTL }
-            guard ttl >= InviteConfig.minTTLSeconds else {
-                throw InviteValidationError.ttlBelowFloor(ttl)
-            }
-        } else if ttl != nil {
-            throw InviteValidationError.ttlOnUnsupportedVersion(v)
+        // Mirrors the server floor. An overshoot is not an error — the server clamps it — so it
+        // is accepted here and narrowed by `effectiveTTLSeconds`.
+        guard ttl >= InviteConfig.minTTLSeconds else {
+            throw InviteValidationError.ttlBelowFloor(ttl)
+        }
+
+        guard addr.count == AccountAddress.length else {
+            throw InviteValidationError.invalidAddress
         }
     }
-    
+
     /// How long this particular invite is worth, already clamped to the server maximum.
-    ///
-    /// v1–v4 have no stated TTL and get the global one, exactly as before.
     var effectiveTTLSeconds: TimeInterval {
         InviteConfig.effectiveTTL(stated: ttl)
     }
@@ -217,49 +128,32 @@ struct InviteObject: Codable, Equatable {
         let expiresAt = TimeInterval(ts) + (ttl ?? effectiveTTLSeconds)
         return max(0, expiresAt - now)
     }
-    
+
     // MARK: - Signing Data
-    
-    /// Get canonical string representation for signing
+
+    /// The signed canonical string: `v|jti|uuid|deviceId|server|ts|un|ttl|hex(addr)`.
     ///
-    /// Fields are concatenated in order:
-    /// - v1: v|jti|uuid|server|ephKey|ts
-    /// - v2: v|jti|uuid|deviceId|server|ephKey|ts
-    /// - v3: v|jti|uuid|deviceId|server|ephKey|ts|un  (un empty if nil)
-    /// - v4: v|jti|uuid|deviceId|server|ts|un  (no ephKey)
-    /// - v5: v|jti|uuid|deviceId|server|ts|un|ttl
-    ///
-    /// This exact order must be used for both signing and verification, and must match
-    /// `InviteToken::canonical_string` in `crates/crypto-agility/src/invites.rs`.
-    ///
-    /// **Every version is spelled out, and an unknown one throws.** This used to end in a
-    /// `default:` carrying the v4 shape, which meant a v5 token would be signed over a
-    /// string with no `ttl` — silently, and only on this side. The moment the server built
-    /// the v5 string *with* `ttl`, every such invite would fail with `InvalidSignature`, an
-    /// error naming keys while the actual disagreement was about which bytes were hashed.
-    /// Rust already refuses unknown versions (`other => Err(UnsupportedVersion)`); this now
-    /// does the same, so the two sides fail the same way at the same point.
+    /// Must match `InviteToken::canonical_string` in construct-server
+    /// (`crates/crypto-agility/src/invites.rs`) and Android byte for byte; the three are held to
+    /// `knst_invite.json`. UUIDs lowercase (Rust's `Uuid` formats that way), `un` empty when
+    /// absent, `ttl` decimal, `addr` lowercase hex.
     func canonicalString() throws -> String {
-        // Rust's Uuid formats with lowercase hex — match that to ensure
-        // client-signed canonical string matches server-verified canonical string.
-        let jtiLower = jti.lowercased()
-        let uuidLower = uuid.lowercased()
-        switch v {
-        case 1:
-            return "\(v)|\(jtiLower)|\(uuidLower)|\(server)|\(ephKey)|\(ts)"
-        case 2:
-            return "\(v)|\(jtiLower)|\(uuidLower)|\(deviceId)|\(server)|\(ephKey)|\(ts)"
-        case 3:
-            return "\(v)|\(jtiLower)|\(uuidLower)|\(deviceId)|\(server)|\(ephKey)|\(ts)|\(un ?? "")"
-        case 4:
-            // Signed capability without dead ephKey.
-            return "\(v)|\(jtiLower)|\(uuidLower)|\(deviceId)|\(server)|\(ts)|\(un ?? "")"
-        case 5:
-            guard let ttl else { throw InviteValidationError.missingTTL }
-            return "\(v)|\(jtiLower)|\(uuidLower)|\(deviceId)|\(server)|\(ts)|\(un ?? "")|\(ttl)"
-        default:
+        guard v == InviteConfig.version else {
             throw InviteValidationError.unsupportedVersion(v)
         }
+        let fields = [
+            "\(v)", jti.lowercased(), uuid.lowercased(), deviceId, server, "\(ts)",
+            un ?? "", "\(ttl)", InviteBinaryCodec.hex(addr),
+        ]
+        return fields.joined(separator: "|")
+    }
+
+    /// The same invite with a different signature — the one field the generator fills last.
+    func signed(_ signature: String) -> InviteObject {
+        InviteObject(
+            v: v, jti: jti, uuid: uuid, deviceId: deviceId, server: server, ts: ts,
+            sig: signature, un: un, ttl: ttl, addr: addr
+        )
     }
 }
 
@@ -267,17 +161,15 @@ struct InviteObject: Codable, Equatable {
 
 enum InviteValidationError: LocalizedError {
     case unsupportedVersion(Int)
-    case missingTTL
     case ttlBelowFloor(UInt32)
-    case ttlOnUnsupportedVersion(Int)
+    case invalidAddress
     case invalidJTI
     case invalidUserUUID
     case invalidDeviceID
     case invalidServer
-    case invalidEphemeralKey
     case invalidTimestamp
     case invalidSignature
-    
+
     var errorDescription: String? {
         switch self {
         case .unsupportedVersion(let v):
@@ -290,43 +182,32 @@ enum InviteValidationError: LocalizedError {
             return "Invalid device ID format (must be 32-char hex)"
         case .invalidServer:
             return "Invalid server FQDN"
-        case .invalidEphemeralKey:
-            return "Invalid ephemeral key (must be 32-byte Base64)"
         case .invalidTimestamp:
             return "Invalid timestamp"
         case .invalidSignature:
             return "Invalid signature (must be 64-byte Base64)"
-        case .missingTTL:
-            return "v5 invite without a ttl"
         case .ttlBelowFloor(let ttl):
             return "Invite ttl \(ttl)s is below the \(InviteConfig.minTTLSeconds)s floor"
-        case .ttlOnUnsupportedVersion(let v):
-            return "v\(v) invite must not carry a ttl"
+        case .invalidAddress:
+            return "Invite address must be a 32-byte key"
         }
     }
 }
 
 // MARK: - Encoding/Decoding Helpers
 //
-// Production transport (F1 fix):
+// Production transport:
 //   QR path  → raw compact binary (QR byte mode) — no base64
 //   URL path → base64url(compact binary) — text boundary only
 //
-// Compact layout ("CIv1"):
+// Compact layout ("CIv1"), v5:
 //   magic[4] "CIv1" | flags u8 | v u8
 //   jti[16] | uuid[16] | deviceId[16]
-//   [ephKey[32] if v<=3] | ts u64 BE | sig[64]
+//   ts u64 BE | sig[64]
 //   serverLen u8 | server UTF-8 | [unLen u8 | un UTF-8 if flags.hasUn]
-//   [ttl u32 BE if v>=5]
+//   ttl u32 BE | addr[32]
 //
-// `ttl` is gated on the version, not on a flag bit, the same way `ephKey` is. A flag would
-// be a second thing saying whether the field is there, free to disagree with `v` — and `v`
-// is already the authority, because the server derives the field's presence from it too.
-//
-// v4 bytes are unchanged: a v4 invite encodes and decodes exactly as it did before v5
-// existed, so nothing in flight is affected.
-//
-// Legacy base64(JSON) still decodes for the short TTL dual-read window.
+// Nothing follows `addr`; trailing bytes are refused. Fixed by `knst_invite.json`.
 
 extension InviteObject {
 
@@ -352,15 +233,6 @@ extension InviteObject {
         guard let deviceBytes = InviteBinaryCodec.data(hex: deviceId), deviceBytes.count == 16 else {
             throw InviteBinaryError.invalidDeviceId
         }
-        let ephBytes: Data?
-        if InviteConfig.carriesEphKey(version: v) {
-            guard let bytes = Data(base64Encoded: ephKey), bytes.count == InviteConfig.ephKeyLengthBytes else {
-                throw InviteBinaryError.invalidEphemeralKey
-            }
-            ephBytes = bytes
-        } else {
-            ephBytes = nil
-        }
         guard let sigBytes = Data(base64Encoded: sig), sigBytes.count == InviteConfig.signatureLengthBytes else {
             throw InviteBinaryError.invalidSignature
         }
@@ -383,10 +255,8 @@ extension InviteObject {
 
         var out = Data()
         out.reserveCapacity(
-            4 + 1 + 1 + 16 + 16 + 16
-            + (ephBytes?.count ?? 0) + 8 + 64 + 1 + serverData.count
-            + (unData.map { 1 + $0.count } ?? 0)
-            + (InviteConfig.carriesTTL(version: v) ? 4 : 0)
+            4 + 1 + 1 + 16 + 16 + 16 + 8 + 64 + 1 + serverData.count
+            + (unData.map { 1 + $0.count } ?? 0) + 4 + AccountAddress.length
         )
 
         out.append(Self.binaryMagic)
@@ -395,9 +265,6 @@ extension InviteObject {
         out.append(jtiBytes)
         out.append(uuidBytes)
         out.append(deviceBytes)
-        if let ephBytes {
-            out.append(ephBytes)
-        }
         out.append(Self.u64BE(UInt64(ts)))
         out.append(sigBytes)
         out.append(UInt8(serverData.count))
@@ -406,13 +273,8 @@ extension InviteObject {
             out.append(UInt8(unData.count))
             out.append(unData)
         }
-        if InviteConfig.carriesTTL(version: v) {
-            // `validate()` above already refused a v5 without one, so this cannot be nil —
-            // but it is spelled out rather than force-unwrapped, because a crash here is
-            // reachable from a decoded invite and that is attacker-supplied input.
-            guard let ttl else { throw InviteBinaryError.missingTTL }
-            out.append(Self.u32BE(ttl))
-        }
+        out.append(Self.u32BE(ttl))
+        out.append(addr)
         return out
     }
 
@@ -425,15 +287,14 @@ extension InviteObject {
         }
         let flags = try r.u8()
         let version = Int(try r.u8())
+        // Refused before reading on: an older layout has fields where v5 has others, and reading
+        // it as v5 would fail somewhere arbitrary with an error that names the wrong thing.
+        guard version == InviteConfig.version else {
+            throw InviteValidationError.unsupportedVersion(version)
+        }
         let jti = try uuidString(from: r.take(16))
         let uuid = try uuidString(from: r.take(16))
         let deviceId = InviteBinaryCodec.hex(try r.take(16))
-        let ephKey: String
-        if InviteConfig.carriesEphKey(version: version) {
-            ephKey = try r.take(InviteConfig.ephKeyLengthBytes).base64EncodedString()
-        } else {
-            ephKey = ""
-        }
         let ts = Int(try r.u64BE())
         let sig = try r.take(InviteConfig.signatureLengthBytes).base64EncodedString()
         let serverLen = Int(try r.u8())
@@ -448,7 +309,8 @@ extension InviteObject {
             let unData = try r.take(unLen)
             un = String(data: unData, encoding: .utf8)
         }
-        let ttl: UInt32? = InviteConfig.carriesTTL(version: version) ? try r.u32BE() : nil
+        let ttl = try r.u32BE()
+        let addr = try r.take(AccountAddress.length)
         guard r.isAtEnd else {
             throw InviteBinaryError.trailingBytes
         }
@@ -459,27 +321,23 @@ extension InviteObject {
             uuid: uuid,
             deviceId: deviceId,
             server: server,
-            ephKey: ephKey,
             ts: ts,
             sig: sig,
             un: un,
-            ttl: ttl
+            ttl: ttl,
+            addr: addr
         )
         try invite.validate()
         return invite
     }
 
-    /// Decode any supported on-the-wire blob: compact binary, or legacy JSON (dual-read window).
+    /// Decode an on-the-wire blob. Only the compact binary exists: the base64(JSON) form
+    /// belonged to v1–v3.
     static func decodePayload(_ data: Data) throws -> InviteObject {
-        if isCompactBinary(data) {
-            return try decodeBinary(data)
+        guard isCompactBinary(data) else {
+            throw InviteBinaryError.unrecognizedPayload
         }
-        // Legacy dual-read: base64(JSON) era stored JSON bytes after outer base64 decode.
-        if let invite = try? JSONDecoder().decode(InviteObject.self, from: data) {
-            try invite.validate()
-            return invite
-        }
-        throw InviteBinaryError.unrecognizedPayload
+        return try decodeBinary(data)
     }
 
     // MARK: Text-boundary encoding (deep links / clipboard)
@@ -489,47 +347,12 @@ extension InviteObject {
         InviteBinaryCodec.base64URLEncode(try encodeBinary())
     }
 
-    /// Decode from base64url or standard base64 of compact binary (or legacy JSON).
+    /// Decode from base64url or standard base64 of compact binary.
     static func fromBase64(_ encoded: String) throws -> InviteObject {
         guard let data = InviteBinaryCodec.base64URLOrStdDecode(encoded) else {
             throw DecodingError.dataCorrupted(DecodingError.Context(
                 codingPath: [],
                 debugDescription: "Invalid Base64 / base64url encoding"
-            ))
-        }
-        return try decodePayload(data)
-    }
-
-    // MARK: Compatibility aliases (old MessagePack-misnamed API)
-
-    /// - Note: Name is historical. Produces compact binary, not MessagePack/JSON.
-    func toMessagePack() throws -> Data { try encodeBinary() }
-
-    static func fromMessagePack(_ data: Data) throws -> InviteObject { try decodePayload(data) }
-
-    /// - Note: Prefer `toBase64URL()` for new call sites.
-    func toBase64() throws -> String { try toBase64URL() }
-
-    // MARK: Legacy JSON (debug / dual-read only)
-
-    func toJSON() throws -> String {
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
-        let data = try encoder.encode(self)
-        guard let json = String(data: data, encoding: .utf8) else {
-            throw EncodingError.invalidValue(self, EncodingError.Context(
-                codingPath: [],
-                debugDescription: "Failed to convert JSON data to UTF-8 string"
-            ))
-        }
-        return json
-    }
-
-    static func fromJSON(_ json: String) throws -> InviteObject {
-        guard let data = json.data(using: .utf8) else {
-            throw DecodingError.dataCorrupted(DecodingError.Context(
-                codingPath: [],
-                debugDescription: "Invalid UTF-8 in JSON string"
             ))
         }
         return try decodePayload(data)
@@ -573,28 +396,24 @@ enum InviteBinaryError: LocalizedError {
     case badMagic
     case invalidUUID
     case invalidDeviceId
-    case invalidEphemeralKey
     case invalidSignature
     case invalidServer
     case fieldTooLong(String)
     case truncated
     case trailingBytes
     case unrecognizedPayload
-    case missingTTL
 
     var errorDescription: String? {
         switch self {
         case .badMagic: return "Invite binary magic mismatch"
         case .invalidUUID: return "Invalid UUID in invite binary"
         case .invalidDeviceId: return "Invalid deviceId in invite binary"
-        case .invalidEphemeralKey: return "Invalid ephKey in invite binary"
         case .invalidSignature: return "Invalid signature in invite binary"
         case .invalidServer: return "Invalid server in invite binary"
         case .fieldTooLong(let f): return "Invite field too long: \(f)"
         case .truncated: return "Invite binary truncated"
         case .trailingBytes: return "Invite binary has trailing bytes"
         case .unrecognizedPayload: return "Unrecognized invite payload encoding"
-        case .missingTTL: return "v5 invite binary without a ttl"
         }
     }
 }

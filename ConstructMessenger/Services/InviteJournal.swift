@@ -35,9 +35,9 @@ struct InviteIssuance: Codable, Identifiable, Equatable {
     struct Mint: Codable, Equatable {
         let jti: String
         let at: Date
-        /// The life this capability was minted with — v5 states its own, below that the
-        /// global maximum applies. Optional so journals written before v5 decode unchanged;
-        /// absent means "whatever the global TTL is", which is what those entries had.
+        /// The life this capability was minted with. Optional only so journals written
+        /// before every invite stated one decode unchanged; absent means the global TTL, which
+        /// is what those entries had.
         var ttl: UInt32?
 
         init(jti: String, at: Date, ttl: UInt32? = nil) {
@@ -48,7 +48,9 @@ struct InviteIssuance: Codable, Identifiable, Equatable {
 
         /// Clamped the same way the server clamps it, so this list and the redeem result
         /// cannot disagree about whether an invite is still good.
-        var livesFor: TimeInterval { InviteConfig.effectiveTTL(stated: ttl) }
+        var livesFor: TimeInterval {
+            ttl.map { InviteConfig.effectiveTTL(stated: $0) } ?? InviteConfig.ttlSeconds
+        }
 
         func isLive(at now: Date) -> Bool {
             now.timeIntervalSince(at) < livesFor
@@ -149,27 +151,52 @@ enum InviteJournalDecision {
 
 /// Local, per-device record of issued invites.
 ///
-/// Persisted in `UserDefaults`: the contents are random UUIDs and timestamps, never the
-/// link itself and never anything about the recipient — the issuer does not learn who
-/// redeemed, and this journal does not either. It self-empties one TTL after the last
-/// mint, so it is a bounded window rather than a history.
+/// The contents are random UUIDs and timestamps, never the link itself and never anything about
+/// the recipient — the issuer does not learn who redeemed, and this journal does not either. It
+/// self-empties one TTL after the last mint, so it is a bounded window rather than a history.
+///
+/// Kept in `LocalRepositories.issuedInvites` since 2026-10-11, one row per code
+/// (`IssuedInviteStore`): `UserDefaults` on iOS as before, the crate's `issued_invites` on macOS.
+/// `issuances` is the store's rows grouped into acts, rebuilt after every write — a view of the
+/// store, never a second copy of it.
 @MainActor
 @Observable
 final class InviteJournal {
 
     static let shared = InviteJournal()
 
-    private static let storageKey = "invite_journal_v1"
-
-    private let defaults: UserDefaults
+    private let store: () -> any IssuedInviteStore
     private(set) var issuances: [InviteIssuance] = []
 
     /// The QR sitting currently on screen, if any. Nil while no sheet is showing, which is
     /// what makes a rotation after dismissal start a new act rather than extend a closed one.
     private var openQRSessionID: UUID?
+    @ObservationIgnored nonisolated(unsafe) private var replaced: NSObjectProtocol?
 
-    init(defaults: UserDefaults = .standard) {
-        self.defaults = defaults
+    /// The app's store, resolved on each use so a test or the macOS switch can replace it.
+    init() {
+        self.store = { LocalRepositories.issuedInvites }
+        load()
+        // A wipe replaces the store under a journal that outlives it (`shared`): the acts held
+        // here are the last account's and must not be shown to, or revoked by, the next one.
+        replaced = NotificationCenter.default.addObserver(
+            forName: .localStoreReplaced, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.reload() }
+        }
+    }
+
+    deinit {
+        if let replaced { NotificationCenter.default.removeObserver(replaced) }
+    }
+
+    /// A journal over `defaults` — a test's own suite.
+    convenience init(defaults: UserDefaults) {
+        self.init(store: DefaultsIssuedInviteStore(defaults: defaults))
+    }
+
+    init(store: any IssuedInviteStore) {
+        self.store = { store }
         load()
     }
 
@@ -208,33 +235,65 @@ final class InviteJournal {
     /// on its own. A mutation removing the clear survived every test, which is what a line
     /// with no observable effect looks like.
     func forget(actID: UUID) {
-        issuances.removeAll { $0.id == actID }
-        save()
+        guard let act = issuances.first(where: { $0.id == actID }) else { return }
+        write { try $0.delete(jtis: act.mints.map(\.jti)) }
     }
 
     private func record(kind: InviteIssuance.Kind, jti: String, at issuedAt: Date, ttl: UInt32?) {
-        let mint = InviteIssuance.Mint(jti: jti, at: issuedAt, ttl: ttl)
-        let openIndex = openQRSessionID.flatMap { id in issuances.firstIndex { $0.id == id } }
+        let openSitting = openQRSessionID.flatMap { id in issuances.contains { $0.id == id } ? id : nil }
 
-        switch InviteJournalDecision.placement(kind: kind, hasOpenQRSession: openIndex != nil) {
+        let sitting: UUID?
+        switch InviteJournalDecision.placement(kind: kind, hasOpenQRSession: openSitting != nil) {
         case .appendToOpenSession:
-            guard let openIndex else { return }
-            issuances[openIndex].append(mint)
+            sitting = openSitting
         case .startNewAct:
-            let act = InviteIssuance(kind: kind, mints: [mint])
-            issuances.append(act)
-            if kind == .qrSession { openQRSessionID = act.id }
+            sitting = kind == .qrSession ? UUID() : nil
+            if kind == .qrSession { openQRSessionID = sitting }
         }
-
-        prune()
-        save()
+        let row = IssuedInviteRecord(
+            jti: jti,
+            kind: kind == .qrSession ? IssuedInviteRecord.qr : IssuedInviteRecord.link,
+            issuedAt: issuedAt,
+            ttlSeconds: ttl ?? UInt32(InviteConfig.ttlSeconds),
+            sitting: sitting?.uuidString
+        )
+        write { try $0.record(row) }
     }
 
     // MARK: Persistence
 
-    private func prune() {
+    /// Forget what is held and read the store again — after it was replaced or emptied.
+    func reload() {
+        openQRSessionID = nil
+        load()
+    }
+
+    /// One write, then the codes past their life are dropped and the acts rebuilt from the store.
+    private func write(_ body: (any IssuedInviteStore) throws -> Void) {
+        do {
+            try body(store())
+        } catch {
+            Log.error("InviteJournal: write failed: \(error)", category: "Invite")
+        }
+        load()
+    }
+
+    private func load() {
+        let rows: [IssuedInviteRecord]
+        do {
+            rows = try store().all()
+        } catch {
+            // A journal that cannot be read is reported, not silently reset to empty: an
+            // empty list is the same shape as "nothing outstanding" and would be believed.
+            Log.error("InviteJournal: read failed, starting empty: \(error)", category: "Invite")
+            issuances = []
+            return
+        }
         let now = Date()
-        issuances = issuances.compactMap { $0.pruned(at: now) }
+        let expired = rows.filter { !Self.mint(of: $0).isLive(at: now) }.map(\.jti)
+        if !expired.isEmpty { try? store().delete(jtis: expired) }
+
+        issuances = Self.acts(from: rows.filter { !expired.contains($0.jti) })
         // A pruned-away sitting must not stay "open", or the next rotation would append to
         // an act that is no longer in the list and be silently dropped.
         if let openQRSessionID, !issuances.contains(where: { $0.id == openQRSessionID }) {
@@ -242,24 +301,26 @@ final class InviteJournal {
         }
     }
 
-    private func load() {
-        guard let data = defaults.data(forKey: Self.storageKey) else { return }
-        do {
-            issuances = try JSONDecoder().decode([InviteIssuance].self, from: data)
-            prune()
-        } catch {
-            // A journal that cannot be read is reported, not silently reset to empty: an
-            // empty list is the same shape as "nothing outstanding" and would be believed.
-            Log.error("InviteJournal: decode failed, starting empty: \(error)", category: "Invite")
-            issuances = []
-        }
+    private static func mint(of row: IssuedInviteRecord) -> InviteIssuance.Mint {
+        InviteIssuance.Mint(jti: row.jti, at: row.issuedAt, ttl: row.ttlSeconds)
     }
 
-    private func save() {
-        do {
-            defaults.set(try JSONEncoder().encode(issuances), forKey: Self.storageKey)
-        } catch {
-            Log.error("InviteJournal: encode failed: \(error)", category: "Invite")
+    /// Rows back into acts: the codes of one QR showing by their sitting, each copied link alone,
+    /// under an id derived from its jti so it stays the same act across launches.
+    static func acts(from rows: [IssuedInviteRecord]) -> [InviteIssuance] {
+        var sittings: [String: [IssuedInviteRecord]] = [:]
+        var acts: [InviteIssuance] = []
+        for row in rows {
+            if row.kind == IssuedInviteRecord.qr, let sitting = row.sitting {
+                sittings[sitting, default: []].append(row)
+            } else {
+                acts.append(InviteIssuance(id: UUID(uuidString: row.jti) ?? UUID(), kind: .link, mints: [mint(of: row)]))
+            }
         }
+        for (sitting, codes) in sittings {
+            let mints = codes.sorted { $0.issuedAt < $1.issuedAt }.map(mint(of:))
+            acts.append(InviteIssuance(id: UUID(uuidString: sitting) ?? UUID(), kind: .qrSession, mints: mints))
+        }
+        return acts
     }
 }

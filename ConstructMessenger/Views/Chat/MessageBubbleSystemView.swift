@@ -15,7 +15,7 @@ struct MessageBubbleSystemView: View {
         HStack {
             Spacer()
             Text(content)
-                .font(CTFont.regular(ChatUIConstants.Typography.systemSize))
+                .font(CTFont.ui(ChatUIConstants.Typography.systemSize))
                 .foregroundColor(Color.CT.textDim)
                 .padding(.horizontal, ChatUIConstants.Bubble.horizontalPadding)
                 .padding(.vertical, ChatUIConstants.Bubble.tightVerticalPadding + 1)

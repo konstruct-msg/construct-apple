@@ -3,7 +3,8 @@
 //  Construct Messenger
 //
 //  Custom media picker: CT chrome, multi-select grid, bottom quality segment +
-//  confirm checkmark. Gallery / Camera / Files. No in-sheet Send / HD chrome.
+//  confirm checkmark. Gallery · Stickers · Camera · Files. No in-sheet Send / HD chrome.
+//  Stickers is in-sheet content that sends on tap; Camera and Files are jump actions.
 //
 
 #if os(iOS)
@@ -17,18 +18,22 @@ struct MediaPickerSheet: View {
     let onConfirm: ([MediaAttachment]) -> Void
     /// Non-image / mixed document URLs from the Files tab.
     var onPickFiles: (([URL]) -> Void)? = nil
+    /// A tap on the Stickers tab sends at once and closes the sheet — no composer strip, no
+    /// caption. nil hides the tab (a caller with nowhere to send to).
+    var onSendSticker: ((StickerReference) -> Void)? = nil
 
     @Environment(\.dismiss) private var dismiss
     @State private var vm: MediaPickerViewModel
     @State private var showCamera = false
     @State private var showFilePicker = false
     @State private var tab: PickerTab = .gallery
+    @State private var stickers = StickerLibrary()
 
     @AppStorage("composer.sendOriginalPhotos") private var sendOriginal = false
     @AppStorage("composer.videoQuality") private var videoQualityRaw = VideoQuality.p1080.rawValue
 
     private enum PickerTab: Hashable {
-        case gallery, camera, files
+        case gallery, stickers, camera, files
     }
 
     /// Which quality segment to show (last-selected kind wins when mixed).
@@ -40,11 +45,13 @@ struct MediaPickerSheet: View {
     init(
         maxSelection: Int = 99,
         onConfirm: @escaping ([MediaAttachment]) -> Void,
-        onPickFiles: (([URL]) -> Void)? = nil
+        onPickFiles: (([URL]) -> Void)? = nil,
+        onSendSticker: ((StickerReference) -> Void)? = nil
     ) {
         self.maxSelection = maxSelection
         self.onConfirm = onConfirm
         self.onPickFiles = onPickFiles
+        self.onSendSticker = onSendSticker
         _vm = State(initialValue: MediaPickerViewModel(maxSelection: maxSelection))
     }
 
@@ -81,9 +88,16 @@ struct MediaPickerSheet: View {
     var body: some View {
         VStack(spacing: 0) {
             chrome
-            content
-            if vm.selectionCount > 0 {
-                selectionTray
+            if tab == .stickers, let onSendSticker {
+                StickerPickerView(library: stickers) { ref in
+                    onSendSticker(ref)
+                    dismiss()
+                }
+            } else {
+                content
+                if vm.selectionCount > 0 {
+                    selectionTray
+                }
             }
             bottomTabs
         }
@@ -130,8 +144,8 @@ struct MediaPickerSheet: View {
 
     private var chrome: some View {
         HStack(spacing: 12) {
-            Text(NSLocalizedString("media_picker_recents", comment: "").uppercased())
-                .font(CTFont.bold(13))
+            Text(NSLocalizedString(tab == .stickers ? "media_picker_tab_stickers" : "media_picker_recents", comment: "").uppercased())
+                .font(CTFont.bodyEmphasis)
                 .foregroundStyle(Color.CT.text)
                 .tracking(2)
 
@@ -147,7 +161,7 @@ struct MediaPickerSheet: View {
                 dismiss()
             } label: {
                 Image(systemName: "xmark.circle.fill")
-                    .font(.system(size: 22))
+                    .font(CTIcon.font(CTIcon.navLg, weight: .regular))
                     .foregroundStyle(Color.CT.textDim)
             }
             .buttonStyle(.plain)
@@ -188,7 +202,7 @@ struct MediaPickerSheet: View {
         VStack(spacing: 16) {
             Spacer()
             Text(LocalizedStringKey("media_picker_allow_access"))
-                .font(CTFont.regular(14))
+                .font(CTFont.ui(14))
                 .foregroundStyle(Color.CT.text)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 32)
@@ -196,7 +210,7 @@ struct MediaPickerSheet: View {
                 Task { await vm.prepare() }
             } label: {
                 Text(LocalizedStringKey("media_picker_allow_access_action"))
-                    .font(CTFont.bold(13))
+                    .font(CTFont.bodyEmphasis)
                     .foregroundStyle(Color.CT.bg)
                     .padding(.horizontal, 20)
                     .padding(.vertical, 12)
@@ -213,7 +227,7 @@ struct MediaPickerSheet: View {
         VStack(spacing: 16) {
             Spacer()
             Text(LocalizedStringKey("media_picker_access_denied"))
-                .font(CTFont.regular(14))
+                .font(CTFont.ui(14))
                 .foregroundStyle(Color.CT.text)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 32)
@@ -221,7 +235,7 @@ struct MediaPickerSheet: View {
                 vm.openSettings()
             } label: {
                 Text(LocalizedStringKey("media_picker_open_settings"))
-                    .font(CTFont.bold(13))
+                    .font(CTFont.bodyEmphasis)
                     .foregroundStyle(Color.CT.accent)
             }
             .buttonStyle(.plain)
@@ -238,7 +252,7 @@ struct MediaPickerSheet: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if vm.assets.isEmpty {
                 Text(LocalizedStringKey("media_picker_empty"))
-                    .font(CTFont.regular(14))
+                    .font(CTFont.ui(14))
                     .foregroundStyle(Color.CT.textDim)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
@@ -271,7 +285,7 @@ struct MediaPickerSheet: View {
         .overlay(alignment: .bottom) {
             if let msg = vm.statusMessage, !msg.isEmpty {
                 Text(msg)
-                    .font(CTFont.regular(11))
+                    .font(CTFont.caption)
                     .foregroundStyle(Color.CT.danger)
                     .padding(8)
                     .background(Color.CT.bg.opacity(0.9))
@@ -292,7 +306,7 @@ struct MediaPickerSheet: View {
                 Task { await confirmSelection() }
             } label: {
                 Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: 34, weight: .regular))
+                    .font(CTIcon.font(CTIcon.overlay, weight: .regular))
                     .foregroundStyle(Color.CT.accent)
                     .symbolRenderingMode(.hierarchical)
             }
@@ -314,12 +328,13 @@ struct MediaPickerSheet: View {
         }
     }
 
-    /// Same control family as VEIL OFF|AUTO|ON (`CTModeSelector`).
+    /// The system segmented control, like the VEIL mode in network settings.
     @ViewBuilder
     private var qualitySegment: some View {
         switch qualityMode {
         case .photo:
-            CTModeSelector(
+            Picker(
+                LocalizedStringKey("quality_original"),
                 selection: Binding(
                     get: { sendOriginal ? MediaQuality.original : MediaQuality.compressed },
                     set: { q in
@@ -327,31 +342,30 @@ struct MediaPickerSheet: View {
                         sendOriginal = hd
                         vm.setPhotoHD(hd)
                     }
-                ),
-                options: [MediaQuality.compressed, .original],
-                labels: [
-                    .compressed: NSLocalizedString("quality_compressed", comment: ""),
-                    .original: NSLocalizedString("quality_original", comment: "")
-                ],
-                width: nil
-            )
+                )
+            ) {
+                Text(LocalizedStringKey("quality_compressed")).tag(MediaQuality.compressed)
+                Text(LocalizedStringKey("quality_original")).tag(MediaQuality.original)
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
         case .video:
-            CTModeSelector(
+            Picker(
+                LocalizedStringKey("quality_original"),
                 selection: Binding(
                     get: { vm.trayVideoQuality },
                     set: { q in
                         videoQualityRaw = q.rawValue
                         vm.setVideoQualityForAllSelected(q)
                     }
-                ),
-                options: VideoQuality.allCases,
-                labels: [
-                    .p720: NSLocalizedString("media_picker_video_720", comment: ""),
-                    .p1080: NSLocalizedString("media_picker_video_1080", comment: ""),
-                    .original: NSLocalizedString("quality_original", comment: "")
-                ],
-                width: nil
-            )
+                )
+            ) {
+                Text(LocalizedStringKey("media_picker_video_720")).tag(VideoQuality.p720)
+                Text(LocalizedStringKey("media_picker_video_1080")).tag(VideoQuality.p1080)
+                Text(LocalizedStringKey("quality_original")).tag(VideoQuality.original)
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
         }
     }
 
@@ -360,6 +374,9 @@ struct MediaPickerSheet: View {
     private var bottomTabs: some View {
         HStack(spacing: 0) {
             tabButton(.gallery, titleKey: "media_picker_tab_gallery", systemImage: "photo.on.rectangle")
+            if onSendSticker != nil {
+                tabButton(.stickers, titleKey: "media_picker_tab_stickers", systemImage: "face.smiling")
+            }
             tabButton(.camera, titleKey: "camera", systemImage: "camera")
             tabButton(.files, titleKey: "files", systemImage: "doc")
         }
@@ -378,9 +395,9 @@ struct MediaPickerSheet: View {
         } label: {
             VStack(spacing: 4) {
                 Image(systemName: systemImage)
-                    .font(.system(size: 18, weight: .medium))
+                    .font(CTIcon.font(CTIcon.nav))
                 Text(LocalizedStringKey(titleKey))
-                    .font(CTFont.regular(10))
+                    .font(CTFont.micro)
             }
             .foregroundStyle(self.tab == tab ? Color.CT.accent : Color.CT.textDim)
             .frame(maxWidth: .infinity)
@@ -388,12 +405,13 @@ struct MediaPickerSheet: View {
         }
         .buttonStyle(.plain)
         .disabled(vm.isExporting)
+        .accessibilityIdentifier(tab == .stickers ? A11y.MediaPicker.tabStickers : "mediaPicker.tab.\(tab)")
     }
 
     private func handleTab(_ tab: PickerTab) {
         self.tab = tab
         switch tab {
-        case .gallery:
+        case .gallery, .stickers:
             break
         case .camera:
             showCamera = true
@@ -452,7 +470,7 @@ private struct MediaPickerCell: View {
                     Spacer()
                     HStack {
                         Text(formatDuration(asset.duration))
-                            .font(CTFont.regular(10))
+                            .font(CTFont.micro)
                             .foregroundStyle(.white)
                             .padding(.horizontal, 5)
                             .padding(.vertical, 2)
@@ -487,7 +505,7 @@ private struct MediaPickerCell: View {
                 )
             if let selectionIndex {
                 Text("\(selectionIndex)")
-                    .font(CTFont.bold(11))
+                    .font(CTFont.badge)
                     .foregroundStyle(Color.CT.bg)
             }
         }

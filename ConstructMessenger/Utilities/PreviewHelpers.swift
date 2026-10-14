@@ -111,6 +111,9 @@ struct PreviewHelpers {
         message.chat = chat
         message.isSentByMe = isSentByMe
         message.timestamp = timestamp ?? Date()
+        message.serverOrderKey = ServerMessageOrder.local(
+            timestamp: message.timestamp, messageId: message.id
+        )
         message.deliveryStatus = isSentByMe ? .delivered : .sent
         message.retryCount = 0
         message.applyStoredEncryption(plaintext: text, contactId: "preview")

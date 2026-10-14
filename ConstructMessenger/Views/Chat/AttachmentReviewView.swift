@@ -36,12 +36,6 @@ struct AttachmentReviewView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            CTNavBar(
-                title: counter,
-                showBack: true,
-                backAction: { dismiss() }
-            )
-
             TabView(selection: $index) {
                 ForEach(Array(attachments.enumerated()), id: \.offset) { i, attachment in
                     page(for: attachment).tag(i)
@@ -52,6 +46,7 @@ struct AttachmentReviewView: View {
             actions
         }
         .ctBackground()
+        .screenTitle(counter)
         .fullScreenCover(isPresented: $editing) {
             if let image = current?.displayImage {
                 MediaEditorView(
@@ -99,7 +94,7 @@ struct AttachmentReviewView: View {
                 }
             } label: {
                 Label(NSLocalizedString("delete", comment: ""), systemImage: "trash")
-                    .font(CTFont.regular(13))
+                    .font(CTFont.body)
                     .foregroundColor(Color.CT.danger)
                     .frame(maxWidth: .infinity)
                     .frame(height: CTLayout.controlHeight)
@@ -112,7 +107,7 @@ struct AttachmentReviewView: View {
             if current?.kind == .image {
                 Button { editing = true } label: {
                     Label(NSLocalizedString("edit", comment: ""), systemImage: "crop.rotate")
-                        .font(CTFont.regular(13))
+                        .font(CTFont.body)
                         .foregroundColor(Color.CT.accent)
                         .frame(maxWidth: .infinity)
                         .frame(height: CTLayout.controlHeight)

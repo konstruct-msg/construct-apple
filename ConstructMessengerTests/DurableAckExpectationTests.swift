@@ -29,11 +29,13 @@ final class DurableAckExpectationTests: XCTestCase {
     override func setUp() {
         super.setUp()
         container = PersistenceController(inMemory: true).container
+        LocalRepositories.useProcessedMessagesForTesting(CoreDataProcessedMessageStore(container: container))
         store.resetDurableWriteExpectationsForTesting()
     }
 
     override func tearDown() {
         store.resetDurableWriteExpectationsForTesting()
+        LocalRepositories.useProcessedMessagesForTesting(nil)
         container = nil
         super.tearDown()
     }
@@ -45,7 +47,7 @@ final class DurableAckExpectationTests: XCTestCase {
         let id = UUID().uuidString
         store.expectDurableWrite(id)
 
-        XCTAssertTrue(store.settleDurableWrite(id, in: context),
+        XCTAssertTrue(store.settleDurableWrite(id),
                       "the core required a durable record and Core Data has none — after a restart "
                       + "the message comes back with nothing remembering it")
     }
@@ -54,9 +56,9 @@ final class DurableAckExpectationTests: XCTestCase {
     func testWrittenObligationIsNotAGap() {
         let id = UUID().uuidString
         store.expectDurableWrite(id)
-        store.markProcessed(id, senderId: sender, in: context)
+        store.markProcessed(id, senderId: sender)
 
-        XCTAssertFalse(store.settleDurableWrite(id, in: context),
+        XCTAssertFalse(store.settleDurableWrite(id),
                        "an obligation the router honoured must be silent — a signal that fires on "
                        + "healthy traffic disables the check it belongs to")
     }
@@ -67,7 +69,7 @@ final class DurableAckExpectationTests: XCTestCase {
     func testNoObligationIsNeverAGap() {
         let id = UUID().uuidString
 
-        XCTAssertFalse(store.settleDurableWrite(id, in: context),
+        XCTAssertFalse(store.settleDurableWrite(id),
                        "the core did not ask about this message")
     }
 
@@ -80,8 +82,8 @@ final class DurableAckExpectationTests: XCTestCase {
         let id = UUID().uuidString
         store.expectDurableWrite(id)
 
-        XCTAssertTrue(store.settleDurableWrite(id, in: context))
-        XCTAssertFalse(store.settleDurableWrite(id, in: context),
+        XCTAssertTrue(store.settleDurableWrite(id))
+        XCTAssertFalse(store.settleDurableWrite(id),
                        "the obligation was already reported and cleared")
     }
 
@@ -90,9 +92,9 @@ final class DurableAckExpectationTests: XCTestCase {
     func testSettlingClearsTheObligationOnTheHealthyPathToo() {
         let id = UUID().uuidString
         store.expectDurableWrite(id)
-        store.markProcessed(id, senderId: sender, in: context)
+        store.markProcessed(id, senderId: sender)
 
-        _ = store.settleDurableWrite(id, in: context)
+        _ = store.settleDurableWrite(id)
         XCTAssertFalse(store.hasOutstandingDurableWriteForTesting(id))
     }
 
@@ -102,10 +104,10 @@ final class DurableAckExpectationTests: XCTestCase {
         let honoured = UUID().uuidString
         store.expectDurableWrite(unmet)
         store.expectDurableWrite(honoured)
-        store.markProcessed(honoured, senderId: sender, in: context)
+        store.markProcessed(honoured, senderId: sender)
 
-        XCTAssertFalse(store.settleDurableWrite(honoured, in: context))
-        XCTAssertTrue(store.settleDurableWrite(unmet, in: context))
+        XCTAssertFalse(store.settleDurableWrite(honoured))
+        XCTAssertTrue(store.settleDurableWrite(unmet))
     }
 
     // MARK: - Not covered here, on purpose

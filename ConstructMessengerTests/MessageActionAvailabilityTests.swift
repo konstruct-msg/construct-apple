@@ -7,7 +7,7 @@
 //  Copy, Quote & Reply and Edit all ask one question — is there text here a person can act on — and
 //  the menu answered it three different ways. Edit was right and said why. Quote & Reply tested
 //  media and file and forgot voice and profile. Copy tested nothing at all, so it appeared on every
-//  message and put `displayText` on the clipboard — which, for a voice message, is the serialised
+//  message and put `legacyBody` on the clipboard — which, for a voice message, is the serialised
 //  voice payload the bubble parses to find the audio, not a transcript.
 //
 //  Reported from device 2026-08-22: "невыполнимые действия на голосовом сообщении".

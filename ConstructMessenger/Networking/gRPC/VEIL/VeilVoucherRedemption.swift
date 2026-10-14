@@ -40,19 +40,19 @@ enum VeilVoucherRedemption {
     /// `LinkParser.parseContactLink`, which failed it with "scan a Konstruct contact
     /// code". The code was fine; only the reader was wrong.
     ///
-    /// Returns the message to show, or nil when this is not a voucher and the caller
+    /// Returns what to show, or nil when this is not a voucher and the caller
     /// should carry on with its own contact parse. Only the explicit
     /// `konstruct://veil-config` form is claimed here — never a bare capability, which
     /// must not be able to shadow a contact code.
-    static func messageIfVoucher(_ text: String) -> String? {
+    static func messageIfVoucher(_ text: String) -> AppError? {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let url = URL(string: trimmed),
               DeepLinkHandler.veilConfigBlob(from: url) != nil else { return nil }
         switch redeem(trimmed) {
         case .success:
-            return NSLocalizedString("veil_config_import_ok", comment: "")
+            return .notice(message: UserText("veil_config_import_ok").resolved, actionTitle: nil)
         case .failure(let error):
-            return error.localizedDescription
+            return AppError.from(error)
         }
     }
 

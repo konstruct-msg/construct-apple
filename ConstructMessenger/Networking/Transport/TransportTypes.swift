@@ -233,6 +233,14 @@ enum TransportEvent: Sendable, Equatable {
     /// No-op when on the direct path.
     case veilConfigChanged
 
+    /// A silent-push wake needs one fetch, and on VEIL the local listener is
+    /// already gone: iOS reclaimed it when it suspended the process. Ordinary
+    /// background RPC failures stay ignored — restarting on every one would
+    /// churn — but this wake is the fetch the banner depends on. Active VEIL
+    /// replaces the listener once. Direct is unchanged: a push must not move
+    /// a working direct path onto the relay.
+    case backgroundWake
+
     /// Effector reports the proxy successfully bound a port for `relay`.
     /// `restarted` is true when a fresh proxy instance was started (port may be reused).
     case proxyStarted(relay: String, port: UInt16, restarted: Bool)

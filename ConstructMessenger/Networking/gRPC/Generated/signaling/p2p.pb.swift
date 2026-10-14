@@ -15,13 +15,13 @@ import SwiftProtobuf
 // incompatible with the version of SwiftProtobuf to which you are linking.
 // Please ensure that you are building against the same version of the API
 // that was used to generate this file.
-fileprivate struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobuf.ProtobufAPIVersionCheck {
+fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobuf.ProtobufAPIVersionCheck {
   struct _2: SwiftProtobuf.ProtobufAPIVersion_2 {}
   typealias Version = _2
 }
 
 /// P2PConnectionType - How the P2P connection was established.
-public enum Shared_Proto_Signaling_V1_P2PConnectionType: SwiftProtobuf.Enum, Swift.CaseIterable {
+public nonisolated enum Shared_Proto_Signaling_V1_P2PConnectionType: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
 
   /// Unspecified (must be 0).
@@ -72,7 +72,7 @@ public enum Shared_Proto_Signaling_V1_P2PConnectionType: SwiftProtobuf.Enum, Swi
 }
 
 /// P2PDisconnectReason - Why the P2P session ended.
-public enum Shared_Proto_Signaling_V1_P2PDisconnectReason: SwiftProtobuf.Enum, Swift.CaseIterable {
+public nonisolated enum Shared_Proto_Signaling_V1_P2PDisconnectReason: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
 
   /// Unspecified (must be 0).
@@ -124,7 +124,7 @@ public enum Shared_Proto_Signaling_V1_P2PDisconnectReason: SwiftProtobuf.Enum, S
 
 /// P2PHandoffRequest - Server instructs both clients to establish a direct connection.
 /// Sent by the server to BOTH participants simultaneously.
-public struct Shared_Proto_Signaling_V1_P2PHandoffRequest: Sendable {
+public nonisolated struct Shared_Proto_Signaling_V1_P2PHandoffRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -183,7 +183,7 @@ public struct Shared_Proto_Signaling_V1_P2PHandoffRequest: Sendable {
 
 /// P2PHandoffAck - Client reports the outcome of a P2P handoff attempt.
 /// Sent by each client to the server after attempting to establish P2P.
-public struct Shared_Proto_Signaling_V1_P2PHandoffAck: Sendable {
+public nonisolated struct Shared_Proto_Signaling_V1_P2PHandoffAck: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -231,7 +231,7 @@ public struct Shared_Proto_Signaling_V1_P2PHandoffAck: Sendable {
 
 /// P2PDisconnect - Notifies the server that a client is dropping the P2P connection.
 /// After receiving this, the server resumes relaying messages for this pair.
-public struct Shared_Proto_Signaling_V1_P2PDisconnect: Sendable {
+public nonisolated struct Shared_Proto_Signaling_V1_P2PDisconnect: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -252,17 +252,17 @@ public struct Shared_Proto_Signaling_V1_P2PDisconnect: Sendable {
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
 
-fileprivate let _protobuf_package = "shared.proto.signaling.v1"
+fileprivate nonisolated let _protobuf_package = "shared.proto.signaling.v1"
 
-extension Shared_Proto_Signaling_V1_P2PConnectionType: SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Signaling_V1_P2PConnectionType: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0P2P_CONNECTION_TYPE_UNSPECIFIED\0\u{1}P2P_CONNECTION_TYPE_DIRECT\0\u{1}P2P_CONNECTION_TYPE_RELAY\0\u{1}P2P_CONNECTION_TYPE_SERVER_FALLBACK\0")
 }
 
-extension Shared_Proto_Signaling_V1_P2PDisconnectReason: SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Signaling_V1_P2PDisconnectReason: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0P2P_DISCONNECT_REASON_UNSPECIFIED\0\u{1}P2P_DISCONNECT_REASON_NORMAL\0\u{1}P2P_DISCONNECT_REASON_NETWORK_CHANGE\0\u{1}P2P_DISCONNECT_REASON_CONNECTION_LOST\0")
 }
 
-extension Shared_Proto_Signaling_V1_P2PHandoffRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Signaling_V1_P2PHandoffRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".P2PHandoffRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}p2p_session_id\0\u{3}peer_user_id\0\u{3}peer_device_id\0\u{3}conversation_id\0\u{3}ice_candidates\0\u{3}relay_address\0\u{1}timestamp\0\u{3}timeout_ms\0\u{c}\u{9}\u{c}")
 
@@ -331,7 +331,7 @@ extension Shared_Proto_Signaling_V1_P2PHandoffRequest: SwiftProtobuf.Message, Sw
   }
 }
 
-extension Shared_Proto_Signaling_V1_P2PHandoffAck: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Signaling_V1_P2PHandoffAck: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".P2PHandoffAck"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}p2p_session_id\0\u{1}success\0\u{3}connection_type\0\u{1}error\0\u{1}timestamp\0\u{3}rtt_ms\0\u{c}\u{7}\u{9}")
 
@@ -390,7 +390,7 @@ extension Shared_Proto_Signaling_V1_P2PHandoffAck: SwiftProtobuf.Message, SwiftP
   }
 }
 
-extension Shared_Proto_Signaling_V1_P2PDisconnect: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Signaling_V1_P2PDisconnect: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".P2PDisconnect"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}p2p_session_id\0\u{1}reason\0\u{1}timestamp\0\u{c}\u{4}\u{7}")
 

@@ -3,8 +3,9 @@
 //  Construct Messenger
 //
 //  Dedup cache for outgoing media uploads. When the user sends the same binary
-//  content more than once within the TTL window, the already-uploaded object
-//  (mediaId + URL + AES key) is reused without re-encrypting or re-uploading. This
+//  content to the same person more than once within the TTL window — a retry, a resend —
+//  the already-uploaded object (mediaId + URL + AES key) is reused without re-encrypting
+//  or re-uploading. Never for another person (`MediaUploadReuse`). This
 //  cuts upload traffic, local CPU, and server object duplication while staying E2EE-safe:
 //
 //    • The AES key lives inside the DR-encrypted message payload → protected on the wire.
@@ -14,13 +15,12 @@
 //      does not enable the cross-user "confirmation-of-file" attack.
 //
 //  Persistence (2026-06-15): the cache is persisted in the Keychain
-//  (AfterFirstUnlockThisDeviceOnly) so dedup survives app restarts — e.g. re-forwarding
-//  the same photo days later reuses one upload. The persisted values include the media
+//  (AfterFirstUnlockThisDeviceOnly) so dedup survives app restarts. The persisted values include the media
 //  AES keys; they are strictly less sensitive than the decrypted media already held in
 //  MediaManager's on-disk cache, and ThisDeviceOnly keeps them out of iCloud/backups.
 //
-//  Cache key: SHA-256 of the plaintext bytes (before AES-GCM encryption) — fixed-length,
-//  non-reversible.
+//  Cache key: SHA-256 of the recipient's account and the plaintext bytes (before AES-GCM
+//  encryption) — fixed-length, non-reversible (`cacheKey`).
 //
 //  TTL: 6 days. This MUST stay strictly below the media-service retention
 //  (`MEDIA_FILE_TTL_SECONDS`, default 7 days), which deletes objects by file mtime from
@@ -33,6 +33,26 @@
 import CryptoKit
 import Foundation
 import Security
+
+/// Whether an upload may stand for, or be stood for by, another upload of the same bytes.
+///
+/// Never across conversations. One object fetched in two chats tells the server that one person
+/// sent the same thing to two places — a graph of who passed what to whom, which the owner ruled
+/// out (2026-10-13, `decisions/forward-carries-no-author.md`). Until then the cache was global:
+/// a photo sent to two people within six days was one object.
+enum MediaUploadReuse: Sendable, Equatable {
+    /// An ordinary send to the account `peerId`: the same bytes sent again *to the same person*
+    /// within the TTL — a retry, a resend — reuse one object, which shows the server nothing it
+    /// had not seen.
+    case withinConversation(peerId: String)
+    /// A forward or a broadcast: a new object under a new key, never looked up and never recorded.
+    case freshObject
+
+    /// What an ordinary send to `peerId` may reuse; a forward reuses nothing.
+    static func forSend(to peerId: String, forwarded: Bool) -> MediaUploadReuse {
+        forwarded ? .freshObject : .withinConversation(peerId: peerId)
+    }
+}
 
 actor MediaSendCache {
     static let shared = MediaSendCache()
@@ -55,9 +75,9 @@ actor MediaSendCache {
     // MARK: - Public API
 
     /// Returns a cached upload result for `data` if one exists and is not expired.
-    func cachedUpload(for data: Data) -> MediaServiceClient.UploadedMedia? {
+    func cachedUpload(for data: Data, reuse: MediaUploadReuse) -> MediaServiceClient.UploadedMedia? {
+        guard let key = Self.cacheKey(data, reuse) else { return nil }
         loadIfNeeded()
-        let key = plaintextKey(data)
         guard let entry = store[key] else { return nil }
         guard Date().timeIntervalSince(entry.createdAt) < Self.ttl else {
             store.removeValue(forKey: key)
@@ -68,11 +88,12 @@ actor MediaSendCache {
     }
 
     /// Stores an upload result so it can be reused for identical plaintext.
-    func storeUpload(_ result: MediaServiceClient.UploadedMedia, for data: Data) {
+    func storeUpload(_ result: MediaServiceClient.UploadedMedia, for data: Data, reuse: MediaUploadReuse) {
+        guard let key = Self.cacheKey(data, reuse) else { return }
         loadIfNeeded()
         evictExpired()
         if store.count >= Self.maxEntries { evictOldest() }
-        store[plaintextKey(data)] = Entry(result: result, createdAt: Date())
+        store[key] = Entry(result: result, createdAt: Date())
         persist()
     }
 
@@ -105,8 +126,16 @@ actor MediaSendCache {
 
     // MARK: - Private helpers
 
-    private func plaintextKey(_ data: Data) -> String {
-        SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+    /// SHA-256 over the conversation and the bytes: the same bytes for another person are another
+    /// entry. Entries written before 2026-10-13 hashed the bytes alone, so no key computed here
+    /// matches one; they age out within the TTL. Nil for an upload that is never cached.
+    static func cacheKey(_ data: Data, _ reuse: MediaUploadReuse) -> String? {
+        guard case .withinConversation(let peerId) = reuse else { return nil }
+        var hasher = SHA256()
+        hasher.update(data: Data(peerId.utf8))
+        hasher.update(data: Data([0]))
+        hasher.update(data: data)
+        return hasher.finalize().map { String(format: "%02x", $0) }.joined()
     }
 
     private func evictExpired() {

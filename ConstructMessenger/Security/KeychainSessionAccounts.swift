@@ -54,9 +54,22 @@ enum KeychainSessionAccounts {
     /// Accounts that are not session state but are named here anyway, because this file is the
     /// one place the Keychain namespace is spelled.
     static let orchestratorState = "construct.orchestrator_state"
-    static let kyberSessionState = "construct.kyber_session_state"
-    static let pqDeferredPrefix = "construct.pq_deferred."
-    static let kyberSignedPrekeyPrefix = "construct.kyber.spk.sk."
+
+    // MARK: - Read by the notification extension as well
+
+    // The extension compiles this file and reads these from the app's keychain
+    // (`decisions/notification-extension-reads-only.md`), so both processes spell them here.
+    // Only the app writes any of them.
+    static let keyRecord = "crypto_private_keys"
+    static let deviceId = "deviceId"
+    static let userId = "userId"
+    static let sessionToken = "session_token"
+    /// The committed stream cursor (`StreamCursorStore`).
+    static let streamCursor = "stream_cursor"
+    /// The endpoint the app connects to, as `host:port` (`ServerEndpoint`).
+    static let serverEndpoint = "server_endpoint"
+    /// Whether the extension may reach the server directly (`ExtensionDirectPath`).
+    static let extensionDirectPath = "extension_direct_path"
 
     /// The account a core `SecureStoreSlot` is stored under on this platform.
     ///
@@ -67,21 +80,18 @@ enum KeychainSessionAccounts {
     /// says only *what* the bytes are; where they live is decided here and nowhere else.
     ///
     /// Android maps the same slots onto Keystore without inheriting any of these names.
+    /// The account this app's own archive *list* for `contactId` lives under — a JSON list of
+    /// `SessionArchive` kept by `SessionArchiveManager`. It was the core's `SessionArchive` slot
+    /// until 2026-09-27, when the core stopped archiving (its archive was END_SESSION's); the
+    /// namespace is unchanged, so what older builds stored is still found and still wiped.
+    static func archiveAccount(for contactId: String) -> String {
+        prefix + archiveInfix + contactId
+    }
+
     static func account(for slot: CfeSecureStoreSlot) -> String {
         switch slot {
         case .session(let contactId):
             return account(for: contactId)
-        case .sessionArchive(let contactId):
-            // The account the archive *list* lives under. Archives are a JSON list of
-            // `SessionArchive`, not a single blob, so the write goes through
-            // `SessionArchiveManager` — which builds its key from this same function.
-            return prefix + archiveInfix + contactId
-        case .pqDeferred(let contactId):
-            return pqDeferredPrefix + contactId
-        case .kyberSessionState:
-            return kyberSessionState
-        case .kyberSignedPrekey(let keyId):
-            return "\(kyberSignedPrekeyPrefix)\(keyId)"
         case .orchestratorState:
             return orchestratorState
         }

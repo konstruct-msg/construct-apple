@@ -52,10 +52,10 @@ final class AuthServiceClient: Sendable {
             let authClient = Shared_Proto_Services_V1_AuthService.Client(wrapping: grpcClient)
 
             var publicKeys = Shared_Proto_Services_V1_DevicePublicKeys()
-            publicKeys.verifyingKey = Data(registrationBundle.verifyingKey)
-            publicKeys.identityPublic = Data(registrationBundle.identityPublic)
-            publicKeys.signedPrekeyPublic = Data(registrationBundle.signedPrekeyPublic)
-            publicKeys.signedPrekeySignature = Data(registrationBundle.signature)
+            publicKeys.verifyingKey = registrationBundle.verifyingKey
+            publicKeys.identityPublic = registrationBundle.identityPublic
+            publicKeys.signedPrekeyPublic = registrationBundle.signedPrekeyPublic
+            publicKeys.signedPrekeySignature = registrationBundle.signature
             publicKeys.cryptoSuite = "Curve25519+Ed25519"
 
             var pow = Shared_Proto_Services_V1_PowSolution()
@@ -419,10 +419,10 @@ final class AuthServiceClient: Sendable {
 
             var payload = Shared_Proto_Services_V1_JoinRequestPayload()
             payload.pendingDeviceID = deviceId
-            payload.identityPublic = Data(bundle.identityPublic)
-            payload.verifyingKey = Data(bundle.verifyingKey)
-            payload.signedPrekeyPublic = Data(bundle.signedPrekeyPublic)
-            payload.signedPrekeySignature = Data(bundle.signature)
+            payload.identityPublic = bundle.identityPublic
+            payload.verifyingKey = bundle.verifyingKey
+            payload.signedPrekeyPublic = bundle.signedPrekeyPublic
+            payload.signedPrekeySignature = bundle.signature
             payload.deviceName = deviceName
             payload.platform = platform
             // The deprecated `*_b64` string fields are deliberately NOT set: identity-service
@@ -516,19 +516,6 @@ final class AuthServiceClient: Sendable {
             var request = Shared_Proto_Services_V1_StoreRecoveryBundleRequest()
             request.bundleCiphertext = ciphertext
             _ = try await authClient.storeRecoveryBundle(request: .init(message: request))
-        }
-    }
-
-    /// Fetch encrypted recovery bundle by username (unauthenticated).
-    /// Returns nil if no bundle is stored for this username.
-    func getRecoveryBundle(username: String) async throws -> Data? {
-        try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.recovery, allowAuthRetry: false) { grpcClient in
-            let authClient = Shared_Proto_Services_V1_AuthService.Client(wrapping: grpcClient)
-            var request = Shared_Proto_Services_V1_GetRecoveryBundleRequest()
-            request.username = username
-            let response = try await authClient.getRecoveryBundle(request: .init(message: request))
-            guard response.bundleExists else { return nil }
-            return response.bundleCiphertext
         }
     }
 }

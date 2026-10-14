@@ -68,10 +68,10 @@ struct RegistrationStageView: View {
         VStack(spacing: 44) {
             VStack(spacing: 8) {
                 Text(LocalizedStringKey("reg_establishing_trust"))
-                    .font(CTFont.bold(18))
+                    .font(CTFont.title)
                     .foregroundColor(Color.CT.text)
                 Text(LocalizedStringKey("reg_joining_network"))
-                    .font(CTFont.regular(13))
+                    .font(CTFont.body)
                     .foregroundColor(Color.CT.textDim)
             }
 
@@ -79,7 +79,7 @@ struct RegistrationStageView: View {
                 .frame(height: 72)
 
             Text(phaseLabel)
-                .font(CTFont.regular(11))
+                .font(CTFont.caption)
                 .foregroundColor(Color.CT.textDim)
                 .id(phaseLabel)
                 .transition(.opacity.animation(.easeInOut(duration: 0.4)))
@@ -92,7 +92,7 @@ struct RegistrationStageView: View {
     private var completeContent: some View {
         VStack(spacing: 28) {
             Text(LocalizedStringKey("reg_welcome"))
-                .font(CTFont.bold(24))
+                .font(CTFont.ui(24, weight: .bold))
                 .foregroundColor(Color.CT.text)
 
             VStack(spacing: 0) {
@@ -104,7 +104,7 @@ struct RegistrationStageView: View {
                     CTSep()
                 }
                 if !deviceId.isEmpty {
-                    DetailRow(label: NSLocalizedString("reg_label_device_id", comment: ""), value: String(deviceId.prefix(16)) + "…")
+                    DetailRow(label: NSLocalizedString("reg_label_device_id", comment: ""), value: String(deviceId.prefix(16)) + "…", technical: true)
                 }
             }
             .background(Color.CT.bgMsg)
@@ -118,10 +118,10 @@ struct RegistrationStageView: View {
     private func errorContent(_ message: String) -> some View {
         VStack(spacing: 20) {
             Text(LocalizedStringKey("reg_error_title"))
-                .font(CTFont.bold(18))
+                .font(CTFont.title)
                 .foregroundColor(Color.CT.danger)
             Text(message)
-                .font(CTFont.regular(13))
+                .font(CTFont.body)
                 .foregroundColor(Color.CT.textDim)
                 .multilineTextAlignment(.center)
         }
@@ -134,18 +134,18 @@ struct RegistrationStageView: View {
     private var actionButton: some View {
         switch step {
         case .complete:
-            CTButton(label: NSLocalizedString("reg_continue", comment: "").uppercased()) {
+            CTButton(label: NSLocalizedString("reg_continue", comment: "")) {
                 onComplete?()
             }
             .accessibilityIdentifier(A11y.Registration.continue)
         case .error:
-            CTButton(label: NSLocalizedString("reg_try_again", comment: "").uppercased(), isDestructive: true) {
+            CTButton(label: NSLocalizedString("reg_try_again", comment: ""), isDestructive: true) {
                 onDismiss?()
             }
             .accessibilityIdentifier(A11y.Registration.retry)
         default:
             Button(NSLocalizedString("reg_cancel", comment: "")) { onDismiss?() }
-                .font(CTFont.regular(13))
+                .font(CTFont.body)
                 .foregroundColor(Color.CT.textDim)
                 .buttonStyle(.plain)
                 .accessibilityIdentifier(A11y.Registration.cancel)
@@ -182,14 +182,17 @@ struct RegistrationStageView: View {
 
     struct DetailRow: View {
         let label: String; let value: String
+        /// The device id row is machine output and stays monospace; the username and the mode
+        /// are not. The row cannot tell, so the caller says.
+        var technical: Bool = false
         var body: some View {
             HStack {
                 Text(label)
-                    .font(CTFont.regular(12))
+                    .font(CTFont.secondary)
                     .foregroundColor(Color.CT.textDim)
                 Spacer()
                 Text(value)
-                    .font(CTFont.bold(12))
+                    .font(technical ? CTFont.mono(12, weight: .bold) : CTFont.ui(12, weight: .bold))
                     .foregroundColor(Color.CT.text)
             }
             .padding(.horizontal, CTLayout.edgePad)
@@ -215,8 +218,6 @@ struct RegistrationFlowView: View {
 
     // Generated keys
     @State private var registrationBundle: RegistrationBundleFields? = nil
-    @State private var signingKey: Data = Data()
-    @State private var identityKey: Data = Data()
 
     var body: some View {
         RegistrationStageView(
@@ -234,18 +235,33 @@ struct RegistrationFlowView: View {
         )
         .ctBackground()
         #if os(iOS)
-        .hideSystemNavBar()
+        // No bar while the device registers: there is no way back out of it.
+        .toolbar(.hidden, for: .navigationBar)
         .navigationBarBackButtonHidden(true)
         #endif
         .onAppear { authViewModel.isRegistrationInProgress = true }
         .onDisappear { authViewModel.isRegistrationInProgress = false }
         .task {
             guard !hasStarted else { return }
-            // Guard against re-running if keys were already saved (e.g. view recreated during dismiss)
-            guard !KeychainManager.shared.isDeviceRegistered() else { return }
+            // Guard against re-running once registration finished (e.g. view recreated during dismiss)
+            guard Self.shouldRegister(
+                hasKeys: KeychainManager.shared.isDeviceRegistered(),
+                hasUserId: KeychainManager.shared.loadUserID() != nil
+            ) else { return }
             hasStarted = true
             await startRegistration()
         }
+    }
+
+    /// Whether this screen runs registration.
+    ///
+    /// Keys in the Keychain do not mean the server knows them: `startRegistration` saves them
+    /// before its first RPC, so a lost response can be retried with the same identity. Until
+    /// 2026-09-29 the guard read keys alone, so a registration that failed once returned here on
+    /// every retry and stayed on "generating keys" forever — and the reuse branch below was
+    /// unreachable. Only the user id, saved after the server answered, means it is done.
+    static func shouldRegister(hasKeys: Bool, hasUserId: Bool) -> Bool {
+        !(hasKeys && hasUserId)
     }
 
     private func startRegistration() async {
@@ -254,48 +270,34 @@ struct RegistrationFlowView: View {
             currentStep = .generatingKeys
 
             let savedId = KeychainManager.shared.loadDeviceID()
-            let savedSigning = KeychainManager.shared.loadDeviceSigningKey()
-            let savedIdentity = KeychainManager.shared.loadDeviceIdentityKey()
+            let savedKeyRecord = KeychainManager.shared.loadPrivateKeysData()
             let savedBundle = RegistrationFlowView.loadSavedBundle()
 
-            if let sid = savedId, let ssign = savedSigning, let sidentity = savedIdentity,
-               let sbundle = savedBundle {
+            // The key record is what the core loaded from at launch, so reusing it keeps the
+            // bundle, the id and the core's keys one identity.
+            if let sid = savedId, savedKeyRecord != nil, let sbundle = savedBundle {
                 // Reuse keys from a previous attempt that failed mid-flight.
                 // Don't regenerate — the keys may already be registered on the server
                 // (the RPC could have timed out after the server persisted the data).
                 Log.info("Reusing previously generated keys: device_id=\(sid)", category: "Registration")
                 deviceId = sid
-                signingKey = ssign
-                identityKey = sidentity
                 registrationBundle = sbundle
             } else {
                 // Generate real cryptographic keys using Rust core
-                let (generatedDeviceId, bundle, signingKeyData, identityKeyData) = try CryptoManager.shared.generateRegistrationBundle()
+                let (generatedDeviceId, bundle) = try CryptoManager.shared.generateRegistrationBundle()
 
                 deviceId = generatedDeviceId
                 registrationBundle = bundle
-                signingKey = signingKeyData
-                identityKey = identityKeyData
 
                 Log.info("Generated keys: device_id=\(generatedDeviceId)", category: "Registration")
-                let verifyingKeyB64 = Data(bundle.verifyingKey).base64EncodedString()
+                let verifyingKeyB64 = bundle.verifyingKey.base64EncodedString()
                 Log.info("Registration bundle verifying_key: \(verifyingKeyB64)", category: "Registration")
 
-                do {
-                    let derivedVerifyingKey = try deriveVerifyingKeyFromSecret(identitySecretKey: [UInt8](signingKeyData))
-                    let derivedBase64 = Data(derivedVerifyingKey).base64EncodedString()
-                    Log.info("Derived verifying key from signing_secret: \(derivedBase64)", category: "Registration")
-                } catch {
-                    Log.info("Failed to derive verifying key from signing_secret: \(error.localizedDescription)", category: "Registration")
-                }
-
-                // Save device keys and bundle IMMEDIATELY — before any network call.
-                // If the registration RPC succeeds on the server but the response is
-                // lost (deadline exceeded), the next launch will find these keys and
-                // successfully authenticate instead of generating a new identity.
+                // Save the device id and bundle IMMEDIATELY — before any network call (the
+                // key record was saved by `generateRegistrationBundle`). If the registration
+                // RPC succeeds on the server but the response is lost (deadline exceeded), the
+                // next launch finds them and authenticates instead of minting a new identity.
                 KeychainManager.shared.saveDeviceID(deviceId)
-                KeychainManager.shared.saveDeviceSigningKey(signingKey)
-                KeychainManager.shared.saveDeviceIdentityKey(identityKey)
                 RegistrationFlowView.saveBundle(bundle)
                 Log.info("Device keys saved to Keychain before RPC", category: "Registration")
             }
@@ -335,7 +337,7 @@ struct RegistrationFlowView: View {
                 username: username,
                 deviceId: deviceId,
                 registrationBundle: registrationBundle ?? RegistrationBundleFields(
-                    identityPublic: [], signedPrekeyPublic: [], signature: [], verifyingKey: [], suiteId: 0
+                    identityPublic: Data(), signedPrekeyPublic: Data(), signature: Data(), verifyingKey: Data(), suiteId: 0
                 ),
                 challenge: challenge,
                 powSolution: solution
@@ -362,27 +364,21 @@ struct RegistrationFlowView: View {
             //    where keys were loaded from Keychain but not yet saved for this run).
             Log.info("Confirming device credentials in Keychain...", category: "Registration")
             KeychainManager.shared.saveDeviceID(deviceId)
-            KeychainManager.shared.saveDeviceSigningKey(signingKey)
-            KeychainManager.shared.saveDeviceIdentityKey(identityKey)
             
             // 2. Verify Keychain saves
             Log.info("Verifying Keychain data...", category: "Registration")
             let savedDeviceId = KeychainManager.shared.loadDeviceID()
-            let savedSigningKey = KeychainManager.shared.loadDeviceSigningKey()
-            let savedIdentityKey = KeychainManager.shared.loadDeviceIdentityKey()
+            let savedKeyRecordAfter = KeychainManager.shared.loadPrivateKeysData()
+            let keychainOK = savedDeviceId != nil && savedKeyRecordAfter != nil
             
-            let keychainOK = savedDeviceId != nil && savedSigningKey != nil && savedIdentityKey != nil
-            
-            if keychainOK {
-                Log.info("   deviceId: \(savedDeviceId!.prefix(16))... (\(savedDeviceId!.count) chars)", category: "Registration")
-                Log.info("   signingKey: \(savedSigningKey!.count) bytes", category: "Registration")
-                Log.info("   identityKey: \(savedIdentityKey!.count) bytes", category: "Registration")
+            if let savedDeviceId, let savedKeyRecordAfter {
+                Log.info("   deviceId: \(savedDeviceId.prefix(16))... (\(savedDeviceId.count) chars)", category: "Registration")
+                Log.info("   keyRecord: \(savedKeyRecordAfter.count) bytes", category: "Registration")
                 Log.info("   isDeviceRegistered: \(KeychainManager.shared.isDeviceRegistered())", category: "Registration")
             } else {
                 Log.error("   Keychain verification FAILED!", category: "Registration")
                 Log.error("      deviceId: \(savedDeviceId != nil ? "✓" : "✗")", category: "Registration")
-                Log.error("      signingKey: \(savedSigningKey != nil ? "✓" : "✗")", category: "Registration")
-                Log.error("      identityKey: \(savedIdentityKey != nil ? "✓" : "✗")", category: "Registration")
+                Log.error("      keyRecord: \(savedKeyRecordAfter != nil ? "✓" : "✗")", category: "Registration")
             }
             
             // 3. Save session tokens + userId
@@ -445,37 +441,15 @@ struct RegistrationFlowView: View {
                 await BlindTokenService.shared.bootstrapInitialBatch()
             }
 
-            // 6.5 Upload Kyber SPK + OTPKs in a single request (detached — survives view dismissal)
-            Log.info("Uploading Kyber SPK + OTPKs (PQC)...", category: "Registration")
-            do {
-                // Two-phase: generate the Kyber SPK in memory and commit to Keychain ONLY after the
-                // server confirms the upload — never write-before-confirm (would desync the local
-                // private key ahead of the server public on a failed upload). If the detached upload
-                // fails/never completes, the migration flag stays unset and migrateIfNeeded re-drives
-                // it next launch. See key-store-consolidation-and-server-authority (P1).
-                let spk = try PQCKeyManager.shared.generateKyberSPKInMemory()
-                let spkSig = try PQCKeyManager.signKyberKey(publicKey: spk.publicKey)
-                let spkTuple = (keyId: spk.keyId, publicKey: spk.publicKey, signature: spkSig)
-                let capturedDeviceId = deviceId
-                Task.detached(priority: .utility) {
-                    do {
-                        let kyberCount = try await PQCKeyManager.generateAndUploadKyberOtpks(
-                            count: 50,
-                            deviceId: capturedDeviceId,
-                            kyberSignedPreKey: spkTuple
-                        )
-                        try PQCKeyManager.shared.commitKyberSPK(publicKey: spk.publicKey, secretKey: spk.secretKey, keyId: spk.keyId)
-                        UserDefaults.standard.set(true, forKey: "pqcKyberSPKMigrationV1Done")
-                        Log.info("   Kyber SPK uploaded + committed (keyId=\(spk.keyId))", category: "Registration")
-                        Log.info("   Kyber OTPKs on server: \(kyberCount)", category: "Registration")
-                    } catch {
-                        Log.error("   Kyber PQC upload failed (will retry on next launch): \(error)", category: "Registration")
-                    }
-                }
-            } catch {
-                Log.error("   Kyber PQC key generation failed: \(error)", category: "Registration")
+            // 6.5 Publish the Kyber SPK, the first Kyber one-time keys and the hybrid identity in
+            // one request (detached — survives view dismissal). A failure is retried on every
+            // launch: the pending key is persisted, so the retry sends the same one.
+            Log.info("Publishing Kyber prekeys (PQXDH v2)...", category: "Registration")
+            let capturedDeviceId = deviceId
+            Task.detached(priority: .utility) {
+                await KyberPrekeyService.publishIfNeeded(deviceId: capturedDeviceId)
             }
-            
+
             Log.info("   isAuthenticated: \(authViewModel.isAuthenticated)", category: "Registration")
             Log.info("   currentUserId: \(authViewModel.currentUserId ?? "nil")", category: "Registration")
             
@@ -498,7 +472,7 @@ struct RegistrationFlowView: View {
             
         } catch {
             Log.error("Registration failed: \(error)", category: "Registration")
-            currentStep = .error(error.userFacingMessage)
+            currentStep = .error(username == nil ? error.userFacingMessage : error.usernameFacingMessage)
         }
     }
 }
@@ -509,10 +483,10 @@ struct RegistrationFlowView: View {
 private extension RegistrationFlowView {
     static func saveBundle(_ bundle: RegistrationBundleFields) {
         PendingRegistrationStore.save(
-            identityPublic: Data(bundle.identityPublic),
-            signedPrekeyPublic: Data(bundle.signedPrekeyPublic),
-            signature: Data(bundle.signature),
-            verifyingKey: Data(bundle.verifyingKey),
+            identityPublic: bundle.identityPublic,
+            signedPrekeyPublic: bundle.signedPrekeyPublic,
+            signature: bundle.signature,
+            verifyingKey: bundle.verifyingKey,
             suiteId: bundle.suiteId
         )
     }
@@ -520,10 +494,10 @@ private extension RegistrationFlowView {
     static func loadSavedBundle() -> RegistrationBundleFields? {
         guard let t = PendingRegistrationStore.load() else { return nil }
         return RegistrationBundleFields(
-            identityPublic: [UInt8](t.identityPublic),
-            signedPrekeyPublic: [UInt8](t.signedPrekeyPublic),
-            signature: [UInt8](t.signature),
-            verifyingKey: [UInt8](t.verifyingKey),
+            identityPublic: t.identityPublic,
+            signedPrekeyPublic: t.signedPrekeyPublic,
+            signature: t.signature,
+            verifyingKey: t.verifyingKey,
             suiteId: t.suiteId
         )
     }

@@ -16,13 +16,11 @@ struct DevicesView: View {
     var showNavBar: Bool = true
 
     @Environment(AuthViewModel.self) private var authViewModel
-    @Environment(\.dismiss) private var dismiss
 
     @State private var devices: [AuthServiceClient.LinkedDevice] = []
     @State private var isLoading = false
     @State private var errorMessage: String? = nil
     @State private var showingQRSheet = false
-    @State private var showingScanner = false
     @State private var deviceToRevoke: AuthServiceClient.LinkedDevice? = nil
     @State private var showRevokeConfirm = false
     @State private var showSignOutConfirm = false
@@ -34,17 +32,6 @@ struct DevicesView: View {
     var body: some View {
         let otherDevices = devices.filter { !$0.isCurrent }
         VStack(spacing: 0) {
-            if showNavBar {
-                CTNavBar(
-                    title: NSLocalizedString("linked_devices", comment: ""),
-                    showBack: true,
-                    backAction: { dismiss() }
-                ) {
-                    EmptyView()
-                } trailing: {
-                    EmptyView()
-                }
-            }
 
             ScrollView {
             LazyVStack(spacing: DevicesSettingsLayout.listSpacing) {
@@ -82,7 +69,7 @@ struct DevicesView: View {
                             }
                             if otherDevices.count > 1 {
                                 Text(LocalizedStringKey("other_devices_hint"))
-                                    .font(CTFont.regular(11))
+                                    .font(CTFont.caption)
                                     .foregroundStyle(Color.CT.textDim)
                                     .settingsSectionHintInsets()
                             }
@@ -93,33 +80,16 @@ struct DevicesView: View {
                     if DeviceLinkOfferPolicy.isLinkingOffered {
                         VStack(alignment: .leading, spacing: DevicesSettingsLayout.sectionSpacing) {
                             CTSectionGroup {
-                                #if os(iOS)
-                                // Primary: open the camera to scan the QR shown on the other device.
-                                ConstructButtonRow(systemImage: "qrcode.viewfinder", title: LocalizedStringKey("link_new_device")) {
-                                    showingScanner = true
-                                }
-                                .accessibilityIdentifier(A11y.Devices.linkNew)
-                                ConstructRowDivider(indent: DevicesSettingsLayout.dividerIndent)
-                                // Secondary: show this device's QR (camera-broken fallback / other device scans us).
-                                ConstructButtonRow(systemImage: "qrcode", title: LocalizedStringKey("device_link_show_qr")) {
-                                    showingQRSheet = true
-                                }
-                                .accessibilityIdentifier(A11y.Devices.showQR)
-                                #else
-                                // macOS has no camera — the only path is showing this device's QR.
-                                ConstructButtonRow(systemImage: "qrcode", title: LocalizedStringKey("link_new_device")) {
-                                    showingQRSheet = true
-                                }
-                                #endif
+                                DeviceLinkActions { showingQRSheet = true }
                             }
                             Text(LocalizedStringKey("linked_devices_hint"))
-                                .font(CTFont.regular(12))
+                                .font(CTFont.secondary)
                                 .foregroundStyle(Color.CT.textDim)
                                 .settingsSectionHintInsets()
                         }
                     }
 
-                    // MARK: - History retry (DEBUG override or enabled flag)
+                    // MARK: - History retry (stand build or enabled flag)
                     if DeviceLinkHistorySyncPolicy.isOffered {
                         VStack(alignment: .leading, spacing: DevicesSettingsLayout.sectionSpacing) {
                             CTSettingsSectionHeader(title: NSLocalizedString("history_sync_settings_section", comment: ""))
@@ -148,7 +118,7 @@ struct DevicesView: View {
                                 }
                             }
                             Text(LocalizedStringKey("history_sync_settings_hint"))
-                                .font(CTFont.regular(12))
+                                .font(CTFont.secondary)
                                 .foregroundStyle(Color.CT.textDim)
                                 .settingsSectionHintInsets()
                         }
@@ -175,7 +145,7 @@ struct DevicesView: View {
                             }
                         }
                         Text(LocalizedStringKey("sign_out_all_hint"))
-                            .font(CTFont.regular(12))
+                            .font(CTFont.secondary)
                             .foregroundStyle(Color.CT.textDim)
                             .settingsSectionHintInsets()
                     }
@@ -186,7 +156,7 @@ struct DevicesView: View {
         } // VStack
         .background(Color.CT.bg.ignoresSafeArea())
         #if os(iOS)
-        .hideSystemNavBar()
+        .screenTitle(NSLocalizedString("linked_devices", comment: ""), shown: showNavBar)
         #endif
         .refreshable { await loadDevices() }
         .task { await loadDevices() }
@@ -197,6 +167,7 @@ struct DevicesView: View {
                 userId: KeychainManager.shared.loadUserID() ?? "",
                 localDeviceId: KeychainManager.shared.loadDeviceID() ?? ""
             )
+            .sheetNavigation(closes: false)
         }
         .sheet(item: $historyRetryKind) { kind in
             HistoryTransferSendView(
@@ -204,12 +175,10 @@ struct DevicesView: View {
                 userId: KeychainManager.shared.loadUserID() ?? "",
                 peerDeviceId: devices.first(where: { !$0.isCurrent })?.id ?? ""
             )
+            .sheetNavigation()
             .environment(\.managedObjectContext, PersistenceController.shared.container.viewContext)
         }
-        .sheet(isPresented: $showingQRSheet) { DeviceLinkQRSheet() }
-        #if os(iOS)
-        .sheet(isPresented: $showingScanner) { DeviceLinkScanView() }
-        #endif
+        .sheet(isPresented: $showingQRSheet) { DeviceLinkQRSheet().sheetNavigation() }
 
         // MARK: Confirmations — revoke device
         .confirmationDialog(
@@ -287,7 +256,11 @@ struct DevicesView: View {
         do {
             devices = try await AuthServiceClient.shared.listDevices()
         } catch {
-            errorMessage = error.localizedDescription
+            // `.refreshable` cancels its task when the list under it redraws (`isLoading` swaps the
+            // spinner for the rows), and `.task` starts the same load. A cancelled load is not a
+            // failure: the other one is still running, and an alert for it says nothing true.
+            if error is CancellationError || Task.isCancelled { return }
+            errorMessage = error.userFacingMessage
             Log.error("listDevices failed: \(error)", category: "DevicesView")
         }
     }
@@ -309,7 +282,7 @@ struct DevicesView: View {
             try await AuthServiceClient.shared.revokeDevice(deviceId: device.id)
             await loadDevices()
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = error.userFacingMessage
             Log.error("revokeDevice failed: \(error)", category: "DevicesView")
         }
     }
@@ -342,7 +315,7 @@ private struct DeviceRow: View {
 
             VStack(alignment: .leading, spacing: DevicesSettingsLayout.deviceMetaSpacing) {
                 Text(displayName)
-                    .font(CTFont.bold(16))
+                    .font(CTFont.ui(16, weight: .bold))
 
                 // The device id, in the same eight hex characters every log line prints.
                 //
@@ -356,7 +329,7 @@ private struct DeviceRow: View {
                 // It is also the string `DEVICE_SET` prints at every authenticated session, so the
                 // screen and the log are comparable without translating between them.
                 Text(device.id.prefix(8))
-                    .font(CTFont.regular(DevicesSettingsLayout.deviceIdFontSize))
+                    .font(CTFont.mono(DevicesSettingsLayout.deviceIdFontSize))
                     .foregroundStyle(Color.CT.textDim)
                     .textSelection(.enabled)
 
@@ -366,12 +339,12 @@ private struct DeviceRow: View {
                             .font(.system(size: DevicesSettingsLayout.currentStatusDotSize))
                             .foregroundStyle(Color.CT.accent)
                         Text(LocalizedStringKey("device_active_now"))
-                            .font(CTFont.regular(12))
+                            .font(CTFont.secondary)
                             .foregroundStyle(Color.CT.accent)
                     }
                 } else {
                     Text(lastSeenText)
-                        .font(CTFont.regular(12))
+                        .font(CTFont.secondary)
                         .foregroundStyle(Color.CT.textDim)
                 }
             }
@@ -381,7 +354,7 @@ private struct DeviceRow: View {
             if !isCurrent {
                 Button(role: .destructive, action: onRevoke) {
                     Image(systemName: "xmark.circle.fill")
-                        .font(CTFont.bold(14))
+                        .font(CTFont.headline)
                         .foregroundStyle(Color.CT.danger)
                 }
                 .buttonStyle(.plain)
@@ -397,10 +370,8 @@ private struct DeviceRow: View {
     /// then shows what it showed before any of this existed — the short id, which identifies it
     /// either way.
     private var described: Shared_Proto_Services_V1_DeviceMetadata? {
-        guard !device.sealedMetadata.isEmpty,
-              let ourKey = KeychainManager.shared.loadDeviceIdentityKey()
-        else { return nil }
-        return DeviceMetadataService.open(device.sealedMetadata, withIdentityPrivateKey: ourKey)
+        guard !device.sealedMetadata.isEmpty else { return nil }
+        return DeviceMetadataService.open(device.sealedMetadata, openingWith: CryptoManager.shared.openSealedToDevice)
     }
 
     private var displayName: String {

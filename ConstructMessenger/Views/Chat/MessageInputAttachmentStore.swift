@@ -79,7 +79,12 @@ final class MessageInputAttachmentStore: ObservableObject {
     func replaceImage(at index: Int, with image: PlatformImage) {
         guard selectedAttachments.indices.contains(index),
               selectedAttachments[index].kind == .image else { return }
-        selectedAttachments[index] = MediaAttachment(image: image, quality: .compressed)
+        let replacement = MediaAttachment(image: image, quality: .compressed)
+        selectedAttachments[index] = replacement
+        Log.debug(
+            "Edited attachment replaced at index \(index): \(Int(image.size.width))x\(Int(image.size.height)), \(replacement.originalData.count) bytes",
+            category: "MessageInput"
+        )
     }
 
     func removeFile(at index: Int) {
@@ -190,7 +195,7 @@ final class MessageInputAttachmentStore: ObservableObject {
                 } catch let error as MessageValidationError {
                     ErrorRouter.shared.report(error)
                 } catch {
-                    ErrorRouter.shared.report(.unknown(error.userFacingMessage))
+                    ErrorRouter.shared.report(error)
                 }
             }
         }

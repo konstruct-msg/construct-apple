@@ -1,0 +1,51 @@
+{
+  "$schema_version": 1,
+  "$authority": "messaging/sticker_pack.proto :: shared.proto.messaging.v1.StickerPackManifest",
+  "$decision": "construct-docs/decisions/sticker-packs-content-addressed.md",
+  "$purpose": "pack_id is the SHA-256 of the manifest's canonical bytes — proto3 binary, fields in ascending order, pack_id and signature cleared. Every client recomputes it on fetch and every publisher computes it on build; a client that hashes differently rejects every real pack, and one that hashes nothing trusts every fake one. This fixes the bytes on one fixture pack.",
+  "$fields": {
+    "manifest.*": "the fixture pack as fields, hashes in hex here (bytes on the wire)",
+    "canonical_hex": "protoc --encode of the manifest with pack_id and signature cleared",
+    "pack_id_hex": "sha256(canonical_hex)",
+    "manifest_hex": "protoc --encode of the manifest with pack_id set and signature empty (a fixture is unsigned)",
+    "blobs": "the sticker files, by sha256, in construct-messenger/ConstructMessengerTests/Fixtures/Stickers/pack/"
+  },
+  "manifest": {
+    "title": "Konstruct fixture",
+    "publisher": "Konstruct",
+    "stickers": [
+      {
+        "sha256": "398f9c2fa58b7c2c8f55ca8bd5b27ead054dd3412183f1033de53bc5802af91e",
+        "emoji": "🔵",
+        "width": 512,
+        "height": 512,
+        "byte_len": 9964
+      },
+      {
+        "sha256": "578e7351323f018dd76a2b56ea1248925a4817b29e279511abe38e04348b67e3",
+        "emoji": "🟥",
+        "width": 512,
+        "height": 512,
+        "byte_len": 1286
+      },
+      {
+        "sha256": "387ccee7a876ab7f231a868046d8cabfcdc02cf81c9f6fe25c80a19ac3e6ca67",
+        "emoji": "🔺",
+        "width": 512,
+        "height": 512,
+        "byte_len": 8154
+      },
+      {
+        "sha256": "c2515dcc1915fed7d07c91744ff78057ac6b4b8214c2c93673434e724e5ea9bd",
+        "emoji": "🟡",
+        "width": 512,
+        "height": 512,
+        "byte_len": 16578
+      }
+    ]
+  },
+  "canonical_hex": "12114b6f6e73747275637420666978747572651a094b6f6e73747275637422310a20398f9c2fa58b7c2c8f55ca8bd5b27ead054dd3412183f1033de53bc5802af91e1204f09f94b518800420800428ec4d22310a20578e7351323f018dd76a2b56ea1248925a4817b29e279511abe38e04348b67e31204f09f9fa518800420800428860a22310a20387ccee7a876ab7f231a868046d8cabfcdc02cf81c9f6fe25c80a19ac3e6ca671204f09f94ba18800420800428da3f22320a20c2515dcc1915fed7d07c91744ff78057ac6b4b8214c2c93673434e724e5ea9bd1204f09f9fa118800420800428c28101",
+  "pack_id_hex": "2a205b125f4a87250007ff04a68d44a9b2d2c868b0443506b81ab52ac75e5ad1",
+  "manifest_hex": "0a202a205b125f4a87250007ff04a68d44a9b2d2c868b0443506b81ab52ac75e5ad112114b6f6e73747275637420666978747572651a094b6f6e73747275637422310a20398f9c2fa58b7c2c8f55ca8bd5b27ead054dd3412183f1033de53bc5802af91e1204f09f94b518800420800428ec4d22310a20578e7351323f018dd76a2b56ea1248925a4817b29e279511abe38e04348b67e31204f09f9fa518800420800428860a22310a20387ccee7a876ab7f231a868046d8cabfcdc02cf81c9f6fe25c80a19ac3e6ca671204f09f94ba18800420800428da3f22320a20c2515dcc1915fed7d07c91744ff78057ac6b4b8214c2c93673434e724e5ea9bd1204f09f9fa118800420800428c28101",
+  "signature_hex": ""
+}

@@ -12,15 +12,15 @@ struct ChatAtRiskBannerView: View {
         if isVisible {
             HStack(spacing: CTLayout.chromeGap) {
                 Image(systemName: "clock.badge.exclamationmark")
-                    .font(CTFont.regular(16))
+                    .font(CTFont.ui(16))
                     .foregroundStyle(.orange)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(LocalizedStringKey("session_at_risk_title"))
-                        .font(CTFont.bold(12))
+                        .font(CTFont.ui(12, weight: .bold))
                         .foregroundStyle(Color.CT.text)
                     Text(LocalizedStringKey("session_at_risk_subtitle"))
-                        .font(CTFont.regular(11))
+                        .font(CTFont.caption)
                         .foregroundStyle(Color.CT.textDim)
                 }
 

@@ -9,7 +9,7 @@
 //  promotion already costs 173–468 ms, inside the same second:
 //
 //      10:43:07  Transport: proxy start gen=1 (async)
-//      10:43:07  VEIL: relay=api.divany-kresla.uk:443 method=veil-front port=49549 latency=468ms
+//      10:43:07  VEIL: relay=<front>:443 method=veil-front port=49549 latency=468ms
 //      10:43:51  VEIL: … latency=173ms
 //
 //  The time goes on the decision instead: every direct attempt burns its full 2.0s accept budget

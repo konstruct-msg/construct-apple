@@ -51,20 +51,34 @@ enum ServerMessageOrder {
     /// after every real server key keeps the optimistic bubble at the bottom and lets it snap to
     /// its authoritative position when the ACK arrives.
     static func pending(localMessageId: String) -> String {
-        "\(pendingTimestamp)\(separator)\(pendingSequence)\(separator)\(localMessageId.lowercased())"
+        "\(pendingPrefix)\(localMessageId.lowercased())"
     }
 
-    /// Legacy rows predate the server-order column. This is only a migration fallback; all new
-    /// transport paths write an authoritative key or the explicit pending sentinel above.
-    static func legacy(timestamp: Date, messageId: String) -> String {
-        let milliseconds = max(Int64(timestamp.timeIntervalSince1970 * 1000), 0)
-        return key(serverTimestampMilliseconds: milliseconds, sequence: 0)
-            ?? pending(localMessageId: messageId)
+    /// Everything a `pending` key starts with — what a store predicate matches on.
+    static var pendingPrefix: String { "\(pendingTimestamp)\(separator)\(pendingSequence)\(separator)" }
+
+    static func isPending(_ key: String) -> Bool { key.hasPrefix(pendingPrefix) }
+
+    /// A row that has no server position and never will: a locally written system notice, an
+    /// imported history row, or one written before this column existed. It sits at its own
+    /// displayed timestamp — unlike `pending` above, which belongs to a row that is *waiting* for
+    /// a position and must stay at the bottom until the acknowledgement moves it.
+    ///
+    /// The message id is the third component and it is what makes the key **total**. Without it
+    /// two rows in the same millisecond compare equal, every fetch falls through to its secondary
+    /// descriptor — `id`, a random UUID — and the transcript orders them by coin flip. That is
+    /// what let five identical "session out of sync" notices stack: the check that suppresses a
+    /// repeat reads *the newest row*, and among same-millisecond rows "newest" was random.
+    static func local(timestamp: Date, messageId: String) -> String {
+        // Clamped to 1ms, not 0: a row at the epoch belongs at the top of a transcript, and 0 is
+        // the one value `key(serverTimestampMilliseconds:)` refuses.
+        let milliseconds = UInt64(max(Int64(timestamp.timeIntervalSince1970 * 1000), 1))
+        return "\(padded(milliseconds))\(separator)\(padded(0))\(separator)\(messageId.lowercased())"
     }
 
     /// Stable comparison key for callers that sort already-loaded managed objects.
     static func effectiveKey(for message: Message) -> String {
-        message.serverOrderKey ?? legacy(timestamp: message.safeTimestamp, messageId: message.id)
+        message.serverOrderKey ?? local(timestamp: message.safeTimestamp, messageId: message.id)
     }
 
     private static func key(serverTimestampMilliseconds: UInt64, sequence: UInt64) -> String {

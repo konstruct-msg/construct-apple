@@ -5,20 +5,20 @@
 
 import SwiftUI
 import Combine
-import CoreData
 
 struct ChatRowView: View {
-    @ObservedObject var chat: Chat
+    /// A value from `ChatsLive`: the row redraws when the chat's value differs. Until 2026-10-09
+    /// this observed the managed `Chat`, and an `.id(...)` of every preview field forced a redraw
+    /// whenever its `objectWillChange` stayed silent.
+    let chat: ChatRecord
+    /// The macOS sidebar's selection, drawn by the platform under the row (accent while the
+    /// list has focus, grey otherwise). iOS lists never select a row and leave it false.
+    var isSelected: Bool = false
 
     var body: some View {
-        // Profile shares update `User` (displayName, avatarData), not `Chat`.
-        // Observing Chat alone does not refresh when a related User changes.
-        // Fetch the peer by id so Core Data attribute updates drive the row.
-        if let userId = chat.otherUser?.id, !userId.isEmpty {
-            ChatRowBody(chat: chat, userId: userId)
-        } else {
-            ChatRowOrphanBody(chat: chat)
-        }
+        // The person is read from `ContactsLive`, whose changes redraw the row too — a profile
+        // share updates the contact, not the chat.
+        ChatRowLayout(chat: chat, user: ContactsLive.shared.contact(chat.peerId), isSelected: isSelected)
     }
 
     private static let rowTimeFormatter: DateFormatter = {
@@ -52,72 +52,21 @@ struct ChatRowView: View {
     }
 }
 
-// MARK: - Row body
-
-private struct ChatRowBody: View {
-    @ObservedObject var chat: Chat
-    @FetchRequest private var users: FetchedResults<User>
-
-    init(chat: Chat, userId: String) {
-        self.chat = chat
-        _users = FetchRequest(
-            sortDescriptors: [],
-            predicate: NSPredicate(format: "id == %@", userId),
-            animation: .default
-        )
-    }
-
-    var body: some View {
-        if let user = users.first {
-            ChatRowWithUser(chat: chat, user: user)
-        } else if let fallback = chat.otherUser {
-            ChatRowWithUser(chat: chat, user: fallback)
-        } else {
-            ChatRowOrphanBody(chat: chat)
-        }
-    }
-}
-
-private struct ChatRowWithUser: View {
-    @ObservedObject var chat: Chat
-    @ObservedObject var user: User
-
-    var body: some View {
-        ChatRowLayout(chat: chat, user: user)
-            // Bust any stale SwiftUI identity when profile *or preview* fields change.
-            // Omitting lastMessageText/Time left rows frozen after Core Data advanced
-            // while NSManagedObject objectWillChange stayed silent (list under NavStack).
-            .id(rowIdentity)
-    }
-
-    private var rowIdentity: String {
-        let previewTs = chat.lastMessageTime.map { String($0.timeIntervalSince1970) } ?? "nil"
-        return "\(chat.id)|\(user.resolvedDisplayName)|\(user.avatarData?.count ?? 0)|\(user.isSharingWithMe)|\(chat.unreadCount)|\(chat.isPinned)|\(chat.lastMessageText ?? "")|\(previewTs)"
-    }
-}
-
-/// Rare fallback when `chat.otherUser` is nil — observes Chat only.
-private struct ChatRowOrphanBody: View {
-    @ObservedObject var chat: Chat
-
-    var body: some View {
-        ChatRowLayout(chat: chat, user: nil)
-            .id(orphanIdentity)
-    }
-
-    private var orphanIdentity: String {
-        let previewTs = chat.lastMessageTime.map { String($0.timeIntervalSince1970) } ?? "nil"
-        return "\(chat.id)|\(chat.unreadCount)|\(chat.lastMessageText ?? "")|\(previewTs)"
-    }
-}
-
 // MARK: - Shared layout
 
 private struct ChatRowLayout: View {
-    /// Must observe Chat: preview/pin/unread land on this object. A plain `let` + stable
-    /// `.id` without preview fields left the subtitle stuck after local sends.
-    @ObservedObject var chat: Chat
-    var user: User?
+    let chat: ChatRecord
+    var user: ContactRecord?
+    var isSelected: Bool = false
+
+    /// On a selected row the dim token reads grey on the accent. The row's own text colour,
+    /// softened, reads on both selections the platform draws — accent and inactive grey. Not
+    /// `backgroundProminence`: this list never reports `.increased` (measured 2026-10-14).
+    private static let selectedDimOpacity = 0.75
+    private var onSelection: Bool { isSelected }
+    private var dimStyle: AnyShapeStyle {
+        onSelection ? AnyShapeStyle(Color.CT.text.opacity(Self.selectedDimOpacity)) : AnyShapeStyle(Color.CT.textDim)
+    }
 
     var body: some View {
         HStack(alignment: .center, spacing: CTLayout.chromeGap) {
@@ -128,9 +77,9 @@ private struct ChatRowLayout: View {
                     if let user {
                         displayNameView(for: user)
                             .lineLimit(1)
-                        if user.ktStatus == .keyChanged || user.ktStatus == .failed {
+                        if user.trustAlert != nil {
                             Image(systemName: "exclamationmark.shield.fill")
-                                .font(.system(size: 11, weight: .semibold))
+                                .font(CTIcon.font(CTIcon.caption, weight: .semibold))
                                 .foregroundStyle(Color.CT.danger)
                                 .accessibilityLabel(Text(LocalizedStringKey("kt_warning")))
                         }
@@ -139,22 +88,22 @@ private struct ChatRowLayout: View {
 
                     if let ts = chat.lastMessageTime {
                         Text(ChatRowView.rowTimestampText(ts))
-                            .font(CTFont.regular(11))
-                            .foregroundColor(Color.CT.textDim)
+                            .font(CTFont.caption)
+                            .foregroundStyle(dimStyle)
                             .lineLimit(1)
                     }
                     if chat.isPinned && chat.unreadCount == 0 {
                         Image(systemName: "pin.fill")
-                            .font(.system(size: 10, weight: .regular))
-                            .foregroundColor(Color.CT.textDim)
+                            .font(CTIcon.font(CTIcon.caption, weight: .regular))
+                            .foregroundStyle(dimStyle)
                     }
                 }
 
                 HStack(alignment: .center, spacing: CTLayout.inlinePad) {
                     if let lastMessage = chat.lastMessageText {
                         Text(Chat.formatPreviewText(lastMessage))
-                            .font(CTFont.regular(12))
-                            .foregroundColor(Color.CT.textDim)
+                            .font(CTFont.secondary)
+                            .foregroundStyle(dimStyle)
                             .lineLimit(1)
                             // Explicit dependency so SwiftUI cannot elide the Text when
                             // only the denormalized preview string changes.
@@ -163,11 +112,12 @@ private struct ChatRowLayout: View {
                     Spacer(minLength: 4)
                     if chat.unreadCount > 0 {
                         Text(chat.unreadCount < 10000 ? "\(chat.unreadCount)" : "9999+")
-                            .font(CTFont.bold(11))
-                            .foregroundColor(Color.CT.bg)
+                            .font(CTFont.badge)
+                            // Inverted on a selected row: an accent badge on the accent vanishes.
+                            .foregroundStyle(onSelection ? Color.CT.accent : Color.CT.bg)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
-                            .background(Color.CT.accent)
+                            .background(onSelection ? Color.CT.text : Color.CT.accent)
                             .clipShape(CTShape.badge())
                             .animation(.easeInOut(duration: 0.2), value: chat.unreadCount)
                     }
@@ -183,16 +133,16 @@ private struct ChatRowLayout: View {
     }
 
     @ViewBuilder
-    private func displayNameView(for user: User) -> some View {
+    private func displayNameView(for user: ContactRecord) -> some View {
         let alias = user.localAlias?.trimmingCharacters(in: .whitespacesAndNewlines)
         if let alias, !alias.isEmpty {
             Text(alias)
-                .font(CTFont.bold(13))
+                .font(CTFont.bodyEmphasis)
                 .foregroundColor(Color.CT.text)
         } else {
             // Profile-shared name → username → generated (see User.resolvedDisplayName).
             Text(user.resolvedDisplayName)
-                .font(CTFont.bold(13))
+                .font(CTFont.bodyEmphasis)
                 .foregroundColor(Color.CT.text)
         }
     }
@@ -201,27 +151,25 @@ private struct ChatRowLayout: View {
     private var avatarView: some View {
         let seed = user?.id ?? "?"
         let initials = initials(for: user)
-        if let data = user?.avatarData,
+        if let data = user?.avatar,
            let platformImg = ImageHelper.imageFromData(data) {
-            CTHexAvatar(initials: initials, image: Image(platformImage: platformImg), size: .medium, colorSeed: seed)
+            CTHexAvatar(initials: initials, image: Image(platformImage: platformImg), size: CTAvatarSize.row, colorSeed: seed)
         } else {
-            CTHexAvatar(initials: initials, size: .medium, colorSeed: seed)
+            CTHexAvatar(initials: initials, size: CTAvatarSize.row, colorSeed: seed)
         }
     }
 
     @ViewBuilder
     private var contextMenuContent: some View {
         Button {
-            chat.isPinned.toggle()
-            try? chat.managedObjectContext?.save()
+            _ = try? LocalRepositories.chats.setPinned(chat.id, !chat.isPinned)
         } label: {
             Label(LocalizedStringKey(chat.isPinned ? "unpin" : "pin"),
                   systemImage: chat.isPinned ? "pin.slash" : "pin")
         }
 
         Button {
-            chat.unreadCount = chat.unreadCount > 0 ? 0 : 1
-            try? chat.managedObjectContext?.save()
+            _ = try? LocalRepositories.chats.setUnread(chat.id, chat.unreadCount > 0 ? 0 : 1)
         } label: {
             Label(
                 LocalizedStringKey(chat.unreadCount > 0 ? "mark_read" : "mark_unread"),
@@ -238,7 +186,7 @@ private struct ChatRowLayout: View {
         }
     }
 
-    private func initials(for user: User?) -> String {
+    private func initials(for user: ContactRecord?) -> String {
         guard let name = user?.resolvedDisplayName else { return "?" }
         let parts = name.split(separator: " ")
         if parts.count >= 2 {

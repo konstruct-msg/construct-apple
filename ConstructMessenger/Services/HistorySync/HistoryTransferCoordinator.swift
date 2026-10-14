@@ -7,8 +7,6 @@
 //  in phase 2 leaves phase-1 rows. Skip is type 0x03, not an inner CTH1 record.
 //
 
-import CoreData
-import CryptoKit
 import Foundation
 #if canImport(UIKit)
 import UIKit
@@ -29,29 +27,32 @@ enum HistoryTransferPhase: Equatable {
 @Observable
 final class HistoryTransferCoordinator {
     private(set) var phase: HistoryTransferPhase = .idle
-    var progress: Double = 0
+
+    /// How long a finished transfer shows its result before its screen closes itself. The
+    /// outcomes that leave something to do — a file to save, media to retry — stay open.
+    static let resultHold: Duration = .milliseconds(1500)
 
     func sendTranscript(
-        records: AsyncThrowingStream<HistoryRecord, Error>,
-        over transport: HistoryByteTransport,
-        session: HistoryStreamSession
+        items: AsyncThrowingStream<HistoryOutbound, Error>,
+        through sender: HistorySender,
+        over transport: HistoryByteTransport
     ) async throws {
         phase = .transcript
         try await withBackgroundTask {
-            try await HistoryNearbyStream.send(records, over: transport, session: session)
+            try await HistoryCoreStream.send(items, through: sender) { try await transport.send($0) }
         }
         phase = .chatsTransferred
     }
 
     func sendMedia(
-        records: AsyncThrowingStream<HistoryRecord, Error>,
-        over transport: HistoryByteTransport,
-        session: HistoryStreamSession
+        items: AsyncThrowingStream<HistoryOutbound, Error>,
+        through sender: HistorySender,
+        over transport: HistoryByteTransport
     ) async throws {
         phase = .media
         do {
             try await withBackgroundTask {
-                try await HistoryNearbyStream.send(records, over: transport, session: session)
+                try await HistoryCoreStream.send(items, through: sender) { try await transport.send($0) }
             }
             phase = .complete
         } catch {
@@ -60,53 +61,25 @@ final class HistoryTransferCoordinator {
         }
     }
 
-    /// Apply records as they arrive. One save per `HistorySnapshotImporter.saveBatchSize`.
-    ///
-    /// Records are pulled here (main actor) and applied in batches inside `context.perform`,
-    /// so a background context is touched only on its own queue — one hop per batch, not
-    /// per record.
-    func importStream(
-        over transport: HistoryByteTransport,
-        session: HistoryStreamSession,
+    /// Receive one stream into the store: records applied as their chunk opens, one save per
+    /// `HistorySnapshotImporter.saveBatchSize`, media written to disk as it arrives.
+    func receive(
+        from source: HistoryByteSource,
+        into receiver: HistoryReceiver,
+        pin: HistoryQRPin,
         expectedUserId: String,
-        in context: NSManagedObjectContext,
-        onManifest: ((Construct_Client_History_V1_HistoryManifest) -> Void)? = nil
-    ) async throws -> HistoryImportSummary {
-        let importer = HistorySnapshotImporter()
-        var summary = HistoryImportSummary()
-        var batch: [HistoryRecord] = []
-        var seen = 0
-
-        func flush() async throws {
-            guard !batch.isEmpty else { return }
-            let records = batch
-            batch.removeAll(keepingCapacity: true)
-            let partial = try await context.perform {
-                var local = HistoryImportSummary()
-                for record in records {
-                    local.add(try importer.apply(record, expectedUserId: expectedUserId, in: context))
-                }
-                try context.saveOrThrow(category: "HistorySync")
-                return local
-            }
-            summary.applied += partial.applied
-            summary.conflictKeepExisting += partial.conflictKeepExisting
-            for (reason, count) in partial.skipped {
-                summary.skipped[reason, default: 0] += count
-            }
-        }
-
-        for try await record in HistoryNearbyStream.receive(over: transport, session: session) {
-            if case .manifest(let m) = record { onManifest?(m) }
-            batch.append(record)
-            seen += 1
-            if batch.count >= HistorySnapshotImporter.saveBatchSize {
-                try await flush()
-            }
-            progress = Double(seen)
-        }
-        try await flush()
-        return summary
+        resolve: (_ deviceIdHex: String) async throws -> HistoryKnownKeys,
+        reply: ((Data) async throws -> Void)?
+    ) async throws -> HistoryCoreStream.Outcome {
+        let sink = HistoryImportSink(expectedUserId: expectedUserId)
+        return try await HistoryCoreStream.receive(
+            from: source,
+            into: receiver,
+            sink: sink,
+            pin: pin,
+            resolve: resolve,
+            reply: reply
+        )
     }
 
     func markSkipped() {

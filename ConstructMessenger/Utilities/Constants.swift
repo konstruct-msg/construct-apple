@@ -27,24 +27,6 @@ struct AccountDeletionConfig {
     static let challengeTTLSeconds: TimeInterval = 60
 }
 
-// MARK: - Avatar Styling
-struct AvatarStyle {
-    static let chatSize: CGFloat = 56
-    static let settingsSize: CGFloat = 54
-    static let bubbleSize: CGFloat = 60
-    static let accountSize: CGFloat = 100
-
-    /// Current avatar clip shape. Change here to update all avatars app-wide.
-    /// Future: swap to HexagonShape() when the visual language is ready.
-    static func avatarShape(_ size: CGFloat = 0) -> Circle {
-        Circle()
-    }
-
-    /// Legacy alias — kept so existing call sites compile without changes.
-    @available(*, deprecated, renamed: "avatarShape")
-    static func squircle(_ size: CGFloat) -> Circle { avatarShape(size) }
-}
-
 // MARK: - Server Configuration
 struct ServerConfig {
     // Primary server URL - API Gateway (routes to all services)
@@ -63,21 +45,14 @@ struct ServerConfig {
 
 // MARK: - Invite Configuration
 struct InviteConfig {
-    /// Versions the client can DECODE and accept.
-    /// v4 drops dead `ephKey` (F2); v1–v3 remain for dual-read within TTL.
-    /// v5 adds a signed per-invite `ttl`.
+    /// The one invite version this client mints and accepts (since 2026-09-28).
     ///
-    /// **Reading a version always ships before writing it.** v5 is accepted here from the
-    /// build that introduces it, while `currentVersion` stays 4 until enough of the fleet
-    /// can read v5 — a client that mints a version its peers reject has made its invites
-    /// undeliverable, and the peer's error says "unsupported version", which points at the
-    /// sender rather than at the rollout.
-    static let supportedVersions: Set<Int> = [1, 2, 3, 4, 5]
+    /// There is no "read before write" rollout any more: every version below it is refused, by
+    /// both clients and the server. It was possible to do once, in an alpha with no installed
+    /// base, and it is what let v5 gain `addr` without becoming v6
+    /// (`decisions/invite-carries-the-account-address.md`).
+    static let version = 5
 
-    /// Version used when GENERATING new invites.
-    /// v4: no ephKey in canonical string / wire; server crypto-agility must accept v4.
-    /// Becomes 5 when `FeatureFlags.inviteV5Minting` is on.
-    static var currentVersion: Int { FeatureFlags.inviteV5Minting ? 5 : 4 }
     /// How long a signed invite stays redeemable.
     ///
     /// **Must equal `INVITE_TTL_SECONDS` in construct-server**
@@ -103,7 +78,6 @@ struct InviteConfig {
     static let maxFutureSkewSeconds: TimeInterval = 300 // 5 minutes
     static let deviceIdLength = 32
     static let deviceIdRegex = "^[a-f0-9]{32}$"
-    static let ephKeyLengthBytes = 32
     static let signatureLengthBytes = 64
     static let qrCodePrefixScheme = "konstruct://add"
     static let qrCountdownTickSeconds: TimeInterval = 1
@@ -133,17 +107,7 @@ struct InviteConfig {
         return formatter.string(from: ttlSeconds) ?? ""
     }
 
-    /// Invite protocol versions that still carry a (unused) ephemeral X25519 pub.
-    static func carriesEphKey(version: Int) -> Bool { version <= 3 }
-
-    /// Invite protocol versions that carry a signed per-invite `ttl`.
-    ///
-    /// Presence is decided by the version and by nothing else — no flag bit in the binary
-    /// container, no "is the field non-nil". One meaning, one carrier; a flag that could
-    /// disagree with `v` is the defect this codebase keeps paying for.
-    static func carriesTTL(version: Int) -> Bool { version >= 5 }
-
-    /// How long a QR code stays redeemable, once v5 minting is on.
+    /// How long a QR code stays redeemable.
     ///
     /// A QR is scanned within seconds of being displayed; a link waits in someone's inbox,
     /// which is the whole reason `ttlSeconds` is twelve hours. Sharing that window gave the
@@ -166,9 +130,8 @@ struct InviteConfig {
     /// identically. Trusting a stated `ttl` above the server maximum would show an invite as
     /// live for hours after the server had begun refusing it — the sender's screen and the
     /// recipient's result disagreeing, with nothing to explain why.
-    static func effectiveTTL(stated: UInt32?) -> TimeInterval {
-        guard let stated else { return ttlSeconds }
-        return min(ttlSeconds, TimeInterval(stated))
+    static func effectiveTTL(stated: UInt32) -> TimeInterval {
+        min(ttlSeconds, TimeInterval(stated))
     }
 }
 
@@ -210,7 +173,7 @@ struct APIConstants {
     }
 
     // Keychain Keys
-    static let sessionTokenKey = "session_token"
+    static let sessionTokenKey = KeychainSessionAccounts.sessionToken
     static let privateKeyKey = "private_key"
     static let userIdKey = "user_id"
     static let lastUsernameKey = "last_username"
@@ -283,7 +246,7 @@ struct MessageSizeLimits {
     static let supportedImageTypes: Set<String> = ["jpg", "jpeg", "png", "gif", "heic", "heif", "webp"]
     static let supportedVideoTypes: Set<String> = ["mp4", "mov", "m4v", "avi", "mkv"]
     static let supportedDocumentTypes: Set<String> = ["pdf", "doc", "docx", "txt", "rtf", "pages", "numbers", "key"]
-    static let supportedAudioTypes: Set<String> = ["mp3", "m4a", "wav", "aac", "flac", "ogg"]
+    static let supportedAudioTypes: Set<String> = ["mp3", "m4a", "wav", "aac", "flac", "ogg", "opus", "aiff", "aif", "caf", "m4b"]
 
     // Helper functions
     static func maxSizeForFileType(_ fileExtension: String) -> Int64 {
@@ -356,24 +319,10 @@ struct FeatureFlags {
     static let enablePushNotifications = false // Пока не реализовано
     static let maxMessageRetryAttempts = 3
 
-    /// Stealth-sealed-sender-v2 Phase 2: route sealed sends over the new unauthenticated
-    /// `SendSealedMessage` RPC / separate gRPC channel instead of the legacy
-    /// sealed-over-`SendMessage` path. **Default off** — flip only once the server RPC
-    /// is deployed fleet-wide and this path has been validated (see
-    /// construct-docs/decisions/stealth-sealed-sender-v2-always-on.md Phase 2).
-    static let sealedSenderUnauthenticatedTransport = false
+    // (sealedSenderUnauthenticatedTransport removed 2026-09-28: a sealed send always leaves
+    // through the unauthenticated `SendSealedMessage` door, decided at the chokepoint in
+    // `MessagingServiceClient.sendMessage`; bundle and sticker fetches use the same channel.)
 
-    /// Mint invites as v5, carrying a signed per-invite `ttl` (QR 300 s, links 12 h).
-    ///
-    /// **Default off, and the order matters.** This build *reads* v5 already
-    /// (`InviteConfig.supportedVersions`); it must not *write* v5 until enough of the fleet
-    /// can read it. A v5 invite handed to an older iOS or Android build is refused with
-    /// "unsupported version" — an error that names the sender's invite rather than the
-    /// rollout, on the one screen where the user has no way to act on it.
-    ///
-    /// Flip once the reading build is out. Server side is already deployed
-    /// (construct-docs backend/INVITE_LIST_REVOKE_SERVER_SPEC.md §4, 2026-08-16).
-    static let inviteV5Minting = false
 
     // (stealthPerMessageDefault removed 2026-07-15: per-message is the only token model
     // now — the per-stream scope and its SecurityView picker are gone. A token rides
@@ -615,8 +564,9 @@ struct VEILRelayRegion: Codable {
 /// *floor*: even with `.well-known` unreachable and no cached manifest, the client
 /// still has a pool of fronts to probe.
 ///
-/// Seeds are expendable — assume a censor eventually blocks each IP; rotate the pool
-/// per release. Adding a front is a one-line append to `VEILConfig.seedRelays`; every
+/// Seeds are expendable — assume a censor eventually blocks each IP, and that a name
+/// in the binary is known to it. None is bundled now (see `VEILConfig`). Adding a
+/// front is a one-line append to `VEILConfig.seedRelays`; every
 /// consumer (relay selector candidates, TransportRouter pin/SNI, `VeilAlternatesCache`
 /// accept-gate, `importBlob` anti-redirection) derives from that list, so nothing else
 /// needs touching.
@@ -640,18 +590,16 @@ struct VEILConfig {
     // The Amsterdam obfs4 relay (ice.ams.konstruct.cc) was retired — see retiredRelayHosts.
     // The main gRPC server is still ams.konstruct.cc (direct path); only the relay is gone.
 
-    // ── Relay: RU veil-front (api.divany-kresla.uk) — the sole VEIL relay ─────
-    /// 2026-06-11: VPS repurposed as the **veil-front relay** (honest-front HTTPS +
-    /// session-bound ticket auth). It terminates veil-TLS with its own Let's Encrypt
-    /// cert and re-wraps gRPC over TLS to ams.konstruct.cc:443 (--backend-tls).
-    /// SPKI below is now that veil-front cert. obfs4/WebTunnel are no longer served
-    /// here — veil-front wins the coordinator race via `ruRelayVeilFrontTicket`.
-    /// 2026-06-14: relay moved to a new VPS (195.133.44.113); cert reissued, so the
-    /// pinned SPKI below was rotated. `api.divany-kresla.uk` A-record must point at
-    /// the new IP for the on-wire SNI to match a resolvable host.
-    static let ruRelayAddress    = "api.divany-kresla.uk:443"
-    static let ruRelaySNI        = "api.divany-kresla.uk"
-    static let ruRelayPinnedSPKI = "5621e47a745614de08efb054b01388f3bcf32c763ecf5f0aeaeb6b0785ff6861"
+    // ── No front is bundled (2026-10-02) ──────────────────────────────────────
+    /// The build carried one front, its address, SNI and pin in this file. Whatever
+    /// ships in the app is public — this repository is public and a binary is read
+    /// by anyone who wants to — and that front was retired for exactly that reason.
+    /// Fronts now reach a device only as signed data: the server's Ed25519-signed
+    /// manifest (`relayConfigSigningKey`), fetched while the direct path still works,
+    /// or a signed config link / QR (`konstruct://veil-config`) handed over out of
+    /// band. A fresh install on a network that already blocks the direct path needs
+    /// the link. `seedRelays` stays as the mechanism and is empty;
+    /// `VeilBundledFrontPolicyTests` fails if a name is added back without deciding to.
     /// Stale obfs4 keypair cert — kept only so the obfs4 probe has a bridge line; it
     /// fails fast (relay no longer speaks obfs4) and veil-front wins the race.
     // The veil-front ticket is per-user auth material — NOT hardcoded here. It is
@@ -701,14 +649,9 @@ struct VEILConfig {
     }
 
     /// Bundled seed-front pool (EntryDirectory Source 2) — the single source of truth
-    /// the address list and the SNI/SPKI/WT dicts below all derive from. Add a bundled
-    /// front here and every consumer picks it up; no other edit needed. Keep the primary
-    /// (ruRelay*) first — order is the relay selector's tie-break priority.
-    static let seedRelays: [VEILSeedRelay] = [
-        VEILSeedRelay(address: ruRelayAddress, sni: ruRelaySNI, spki: ruRelayPinnedSPKI, wtPath: "/api/stream"),
-        // Append additional bundled fronts here (e.g. co-tenancy relays). Each needs a
-        // distinct address, its TLS SNI, and the hex SHA-256 SPKI pin of its live cert.
-    ]
+    /// the address list and the SNI/SPKI/WT dicts below all derive from. Empty on
+    /// purpose since 2026-10-02: see "No front is bundled" above.
+    static let seedRelays: [VEILSeedRelay] = []
 
     /// Ordered relay candidate list used as a last resort when discovery is unavailable.
     /// Order matters: relays are probed concurrently but this sets tie-break priority.
@@ -753,10 +696,9 @@ struct VEILConfig {
     /// The first matching rule wins; unmatched → default ordering.
     ///
     /// Override via `.well-known/construct-server` `ice.relay_regions` without a new build.
-    /// Only one relay (veil-front) remains, so the region rule just prefers it everywhere.
-    static let hardcodedRelayRegions: [VEILRelayRegion] = [
-        VEILRelayRegion(tzOffsetMin: -12, tzOffsetMax: 12, preferredRelays: [ruRelayAddress]),
-    ]
+    /// Empty: no front is bundled, so there is nothing to prefer before the server's
+    /// regions arrive.
+    static let hardcodedRelayRegions: [VEILRelayRegion] = []
 }
 
 // MARK: - Log Categories
@@ -807,6 +749,12 @@ extension APIConstants {
 
 // MARK: - Notifications
 extension Notification.Name {
+    /// A history snapshot (nearby or file) was applied: chats and contacts this device did not have
+    /// a moment ago are in Core Data. The message stream subscribes per chat, so it has to look again.
+    static let historyImported = Notification.Name("constructHistoryImported")
+    /// The Core Data store was replaced by an empty one (`PersistenceController.replaceStoreWithEmpty`).
+    /// Every object a view still holds from the old store is dead: reading one raises.
+    static let localStoreReplaced = Notification.Name("constructLocalStoreReplaced")
     static let serverURLChanged   = Notification.Name("serverURLChanged")
     static let deleteChat         = Notification.Name("constructDeleteChat")
     /// Posted when a contact's identity key changes since the last verified bundle.

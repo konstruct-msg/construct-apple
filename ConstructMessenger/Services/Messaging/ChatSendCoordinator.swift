@@ -18,7 +18,7 @@ struct QueuedMessage {
     /// session initialises is replayed through `sendMessage`, and anything this struct drops
     /// is dropped silently — the caption arrives, the files never do.
     let fileURLs: [URL]
-    let replyTo: Message?
+    let replyTo: TranscriptRow?
     let replyToContentOverride: String?
     let timestamp: Date
 
@@ -29,7 +29,7 @@ struct QueuedMessage {
     let placeholderId: String?
 
     init(text: String, attachments: [MediaAttachment] = [], fileURLs: [URL] = [],
-         replyTo: Message? = nil, replyToContentOverride: String? = nil, placeholderId: String? = nil) {
+         replyTo: TranscriptRow? = nil, replyToContentOverride: String? = nil, placeholderId: String? = nil) {
         self.text = text
         self.attachments = attachments
         self.fileURLs = fileURLs
@@ -45,7 +45,7 @@ final class ChatSendCoordinator {
 
     // MARK: - Dependencies
 
-    private let chat: Chat
+    private let conversation: Conversation
     private let viewContext: NSManagedObjectContext
     private let sessionManager: ChatSessionManager
     private weak var viewModel: ChatViewModel?
@@ -70,18 +70,18 @@ final class ChatSendCoordinator {
         let attachments: [MediaAttachment]
         let fileURLs: [URL]
         let caption: String
-        let replyTo: Message?
+        let replyTo: TranscriptRow?
     }
     private var pendingMediaUploads: [String: MediaUploadPayload] = [:]
 
     // MARK: - Init
 
     init(
-        chat: Chat,
+        conversation: Conversation,
         viewContext: NSManagedObjectContext,
         sessionManager: ChatSessionManager
     ) {
-        self.chat = chat
+        self.conversation = conversation
         self.viewContext = viewContext
         self.sessionManager = sessionManager
     }
@@ -105,7 +105,7 @@ final class ChatSendCoordinator {
         text: String,
         attachments: [MediaAttachment] = [],
         fileURLs: [URL] = [],
-        replyTo: Message? = nil,
+        replyTo: TranscriptRow? = nil,
         replyToContentOverride: String? = nil
     ) {
         Log.info("sendMessage called with \(attachments.count) images, \(fileURLs.count) files", category: "ChatViewModel")
@@ -122,10 +122,7 @@ final class ChatSendCoordinator {
             }
             return
         }
-        guard let recipientId = chat.otherUser?.id else {
-            Log.error("No recipient ID", category: "ChatViewModel")
-            return
-        }
+        let recipientId = conversation.peerId
         guard let currentUserId = AuthSessionManager.shared.currentUserId else {
             Log.error("No current user ID", category: "ChatViewModel")
             return
@@ -136,7 +133,7 @@ final class ChatSendCoordinator {
             return
         }
 
-        let hasSession = CryptoManager.shared.hasSession(for: recipientId)
+        let hasSession = CryptoManager.shared.hasSessionWithAnyDevice(ofPeer: recipientId)
 
         if !hasSession {
             enqueueUntilSessionExists(
@@ -152,32 +149,9 @@ final class ChatSendCoordinator {
             return
         }
 
-        // Buffer only plain-text sends while awaiting RESPONDER session_ready. The buffer is a
-        // text-only Core Data stub: its sole recoverable payload is `decryptedContent`, and the
-        // confirmation flush (`MessageRetryManager.reencryptAndSend`) explicitly refuses `.media`.
-        // Media/file sends have no content yet at buffer time (the JSON is produced by the upload),
-        // so buffering them here would persist an empty stub — an un-retryable "message unavailable"
-        // bubble with the attachments silently dropped. Let them flow to sendMediaMessage/
-        // sendFileMessage instead: the upload latency naturally covers the confirmation window, and
-        // that path persists correct display content plus a resendable wire payload.
-        if SessionConfirmationTracker.shared.isPending(recipientId), attachments.isEmpty, fileURLs.isEmpty {
-            let bufferedId = UUID().uuidString
-            let stub = ChatMessage(
-                id: bufferedId,
-                from: currentUserId,
-                to: recipientId,
-                ephemeralPublicKey: Data(),
-                messageNumber: 0,
-                content: Data(),
-                suiteId: 0,
-                timestamp: UInt64(Date().timeIntervalSince1970)
-            )
-            saveMessage(stub, decryptedContent: text, isSentByMe: true, status: .queued,
-                        replyTo: replyTo, replyToContentOverride: replyToContentOverride, suiteId: 0)
-            Log.info("SESSION_CONFIRM[buffered]: message \(bufferedId.prefix(8))… queued — waiting for RESPONDER session_ready from \(recipientId.prefix(8))…", category: "SessionConfirm")
-            return
-        }
-
+        // Plain-text sends were buffered here while our SESSION_RESET_INIT awaited the peer's
+        // `session_ready`, until 2026-09-27. Nothing waits for an answer now: the message carries
+        // the handshake header itself (`decisions/sessions-renew-by-sending.md`).
         Log.info("Sending to: \(recipientId), from: \(currentUserId)", category: "ChatViewModel")
         Task { @MainActor [weak self] in
             guard let self else { return }
@@ -233,7 +207,7 @@ final class ChatSendCoordinator {
         text: String,
         attachments: [MediaAttachment],
         fileURLs: [URL],
-        replyTo: Message?,
+        replyTo: TranscriptRow?,
         replyToContentOverride: String?,
         recipientId: String,
         currentUserId: String,
@@ -247,10 +221,6 @@ final class ChatSendCoordinator {
                 id: rowId,
                 from: currentUserId,
                 to: recipientId,
-                ephemeralPublicKey: Data(),
-                messageNumber: 0,
-                content: Data(),
-                suiteId: 0,
                 timestamp: UInt64(Date().timeIntervalSince1970)
             )
             saveMessage(stub, decryptedContent: text, isSentByMe: true, status: .queued,
@@ -273,7 +243,7 @@ final class ChatSendCoordinator {
                 items: items,
                 replyTo: replyTo,
                 replyToContentOverride: replyToContentOverride,
-                chat: chat,
+                chatId: conversation.chatId,
                 in: viewContext
             )
             queuedMessages.append(QueuedMessage(
@@ -321,7 +291,7 @@ final class ChatSendCoordinator {
         text: String,
         attachments: [MediaAttachment],
         fileURLs: [URL],
-        replyTo: Message?,
+        replyTo: TranscriptRow?,
         replyToContentOverride: String?
     ) {
         if !fileURLs.isEmpty {
@@ -331,7 +301,7 @@ final class ChatSendCoordinator {
                 ErrorRouter.shared.report(error)
                 return
             } catch {
-                ErrorRouter.shared.report(.unknown(error.userFacingMessage))
+                ErrorRouter.shared.report(error)
                 return
             }
             sendFileMessage(fileURLs: fileURLs, caption: text, replyTo: replyTo, replyToContentOverride: replyToContentOverride)
@@ -344,7 +314,7 @@ final class ChatSendCoordinator {
                 ErrorRouter.shared.report(error)
                 return
             } catch {
-                ErrorRouter.shared.report(.unknown(error.userFacingMessage))
+                ErrorRouter.shared.report(error)
                 return
             }
             sendMediaMessage(attachments: attachments, caption: text, replyTo: replyTo, replyToContentOverride: replyToContentOverride)
@@ -356,7 +326,7 @@ final class ChatSendCoordinator {
             ErrorRouter.shared.report(error)
             return
         } catch {
-            ErrorRouter.shared.report(.unknown(error.userFacingMessage))
+            ErrorRouter.shared.report(error)
             return
         }
         sendTextMessage(text: text, replyTo: replyTo, replyToContentOverride: replyToContentOverride)
@@ -365,13 +335,12 @@ final class ChatSendCoordinator {
     // MARK: - Queue handling
 
     func sendQueuedMessages() {
-        guard let recipientId = chat.otherUser?.id,
-              let currentUserId = AuthSessionManager.shared.currentUserId else { return }
+        let recipientId = conversation.peerId
+        guard let currentUserId = AuthSessionManager.shared.currentUserId else { return }
         retryManager.sendQueuedMessages(
-            for: chat,
+            inChat: conversation.chatId,
             recipientId: recipientId,
-            currentUserId: currentUserId,
-            context: viewContext
+            currentUserId: currentUserId
         )
     }
 
@@ -424,40 +393,51 @@ final class ChatSendCoordinator {
             persistenceService.updateMessageStatus(messageId: placeholderId, status: .failed, in: viewContext)
         }
 
-        guard let currentUserId = AuthSessionManager.shared.currentUserId,
-              let recipientId = chat.otherUser?.id else {
+        let recipientId = conversation.peerId
+        guard let currentUserId = AuthSessionManager.shared.currentUserId else {
             queuedMessages.removeAll()
             return
         }
 
         for queued in queuedMessages where queued.placeholderId == nil {
-            let msg = Message(context: viewContext)
-            msg.id = UUID().uuidString
-            msg.fromUserId = currentUserId
-            msg.toUserId = recipientId
-            msg.contentType = .regular
-            msg.timestamp = queued.timestamp
-            msg.serverOrderKey = ServerMessageOrder.pending(localMessageId: msg.id)
-            msg.deliveryStatus = .failed
-            msg.isSentByMe = true
-            msg.chat = chat
-            msg.applyStoredEncryption(plaintext: queued.text, contactId: recipientId)
-            // These rows bypass MessagePersistenceService, so the preview needs advancing here
-            // too — otherwise the list keeps showing an older message than the transcript does.
-            chat.applyPreview(text: queued.text, timestamp: queued.timestamp)
+            let id = UUID().uuidString
+            do {
+                try LocalRepositories.messages.insert(MessageRecord(
+                    id: id, chatId: conversation.chatId, fromUserId: currentUserId, toUserId: recipientId,
+                    isSentByMe: true, timestamp: queued.timestamp,
+                    orderKey: ServerMessageOrder.pending(localMessageId: id),
+                    body: Data(queued.text.utf8), contentType: .regular, deliveryStatus: .failed,
+                    retryCount: 0, suiteId: 0, isEdited: false, editedAt: nil, replyToMessageId: nil,
+                    replyQuote: nil, transcript: nil, transcriptLanguage: nil, transcriptGeneratedAt: nil
+                ), searchText: queued.text)
+            } catch {
+                Log.error("Failed queued message \(id.prefix(8))… not saved: \(error)", category: "ChatViewModel")
+            }
         }
-        viewContext.saveAndLog()
+        // These rows bypass MessagePersistenceService.saveMessage, so the preview needs advancing
+        // here too — otherwise the list keeps showing an older message than the transcript does.
+        // After the insert, through the repository; only the newest can be the preview.
+        if let newest = queuedMessages.filter({ $0.placeholderId == nil }).max(by: { $0.timestamp < $1.timestamp }) {
+            MessagePersistenceService.advancePreview(ofChat: conversation.chatId, text: newest.text, at: newest.timestamp)
+        }
         queuedMessages.removeAll()
     }
 
     // MARK: - Text message
 
     /// Build a QuotedMessage for a reply, or nil. Shared by text and media sends.
-    func buildQuoted(replyTo: Message?, replyToContentOverride: String?) -> Shared_Proto_Messaging_V1_QuotedMessage? {
+    func buildQuoted(replyTo: TranscriptRow?, replyToContentOverride: String?) -> Shared_Proto_Messaging_V1_QuotedMessage? {
         guard let reply = replyTo else { return nil }
         var quoted = Shared_Proto_Messaging_V1_QuotedMessage()
         quoted.messageID = reply.id
-        quoted.textPreview = replyToContentOverride ?? reply.displayText
+        // A sticker has no text form, so the quote carries what the chat list shows for it.
+        let stickerLine = reply.stickerReference.map {
+            "\($0.emoji) \(NSLocalizedString("sticker", comment: ""))"
+        }
+        ReplyPreviewPayload.projecting(
+            originalContent: reply.legacyBody,
+            textOverride: replyToContentOverride ?? stickerLine
+        )?.apply(to: &quoted)
         return quoted
     }
 
@@ -467,14 +447,14 @@ final class ChatSendCoordinator {
     ///   SenderSync uses the same wire `plaintextData` (not display JSON) — C1c.
     func sendTextMessage(
         text: String,
-        replyTo: Message?,
+        replyTo: TranscriptRow?,
         replyToContentOverride: String? = nil,
         localThumbnails: [Data] = [],
         wirePlaintext: Data? = nil,
         storagePayload: Data? = nil
     ) {
-        guard let recipientId = chat.otherUser?.id,
-              let currentUserId = AuthSessionManager.shared.currentUserId else {
+        let recipientId = conversation.peerId
+        guard let currentUserId = AuthSessionManager.shared.currentUserId else {
             return
         }
         do {
@@ -513,12 +493,7 @@ final class ChatSendCoordinator {
                 id: messageId,
                 from: currentUserId,
                 to: recipientId,
-                ephemeralPublicKey: Data(),
-                messageNumber: 0,
-                content: Data(),
-                suiteId: 0,
-                timestamp: UInt64(Date().timeIntervalSince1970),
-                oneTimePreKeyId: 0
+                timestamp: UInt64(Date().timeIntervalSince1970)
             )
             Log.debug("Sending message with ID: \(messageId)", category: "ChatViewModel")
             saveMessage(message, decryptedContent: text, isSentByMe: true, status: .sending,
@@ -534,71 +509,51 @@ final class ChatSendCoordinator {
                     try? await Task.sleep(for: .milliseconds(Int(jitterMs)))
                 }
                 do {
-                    let recipientIdentityKey: Data? = await {
-                        guard StealthPolicy.shared.shouldUseSealedSender() else { return nil }
-                        if let k = self.sessionManager.cachedIdentityKey { return k }
-                        return await self.fetchRecipientIdentityKeyForEdit(recipientId: recipientId, context: self.viewContext)
-                    }()
-                    // One spend unit for this message to this person: it covers the primary
-                    // envelope below AND the fan-out copies `mirrorOutgoing` sends to their other
-                    // devices a few lines down. Both paths reach one `recipient_user_id`, which is
-                    // exactly what the server keys `token_spend_id` by, so one token pays for all
-                    // of them. Before this the two paths minted a unit each and a two-device peer
-                    // cost two tokens a message.
+                    // One spend unit for this message to this person: it covers every copy the
+                    // pipeline sends — one per device of theirs — because all of them reach one
+                    // `recipient_user_id`, which is exactly what the server keys `token_spend_id`
+                    // by, so one token pays for all of them.
                     //
                     // Minted unconditionally rather than sized from a device count. Sizing is what
                     // broke it: this site asked `PeerDeviceRegistry`, which only `KeyServiceClient`
                     // writes and which reads 1 for a peer whose second device we learned about from
-                    // a bundle fetch elsewhere — so `forEnvelopeCount` returned nil, the fan-out
-                    // then minted nothing either, and a two-device peer cost two tokens a message.
-                    // Measured 2026-09-11: zero "covered by unit" lines in 71 spends.
+                    // a bundle fetch elsewhere — so `forEnvelopeCount` returned nil and a two-device
+                    // peer cost two tokens a message. Measured 2026-09-11: zero "covered by unit"
+                    // lines in 71 spends.
                     //
                     // A unit that ends up covering one envelope costs nothing — the server takes the
                     // identical `redeem_token` path for the first envelope either way — and it is
                     // also what lets `MessageRetryManager` reuse the redemption instead of buying a
                     // second token for the same body.
                     let peerSpendUnit = TokenSpendUnit.forMessage()
-                    let aggregated = try await OutboundMessagePipeline.shared.sendChunks(
+                    let report = try await OutboundMessagePipeline.shared.sendToRecipientDevices(
                         plan: plan,
                         baseMessageId: messageId,
                         senderId: currentUserId,
                         recipientId: recipientId,
-                        conversationId: ConversationId.direct(myUserId: currentUserId, theirUserId: recipientId),
                         timestamp: message.timestamp,
-                        recipientIdentityKey: recipientIdentityKey,
                         spendUnit: peerSpendUnit
                     )
+                    let aggregated = report.status
                     TrafficProtectionService.shared.recordRealMessageSent()
                     if let myDeviceId = AuthSessionManager.shared.currentDeviceId, !myDeviceId.isEmpty {
-                        // C1c: sync the same wire bytes as the primary send (MessageContent / pre-KNST),
+                        // C1c: sync the same wire bytes as the send (MessageContent / pre-KNST),
                         // not display JSON. Coordinator re-applies KNST framing per own device.
                         let wireForSync = plaintextData
-                        let chunksForFanOut = plan.payloads
                         Task { [weak self] in
                             _ = self
-                            // Our own other devices, then the recipient's. The primary send above
-                            // reached one of theirs — the device their pinned key names — and the
-                            // server copies that envelope to all their streams, but only that
-                            // device holds the session that opens it.
+                            // Our own other devices. The recipient's were all reached by the send
+                            // above, or are owed in its report and queued from there.
                             //
                             // One call, because the retry path must make the same one: see
                             // `mirrorOutgoing`.
                             await MultiDeviceSendCoordinator.shared.mirrorOutgoing(
                                 wirePlaintext: wireForSync,
-                                chunks: chunksForFanOut,
                                 messageId: messageId,
                                 recipientUserId: recipientId,
                                 senderUserId: currentUserId,
                                 senderDeviceId: myDeviceId,
-                                timestamp: message.timestamp,
-                                peerSpendUnit: peerSpendUnit
-                            )
-                            // The fan-out is the payer whenever the primary send could not be (an
-                            // empty wallet on the first envelope does not condemn the rest — see
-                            // TokenSpendUnit). Recording here as well as below is why a retry of
-                            // such a message still rides on a redemption rather than buying one.
-                            TokenSpendUnitStore.remember(
-                                peerSpendUnit, baseMessageId: messageId, recipientId: recipientId
+                                timestamp: message.timestamp
                             )
                         }
                     }
@@ -614,11 +569,9 @@ final class ChatSendCoordinator {
                     // including the delivery receipt for this very message, which is 36–38% of the
                     // bill on its own. Off the send path, because a control envelope must not delay
                     // the bubble the user is watching.
-                    if IntakeCredentialService.shared.peerNeedsOurKey(recipientId) {
-                        Task { [recipientIdentityKey] in
-                            await OutboundSessionService.shared.sendIntakeKey(
-                                to: recipientId, recipientIdentityKey: recipientIdentityKey
-                            )
+                    if OutboundSessionService.peerNeedsOurContactCard(recipientId) {
+                        Task {
+                            await OutboundSessionService.shared.sendContactCard(to: recipientId)
                         }
                     }
                     let deliveryStatus: DeliveryStatus
@@ -636,15 +589,19 @@ final class ChatSendCoordinator {
                         if aggregated.errorCode == "encryptionFailed" {
                             deliveryStatus = .failed
                             OutgoingWirePayloadStore.shared.remove(baseMessageId: messageId)
-                            Log.error("encryptionFailed from server — triggering END_SESSION for \(self.chat.otherUser?.id.prefix(8) ?? "?")\(traceTag)", category: "ChatViewModel")
-                            if let peerId = self.chat.otherUser?.id {
-                                Task {
-                                    try? await SessionLifecycleController.shared.sendEndSession(
-                                        to: peerId,
-                                        reason: "server_encryption_rejected"
-                                    )
-                                }
-                            }
+                            // The refusal was of a ciphertext, so it names the ratchet that
+                            // produced it — one device's. That ratchet is ours to retire, and the
+                            // next send opens a new one; the peer is told nothing, because nothing
+                            // it holds is wrong. Until 2026-09-27 it was sent an END_SESSION.
+                            let refused = report.copies
+                                .filter { $0.response?.errorCode == "encryptionFailed" }
+                                .map(\.deviceId)
+                            Log.error("encryptionFailed from server — retiring our state with \(recipientId.prefix(8))… devices=\(refused.map { $0.prefix(8) })\(traceTag)", category: "ChatViewModel")
+                            SessionLifecycleController.shared.resetSession(
+                                with: recipientId,
+                                devices: refused.isEmpty ? nil : refused,
+                                reason: "server_encryption_rejected"
+                            )
                         } else if aggregated.retryable {
                             deliveryStatus = .queued
                             Log.error("Server rejected message \(messageId): retryable=true\(ecStr)\(raStr)\(traceTag) — queued for retry", category: "ChatViewModel")
@@ -703,11 +660,10 @@ final class ChatSendCoordinator {
                         Log.info("Transport failure — queueing \(messageId.prefix(8))… for safe retry", category: "ChatViewModel")
                         self.updateMessageStatus(messageId: messageId, status: .queued)
                     } else {
+                        // The message says it failed — its mark and its retry — so no toast says
+                        // it again (TODO 128: one failure, one signal).
                         self.updateMessageStatus(messageId: messageId, status: .failed)
                         OutgoingWirePayloadStore.shared.remove(baseMessageId: messageId)
-                        ErrorRouter.shared.report(error, recovery: { [weak self] in
-                            self?.sendTextMessage(text: text, replyTo: replyTo, replyToContentOverride: replyToContentOverride, localThumbnails: localThumbnails)
-                        })
                     }
                 }
             }
@@ -718,11 +674,7 @@ final class ChatSendCoordinator {
                 return
             }
             Log.debug("Encryption failed, session was deleted. Reinitializing...", category: "ChatViewModel")
-            guard let toUserId = chat.otherUser?.id else {
-                ErrorRouter.shared.report(error)
-                Log.error("Failed to encrypt message: \(error.localizedDescription)", category: "ChatViewModel")
-                return
-            }
+            let toUserId = conversation.peerId
             viewModel?.isSessionReady = false
             let queued = QueuedMessage(text: text, attachments: [], replyTo: replyTo)
             queuedMessages.append(queued)
@@ -737,13 +689,13 @@ final class ChatSendCoordinator {
     func sendMediaMessage(
         attachments: [MediaAttachment],
         caption: String,
-        replyTo: Message?,
+        replyTo: TranscriptRow?,
         replyToContentOverride: String? = nil
     ) {
-        guard let recipientId = chat.otherUser?.id,
-              let currentUserId = AuthSessionManager.shared.currentUserId else {
+        let recipientId = conversation.peerId
+        guard let currentUserId = AuthSessionManager.shared.currentUserId else {
             Log.error("No recipient/user ID for media message", category: "ChatViewModel")
-            ErrorRouter.shared.report(.unknown("Cannot send media: no recipient"))
+            ErrorRouter.shared.report(.unknown(detail: "media send with no recipient or no account"))
             return
         }
         let placeholderId = UUID().uuidString
@@ -752,7 +704,8 @@ final class ChatSendCoordinator {
         let placeholderItems = attachments.map { attachment in
             MessagePersistenceService.UploadPlaceholderItem(
                 thumbnail: attachment.displayImage.flatMap { MediaManager.shared.generateThumbnail(from: $0) },
-                mimeType: attachment.mimeType
+                mimeType: attachment.mimeType,
+                presentation: attachment.presentation
             )
         }
         persistenceService.savePlaceholderMessage(
@@ -763,7 +716,7 @@ final class ChatSendCoordinator {
             items: placeholderItems,
             replyTo: replyTo,
             replyToContentOverride: replyToContentOverride,
-            chat: chat,
+            chatId: conversation.chatId,
             in: viewContext
         )
         pendingMediaUploads[placeholderId] = MediaUploadPayload(
@@ -806,18 +759,15 @@ final class ChatSendCoordinator {
             } catch {
                 Log.error("Media upload failed: \(error.localizedDescription) | raw: \(error)", category: "ChatViewModel")
                 MediaUploadProgressTracker.shared.clear(placeholderId)
+                // The placeholder shows the failure and its retry; no toast besides.
                 updateMessageStatus(messageId: placeholderId, status: .failed)
-                ErrorRouter.shared.report(
-                    AppError.mediaUploadFailed(error.localizedDescription),
-                    recovery: { [weak self] in self?.retryMessage_byId(placeholderId) }
-                )
             }
         }
     }
 
     func sendVoiceMessage(url: URL, duration: TimeInterval, waveform: [Float]) {
-        guard let recipientId = chat.otherUser?.id,
-              let currentUserId = AuthSessionManager.shared.currentUserId else {
+        let recipientId = conversation.peerId
+        guard let currentUserId = AuthSessionManager.shared.currentUserId else {
             Log.error("No recipient/user ID for voice message", category: "ChatViewModel")
             return
         }
@@ -828,13 +778,14 @@ final class ChatSendCoordinator {
             toUserId: recipientId,
             duration: duration,
             waveform: waveform,
-            chat: chat,
+            chatId: conversation.chatId,
             in: viewContext
         )
         Task { [weak self] in
             guard let self else { return }
             do {
-                let voiceContent = try await MediaManager.shared.uploadAudio(url, duration: duration, waveform: waveform)
+                let voiceContent = try await MediaManager.shared.uploadAudio(
+                    url, duration: duration, waveform: waveform, for: recipientId)
                 let wireContent = MediaWireCodec.voiceMessageContent(from: voiceContent)
                 let wirePlaintext = try wireContent.serializedData()
                 let storagePayload = LocalMessagePayload.storagePayload(forWireContent: wireContent)
@@ -851,8 +802,8 @@ final class ChatSendCoordinator {
                 )
             } catch {
                 Log.error("Voice upload failed: \(error.localizedDescription)", category: "ChatViewModel")
+                // The placeholder shows the failure; no toast besides.
                 updateMessageStatus(messageId: placeholderId, status: .failed)
-                ErrorRouter.shared.report(AppError.mediaUploadFailed(error.localizedDescription))
             }
         }
     }
@@ -860,11 +811,11 @@ final class ChatSendCoordinator {
     private func sendFileMessage(
         fileURLs: [URL],
         caption: String,
-        replyTo: Message?,
+        replyTo: TranscriptRow?,
         replyToContentOverride: String? = nil
     ) {
-        guard let recipientId = chat.otherUser?.id,
-              let currentUserId = AuthSessionManager.shared.currentUserId else {
+        let recipientId = conversation.peerId
+        guard let currentUserId = AuthSessionManager.shared.currentUserId else {
             return
         }
         let placeholderId = UUID().uuidString
@@ -872,11 +823,16 @@ final class ChatSendCoordinator {
             id: placeholderId,
             fromUserId: currentUserId,
             toUserId: recipientId,
-            caption: caption.isEmpty ? (fileURLs.first?.lastPathComponent ?? "File") : caption,
-            items: [MessagePersistenceService.UploadPlaceholderItem()],
+            caption: caption,
+            items: fileURLs.map {
+                MessagePersistenceService.UploadPlaceholderItem(
+                    fileName: $0.lastPathComponent,
+                    fileSize: (try? $0.resourceValues(forKeys: [.fileSizeKey]))?.fileSize
+                )
+            },
             replyTo: replyTo,
             replyToContentOverride: replyToContentOverride,
-            chat: chat,
+            chatId: conversation.chatId,
             in: viewContext
         )
         pendingMediaUploads[placeholderId] = MediaUploadPayload(
@@ -887,7 +843,8 @@ final class ChatSendCoordinator {
             do {
                 let result = try await mediaUploadManager.uploadFilesAndBuildContent(
                     urls: fileURLs,
-                    caption: caption
+                    caption: caption,
+                    for: recipientId
                 )
                 pendingMediaUploads.removeValue(forKey: placeholderId)
                 persistenceService.deleteMessage(id: placeholderId, in: viewContext, autoSave: false)
@@ -906,72 +863,83 @@ final class ChatSendCoordinator {
                 )
             } catch {
                 Log.error("File upload failed: \(error.localizedDescription)", category: "ChatViewModel")
+                // The placeholder shows the failure and its retry; no toast besides.
                 updateMessageStatus(messageId: placeholderId, status: .failed)
-                ErrorRouter.shared.report(
-                    AppError.mediaUploadFailed(error.localizedDescription),
-                    recovery: { [weak self] in self?.retryMessage_byId(placeholderId) }
-                )
             }
         }
+    }
+
+    // MARK: - Sticker
+
+    /// A sticker is sent the way text is: one `MessageContent`, one session send. Nothing is
+    /// uploaded — the pack is public and the recipient fetches it by hash — so there is no
+    /// placeholder and no upload task, and the reference is stored typed (CTM1 `messageContent`),
+    /// never as a JSON shape in the text.
+    func sendSticker(_ ref: StickerReference, replyTo: TranscriptRow? = nil) {
+        var content = Shared_Proto_Messaging_V1_MessageContent()
+        content.sticker = ref.wire
+        guard let wirePlaintext = try? content.serializedData(), !wirePlaintext.isEmpty else {
+            Log.error("Failed to serialize sticker MessageContent", category: "ChatViewModel")
+            return
+        }
+        try? StickerPackStore.default().recordUsed(ref)
+        sendTextMessage(
+            text: "",
+            replyTo: replyTo,
+            wirePlaintext: wirePlaintext,
+            storagePayload: LocalMessagePayload.storagePayload(forWireContent: content)
+        )
     }
 
     // MARK: - Reaction
 
     /// Optimistic apply, then the same pipeline as `editMessage`. Never a chat row.
     /// Double-tap likes pass `ReactionReducer.likeEmoji`.
-    func sendReaction(_ message: Message, emoji: String) {
-        guard let recipientId = chat.otherUser?.id,
-              let currentUserId = AuthSessionManager.shared.currentUserId else { return }
+    func sendReaction(_ message: TranscriptRow, emoji: String) {
+        let recipientId = conversation.peerId
+        guard let currentUserId = AuthSessionManager.shared.currentUserId else { return }
         let nowMs = Int64(Date().timeIntervalSince1970 * 1000)
-        let existing = ReactionStore.row(
-            targetMessageId: message.id,
-            reactorUserId: currentUserId,
-            in: viewContext
-        )
+        let existing = try? LocalRepositories.reactions.reaction(on: message.id, by: currentUserId)
         guard let plan = ReactionReducer.sendPlan(
             targetMessageId: message.id,
             currentEmoji: existing?.emoji,
             tapped: emoji,
             nowMs: nowMs
         ) else { return }
+        // What the menu row learns from. Taking a reaction off is not a use of it.
+        if case .add(let added) = plan.incoming {
+            ReactionQuickSetStore.shared.record(added)
+        }
         guard let payload = ReactionWire.encode(plan) else {
-            ErrorRouter.shared.report(.unknown(NSLocalizedString("reaction_failed", comment: "")))
+            ErrorRouter.shared.report(.said(UserText("reaction_failed")))
             return
         }
 
         let previous = existing.map { ReactionReducer.Row(emoji: $0.emoji, timestampMs: $0.timestampMs) }
-        _ = ReactionStore.applyIncoming(
+        _ = Reactions.applyIncoming(
             targetMessageId: plan.targetMessageId,
             reactorUserId: currentUserId,
             actionRawValue: ReactionWire.actionRawValue(plan.incoming),
             emoji: ReactionWire.emoji(plan.incoming),
             payloadTimestampMs: plan.timestampMs,
             fallbackTimestampMs: plan.timestampMs,
-            nowMs: plan.timestampMs,
-            in: viewContext
+            nowMs: plan.timestampMs
         )
 
-        let conversationId = ConversationId.direct(myUserId: currentUserId, theirUserId: recipientId)
         Task { [weak self] in
-            guard let self else { return }
+            guard self != nil else { return }
             do {
                 let actionId = UUID().uuidString.lowercased()
                 let chunkPlan = ChunkedMessageSender.shared.buildPlan(
                     plaintext: payload,
                     messageId: UUID(uuidString: actionId) ?? UUID()
                 )
-                let recipientIdentityKey: Data? = StealthPolicy.shared.shouldUseSealedSender()
-                    ? await fetchRecipientIdentityKeyForEdit(recipientId: recipientId, context: viewContext)
-                    : nil
-
-                _ = try await OutboundMessagePipeline.shared.sendChunks(
+                _ = try await OutboundMessagePipeline.shared.sendToRecipientDevices(
                     plan: chunkPlan,
                     baseMessageId: actionId,
                     senderId: currentUserId,
                     recipientId: recipientId,
-                    conversationId: conversationId,
-                    timestamp: UInt64(Date().timeIntervalSince1970),
-                    recipientIdentityKey: recipientIdentityKey
+                    timestamp: UInt64(Date().timeIntervalSince1970)
                 )
 
                 if let myDeviceId = AuthSessionManager.shared.currentDeviceId, !myDeviceId.isEmpty {
@@ -980,7 +948,6 @@ final class ChatSendCoordinator {
                     // that never sees it renders the transcript differently from its siblings.
                     await MultiDeviceSendCoordinator.shared.mirrorOutgoing(
                         wirePlaintext: payload,
-                        chunks: chunkPlan.payloads,
                         messageId: actionId,
                         recipientUserId: recipientId,
                         senderUserId: currentUserId,
@@ -993,30 +960,28 @@ final class ChatSendCoordinator {
                     "Stealth: reaction send blocked (cannot seal) — rolling back \(message.id.prefix(8))…",
                     category: "ChatSendCoordinator"
                 )
-                ReactionStore.restoreLocal(
+                Reactions.restoreLocal(
                     targetMessageId: plan.targetMessageId,
                     reactorUserId: currentUserId,
                     previous: previous,
-                    nowMs: plan.timestampMs,
-                    in: self.viewContext
+                    nowMs: plan.timestampMs
                 )
-                ErrorRouter.shared.report(.unknown(NSLocalizedString("reaction_failed", comment: "")))
+                ErrorRouter.shared.report(.said(UserText("reaction_failed")))
             } catch {
-                ErrorRouter.shared.report(.unknown(NSLocalizedString("reaction_failed", comment: "")))
+                ErrorRouter.shared.report(.said(UserText("reaction_failed")))
             }
         }
     }
 
     // MARK: - Edit
 
-    func editMessage(_ message: Message, newText: String, editingBinding: @escaping () -> Void) {
-        guard let recipientId = chat.otherUser?.id,
-              let currentUserId = AuthSessionManager.shared.currentUserId else { return }
-        let conversationId = ConversationId.direct(myUserId: currentUserId, theirUserId: recipientId)
+    func editMessage(_ message: TranscriptRow, newText: String, editingBinding: @escaping () -> Void) {
+        let recipientId = conversation.peerId
+        guard let currentUserId = AuthSessionManager.shared.currentUserId else { return }
         // For a media message, editing the caption must rebuild the album (binary wire +
         // local JSON) — sending plain text would replace the descriptor and destroy the media.
-        // Read displayText here (current actor) before hopping onto the Task.
-        let storedPayload = MessageDisplayCache.shared.payloadData(for: message)
+        // Read legacyBody here (current actor) before hopping onto the Task.
+        let storedPayload = MessageDisplayCache.shared.payloadData(messageId: message.id)
         let mediaEdit = MediaWireCodec.editedCaptionPayload(storedPlaintext: storedPayload, newCaption: newText)
         Task { [weak self] in
             guard let self else { return }
@@ -1040,25 +1005,19 @@ final class ChatSendCoordinator {
                 var content = Shared_Proto_Messaging_V1_MessageContent()
                 content.edit = editMsg
                 guard let editPayload = try? content.serializedData() else {
-                    ErrorRouter.shared.report(.unknown("Failed to serialize edit"))
+                    ErrorRouter.shared.report(.said(UserText("edit_message_failed")))
                     return
                 }
 
                 let editActionId = UUID().uuidString.lowercased()
                 let plan = ChunkedMessageSender.shared.buildPlan(plaintext: editPayload, messageId: UUID(uuidString: editActionId) ?? UUID())
 
-                let recipientIdentityKey: Data? = StealthPolicy.shared.shouldUseSealedSender()
-                    ? await fetchRecipientIdentityKeyForEdit(recipientId: recipientId, context: viewContext)
-                    : nil
-
-                _ = try await OutboundMessagePipeline.shared.sendChunks(
+                _ = try await OutboundMessagePipeline.shared.sendToRecipientDevices(
                     plan: plan,
                     baseMessageId: editActionId,
                     senderId: currentUserId,
                     recipientId: recipientId,
-                    conversationId: conversationId,
-                    timestamp: UInt64(Date().timeIntervalSince1970),
-                    recipientIdentityKey: recipientIdentityKey
+                    timestamp: UInt64(Date().timeIntervalSince1970)
                 )
 
                 let editedDate = Date()
@@ -1074,20 +1033,17 @@ final class ChatSendCoordinator {
             } catch is StealthDowngradeBlocked {
                 // Stealth on but the edit could not be sealed — fail closed, never send identified.
                 Log.info("Stealth: edit send blocked (cannot seal) — not downgrading for \(message.id.prefix(8))…", category: "ChatSendCoordinator")
-                ErrorRouter.shared.report(.unknown(NSLocalizedString("edit_message_failed", comment: "")))
+                ErrorRouter.shared.report(.said(UserText("edit_message_failed")))
             } catch {
-                ErrorRouter.shared.report(.unknown(String(format: NSLocalizedString("edit_message_failed", comment: ""), error.localizedDescription)))
+                Log.error("Edit not sent for \(message.id.prefix(8))…: \(error)", category: "ChatSendCoordinator")
+                ErrorRouter.shared.report(.said(UserText("edit_message_failed")))
             }
         }
     }
 
-    private func fetchRecipientIdentityKeyForEdit(recipientId: String, context: NSManagedObjectContext) async -> Data? {
-        StealthSenderService.recipientIdentityKey(recipientId: recipientId, context: context)
-    }
-
     // MARK: - Retry
 
-    func retryMessage(_ message: Message) {
+    func retryMessage(_ message: TranscriptRow) {
         if let payload = pendingMediaUploads[message.id] {
             pendingMediaUploads.removeValue(forKey: message.id)
             persistenceService.deleteMessage(id: message.id, in: viewContext)
@@ -1098,19 +1054,15 @@ final class ChatSendCoordinator {
             }
             return
         }
-        guard let recipientId = chat.otherUser?.id else {
-            Log.error("No recipient ID for retry", category: "ChatViewModel")
-            return
-        }
+        let recipientId = conversation.peerId
         retryManager.retryMessage(
             message,
             recipientId: recipientId,
-            context: viewContext,
             onError: { [weak self] error in
                 guard let self else { return }
                 if error == "payload_expired" {
-                    let text = message.displayText
-                    guard !text.isEmpty else { return }
+                    // Text only: a media row's body would go out as a bubble of JSON.
+                    guard let text = message.plainText, !text.isEmpty else { return }
                     Log.info("Retry: payload expired — sending '\(text.prefix(20))…' as fresh message", category: "ChatViewModel")
                     // Remove the orphaned failed placeholder before re-sending under a new
                     // message ID — otherwise the original lingers and the chat shows two
@@ -1118,18 +1070,11 @@ final class ChatSendCoordinator {
                     self.persistenceService.deleteMessage(id: message.id, in: self.viewContext)
                     self.sendTextMessage(text: text, replyTo: nil)
                 } else {
-                    ErrorRouter.shared.report(.unknown(error))
+                    // The message keeps its failed mark and its retry; no toast besides.
+                    Log.error("Retry of \(message.id.prefix(8))… failed: \(error)", category: "ChatViewModel")
                 }
             }
         )
-    }
-
-    private func retryMessage_byId(_ messageId: String) {
-        let fetchRequest = Message.fetchRequest()
-        fetchRequest.predicate = NSPredicate(format: "id == %@", messageId)
-        fetchRequest.fetchLimit = 1
-        guard let msg = try? viewContext.fetch(fetchRequest).first else { return }
-        retryMessage(msg)
     }
 
     // MARK: - Persistence helpers
@@ -1139,7 +1084,7 @@ final class ChatSendCoordinator {
         decryptedContent: String,
         isSentByMe: Bool,
         status: DeliveryStatus,
-        replyTo: Message? = nil,
+        replyTo: TranscriptRow? = nil,
         replyToContentOverride: String? = nil,
         localThumbnails: [Data] = [],
         suiteId: UInt16,
@@ -1151,7 +1096,7 @@ final class ChatSendCoordinator {
                 decryptedContent: decryptedContent,
                 isSentByMe: isSentByMe,
                 status: status,
-                chat: chat,
+                chatId: conversation.chatId,
                 replyTo: replyTo,
                 replyToContentOverride: replyToContentOverride,
                 localThumbnails: localThumbnails,

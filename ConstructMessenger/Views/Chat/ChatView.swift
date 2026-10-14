@@ -11,11 +11,17 @@ import UniformTypeIdentifiers
 
 struct ChatView: View {
     @Environment(\.managedObjectContext) private var viewContext
-    @Environment(\.dismiss) private var dismiss
+    @Environment(\.scenePhase) private var scenePhase
+    /// Between this chat's appear and disappear — not covered by a pushed profile or the like.
+    @State private var isOnScreen = false
     /// Lazy holder — SwiftUI re-runs View.init on parent re-render; we must not
     /// allocate ChatViewModel there or discarded copies spam deinit / waste work.
     @State private var lazyViewModel: LazyChatViewModel
     private var viewModel: ChatViewModel { lazyViewModel.value }
+    private var peerId: String { viewModel.conversation.peerId }
+    private var peerName: String {
+        ContactsLive.shared.contact(peerId)?.resolvedDisplayName ?? DisplayNameGenerator.generate(from: peerId)
+    }
     /// Whoever owns the scroll position on this path. Chosen once, in `init`.
     ///
     /// Sampling the flag in `body` would let a mid-session flip put two owners on screen, which is
@@ -27,22 +33,30 @@ struct ChatView: View {
     private let usesOwnedInset: Bool
     private var connectionManager = ConnectionStatusManager.shared
     @State private var messageText = ""
-    @State private var replyingTo: Message?
+    @State private var replyingTo: TranscriptRow?
     /// When non-nil, the user selected a partial quote from `replyingTo` for reply.
     @State private var replyQuoteText: String? = nil
     /// Message opened for "Quote & Reply" selection sheet.
-    @State private var quotingMessage: Message? = nil
+    @State private var quotingMessage: TranscriptRow? = nil
     /// Soft reply focus — lowercased message ids that stay full-opacity; others dim.
     /// Empty = idle chat (no visual change). See ``ChatUIConstants.ReplyFocus``.
     @State private var replyFocusIds: Set<String> = []
     @State private var replyFocusPeekTask: Task<Void, Never>?
     @State private var showingUserProfile = false
+    /// The top safe area — status bar and the system bar. The UIKit transcript lays out under the
+    /// bar and needs it as padding; a SwiftUI scroll view does that itself.
+    @State private var topBarInset: CGFloat = 0
     @State private var callManager: (any CallUIManaging)? = CallRuntimeProvider.makeUIManager()
 
     @State private var searchText = ""
     @State private var isSearchActive = false
     @State private var isEditMode = false
     @State private var selectedMessages: Set<String> = []
+    /// What the forward picker on screen will send.
+    @State private var forwarding: [TranscriptRow] = []
+    @State private var showingForwardPicker = false
+    @State private var forwardFailed = false
+    @Environment(ChatsViewModel.self) private var chatsViewModel
     @State private var galleryStartItem: GalleryStartItem?  // media gallery presenter
 
     // Drop target for drag-and-drop from Finder (macOS) over the whole chat area
@@ -54,6 +68,7 @@ struct ChatView: View {
 
     // Key Transparency status for the contact in this chat
     @State private var contactKTStatus: KTStatus = .unverified
+    @State private var contactTrustAlert: ContactTrustAlert?
     /// True when the session with this contact was established via a degraded (stale-SPK) init.
     @State private var isSessionAtRisk = false
     /// Safety Numbers sheet after key-change "Verify".
@@ -107,9 +122,6 @@ struct ChatView: View {
         static let composerHorizontalPadding = ChatUIConstants.Shell.composerHorizontalPadding
         static let composerBottomPadding = ChatUIConstants.Shell.composerBottomPadding
         static let messageBottomClearance = ChatUIConstants.Shell.messageBottomClearance
-        /// Extra band below the status-bar safe area (≈ nav capsule height + margin) covered
-        /// by the top scrim so scrolling text blurs/fades before it reaches the clock & signal.
-        static let topScrimUnderSafeArea = ChatUIConstants.Shell.topScrimUnderSafeArea
         /// Same cutoff as ``ChatScrollManager/heightRepinThreshold`` — layout noise, not a pin trigger.
         static let geometryLogThreshold = ChatScrollManager.heightRepinThreshold
     }
@@ -123,13 +135,13 @@ struct ChatView: View {
         let grew = abs(new.contentHeight - old.contentHeight) >= Layout.geometryLogThreshold
         guard moved || grew else { return }
         ChatScrollManager.logGeometry(
-            "SCROLL_GEO content=\(Int(new.contentHeight))pt viewport=[\(Int(new.visibleMinY))…\(Int(new.visibleMinY + (new.contentHeight - new.distanceFromBottom - new.visibleMinY)))] fromBottom=\(Int(new.distanceFromBottom)) msgs=\(viewModel.messages.count) \(viewport.stateDescription)"
+            "SCROLL_GEO content=\(Int(new.contentHeight))pt viewport=[\(Int(new.visibleMinY))…\(Int(new.visibleMinY + (new.contentHeight - new.distanceFromBottom - new.visibleMinY)))] fromBottom=\(Int(new.distanceFromBottom)) msgs=\(viewModel.entries.count) \(viewport.stateDescription)"
         )
     }
 
-    init(chat: Chat, context: NSManagedObjectContext) {
+    init(conversation: Conversation, context: NSManagedObjectContext) {
         _lazyViewModel = State(wrappedValue: LazyChatViewModel {
-            ChatViewModel(chat: chat, context: context)
+            ChatViewModel(conversation: conversation, context: context)
         })
         let owned = ChatViewportConfiguration.ownedInsetStackEnabled
         self.usesOwnedInset = owned
@@ -145,7 +157,7 @@ struct ChatView: View {
         // Compute once per body pass to avoid repeated full-array filtering in render path.
         let renderedMessages = filteredMessages
 
-        // Floating capsule glass panels (top nav + bottom input) over scroll, following Apple's capsulization
+        // The transcript under the system bar's glass and the floating composer.
         ZStack {
             // Full-bleed chat background so the floating input capsule sits over a continuous
             // surface — without this the ScrollView's own background stops at the safe area and
@@ -153,9 +165,9 @@ struct ChatView: View {
             // strip under the capsule.
             Color.CT.bg.ignoresSafeArea()
 
-            // Message list — base layer, scrolls underneath the floating capsules
+            // Message list — base layer, scrolls under the bar and the composer
             transcript(renderedMessages)
-                .onChange(of: viewModel.messages.count) { oldCount, count in
+                .onChange(of: viewModel.entries.count) { oldCount, count in
                     if AppConstants.enableDebugLogging {
                         Log.info("ChatView: messages count changed to \(count)")
                     }
@@ -220,41 +232,25 @@ struct ChatView: View {
                 }
                 .onChange(of: viewModel.editingMessage) { _, editMsg in
                     if let editMsg {
-                        // For media messages pre-fill with caption, not the raw JSON payload
-                        if let mc = parseMediaContent(from: editMsg.displayText) {
-                            messageText = mc.caption
-                        } else {
-                            messageText = editMsg.displayText
-                        }
+                        // A media message edits its caption.
+                        messageText = editMsg.readableText
                     }
                 }
 
-            // Top scrim so scrolling text fades before the status bar / floating nav.
-            GeometryReader { geo in
-                Rectangle()
-                    .fill(
-                        LinearGradient(
-                            stops: [
-                                .init(color: Color.CT.bg, location: 0),
-                                .init(color: Color.CT.bg.opacity(0.65), location: 0.55),
-                                .init(color: Color.CT.bg.opacity(0), location: 1)
-                            ],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
-                    )
-                    .frame(height: geo.safeAreaInsets.top + Layout.topScrimUnderSafeArea)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                    .ignoresSafeArea(edges: .top)
-            }
-            .allowsHitTesting(false)
-
-            // === Floating capsule glass panels (Apple capsulization) ===
-            // Top: nav + banners (capsule style)
+            // Search and the banners, under the system bar.
             VStack(spacing: ChatUIConstants.Shell.floatingChromeSpacing) {
-                chatNavBar
+                if isSearchActive {
+                    ChatSearchChromeView(
+                        searchText: $searchText,
+                        resultCount: renderedMessages.count,
+                        onClose: {
+                            withAnimation {
+                                isSearchActive = false
+                            }
+                        }
+                    )
                     .padding(.horizontal, ChatUIConstants.Shell.floatingChromeHorizontal)
-                    .padding(.top, ChatUIConstants.Shell.floatingChromeTop + callBarInset)
+                }
 
                 floodBurstBanner
 
@@ -266,48 +262,50 @@ struct ChatView: View {
 
                 Spacer(minLength: 0)
             }
+            .padding(.top, callBarInset)
             .frame(maxHeight: .infinity, alignment: .top)
 
         }
+        .onGeometryChange(for: CGFloat.self, of: { $0.safeAreaInsets.top }) { topBarInset = $0 }
+        .toolbar { chatToolbar }
+        .inlineNavTitle()
         #if os(iOS)
-        .hideSystemNavBar()
-        .toolbar(.hidden, for: .tabBar)
+        .hidesTabBar()
+        .softTopScrollEdge()
         #endif
         .modifier(ComposerPlacement(usesOverlay: usesOwnedInset) { composer })
-        // Edge-swipe-back is handled natively by interactivePopGestureRecognizer
-        // (see InteractiveSwipeBack.swift) — no manual DragGesture needed.
         .onDrop(of: [.image, .fileURL], isTargeted: $isChatDropTargeted) { providers in
             handleChatDrop(providers: providers)
         }
         .overlay {
             ChatDropOverlayView(isVisible: isChatDropTargeted)
         }
-        .overlay(alignment: .top) {
-            ChatSearchOverlayView(
-                isSearchActive: $isSearchActive,
-                searchText: $searchText,
-                resultCount: renderedMessages.count
-            )
-        }
         .sheet(isPresented: $showingUserProfile) {
-            if let user = viewModel.chat.otherUser {
-                UserProfileView(
-                    user: user,
-                    showMessageButton: false   // already inside this chat — no loop
-                )
-                .environment(\.managedObjectContext, viewContext)
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
-            }
+            UserProfileView(
+                userId: peerId,
+                showMessageButton: false   // already inside this chat — no loop
+            )
+            .sheetNavigation()
+            .environment(\.managedObjectContext, viewContext)
+            .presentationDetents([.large])
+            .presentationDragIndicator(.visible)
+        }
+        .sheet(isPresented: $showingForwardPicker) {
+            ForwardPickerView(onPick: finishForward(to:))
+                .sheetNavigation()
+        }
+        .task(id: ForwardDrafts.shared.pending[viewModel.conversation.chatId]?.count ?? 0) {
+            await sendForwardedHere()
+        }
+        .alert(NSLocalizedString("forward_failed", comment: ""), isPresented: $forwardFailed) {
+            Button(NSLocalizedString("ok", comment: ""), role: .cancel) {}
         }
         .sheet(isPresented: $showingSafetyNumbers) {
-            if let user = viewModel.chat.otherUser,
-               let deviceId = KeyChangeUX.safetyDeviceId(for: user) {
-                SafetyNumberView(
-                    theirDeviceId: deviceId,
-                    theirDisplayName: user.resolvedDisplayName
-                )
-            }
+            SafetyNumberView(
+                theirDeviceIds: KeyChangeUX.safetyDeviceIds(ofContact: peerId),
+                theirDisplayName: peerName
+            )
+            .sheetNavigation()
         }
         .sheet(item: $quotingMessage) { msg in
             QuoteSelectionSheet(message: msg) { selectedQuote in
@@ -315,6 +313,7 @@ struct ChatView: View {
                 replyQuoteText = selectedQuote
                 setComposeReplyFocus(messageId: msg.id)
             }
+            .sheetNavigation()
             .presentationDetents([.medium, .large])
             .presentationDragIndicator(.visible)
         }
@@ -324,11 +323,26 @@ struct ChatView: View {
         .onChange(of: viewModel.isInitializingSession) { _, _ in refreshSessionAtRiskState() }
         // Posted when an at-risk session is auto-upgraded — refresh the banner so it disappears.
         .onReceive(NotificationCenter.default.publisher(for: .sessionAtRiskChanged)) { note in
-            if (note.userInfo?["userId"] as? String) == viewModel.chat.otherUser?.id {
+            if (note.userInfo?["userId"] as? String) == peerId {
                 refreshSessionAtRiskState()
             }
         }
         .onDisappear(perform: handleViewDisappear)
+        // A video note expanding in place grows downward; bring the whole of it into view.
+        .onChange(of: VideoNotePlayback.shared.expanded) { _, key in
+            guard let key else { return }
+            Task { @MainActor in
+                try? await Task.sleep(for: .seconds(ChatUIConstants.VideoNote.expandDuration))
+                guard VideoNotePlayback.shared.expanded == key else { return }
+                viewport.scrollTo(messageId: key.messageId, anchor: .center, animated: true)
+            }
+        }
+        // Messages that arrive while the chat is open behind a locked or backgrounded app are
+        // counted unread, rightly. Coming back shows them in this chat, and appear does not fire
+        // again — so without this the count outlived the reading and showed on the list.
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active, isOnScreen { markChatAsRead() }
+        }
         #if os(iOS)
         .fullScreenCover(item: $galleryStartItem) { item in
                 MediaGalleryViewer(
@@ -372,34 +386,27 @@ struct ChatView: View {
     /// First-class trust event: identity key changed or KT verification failed.
     private var keyChangeBanner: some View {
         ChatKeyChangeBannerView(
-            status: contactKTStatus,
-            contactName: viewModel.chat.otherUser?.resolvedDisplayName
-                ?? NSLocalizedString("chat", comment: ""),
+            alert: contactTrustAlert,
+            contactName: peerName,
             onVerify: { showingSafetyNumbers = true },
             onAccept: { acknowledgeContactKeyChange() }
         )
-        .animation(.spring(response: 0.35, dampingFraction: 0.85), value: contactKTStatus)
+        .animation(.spring(response: 0.35, dampingFraction: 0.85), value: contactTrustAlert)
     }
 
     private func acknowledgeContactKeyChange() {
-        guard let userId = viewModel.chat.otherUser?.id else { return }
-        if KeyChangeUX.acknowledgeKeyChange(userId: userId, context: viewContext) {
+        if KeyChangeUX.acknowledgeKeyChange(userId: peerId) {
             loadContactKTStatus()
         }
     }
 
     /// Refresh the at-risk state from the per-peer Keychain flag set by degraded init.
     private func refreshSessionAtRiskState() {
-        guard let contactId = viewModel.chat.otherUser?.id, !contactId.isEmpty else {
-            isSessionAtRisk = false
-            return
-        }
+        let contactId = peerId
         isSessionAtRisk = KeychainManager.shared.loadSessionAtRiskFlag(for: contactId)
     }
 
-    private var floodSenderId: String {
-        viewModel.chat.otherUser?.id ?? ""
-    }
+    private var floodSenderId: String { peerId }
 
     private var isFloodSenderSuppressed: Bool {
         floodGuard.suppressedSenders.contains(floodSenderId)
@@ -410,15 +417,16 @@ struct ChatView: View {
     }
 
     private func blockAndUnsuppressFloodSender() {
-        if let user = viewModel.chat.otherUser {
-            user.isBlocked = true
-            try? user.managedObjectContext?.save()
-            let userId = user.id
-            // Durable server-side block (best-effort; local isBlocked already drives the drop).
-            Task {
-                do { _ = try await UserServiceClient.shared.blockUser(userId: userId) }
-                catch { Log.error("Flood block sync failed for \(userId.prefix(8))… (local kept): \(error)", category: "ChatView") }
-            }
+        let userId = peerId
+        do {
+            try LocalRepositories.contacts.setBlocked(userId, true)
+        } catch {
+            Log.error("Flood block not saved locally for \(userId.prefix(8))…: \(error)", category: "ChatView")
+        }
+        // Durable server-side block (best-effort; local isBlocked already drives the drop).
+        Task {
+            do { _ = try await UserServiceClient.shared.blockUser(userId: userId) }
+            catch { Log.error("Flood block sync failed for \(userId.prefix(8))… (local kept): \(error)", category: "ChatView") }
         }
         IncomingFloodGuard.shared.unsuppress(senderId: floodSenderId)
     }
@@ -428,7 +436,8 @@ struct ChatView: View {
         if isEditMode && !selectedMessages.isEmpty {
             ChatSelectionBarView(
                 selectedCount: selectedMessages.count,
-                onDelete: deleteSelectedMessages
+                onDelete: deleteSelectedMessages,
+                onForward: forwardSelectedMessages
             )
         }
     }
@@ -453,7 +462,7 @@ struct ChatView: View {
                         replyToContentOverride: replyQuoteText
                     )
                     messageText = ""
-                    DraftStore.shared.clear(for: viewModel.chat.id)
+                    DraftStore.shared.clear(for: viewModel.conversation.chatId)
                     replyingTo = nil
                     replyQuoteText = nil
                     clearReplyFocus(animated: true)
@@ -467,6 +476,13 @@ struct ChatView: View {
             onSendVoice: { url, duration, waveform in
                 viewModel.sendVoiceMessage(url: url, duration: duration, waveform: waveform)
                 // Same single path as a text send.
+                viewport.followExplicitly()
+            },
+            onSendSticker: { ref in
+                viewModel.sendSticker(ref, replyTo: replyingTo)
+                replyingTo = nil
+                replyQuoteText = nil
+                clearReplyFocus(animated: true)
                 viewport.followExplicitly()
             },
             onCancelReply: {
@@ -483,7 +499,7 @@ struct ChatView: View {
         .overlay {
             if viewModel.isInitializingSession {
                 Text(NSLocalizedString("history_sync_composer_connecting", comment: ""))
-                    .font(CTFont.regular(12))
+                    .font(CTFont.secondary)
                     .foregroundStyle(Color.CT.textDim)
                     .multilineTextAlignment(.center)
                     .padding(CTLayout.inlinePad)
@@ -500,7 +516,7 @@ struct ChatView: View {
                     }
                 } label: {
                     Image(systemName: "chevron.down")
-                        .font(.system(size: CTLayout.callIconSize))
+                        .font(CTIcon.font(CTIcon.control, weight: .regular))
                         .foregroundColor(Color.CT.accent)
                         .frame(width: CTLayout.controlHeight, height: CTLayout.controlHeight)
                         .glassCapsule()
@@ -515,49 +531,104 @@ struct ChatView: View {
         }
     }
     
-    // MARK: - CT Navigation Bar
+    // MARK: - Bar
 
-    private var chatNavBar: some View {
-        ChatNavBarView(
-            title: viewModel.chat.otherUser?.resolvedDisplayName ?? NSLocalizedString("chat", comment: ""),
-            subtitle: navigationStatusSubtitle,
-            contactKTStatus: contactKTStatus,
-            isEditMode: isEditMode,
-            canStartCall: canStartCall,
-            isSearchActive: isSearchActive,
-            onBack: { dismiss() },
-            onOpenProfile: { showingUserProfile = true },
-            onDoneEdit: {
-                withAnimation {
-                    isEditMode = false
-                    selectedMessages.removeAll()
+    /// The conversation on the system bar (`decisions/navigation-bars-are-the-systems.md`): the
+    /// system back, the person's name as the title, the actions in one menu.
+    @ToolbarContentBuilder
+    private var chatToolbar: some ToolbarContent {
+        // The title is a button: a tap on the name opens the person (owner, 2026-10-08). The one
+        // bar of ours whose title is a view, so it sets the bar's title face itself.
+        ToolbarItem(placement: .principal) {
+            Button { showingUserProfile = true } label: {
+                ObservedPeerName(userId: peerId) { chatTitle($0) }
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier(A11y.Chat.title)
+            .accessibilityHint(Text(LocalizedStringKey("profile")))
+        }
+
+        if contactTrustAlert != nil {
+            ToolbarItem(placement: .primaryAction) {
+                Button { showingSafetyNumbers = true } label: {
+                    Label(NSLocalizedString("kt_warning", comment: ""), systemImage: "exclamationmark.shield.fill")
                 }
-            },
-            onStartCall: startCall,
-            onStartVideoCall: startVideoCall,
-            onToggleSearch: {
-                withAnimation {
-                    isSearchActive.toggle()
-                    if !isSearchActive { searchText = "" }
-                }
-            },
-            onKTWarningTap: {
-                if contactKTStatus == .keyChanged || contactKTStatus == .failed {
-                    showingSafetyNumbers = true
+                .tint(Color.CT.danger)
+                .accessibilityHint(Text(LocalizedStringKey("key_change_verify")))
+            }
+        }
+
+        if isEditMode {
+            ToolbarItem(placement: .confirmationAction) {
+                ConfirmButton(title: NSLocalizedString("done", comment: "")) {
+                    withAnimation {
+                        isEditMode = false
+                        selectedMessages.removeAll()
+                    }
                 }
             }
-        )
+        } else {
+            ToolbarItem(placement: .primaryAction) {
+                chatActionsItem.barItem()
+            }
+        }
     }
 
-    /// Load KT status for the contact from Core Data.
+    /// Search, call, video call — one menu. With a single action (no callable contact) it is
+    /// that action's own button: a menu of one is a detour.
+    @ViewBuilder
+    private var chatActionsItem: some View {
+        let actions = headerActions
+        if actions.count == 1, let only = actions.first {
+            Button { performHeaderAction(only) } label: { chatActionLabel(only) }
+        } else {
+            Menu {
+                ForEach(actions, id: \.self) { action in
+                    Button { performHeaderAction(action) } label: { chatActionLabel(action) }
+                }
+            } label: {
+                Label(NSLocalizedString("chat_actions", comment: ""), systemImage: "ellipsis.circle")
+            }
+        }
+    }
+
+    private func chatActionLabel(_ action: ChatAction) -> some View {
+        Label(NSLocalizedString(action.labelKey, comment: ""), systemImage: action.symbol)
+    }
+
+    /// Name, then the session or connection state under it — the bar's title and subtitle, drawn
+    /// in the faces the app-wide bar appearance gives a plain title.
+    private func chatTitle(_ name: String) -> some View {
+        VStack(spacing: 0) {
+            HStack(spacing: CTLayout.inlinePad / 2) {
+                Text(name)
+                    .font(CTFont.ui(17, weight: .semibold, relativeTo: .headline))
+                    .foregroundStyle(Color.CT.text)
+                    .lineLimit(1)
+                if contactTrustAlert == nil, contactKTStatus == .verified {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(CTFont.caption)
+                        .foregroundStyle(Color.CT.accent)
+                        .accessibilityLabel(Text(LocalizedStringKey("kt_verified")))
+                }
+            }
+            if let subtitle = navigationStatusSubtitle {
+                Text(subtitle)
+                    .font(CTFont.caption)
+                    .foregroundStyle(Color.CT.textDim)
+                    .lineLimit(1)
+                    .transition(.opacity)
+            }
+        }
+        .contentShape(Rectangle())
+    }
+
+    /// Load KT status for the contact — as saved, since this runs on the notification a write
+    /// posts.
     private func loadContactKTStatus() {
-        guard let userId = viewModel.chat.otherUser?.id, !userId.isEmpty else { return }
-        let ctx = viewContext
-        let req = User.fetchRequest()
-        req.predicate = NSPredicate(format: "id == %@", userId)
-        req.fetchLimit = 1
-        if let user = (try? ctx.fetch(req))?.first {
-            contactKTStatus = user.ktStatus
+        if let contact = try? LocalRepositories.contacts.contact(peerId) {
+            contactKTStatus = contact.ktStatus
+            contactTrustAlert = contact.trustAlert
         }
     }
 
@@ -578,7 +649,7 @@ struct ChatView: View {
     /// The extraction is what keeps the file compilable, and it is why the container's arguments
     /// are named methods rather than inline closures.
     @ViewBuilder
-    private func transcript(_ renderedMessages: [Message]) -> some View {
+    private func transcript(_ renderedMessages: [TranscriptEntry]) -> some View {
         if usesOwnedInset {
             ChatTranscriptScrollView(
                 bottomInset: transcriptBottomPad,
@@ -599,7 +670,7 @@ struct ChatView: View {
                     transcriptRows(renderedMessages)
                     Color.clear.frame(height: Layout.messageBottomClearance)
                 }
-                .padding(.top, ChatUIConstants.Shell.scrollContentTopPad + callBarInset)
+                .padding(.top, topBarInset + ChatUIConstants.Shell.scrollContentTopPad + callBarInset)
                 .padding(.horizontal)
                 .coordinateSpace(name: Self.transcriptContentSpace)
                 .environment(\.containerWidth, containerWidth)
@@ -608,6 +679,9 @@ struct ChatView: View {
             // never calls — it has no `ScrollViewReader`, so `onProxyReady` does not exist here.
             // Opening a chat therefore left the badge standing for the whole owned-path build.
             .onAppear { LocalNotificationManager.shared.clearBadge() }
+            // Under the bar's glass, as a SwiftUI scroll view goes on its own; `topBarInset` keeps
+            // the first message clear of it.
+            .ignoresSafeArea(.container, edges: .top)
         } else {
             legacyTranscript(renderedMessages)
         }
@@ -637,7 +711,7 @@ struct ChatView: View {
     }
 
     @ViewBuilder
-    private func legacyTranscript(_ renderedMessages: [Message]) -> some View {
+    private func legacyTranscript(_ renderedMessages: [TranscriptEntry]) -> some View {
         ChatTranscriptContainer(
             rowSpacing: ChatUIConstants.Shell.listSpacing,
             topContentPad: ChatUIConstants.Shell.scrollContentTopPad + callBarInset,
@@ -724,7 +798,7 @@ struct ChatView: View {
         // here and the opening is armed by the 0 → N change instead. Declaring the opening
         // finished on an empty list is what let load-more growth take the animated branch and
         // blank the chat.
-        viewport.noteTranscriptAppeared(messageCount: viewModel.messages.count)
+        viewport.noteTranscriptAppeared(messageCount: viewModel.entries.count)
     }
 
     private func handleTranscriptGeometry(from old: ChatScrollGeometry, to metrics: ChatScrollGeometry) {
@@ -744,7 +818,7 @@ struct ChatView: View {
                 containerHeight: metrics.containerHeight
             )
         }
-        viewport.updateGeometry(metrics, messageCount: viewModel.messages.count)
+        viewport.updateGeometry(metrics, messageCount: viewModel.entries.count)
         // The blank chat is a *geometry* state and no log has ever shown it: we know where the
         // messages are and nothing about where the viewport is. One line per meaningful move
         // answers "was the offset wrong, or were the cells absent".
@@ -770,7 +844,7 @@ struct ChatView: View {
         //
         // The two cheap checks are not redundant with that authority — they keep `filteredMessages`
         // (an O(n) filter) off the per-frame path, and it has to be that list rather than
-        // `viewModel.messages`: it is what the rows are built from, so it is the only one whose
+        // `viewModel.entries`: it is what the rows are built from, so it is the only one whose
         // first element is guaranteed to be a row that can install the reporter.
         if !viewport.isFollowing, viewport.heldMessageId == nil {
             viewport.bindAnchorRow(filteredMessages.first?.id)
@@ -799,7 +873,7 @@ struct ChatView: View {
     /// reaches the oldest edge. `LazyVStack` materialises this on first layout even when
     /// bottom-anchored; the load is gated by `ChatScrollManager.shouldLoadOlderHistory` (TODO 34).
     @ViewBuilder
-    private func loadMoreSentinel(_ renderedMessages: [Message]) -> some View {
+    private func loadMoreSentinel(_ renderedMessages: [TranscriptEntry]) -> some View {
         if viewModel.hasMoreMessages && !renderedMessages.isEmpty {
             Group {
                 if viewModel.isLoadingMore {
@@ -822,12 +896,12 @@ struct ChatView: View {
     /// The message rows, lifted out of `body` so `ChatTranscriptContainer` owns only the scroll.
     /// Every callback still belongs to `ChatView` — the container never sees a view model.
     @ViewBuilder
-    private func transcriptRows(_ renderedMessages: [Message]) -> some View {
+    private func transcriptRows(_ renderedMessages: [TranscriptEntry]) -> some View {
                 // Messages in oldest-first order (ScrollView anchored to bottom via .defaultScrollAnchor)
                 ForEach(Array(renderedMessages.enumerated()), id: \.element.id) { index, message in
                     VStack(spacing: 0) {
-                        MessageBubble(
-                            message: message,
+                        ObservedTranscriptRow(entry: message) { row in MessageBubble(
+                            message: row,
                             isLastInGroup: message.isLastInGroup(at: index, in: renderedMessages),
                             isSelected: selectedMessages.contains(message.id),
                             isEditMode: isEditMode,
@@ -867,8 +941,9 @@ struct ChatView: View {
                             },
                             onReact: { msg, emoji in
                                 viewModel.sendReaction(msg, emoji: emoji)
-                            }
-                        )
+                            },
+                            onForward: { msg in startForward([msg]) }
+                        ) }
                         .id(message.id)
                         // The LAST message only, and no longer just a probe. Auto-scroll
                         // promises the newest message is on screen; this is the only place
@@ -917,7 +992,7 @@ struct ChatView: View {
                                 viewport.noteLastMessageVisible(false, searchActive: isSearchActive)
                             }
                         }
-                        .opacity(replyFocusOpacity(for: message))
+                        .opacity(replyFocusOpacity(for: message.id))
                         .animation(
                             .easeInOut(duration: ChatUIConstants.ReplyFocus.animationDuration),
                             value: replyFocusIds
@@ -945,9 +1020,20 @@ struct ChatView: View {
     private var canStartCall: Bool {
         guard CallsFeature.isEnabled,
               let callManager,
-              viewModel.chat.otherUser != nil,
               case .idle = callManager.state else { return false }
         return true
+    }
+
+    private var headerActions: [ChatAction] {
+        ChatAction.available(canCall: canStartCall, videoEnabled: CallsFeature.isVideoEnabled)
+    }
+
+    private func performHeaderAction(_ action: ChatAction) {
+        switch action {
+        case .search: withAnimation { isSearchActive = true }
+        case .call: startCall()
+        case .videoCall: startVideoCall()
+        }
     }
 
     private func startCall() {
@@ -959,12 +1045,11 @@ struct ChatView: View {
     }
 
     private func startOutgoingCall(hasVideo: Bool) {
-        guard let otherUser = viewModel.chat.otherUser else { return }
         guard let callManager else { return }
         Task {
             await callManager.startOutgoingCall(
-                to: otherUser.id,
-                displayName: otherUser.resolvedDisplayName,
+                to: peerId,
+                displayName: peerName,
                 hasVideo: hasVideo
             )
         }
@@ -990,33 +1075,33 @@ struct ChatView: View {
 
     // MARK: - Computed Properties
 
-    private var filteredMessages: [Message] {
-        // Guard against accessing deleted/faulted Core Data objects that the FRC
-        // may not have removed from viewModel.messages before SwiftUI re-evaluates.
-        let valid = viewModel.messages.filter { !$0.isDeleted && $0.managedObjectContext != nil }
+    private var filteredMessages: [TranscriptEntry] {
+        let valid = viewModel.entries
         if searchText.isEmpty {
             return valid
         }
-        return valid.filter { message in
-            message.displayText.localizedCaseInsensitiveContains(searchText)
+        // The words, not the stored body: "mediaId" would match every photo. Reads every row,
+        // so the list follows every row while a search is open — only then.
+        return valid.filter { entry in
+            entry.row.readableText.localizedCaseInsensitiveContains(searchText)
         }
     }
 
     /// All media messages in display order. Upload placeholders are excluded.
-    private func mediaMessages(in messages: [Message]) -> [Message] {
-        messages.filter {
-            guard let mc = parseMediaContent(from: $0.displayText) else { return false }
+    private func mediaMessages(in entries: [TranscriptEntry]) -> [TranscriptRow] {
+        entries.map(\.row).filter {
+            guard let mc = parseMediaContent(from: $0.legacyBody) else { return false }
             return (mc.media["_placeholder"] as? Bool) != true
         }
     }
 
     // MARK: - Soft reply focus (dim non-related bubbles)
 
-    private func replyFocusOpacity(for message: Message) -> Double {
+    private func replyFocusOpacity(for messageId: String) -> Double {
         guard !isEditMode, !replyFocusIds.isEmpty else {
             return ChatUIConstants.ReplyFocus.focusedOpacity
         }
-        let id = message.id.lowercased()
+        let id = messageId.lowercased()
         if replyFocusIds.contains(id) {
             return ChatUIConstants.ReplyFocus.focusedOpacity
         }
@@ -1063,7 +1148,7 @@ struct ChatView: View {
     }
 
     /// Tap on in-bubble reply strip: scroll to parent, keep parent + child bright briefly.
-    private func peekReplyChain(for message: Message) {
+    private func peekReplyChain(for message: TranscriptRow) {
         let childId = message.id.lowercased()
         let parentId = (message.replyToMessageId ?? "").lowercased()
         guard !parentId.isEmpty else { return }
@@ -1115,17 +1200,21 @@ struct ChatView: View {
         }
         // Restore an unsent draft saved when we last left this chat.
         if viewModel.editingMessage == nil, messageText.isEmpty {
-            messageText = DraftStore.shared.draft(for: viewModel.chat.id)
+            messageText = DraftStore.shared.draft(for: viewModel.conversation.chatId)
         }
+        isOnScreen = true
         markChatAsRead()
         viewModel.onViewAppear()
         loadContactKTStatus()
         refreshSessionAtRiskState()
         // Phase 2: if this contact was reached via a degraded session and has since rotated
         // their keys, opportunistically re-key to a fresh session (no-op otherwise).
-        if let contactId = viewModel.chat.otherUser?.id, !contactId.isEmpty {
-            Task { await SessionInitializationService.shared.upgradeAtRiskSessionIfPeerFresh(userId: contactId) }
-        }
+        let contactId = peerId
+        Task { await SessionInitializationService.shared.upgradeAtRiskSessionIfPeerFresh(userId: contactId) }
+        // Who this person's devices are, when nothing recent has said. Opening the chat is the
+        // trigger rather than sending, so the key server is asked once per peer per TTL and never
+        // per message. Best-effort; see `refreshRecipientDevices`.
+        Task { await MultiDeviceSendCoordinator.shared.refreshRecipientDevices(for: contactId) }
         setActiveChatState(isActive: true)
         // Active chat owns continuous voice playback: advance to the next voice message
         // (older → newer) when one finishes, if the setting is on.
@@ -1137,11 +1226,15 @@ struct ChatView: View {
     private func handleViewDisappear() {
         replyFocusPeekTask?.cancel()
         replyFocusPeekTask = nil
+        isOnScreen = false
+        VideoNotePlayback.shared.collapse()
         guard !isPreviewRuntime else { return }
+        // Whatever arrived while this chat was on screen has been seen.
+        markChatAsRead()
         // Preserve a half-typed message across navigation. Skip while editing,
         // so the edit buffer never leaks into the new-message draft.
         if viewModel.editingMessage == nil {
-            DraftStore.shared.save(messageText, for: viewModel.chat.id)
+            DraftStore.shared.save(messageText, for: viewModel.conversation.chatId)
         }
         setActiveChatState(isActive: false)
         AudioPlayerService.shared.onTrackFinished = nil
@@ -1149,32 +1242,23 @@ struct ChatView: View {
 
     private func handleContactKeyChanged(_ note: Notification) {
         guard let changedId = note.userInfo?["userId"] as? String,
-              changedId == viewModel.chat.otherUser?.id else { return }
+              changedId == peerId else { return }
         loadContactKTStatus()
     }
 
     private func setActiveChatState(isActive: Bool) {
-        guard let contactId = viewModel.chat.otherUser?.id, !contactId.isEmpty else { return }
-        KeyChangeUX.setActiveChatContact(isActive ? contactId : nil)
-        // A contact whose key is not pinned has no session for the core to schedule heartbeats
-        // against; telling it a chat opened would name a peer it has never heard of.
-        guard let peerContactId = SessionAddressing.contactId(forPeer: contactId) else { return }
-        _ = try? CryptoManager.shared.handleOrchestratorEvent(
-            .activeChatChanged(contactId: peerContactId, isActive: isActive),
-            tag: isActive ? "chat_active_true" : "chat_active_false"
-        )
+        KeyChangeUX.setActiveChatContact(isActive ? peerId : nil)
     }
 
     // MARK: - Actions
 
     private func markChatAsRead() {
-        let chat = viewModel.chat
-        guard chat.unreadCount > 0 else { return }
-        chat.unreadCount = 0
-        try? viewContext.save()
+        let chatId = viewModel.conversation.chatId
+        guard let unread = try? LocalRepositories.chats.chat(chatId)?.unreadCount, unread > 0 else { return }
+        _ = try? LocalRepositories.chats.setUnread(chatId, 0)
     }
 
-    private func toggleMessageSelection(_ message: Message) {
+    private func toggleMessageSelection(_ message: TranscriptRow) {
         if selectedMessages.contains(message.id) {
             selectedMessages.remove(message.id)
         } else {
@@ -1182,6 +1266,37 @@ struct ChatView: View {
         }
     }
     
+    // MARK: - Forward
+
+    private func startForward(_ rows: [TranscriptRow]) {
+        forwarding = rows
+        showingForwardPicker = true
+    }
+
+    private func forwardSelectedMessages() {
+        startForward(viewModel.entries.map(\.row).filter { selectedMessages.contains($0.id) })
+    }
+
+    /// The picked chat sends it: this one at once, any other when it opens.
+    private func finishForward(to chat: ChatRecord) {
+        ForwardDrafts.shared.hand(ForwardItem.content(of: forwarding), to: chat.id)
+        forwarding = []
+        withAnimation {
+            selectedMessages.removeAll()
+            isEditMode = false
+        }
+        if chat.id != viewModel.conversation.chatId {
+            chatsViewModel.chatToOpen = chat.id
+        }
+    }
+
+    private func sendForwardedHere() async {
+        let items = ForwardDrafts.shared.take(for: viewModel.conversation.chatId)
+        guard !items.isEmpty else { return }
+        let failures = await viewModel.forward(items)
+        if !failures.isEmpty { forwardFailed = true }
+    }
+
     private func deleteSelectedMessages() {
         guard !selectedMessages.isEmpty else { return }
         
@@ -1247,8 +1362,25 @@ struct ChatView: View {
 
     // SessionLifecycleController.shared is used internally — preview doesn't need DI
     return NavigationStack {
-        ChatView(chat: chat, context: context)
+        ChatView(conversation: Conversation(chatId: chat.id, peerId: user.id), context: context)
             .environment(\.managedObjectContext, context)
+            .environment(ChatsViewModel())
     }
 }
 #endif
+
+/// Hands its content the peer's current name. `ChatViewModel` is `@Observable`, and Observation
+/// does not track a managed object's attributes, so reading `otherUser.resolvedDisplayName` in
+/// `ChatView.body` subscribed to nothing: a profile applied while the chat was open renamed the
+/// chat list row (a `@FetchRequest`) and left this header on the old name until the chat was
+/// reopened. `@ObservedObject` re-renders on the object's `objectWillChange`, which a save or a
+/// merge into the view context fires.
+private struct ObservedPeerName<Content: View>: View {
+    let userId: String
+    let content: (String) -> Content
+
+    var body: some View {
+        content(ContactsLive.shared.contact(userId)?.resolvedDisplayName
+            ?? DisplayNameGenerator.generate(from: userId))
+    }
+}

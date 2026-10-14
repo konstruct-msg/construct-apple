@@ -37,6 +37,9 @@ enum CallOfferDisposition: Equatable {
     case resumeAnswer
     /// The call is ringing and unanswered. Attach the SDP for `answer()` to consume.
     case storeForAnswer
+    /// Another call is in progress and this offer is not glare with it. Refuse it as busy — tell
+    /// the caller and remember the id as ended — and leave the call in progress alone.
+    case declineBusy
     /// Nothing matches this call id — a genuinely new incoming call.
     case reportNewCall
 }
@@ -51,20 +54,34 @@ enum CallOfferDisposition: Equatable {
 ///
 /// Glare (an *outgoing* call to the same peer) is deliberately not modelled here — it is resolved
 /// by a userId tie-break in `handleIncomingCallOffer` and is a different question from this one.
+///
+/// `isBusyWithAnotherCall` is the guard this path did not have until 2026-10-01. The push path
+/// refused a second caller; an offer for that same second call, arriving a moment later, found no
+/// match and took `.reportNewCall`, whose `begin()` starts with `active?.close()` — the call in
+/// progress was hung up by someone else dialling in. Android raised it from its own code: there the
+/// offer decides "busy", the second caller gets hangup BUSY and the call in progress is untouched.
 func callOfferDisposition(
     hasRecentlyEnded: Bool,
     matchesActiveIncomingCall: Bool,
-    awaitingOfferAfterAnswer: Bool
+    awaitingOfferAfterAnswer: Bool,
+    isBusyWithAnotherCall: Bool
 ) -> CallOfferDisposition {
     if hasRecentlyEnded { return .ignoreCallEnded }
-    guard matchesActiveIncomingCall else { return .reportNewCall }
+    guard matchesActiveIncomingCall else {
+        return isBusyWithAnotherCall ? .declineBusy : .reportNewCall
+    }
     return awaitingOfferAfterAnswer ? .resumeAnswer : .storeForAnswer
 }
 
 /// What an arriving VoIP push means for the call state we already hold.
 enum IncomingPushDisposition: Equatable {
-    /// Another call is up. Refuse this one and tell CallKit it ended.
+    /// Another call is up. Refuse this one: tell CallKit it ended, tell the caller we are busy, and
+    /// remember the id as ended so its offer, arriving later, is not taken for a new call.
     case declineBusy
+    /// Our outgoing call to this same caller is up and they dialled us too. End the CallKit report
+    /// the push forced, and nothing more — the offer's userId tie-break decides which call survives,
+    /// so this one must neither be refused to the caller nor remembered as ended.
+    case deferToGlareTieBreak
     /// We are already tracking this exact call — the offer got here first. The push carries nothing
     /// the call does not already have, so leave the call alone.
     case alreadyTracking
@@ -97,11 +114,26 @@ enum IncomingPushDisposition: Equatable {
 func incomingPushDisposition(
     hasActiveCall: Bool,
     isBusyState: Bool,
-    matchesTrackedCallId: Bool
+    matchesTrackedCallId: Bool,
+    isGlareWithCaller: Bool
 ) -> IncomingPushDisposition {
     guard hasActiveCall else { return .beginNewCall }
     if matchesTrackedCallId { return .alreadyTracking }
-    return isBusyState ? .declineBusy : .beginNewCall
+    guard isBusyState else { return .beginNewCall }
+    return isGlareWithCaller ? .deferToGlareTieBreak : .declineBusy
+}
+
+/// Whether a call in this state occupies the phone, so that a second, different call is refused.
+///
+/// `.incoming` counts since 2026-10-01. Until then a call ringing unanswered was not "busy", and a
+/// second caller's push or offer replaced it — the first caller was dropped by someone else
+/// dialling in. `.idle` and `.ended` hold no call, so a stale `ActiveCall` left in either cannot
+/// refuse a real one.
+func callStateIsBusy(_ state: CallState) -> Bool {
+    switch state {
+    case .incoming, .dialing, .ringing, .connecting, .active: return true
+    case .idle, .ended: return false
+    }
 }
 
 /// What an SDP offer means for a call we are already tracking.
@@ -228,6 +260,41 @@ func shouldIgnoreSilentPush(foregroundLiveStream: Bool, callNeedsOffer: Bool) ->
     foregroundLiveStream && !callNeedsOffer
 }
 
+/// What a signaling-stream receive loop ending means for the call.
+///
+/// The stream is not the call. Offer, answer, and hangup ride the message path; the stream is
+/// presence, a fast path for ICE — and the only path for the server's own hangup. That last part
+/// is why closing it cannot simply be ignored: the signaling reaper
+/// (`signaling-service/src/registry.rs`, `HangupReason::Timeout`) ends an unanswered call by
+/// sending over the stream, and a call whose stream is gone never hears it. The call may outlive
+/// its stream only while something else bounds it:
+///
+/// - media up — ICE failure or a hangup ends it (the ~30s drop was ending it here);
+/// - answered and waiting for the offer — the 45s offer wait ends it. 2026-09-24, 3C86C064: the
+///   callee answered, the VEIL listener refused the stream, and this end cancelled that wait one
+///   second in, so each side looked like the other had cancelled.
+///
+/// Before media with neither, nothing ends the call: a caller whose stream died would ring until
+/// the user gave up, while the server had already hung up the other side.
+enum SignalingStreamClosedDisposition: Equatable {
+    /// Open the stream again; the call is unaffected.
+    case reconnect
+    /// No more reconnects, but something other than the stream bounds the call.
+    case keepOnMessagePath
+    /// The stream was the last thing that could end this call.
+    case endCall
+}
+
+func signalingStreamClosedDisposition(
+    mediaConnected: Bool,
+    awaitingOfferAfterAnswer: Bool,
+    canReconnect: Bool
+) -> SignalingStreamClosedDisposition {
+    if canReconnect { return .reconnect }
+    if mediaConnected || awaitingOfferAfterAnswer { return .keepOnMessagePath }
+    return .endCall
+}
+
 /// Whether an incoming call should pull missed messages to recover an SDP that has not arrived.
 enum IncomingCallFetchDisposition: Equatable {
     /// The offer is already in hand. A fetch would only replay it.
@@ -326,11 +393,16 @@ protocol CallUIManaging: AnyObject {
     var state: CallState { get }
     var lastError: String? { get }
     var callQuality: CallQuality { get }
+    var video: CallVideoState { get }
 
     func clearLastError()
     func startOutgoingCall(to userId: String, displayName: String, hasVideo: Bool) async
     func endCall()
+    func answerIncomingCall(withCamera: Bool)
+    func declineIncomingCall()
     func setMuted(_ muted: Bool)
+    func setCameraOn(_ on: Bool)
+    func switchCamera()
 }
 
 enum CallRuntimeProvider {

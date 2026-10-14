@@ -31,57 +31,26 @@ struct ContactRequestSheet: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            CTNavBar(
-                title: NSLocalizedString("contact_request_sheet_title", comment: ""),
-                showBack: false
-            ) {
-                EmptyView()
-            } trailing: {
-                Button(action: { dismiss() }) {
-                    Image(systemName: "xmark.circle")
-                        .font(.system(size: 18, weight: .medium))
-                        .foregroundColor(Color.CT.accent)
-                }
-                .buttonStyle(.plain)
-                .disabled(isProcessing)
-            }
-
-            Rectangle()
-                .fill(Color.CT.noise)
-                .frame(height: 1)
-
             ScrollView {
                 VStack(spacing: 20) {
                     // Identity header
                     VStack(spacing: 12) {
-                        ZStack {
-                            Circle()
-                                .fill(Color.CT.bgMsg)
-                                .frame(width: 72, height: 72)
-                            IdenticonView(seed: request.fromUserId)
-                                .frame(width: 56, height: 56)
-                                .clipShape(Circle())
-                        }
-                        .overlay(
-                            Circle()
-                                .stroke(Color.CT.noise, lineWidth: 1)
-                                .frame(width: 72, height: 72)
-                        )
+                        MainAvatarView(userId: request.fromUserId, size: CTAvatarSize.hero)
 
                         VStack(spacing: 4) {
                             Text(displayTitle)
-                                .font(CTFont.bold(17))
+                                .font(CTFont.ui(17, weight: .bold))
                                 .foregroundColor(Color.CT.text)
                                 .multilineTextAlignment(.center)
 
                             if let subtitleHandle, subtitleHandle != displayTitle {
                                 Text(subtitleHandle)
-                                    .font(CTFont.regular(13))
+                                    .font(CTFont.body)
                                     .foregroundColor(Color.CT.textDim)
                             }
 
                             Text(NSLocalizedString("contact_request_from_title", comment: ""))
-                                .font(CTFont.regular(13))
+                                .font(CTFont.body)
                                 .foregroundColor(Color.CT.textDim)
                                 .multilineTextAlignment(.center)
                                 .padding(.top, 2)
@@ -92,7 +61,7 @@ struct ContactRequestSheet: View {
 
                     if let errorMessage {
                         Text(errorMessage)
-                            .font(CTFont.regular(12))
+                            .font(CTFont.secondary)
                             .foregroundColor(Color.CT.danger)
                             .multilineTextAlignment(.center)
                             .frame(maxWidth: .infinity)
@@ -130,10 +99,10 @@ struct ContactRequestSheet: View {
                                         .scaleEffect(0.8)
                                 } else {
                                     Image(systemName: "exclamationmark.bubble")
-                                        .font(.system(size: 13, weight: .semibold))
+                                        .font(CTIcon.font(CTIcon.caption, weight: .semibold))
                                 }
                                 Text(NSLocalizedString("contact_request_spam_block", comment: ""))
-                                    .font(CTFont.regular(13))
+                                    .font(CTFont.body)
                             }
                             .foregroundColor(isProcessing ? Color.CT.textDim : Color.CT.danger.opacity(0.9))
                             .frame(maxWidth: .infinity)
@@ -151,6 +120,14 @@ struct ContactRequestSheet: View {
             }
         }
         .ctBackground()
+        .screenTitle(NSLocalizedString("contact_request_sheet_title", comment: ""))
+        // Its own close, not `sheetNavigation`'s: it waits while an answer is being sent.
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                CloseButton { dismiss() }
+                    .disabled(isProcessing)
+            }
+        }
     }
 
     private enum ButtonRole {
@@ -178,10 +155,10 @@ struct ContactRequestSheet: View {
                         .scaleEffect(0.85)
                 } else {
                     Image(systemName: systemImage)
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(CTIcon.font(CTIcon.row, weight: .semibold))
                 }
                 Text(title)
-                    .font(CTFont.medium(14))
+                    .font(CTFont.ui(14, weight: .medium))
             }
             .foregroundColor(foreground(for: role, dimmed: dimmed))
             .frame(maxWidth: .infinity)
@@ -229,7 +206,7 @@ struct ContactRequestSheet: View {
             try await action()
             dismiss()
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = error.userFacingMessage
         }
         isProcessing = false
         activeAction = nil

@@ -17,273 +17,244 @@ import Observation
 class ProfileShareViewModel {
     private var viewContext: NSManagedObjectContext?
     private var isSharingProfile = false
+    /// Who sends a profile to one contact: `deliver` unless a test stands in, so a rebroadcast can
+    /// be checked to reach every contact without a server.
+    typealias Deliver = (OutgoingProfile, String) async -> (Bool, String?)
+    private var deliverOverride: Deliver?
+    /// Puts our avatar on the media server — one new object per call. A test stands in.
+    typealias UploadAvatar = (PlatformImage) async throws -> AvatarUploadResult
+    private var uploadAvatar: UploadAvatar = { try await MediaManager.shared.uploadAvatar($0) }
+    /// Waits between two contacts of a rebroadcast. A test stands in.
+    typealias Pause = (Duration) async -> Void
+    private var pause: Pause = { try? await Task.sleep(for: $0) }
 
     init() {}
 
-    init(context: NSManagedObjectContext) {
+    init(context: NSManagedObjectContext, deliver: Deliver? = nil,
+         uploadAvatar: UploadAvatar? = nil, pause: Pause? = nil) {
         self.viewContext = context
+        self.deliverOverride = deliver
+        if let uploadAvatar { self.uploadAvatar = uploadAvatar }
+        if let pause { self.pause = pause }
     }
+
+    /// The wait before each contact after the first. Sends in one burst would tell the server
+    /// "one account, N recipients, now" even with every avatar a separate object (TODO 144).
+    static let rebroadcastSpacing: ClosedRange<Double> = 2...12
 
     func setContext(_ context: NSManagedObjectContext) {
         self.viewContext = context
     }
     
-    /// Share profile (displayName and avatar) with another user via E2E encrypted message
-    /// Avatar is uploaded via Media Upload API to avoid size limitations
+    /// Our profile as it goes out: the name we go by and, when we have one, the avatar — already
+    /// uploaded, so the profile only names it.
+    struct OutgoingProfile {
+        let senderId: String
+        let data: ProfileShare
+    }
+
+    /// Set when a profile went out without the avatar because the upload failed: the avatar was
+    /// left as "unchanged" rather than sent as removed, so contacts keep the old one, and the
+    /// rebroadcast is owed until it succeeds. Consumed on the next stream connect.
+    private static let rebroadcastOwedKey = "profileRebroadcastOwed"
+    static var rebroadcastOwed: Bool {
+        get { UserDefaults.standard.bool(forKey: rebroadcastOwedKey) }
+        set { UserDefaults.standard.set(newValue, forKey: rebroadcastOwedKey) }
+    }
+
+    /// Rebroadcast if an earlier one went out without its avatar. Called on stream connect.
+    static func rebroadcastIfOwed() async {
+        guard rebroadcastOwed else { return }
+        rebroadcastOwed = false
+        Log.info("Profile rebroadcast owed from a failed avatar upload — sending again", category: "ProfileShare")
+        let shareVM = ProfileShareViewModel(context: PersistenceController.shared.container.viewContext)
+        await shareVM.rebroadcastProfileToSharedContacts()
+    }
+
+    /// Share profile (displayName and avatar) with another user via E2E encrypted message.
+    /// Avatar is uploaded via Media Upload API to avoid size limitations.
+    ///
+    /// The toggle's entry point. A second tap while the first is under way is ignored — and now
+    /// says so through `completion`, which it used to skip, leaving its caller waiting forever.
     func shareProfile(with userId: String, completion: @escaping (Bool, String?) -> Void) {
-        guard let context = viewContext,
-              let currentUserId = AuthSessionManager.shared.currentUserId else {
-            completion(false, NSLocalizedString("not_authenticated", comment: ""))
-            return
-        }
-
-        // Get current user's profile data
-        let userFetchRequest: NSFetchRequest<User> = User.fetchRequest()
-        userFetchRequest.predicate = NSPredicate(format: "id == %@", currentUserId)
-
-        guard let currentUser = try? context.fetch(userFetchRequest).first else {
-            completion(false, NSLocalizedString("user_not_found", comment: ""))
-            return
-        }
-
-        // Snapshot values we need before any await — NSManagedObject must not be
-        // read off MainActor after suspension points.
-        let displayName = currentUser.resolvedDisplayName
-        let avatarDataSnapshot = currentUser.avatarData
-        let avatarImage = avatarDataSnapshot.flatMap { ImageHelper.imageFromData($0) }
-
-        // Prevent concurrent share attempts
         guard !isSharingProfile else {
             Log.info("Profile share already in progress, ignoring duplicate", category: "ProfileShare")
+            completion(false, nil)
             return
         }
         isSharingProfile = true
-
-        // Explicit @MainActor so completion + @Observable state never hop off main
-        // after gRPC/media awaits (SwiftUI "Publishing changes from background threads").
-        Task { @MainActor [weak self] in
-            guard let self else { return }
+        Task { @MainActor in
             defer { self.isSharingProfile = false }
-
-            // Check if session is ready; if not, initialize it on-demand
-            if !CryptoManager.shared.hasSession(for: userId) {
-                Log.info("No session for \(userId) — initializing before profile share", category: "ProfileShare")
-                let service = SessionInitializationService.shared
-                do {
-                    // Real X3DH init (no session yet) — legitimately consumes an OTPK.
-                    let bundle = try await service.fetchPublicKeyWithRetry(userId: userId, consumeOneTimePrekey: true)
-                    do {
-                        try service.initializeSession(userId: userId, bundle: bundle, deleteExisting: false)
-                    } catch SessionError.peerSPKStale {
-                        // Contact offline too long to rotate their SPK — degrade so the profile
-                        // still shares. Flags the session at-risk (see stale-peer-reachability).
-                        try service.initializeSession(userId: userId, bundle: bundle, deleteExisting: false, allowStale: true)
-                    }
-                    Log.info("Session initialized for profile share with \(userId)", category: "ProfileShare")
-                } catch {
-                    Log.error("Failed to initialize session for profile share: \(error)", category: "ProfileShare")
-                    completion(false, NSLocalizedString("failed_to_establish_session", comment: ""))
-                    return
-                }
+            guard let profile = await self.prepareProfile() else {
+                completion(false, NSLocalizedString("user_not_found", comment: ""))
+                return
             }
+            let (success, error) = await self.deliver(profile, to: userId)
+            completion(success, error)
+        }
+    }
 
-            var avatarMediaId: String? = nil
-            var avatarMediaUrl: String? = nil
-            var avatarMediaKey: Data? = nil
-            var avatarMediaType: String? = nil
+    /// Snapshot our name and avatar, and upload the avatar. Nil when there is no signed-in user.
+    ///
+    /// The avatar goes as one of three states (`ProfileShare.Avatar`): uploaded → `set`; we have
+    /// none → `removed`, so a contact holding an old one clears it; the upload failed → `unchanged`,
+    /// so contacts keep what they have, and the rebroadcast is owed (`rebroadcastOwed`). Before
+    /// 2026-10-02 the last two were the same message, and no contact ever cleared an avatar.
+    ///
+    /// The `Task`s that send it hold `self` strongly on purpose. Until 2026-10-02 they captured it
+    /// weakly (`463a8533`, 2026-04-10), and `rebroadcastProfileToSharedContacts` runs on a view
+    /// model made for that one call and released as soon as it returned — so every send found
+    /// `self` gone and returned without a word. A changed name or avatar reached no contact at
+    /// all; before April, the `isSharingProfile` guard let it reach the first one only.
+    func prepareProfile() async -> OutgoingProfile? {
+        guard viewContext != nil,
+              let currentUserId = AuthSessionManager.shared.currentUserId,
+              var me = try? LocalRepositories.ownProfile.profile(accountId: currentUserId) else { return nil }
 
-            if let avatarImage {
-                do {
-                    Log.info("Uploading avatar via MediaManager", category: "ProfileShare")
-                    let uploadResult = try await MediaManager.shared.uploadAvatar(avatarImage)
-                    avatarMediaId = uploadResult.mediaId
-                    avatarMediaUrl = uploadResult.mediaUrl
-                    avatarMediaKey = uploadResult.encryptionKey  // Data
-                    avatarMediaType = "image/jpeg"
-                    Log.info("Avatar uploaded: \(uploadResult.mediaId)", category: "ProfileShare")
-                } catch {
-                    Log.error("Failed to upload avatar: \(error.localizedDescription)", category: "ProfileShare")
-                }
-            }
+        // A profile that has never been stamped (edited before the stamp existed) gets one now,
+        // once, and keeps it: what makes it a version is that sending again does not change it.
+        if me.profileEditedAtMs == 0 {
+            me.markEdited()
+            try? LocalRepositories.ownProfile.save(me)
+        }
 
-            // Create profile data with media info
-            let profileData = ProfileShareData(
-                displayName: displayName,
-                avatarMediaId: avatarMediaId,
-                avatarMediaUrl: avatarMediaUrl,
-                avatarMediaKey: avatarMediaKey,
-                avatarMediaType: avatarMediaType,
-                timestamp: Int64(Date().timeIntervalSince1970)
-            )
+        // Only a name we chose, or our username: never the generated one, which a contact
+        // computes for itself and would take for a name we picked (`ProfileShare.chosenName`).
+        let displayName = DisplayNameGenerator.isGenerated(me.displayName, for: currentUserId)
+            ? me.username
+            : (me.displayName.isEmpty ? me.username : me.displayName)
+        let editedAtMs = UInt64(me.profileEditedAtMs)
+        let avatarImage = me.avatar.flatMap { ImageHelper.imageFromData($0) }
 
-            // Serialize to binary (closes legacy JSON in wire payload).
-            // Still E2EE via DR. Supports stealth when enabled.
-            let binaryPayload = profileData.toBinaryData()
-            Log.debug("Profile data binary size: \(binaryPayload.count) bytes (before encryption)", category: "ProfileShare")
-            Log.debug("   displayName: \(profileData.displayName)", category: "ProfileShare")
-            Log.debug("   avatarMediaId: \(avatarMediaId ?? "nil")", category: "ProfileShare")
-
-            // Stealth support: pass recipient identity key so SealedInner is built when enabled.
-            let recipientIdentityKey: Data? = StealthPolicy.shared.shouldUseSealedSender()
-                ? await fetchRecipientIdentityKey(userId: userId)
-                : nil
-
-            // Encrypt and send via E2E message (binary payload)
-            Log.debug("Sending profile message for user \(userId), binary size: \(binaryPayload.count) bytes", category: "ProfileShare")
-            let messageId = UUID().uuidString
-            let plan = ChunkedMessageSender.shared.buildPlan(plaintext: binaryPayload, messageId: UUID(uuidString: messageId) ?? UUID())
-
+        let avatar: ProfileShare.Avatar
+        if let avatarImage {
             do {
-                let conversationId = ConversationId.direct(myUserId: currentUserId, theirUserId: userId)
-                let responses = try await ChunkedMessageSender.shared.sendChunks(
-                    plan: plan,
-                    senderId: currentUserId,
-                    recipientId: userId,
-                    conversationId: conversationId,
-                    timestamp: UInt64(Date().timeIntervalSince1970),
-                    recipientIdentityKey: recipientIdentityKey
-                )
-                let response = responses.first ?? SendMessageResponse(messageId: messageId, status: "sent")
-                if response.status.lowercased() == "blocked" {
-                    Log.error("Profile share rejected — sender is blocked by \(userId.prefix(8))…", category: "ProfileShare")
-                    completion(false, "blocked")
-                    return
-                }
-                Log.info("Profile shared with user \(userId) via gRPC: \(response.messageId)", category: "ProfileShare")
-                completion(true, nil)
+                let upload = try await uploadAvatar(avatarImage)
+                avatar = .set(ProfileShare.AvatarRef(
+                    mediaId: upload.mediaId,
+                    mediaUrl: upload.mediaUrl,
+                    mediaKey: upload.encryptionKey,
+                    mimeType: "image/jpeg"
+                ))
+                Log.info("Avatar uploaded: \(upload.mediaId)", category: "ProfileShare")
             } catch {
-                Log.error("Failed to send profile message via gRPC: \(error.localizedDescription)", category: "ProfileShare")
-                completion(false, error.localizedDescription)
+                Log.error("Failed to upload avatar: \(error.localizedDescription) — profile goes with the avatar unchanged, rebroadcast owed", category: "ProfileShare")
+                avatar = .unchanged
+                Self.rebroadcastOwed = true
             }
+        } else {
+            avatar = .removed
+        }
+
+        return OutgoingProfile(
+            senderId: currentUserId,
+            data: ProfileShare(displayName: displayName, editedAtMs: editedAtMs, avatar: avatar)
+        )
+    }
+
+    /// [profile] to every device of [userId]. True when a device of theirs took it.
+    func deliver(_ profile: OutgoingProfile, to userId: String) async -> (Bool, String?) {
+        // Check if session is ready; if not, initialize it on-demand
+        if !CryptoManager.shared.hasSessionWithAnyDevice(ofPeer: userId) {
+            Log.info("No session for \(userId) — initializing before profile share", category: "ProfileShare")
+            let service = SessionInitializationService.shared
+            do {
+                // Real X3DH init (no session yet) — legitimately consumes an OTPK.
+                let bundle = try await service.fetchPublicKeyWithRetry(userId: userId, consumeOneTimePrekey: true)
+                do {
+                    try service.initializeSession(userId: userId, bundle: bundle)
+                } catch SessionError.peerSPKStale {
+                    // Contact offline too long to rotate their SPK — degrade so the profile
+                    // still shares. Flags the session at-risk (see stale-peer-reachability).
+                    try service.initializeSession(userId: userId, bundle: bundle, allowStale: true)
+                }
+                Log.info("Session initialized for profile share with \(userId)", category: "ProfileShare")
+            } catch {
+                Log.error("Failed to initialize session for profile share: \(error)", category: "ProfileShare")
+                return (false, NSLocalizedString("failed_to_establish_session", comment: ""))
+            }
+        }
+
+        // Content type 29 in KNST byte 5, inside the ciphertext: the receiver no longer has to
+        // guess a profile from its bytes, and the server sees a generic envelope as before.
+        let payload: Data
+        do {
+            payload = try profile.data.encoded()
+        } catch {
+            Log.error("Profile did not encode: \(error)", category: "ProfileShare")
+            return (false, error.userFacingMessage)
+        }
+        let messageId = UUID().uuidString.lowercased()
+        let plan: ChunkedMessagePlan = .whole(payload, contentType: 29, messageId: UUID(uuidString: messageId) ?? UUID())
+
+        do {
+            // Every device of theirs. Until 2026-09-22 this reached the pinned one only, so a
+            // peer's second device never learned our name or avatar.
+            let response = try await OutboundMessagePipeline.shared.sendToRecipientDevices(
+                plan: plan,
+                baseMessageId: messageId,
+                senderId: profile.senderId,
+                recipientId: userId,
+                timestamp: UInt64(Date().timeIntervalSince1970)
+            ).status
+            if response.status.lowercased() == "blocked" {
+                Log.error("Profile share rejected — sender is blocked by \(userId.prefix(8))…", category: "ProfileShare")
+                return (false, "blocked")
+            }
+            Log.info("Profile shared with user \(userId) via gRPC: \(response.messageId)", category: "ProfileShare")
+            return (true, nil)
+        } catch {
+            Log.error("Failed to send profile message via gRPC: \(error.localizedDescription)", category: "ProfileShare")
+            return (false, error.userFacingMessage)
         }
     }
     
-    private func fetchRecipientIdentityKey(userId: String) async -> Data? {
-        do {
-            // Identity key only (stealth sealing) — must not drain the peer's OTPK pool.
-            let bundle = try await KeyServiceClient.shared.getPreKeyBundle(userId: userId, consumeOneTimePrekey: false)
-            return bundle.identityPublic
-        } catch {
-            Log.error("Profile share: failed to fetch bundle for stealth: \(error)", category: "ProfileShare")
-            return nil
-        }
-    }
-
-    /// Handle received profile data from another user
-    func handleReceivedProfile(_ profileData: ProfileShareData, from userId: String) {
-        guard let context = viewContext else { return }
-        
-        let userFetchRequest: NSFetchRequest<User> = User.fetchRequest()
-        userFetchRequest.predicate = NSPredicate(format: "id == %@", userId)
-        
-        guard let user = try? context.fetch(userFetchRequest).first else {
-            Log.error("User not found for profile update: \(userId)", category: "ProfileShare")
-            return
-        }
-        
-        // Update user's display name
-        user.displayName = profileData.displayName
-        
-        // Update avatar if provided
-        // Priority: new format (Media Upload API) > old format (base64)
-        if let avatarMediaId = profileData.avatarMediaId,
-           let avatarMediaUrl = profileData.avatarMediaUrl,
-           let avatarMediaKey = profileData.avatarMediaKey {
-            // New format: download and decrypt media from Media Upload API
-            Task { [weak self] in
-                guard self != nil else { return }
-                do {
-                    Log.info("Downloading avatar from Media Upload API: \(avatarMediaId)", category: "ProfileShare")
-                    
-                    // Decrypt media key from Double Ratchet message
-                    // The avatarMediaKey is encrypted with Double Ratchet, so we need to decrypt it
-                    // But we don't have the message structure... Let's use a workaround:
-                    // Create a temporary message structure to decrypt the key
-                    
-                    // Actually, for profile sharing, we should decrypt the mediaKey as part of the profile message
-                    // But the mediaKey is in the JSON, which is already decrypted...
-                    // So the mediaKey should be the raw base64-encoded key, not Double Ratchet encrypted.
-                    
-                    // Let me check the current implementation... In shareProfile(), we call:
-                    // encryptMediaKey() which returns encrypted.content (Double Ratchet encrypted)
-                    // But to decrypt it, we need ephemeralPublicKey and messageNumber.
-                    
-                    // Solution: For profile sharing, we should include the raw media key in the JSON
-                    // (the JSON is already E2E encrypted, so it's secure).
-                    // Let's update shareProfile() to use the raw key instead of encrypting it again.
-                    
-                    // The mediaKey is base64-encoded raw key (JSON is already E2E encrypted)
-                    let avatarData = try await MediaManager.shared.downloadAndDecryptMedia(
-                        mediaId: avatarMediaId,
-                        mediaUrl: avatarMediaUrl,
-                        mediaKey: avatarMediaKey
-                    )
-                    
-                    await MainActor.run {
-                        user.avatarData = avatarData
-                        do {
-                            try context.save()
-                            Log.info("Avatar downloaded and saved for user \(userId)", category: "ProfileShare")
-                        } catch {
-                            Log.error("Failed to save avatar: \(error)", category: "ProfileShare")
-                        }
-                    }
-                } catch {
-                    Log.error("Failed to download avatar: \(error.localizedDescription)", category: "ProfileShare")
-                }
-            }
-        } else if let avatarBase64 = profileData.avatarData,
-                  let avatarData = Data(base64Encoded: avatarBase64) {
-            // Old format: base64 data (backward compatibility)
-            user.avatarData = avatarData
-        }
-        
-        // Mark as sharing with us
-        user.isSharingWithMe = true
-        user.sharedWithMeAt = Date()
-        
-        do {
-            try context.save()
-            Log.info("Profile data updated for user \(userId)", category: "ProfileShare")
-        } catch {
-            Log.error("Failed to save profile data: \(error)", category: "ProfileShare")
-        }
-    }
-
     // MARK: - Avatar rebroadcast
 
     /// Re-send current profile (including updated avatar) to all contacts we are sharing with.
     /// Call this whenever the user changes their avatar or display name so contacts stay in sync.
-    /// Uses a background Task per contact — failures are logged but don't surface to the user.
-    func rebroadcastProfileToSharedContacts() {
-        guard let context = viewContext,
+    ///
+    /// Each contact in turn, in a random order, a few seconds apart, and each with its own upload of
+    /// the avatar — awaited, so the caller's `Task` keeps this view model alive until the last one
+    /// is sent. Failures are logged and do not stop the others.
+    ///
+    /// Until 2026-10-13 the avatar was uploaded once and that one object went to every contact:
+    /// the server saw one object of ours fetched from N connections — not just who our contacts
+    /// are, but whom we share our profile with (owner, TODO 144). A separate, equally long object
+    /// per contact, sent apart, takes away "the same thing to N people at once". It does not take
+    /// away that each upload is ours: the upload token names the account — that is the anonymous
+    /// upload decision, not this.
+    func rebroadcastProfileToSharedContacts() async {
+        guard viewContext != nil,
               let currentUserId = AuthSessionManager.shared.currentUserId else { return }
 
-        // Fetch all contacts we have chosen to share our profile with
-        let fetchRequest: NSFetchRequest<User> = User.fetchRequest()
-        fetchRequest.predicate = NSPredicate(format: "amISharingWith == YES AND id != %@", currentUserId)
-
-        guard let contacts = try? context.fetch(fetchRequest), !contacts.isEmpty else {
+        // The contacts we have chosen to share our profile with
+        let contactIds = (try? LocalRepositories.contacts.sharingWith(except: currentUserId)) ?? []
+        guard !contactIds.isEmpty else {
             Log.info("No contacts to rebroadcast profile to", category: "ProfileShare")
             return
         }
 
-        let contactIds = contacts.map(\.id)
         Log.info("Rebroadcasting profile to \(contactIds.count) contact(s)", category: "ProfileShare")
 
-        for contactId in contactIds {
-            Task { [weak self] in
-                guard let self else { return }
-                await withCheckedContinuation { continuation in
-                    self.shareProfile(with: contactId) { success, error in
-                        if success {
-                            Log.info("Profile rebroadcast to \(contactId.prefix(8))", category: "ProfileShare")
-                        } else {
-                            Log.error("Profile rebroadcast to \(contactId.prefix(8)) failed: \(error ?? "unknown")", category: "ProfileShare")
-                        }
-                        continuation.resume()
-                    }
-                }
+        for (index, contactId) in contactIds.shuffled().enumerated() {
+            if index > 0 {
+                await pause(.seconds(Double.random(in: Self.rebroadcastSpacing)))
+            }
+            guard let profile = await prepareProfile() else {
+                Log.error("Profile rebroadcast: no signed-in user", category: "ProfileShare")
+                return
+            }
+            let (success, error): (Bool, String?)
+            if let deliverOverride {
+                (success, error) = await deliverOverride(profile, contactId)
+            } else {
+                (success, error) = await deliver(profile, to: contactId)
+            }
+            if success {
+                Log.info("Profile rebroadcast to \(contactId.prefix(8))", category: "ProfileShare")
+            } else {
+                Log.error("Profile rebroadcast to \(contactId.prefix(8)) failed: \(error ?? "unknown")", category: "ProfileShare")
             }
         }
     }

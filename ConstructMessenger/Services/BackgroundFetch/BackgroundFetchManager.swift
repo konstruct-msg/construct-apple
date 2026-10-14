@@ -253,6 +253,20 @@ class BackgroundFetchManager: NSObject {
                     category: "BackgroundFetch"
                 )
 
+                // 2026-09-24, 9a921fe2: the silent push arrived, then every fetch
+                // died with connection refused on 127.0.0.1:62404. The listener
+                // was gone (iOS had suspended the process) and a background
+                // staleLocalProxy is ignored on purpose, so nothing replaced it
+                // and no banner was posted. Replace it once, before this fetch,
+                // and only when the route is already VEIL.
+                #if os(iOS)
+                // `.inactive` counts: CallKit's answer banner is not `.active`,
+                // and that is when 3C86C064's fetch hit the dead listener.
+                if !AppActivityState.shared.isForeground {
+                    await TransportRouter.shared.restartVeilForBackgroundWake()
+                }
+                #endif
+
                 // ONE page per fetch — deliberately, and this is load-bearing.
                 //
                 // The server now trims `delivery:offline:{user}` on GetPendingMessages too, up to
@@ -413,9 +427,13 @@ class BackgroundFetchManager: NSObject {
     /// Enable background fetch
     /// Call this when user enables background refresh in settings
     /// Manual pull-to-refresh: fetches pending messages immediately via gRPC.
-    func fetchPendingMessages() async {
+    /// True when the server was reached and the backlog processed — a skip or an error is false.
+    @discardableResult
+    func fetchPendingMessages() async -> Bool {
         await withCheckedContinuation { continuation in
-            performQuickMessageFetch { _ in continuation.resume() }
+            performQuickMessageFetch { result in
+                if case .success = result { continuation.resume(returning: true) } else { continuation.resume(returning: false) }
+            }
         }
     }
 
@@ -449,13 +467,24 @@ class BackgroundFetchManager: NSObject {
 
         // Loop rather than recurse: every push that arrived during a fetch is answered by the
         // next iteration, and any number of them collapses into that one fetch.
+        var fetched = false
         repeat {
             followUpRequested = false
             fetchStartedAt = Date()
             isFetchInFlight = true
-            await fetchPendingMessages()
+            fetched = await fetchPendingMessages()
             isFetchInFlight = false
         } while followUpRequested
+
+        // A push for a delivery receipt shows the same banner as one for a message (TODO 123).
+        // Only after a fetch that reached the server: one that failed found nothing because it
+        // fetched nothing, and the banner may be a real message's.
+        guard fetched else { return }
+        guard let chats = try? LocalRepositories.chats.chats() else { return }
+        let unread = chats.filter { $0.unreadCount > 0 }.count
+        await MainActor.run {
+            LocalNotificationManager.shared.withdrawPushBannersIfNothingUnread(unreadChats: unread)
+        }
     }
 
     func enableBackgroundFetch() {

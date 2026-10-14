@@ -54,22 +54,46 @@ Sibling repos: `~/Code/construct-core` (crypto), `~/Code/construct-transport` (Q
   upgrade; a pinned one stops resolving and the failure reads like a project problem. This file
   said `iPhone 16,OS=18.6` for months after that runtime was gone. Check
   `xcrun simctl list devices available` rather than trusting any example.
+- **The version and build number are set on the PROJECT, not on a target** (since 2026-10-11),
+  so the app and its notification extension (`ConstructNotifications/`) inherit one value; App
+  Store Connect rejects an embedded extension whose version differs. A number typed on a target's
+  General tab writes a target-level override; `scripts/check_build_versions.sh` (CI) fails on it.
 - **`ConstructMessenger` is the scheme with the test target.** A scheme that builds the app alone
   runs zero tests and reports success.
 
 ## Design system (read before touching any UI)
 
-Hybrid language: CT terminal aesthetic + Apple HIG. Terminal glyphs are **decorative-only**: SF
-Symbols and native controls for anything interactive or stateful (`CTStatusBadge`, `Toggle`,
-`chevron.*`); ASCII only as chrome (`> TITLE` headers, separators). Never regress a converted
-control back to ASCII.
+**Affordance is native, identity is ours** — three layers, and the line is fixed
+(`decisions/affordance-is-native-identity-is-ours.md`, staged plan
+`client/ios/NATIVE_AFFORDANCE_MIGRATION.md`):
+
+| Layer | Who decides the look |
+|---|---|
+| **Control and state** — buttons, toggles, navigation, selection, status, disclosure | the platform, always |
+| **Structure and rhythm** — grid and density, hairlines, section headers, palette, dark default, identicon avatars (a circle — hexagons were dropped 2026-05-04), the monospace chrome | us; this is the identity |
+| **Content** — message text (`CTFont.message`) | the reader |
+
+The test: *does a person have to learn this app to know what it does?* If yes it is a control, and
+it looks like the platform's control.
+
+**No new ASCII control and no new ASCII status, anywhere** — including in feature work unrelated to
+the migration. SF Symbols and native controls for anything interactive or stateful (`CTStatusBadge`,
+`Toggle`, `chevron.*`); ASCII only as structure (`> TITLE` headers, the `>` system-message prefix,
+separators, keycap hints, debug surfaces). Never regress a converted control back to ASCII. The
+ASCII affordances still in the tree are enumerated debt, not the target state.
+
+A surface that does not exist yet is built under this rule from the start — it is not written in the
+old language and migrated later. If a token it needs is missing, the token lands first.
+
+`client/ios/DESIGN_CONCEPT.md` §2.3 in the vault describes brackets as the affordance metaphor; that is
+**history, superseded 2026-09-20**, and the file says so. Do not implement from it.
 
 Tokens — source of truth `ConstructMessenger/Utilities/ConstructTheme.swift`:
 
 | Kind | API |
 |------|-----|
-| Colors | `Color.CT.bg`, `.text`, `.textDim`, `.accent`, `.accentDim`, `.danger`, `.noise`, `.bgMsg`, `.outMsgBg`, `.outMsgText` |
-| Fonts | `CTFont.regular/medium/bold(size)` — always JetBrains Mono, for **chrome**. `CTFont.message(size)` for message text: the one face the reader chooses |
+| Colors | `Color.CT.bg`, `.text`, `.textDim`, `.accent`, `.accentDim`, `.danger`, `.online` (status only), `.noise`, `.bgMsg`, `.outMsgBg`, `.outMsgText` |
+| Fonts | Chrome: the roles `CTFont.title/headline/body/bodyEmphasis/secondary/caption/micro/badge`, or `CTFont.ui(size, weight:)` for a size outside them — JetBrains Mono, Dynamic Type via `relativeTo:`. `CTFont.mono(size)` for content that *is* machine output. `CTFont.message(size)` for message text: the one face the reader chooses, system by default. The pre-split `CTFont.regular/medium/bold` were removed 2026-10-06 |
 | Radii / Shapes | `CTRadius` (`badge` 6 · `card` 8 · `control` 10 · `pill` 999) via `CTShape.*()` — no magic `cornerRadius: 16\|18\|22` |
 | Layout | `CTLayout` (`edgePad` 12 · `controlHeight` 42 · `hitTarget` 44 · …) |
 | Glass | `.glassCapsule()` — defaults to pill; do not pass 18/22 |
@@ -77,24 +101,51 @@ Tokens — source of truth `ConstructMessenger/Utilities/ConstructTheme.swift`:
 - Two surface languages, never mixed on one control: **form/card** (`CTRadius.card`, solid) vs
   **composer/glass** (`pill`, `.glassCapsule()`); `CTButton`/bubbles use `CTRadius.control`.
 - **Message text is the one thing the reader picks the font for.** `CTFont.message` — bubbles and
-  the composer that fills them — reads a preference; everything else is `CTFont.*` and stays
-  monospaced unconditionally. The split is chrome vs content, the same line that already puts SF
-  Symbols on anything interactive. Do not widen it: a preference read inside `CTFont.regular`
-  would turn nav bars, `> TITLE` headers and badges into a different product. Note the old "always"
-  was never true where it mattered — JetBrains Mono ships no CJK, so Japanese bubbles have always
-  been a substituted face. `CTFont.message` also carries the size preference and `relativeTo:
-  .body`; the chrome deliberately does not scale, because it is laid out against fixed metrics.
-- **No `NavigationStack` inside sheets** — `CTNavBar(showBack: true, backAction: { dismiss() })`.
+  the composer that fills them — reads a preference, **system face by default** since
+  2026-09-21. It stays a preference and nothing else gains one: a font choice read inside the
+  chrome tokens would make the product configurable rather than designed. Note "always JetBrains
+  Mono" was never true where it mattered — the family ships no CJK, so Japanese bubbles have
+  always been a substituted face. `CTFont.message` also carries the size preference and
+  `relativeTo: .body`.
+- **The chrome is monospace and stays so.** It was the system face for one day (2026-09-20 → 21)
+  and, seen on a device, the mono chrome was the identity worth keeping. `CTFont.ui` and
+  `CTFont.mono` resolve to the same family today; the split is kept because it records *why* a
+  site is monospace (this is a fingerprint) and is what lets the chrome move again without the
+  fingerprints moving with it. Do not hand-roll `.system(...)` or `.monospaced` at a call site.
+- **JetBrains Mono is bundled since 2026-09-21** — `ConstructMessenger/Fonts/` (four weights +
+  `OFL.txt`), `UIAppFonts` in the iOS `Info.plist`, `ATSApplicationFontsPath` in the Desktop one.
+  Before that the name was looked up and nothing answered: every build had rendered SF Mono under
+  the JetBrains name, for eight months, with nothing to say so. The synchronized group flattens
+  resources into the bundle root, so `UIAppFonts` lists bare file names — a `Fonts/` prefix is
+  ignored silently. `ThemeTypographyTests` asserts the four PostScript names resolve at runtime.
+- **Bars are the system's** (`decisions/navigation-bars-are-the-systems.md`, 2026-10-07):
+  `.navigationTitle` + `inlineNavTitle()` and `.toolbar` items, each a symbol *and* a title. A
+  sheet with a title or an action is wrapped at the presenting site in `.sheetNavigation()` (its
+  own `NavigationStack` and a close item). Until then this file banned `NavigationStack` in sheets
+  and prescribed `CTNavBar`; the ban's one recorded reason was the terminal look of the bar, which
+  2026-09-20 withdrew, and on iPhone Duo only system bars stand vertically. `CTNavBar`,
+  `hideSystemNavBar()` and `InteractiveSwipeBack` (the half-screen back swipe) were deleted on
+  2026-10-08 with the last screen that used them; back is the system's gesture. A screen with no
+  bar at all (the onboarding welcome, registration) says `.toolbar(.hidden, for: .navigationBar)`.
+  Our part of the bar is set once, app-wide — the title face — never per screen; bar items take
+  the label colour (`barItem()`), a confirming action the accent (`ConfirmButton`).
 - Background always `Color.CT.bg` (`#090909`) via `.ctBackground()`.
 - New UI must use tokens; when editing a file with a literal `8`/`10`/`18`, migrate that call site.
 - Debug-only UI: `.orange`, `#if DEBUG`.
-- Tab bar is the standard SwiftUI `TabView`; hide it in a conversation only via
-  `.toolbar(.hidden, for: .tabBar)` on the `ChatView` destination.
+- Tab bar is the standard SwiftUI `TabView`; a conversation hides it with `.hidesTabBar()`
+  (`Platform/PlatformNavBar.swift`). Until 2026-10-08 this said `.toolbar(.hidden, for: .tabBar)`,
+  which brings the bar back only after the pop has finished — ~0.3 s of a list without its tab
+  bar, measured on video; `hidesTabBar()` moves it into the transition.
 
-**Xcode Previews do not run in the app target.** It links WebRTC and WhisperKit, and the preview
-process dies at launch with `_objc_fatal: Attempt to use unknown class` whenever those load — on
-any iOS runtime, independent of app code, and compile flags cannot help because the frameworks stay
-linked. Every `#Preview` block in the app is therefore decorative today.
+**Xcode Previews run in the app target since 2026-10-01** — `InCallView`'s preview rendered on
+Xcode 27 (JIT executor), with the scheme `ConstructMessenger` (Debug, `-Onone`). Until then this
+paragraph said they could not: the preview process died at launch with `_objc_fatal: Attempt to
+use unknown class` once WebRTC or WhisperKit loaded. Which change ended that is not established —
+the same day WebRTC moved from stasel's package to webrtc-sdk (`Packages/WebRTC`), and the toolchain
+was Xcode 27 — so if previews break again, check those two first. A preview needs the Debug
+configuration: the `Construct Messenger Beta` scheme runs Beta, built `-O`, which Previews refuse.
+A preview that fails with "ThunkContentMarker … invalidated" lost its file to an edit mid-build;
+refresh it.
 
 A separate previewable package is a recurring idea and was tried once. If you rebuild it, the
 theme file is **shared, never copied** — the copy is what killed the last attempt. Read
@@ -103,8 +154,10 @@ theme file is **shared, never copied** — the copy is what killed the last atte
 ## Localization
 
 - **All** visible strings use `NSLocalizedString("key", comment: "")` — no hardcoded English.
-- New keys go to **all four** locales — `en`, `ru`, `ja`, `fr` — in the same commit.
-  `scripts/check_localization.sh` enforces parity, no duplicate keys, no key that resolves to
+- New keys go to **every** locale — `en`, `ru`, `ja`, `fr`, `hy-AM` — in the same commit.
+  The list is `OTHER_LOCALES` in `scripts/check_localization.sh`; a locale added to the app is
+  added there in the same change, or nothing checks it (`hy-AM` went unchecked for a day and
+  missed the next commit's keys). The script enforces parity, no duplicate keys, no key that resolves to
   nothing, and that a translation carries the same format specifiers as its English source by
   position and conversion type; CI runs it. A key with no entry is displayed to the user
   verbatim — the ones already on real screens are listed in that script's `BASELINE`, and the
@@ -115,14 +168,15 @@ theme file is **shared, never copied** — the copy is what killed the last atte
   that happen — nothing reported the gap, so it grew by whatever each release added. A locale
   allowed to lag does. Both are complete now and held to the same rule.
 - **One product name per script.** `Konstruct` in Latin, `Конструкт` in Russian, `コンストラクト`
-  in Japanese — a localized name is a transliteration, never a translation. The one deliberate
+  in Japanese, `Կոնստրուկտ` in Armenian (case endings attach without a hyphen:
+  `Կոնստրուկտը`) — a localized name is a transliteration, never a translation. The one deliberate
   exception is `onboarding_tagline`, where "identity is a construct" is the common noun and the
   pun. Why the Japanese changed: `client/GLOSSARY_PRODUCT_LANGUAGE.md` in the vault.
 - **App Store listing copy lives in `fastlane/metadata/<locale>/`**, not only in App Store
   Connect, so a change to it has a diff and a reviewer. Read `fastlane/metadata/README.md` before
   touching it — field limits, the four store locales, and what must never go in the copy.
   `scripts/check_appstore_metadata.sh` enforces the mechanical part and CI runs it.
-- Nav titles: `CTNavBar` applies `.uppercased()` + `.tracking(4)` — pass the raw localized string.
+- Bar titles are sentence case, passed as the localized string, never uppercased in code.
 - UI copy is plain language ("people / chats / device", never "node / stream / replica"). Code
   identifiers keep domain names — no renames.
 - **VEIL is not ICE.** VEIL is our obfuscation layer (`Veil*` / `veil_*`, `Networking/gRPC/VEIL/`);
@@ -132,7 +186,7 @@ theme file is **shared, never copied** — the copy is what killed the last atte
 
 **Before writing any session or crypto decision in Swift, open `~/Code/construct-core/src/construct_core.udl`.**
 It is the list of what the core already does, and this app keeps rebuilding entries from it. Already
-exported and already ignored at least once each: `derive_device_id`, `tie_break_role`,
+exported and already ignored at least once each: `derive_device_id`,
 `get_all_session_contact_ids` (the devices we hold sessions with — half of any per-device plan),
 `get_session_health`, both init paths, `remove_session`.
 
@@ -161,12 +215,47 @@ core, and let the core decide which of them the operation touches. Building the 
 did the translation here is exactly the inversion that produced `MultiDeviceSendCoordinator`.
 
 Current known exceptions, with their destination — do not treat them as settled placements:
-the account-keyed `sessionPhases` / confirm-gate / heal walk, and `contactId(forPeer:)` on the
-hot path, are the leftover of a coordinator that still decides; they belong in the core machine
-(`decisions/session-is-one-state-machine.md`). `PeerDevice` is a legitimate local store but is not
-the authority on a peer's device set. See `decisions/a-peer-is-a-set-of-devices.md`.
+the account-keyed `sessionPhases` and the per-scope init locks are the leftover of a coordinator
+that still decides; they belong in the core machine (`decisions/session-is-one-state-machine.md`).
+The queue of messages waiting for a session moved there on 2026-09-26
+— this app keeps envelopes and must not grow a second queue beside the core's
+(`decisions/first-contact-queue-keyed-by-claimed-device.md`). **Receiving opens fetch nothing**
+since 2026-09-27: a first message opens with the key its sender certificate names, once the core
+has checked the server's signature. This app hands the certificate over with the message
+(`ChatMessage.senderCertificate`) and the server keys before each open; it never fetches the
+sender's bundle to receive, and never walks the sender's devices
+(`decisions/first-message-opens-without-the-server.md`).
+`PeerDevice` is a legitimate local store but is not the authority on a peer's device set. See
+`decisions/a-peer-is-a-set-of-devices.md`.
+
+**Everything below the seam takes a device id.** `encryptMessage`, `hasSession`, `archiveSession`,
+`restoreSession`, `getSessionHealth`, `sessionEpoch`, the background decrypt — each names one
+ratchet, and `SessionAddressing.asDevice(_:)` checks that rather than resolving, logging an error
+with the caller's name when it is handed an account. A caller holding an account expands it with
+`deviceIds(ofPeer:)` and acts on the whole set, or asks one of the folds
+(`hasSessionWithAnyDevice(ofPeer:)` and friends). `pinnedDevice(ofPeer:)` — the single device a
+peer's one pinned key names — is the offline answer and nothing else; it may not appear under the
+crypto layer, and `CryptoIdentitySpaceTests` fails if it does, or if anyone takes `.first` of a
+device set.
 
 ## Architecture invariants
+
+**A change on the delivery or crypto path answers three questions before it lands**, in the
+commit message or the session note — not "this is safe", but the answers:
+
+1. What does the server (or any relay) learn that it did not learn before?
+2. What can a party — server, sender, a sibling device — withhold or substitute that it could
+   not before?
+3. Which trust boundary moves, and in which direction?
+
+"An improvement must not cost security" is what everyone already nods at, and it has no
+content until it is a question with an answer. The questions are the content. A change whose
+honest answer to 1 or 2 is "something" is not merged on the strength of the improvement; it is
+a design decision and goes through `decisions/`. Example of the rule applied: the 2026-09-21
+mailbox merge filter (`construct-server` PR #53) — learns nothing new (the field was already
+read at dispatch), a sender can misdirect only its own envelopes and only as the cutover would
+anyway, and the boundary moved inward (ciphertext sealed to one device stops reaching its
+sibling). Asked before the merge, not after.
 
 Before any architectural decision, search the vault:
 `grep -ril <topic> ~/Code/construct-docs/{architecture,backend,client,cryptocore,security,decisions}`.
@@ -174,10 +263,35 @@ Before touching `Networking/gRPC/VEIL/` or `Services/Calls/`, read
 `decisions/ice-connection-loop-complexity.md` — it predates the rename below and covers both.
 
 - **INITIATOR and RESPONDER init paths are distinct** (`init_session` vs
-  `init_receiving_session`); tie-break: higher deviceId wins as INITIATOR.
+  `open_receiving`). **A session renews by sending** since 2026-09-27: any message carrying the
+  handshake header (ML-KEM ciphertext) opens a new state beside the one held, and the core keeps
+  previous states and promotes the one that decrypts. There is no SESSION_RESET_INIT,
+  `session_ready`, ping, confirm window, tie-break or heal — do not rebuild any of them here
+  (`decisions/sessions-renew-by-sending.md`).
+- **There is no END_SESSION** since 2026-09-28. A message nothing reads is answered by the core
+  with a DECRYPTION_ERROR (content type 28) naming the state it was written on; the writer's core
+  retires that state only if it is current, and resends the named message once. Manual reset,
+  chat and contact deletion and logout are **local** — nothing is sent. Do not add a teardown
+  message, a cooldown, a stale-by-timestamp check or an "announce the reset" path: a message that
+  names no state is the thing this replaced.
 - **Keychain**: crypto state that must survive a background/locked push decrypt uses
   `kSecAttrAccessibleAfterFirstUnlock*` (`KeychainManager.cryptoKeyAccessible`), never
   `WhenUnlocked*` — otherwise silent session desync and END_SESSION teardown of healthy sessions.
+- **Ask the core for the operation, never for the key.** Signing with the device key, opening a
+  box sealed to it, device-copy tags and the MLS signer are `OrchestratorCore` calls
+  (`signWithDeviceKey`, `openSealedToDevice`, `deviceCopyTag*`, `newMlsStore`/`importMlsStore`)
+  since 2026-09-29. Before that the secret was read out (`getSigningKeyBytes`, the Keychain's
+  `deviceIdentityKey` copy) on every sealed message and every send, and this file carried a second
+  CryptoKit implementation of the sealed box. The Keychain holds the device keys once, in the
+  key record (`crypto_private_keys`) the core loads from; the raw copies are deleted at launch.
+  The history-file channel key and the social-recovery bundle are made in the core too.
+- **History transfer is the core's protocol; this app moves bytes.** CTH1 framing, record order,
+  the chunk cipher, CTT1 v2 and CTHF frames and every check on them are
+  `construct-core/src/history/` since 2026-09-29 (`HistorySender` / `HistoryReceiver`). The app reads what
+  `need()` asks, feeds it, fetches the directory keys at `AwaitKeys`, decodes released records
+  into Core Data and writes media pieces to disk (`HistoryCoreStream`). Until then it was ~1 500
+  lines of Swift shared with nothing else, which Android would have had to write a second time.
+  `HistoryChannelTests` fails on a CryptoKit import on this path.
 - Device keys are deleted **only** on gRPC UNAUTHENTICATED (16) / PERMISSION_DENIED (7) — never on
   a network error.
 - **All crypto goes direct via UniFFI** (`ConstructCore.xcframework`) on iOS and macOS alike. The
@@ -201,7 +315,10 @@ was deliberate is indistinguishable from one that was forgotten. `pqMessageEpoch
 `pqRatchetField` were dropped at the unseal boundary and nobody could see it, precisely because the
 neighbouring deliberate omission (`sealedInnerData`) *was* commented and these two were not. Better
 still, give the boundary a name (`ChatMessage.resolvingSealedSender(_:currentUserId:)`) so it is an
-object a test can reach rather than an argument list inside a 200-line method.
+object a test can reach rather than an argument list inside a 200-line method. Best, do not list:
+since 2026-09-29 that boundary copies the message and assigns the few fields it replaces, and the
+parsed header fields are gone from `ChatMessage` altogether — it keeps `rawPayload` and the core's
+`wire_summary` of it, so there is no copy of the payload to drop.
 
 **A producer with no consumer is a defect, not dead weight.** If you add a send, a signal or an
 action, the reader must exist in the same change — or the sender must be removed. An unconsumed
@@ -214,10 +331,15 @@ either wired up or deleted.
 
 1. **No base64 in application logic** — only at true text-transport boundaries (QR, deep links,
    `mailto:`). Never in message processing, session management or storage.
-2. **No JSON for binary payloads** — keys, ciphertexts and wire payloads are `Data` / `[UInt8]`
-   end to end; use protobuf `bytes` or CFE binary.
-3. **The UniFFI boundary passes `Data` / `[UInt8]`** — never stringify; UDL fields holding binary
-   are `sequence<u8>`, not `String`.
+2. **No JSON for binary payloads** — keys, ciphertexts and wire payloads are `Data` end to end;
+   use protobuf `bytes` or CFE binary.
+3. **The UniFFI boundary passes `Data`** — UDL byte fields and arguments are `bytes`, never
+   `sequence<u8>` and never `String`. Both are `Vec<u8>` in Rust; the bindings are not alike:
+   `bytes` is `Data`, one block copy, while `sequence<u8>` is `[UInt8]` copied one byte per call
+   (and `List<UByte>`, an object per byte, on Android). This rule prescribed `sequence<u8>` until
+   2026-09-29 — it meant "not base64", and 195 fields were the slow kind. The core's
+   `construct-core/tests/udl_bytes_test.rs` fails on a new one. A value from the core is already `Data`: do not
+   wrap it in `Data(…)`, which copies it again.
 4. **Session state persists as CFE envelopes** — every `Action::SaveSessionToSecureStore` data
    field originates from `export_session_bytes_for`, never `export_session_json_for`.
 5. `Codable` `Data` fields (implicit base64 in JSONEncoder) are fine for UserDefaults persistence;
@@ -225,8 +347,8 @@ either wired up or deleted.
 6. Core Data `encryptedContent` is `Binary Data` (external storage); `ChatMessage.content` is
    `Data` — control messages use `Data()`, never a string literal.
 
-Before adding any crypto or messaging field: is it `Data` source-to-destination, `[UInt8]` across
-FFI, proto `bytes`, zero base64 in the path? If not, fix the design before merging.
+Before adding any crypto or messaging field: is it `Data` source-to-destination, `bytes` in the
+UDL, proto `bytes`, zero base64 in the path? If not, fix the design before merging.
 
 ## Two representations, one authority
 
@@ -304,6 +426,19 @@ otherwise have looked.
 
 [Conventional Commits](https://www.conventionalcommits.org/): `feat(scope): …`, `fix(scope): …`,
 `refactor(scope): …`, `chore(scope): …`.
+
+**Never commit on `develop` or `main`.** `develop` is what goes to TestFlight; `main` is what goes
+to the App Store. Every change goes on a topic branch cut from an up-to-date `develop`
+(`feat|fix|docs|chore|test/<topic>`) and lands in `develop` through a GitHub pull request.
+`develop → main` is the release step, and the owner takes it. Agents push and open the PR only
+when asked.
+
+From 2026-09-11 to 2026-10-01 changes went straight to the default branch across the
+construct-* repos — two people on the project made a branch per change look like ceremony. That
+was reversed on purpose: the habit has to be in place before there is an App Store release for it
+to break. A commit that landed on `develop` by mistake and is not pushed moves off it with
+`git branch <topic> && git reset --keep origin/develop && git switch <topic>`. Pushed history is
+never rewritten.
 
 ## Documentation & session notes
 

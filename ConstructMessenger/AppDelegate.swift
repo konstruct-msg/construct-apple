@@ -26,6 +26,8 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         // observers are registered before the first background transition. The transport layer
         // reads it off-main to suppress futile VEIL restarts while suspended (see AppActivityState).
         _ = AppActivityState.shared
+        // Drop the store key and decrypted text when the app leaves the screen (UnsealedMemory).
+        UnsealedMemory.forgetOnBackground()
 
         // Register UserDefaults defaults — only applies when key has never been set.
         // This makes push notifications and background fetch ON for new installs.
@@ -59,6 +61,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
             // and the server drops the object 7 days after upload, so a purge on day nine takes
             // the last copy that exists. See MediaManager.mediaDirectory.
             Task { @MainActor in MediaManager.shared.migrateMediaOutOfCaches() }
+            Task.detached(priority: .utility) { MediaManager.sealClearFiles() }
 
             let migrated = ThumbnailStore.shared.migrateFromUserDefaults()
             if migrated.keys > 0 {

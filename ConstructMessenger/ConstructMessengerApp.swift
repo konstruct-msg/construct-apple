@@ -21,15 +21,29 @@ struct Construct_MessengerApp: App {
     @State private var securityViewModel: SecurityViewModel
     @State private var recoveryViewModel: AccountRecoveryViewModel
     @State private var socialRecoveryService: SocialRecoveryService
+    /// Bumped when `LocalDataWipe` swaps the store for an empty one. Everything under
+    /// `ContentView` is rebuilt with it, because a `@FetchRequest` that outlives the swap keeps
+    /// objects from the removed store, and the next fetch on the view context throws "persistent
+    /// store is not reachable from this NSManagedObjectContext's coordinator" from inside its
+    /// change observer. Build 712 crashed that way on the first message after deleting the
+    /// account and registering again.
+    @State private var storeGeneration = 0
+    /// The launch moves this install to construct-store first (`StoreImportView`); the runtime
+    /// and the launch task wait for it.
+    @State private var storeImportPending: Bool
     private let rootContainer: NSPersistentContainer
 
     init() {
         let isPreview = PreviewDetector.isRunningInPreview
+        // Before Core Data is touched: once moved, its old files are not opened again.
+        LocalStoreImport.removeCoreDataLeftovers()
+        let importPending = !isPreview && LocalStoreImport.isDueAtLaunch
+        _storeImportPending = State(initialValue: importPending)
         let container = isPreview
             ? PersistenceController.preview.container
             : PersistenceController.shared.container
         self.rootContainer = container
-        _authViewModel = State(initialValue: AuthViewModel(context: container.viewContext, startRuntime: !isPreview))
+        _authViewModel = State(initialValue: AuthViewModel(context: container.viewContext, startRuntime: !isPreview && !importPending))
         _securityViewModel = State(initialValue: SecurityViewModel())
         _recoveryViewModel = State(initialValue: AccountRecoveryViewModel())
         _socialRecoveryService = State(initialValue: SocialRecoveryService())
@@ -52,11 +66,27 @@ struct Construct_MessengerApp: App {
 
     var body: some Scene {
         WindowGroup {
+            if storeImportPending {
+                StoreImportView {
+                    storeImportPending = false
+                    authViewModel.startDeferredRuntime()
+                }
+            } else {
+                appRoot
+            }
+        }
+    }
+
+    private var appRoot: some View {
             SecurityGateView {
                 ContentView()
                     .environment(\.managedObjectContext, rootContainer.viewContext)
                     .environment(authViewModel)
                     .environment(appDelegate.deepLinkHandler)
+                    .id(storeGeneration)
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .localStoreReplaced).receive(on: DispatchQueue.main)) { _ in
+                storeGeneration &+= 1
             }
             .environment(securityViewModel)
             .environment(authViewModel)   // PinLockView needs AuthViewModel for duress wipe
@@ -71,6 +101,8 @@ struct Construct_MessengerApp: App {
                 // the composer-swap explanation for TODO 33 was fixed and the symptom stayed.
                 KeyboardEventTracer.shared.start()
                 MediaManager.shared.evictOldFiles()
+                // Packs that ship in the app, into the store once. No network; first launch only.
+                StickerService.shared.seedBundledPacks()
                 StorageMigrationService.shared.migrateIfNeeded(
                     context: rootContainer.viewContext
                 )
@@ -82,13 +114,11 @@ struct Construct_MessengerApp: App {
                 // Post-auth key maintenance lives in AuthViewModel; this task can run before
                 // async session restore completes.
             }
-        }
     }
 
     // MARK: - Global UIKit appearance
 
     private func applyGlobalAppearance() {
-        let bg2     = UIColor(Color.CT.bgMsg)
         let accent  = UIColor(Color.CT.accent)
         let dim     = UIColor(Color.CT.textDim)
         let bright  = UIColor(Color.CT.text)
@@ -108,20 +138,18 @@ struct Construct_MessengerApp: App {
         UITabBar.appearance().scrollEdgeAppearance  = tabApp
 
         // ── Navigation bar ───────────────────────────────────────────────────
-        let titleAttrs: [NSAttributedString.Key: Any] = [
+        // The bar is the system's; ours is the title face, nothing else
+        // (`decisions/navigation-bars-are-the-systems.md`). No `standardAppearance`: an
+        // appearance of our own with a background turns the iOS 26 glass off. The title is the
+        // chrome's monospace at 17 pt, on the headline curve. Bar items are the
+        // label colour (`barItem()`), the accent only on a confirming action.
+        let titleSize = UIFontMetrics(forTextStyle: .headline).scaledValue(for: 17)
+        let titleFont = UIFont(name: "JetBrainsMono-SemiBold", size: titleSize)
+            ?? .monospacedSystemFont(ofSize: titleSize, weight: .semibold)
+        UINavigationBar.appearance().titleTextAttributes = [
             .foregroundColor: bright,
-            .font: UIFont.monospacedSystemFont(ofSize: 14, weight: .semibold)
+            .font: titleFont
         ]
-        let navApp = UINavigationBarAppearance()
-        navApp.configureWithOpaqueBackground()
-        navApp.backgroundColor              = bg2
-        navApp.titleTextAttributes          = titleAttrs
-        navApp.largeTitleTextAttributes     = [.foregroundColor: bright]
-        navApp.shadowColor                  = UIColor(Color.CT.noise)
-        UINavigationBar.appearance().standardAppearance   = navApp
-        UINavigationBar.appearance().scrollEdgeAppearance = navApp
-        UINavigationBar.appearance().compactAppearance    = navApp
-        UINavigationBar.appearance().tintColor            = accent
 
         // ── Lists / Table views ──────────────────────────────────────────────
         UITableView.appearance().backgroundColor     = UIColor(Color.CT.bg)

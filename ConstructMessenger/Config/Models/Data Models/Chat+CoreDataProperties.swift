@@ -85,12 +85,6 @@ extension Chat {
         lastMessageTime = timestamp
     }
 
-    /// Clear the preview — no messages left in the conversation.
-    func clearPreview() {
-        lastMessageText = nil
-        lastMessageTime = nil
-    }
-
     /// Align denormalized list preview with the newest visible transcript message.
     ///
     /// Call when the list appears / after a context save. Covers three stuck-row classes:
@@ -99,51 +93,12 @@ extension Chat {
     /// 2. Missed `applyPreview` on a write path (message exists, stamp stale).
     /// 3. Future-timestamp freeze (`lastMessageTime` ahead of every real message).
     ///
-    /// Uses the same `contentTypeRaw == 0` filter as `ChatMessageStore`'s FRC so control
-    /// rows never become the list subtitle. Returns `true` when fields changed.
+    /// The rule is `MessagePersistenceService.reconcilePreview(ofChat:)`, over the repositories;
+    /// this is its door for a list still holding managed chats. Returns `true` when it wrote.
     @discardableResult
-    func reconcilePreviewFromTranscript(in context: NSManagedObjectContext? = nil) -> Bool {
-        let ctx = context ?? managedObjectContext
-        guard let ctx else { return false }
-
-        let req = Message.fetchRequest()
-        req.predicate = NSPredicate(format: "chat == %@ AND contentTypeRaw == 0", self)
-        req.sortDescriptors = [
-            NSSortDescriptor(key: "serverOrderKey", ascending: false),
-            NSSortDescriptor(key: "id", ascending: false)
-        ]
-        // A few candidates so a leaked service/control row at the tip does not pin us.
-        req.fetchLimit = 8
-
-        let rows = (try? ctx.fetch(req)) ?? []
-        let newest = rows.first { msg in
-            // Cheap type check first; displayText decrypt only for tip candidates.
-            if msg.contentType.isEphemeral { return false }
-            if msg.isServiceArtifact || msg.isControlArtifact { return false }
-            return true
-        }
-
-        guard let newest else {
-            if lastMessageText != nil || lastMessageTime != nil {
-                clearPreview()
-                return true
-            }
-            return false
-        }
-
-        let text = Chat.formatPreviewText(newest.displayText)
-        if let current = lastMessageTime,
-           abs(current.timeIntervalSince(newest.timestamp)) < 0.5,
-           (lastMessageText ?? "") == text {
-            return false
-        }
-
-        applyPreview(text: newest.displayText, timestamp: newest.timestamp, force: true)
-        Log.debug(
-            "Preview reconciled for \(id.prefix(8))… → '\(text.prefix(40))' ts=\(newest.timestamp)",
-            category: "Chat"
-        )
-        return true
+    func reconcilePreviewFromTranscript() -> Bool {
+        guard let record = ChatRecord(row: self) else { return false }
+        return MessagePersistenceService.reconcilePreview(ofChat: record)
     }
 }
 

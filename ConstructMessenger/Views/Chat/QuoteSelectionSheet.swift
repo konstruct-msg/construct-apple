@@ -15,37 +15,19 @@ import AppKit
 #endif
 
 struct QuoteSelectionSheet: View {
-    let message: Message
+    let message: TranscriptRow
     let onConfirm: (String) -> Void
 
     @Environment(\.dismiss) private var dismiss
     @State private var selectedText: String = ""
 
-    private var fullText: String { message.displayText }
+    private var fullText: String { message.readableText }
 
     var body: some View {
         VStack(spacing: 0) {
-            CTNavBar(
-                title: NSLocalizedString("select_quote", comment: ""),
-                showBack: false,
-                backAction: { dismiss() }
-            ) {
-                EmptyView()
-            } trailing: {
-                Button(NSLocalizedString("reply_with_selection", comment: "")) {
-                    guard !selectedText.isEmpty else { return }
-                    onConfirm(selectedText)
-                    dismiss()
-                }
-                .font(CTFont.bold(13))
-                .foregroundColor(selectedText.isEmpty ? Color.CT.textDim : Color.CT.accent)
-                .disabled(selectedText.isEmpty)
-                .buttonStyle(.plain)
-            }
-
             VStack(alignment: .leading, spacing: 12) {
                 Text(NSLocalizedString("quote_selection_hint", comment: ""))
-                    .font(CTFont.regular(12))
+                    .font(CTFont.secondary)
                     .foregroundColor(Color.CT.textDim)
                     .padding(.horizontal)
 
@@ -61,7 +43,7 @@ struct QuoteSelectionSheet: View {
                             .fill(Color.CT.accent)
                             .frame(width: 2)
                         Text(selectedText)
-                            .font(CTFont.regular(11))
+                            .font(CTFont.caption)
                             .foregroundColor(Color.CT.textDim)
                             .lineLimit(2)
                     }
@@ -73,19 +55,20 @@ struct QuoteSelectionSheet: View {
                 }
             }
             .padding(.top, 8)
-
-            HStack {
-                Button(NSLocalizedString("cancel", comment: "")) { dismiss() }
-                    .font(CTFont.regular(13))
-                    .foregroundColor(Color.CT.textDim)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 12)
-            }
-            .padding(.horizontal)
             .padding(.bottom, 16)
-            .ctBorderTop()
         }
         .background(Color.CT.bg)
+        .screenTitle(NSLocalizedString("select_quote", comment: ""))
+        .toolbar {
+            ToolbarItem(placement: .confirmationAction) {
+                ConfirmButton(title: NSLocalizedString("reply_with_selection", comment: "")) {
+                    guard !selectedText.isEmpty else { return }
+                    onConfirm(selectedText)
+                    dismiss()
+                }
+                .disabled(selectedText.isEmpty)
+            }
+        }
     }
 }
 

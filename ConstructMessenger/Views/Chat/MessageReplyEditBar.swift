@@ -12,8 +12,6 @@ import Combine
 
 private enum ComposerAuxBarLayout {
     static let accentBarWidth: CGFloat = 2
-    /// Compact cancel glyph (full hit target still applied via contentShape padding).
-    static let cancelIconSize: CGFloat = 18
     static let cancelHit: CGFloat = 32
     static let verticalPadding: CGFloat = 6
     static let labelPreviewSpacing: CGFloat = 1
@@ -36,7 +34,7 @@ struct MessageReplyBar: View {
 
             VStack(alignment: .leading, spacing: ComposerAuxBarLayout.labelPreviewSpacing) {
                 Text(LocalizedStringKey("reply_to_colon"))
-                    .font(CTFont.regular(ChatUIConstants.Typography.metaSize))
+                    .font(CTFont.ui(ChatUIConstants.Typography.metaSize))
                     .foregroundColor(Color.CT.textDim)
                 ReplyPreviewContent(
                     content: content,
@@ -76,10 +74,10 @@ struct MessageEditBar: View {
 
             VStack(alignment: .leading, spacing: ComposerAuxBarLayout.labelPreviewSpacing) {
                 Text(LocalizedStringKey("editing_message"))
-                    .font(CTFont.regular(ChatUIConstants.Typography.metaSize))
-                    .foregroundColor(Color.CT.accentDim)
+                    .font(CTFont.ui(ChatUIConstants.Typography.metaSize))
+                    .foregroundColor(Color.CT.accent)
                 Text(content)
-                    .font(CTFont.regular(12))
+                    .font(CTFont.secondary)
                     .lineLimit(1)
                     .foregroundColor(Color.CT.textDim)
             }
@@ -104,7 +102,7 @@ struct MessageEditBar: View {
 private func cancelButton(action: @escaping () -> Void) -> some View {
     Button(action: action) {
         Image(systemName: "xmark.circle.fill")
-            .font(.system(size: ComposerAuxBarLayout.cancelIconSize, weight: .regular))
+            .font(CTIcon.font(CTIcon.nav, weight: .regular))
             .foregroundColor(Color.CT.textDim)
             .frame(
                 width: ComposerAuxBarLayout.cancelHit,

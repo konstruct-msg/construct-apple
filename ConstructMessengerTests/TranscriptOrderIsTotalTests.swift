@@ -1,0 +1,160 @@
+//
+//  TranscriptOrderIsTotalTests.swift
+//  ConstructMessengerTests
+//
+//  The transcript's order key must be a *total* order, and every row must carry one.
+//
+//  Neither held. `serverOrderKey` is the sort key of twelve fetches, and two rows that compare
+//  equal on it fall through to the secondary descriptor — `id`, a random UUID. Two ways to get
+//  there: a row created with no key at all (the system notice, left nil until the next launch's
+//  backfill), and two rows in the same millisecond (the key was `<ms>-<seq>` with `seq` fixed at
+//  zero for anything local).
+//
+//  This is not only a display defect. `MessageRouter.isRepeatOfLastRow` — the check that stopped a
+//  notice restating a condition that had not changed — asked for *the newest row*. Among rows that
+//  compare equal, "newest" was a coin flip, so the suppression sometimes read the wrong row and
+//  let the duplicate through. That is the 2026-08-04 screenshot: five identical "session out of
+//  sync" blocks, stacked. The check went with the notice (2026-09-28); the newest row is still
+//  what a deletion recomputes the chat's preview from.
+//
+
+import XCTest
+import CoreData
+@testable import Construct_Messenger
+
+@MainActor
+final class TranscriptOrderIsTotalTests: XCTestCase {
+
+    // MARK: - The key itself
+
+    /// Mutation: drop the `\(separator)\(messageId)` component from `ServerMessageOrder.local` —
+    /// this reddens. It is the whole reason the key is total.
+    func testTwoRowsInTheSameMillisecondGetDifferentKeys() {
+        let sameInstant = Date(timeIntervalSince1970: 1_758_600_000.123)
+        let a = ServerMessageOrder.local(timestamp: sameInstant, messageId: "AAAA-1111")
+        let b = ServerMessageOrder.local(timestamp: sameInstant, messageId: "BBBB-2222")
+        XCTAssertNotEqual(a, b, "same millisecond, two rows — equal keys hand the order to a random UUID")
+        XCTAssertLessThan(a, b, "and the tie-break must be stable, not merely unequal")
+    }
+
+    /// Mutation: make `local` return `pending(localMessageId:)` — this reddens. A row with no
+    /// server position is not a row *waiting* for one; pinning a notice below every later message
+    /// is a different bug from ordering it at random.
+    func testALocalRowSitsAtItsOwnTimestampAndNotAtTheBottom() {
+        let older = ServerMessageOrder.local(timestamp: Date(timeIntervalSince1970: 1_000), messageId: "a")
+        let newer = ServerMessageOrder.local(timestamp: Date(timeIntervalSince1970: 2_000), messageId: "b")
+        let waiting = ServerMessageOrder.pending(localMessageId: "c")
+        XCTAssertLessThan(older, newer, "a local key orders by its own timestamp")
+        XCTAssertLessThan(newer, waiting, "a row still waiting for a server position stays below both")
+    }
+
+    /// Mutation: change the clamp in `local` from `1` to `0` — this reddens. `key(serverTimestamp…)`
+    /// refuses zero, and the old code answered a zero timestamp with the pending sentinel, which
+    /// sent the oldest row in the transcript to the bottom.
+    func testAnEpochTimestampStaysAtTheTop() {
+        let epoch = ServerMessageOrder.local(timestamp: Date(timeIntervalSince1970: 0), messageId: "a")
+        let later = ServerMessageOrder.local(timestamp: Date(timeIntervalSince1970: 1), messageId: "b")
+        XCTAssertLessThan(epoch, later)
+        XCTAssertLessThan(epoch, ServerMessageOrder.pending(localMessageId: "c"))
+    }
+
+    // MARK: - Every row carries one
+
+    /// The invariant the comment on `backfillMissingServerOrderKeys` had been asserting on its own
+    /// since the column was added, while `addSystemMessage` left it nil.
+    ///
+    /// Mutation: delete `row.serverOrderKey = …` from any `Message(context:)` site in the app — the
+    /// store's insert included — this reddens and names the file and line.
+    func testEveryRowCreationSiteStampsTheOrderColumn() {
+        let appRoot = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("ConstructMessenger")
+
+        guard let walker = FileManager.default.enumerator(
+            at: appRoot, includingPropertiesForKeys: nil
+        ) else { return XCTFail("cannot walk \(appRoot.path)") }
+
+        var offenders: [String] = []
+        var sitesChecked = 0
+
+        for case let url as URL in walker where url.pathExtension == "swift" {
+            guard !url.path.contains("/Generated/"),
+                  let source = try? String(contentsOf: url, encoding: .utf8) else { continue }
+            let lines = source.components(separatedBy: .newlines)
+            for (index, line) in lines.enumerated() where line.contains("= Message(context:") {
+                sitesChecked += 1
+                // The stamp is written with the row's other columns, so a generous window is
+                // still a tight claim: it must be in the same construction block.
+                let window = lines[index..<min(index + 30, lines.count)].joined(separator: "\n")
+                if !window.contains("serverOrderKey") {
+                    offenders.append("\(url.lastPathComponent):\(index + 1)")
+                }
+            }
+        }
+
+        // Since messages B1 (2026-10-09) the app's own rows are written through `MessageStore`, whose
+        // `MessageRecord.orderKey` is not optional — the type carries this invariant there. The
+        // managed-object sites left are the store's own insert and the previews (the history
+        // import went through the store on 2026-10-10); the walk must still find them.
+        XCTAssertGreaterThanOrEqual(sitesChecked, 2, "found no row creation sites — the walk itself is broken")
+        XCTAssertTrue(
+            offenders.isEmpty,
+            "a Message row is created without an order key at: \(offenders.joined(separator: ", ")). "
+            + "A nil key sorts by a random UUID in every transcript fetch."
+        )
+    }
+
+    // MARK: - What it buys
+
+    /// The behaviour the random tie-break was corrupting: which row is the newest. Repeated,
+    /// because a coin flip passes once in two: the old code failed this roughly half of every run,
+    /// which is how `SystemNoticeRepeatTests` (removed with the notice) came to be a "known flake".
+    ///
+    /// Mutation: give both rows the same `serverOrderKey` — this reddens within a few iterations.
+    func testTheNewestRowIsDecidedByTheKeyAndNotByAUuid() throws {
+        for _ in 0..<50 {
+            let container = PersistenceController(inMemory: true).container
+            let context = container.viewContext
+
+            let other = User(context: context)
+            other.id = UUID().uuidString
+            other.username = "annie"
+            other.displayName = ""
+            let chat = Chat(context: context)
+            chat.id = UUID().uuidString
+            chat.otherUser = other
+
+            let notice = "The encrypted session is out of sync."
+            add(notice, from: "SYSTEM", at: Date(timeIntervalSince1970: 1_000), to: chat, in: context)
+            add("Привет", from: "annie", at: Date(timeIntervalSince1970: 2_000), to: chat, in: context)
+            // Saved, and checked: the store reads on its own context, so an unsaved fixture would
+            // read as an empty chat rather than fail.
+            try context.save()
+
+            let newest = try CoreDataMessageStore(container: container)
+                .messages(inChat: chat.id, before: nil, limit: 1).last
+            XCTAssertEqual(
+                newest?.fromUserId, "annie",
+                "the message is newer than the notice — reading a random row loses this"
+            )
+        }
+    }
+
+    private func add(
+        _ text: String, from: String, at timestamp: Date,
+        to chat: Chat, in context: NSManagedObjectContext
+    ) {
+        let m = Message(context: context)
+        m.id = UUID().uuidString
+        m.chat = chat
+        m.fromUserId = from
+        m.toUserId = "me"
+        m.timestamp = timestamp
+        m.serverOrderKey = ServerMessageOrder.local(timestamp: timestamp, messageId: m.id)
+        m.isSentByMe = false
+        m.deliveryStatus = .delivered
+        m.retryCount = 0
+        m.applyStoredEncryption(plaintext: text, contactId: "annie")
+    }
+}

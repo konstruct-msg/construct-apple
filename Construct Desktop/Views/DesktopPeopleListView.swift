@@ -12,15 +12,8 @@ struct DesktopPeopleListView: View {
     @Environment(\.managedObjectContext) private var viewContext
     @Environment(ChatsViewModel.self) private var chatsViewModel
 
-    @FetchRequest(
-        sortDescriptors: [
-            NSSortDescriptor(keyPath: \User.displayName, ascending: true),
-            NSSortDescriptor(keyPath: \User.username, ascending: true)
-        ],
-        predicate: NSPredicate(format: "isContact == YES"),
-        animation: .default
-    )
-    private var contacts: FetchedResults<User>
+    /// People marked as contacts, in the order shown (`ContactsLive.contacts`).
+    private var contacts: [ContactRecord] { ContactsLive.shared.contacts() }
 
     @State private var searchQuery = ""
     @FocusState private var searchFocused: Bool
@@ -44,8 +37,8 @@ struct DesktopPeopleListView: View {
             .ctBorderBottom()
     }
 
-    private var filteredContacts: [User] {
-        guard !searchQuery.isEmpty else { return Array(contacts) }
+    private var filteredContacts: [ContactRecord] {
+        guard !searchQuery.isEmpty else { return contacts }
         let q = searchQuery.lowercased()
         return contacts.filter { user in
             user.resolvedDisplayName.lowercased().contains(q)
@@ -62,7 +55,7 @@ struct DesktopPeopleListView: View {
             List {
                 ForEach(filteredContacts) { user in
                     Button {
-                        chatsViewModel.openOrCreateChat(with: user)
+                        chatsViewModel.openOrCreateChat(withContact: user.id)
                     } label: {
                         DesktopPeopleRow(user: user)
                     }
@@ -79,17 +72,17 @@ struct DesktopPeopleListView: View {
 
     private var emptyState: some View {
         VStack(spacing: CTLayout.sectionGap) {
-            Image(systemName: "person.2")
-                .font(.system(size: 30, weight: .light))
+            Image(systemName: "circle.grid.cross")
+                .font(CTFont.ui(30, weight: .light))
                 .foregroundStyle(Color.CT.textDim)
 
             Text(LocalizedStringKey("synapses_empty_title"))
-                .font(CTFont.bold(15))
+                .font(CTFont.ui(15, weight: .bold))
                 .foregroundStyle(Color.CT.text)
                 .multilineTextAlignment(.center)
 
             Text(LocalizedStringKey("synapses_empty_subtitle"))
-                .font(CTFont.regular(12))
+                .font(CTFont.secondary)
                 .foregroundStyle(Color.CT.textDim)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, CTLayout.sectionGap)
@@ -100,7 +93,7 @@ struct DesktopPeopleListView: View {
 }
 
 private struct DesktopPeopleRow: View {
-    @ObservedObject var user: User
+    let user: ContactRecord
 
     var body: some View {
         HStack(alignment: .center, spacing: CTLayout.chromeGap) {
@@ -109,13 +102,13 @@ private struct DesktopPeopleRow: View {
             VStack(alignment: .leading, spacing: 4) {
                 HStack(alignment: .firstTextBaseline, spacing: CTLayout.inlinePad) {
                     Text(user.resolvedDisplayName)
-                        .font(CTFont.bold(13))
+                        .font(CTFont.bodyEmphasis)
                         .foregroundStyle(Color.CT.text)
                         .lineLimit(1)
 
-                    if user.ktStatus == .keyChanged || user.ktStatus == .failed {
+                    if user.trustAlert != nil {
                         Image(systemName: "exclamationmark.shield.fill")
-                            .font(.system(size: 11, weight: .semibold))
+                            .font(CTFont.ui(11, weight: .semibold))
                             .foregroundStyle(Color.CT.danger)
                             .accessibilityLabel(Text(LocalizedStringKey("kt_warning")))
                     }
@@ -125,7 +118,7 @@ private struct DesktopPeopleRow: View {
 
                 if !user.username.isEmpty {
                     Text("@\(user.username)")
-                        .font(CTFont.regular(12))
+                        .font(CTFont.secondary)
                         .foregroundStyle(Color.CT.textDim)
                         .lineLimit(1)
                 }
@@ -139,15 +132,15 @@ private struct DesktopPeopleRow: View {
     private var avatarView: some View {
         let seed = user.id
         let initials = initials(for: user)
-        if let data = user.avatarData,
+        if let data = user.avatar,
            let platformImg = ImageHelper.imageFromData(data) {
-            CTHexAvatar(initials: initials, image: Image(platformImage: platformImg), size: .medium, colorSeed: seed)
+            CTHexAvatar(initials: initials, image: Image(platformImage: platformImg), size: CTAvatarSize.row, colorSeed: seed)
         } else {
-            CTHexAvatar(initials: initials, size: .medium, colorSeed: seed)
+            CTHexAvatar(initials: initials, size: CTAvatarSize.row, colorSeed: seed)
         }
     }
 
-    private func initials(for user: User) -> String {
+    private func initials(for user: ContactRecord) -> String {
         let parts = user.resolvedDisplayName.split(separator: " ")
         if parts.count >= 2 {
             return String(parts[0].prefix(1) + parts[1].prefix(1)).uppercased()
@@ -156,8 +149,11 @@ private struct DesktopPeopleRow: View {
     }
 }
 
+// DEBUG only: the previews seed `ContactsLive.useForPreview`, which a release build does not have.
+#if DEBUG
 #Preview {
     let container = PreviewHelpers.createPreviewContainer()
+    ContactsLive.useForPreview(container)
     let context = container.viewContext
     _ = PreviewHelpers.createSampleUser(context: context, id: "user1", username: "alice", displayName: "Alice")
     _ = PreviewHelpers.createSampleUser(context: context, id: "user2", username: "bob", displayName: "Bob")
@@ -169,3 +165,4 @@ private struct DesktopPeopleRow: View {
         .environment(chatsViewModel)
         .frame(width: 280, height: 600)
 }
+#endif

@@ -47,8 +47,10 @@ struct NewChatView: View {
                 }
             }
             .sheet(isPresented: $showingQRScanner) {
-                QRScannerView { contactURL in
-                    handleScannedContact(contactURL)
+                RecoveryGated {
+                    QRScannerView { contactURL in
+                        handleScannedContact(contactURL)
+                    }
                 }
             }
             .onAppear {
@@ -64,14 +66,14 @@ struct NewChatView: View {
         Log.info("NewChatView: Handling scanned URL: \(urlString)", category: "NewChatView")
 
         // A voucher scanned here is a voucher, not a malformed contact code.
-        if let message = VeilVoucherRedemption.messageIfVoucher(urlString) {
+        if let outcome = VeilVoucherRedemption.messageIfVoucher(urlString) {
             showingQRScanner = false
-            showErrorAfterDismiss(message)
+            showErrorAfterDismiss(outcome)
             return
         }
         guard let url = URL(string: urlString) else {
             Log.error("Invalid URL string: \(urlString)", category: "NewChatView")
-            showErrorAfterDismiss(NSLocalizedString("invalid_qr_code_construct", comment: "Error message for invalid QR code"))
+            showErrorAfterDismiss(.said(UserText("invalid_qr_code_construct")))
             return
         }
 
@@ -88,7 +90,7 @@ struct NewChatView: View {
             } catch {
                 Log.error("Failed to parse contact link: \(error.localizedDescription)", category: "NewChatView")
                 await MainActor.run {
-                    showErrorAfterDismiss(error.localizedDescription)
+                    showErrorAfterDismiss(AppError.from(error))
                     showingQRScanner = false
                 }
             }
@@ -100,16 +102,8 @@ struct NewChatView: View {
         let username = contactInfo.username
         Log.info("NewChatView: Adding contact userId=\(userId), username=\(username)", category: "NewChatView")
 
-        let publicUserInfo = PublicUserInfo(
-            id: userId,
-            username: username,
-            avatarUrl: nil,
-            bio: nil,
-            deviceId: contactInfo.deviceId
-        )
         if let chat = chatsViewModel.startChat(
-            with: publicUserInfo,
-            identityPublicKey: contactInfo.identityPublicKey
+            redeeming: contactInfo
         ) {
             Log.info("NewChatView: Chat created with @\(username), chat.id=\(chat.id)", category: "NewChatView")
             chatsViewModel.chatToOpen = chat.id
@@ -119,10 +113,10 @@ struct NewChatView: View {
         }
     }
 
-    private func showErrorAfterDismiss(_ message: String) {
+    private func showErrorAfterDismiss(_ error: AppError) {
         showingQRScanner = false
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
-            ErrorRouter.shared.report(.unknown(message))
+            ErrorRouter.shared.report(error)
         }
     }
 }

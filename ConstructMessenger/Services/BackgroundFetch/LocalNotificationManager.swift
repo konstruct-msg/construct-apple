@@ -89,17 +89,20 @@ class LocalNotificationManager: NSObject {
         ]
 
         let identifier = requestId.map { "cr-recv-\($0)" } ?? "cr-recv-\(UUID().uuidString)"
-        let request = UNNotificationRequest(
-            identifier: identifier,
-            content: content,
-            trigger: nil
-        )
-        notificationCenter.add(request) { error in
-            if let error = error {
-                Log.error("Failed to show contact-request notification: \(error)", category: "LocalNotifications")
-            } else {
-                Log.debug("Contact-request notification shown: \(identifier)", category: "LocalNotifications")
-            }
+        post(content, identifier: identifier, coveredByPushOf: "contact_request_received")
+    }
+
+    /// Takes back the "New message" push banners when the fetch they woke found nothing to read
+    /// (`PushBannerReplacement.bannersToWithdraw`).
+    func withdrawPushBannersIfNothingUnread(unreadChats: Int) {
+        notificationCenter.getDeliveredNotifications { [notificationCenter] delivered in
+            let ids = PushBannerReplacement.bannersToWithdraw(
+                among: delivered.map(PushBannerReplacement.Delivered.init),
+                unreadChats: unreadChats
+            )
+            guard !ids.isEmpty else { return }
+            notificationCenter.removeDeliveredNotifications(withIdentifiers: ids)
+            Log.info("Withdrew \(ids.count) push banner(s): the push brought nothing to read", category: "LocalNotifications")
         }
     }
 
@@ -122,17 +125,36 @@ class LocalNotificationManager: NSObject {
         // Use a stable per-chat identifier so back-to-back messages in the same
         // conversation collapse to a single banner instead of spamming the lock screen.
         let identifier = chatId.map { "msg-chat-\($0)" } ?? "msg-\(UUID().uuidString)"
-        let request = UNNotificationRequest(
-            identifier: identifier,
-            content: content,
-            trigger: nil
-        )
+        post(content, identifier: identifier, coveredByPushOf: "new_message")
+    }
 
-        notificationCenter.add(request) { error in
-            if let error = error {
-                Log.error("Failed to show notification: \(error)", category: "LocalNotifications")
-            } else {
-                Log.debug("Notification shown: \(identifier)", category: "LocalNotifications")
+    /// Posts `content`, unless the server's push banner for this message is already on screen.
+    ///
+    /// Since 2026-10-05 a message push is an alert ("Konstruct / New message", from the app's
+    /// own strings) that also carries `content-available`. iOS shows that banner the moment the
+    /// push lands; when it grants the wake, the fetch arrives here a fraction of a second later.
+    /// Replacing the banner (remove it, post ours silently) put two banners on screen in a row
+    /// for one message — the server's log and the device's agreed on 2026-10-05. So when a push
+    /// banner of the same kind was delivered moments ago, it stays and nothing is posted.
+    /// The cost: that banner opens the app, not the chat — a blind push names no conversation.
+    private func post(_ content: UNMutableNotificationContent, identifier: String, coveredByPushOf activity: String) {
+        notificationCenter.getDeliveredNotifications { [notificationCenter] delivered in
+            let covering = PushBannerReplacement.coveringPushBanners(
+                among: delivered.map(PushBannerReplacement.Delivered.init),
+                activity: activity,
+                now: Date()
+            )
+            if !covering.isEmpty {
+                Log.debug("Notification skipped: \(identifier) (push banner already shown)", category: "LocalNotifications")
+                return
+            }
+            let request = UNNotificationRequest(identifier: identifier, content: content, trigger: nil)
+            notificationCenter.add(request) { error in
+                if let error {
+                    Log.error("Failed to show notification: \(error)", category: "LocalNotifications")
+                } else {
+                    Log.debug("Notification shown: \(identifier)", category: "LocalNotifications")
+                }
             }
         }
     }
@@ -357,5 +379,59 @@ extension Notification.Name {
 private extension String {
     var localized: String {
         return NSLocalizedString(self, comment: "")
+    }
+}
+
+/// Which push banners already cover a banner of our own. Pure, so the window and the kind match
+/// are reachable from tests without a notification center.
+enum PushBannerReplacement {
+
+    /// How recent a push banner must be to count as this wake's. A wake runs within ~30 s of
+    /// its push; an older banner belongs to an earlier message, so ours is posted (with its
+    /// sound, since nothing else just made one).
+    static let window: TimeInterval = 60
+
+    struct Delivered: Equatable {
+        let identifier: String
+        let date: Date
+        let fromPush: Bool
+        /// `construct.type` from the push payload.
+        let activity: String?
+
+        init(identifier: String, date: Date, fromPush: Bool, activity: String?) {
+            self.identifier = identifier
+            self.date = date
+            self.fromPush = fromPush
+            self.activity = activity
+        }
+
+        init(_ notification: UNNotification) {
+            let construct = notification.request.content.userInfo["construct"] as? [AnyHashable: Any]
+            self.init(
+                identifier: notification.request.identifier,
+                date: notification.date,
+                fromPush: notification.request.trigger is UNPushNotificationTrigger,
+                activity: construct?["type"] as? String
+            )
+        }
+    }
+
+    /// The push banners to take back after a push-woken fetch: every "New message" push banner,
+    /// when nothing is unread. The server cannot tell a delivery receipt from a message — on
+    /// purpose, `decisions/sealed-content-type-inside-the-plaintext-frame` — so a receipt arrives
+    /// with the same banner, and opening it found nothing (TODO 123, 2026-10-06). With anything
+    /// unread none is taken back: a receipt that lands just after a real message must not
+    /// withdraw that message's banner, and a blind banner names no chat to match it by.
+    static func bannersToWithdraw(among delivered: [Delivered], unreadChats: Int) -> [String] {
+        guard unreadChats == 0 else { return [] }
+        return delivered
+            .filter { $0.fromPush && $0.activity == "new_message" }
+            .map(\.identifier)
+    }
+
+    static func coveringPushBanners(among delivered: [Delivered], activity: String, now: Date) -> [String] {
+        delivered
+            .filter { $0.fromPush && $0.activity == activity && now.timeIntervalSince($0.date) <= window }
+            .map(\.identifier)
     }
 }

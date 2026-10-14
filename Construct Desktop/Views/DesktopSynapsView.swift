@@ -22,15 +22,11 @@ struct DesktopSynapsView: View {
     @Environment(\.managedObjectContext) private var context
     @Environment(ChatsViewModel.self)    private var chatsViewModel
 
-    @FetchRequest(
-        sortDescriptors: [NSSortDescriptor(keyPath: \User.displayName, ascending: true)],
-        predicate: NSPredicate(format: "isContact == YES"),
-        animation: .default
-    )
-    private var contacts: FetchedResults<User>
+    /// People marked as contacts, in the order shown (`ContactsLive.contacts`).
+    private var contacts: [ContactRecord] { ContactsLive.shared.contacts() }
 
     @State private var searchText      = ""
-    @State private var pruneTarget:    User? = nil
+    @State private var pruneTarget:    ContactRecord? = nil
     @State private var showPruneAlert  = false
     @State private var canvasScale:    CGFloat = 1.0
     @State private var canvasOffset:   CGSize  = .zero
@@ -43,8 +39,8 @@ struct DesktopSynapsView: View {
 
     private static let contactRequestsRefreshInterval: TimeInterval = 8
 
-    private var filtered: [User] {
-        guard !searchText.isEmpty else { return Array(contacts) }
+    private var filtered: [ContactRecord] {
+        guard !searchText.isEmpty else { return contacts }
         let q = searchText.lowercased()
         return contacts.filter {
             $0.displayName.lowercased().contains(q) ||
@@ -73,13 +69,13 @@ struct DesktopSynapsView: View {
                             minScale: 0.20,
                             maxScale: 3.0
                         ) {
-                            DesktopHoneycombCloud(
+                            DesktopSynapsCloud(
                                 contacts:     filtered,
                                 canvasScale:  canvasScale,
                                 canvasOffset: canvasOffset,
                                 screenSize:   geo.size,
                                 onMessage: { user in
-                                    chatsViewModel.openOrCreateChat(with: user)
+                                    chatsViewModel.openOrCreateChat(withContact: user.id)
                                 },
                                 onRemove: { user in
                                     pruneTarget = user
@@ -90,12 +86,12 @@ struct DesktopSynapsView: View {
                     }
                 }
                 .onAppear {
-                    canvasScale = fitScale(contacts: Array(contacts), screenSize: geo.size)
+                    canvasScale = fitScale(contacts: contacts, screenSize: geo.size)
                 }
             }
         }
         .background(Color.CT.bg)
-        .navigationTitle(NSLocalizedString("people", comment: ""))
+        .navigationTitle(NSLocalizedString("synapses", comment: ""))
         .searchable(
             text: $searchText,
             placement: .toolbar,
@@ -114,14 +110,9 @@ struct DesktopSynapsView: View {
             Task {
                 let pendingIds = ContactRequestService.shared.consumePendingNavigationUserIds()
                 guard let userId = pendingIds.first, !userId.isEmpty else { return }
-                let req = NSFetchRequest<User>(entityName: "User")
-                req.predicate = NSPredicate(format: "id == %@", userId)
-                req.fetchLimit = 1
-                if let user = try? context.fetch(req).first {
-                    await MainActor.run {
-                        chatsViewModel.openOrCreateChat(with: user)
-                        onSwitchToChats?()
-                    }
+                await MainActor.run {
+                    chatsViewModel.openOrCreateChat(withContact: userId)
+                    onSwitchToChats?()
                 }
             }
         }
@@ -134,13 +125,14 @@ struct DesktopSynapsView: View {
                 ContactRequestSheet(
                     request: request,
                     onAccept: {
-                        let user = try await vm.accept(request: request, context: context)
-                        chatsViewModel.openOrCreateChat(with: user)
+                        let user = try await vm.accept(request: request)
+                        chatsViewModel.openOrCreateChat(withContact: user.id)
                         onSwitchToChats?()
                     },
                     onDeclineBlock: { try await vm.declineAndBlock(requestId: request.id) },
                     onSpamBlock: { try await vm.reportSpamAndBlock(requestId: request.id) }
                 )
+                .sheetNavigation(closes: false)
                 .frame(minWidth: 400, minHeight: 280)
             }
         }
@@ -150,10 +142,10 @@ struct DesktopSynapsView: View {
             }
         }
         .alert(
-            NSLocalizedString("synaps_prune_title", comment: ""),
+            NSLocalizedString("synapses_prune_title", comment: ""),
             isPresented: $showPruneAlert
         ) {
-            Button(NSLocalizedString("synaps_prune_action", comment: ""), role: .destructive) {
+            Button(NSLocalizedString("synapses_prune_action", comment: ""), role: .destructive) {
                 if let user = pruneTarget {
                     Task { await chatsViewModel.pruneContact(userId: user.id) }
                 }
@@ -162,7 +154,7 @@ struct DesktopSynapsView: View {
             Button(NSLocalizedString("cancel", comment: ""), role: .cancel) { pruneTarget = nil }
         } message: {
             if let name = pruneTarget?.displayName {
-                Text(String(format: NSLocalizedString("synaps_prune_message", comment: ""), name))
+                Text(String(format: NSLocalizedString("synapses_prune_message", comment: ""), name))
             }
         }
     }
@@ -190,18 +182,14 @@ struct DesktopSynapsView: View {
         Log.info("Refreshing contact requests (\(reason))", category: "DesktopSynapsView")
         await vm.load()
 
-        let pendingIds = ContactRequestService.shared.consumePendingNavigationUserIds()
-        let pendingUser: User? = pendingIds.first.flatMap { userId in
-            guard !userId.isEmpty else { return nil }
-            let req = NSFetchRequest<User>(entityName: "User")
-            req.predicate = NSPredicate(format: "id == %@", userId)
-            req.fetchLimit = 1
-            return try? context.fetch(req).first
-        }
+        let pendingId = ContactRequestService.shared.consumePendingNavigationUserIds().first { !$0.isEmpty }
 
-        let accepted = await vm.checkAcceptedRequests(context: context)
-        if let first = accepted.first ?? pendingUser {
-            chatsViewModel.openOrCreateChat(with: first)
+        let accepted = await vm.checkAcceptedRequests()
+        if let first = accepted.first {
+            chatsViewModel.openOrCreateChat(withContact: first.id)
+            onSwitchToChats?()
+        } else if let pendingId {
+            chatsViewModel.openOrCreateChat(withContact: pendingId)
             onSwitchToChats?()
         }
     }
@@ -220,21 +208,21 @@ struct DesktopSynapsView: View {
                         VStack(alignment: .leading, spacing: 2) {
                             if let name = request.displayName, !name.isEmpty {
                                 Text(name)
-                                    .font(CTFont.regular(13))
+                                    .font(CTFont.body)
                                     .foregroundStyle(Color.CT.text)
                             } else if let username = request.username, !username.isEmpty {
                                 Text("@\(username)")
-                                    .font(CTFont.regular(13))
+                                    .font(CTFont.body)
                                     .foregroundStyle(Color.CT.text)
                             } else {
                                 Text(DisplayNameGenerator.generate(from: request.fromUserId))
-                                    .font(CTFont.regular(13))
+                                    .font(CTFont.body)
                                     .foregroundStyle(Color.CT.textDim)
                             }
                         }
                         Spacer()
                         Image(systemName: "chevron.right")
-                            .font(.system(size: 12, weight: .semibold))
+                            .font(CTFont.ui(12, weight: .semibold))
                             .foregroundStyle(Color.CT.textDim)
                     }
                     .padding(.horizontal, 14)
@@ -252,11 +240,11 @@ struct DesktopSynapsView: View {
 
     private var emptyState: some View {
         VStack(spacing: 14) {
-            Text(LocalizedStringKey("synaps_empty_title"))
-                .font(CTFont.bold(14))
+            Text(LocalizedStringKey("synapses_empty_title"))
+                .font(CTFont.headline)
                 .foregroundStyle(Color.CT.text)
-            Text(LocalizedStringKey("synaps_empty_subtitle"))
-                .font(CTFont.regular(12))
+            Text(LocalizedStringKey("synapses_empty_subtitle"))
+                .font(CTFont.secondary)
                 .foregroundStyle(Color.CT.textDim)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 32)
@@ -265,10 +253,10 @@ struct DesktopSynapsView: View {
             } label: {
                 Label {
                     Text(LocalizedStringKey("new_contact"))
-                        .font(CTFont.medium(12))
+                        .font(CTFont.ui(12, weight: .medium))
                 } icon: {
                     Image(systemName: "person.crop.circle.badge.plus")
-                        .font(.system(size: 12, weight: .medium))
+                        .font(CTFont.ui(12, weight: .medium))
                 }
                 .foregroundStyle(Color.CT.accent)
                 .padding(.horizontal, 12)
@@ -282,79 +270,51 @@ struct DesktopSynapsView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    private func fitScale(contacts: [User], screenSize: CGSize) -> CGFloat {
+    private func fitScale(contacts: [ContactRecord], screenSize: CGSize) -> CGFloat {
         guard !contacts.isEmpty else { return 1.0 }
-        return HoneycombLayoutEngine(contacts: contacts, canvasSize: screenSize).initialScale
+        let metrics = ContactMetrics.byContact(contacts.map(\.id))
+        return SynapsCloudLayout(contacts: contacts, metrics: metrics).fitScale(in: screenSize)
     }
 }
 
-// MARK: - DesktopHoneycombCloud
+// MARK: - DesktopSynapsCloud
 
-private struct DesktopHoneycombCloud: View {
-    let contacts:     [User]
+private struct DesktopSynapsCloud: View {
+    @Environment(\.managedObjectContext) private var context
+    let contacts:     [ContactRecord]
     let canvasScale:  CGFloat
     let canvasOffset: CGSize
     let screenSize:   CGSize
-    var onMessage:    (User) -> Void
-    var onRemove:     (User) -> Void
-
-    private var rawCounts: [String: Int] {
-        var result: [String: Int] = [:]
-        for user in contacts {
-            let chats = (user.chats?.allObjects as? [Chat]) ?? []
-            result[user.id] = chats.map { $0.messages?.count ?? 0 }.max() ?? 0
-        }
-        return result
-    }
+    var onMessage:    (ContactRecord) -> Void
+    var onRemove:     (ContactRecord) -> Void
 
     private var metricsMap: [String: ContactMetrics] {
-        let counts = rawCounts
-        let maxCount = counts.values.max() ?? 0
-        let now = Date()
-        var map: [String: ContactMetrics] = [:]
-        for user in contacts {
-            let userChats = (user.chats?.allObjects as? [Chat]) ?? []
-            let count = counts[user.id] ?? 0
-            let score: CGFloat = maxCount > 0 ? CGFloat(count) / CGFloat(maxCount) : 0
-            let lastMsg = userChats.compactMap { $0.lastMessageTime }.max()
-            let unread = userChats.reduce(0) { $0 + Int($1.unreadCount) }
-            let recency: ContactMetrics.Recency
-            if let t = lastMsg {
-                let age = now.timeIntervalSince(t)
-                recency = age < 86_400 ? .fresh : age < 604_800 ? .recent : .none
-            } else {
-                recency = .none
-            }
-            map[user.id] = ContactMetrics(
-                frequencyScore: score,
-                recency: recency,
-                unreadCount: unread
-            )
-        }
-        return map
+        ContactMetrics.byContact(contacts.map(\.id))
     }
 
     var body: some View {
         GeometryReader { geo in
-            let engine  = HoneycombLayoutEngine(contacts: contacts, canvasSize: geo.size)
             let metrics = metricsMap
+            let layout  = SynapsCloudLayout(contacts: contacts, metrics: metrics)
+            let centre  = CGPoint(x: geo.size.width / 2, y: geo.size.height / 2)
 
             ZStack(alignment: .topLeading) {
                 Color.clear.frame(width: geo.size.width, height: geo.size.height)
 
-                ForEach(engine.items) { item in
+                ForEach(layout.items) { item in
+                    let position = CGPoint(x: centre.x + item.position.x, y: centre.y + item.position.y)
                     DesktopContactNode(
                         user:         item.user,
-                        cellSize:     engine.cellSize,
+                        pitch:        SynapsCloudLayout.pitch,
                         metrics:      metrics[item.user.id] ?? .zero,
-                        canvasPos:    item.position,
+                        canvasPos:    position,
                         canvasScale:  canvasScale,
                         canvasOffset: canvasOffset,
                         screenSize:   screenSize,
                         onMessage:    { onMessage(item.user) },
                         onRemove:     { onRemove(item.user) }
                     )
-                    .position(item.position)
+                    .position(position)
                 }
             }
         }
@@ -364,8 +324,9 @@ private struct DesktopHoneycombCloud: View {
 // MARK: - DesktopContactNode
 
 private struct DesktopContactNode: View {
-    @ObservedObject var user: User
-    let cellSize:     CGFloat
+    let user: ContactRecord
+    /// Centre-to-centre distance of neighbours (`SynapsCloudLayout.pitch`).
+    let pitch:        CGFloat
     let metrics:      ContactMetrics
     let canvasPos:    CGPoint
     let canvasScale:  CGFloat
@@ -377,16 +338,15 @@ private struct DesktopContactNode: View {
     @State private var showPopover = false
     @State private var isHovered   = false
 
-    private var cellWidth: CGFloat { cellSize / 0.74 }
 
     /// Slightly smaller circles so a name label fits under each node (mirrors iOS).
     private var effectiveSize: CGFloat {
         let f = 0.50 + 0.16 * metrics.frequencyScore  // [0.50 … 0.66]
-        return cellWidth * f
+        return pitch * f
     }
 
     private var labelWidth: CGFloat {
-        min(cellWidth * 0.92, max(effectiveSize * 1.35, 56))
+        min(pitch * 0.92, max(effectiveSize * 1.35, 56))
     }
 
     var body: some View {
@@ -399,7 +359,7 @@ private struct DesktopContactNode: View {
                 }
 
                 ZStack {
-                    if let data = user.avatarData, let img = PlatformImage(data: data) {
+                    if let data = user.avatar, let img = PlatformImage(data: data) {
                         Image(platformImage: img)
                             .resizable()
                             .scaledToFill()
@@ -421,7 +381,7 @@ private struct DesktopContactNode: View {
                     let n = metrics.unreadCount
                     let label = n > 99 ? "99+" : "\(n)"
                     Text(label)
-                        .font(CTFont.bold(n > 9 ? 8 : 9))
+                        .font(CTFont.ui(n > 9 ? 8 : 9, weight: .bold))
                         .foregroundStyle(Color.CT.bg)
                         .padding(.horizontal, n > 9 ? 4 : 0)
                         .frame(minWidth: 15, minHeight: 15)
@@ -432,15 +392,17 @@ private struct DesktopContactNode: View {
             .frame(width: effectiveSize * 1.2, height: effectiveSize * 1.2)
             .opacity(proximityOpacity)
 
+            // One line: the Desktop names every contact (no lens), and the rows are spaced for
+            // the iOS cloud, which names only the ones near the middle.
             Text(user.resolvedDisplayName)
-                .font(CTFont.medium(10))
+                .font(CTFont.ui(10, weight: .medium))
                 .foregroundStyle(user.isBlocked ? Color.CT.textDim : Color.CT.text)
                 .lineLimit(1)
                 .minimumScaleFactor(0.75)
                 .truncationMode(.tail)
                 .multilineTextAlignment(.center)
                 .frame(width: labelWidth)
-                .opacity(min(1.0, proximityOpacity + 0.35))
+            .opacity(min(1.0, proximityOpacity + 0.35))
         }
         .scaleEffect(proximityScale)
         .animation(.easeInOut(duration: 0.12), value: isHovered)
@@ -470,7 +432,7 @@ private struct DesktopContactNode: View {
             Button(role: .destructive) {
                 onRemove()
             } label: {
-                Text(NSLocalizedString("synaps_prune_action", comment: ""))
+                Text(NSLocalizedString("synapses_prune_action", comment: ""))
             }
         }
         // Profile popover anchored to the node
@@ -486,7 +448,6 @@ private struct DesktopContactNode: View {
                     onRemove()
                 }
             )
-            .environment(\.managedObjectContext, user.managedObjectContext ?? NSManagedObjectContext(concurrencyType: .mainQueueConcurrencyType))
         }
     }
 
@@ -534,7 +495,7 @@ private struct DesktopContactNode: View {
 /// Actions: message → opens chat in detail column; remove → prune with confirmation.
 private struct DesktopNodePopover: View {
     @Environment(\.dismiss) private var dismiss
-    @ObservedObject var user: User
+    let user: ContactRecord
     var onMessage: () -> Void
     var onRemove:  () -> Void
 
@@ -546,11 +507,11 @@ private struct DesktopNodePopover: View {
                     .padding(.top, 16)
 
                 Text(user.displayName)
-                    .font(CTFont.bold(13))
+                    .font(CTFont.bodyEmphasis)
                     .foregroundStyle(Color.CT.text)
 
                 Text("@\(user.username)")
-                    .font(CTFont.regular(11))
+                    .font(CTFont.caption)
                     .foregroundStyle(Color.CT.textDim)
                     .padding(.bottom, 4)
             }
@@ -562,7 +523,8 @@ private struct DesktopNodePopover: View {
             // Actions
             VStack(spacing: 0) {
                 popoverButton(
-                    label: "[\(NSLocalizedString("message", comment: "").uppercased()) →]",
+                    label: NSLocalizedString("message", comment: ""),
+                    symbol: "bubble.left.fill",
                     color: Color.CT.accent
                 ) {
                     onMessage()
@@ -572,7 +534,8 @@ private struct DesktopNodePopover: View {
                     .padding(.horizontal, 12)
 
                 popoverButton(
-                    label: "[✕ \(NSLocalizedString("synaps_prune_action", comment: "").uppercased())]",
+                    label: NSLocalizedString("synapses_prune_action", comment: ""),
+                    symbol: "xmark.circle",
                     color: Color.CT.danger
                 ) {
                     onRemove()
@@ -591,7 +554,7 @@ private struct DesktopNodePopover: View {
     private var avatarView: some View {
         let size: CGFloat = 52
         ZStack {
-            if let data = user.avatarData, let img = PlatformImage(data: data) {
+            if let data = user.avatar, let img = PlatformImage(data: data) {
                 Image(platformImage: img)
                     .resizable()
                     .scaledToFill()
@@ -614,10 +577,10 @@ private struct DesktopNodePopover: View {
         )
     }
 
-    private func popoverButton(label: String, color: Color, action: @escaping () -> Void) -> some View {
+    private func popoverButton(label: String, symbol: String, color: Color, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Text(label)
-                .font(CTFont.regular(12))
+            Label(label, systemImage: symbol)
+                .font(CTFont.ui(12, weight: .medium, relativeTo: .caption))
                 .foregroundStyle(color)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 16)

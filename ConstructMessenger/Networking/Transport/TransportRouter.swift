@@ -83,25 +83,18 @@ actor TransportRouter {
         let now = Date()
         let modeForEvent = resolvedMode(for: event)
         currentMode = modeForEvent
-        let outcome = TransportReducer.reduce(
+        let oldState = state
+        let outcome = TransportReducer.route(
             state: state,
             event: event,
-            config: effectiveConfig(for: modeForEvent),
+            mode: modeForEvent,
+            config: config,
             now: now
         )
-        let oldState = state
-        var nextState = outcome.state
-        var effects = outcome.effects
-
-        // Auto mode: direct-path success while VEIL is active means VEIL was a false
-        // positive (typically H3-only failures on an otherwise healthy network).
-        if case .auto = modeForEvent,
-           case .veilActive = oldState,
-           case .rpcSucceeded(let via, _) = event,
-           !via.isVEIL {
-            nextState = .direct(consecutiveFails: 0)
-            if !effects.contains(.requestProxyStop) { effects.append(.requestProxyStop) }
-            if !effects.contains(.setVeilPort(nil)) { effects.append(.setVeilPort(nil)) }
+        let nextState = outcome.state
+        let effects = outcome.effects
+        if case .auto = modeForEvent, case .veilActive = oldState, nextState == .direct(consecutiveFails: 0),
+           case .rpcSucceeded(let via, _) = event, !via.isVEIL {
             Log.info("Transport: auto de-escalation — direct path confirmed, stopping VEIL", category: "Transport")
         }
 
@@ -131,6 +124,29 @@ actor TransportRouter {
         if effects.contains(.requestProxyStart) {
             beginProxyStart()
         }
+    }
+
+    /// Replace a VEIL listener that iOS reclaimed while the process was suspended,
+    /// and wait until the new one is bound (or the probe has failed).
+    ///
+    /// No-op unless the route is already VEIL. Direct stays direct: the wake
+    /// must not escalate a phone that is talking to the server in the clear.
+    /// The wait is outside `send` — awaiting `veil_start` inside `send` freezes
+    /// the actor for the whole probe.
+    func restartVeilForBackgroundWake() async {
+        switch state {
+        case .veilActive:
+            // A listener that is actually accepting is left alone. Rotating a
+            // healthy one on every background fetch is the churn this wake is
+            // not allowed to become.
+            if await proxyEffector.listenerIsAlive() { return }
+            await send(.backgroundWake)
+        case .veilProbing:
+            break
+        case .offline, .direct, .veilCooldown:
+            return
+        }
+        await proxyStartTask?.value
     }
 
     /// Kick the FSM into action after init. Should be called once at app startup,
@@ -264,12 +280,6 @@ actor TransportRouter {
         default:
             return currentMode
         }
-    }
-
-    private func effectiveConfig(for mode: VeilMode) -> TransportConfig {
-        var effective = config
-        effective.allowDirectToVeilEscalation = mode != .off
-        return effective
     }
 }
 

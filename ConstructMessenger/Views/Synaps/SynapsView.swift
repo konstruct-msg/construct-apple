@@ -19,29 +19,25 @@ import UIKit
 
 struct SynapsView: View {
 
-    /// Hosts a scan-QR action in the nav bar. The iPad regular shell already exposes
-    /// a global QR scan in its rail, so it passes `false` to avoid a duplicate entry point.
-    var showsScanAction: Bool = true
-
     @Environment(\.managedObjectContext) private var context
     @Environment(ChatsViewModel.self) private var chatsViewModel
 
-    @FetchRequest(
-        sortDescriptors: [NSSortDescriptor(keyPath: \User.displayName, ascending: true)],
-        predicate: NSPredicate(format: "isContact == YES"),
-        animation: .default
-    )
-    private var contacts: FetchedResults<User>
+    /// People marked as contacts, in the order shown (`ContactsLive.contacts`).
+    private var contacts: [ContactRecord] { ContactsLive.shared.contacts() }
 
     @State private var searchText      = ""
     @FocusState private var isSearchFocused: Bool
-    @State private var selectedContact: User? = nil
-    @State private var pruneTarget:     User? = nil
+    @State private var selectedContact: ContactRecord? = nil
+    @State private var pruneTarget:     ContactRecord? = nil
     @State private var showPruneConfirm = false
-    // Shared canvas transform — owned here so HoneycombCloud can read them for
-    // the proximity effect while ZoomableCloud drives them via gestures.
+    // Shared canvas transform — owned here so SynapsCloud can read them for
+    // the lens while ZoomableCloud drives them via gestures.
     @State private var canvasScale:  CGFloat  = 1.0   // recalculated on appear
     @State private var canvasOffset: CGSize   = .zero
+    /// How far inside the visible area the lens ends: about the radius of a circle at the rim.
+    private static let lensInset: CGFloat = 14
+    /// Height of what overlays the cloud's top edge (remote result, pending requests).
+    @State private var topOverlayHeight: CGFloat = 0
 
     // MARK: - Remote search state
     enum RemoteSearchState {
@@ -70,23 +66,33 @@ struct SynapsView: View {
     /// from rapid tab re-entries (native TabView re-runs `.task` on every appear).
     private static let contactRequestsRefreshInterval: TimeInterval = 8
 
-    private var filtered: [User] {
+    private var filtered: [ContactRecord] {
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !query.isEmpty else { return Array(contacts) }
-        return contacts.filter { userMatchesQuery($0, query: query) }
+        guard !query.isEmpty else { return contacts }
+        return contacts.filter { $0.matches(query: query) }
     }
 
     var body: some View {
         let filteredContacts = filtered
         NavigationStack {
-            // Content is laid out in the safe area *below* the top chrome (nav + search)
-            // via safeAreaInset. Do not overlay chrome without reserving that space —
-            // remote-search results and the honeycomb were previously drawn under the
-            // search field. Extra bottom padding for the old floating CTTabBar is gone:
-            // native TabView already applies tab-bar safe area; the extra 72pt made the
-            // visible cloud end far above the bar.
-            ZStack {
+            // The cloud runs under the bars, as every other screen's content does; until
+            // 2026-10-08 it was cut to the safe area and ended at the search field's lower edge.
+            // What sits over its top edge — a remote result, pending requests — is measured so
+            // the cloud centres and fits in the part that is actually visible.
+            ZStack(alignment: .top) {
                 CTMatrixBackground().ignoresSafeArea()
+
+                if contacts.isEmpty {
+                    // While searching, the remote card above is the primary UI; keep the
+                    // “no synapses yet” empty state for idle only.
+                    if searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        emptyState
+                    }
+                } else {
+                    GeometryReader { geo in
+                        cloud(contacts: filteredContacts, in: geo)
+                    }
+                }
 
                 VStack(spacing: 0) {
                     if !searchText.isEmpty, filteredContacts.isEmpty {
@@ -95,61 +101,26 @@ struct SynapsView: View {
                     if let vm = contactRequestsVM, !vm.incomingRequests.isEmpty, searchText.isEmpty {
                         requestsSection(vm: vm)
                     }
-                    GeometryReader { geo in
-                        Group {
-                            if contacts.isEmpty {
-                                // While searching, the remote card above is the primary UI;
-                                // keep the “no synapses yet” empty state for idle only.
-                                if searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                                    emptyState
-                                } else {
-                                    Color.clear
-                                }
-                            } else {
-                                ZoomableCloud(
-                                    scale:    $canvasScale,
-                                    offset:   $canvasOffset,
-                                    minScale: 0.20,
-                                    maxScale: 3.0
-                                ) {
-                                    HoneycombCloud(
-                                        contacts:     filteredContacts,
-                                        metricsByUser: contactMetricsByUser,
-                                        selected:     $selectedContact,
-                                        canvasScale:  canvasScale,
-                                        canvasOffset: canvasOffset,
-                                        screenSize:   geo.size
-                                    )
-                                }
-                            }
-                        }
-                        .frame(width: geo.size.width, height: geo.size.height)
-                        .contentShape(Rectangle())
-                        .onTapGesture {
-                            // No ScrollView here — tap empty canvas / empty state to drop keyboard.
-                            dismissSearchKeyboard()
-                        }
-                        .onAppear {
-                            // Fit once per appear; do not re-fit on keyboard-driven size
-                            // changes — that would yank a mid-gesture pan/zoom.
-                            canvasScale = fitScale(contacts: Array(contacts), screenSize: geo.size)
-                        }
-                    }
                 }
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { topOverlayHeight = $0 }
             }
             .ctBackground()
-            .safeAreaInset(edge: .top, spacing: 0) {
-                VStack(spacing: 0) {
-                    synapsNavBar
-                    synapsSearchBar
-                        .padding(.horizontal, 12)
-                        .padding(.top, 4)
-                        .padding(.bottom, 8)
+            .navigationTitle(NSLocalizedString("synapses", comment: ""))
+            .inlineNavTitle()
+            .connectionSubtitle()
+            .searchable(text: $searchText, prompt: Text(LocalizedStringKey("search_prompt")))
+            .searchFocused($isSearchFocused)
+            .onSubmit(of: .search) { dismissSearchKeyboard() }
+            #if os(iOS)
+            .toolbar {
+                ToolbarItem(placement: .primaryAction) {
+                    Button { showingQRScanner = true } label: {
+                        Label(NSLocalizedString("scan_qr_code", comment: ""), systemImage: "qrcode.viewfinder")
+                    }
+                    .barItem()
                 }
-                // Solid enough that result rows never read through the chrome; matrix
-                // still shows at the sides via the search capsule’s material.
-                .background(Color.CT.bg.opacity(0.94))
             }
+            #endif
             #if os(iOS)
             .toolbar {
                 ToolbarItemGroup(placement: .keyboard) {
@@ -182,7 +153,7 @@ struct SynapsView: View {
                     guard !Task.isCancelled else { return }
                     let query = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
                     guard !query.isEmpty else { return }
-                    let hasLocalMatches = contacts.contains { userMatchesQuery($0, query: query) }
+                    let hasLocalMatches = contacts.contains { $0.matches(query: query) }
                     await performRemoteSearch(username: query, localMatchesExist: hasLocalMatches)
                 }
             }
@@ -212,12 +183,7 @@ struct SynapsView: View {
                 Task {
                     let pendingIds = ContactRequestService.shared.consumePendingNavigationUserIds()
                     guard let userId = pendingIds.first, !userId.isEmpty else { return }
-                    let req = NSFetchRequest<User>(entityName: "User")
-                    req.predicate = NSPredicate(format: "id == %@", userId)
-                    req.fetchLimit = 1
-                    if let user = try? context.fetch(req).first {
-                        await MainActor.run { chatsViewModel.openOrCreateChat(with: user) }
-                    }
+                    await MainActor.run { chatsViewModel.openOrCreateChat(withContact: userId) }
                 }
             }
             .onReceive(NotificationCenter.default.publisher(for: .contactRequestReceived)) { _ in
@@ -226,22 +192,20 @@ struct SynapsView: View {
                 guard let vm = contactRequestsVM else { return }
                 Task { await refreshContactRequests(vm: vm, reason: "push_received") }
             }
-            #if os(iOS)
-            .hideSystemNavBar()
-            #endif
             .sheet(isPresented: $showingQRScanner) {
-                QRScannerView { contactURL in handleScannedQR(contactURL) }
+                RecoveryGated { QRScannerView { contactURL in handleScannedQR(contactURL) } }
             }
             .sheet(item: $selectedContact) { user in
                 UserProfileView(
-                    user: user,
+                    userId: user.id,
                     showMessageButton: true,
-                    onOpenChat: { chatsViewModel.openOrCreateChat(with: user) },
+                    onOpenChat: { chatsViewModel.openOrCreateChat(withContact: user.id) },
                     onPrune: {
                         pruneTarget = user
                         showPruneConfirm = true
                     }
                 )
+                .sheetNavigation()
                 .environment(\.managedObjectContext, context)
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
@@ -251,12 +215,13 @@ struct SynapsView: View {
                     ContactRequestSheet(
                         request: request,
                         onAccept: {
-                            let user = try await vm.accept(request: request, context: context)
-                            chatsViewModel.openOrCreateChat(with: user)
+                            let user = try await vm.accept(request: request)
+                            chatsViewModel.openOrCreateChat(withContact: user.id)
                         },
                         onDeclineBlock: { try await vm.declineAndBlock(requestId: request.id) },
                         onSpamBlock: { try await vm.reportSpamAndBlock(requestId: request.id) }
                     )
+                    .sheetNavigation(closes: false)
                     .presentationDetents([.medium])
                     .presentationDragIndicator(.visible)
                 }
@@ -281,52 +246,62 @@ struct SynapsView: View {
         }
     }
 
-    // MARK: - Initial scale
+    // MARK: - Cloud
 
-    /// Compute a zoom level that fits all contacts with ~12% breathing room.
-    private func fitScale(contacts: [User], screenSize: CGSize) -> CGFloat {
-        guard !contacts.isEmpty else { return 1.0 }
-        let engine = HoneycombLayoutEngine(contacts: contacts, canvasSize: screenSize)
-        return engine.initialScale
+    /// The cloud on a canvas the size of the whole screen. `geo` is the safe area; the canvas
+    /// extends past it by its insets, and the visible part — between the search field (and
+    /// whatever overlays the top) and the tab bar — is where the cloud centres and fits.
+    private func cloud(contacts: [ContactRecord], in geo: GeometryProxy) -> some View {
+        let insets = geo.safeAreaInsets
+        let canvas = CGSize(
+            width: geo.size.width + insets.leading + insets.trailing,
+            height: geo.size.height + insets.top + insets.bottom
+        )
+        let visible = CGRect(
+            x: insets.leading,
+            y: insets.top + topOverlayHeight,
+            width: geo.size.width,
+            height: Swift.max(0, geo.size.height - topOverlayHeight)
+        )
+        let focus = CGPoint(x: visible.midX, y: visible.midY)
+        let layout = SynapsCloudLayout(contacts: contacts, metrics: contactMetricsByUser)
+        return ZoomableCloud(
+            scale:    $canvasScale,
+            offset:   $canvasOffset,
+            anchor:   UnitPoint(x: focus.x / canvas.width, y: focus.y / canvas.height),
+            minScale: 0.20,
+            maxScale: 3.0
+        ) {
+            SynapsCloud(
+                layout:       layout,
+                metricsByUser: contactMetricsByUser,
+                selected:     $selectedContact,
+                canvasScale:  canvasScale,
+                canvasOffset: canvasOffset,
+                focus:        focus,
+                // The oval stops a rim circle's radius short of the visible edges.
+                lens:         SynapsLens(radii: CGSize(
+                    width: Swift.max(0, visible.width / 2 - Self.lensInset),
+                    height: Swift.max(0, visible.height / 2 - Self.lensInset)
+                ))
+            )
+        }
+        .frame(width: canvas.width, height: canvas.height)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            // No ScrollView here — tap empty canvas to drop keyboard.
+            dismissSearchKeyboard()
+        }
+        .offset(x: -insets.leading, y: -insets.top)
+        .onAppear {
+            // The lens keeps every contact inside the visible area at 1:1, so the cloud opens
+            // there rather than fitted (which, under the lens, shrank everyone twice).
+            canvasScale = 1
+        }
     }
 
     private func rebuildContactMetrics() {
-        let users = Array(contacts)
-        guard !users.isEmpty else {
-            contactMetricsByUser = [:]
-            return
-        }
-
-        var drafts: [(id: String, count: Int, lastMessage: Date?, unread: Int)] = []
-        var maxCount = 0
-
-        for user in users {
-            let userChats = (user.chats?.allObjects as? [Chat]) ?? []
-            let count = userChats.map { $0.messages?.count ?? 0 }.max() ?? 0
-            maxCount = max(maxCount, count)
-            let lastMessage = userChats.compactMap { $0.lastMessageTime }.max()
-            let unread = userChats.reduce(0) { $0 + Int($1.unreadCount) }
-            drafts.append((id: user.id, count: count, lastMessage: lastMessage, unread: unread))
-        }
-
-        let now = Date()
-        var nextMap: [String: ContactMetrics] = [:]
-        for draft in drafts {
-            let score: CGFloat = maxCount > 0 ? CGFloat(draft.count) / CGFloat(maxCount) : 0
-            let recency: ContactMetrics.Recency
-            if let t = draft.lastMessage {
-                let age = now.timeIntervalSince(t)
-                recency = age < 86_400 ? .fresh : age < 604_800 ? .recent : .none
-            } else {
-                recency = .none
-            }
-            nextMap[draft.id] = ContactMetrics(
-                frequencyScore: score,
-                recency: recency,
-                unreadCount: draft.unread
-            )
-        }
-        contactMetricsByUser = nextMap
+        contactMetricsByUser = ContactMetrics.byContact(contacts.map(\.id))
     }
 
     private func notificationContainsSynapsesMetricChanges(_ note: Notification) -> Bool {
@@ -365,50 +340,14 @@ struct SynapsView: View {
         Log.info("Refreshing contact requests (\(reason))", category: "SynapsView")
         await vm.load()
 
-        let pendingIds = ContactRequestService.shared.consumePendingNavigationUserIds()
-        let pendingUser: User? = pendingIds.first.flatMap { userId in
-            guard !userId.isEmpty else { return nil }
-            let req = NSFetchRequest<User>(entityName: "User")
-            req.predicate = NSPredicate(format: "id == %@", userId)
-            req.fetchLimit = 1
-            return try? context.fetch(req).first
+        let pendingId = ContactRequestService.shared.consumePendingNavigationUserIds().first { !$0.isEmpty }
+
+        let accepted = await vm.checkAcceptedRequests()
+        if let first = accepted.first {
+            chatsViewModel.openOrCreateChat(withContact: first.id)
+        } else if let pendingId {
+            chatsViewModel.openOrCreateChat(withContact: pendingId)
         }
-
-        let accepted = await vm.checkAcceptedRequests(context: context)
-        if let first = accepted.first ?? pendingUser {
-            chatsViewModel.openOrCreateChat(with: first)
-        }
-    }
-
-    // MARK: - Nav Bar
-
-    private var synapsNavBar: some View {
-        HStack(spacing: 10) {
-            Text(NSLocalizedString("synapses", comment: "").uppercased())
-                .font(CTFont.bold(14))
-                .foregroundColor(Color.CT.text)
-                .tracking(4)
-            Spacer()
-            #if os(iOS)
-            if showsScanAction {
-                Button { showingQRScanner = true } label: {
-                    Image(systemName: "qrcode.viewfinder")
-                        .font(.system(size: CTLayout.navIconSize, weight: .medium))
-                        .foregroundColor(Color.CT.accent)
-                }
-            }
-            #endif
-        }
-        .padding(.horizontal, CTLayout.edgePad)
-        .frame(height: CTLayout.navBarHeight)
-        .ctBorderBottom()
-    }
-
-    // MARK: - Search Bar
-
-    private var synapsSearchBar: some View {
-        CTSearchBar(text: $searchText, focused: $isSearchFocused)
-            .onSubmit { dismissSearchKeyboard() }
     }
 
     private func dismissSearchKeyboard() {
@@ -428,29 +367,20 @@ struct SynapsView: View {
 
     // MARK: - Empty state
 
+    // The QR scan (nav bar / iPad rail) and the search bar above are the real entry points; the
+    // description already names both. No duplicate action buttons here.
     private var emptyState: some View {
-        VStack(spacing: CTLayout.sectionGap) {
-            Image(systemName: "circle.grid.cross")
-                .font(.system(size: 32, weight: .light))
-                .foregroundStyle(Color.CT.textDim)
-                .padding(.bottom, 4)
-
-            Text(LocalizedStringKey("synapses_empty_title"))
-                .font(CTFont.bold(16))
-                .foregroundStyle(Color.CT.text)
-                .multilineTextAlignment(.center)
-
-            // The QR scan (nav bar / iPad rail) and the search bar above are the
-            // real entry points; the subtitle already names both. No duplicate
-            // action buttons here.
+        ContentUnavailableView {
+            Label {
+                Text(LocalizedStringKey("synapses_empty_title"))
+                    .font(CTFont.headline)
+            } icon: {
+                Image(systemName: "circle.grid.cross")
+            }
+        } description: {
             Text(LocalizedStringKey("synapses_empty_subtitle"))
-                .font(CTFont.regular(13))
-                .foregroundStyle(Color.CT.textDim)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, CTLayout.sectionGap)
+                .font(CTFont.body)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding(.horizontal, CTLayout.edgePad)
     }
 
     // MARK: - Remote Search Card
@@ -460,7 +390,7 @@ struct SynapsView: View {
         VStack(spacing: 0) {
             HStack {
                 Text(LocalizedStringKey("synapses_remote_result_header"))
-                    .font(CTFont.bold(10))
+                    .font(CTFont.ui(10, weight: .bold))
                     .foregroundStyle(Color.CT.accent)
                     .tracking(2)
                 Spacer()
@@ -478,7 +408,7 @@ struct SynapsView: View {
             case .searching:
                 HStack {
                     Text(LocalizedStringKey("synapses_searching"))
-                        .font(CTFont.regular(13))
+                        .font(CTFont.body)
                         .foregroundStyle(Color.CT.textDim)
                     Spacer()
                     ProgressView().tint(Color.CT.accent).scaleEffect(0.7)
@@ -493,27 +423,27 @@ struct SynapsView: View {
 
                 HStack(spacing: 12) {
                     Image(systemName: "person.crop.circle")
-                        .font(.system(size: 28, weight: .regular))
+                        .font(CTIcon.font(CTIcon.overlay, weight: .regular))
                         .foregroundStyle(Color.CT.accent)
                         .frame(width: 32, height: 32)
 
                     VStack(alignment: .leading, spacing: 2) {
                         if profile.hasDisplayName {
                             Text(profile.displayName)
-                                .font(CTFont.bold(14))
+                                .font(CTFont.headline)
                                 .foregroundStyle(Color.CT.text)
                         }
                         if profile.hasUsername {
                             Text("@\(profile.username)")
-                                .font(CTFont.regular(12))
+                                .font(CTFont.secondary)
                                 .foregroundStyle(Color.CT.textDim)
                         } else if !fallbackQuery.isEmpty {
                             Text("@\(fallbackQuery)")
-                                .font(CTFont.regular(12))
+                                .font(CTFont.secondary)
                                 .foregroundStyle(Color.CT.text)
                         } else {
                             Text(DisplayNameGenerator.generate(from: profile.userID))
-                                .font(CTFont.regular(13))
+                                .font(CTFont.body)
                                 .foregroundStyle(Color.CT.text)
                         }
                     }
@@ -523,9 +453,9 @@ struct SynapsView: View {
                     if alreadySent {
                         HStack(spacing: 5) {
                             Image(systemName: "checkmark.circle.fill")
-                                .font(.system(size: 14, weight: .semibold))
+                                .font(CTIcon.font(CTIcon.row, weight: .semibold))
                             Text(NSLocalizedString("contact_request_sent", comment: ""))
-                                .font(CTFont.regular(12))
+                                .font(CTFont.secondary)
                         }
                         .foregroundStyle(Color.CT.textDim)
                     } else if isSending {
@@ -539,9 +469,9 @@ struct SynapsView: View {
                         } label: {
                             HStack(spacing: 5) {
                                 Image(systemName: "person.badge.plus")
-                                    .font(.system(size: 13, weight: .semibold))
+                                    .font(CTIcon.font(CTIcon.caption, weight: .semibold))
                                 Text(NSLocalizedString("contact_request_send_action", comment: ""))
-                                    .font(CTFont.medium(12))
+                                    .font(CTFont.ui(12, weight: .medium))
                             }
                             .foregroundStyle(Color.CT.bg)
                             .padding(.horizontal, 12)
@@ -558,7 +488,7 @@ struct SynapsView: View {
             case .notFound:
                 HStack {
                     Text(LocalizedStringKey("synapses_not_found"))
-                        .font(CTFont.regular(13))
+                        .font(CTFont.body)
                         .foregroundStyle(Color.CT.textDim)
                     Spacer()
                 }
@@ -589,11 +519,6 @@ struct SynapsView: View {
         }
     }
 
-    private func userMatchesQuery(_ user: User, query: String) -> Bool {
-        user.displayName.localizedCaseInsensitiveContains(query)
-            || user.username.localizedCaseInsensitiveContains(query)
-    }
-
     /// Sends a contact request to a discoverable user found via remote search.
     @MainActor
     private func sendContactRequest(to profile: Shared_Proto_Services_V1_UserProfile) async {
@@ -614,16 +539,14 @@ struct SynapsView: View {
             // Transport blips surface as gRPC "Stream unexpectedly closed." — map to a
             // human-readable connection message (RPC already retried in UserServiceClient).
             Log.error("sendContactRequest failed for \(profile.userID.prefix(8))…: \(error)", category: "ContactRequest")
-            let raw = error.userFacingMessage
-            let lower = raw.lowercased()
-            let message: String
-            if lower.contains("stream") || lower.contains("unavailable") || lower.contains("closed")
-                || lower.contains("connection") || lower.contains("timeout") || lower.contains("deadline") {
-                message = NSLocalizedString("contact_request_send_failed", comment: "")
+            // A connection failure gets the request's own sentence; anything else, the general one.
+            // Classified by type, not by sniffing the error's words for "stream" or "timeout".
+            let appError = AppError.from(error)
+            if case .network = appError {
+                ErrorRouter.shared.report(.said(UserText("contact_request_send_failed")))
             } else {
-                message = raw
+                ErrorRouter.shared.report(appError)
             }
-            ErrorRouter.shared.report(.unknown(message))
         }
     }
 
@@ -641,35 +564,28 @@ struct SynapsView: View {
                     selectedRequest = request
                 } label: {
                     HStack(spacing: 12) {
-                        ZStack {
-                            Circle()
-                                .fill(Color.CT.bgMsg)
-                                .frame(width: 36, height: 36)
-                            IdenticonView(seed: request.fromUserId)
-                                .frame(width: 28, height: 28)
-                                .clipShape(Circle())
-                        }
+                        MainAvatarView(userId: request.fromUserId, size: CTAvatarSize.row)
                         VStack(alignment: .leading, spacing: 2) {
                             if let name = request.displayName, !name.isEmpty {
                                 Text(name)
-                                    .font(CTFont.regular(13))
+                                    .font(CTFont.body)
                                     .foregroundStyle(Color.CT.text)
                             } else if let username = request.username, !username.isEmpty {
                                 Text("@\(username)")
-                                    .font(CTFont.regular(13))
+                                    .font(CTFont.body)
                                     .foregroundStyle(Color.CT.text)
                             } else {
                                 Text(DisplayNameGenerator.generate(from: request.fromUserId))
-                                    .font(CTFont.regular(13))
+                                    .font(CTFont.body)
                                     .foregroundStyle(Color.CT.textDim)
                             }
                             Text(NSLocalizedString("contact_request_from_title", comment: ""))
-                                .font(CTFont.regular(11))
+                                .font(CTFont.caption)
                                 .foregroundStyle(Color.CT.textDim)
                         }
                         Spacer()
                         Image(systemName: "chevron.right")
-                            .font(.system(size: 12, weight: .semibold))
+                            .font(CTIcon.font(CTIcon.caption, weight: .semibold))
                             .foregroundStyle(Color.CT.textDim)
                     }
                     .padding(.horizontal, 14)
@@ -690,12 +606,11 @@ struct SynapsView: View {
             let user = try ContactLinkService.shared.createOrUpdateContact(
                 userId: profile.userID,
                 username: profile.hasUsername ? profile.username : nil,
-                displayName: profile.hasDisplayName ? profile.displayName : nil,
-                context: context
+                displayName: profile.hasDisplayName ? profile.displayName : nil
             )
             searchText = ""
             remoteState = .idle
-            chatsViewModel.openOrCreateChat(with: user)
+            chatsViewModel.openOrCreateChat(withContact: user.id)
         } catch {
             Log.error("addRemoteUserAndChat failed: \(error)", category: "SynapsView")
         }
@@ -705,17 +620,17 @@ struct SynapsView: View {
 
     private func handleScannedQR(_ urlString: String) {
         // A voucher scanned here is a voucher, not a malformed contact code.
-        if let message = VeilVoucherRedemption.messageIfVoucher(urlString) {
+        if let outcome = VeilVoucherRedemption.messageIfVoucher(urlString) {
             showingQRScanner = false
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
-                ErrorRouter.shared.report(.unknown(message))
+                ErrorRouter.shared.report(outcome)
             }
             return
         }
         guard let url = URL(string: urlString) else {
             showingQRScanner = false
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
-                ErrorRouter.shared.report(.unknown(NSLocalizedString("invalid_qr_code_construct", comment: "")))
+                ErrorRouter.shared.report(.said(UserText("invalid_qr_code_construct")))
             }
             return
         }
@@ -725,16 +640,8 @@ struct SynapsView: View {
                 await MainActor.run {
                     showingQRScanner = false
                     if contactInfo.userId == AuthSessionManager.shared.currentUserId { return }
-                    let publicUserInfo = PublicUserInfo(
-                        id: contactInfo.userId,
-                        username: contactInfo.username,
-                        avatarUrl: nil,
-                        bio: nil,
-                        deviceId: contactInfo.deviceId
-                    )
                     if let chat = chatsViewModel.startChat(
-                        with: publicUserInfo,
-                        identityPublicKey: contactInfo.identityPublicKey
+                        redeeming: contactInfo
                     ) {
                         chatsViewModel.selectedTab = 0
                         chatsViewModel.chatToOpen = chat.id
@@ -745,7 +652,7 @@ struct SynapsView: View {
                 await MainActor.run {
                     showingQRScanner = false
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
-                        ErrorRouter.shared.report(.unknown(error.localizedDescription))
+                        ErrorRouter.shared.report(error)
                     }
                 }
             }
@@ -753,127 +660,146 @@ struct SynapsView: View {
     }
 }
 
-// MARK: - ZoomableCloud, HoneycombLayoutEngine, ContactMetrics
+// MARK: - ZoomableCloud, SynapsCloudLayout, ContactMetrics
 // → moved to SynapsLayoutEngine.swift (shared with DesktopSynapsView)
 
-// MARK: - Honeycomb Cloud
+// MARK: - Cloud
 
-private struct HoneycombCloud: View {
-    let contacts:     [User]
+private struct SynapsCloud: View {
+    let layout:       SynapsCloudLayout
     let metricsByUser: [String: ContactMetrics]
-    @Binding var selected: User?
+    @Binding var selected: ContactRecord?
     let canvasScale:  CGFloat
     let canvasOffset: CGSize
-    let screenSize:   CGSize
+    /// The middle of the visible part of the canvas; the cloud's centre and the lens sit here.
+    let focus:        CGPoint
+    let lens:         SynapsLens
 
     var body: some View {
-        GeometryReader { geo in
-            let engine  = HoneycombLayoutEngine(contacts: contacts, canvasSize: geo.size)
-            let metrics = metricsByUser
+        ZStack(alignment: .topLeading) {
+            Color.clear
 
-            // Canvas is screen-sized; contacts that overflow (large grids when
-            // zoomed to 1:1) are clipped by ZoomableCloud and visible when zoomed out.
-            ZStack(alignment: .topLeading) {
-                Color.clear.frame(width: geo.size.width, height: geo.size.height)
-
-                ForEach(engine.items) { item in
-                    ContactCircle(
-                        user:         item.user,
-                        cellSize:     engine.cellSize,
-                        metrics:      metrics[item.user.id] ?? .zero,
-                        canvasPos:    item.position,
-                        canvasScale:  canvasScale,
-                        canvasOffset: canvasOffset,
-                        screenSize:   screenSize
-                    ) {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.72)) {
-                            selected = item.user
-                        }
+            ForEach(layout.items) { item in
+                let placed = place(item)
+                ContactCircle(
+                    user:         item.user,
+                    pitch:        SynapsCloudLayout.pitch,
+                    metrics:      metricsByUser[item.user.id] ?? .zero,
+                    lensScale:    placed.scale,
+                    lensOpacity:  placed.opacity,
+                    labelOpacity: placed.labelOpacity
+                ) {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.72)) {
+                        selected = item.user
                     }
-                    .position(item.position)
                 }
+                .position(placed.position)
             }
         }
+    }
+
+    /// Where the lens draws a contact. ZoomableCloud scales the canvas about `focus` and then
+    /// pans it, so the contact's screen point is worked out, moved by the lens, and taken back
+    /// to the canvas point that lands there.
+    private func place(_ item: SynapsCloudLayout.Item) -> (position: CGPoint, scale: CGFloat, opacity: Double, labelOpacity: Double) {
+        let scale = Swift.max(canvasScale, 0.0001)
+        let screen = CGPoint(
+            x: focus.x + item.position.x * scale + canvasOffset.width,
+            y: focus.y + item.position.y * scale + canvasOffset.height
+        )
+        let (drawn, rim) = lens.draw(screen, centre: focus)
+        return (
+            position: CGPoint(
+                x: focus.x + (drawn.x - focus.x - canvasOffset.width) / scale,
+                y: focus.y + (drawn.y - focus.y - canvasOffset.height) / scale
+            ),
+            scale: SynapsLens.scale(atRim: rim),
+            opacity: SynapsLens.opacity(atRim: rim),
+            labelOpacity: SynapsLens.labelOpacity(atDistance: hypot(drawn.x - focus.x, drawn.y - focus.y))
+        )
     }
 }
 
 // MARK: - Contact Circle
 
 private struct ContactCircle: View {
-    @ObservedObject var user: User
-    /// Base cell size from the layout engine (cellWidth × 0.74).
-    let cellSize:     CGFloat
+    let user: ContactRecord
+    /// Centre-to-centre distance of neighbours (`SynapsCloudLayout.pitch`).
+    let pitch:        CGFloat
     let metrics:      ContactMetrics
-    let canvasPos:    CGPoint
-    let canvasScale:  CGFloat
-    let canvasOffset: CGSize
-    let screenSize:   CGSize
+    /// Size and opacity under the lens: full in the middle, smaller and dimmer at the edge.
+    let lensScale:    CGFloat
+    let lensOpacity:  Double
+    /// The name shows only around the middle.
+    let labelOpacity: Double
     var onTap: () -> Void
 
     @State private var touchMoved = false
 
-    /// cellWidth recovered from engine mapping (cellSize = cellWidth × 0.74).
-    private var cellWidth: CGFloat { cellSize / 0.74 }
-
     // MARK: Size
     //
-    // Frequency score drives rendered diameter in the range [0.50 … 0.66] × cellWidth.
-    // Slightly smaller than pure-avatar layout so a name label fits under each circle
-    // without colliding with the next honeycomb row (vStep ≈ 1.02 × cellWidth).
+    // Frequency score drives rendered diameter in the range [0.50 … 0.66] × pitch, small
+    // enough that the name under each circle clears the row below.
     private var effectiveSize: CGFloat {
         let f = 0.50 + 0.16 * metrics.frequencyScore  // [0.50 … 0.66]
-        return cellWidth * f
+        return pitch * f
     }
 
     /// Max width for the name under the avatar — slightly wider than the circle.
     private var labelWidth: CGFloat {
-        min(cellWidth * 0.92, max(effectiveSize * 1.35, 56))
+        min(pitch * 0.92, max(effectiveSize * 1.35, 56))
     }
 
     var body: some View {
-        VStack(spacing: 4) {
+        // The circle is the view and stands exactly on its point; the name hangs under it as an
+        // overlay, two points below the rim, and takes no room of its own. Until 2026-10-08 the
+        // circle sat in a frame a fifth larger (room for the halo) with the name below that, so
+        // the name floated off the circle and the circle stood above its point.
+        ZStack {
             ZStack {
-                // Soft halo — ambient “this node is live” (not a feed preview).
+                if let data = user.avatar, let img = PlatformImage(data: data) {
+                    Image(platformImage: img)
+                        .resizable()
+                        .scaledToFill()
+                } else {
+                    Circle().fill(accentColor.opacity(0.12))
+                    IdenticonView(seed: user.id)
+                }
+            }
+            .frame(width: effectiveSize, height: effectiveSize)
+            .clipShape(Circle())
+            .overlay(Circle().stroke(borderColor, lineWidth: metrics.activityRingLineWidth))
+            // Soft halo — ambient “this node is live” (not a feed preview).
+            .background {
                 if metrics.showsActivityHalo && !user.isBlocked {
                     Circle()
                         .stroke(Color.CT.accent.opacity(0.28), lineWidth: 3)
                         .frame(width: effectiveSize * 1.14, height: effectiveSize * 1.14)
                 }
-
-                ZStack {
-                    if let data = user.avatarData, let img = PlatformImage(data: data) {
-                        Image(platformImage: img)
-                            .resizable()
-                            .scaledToFill()
-                    } else {
-                        Circle().fill(accentColor.opacity(0.12))
-                        IdenticonView(seed: user.id)
-                    }
-                }
-                .frame(width: effectiveSize, height: effectiveSize)
-                .clipShape(Circle())
-                .overlay(Circle().stroke(borderColor, lineWidth: metrics.activityRingLineWidth))
-
-                if metrics.unreadCount > 0 {
-                    unreadBadge
-                        .offset(x: effectiveSize * 0.34, y: -effectiveSize * 0.34)
-                }
             }
-            .frame(width: effectiveSize * 1.2, height: effectiveSize * 1.2)
-            .opacity(proximityOpacity)
 
+            if metrics.unreadCount > 0 {
+                unreadBadge
+                    .offset(x: effectiveSize * 0.34, y: -effectiveSize * 0.34)
+            }
+        }
+        .overlay(alignment: .top) {
+            // A name of two words wraps onto a second line rather than being cut.
             Text(user.resolvedDisplayName)
-                .font(CTFont.medium(10))
+                .font(CTFont.ui(10, weight: .medium))
                 .foregroundStyle(user.isBlocked ? Color.CT.textDim : Color.CT.text)
-                .lineLimit(1)
+                .lineLimit(2)
                 .minimumScaleFactor(0.75)
                 .truncationMode(.tail)
                 .multilineTextAlignment(.center)
                 .frame(width: labelWidth)
-                // Names stay a bit more readable than peripheral avatars.
-                .opacity(min(1.0, proximityOpacity + 0.35))
+                .fixedSize(horizontal: false, vertical: true)
+                .offset(y: effectiveSize + 2)
+                .opacity(labelOpacity)
+                .allowsHitTesting(false)
         }
-        .scaleEffect(proximityScale)
+        .scaleEffect(lensScale)
+        .opacity(lensOpacity)
         // Use DragGesture(minimumDistance: 0) so we can distinguish a stationary
         // tap from a drag that happens to end over the contact. Only fire onTap
         // when the finger hasn't moved more than 8 pt — matching the parent
@@ -899,7 +825,7 @@ private struct ContactCircle: View {
         let n = metrics.unreadCount
         let label = n > 99 ? "99+" : "\(n)"
         return Text(label)
-            .font(CTFont.bold(n > 9 ? 8 : 9))
+            .font(CTFont.ui(n > 9 ? 8 : 9, weight: .bold))
             .foregroundStyle(Color.CT.bg)
             .padding(.horizontal, n > 9 ? 4 : 0)
             .frame(minWidth: 15, minHeight: 15)
@@ -921,40 +847,6 @@ private struct ContactCircle: View {
         return name
     }
 
-    // MARK: Proximity effect
-    //
-    // Compute where this contact actually appears on screen after the canvas
-    // transform (scaleEffect + offset). Contacts close to the screen centre
-    // get a scale boost (≤ +30%) and full opacity; peripheral ones fade out.
-
-    private var screenPos: CGPoint {
-        let cx = screenSize.width  / 2
-        let cy = screenSize.height / 2
-        return CGPoint(
-            x: (canvasPos.x - cx) * canvasScale + cx + canvasOffset.width,
-            y: (canvasPos.y - cy) * canvasScale + cy + canvasOffset.height
-        )
-    }
-
-    private var distanceToCenter: CGFloat {
-        let c = CGPoint(x: screenSize.width / 2, y: screenSize.height / 2)
-        return hypot(screenPos.x - c.x, screenPos.y - c.y)
-    }
-
-    /// Contacts within ~50% of the shortest screen half-dimension are "central".
-    private var proximityScale: CGFloat {
-        let radius = Swift.min(screenSize.width, screenSize.height) * 0.5
-        let t = Swift.max(0, 1 - distanceToCenter / radius)
-        return 1.0 + 0.10 * t  // max ×1.10 — keeps circles within their hex cells
-    }
-
-    /// Peripheral contacts fade to 40% opacity.
-    private var proximityOpacity: Double {
-        let radius = Swift.min(screenSize.width, screenSize.height) * 0.65
-        let t = Swift.max(0, 1 - distanceToCenter / radius)
-        return 0.40 + 0.60 * t
-    }
-
     // MARK: Style
 
     private var accentColor: Color { .hexagonAccent(for: user.id) }
@@ -966,8 +858,11 @@ private struct ContactCircle: View {
 
 // MARK: - Preview
 
-#Preview("Honeycomb") {
+// DEBUG only: the previews seed `ContactsLive.useForPreview`, which a release build does not have.
+#if DEBUG
+#Preview("Cloud") {
     let container = PreviewHelpers.createPreviewContainer()
+    ContactsLive.useForPreview(container)
     let context = container.viewContext
 
     let users: [(String, String, String)] = [
@@ -1004,6 +899,7 @@ private struct ContactCircle: View {
 
 #Preview("Empty") {
     let container = PreviewHelpers.createPreviewContainer()
+    ContactsLive.useForPreview(container)
     let context = container.viewContext
     let chatsVM = ChatsViewModel()
     chatsVM.setContext(context)
@@ -1012,3 +908,4 @@ private struct ContactCircle: View {
         .environment(chatsVM)
         .preferredColorScheme(.dark)
 }
+#endif

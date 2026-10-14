@@ -1,0 +1,43 @@
+{
+  "title": "Konstruct fixture",
+  "publisher": "Konstruct",
+  "canvas": 512,
+  "stickers": [
+    {
+      "index": 0,
+      "source": "01_dot.png",
+      "sha256": "398f9c2fa58b7c2c8f55ca8bd5b27ead054dd3412183f1033de53bc5802af91e",
+      "emoji": "🔵",
+      "width": 512,
+      "height": 512,
+      "byte_len": 9964
+    },
+    {
+      "index": 1,
+      "source": "02_square.png",
+      "sha256": "578e7351323f018dd76a2b56ea1248925a4817b29e279511abe38e04348b67e3",
+      "emoji": "🟥",
+      "width": 512,
+      "height": 512,
+      "byte_len": 1286
+    },
+    {
+      "index": 2,
+      "source": "03_tri.png",
+      "sha256": "387ccee7a876ab7f231a868046d8cabfcdc02cf81c9f6fe25c80a19ac3e6ca67",
+      "emoji": "🔺",
+      "width": 512,
+      "height": 512,
+      "byte_len": 8154
+    },
+    {
+      "index": 3,
+      "source": "04_ring.png",
+      "sha256": "c2515dcc1915fed7d07c91744ff78057ac6b4b8214c2c93673434e724e5ea9bd",
+      "emoji": "🟡",
+      "width": 512,
+      "height": 512,
+      "byte_len": 16578
+    }
+  ]
+}

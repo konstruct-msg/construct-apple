@@ -9,15 +9,15 @@ struct ChatFloodBannerView: View {
         if isVisible {
             HStack(spacing: CTLayout.chromeGap) {
                 Image(systemName: "exclamationmark.triangle.fill")
-                    .font(CTFont.regular(16))
+                    .font(CTFont.ui(16))
                     .foregroundStyle(.orange)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(LocalizedStringKey("flood_banner_title"))
-                        .font(CTFont.bold(12))
+                        .font(CTFont.ui(12, weight: .bold))
                         .foregroundStyle(Color.CT.text)
                     Text(LocalizedStringKey("flood_banner_subtitle"))
-                        .font(CTFont.regular(11))
+                        .font(CTFont.caption)
                         .foregroundStyle(Color.CT.textDim)
                 }
 
@@ -25,7 +25,7 @@ struct ChatFloodBannerView: View {
 
                 Button(action: onAllow) {
                     Image(systemName: "chevron.right")
-                        .font(CTFont.regular(12))
+                        .font(CTFont.secondary)
                         .foregroundStyle(.orange)
                         .frame(width: CTLayout.hitTarget * 0.75, height: CTLayout.hitTarget * 0.75)
                         .contentShape(Rectangle())
@@ -34,7 +34,7 @@ struct ChatFloodBannerView: View {
 
                 Button(action: onBlock) {
                     Image(systemName: "nosign")
-                        .font(CTFont.regular(12))
+                        .font(CTFont.secondary)
                         .foregroundStyle(Color.CT.danger)
                         .frame(width: CTLayout.hitTarget * 0.75, height: CTLayout.hitTarget * 0.75)
                         .contentShape(Rectangle())

@@ -32,6 +32,11 @@ enum AccountWipeKeys {
         "construct.userId",
         "construct.deviceId",
         "construct.localStore.ownerUserId",
+        // Keychain: the at-rest store key. `LocalDataWipe` deletes it first; listed so the scan
+        // knows it is the account's.
+        "construct.localStore.key.v1",
+        // Ids of first messages that failed to open (`FailedInitMessageStore`) — the account's.
+        "com.construct.failed_init_message_ids",
         "construct.pendingRegistrationBundle",
         // This account's intake key, and the note of which epoch we last published tags for.
         // Wiped together: a new account minting a fresh key while the old publish marker says
@@ -39,8 +44,16 @@ enum AccountWipeKeys {
         // for a day with nothing on this device saying why.
         "construct.intake.own",
         "construct.intake.lastPublishedEpoch.v1",
+        // This account's address (its recovery public key). The next identity has another, and a
+        // stale one here would go into every invite it mints — contacts would write to an
+        // address that is not theirs, and the server would drop it silently.
+        "construct.accountAddress",
         // Who already holds our key. Wiped because the new account's key is a different secret —
-        // a stale list would suppress the lazy hand-off to every contact it names.
+        // a stale list would suppress the lazy hand-off to every contact it names. Both versions:
+        // v2 is keyed by device (2026-09-22) and v1 by account, and a wipe that left the older one
+        // behind would leave a list nothing reads and nothing clears.
+        "construct.intake.sentTo.v3",
+        "construct.intake.sentTo.v2",
         "construct.intake.sentTo.v1",
         // Peers whose credential the server refused, by epoch. Same shape as `sentTo`: a list of
         // who this account talks to, meaningless — and misleading — under the next account.
@@ -59,6 +72,22 @@ enum AccountWipeKeys {
         // wipe left one identity's pruned contacts shielding the next identity's messages.
         "construct.deletedContacts.v2",
 
+        // Keychain: the recovery phrase waiting to be uploaded or copied (`RecoveryPhraseVault`).
+        // `LocalDataWipe` deletes both, on sign-out as on deletion; listed so the scan knows they
+        // are the account's. The sign-out warning fires while a copy is still owed.
+        "construct.recovery.phrase.pending",
+        "construct.recovery.phrase.held",
+        // When the silent key was made, whether its copy was confirmed, and the reminder's
+        // snooze (`RecoveryBackupMarks`). The account's; the next one starts with none.
+        "construct.recovery.silentAt",
+        "construct.recovery.silentAccount",
+        "construct.recovery.copied",
+        "construct.recovery.reminderSnoozedUntil",
+
+        // The reactions this person uses most (`ReactionQuickSetStore`). A habit of this
+        // identity's; the next one starts from the popular set.
+        "construct.reactions.quickSet.v1",
+
         // Stream position. The omission that prompted this file: leaving it behind means the next
         // identity resumes from the previous one's watermark.
         "construct.stream.cursor",
@@ -69,12 +98,25 @@ enum AccountWipeKeys {
         "construct.orchestrator_state",
         "construct.orchestrator_state.afu_migrated.v1",
         "construct.cryptoKeys.afu_migrated.v2",
+        // The second healing queue, gone 2026-09-23 (step 4). Still wiped: a build predating the
+        // change may have written one, and a stale queue restored onto a fresh identity is the
+        // ghost-identity audit of 2026-07-26.
         "construct.healing_queue_state",
+        // "the dead `HealingMessage` rows have been emptied on this install". Not device-about,
+        // so it leaves with the identity: a wipe empties the store anyway, and a flag claiming
+        // work was done on data that no longer exists is the kind of leftover this list is for.
+        "construct.healingMessage.purged.v1",
         // Copies this account's messages still owe to a recipient's devices (§C). Leaves with the
         // account for the same reason the wire-payload entries do: they name messages and peers of
         // the person signing out, and a drain after a re-registration would try to send them as
         // whoever signed in next.
         "construct.fanoutRetryQueue.v1",
+        // The invites this account minted (`IssuedInviteStore`). Left behind, the next account's
+        // Settings would list codes it never issued and offer to revoke them — under a token that
+        // is not theirs. `invite_journal_v1` is where they were kept until 2026-10-11, never in
+        // this list; it went with no wipe at all.
+        "construct.issuedInvites.v2",
+        "invite_journal_v1",
         // The device set this account's metadata blob was last sealed for. Leaves with the
         // account: a stale marker after a re-registration would convince the next account that its
         // metadata was already published, and its row would stay unnamed on every sibling.
@@ -88,6 +130,9 @@ enum AccountWipeKeys {
         "construct.spk.uploadTimestamp",
         "construct.hybridIdentity.published.v1",
         "construct.hybridIdentity.spkFingerprint.v1",
+        // Which Kyber SPK (device:keyId) the server confirmed. Belongs to this identity's keys:
+        // kept across a wipe it would tell the next identity its SPK was already published.
+        "construct.kyber.v2.published",
 
         // Sealed sender — the cert belongs to the old identity.
         "construct.sealed_sender_cert",
@@ -104,6 +149,9 @@ enum AccountWipeKeys {
 
         // Per-contact / per-message UI and delivery state
         "construct.contactKeyChangeAcknowledged",
+        // Contacts' device sets as last listed. Nothing writes it since the new-device alarm went
+        // (2026-09-30); kept here so installs that wrote it lose it with the account.
+        "construct.peerDeviceSets.listed.v1",
         "construct.openChatForKeyChange",
         "construct.inviteAcceptedContactCreated",
         "construct.adMigration.serverUUID.v1.done",
@@ -114,6 +162,10 @@ enum AccountWipeKeys {
         "construct.selfAddressedResidue.cleared.v1",
         "construct.media_send_cache_v1",
         "construct.manifest_signed_at",
+        // The public IP and region the removed GeoIP lookup cached. `GRPCChannelManager` already
+        // deletes them at launch; listed so a wipe says the same about where the person was.
+        "construct.geoip_ip_v1",
+        "construct.geoip_region_v1",
 
         // Feature toggles that are user choices, not device capabilities
         "veil_enabled",
@@ -135,6 +187,13 @@ enum AccountWipeKeys {
         "construct.tokenSpendUnit.v1.",
         "construct.kyber.otpk.sk.",
         "construct.pq_deferred.",
+        // Not `construct.`-named, so the scan does not require them; listed because they are the
+        // account's: thumbnail JPEGs of builds before 2026-08-11 (`ThumbnailStore` moved them to
+        // Caches, and a failed move leaves them here).
+        "message_thumbnail_",
+        // The per-peer PQXDH downgrade flag of builds before PQXDH v2 (Keychain). Nothing writes
+        // it any more; `KyberPrekeyService.deleteLegacyItems` sweeps what an older build left.
+        "construct.pqxdh.downgraded.",
         // Where `SecureStoreSlot.KyberSignedPrekey` would land. No reachable emitter today
         // (`commit_spk_rotation` is called only from its own tests), but a secret key that
         // appears must leave with the account, and classifying it now costs nothing.
@@ -150,14 +209,18 @@ enum AccountWipeKeys {
         "construct.ice_relay_infos",
         "construct.ice_relay_regions",
         "construct.ice_deprecated_relay_ids",
-        "construct.geoip_ip_v1",
-        "construct.geoip_region_v1",
 
         // Server-provided public material, identical for every identity on this server. Dropping
         // it would leave sealed-sender attestation unable to vouch anything until a refetch.
         "construct.bundle_signing_key",
         "construct.server.token_enc_pub",
         "construct.server.token_enc_pub.fetched_at",
+        // Delegations of the server's hybrid keys — root-signed public data, the same for everyone.
+        "construct.server.trust_delegations",
+
+        // Which store this install stands on: construct-store once iOS has moved to it
+        // (`LocalStoreImport`). A wipe replaces the store with an empty one and stays on it.
+        "construct.localStore.active.v1",
 
         // Device-level app preferences.
         "customServerURL",
@@ -188,6 +251,21 @@ enum AccountWipeKeys {
         "construct.PendingReassemblyStore",
         "construct.ReceiptResendThrottle",
         "construct.reassembly_store_key",
+        // The file name of the encrypted local store (`LocalStoreSession`), not a defaults key. A
+        // wipe removes the file with the container sweep, after destroying its key
+        // (`LocalDataWipe.run`).
+        "construct.db",
+        // A Keychain item `KeychainPlacement` writes and deletes in the same breath to learn
+        // whether the build may use the data protection keychain. Never left behind.
+        "construct.keychain.placement_probe",
+
+        // A Keychain item: the key this device labels VEIL front names under in its logs
+        // (`LogRedaction`). About the device, not the account; kept so labels stay comparable.
+        "construct.logLabel.key.v1",
+
+        // A key inside construct.db (`LocalStoreImport.completedKey`), not in `UserDefaults`; it
+        // goes with the store.
+        "construct.localStore.importedFromCoreData.v1",
 
         // Notification names.
         "construct.reaction.didChange"

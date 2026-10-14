@@ -21,7 +21,7 @@ extension CryptoManager {
 
         if actions.contains(where: { action in
             switch action {
-            case .sendEndSession, .sessionHealNeeded, .fetchPublicKeyBundle:
+            case .sendDecryptionError, .sessionRetired, .resendMessage, .openReceiving, .openSession:
                 return true
             default:
                 return false
@@ -35,8 +35,8 @@ extension CryptoManager {
 
     func orchestratorEventSummary(_ event: CfeIncomingEvent) -> String {
         switch event {
-        case .messageReceived(let messageId, let from, let data, let msgNum, _, let otpkId, let isControl, let contentType):
-            return "messageReceived from=\(from.prefix(8))… msgId=\(messageId.prefix(8))… msgNum=\(msgNum) ct=\(contentType) control=\(isControl) data=\(data.count)B otpkId=\(otpkId)"
+        case .messageReceived(let messageId, let from, let data, let contentType, let certificate, let envelopeSession):
+            return "messageReceived from=\(from.prefix(8))… msgId=\(messageId.prefix(8))… ct=\(contentType) data=\(data.count)B sealed=\(certificate != nil) envelope=\(envelopeSession != nil)"
         case .outgoingMessage(let contactId, let messageId, let plaintextUtf8, let contentType):
             return "outgoingMessage to=\(contactId.prefix(8))… msgId=\(messageId.prefix(8))… ct=\(contentType) plaintext=\(plaintextUtf8.count)ch"
         case .outgoingCallSignal(let contactId, let messageId, let protoBytes):
@@ -45,20 +45,22 @@ extension CryptoManager {
             return "sessionInitCompleted contactId=\(contactId.prefix(8))… session=\(sessionData.count)B"
         case .ackReceived(let messageId):
             return "ackReceived msgId=\(messageId.prefix(8))…"
-        case .keyBundleFetched(let userId, _):
-            return "keyBundleFetched userId=\(userId.prefix(8))…"
+        case .sessionBundleFetched(let contactId, _):
+            return "sessionBundleFetched contactId=\(contactId.prefix(8))…"
+        case .sessionBundleUnavailable(let contactId):
+            return "sessionBundleUnavailable contactId=\(contactId.prefix(8))…"
         case .networkReconnected:
             return "networkReconnected"
         case .appLaunched:
             return "appLaunched"
+        case .decryptionErrorReceived(let contactId, let payload, let opened):
+            return "decryptionErrorReceived from=\(contactId.prefix(8))… payload=\(payload.count)B opened=\(opened)"
         case .timerFired(let timerId):
             return "timerFired id=\(timerId.prefix(24))…"
         case .ackDbResult(let messageId, let isProcessed):
             return "ackDbResult msgId=\(messageId.prefix(8))… processed=\(isProcessed)"
-        case .activeChatChanged(let contactId, let isActive):
-            return "activeChatChanged contactId=\(contactId.prefix(8))… active=\(isActive)"
-        case .heartbeatReceived(let contactId, let messageId, let data, let msgNum):
-            return "heartbeatReceived from=\(contactId.prefix(8))… msgId=\(messageId.prefix(8))… msgNum=\(msgNum) data=\(data.count)B"
+        case .heartbeatReceived(let contactId, let messageId, let data):
+            return "heartbeatReceived from=\(contactId.prefix(8))… msgId=\(messageId.prefix(8))… data=\(data.count)B"
         }
     }
 
@@ -69,11 +71,14 @@ extension CryptoManager {
             switch action {
             case .messageDecrypted:         labels.insert("decrypted")
             case .callSignalDecrypted:      labels.insert("call_signal")
+            case .controlFrameDecrypted:    labels.insert("control_frame")
             case .sendEncryptedMessage:     labels.insert("send")
             case .saveToSecureStore: labels.insert("save")
-            case .sessionHealNeeded:        labels.insert("heal")
-            case .sendEndSession:           labels.insert("end_session")
-            case .fetchPublicKeyBundle:     labels.insert("fetch_bundle")
+            case .sendDecryptionError:      labels.insert("decryption_error")
+            case .sessionRetired:           labels.insert("retired")
+            case .resendMessage:            labels.insert("resend")
+            case .openReceiving:            labels.insert("open_receiving")
+            case .openSession:              labels.insert("open_session")
             case .notifyError(let code, let msg) where firstError == nil:
                 firstError = (code, msg)
             default: break

@@ -17,12 +17,13 @@ struct DesktopChatView: View {
     /// Lazy holder — avoid allocating ChatViewModel in View.init (parent re-render churn).
     @State private var lazyViewModel: LazyChatViewModel
     private var viewModel: ChatViewModel { lazyViewModel.value }
+    private var peerId: String { viewModel.conversation.peerId }
     @State private var scrollManager = ChatScrollManager()
     private var connectionManager = ConnectionStatusManager.shared
     @State private var messageText = ""
-    @State private var replyingTo: Message?
+    @State private var replyingTo: TranscriptRow?
     @State private var replyQuoteText: String? = nil
-    @State private var quotingMessage: Message? = nil
+    @State private var quotingMessage: TranscriptRow? = nil
     @State private var replyFocusIds: Set<String> = []
     @State private var replyFocusPeekTask: Task<Void, Never>?
     @State private var showingUserProfile = false
@@ -32,6 +33,10 @@ struct DesktopChatView: View {
     @State private var isSearchActive = false
     @State private var isEditMode = false
     @State private var selectedMessages: Set<String> = []
+    /// What the forward picker on screen will send.
+    @State private var forwarding: [TranscriptRow] = []
+    @State private var showingForwardPicker = false
+    @State private var forwardFailed = false
     @State private var galleryStartItem: GalleryStartItem?
 
     @State private var chatDropImages: [PlatformImage] = []
@@ -40,12 +45,13 @@ struct DesktopChatView: View {
 
     @State private var floodGuard = IncomingFloodGuard.shared
     @State private var contactKTStatus: KTStatus = .unverified
+    @State private var contactTrustAlert: ContactTrustAlert?
     @State private var isSessionAtRisk = false
     @State private var containerWidth: CGFloat = 800
 
-    init(chat: Chat, context: NSManagedObjectContext) {
+    init(conversation: Conversation, context: NSManagedObjectContext) {
         _lazyViewModel = State(wrappedValue: LazyChatViewModel {
-            ChatViewModel(chat: chat, context: context)
+            ChatViewModel(conversation: conversation, context: context)
         })
     }
 
@@ -67,7 +73,7 @@ struct DesktopChatView: View {
                 rows: { transcriptRows }
             )
             .environment(\.containerWidth, containerWidth)
-                .onChange(of: viewModel.messages.count) { oldCount, count in
+                .onChange(of: viewModel.entries.count) { oldCount, count in
                     // Shared with iOS ChatView: open / corrective pin / animated follow.
                     scrollManager.handleTranscriptCountChange(
                         oldCount: oldCount,
@@ -105,11 +111,8 @@ struct DesktopChatView: View {
                 }
                 .onChange(of: viewModel.editingMessage) { _, editMsg in
                     if let editMsg {
-                        if let mc = parseMediaContent(from: editMsg.displayText) {
-                            messageText = mc.caption
-                        } else {
-                            messageText = editMsg.displayText
-                        }
+                        // A media message edits its caption.
+                        messageText = editMsg.readableText
                     }
                 }
         
@@ -138,7 +141,7 @@ struct DesktopChatView: View {
                         .background(Color.CT.accent.opacity(0.05))
                         .overlay(
                             Text(LocalizedStringKey("drop_to_attach"))
-                                .font(CTFont.regular(16))
+                                .font(CTFont.ui(16))
                                 .foregroundColor(Color.CT.accent)
                                 .padding(16)
                                 .background(Color.CT.bgMsg)
@@ -148,12 +151,22 @@ struct DesktopChatView: View {
                         .padding(8)
                 }
             }
+            .sheet(isPresented: $showingForwardPicker) {
+                ForwardPickerView(onPick: finishForward(to:))
+                    .sheetNavigation()
+                    .frame(minWidth: 420, minHeight: 480)
+            }
+            .task(id: ForwardDrafts.shared.pending[viewModel.conversation.chatId]?.count ?? 0) {
+                await sendForwardedHere()
+            }
+            .alert(NSLocalizedString("forward_failed", comment: ""), isPresented: $forwardFailed) {
+                Button(NSLocalizedString("ok", comment: ""), role: .cancel) {}
+            }
             .sheet(isPresented: $showingUserProfile) {
-                if let user = viewModel.chat.otherUser {
-                    UserProfileView(user: user, showMessageButton: false)
-                        .environment(\.managedObjectContext, viewContext)
-                        .frame(minWidth: 420, minHeight: 480)
-                }
+                UserProfileView(userId: peerId, showMessageButton: false)
+                    .sheetNavigation()
+                    .environment(\.managedObjectContext, viewContext)
+                    .frame(minWidth: 420, minHeight: 480)
             }
             .sheet(item: $quotingMessage) { msg in
                 QuoteSelectionSheet(message: msg) { selectedQuote in
@@ -161,10 +174,11 @@ struct DesktopChatView: View {
                     replyQuoteText = selectedQuote
                     setComposeReplyFocus(messageId: msg.id)
                 }
+                .sheetNavigation()
                 .frame(minWidth: 400, minHeight: 320)
             }
             .sheet(item: $galleryStartItem) { item in
-                MediaGalleryViewer(
+                DesktopMediaViewer(
                     messages: mediaMessages,
                     initialMessageId: item.messageId,
                     initialItemIndex: item.itemIndex,
@@ -186,7 +200,7 @@ struct DesktopChatView: View {
             }
             .onChange(of: viewModel.isInitializingSession) { _, _ in refreshSessionAtRiskState() }
             .onReceive(NotificationCenter.default.publisher(for: .sessionAtRiskChanged)) { note in
-                if (note.userInfo?["userId"] as? String) == viewModel.chat.otherUser?.id {
+                if (note.userInfo?["userId"] as? String) == peerId {
                     refreshSessionAtRiskState()
                 }
             }
@@ -196,28 +210,15 @@ struct DesktopChatView: View {
                 viewModel.onViewAppear()
                 loadContactKTStatus()
                 refreshSessionAtRiskState()
-                if let contactId = viewModel.chat.otherUser?.id, !contactId.isEmpty {
-                    _ = try? CryptoManager.shared.handleOrchestratorEvent(
-                        .activeChatChanged(contactId: contactId, isActive: true),
-                        tag: "chat_active_true"
-                    )
-                }
             }
             .onReceive(NotificationCenter.default.publisher(for: .contactKeyChanged)) { note in
                 guard let changedId = note.userInfo?["userId"] as? String,
-                      changedId == viewModel.chat.otherUser?.id else { return }
+                      changedId == peerId else { return }
                 loadContactKTStatus()
             }
             .onDisappear {
                 replyFocusPeekTask?.cancel()
                 replyFocusPeekTask = nil
-                guard ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] != "1" else { return }
-                if let contactId = viewModel.chat.otherUser?.id, !contactId.isEmpty {
-                    _ = try? CryptoManager.shared.handleOrchestratorEvent(
-                        .activeChatChanged(contactId: contactId, isActive: false),
-                        tag: "chat_active_false"
-                    )
-                }
             }
             .alert(callManager.lastError ?? "", isPresented: Binding(
                 get: { callManager.lastError != nil },
@@ -229,17 +230,13 @@ struct DesktopChatView: View {
             }
         }
         .modifier(DesktopChatWindowTitle(
-            user: viewModel.chat.otherUser,
-            fallback: NSLocalizedString("chat", comment: ""),
-            subtitle: navigationStatusSubtitle
+            userId: peerId,
+            fallback: NSLocalizedString("chat", comment: "")
         ))
+        // The window keeps its title (the Window menu, Mission Control); the toolbar shows
+        // `chatTitle` instead, so the key status can stand next to the name.
+        .toolbar(removing: .title)
         .toolbar { chatToolbar }
-        .searchable(
-            text: $searchText,
-            isPresented: $isSearchActive,
-            placement: .toolbar,
-            prompt: LocalizedStringKey("search_messages")
-        )
         .onChange(of: chatsViewModel.chatSearchPresented) { _, presented in
             guard presented else { return }
             isSearchActive = true
@@ -254,20 +251,17 @@ struct DesktopChatView: View {
     }
 
     private func refreshSessionAtRiskState() {
-        guard let contactId = viewModel.chat.otherUser?.id, !contactId.isEmpty else {
-            isSessionAtRisk = false
-            return
-        }
+        let contactId = peerId
         isSessionAtRisk = KeychainManager.shared.loadSessionAtRiskFlag(for: contactId)
     }
 
     @ViewBuilder
     private var floodBurstBanner: some View {
-        let senderId = viewModel.chat.otherUser?.id ?? ""
+        let senderId = peerId
         if floodGuard.suppressedSenders.contains(senderId) {
             HStack(spacing: 10) {
                 Image(systemName: "exclamationmark.triangle.fill")
-                    .font(CTFont.regular(16))
+                    .font(CTFont.ui(16))
                     .foregroundStyle(.orange)
 
                 VStack(alignment: .leading, spacing: 2) {
@@ -284,20 +278,17 @@ struct DesktopChatView: View {
                     IncomingFloodGuard.shared.unsuppress(senderId: senderId)
                 } label: {
                     Label(NSLocalizedString("allow", comment: ""), systemImage: "checkmark.circle")
-                        .font(CTFont.regular(12))
+                        .font(CTFont.secondary)
                         .foregroundStyle(.orange)
                 }
                 .buttonStyle(.plain)
 
                 Button {
-                    if let user = viewModel.chat.otherUser {
-                        user.isBlocked = true
-                        try? user.managedObjectContext?.save()
-                    }
+                    try? LocalRepositories.contacts.setBlocked(peerId, true)
                     IncomingFloodGuard.shared.unsuppress(senderId: senderId)
                 } label: {
                     Label(NSLocalizedString("block_user", comment: ""), systemImage: "hand.raised.fill")
-                        .font(CTFont.regular(12))
+                        .font(CTFont.secondary)
                         .foregroundStyle(Color.CT.danger)
                 }
                 .buttonStyle(.plain)
@@ -317,16 +308,22 @@ struct DesktopChatView: View {
                 Button(role: .destructive) {
                     deleteSelectedMessages()
                 } label: {
-                    Text("[\(NSLocalizedString("delete_selected", comment: "")) →]")
-                        .font(CTFont.regular(13))
+                    Label(NSLocalizedString("delete_selected", comment: ""), systemImage: "trash")
+                        .font(CTFont.ui(13, weight: .medium, relativeTo: .footnote))
                         .foregroundStyle(Color.CT.danger)
                 }
                 Spacer()
                 Text(
                     "\(selectedMessages.count) \(NSLocalizedString(selectedMessages.count == 1 ? "message_selected" : "messages_selected", comment: ""))"
                 )
-                    .font(CTFont.regular(12))
+                    .font(CTFont.secondary)
                     .foregroundStyle(Color.CT.textDim)
+                Spacer()
+                Button {
+                    startForward(viewModel.entries.map(\.row).filter { selectedMessages.contains($0.id) })
+                } label: {
+                    Label(NSLocalizedString("forward", comment: ""), systemImage: "arrowshape.turn.up.right")
+                }
             }
             .padding()
             .background(Color.CT.bg)
@@ -393,9 +390,9 @@ struct DesktopChatView: View {
                 } label: {
                     ZStack(alignment: .topTrailing) {
                         Image(systemName: "chevron.down.circle.fill")
-                            .font(.system(size: 32, weight: .semibold))
+                            .font(CTFont.ui(32, weight: .semibold))
                             .foregroundStyle(Color.CT.accent, Color.CT.bg.opacity(0.85))
-                        if viewModel.chat.unreadCount > 0 {
+                        if (ChatsLive.shared.chat(viewModel.conversation.chatId)?.unreadCount ?? 0) > 0 {
                             Circle()
                                 .fill(Color.CT.danger)
                                 .frame(width: 10, height: 10)
@@ -414,11 +411,36 @@ struct DesktopChatView: View {
 
     // MARK: - Window toolbar (D1)
 
+    //
+    // The name, our own connection state under it, and the key status beside it are the title —
+    // status, not controls, so no glass under them (macOS 26 groups neighbouring items into one
+    // capsule, and the badge read as a second button next to the profile). Nothing about the
+    // peer's presence: there is none to show. The right side is only controls.
+
     @ToolbarContentBuilder
     private var chatToolbar: some ToolbarContent {
-        if contactKTStatus != .unverified {
-            ToolbarItem(placement: .automatic) {
-                ktBadge
+        if #available(macOS 26.0, *) {
+            ToolbarItem(placement: .navigation) { chatTitle }
+                .sharedBackgroundVisibility(.hidden)
+        } else {
+            ToolbarItem(placement: .navigation) { chatTitle }
+        }
+
+        ToolbarItem(placement: .primaryAction) {
+            if isSearchActive {
+                DesktopToolbarSearchField(
+                    text: $searchText,
+                    prompt: NSLocalizedString("search_messages", comment: ""),
+                    onEnd: { isSearchActive = false }
+                )
+                .frame(width: Self.searchFieldWidth)
+            } else {
+                Button {
+                    isSearchActive = true
+                } label: {
+                    Image(systemName: "magnifyingglass")
+                }
+                .help(NSLocalizedString("search_messages", comment: ""))
             }
         }
 
@@ -426,10 +448,9 @@ struct DesktopChatView: View {
             Button {
                 showingUserProfile = true
             } label: {
-                Image(systemName: "person.crop.circle")
+                Image(systemName: "info.circle")
             }
             .help(NSLocalizedString("profile", comment: ""))
-            .disabled(viewModel.chat.otherUser == nil)
         }
 
         if isEditMode {
@@ -442,14 +463,14 @@ struct DesktopChatView: View {
                 .help(NSLocalizedString("done", comment: ""))
             }
         } else if CallsFeature.isEnabled,
-                  let otherUser = viewModel.chat.otherUser,
                   case .idle = callManager.state {
             ToolbarItem(placement: .primaryAction) {
                 Button {
                     Task {
                         await callManager.startOutgoingCall(
-                            to: otherUser.id,
-                            displayName: otherUser.resolvedDisplayName,
+                            to: peerId,
+                            displayName: ContactsLive.shared.contact(peerId)?.resolvedDisplayName
+                                ?? DisplayNameGenerator.generate(from: peerId),
                             hasVideo: false
                         )
                     }
@@ -461,22 +482,42 @@ struct DesktopChatView: View {
         }
     }
 
+    private static let searchFieldWidth: CGFloat = 220
+
+    private var chatTitle: some View {
+        HStack(spacing: CTSpace.s) {
+            VStack(alignment: .leading, spacing: 0) {
+                Text(titleName)
+                    .font(CTFont.headline)
+                    .foregroundStyle(Color.CT.text)
+                    .lineLimit(1)
+                if let subtitle = navigationStatusSubtitle {
+                    Text(subtitle)
+                        .font(CTFont.caption)
+                        .foregroundStyle(Color.CT.textDim)
+                        .lineLimit(1)
+                }
+            }
+            ktBadge
+        }
+        .padding(.horizontal, CTSpace.xs)
+    }
+
+    private var titleName: String {
+        guard !peerId.isEmpty else { return NSLocalizedString("chat", comment: "") }
+        return ContactsLive.shared.contact(peerId)?.resolvedDisplayName
+            ?? DisplayNameGenerator.generate(from: peerId)
+    }
+
     @ViewBuilder private var ktBadge: some View {
-        switch contactKTStatus {
-        case .verified:
+        if let alert = contactTrustAlert {
+            CTStatusBadge(status: alert == .verificationFailed ? .error : .warning, size: 12)
+                .help(NSLocalizedString(alert.titleKey, comment: ""))
+                .accessibilityLabel(Text(NSLocalizedString("kt_warning", comment: "")))
+        } else if contactKTStatus == .verified {
             CTStatusBadge(status: .ok, size: 12)
                 .help(NSLocalizedString("kt_verified", comment: ""))
                 .accessibilityLabel(Text(NSLocalizedString("kt_verified", comment: "")))
-        case .keyChanged:
-            CTStatusBadge(status: .warning, size: 12)
-                .help(NSLocalizedString("kt_warning", comment: ""))
-                .accessibilityLabel(Text(NSLocalizedString("kt_warning", comment: "")))
-        case .failed:
-            CTStatusBadge(status: .error, size: 12)
-                .help(NSLocalizedString("kt_warning", comment: ""))
-                .accessibilityLabel(Text(NSLocalizedString("kt_warning", comment: "")))
-        case .unverified:
-            EmptyView()
         }
     }
 
@@ -493,16 +534,17 @@ struct DesktopChatView: View {
 
     // MARK: - Computed Properties
 
-    private var filteredMessages: [Message] {
-        let valid = viewModel.messages.filter { !$0.isDeleted && $0.managedObjectContext != nil }
+    private var filteredMessages: [TranscriptEntry] {
+        let valid = viewModel.entries
         guard !searchText.isEmpty else { return valid }
-        return valid.filter { $0.displayText.localizedCaseInsensitiveContains(searchText) }
+        // The words, not the stored body: "mediaId" would match every photo. Reads every row, so
+        // the list follows every row while a search is open — only then.
+        return valid.filter { $0.row.readableText.localizedCaseInsensitiveContains(searchText) }
     }
 
-    private var mediaMessages: [Message] {
+    private var mediaMessages: [TranscriptRow] {
         viewModel.messages.filter {
-            guard !$0.isDeleted, $0.managedObjectContext != nil else { return false }
-            if let mc = parseMediaContent(from: $0.displayText) {
+            if let mc = parseMediaContent(from: $0.legacyBody) {
                 return (mc.media["_placeholder"] as? Bool) != true
             }
             return false
@@ -511,11 +553,11 @@ struct DesktopChatView: View {
 
     // MARK: - Soft reply focus
 
-    private func replyFocusOpacity(for message: Message) -> Double {
+    private func replyFocusOpacity(for messageId: String) -> Double {
         guard !isEditMode, !replyFocusIds.isEmpty else {
             return ChatUIConstants.ReplyFocus.focusedOpacity
         }
-        if replyFocusIds.contains(message.id.lowercased()) {
+        if replyFocusIds.contains(messageId.lowercased()) {
             return ChatUIConstants.ReplyFocus.focusedOpacity
         }
         return ChatUIConstants.ReplyFocus.dimmedOpacity
@@ -529,7 +571,7 @@ struct DesktopChatView: View {
         }
     }
 
-    private func peekReplyChain(for message: Message) {
+    private func peekReplyChain(for message: TranscriptRow) {
         let childId = message.id.lowercased()
         let parentId = (message.replyToMessageId ?? "").lowercased()
         guard !parentId.isEmpty else { return }
@@ -565,17 +607,41 @@ struct DesktopChatView: View {
     // MARK: - Actions
 
     private func markChatAsRead() {
-        guard viewModel.chat.unreadCount > 0 else { return }
-        viewModel.chat.unreadCount = 0
-        try? viewContext.save()
+        let chatId = viewModel.conversation.chatId
+        guard let unread = try? LocalRepositories.chats.chat(chatId)?.unreadCount, unread > 0 else { return }
+        try? LocalRepositories.chats.setUnread(chatId, 0)
     }
 
-    private func toggleMessageSelection(_ message: Message) {
+    private func toggleMessageSelection(_ message: TranscriptRow) {
         if selectedMessages.contains(message.id) {
             selectedMessages.remove(message.id)
         } else {
             selectedMessages.insert(message.id)
         }
+    }
+
+    // MARK: - Forward
+
+    private func startForward(_ rows: [TranscriptRow]) {
+        forwarding = rows
+        showingForwardPicker = true
+    }
+
+    /// The picked chat sends it: this one at once, any other when it opens.
+    private func finishForward(to chat: ChatRecord) {
+        ForwardDrafts.shared.hand(ForwardItem.content(of: forwarding), to: chat.id)
+        forwarding = []
+        withAnimation { selectedMessages.removeAll(); isEditMode = false }
+        if chat.id != viewModel.conversation.chatId {
+            chatsViewModel.chatToOpen = chat.id
+        }
+    }
+
+    private func sendForwardedHere() async {
+        let items = ForwardDrafts.shared.take(for: viewModel.conversation.chatId)
+        guard !items.isEmpty else { return }
+        let failures = await viewModel.forward(items)
+        if !failures.isEmpty { forwardFailed = true }
     }
 
     private func deleteSelectedMessages() {
@@ -592,7 +658,7 @@ struct DesktopChatView: View {
         LocalNotificationManager.shared.clearBadge()
         // Same as iOS: only arm opening when a transcript is already present.
         // Empty → 0→N is handled by handleTranscriptCountChange.
-        if !viewModel.messages.isEmpty {
+        if !viewModel.entries.isEmpty {
             scrollManager.beginOpening()
         }
     }
@@ -644,8 +710,8 @@ struct DesktopChatView: View {
     private var transcriptRows: some View {
                 ForEach(Array(filteredMessages.enumerated()), id: \.element.id) { index, message in
                     VStack(spacing: 0) {
-                        MessageBubble(
-                            message: message,
+                        ObservedTranscriptRow(entry: message) { row in MessageBubble(
+                            message: row,
                             isLastInGroup: message.isLastInGroup(at: index, in: filteredMessages),
                             isSelected: selectedMessages.contains(message.id),
                             isEditMode: isEditMode,
@@ -666,8 +732,9 @@ struct DesktopChatView: View {
                             onJumpToReply: { msg in peekReplyChain(for: msg) },
                             onReact: { msg, emoji in
                                 viewModel.sendReaction(msg, emoji: emoji)
-                            }
-                        )
+                            },
+                            onForward: { msg in startForward([msg]) }
+                        ) }
                         .id(message.id)
                         .onAppear {
                             if index == filteredMessages.count - 1 {
@@ -679,7 +746,7 @@ struct DesktopChatView: View {
                                 scrollManager.noteLastMessageVisible(false, searchActive: isSearchActive)
                             }
                         }
-                        .opacity(replyFocusOpacity(for: message))
+                        .opacity(replyFocusOpacity(for: message.id))
                         .animation(
                             .easeInOut(duration: ChatUIConstants.ReplyFocus.animationDuration),
                             value: replyFocusIds
@@ -703,12 +770,9 @@ struct DesktopChatView: View {
     }
 
     private func loadContactKTStatus() {
-        guard let userId = viewModel.chat.otherUser?.id, !userId.isEmpty else { return }
-        let req = User.fetchRequest()
-        req.predicate = NSPredicate(format: "id == %@", userId)
-        req.fetchLimit = 1
-        if let user = (try? viewContext.fetch(req))?.first {
-            contactKTStatus = user.ktStatus
+        if let contact = try? LocalRepositories.contacts.contact(peerId) {
+            contactKTStatus = contact.ktStatus
+            contactTrustAlert = contact.trustAlert
         }
     }
 
@@ -749,31 +813,20 @@ struct DesktopChatView: View {
     }
 }
 
-/// Pushes the peer's live display name into the window title. Chat does not
-/// publish User attribute changes (profile share), so this observes User itself.
+/// Pushes the peer's live display name into the window title. Chat does not change when the
+/// contact's profile does, so the name is read from `ContactsLive`, whose changes redraw it.
 private struct DesktopChatWindowTitle: ViewModifier {
-    var user: User?
+    var userId: String?
     let fallback: String
-    let subtitle: String?
 
     func body(content: Content) -> some View {
-        if let user {
-            Observing(content: content, user: user, subtitle: subtitle)
+        if let userId, !userId.isEmpty {
+            content
+                .navigationTitle(ContactsLive.shared.contact(userId)?.resolvedDisplayName
+                    ?? DisplayNameGenerator.generate(from: userId))
         } else {
             content
                 .navigationTitle(fallback)
-        }
-    }
-
-    private struct Observing: View {
-        let content: Content
-        @ObservedObject var user: User
-        let subtitle: String?
-
-        var body: some View {
-            content
-                .navigationTitle(user.resolvedDisplayName)
-                .navigationSubtitle(subtitle ?? "")
         }
     }
 }
@@ -793,7 +846,7 @@ private struct DesktopChatWindowTitle: ViewModifier {
         _ = PreviewHelpers.createSampleMessage(context: context, chat: chat, isSentByMe: false, text: "Nice, let me know when it's ready")
     }()
 
-    DesktopChatView(chat: chat, context: context)
+    DesktopChatView(conversation: Conversation(chatId: chat.id, peerId: user.id), context: context)
         .environment(\.managedObjectContext, context)
         .frame(width: 600, height: 500)
 }

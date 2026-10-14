@@ -6,10 +6,12 @@
 //  instruction.
 //
 //  Every message in the field logs of 2026-08-01 returned exactly one action — nine of ten. The
-//  tenth was an X3DH carrier arriving on an existing session, where the core emits
+//  tenth was an X3DH carrier arriving on an existing session, where the core emitted
 //  `applyPqContribution` *and* `checkAckInDb`. `MessageRouter` gated the ACK round-trip on
 //  `actions.count == 1`, so that one message was ACKed as delivered without ever being
 //  decrypted, and the sender's next message diverged the ratchet into an END_SESSION cycle.
+//  (`applyPqContribution` is gone since PQXDH v2; the core decapsulates itself. The lists below
+//  pair the ACK question with actions that still exist — the hazard is the pairing, not which.)
 //
 //  Acceptance is mutation-based: reintroduce any length or position assumption in
 //  OrchestratorActionPlan and this file must go red.
@@ -25,51 +27,30 @@ final class OrchestratorActionPlanTests: XCTestCase {
 
     // MARK: - The regression
 
-    /// The exact list from the field log: an X3DH carrier whose ACK cache missed after a
-    /// restart. Both instructions must be recovered — recovering only one is the bug.
-    func testCarrierWithAckMiss_RecoversBothInstructions() {
-        let kem = Data(repeating: 0xAB, count: 1088)
+    /// An ACK-cache miss that is not the only action. The question must be found — missing it
+    /// strands the message undecrypted (the 2026-08-01 defect).
+    func testAckMissAmongOtherActions_IsRecovered() {
         let plan = OrchestratorActionPlan(actions: [
-            .applyPqContribution(contactId: peer, kemSs: kem),
+            .scheduleTimer(timerId: "cooldown_expired:\(peer)", delayMs: 5068),
             .checkAckInDb(messageId: messageId)
         ])
 
         XCTAssertEqual(plan.ackCheckMessageId, messageId,
-                       "checkAckInDb must be found even when it is not the only action — "
-                       + "missing it strands the message undecrypted (the 2026-08-01 defect)")
-        XCTAssertEqual(plan.kemCiphertext, kem,
-                       "the KEM ciphertext must survive for decapsulation")
+                       "checkAckInDb must be found even when it is not the only action")
     }
 
     /// Order is the core's business, not ours. The same pair reversed must read identically.
     func testInstructionOrderIsIrrelevant() {
-        let kem = Data(repeating: 0x07, count: 1088)
         let forward = OrchestratorActionPlan(actions: [
-            .applyPqContribution(contactId: peer, kemSs: kem),
+            .scheduleTimer(timerId: "cooldown_expired:\(peer)", delayMs: 5068),
             .checkAckInDb(messageId: messageId)
         ])
         let reversed = OrchestratorActionPlan(actions: [
             .checkAckInDb(messageId: messageId),
-            .applyPqContribution(contactId: peer, kemSs: kem)
+            .scheduleTimer(timerId: "cooldown_expired:\(peer)", delayMs: 5068)
         ])
 
         XCTAssertEqual(forward.ackCheckMessageId, reversed.ackCheckMessageId)
-        XCTAssertEqual(forward.kemCiphertext, reversed.kemCiphertext)
-    }
-
-    /// A decrypted carrier: the PQ contribution rides alongside the routing verdict and the
-    /// storage actions, and must not be lost among them.
-    func testCarrierAmongRoutingAndStorageActions_StillYieldsContribution() {
-        let kem = Data(repeating: 0x5A, count: 1088)
-        let plan = OrchestratorActionPlan(actions: [
-            .applyPqContribution(contactId: peer, kemSs: kem),
-            .messageDecrypted(contactId: peer, messageId: messageId, plaintext: Data("hi".utf8)),
-            .saveToSecureStore(slot: .session(contactId: peer), data: Data(repeating: 1, count: 430)),
-            .persistAck(messageId: messageId, timestamp: 1_785_615_000)
-        ])
-
-        XCTAssertEqual(plan.kemCiphertext, kem)
-        XCTAssertNil(plan.ackCheckMessageId, "no ACK question was asked in this list")
     }
 
     // MARK: - The pre-existing single-action shapes must keep working
@@ -79,68 +60,50 @@ final class OrchestratorActionPlanTests: XCTestCase {
         let plan = OrchestratorActionPlan(actions: [.checkAckInDb(messageId: messageId)])
 
         XCTAssertEqual(plan.ackCheckMessageId, messageId)
-        XCTAssertNil(plan.kemCiphertext)
     }
 
-    /// An ordinary message on an established session: no carrier, no ACK question.
-    func testPlainDecrypt_YieldsNeitherInstruction() {
+    /// An ordinary message on an established session: no ACK question.
+    func testPlainDecrypt_AsksNothing() {
         let plan = OrchestratorActionPlan(actions: [
-            .messageDecrypted(contactId: peer, messageId: messageId, plaintext: Data("hi".utf8))
+            .messageDecrypted(contactId: peer, messageId: messageId, plaintext: Data("hi".utf8)),
+            .saveToSecureStore(slot: .session(contactId: peer), data: Data(repeating: 1, count: 430)),
+            .persistAck(messageId: messageId, timestamp: 1_785_615_000)
         ])
 
-        XCTAssertNil(plan.kemCiphertext)
         XCTAssertNil(plan.ackCheckMessageId)
     }
 
-    func testEmptyActions_YieldNeitherInstruction() {
+    func testEmptyActions_AskNothing() {
         let plan = OrchestratorActionPlan(actions: [])
 
-        XCTAssertNil(plan.kemCiphertext)
         XCTAssertNil(plan.ackCheckMessageId)
     }
 
-    /// A duplicate the core dropped still carries the contribution instruction, because the core
-    /// pushes it before routing. The router must NOT apply it — that decision belongs to the
-    /// caller (it applies only on `.messageDecrypted`), but the plan still reports it faithfully
-    /// rather than second-guessing the core.
-    func testDroppedDuplicate_ReportsContributionForCallerToJudge() {
-        let kem = Data(repeating: 0xC3, count: 1088)
-        let plan = OrchestratorActionPlan(actions: [
-            .applyPqContribution(contactId: peer, kemSs: kem)
-        ])
+    // MARK: - Routing verdict
 
-        XCTAssertEqual(plan.kemCiphertext, kem)
-        XCTAssertNil(plan.ackCheckMessageId)
+    /// An unread message is a verdict whichever way the core states it, with the error it built
+    /// beside the persist chore, or with only its reason. Read as `.none` it would be logged as
+    /// "no routing decision" and the error would not be sent. (Device logs 2026-08-19 show the
+    /// shape: a named decision beside a chore read as unknown.)
+    func testAnUnreadMessage_IsAnUnreadableVerdict() {
+        XCTAssertEqual(OrchestratorActionPlan.routingVerdict(from: [
+            .persistAck(messageId: messageId, timestamp: 1),
+            .sendDecryptionError(contactId: peer, messageId: messageId, payload: Data([1]), enveloped: false),
+            .notifyError(code: OrchestratorActionPlan.decryptFailedCode, message: "AEAD decryption failed")
+        ]), .unreadable)
+        XCTAssertEqual(OrchestratorActionPlan.routingVerdict(from: [
+            .notifyError(code: OrchestratorActionPlan.decryptFailedCode, message: "AEAD decryption failed")
+        ]), .unreadable)
     }
 
-    // MARK: - Routing verdict (healSuppressed is a decision, not "unknown")
-
-    /// Device logs 2026-08-19: the core returned
-    /// `[healSuppressed(..., retryAfterMs: 5068), scheduleTimer(cooldown_expired:…)]`
-    /// and the router logged `unknown(healSuppressed),unknown(scheduleTimer)` then ERROR
-    /// "no routing decision". That pair is a cooldown verdict. Treating it as `.none`
-    /// skipped the timer and advanced the cursor past an un-ACKed message.
-    func testHealSuppressedPlusTimer_IsAHealSuppressedVerdict() {
-        let verdict = OrchestratorActionPlan.routingVerdict(from: [
-            .healSuppressed(contactId: peer, retryAfterMs: 5068),
-            .scheduleTimer(timerId: "cooldown_expired:\(peer)", delayMs: 5068)
-        ])
-        XCTAssertEqual(
-            verdict,
-            .healSuppressed(contactId: peer, retryAfterMs: 5068),
-            "scheduleTimer is a chore riding alongside the verdict, not a missing decision"
-        )
-    }
-
-    func testEndSessionSuppressedPlusTimer_IsAnEndSessionSuppressedVerdict() {
-        let verdict = OrchestratorActionPlan.routingVerdict(from: [
-            .endSessionSuppressed(contactId: peer, retryAfterMs: 5077),
-            .scheduleTimer(timerId: "cooldown_expired:\(peer)", delayMs: 5077)
-        ])
-        XCTAssertEqual(
-            verdict,
-            .endSessionSuppressed(contactId: peer, retryAfterMs: 5077)
-        )
+    /// A payload that does not parse is a verdict of its own, ahead of the reason the core logs
+    /// beside it. Read as `.none` (all it was before core 0.28) it is logged as an undecided
+    /// message — an ERROR — and no processed record is written.
+    func testAMalformedPayload_IsAMalformedVerdict() {
+        XCTAssertEqual(OrchestratorActionPlan.routingVerdict(from: [
+            .malformedDropped(messageId: messageId),
+            .notifyError(code: "MALFORMED_WIRE_PAYLOAD", message: "suite 3 is retired")
+        ]), .malformed(messageId: messageId))
     }
 
     func testTimerAlone_IsNotARoutingVerdict() {
@@ -160,7 +123,7 @@ final class OrchestratorActionPlanTests: XCTestCase {
         let decrypted = OrchestratorActionPlan.routingVerdict(from: [
             .scheduleTimer(timerId: "x", delayMs: 1),
             .messageDecrypted(contactId: peer, messageId: messageId, plaintext: Data("hi".utf8)),
-            .healSuppressed(contactId: peer, retryAfterMs: 1)
+            .sendDecryptionError(contactId: peer, messageId: messageId, payload: Data([1]), enveloped: false)
         ])
         XCTAssertEqual(decrypted, .decrypted)
     }

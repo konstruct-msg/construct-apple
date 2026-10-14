@@ -65,6 +65,21 @@ final class CropGeometryTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(displayed.height * min, window.height - 0.001)
     }
 
+    /// A pinch's final value, not a possibly stale SwiftUI `@State` snapshot, commits the zoom.
+    /// This is the incident shape: the preview enlarged, but Done rendered the old scale.
+    func testPinchCommitUsesTheGestureValueThatEnded() {
+        XCTAssertEqual(
+            CropGeometry.scaleAfterMagnification(1, gestureValue: 2, minimum: 1),
+            2,
+            accuracy: 0.001
+        )
+        XCTAssertEqual(
+            CropGeometry.scaleAfterMagnification(1, gestureValue: 0.5, minimum: 1.25),
+            1.25,
+            accuracy: 0.001
+        )
+    }
+
     // MARK: - Panning
 
     func testAnImageThatExactlyFillsTheWindowCannotBeDragged() {

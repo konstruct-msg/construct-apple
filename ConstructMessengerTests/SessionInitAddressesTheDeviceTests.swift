@@ -32,8 +32,11 @@ private final class RecordingCore: OrchestratorCore, @unchecked Sendable {
     private static var kept: [RecordingCore] = []
 
     var sessionExistsFor: Set<String> = []
+    /// Set to make `reopenSession` refuse, the way the core does for a bundle it cannot trust.
+    var reopenRefusal: Error?
     private(set) var initReceivingContactIds: [String] = []
     private(set) var initSendingContactIds: [String] = []
+    private(set) var reopenContactIds: [String] = []
 
     init() {
         super.init(noHandle: NoHandle())
@@ -47,17 +50,28 @@ private final class RecordingCore: OrchestratorCore, @unchecked Sendable {
 
     override func getSessionSuiteId(contactId: String) -> UInt16 { 3 }
 
-    override func initReceivingSession(
-        contactId: String,
-        recipientBundle: BinaryKeyBundle,
-        firstMessage: BinaryFirstMessage
+    override func initReceivingSessionFromWirePayload(
+        senderCertificate: SenderCertificate,
+        wirePayload: Data
     ) throws -> SessionInitResult {
-        initReceivingContactIds.append(contactId)
+        // The core files the session under the device the certificate names and answers with it.
+        initReceivingContactIds.append(senderCertificate.deviceId)
         return SessionInitResult(
-            sessionId: "session-\(contactId)",
-            decryptedMessage: Array("hello".utf8),
-            storageKey: []
+            sessionId: senderCertificate.deviceId,
+            decryptedMessage: Data("hello".utf8),
+            storageKey: Data(),
+            kyberPrekeys: nil
         )
+    }
+
+    override func reopenSession(contactId: String, recipientBundle: BinaryKeyBundle) throws -> String {
+        reopenContactIds.append(contactId)
+        if let reopenRefusal { throw reopenRefusal }
+        return "session-\(contactId)"
+    }
+
+    override func exportSession(contactId: String) throws -> Data {
+        Data("held-\(contactId)".utf8)
     }
 
     override func initSession(contactId: String, recipientBundle: BinaryKeyBundle) throws -> String {
@@ -91,20 +105,44 @@ final class SessionInitAddressesTheDeviceTests: XCTestCase {
         )
     }
 
+    /// The same device's bundle as the INITIATOR path takes it. The fake core never reads the
+    /// Kyber fields, so they are left out.
+    private func served() -> PublicKeyBundleData {
+        let b = bundle()
+        return PublicKeyBundleData(
+            userId: account,
+            username: "",
+            identityPublic: b.identityPublic,
+            signedPrekeyPublic: b.signedPrekeyPublic,
+            signature: b.signature,
+            verifyingKey: b.verifyingKey,
+            suiteId: 1,
+            spkUploadedAt: 0,
+            spkRotationEpoch: 0,
+            kyberSpkUploadedAt: 0,
+            kyberSpkRotationEpoch: 0
+        )
+    }
+
     private func firstMessage() -> ChatMessage {
         ChatMessage(
             id: UUID().uuidString,
             from: account,
             to: "0a1c609f-b37d-4d67-b7b2-b0f8ec16d167",
-            ephemeralPublicKey: Data(repeating: 0x55, count: 32),
-            messageNumber: 0,
-            content: Data(repeating: 0x66, count: 283),
-            suiteId: 1,
             timestamp: 1_788_698_000,
-            oneTimePreKeyId: 1_000_710,
-            kemCiphertext: Data(),
             contentType: 0,
-            kyberOtpkId: 0
+            // Names the bundle's device; the fake core does not check the signature.
+            senderCertificate: SenderCertificate(
+                userId: account, domain: "test.example", identityKey: bundleIdentityKey,
+                deviceId: bundleDevice, issuedAt: 1, expiresAt: 2, signature: Data(repeating: 0x09, count: 64),
+                serverKid: Data(), serverSignatureHybrid: Data()
+            ),
+            // A handshake header, so the message classifies as one; the fake core never decrypts it.
+            rawPayload: handBuiltWirePayload(
+                messageNumber: 0,
+                suiteId: 1,
+                kemCiphertext: [UInt8](repeating: 0x77, count: 1568)
+            )
         )
     }
 
@@ -126,17 +164,15 @@ final class SessionInitAddressesTheDeviceTests: XCTestCase {
         let core = RecordingCore()
         var saved: [String] = []
 
-        _ = try CryptoSessionInitializationService().initReceivingSession(
-            for: account,
-            recipientBundle: bundle(),
-            firstMessage: firstMessage(),
+        _ = try CryptoSessionInitializationService().openReceiving(
+            firstMessage(),
             core: core,
             archiveSession: { _, _ in },
             saveSession: { saved.append($0) }
         )
 
         XCTAssertEqual(core.initReceivingContactIds, [bundleDevice],
-                       "premise: the session opens under the bundle's device")
+                       "premise: the session opens under the certificate's device")
         XCTAssertEqual(saved, [bundleDevice],
                        "the persist must name the device the session was opened under — given the "
                        + "account it resolves to the pinned device and exports a session that is not there")
@@ -148,7 +184,7 @@ final class SessionInitAddressesTheDeviceTests: XCTestCase {
 
         try CryptoSessionInitializationService().initializeSession(
             for: account,
-            recipientBundle: bundle(),
+            bundle: served(),
             core: core,
             archiveSession: { _, _ in },
             saveSession: { saved.append($0) }
@@ -159,25 +195,72 @@ final class SessionInitAddressesTheDeviceTests: XCTestCase {
                        "the INITIATOR path is the mirror image and had the same defect")
     }
 
-    /// The archive is guarded on `hasSession(contactId:)` — an answer about one device. Handing
-    /// the account to the archive that follows makes the question and the action address different
-    /// peers' devices.
-    func testArchiveBeforeReinitNamesTheDeviceThatWasAskedAbout() throws {
+    /// A sibling's new state opened over one held is not archived here: the core keeps the held
+    /// state as a previous one, and archiving it — as this did until 2026-09-27 — threw away what
+    /// the sibling still had in flight on it (`decisions/sessions-renew-by-sending.md`).
+    func testAReceivingOpenOverAHeldSessionArchivesNothing() throws {
         let core = RecordingCore()
         core.sessionExistsFor = [bundleDevice]
         var archived: [String] = []
 
-        _ = try CryptoSessionInitializationService().initReceivingSession(
-            for: account,
-            recipientBundle: bundle(),
-            firstMessage: firstMessage(),
+        _ = try CryptoSessionInitializationService().openReceiving(
+            firstMessage(),
             core: core,
             archiveSession: { peer, _ in archived.append(peer) },
             saveSession: { _ in }
         )
 
-        XCTAssertEqual(archived, [bundleDevice],
-                       "the archive must put away the session `hasSession` just found, not whichever "
-                       + "device the contact list pins")
+        XCTAssertEqual(archived, [], "the held state is the core's to keep")
+    }
+
+    /// A session held with the device is replaced by the core's reopen — built first — and kept
+    /// by the core as a previous state. Nothing is archived: up front that left a pair with no
+    /// session when the init was then refused, and afterwards it duplicated what the core keeps.
+    func testSendingInitOverAHeldSessionReopensAndArchivesNothing() throws {
+        let core = RecordingCore()
+        core.sessionExistsFor = [bundleDevice]
+        var archivedFirst: [String] = []
+        var saved: [String] = []
+
+        try CryptoSessionInitializationService().initializeSession(
+            for: account,
+            bundle: served(),
+            core: core,
+            archiveSession: { peer, _ in archivedFirst.append(peer) },
+            saveSession: { saved.append($0) }
+        )
+
+        XCTAssertEqual(core.reopenContactIds, [bundleDevice])
+        XCTAssertEqual(core.initSendingContactIds, [], "a held session goes through reopen, not init")
+        XCTAssertEqual(archivedFirst, [], "nothing is torn down, before or after")
+        XCTAssertEqual(saved, [bundleDevice])
+    }
+
+    /// The reopen refused (PQ_REQUIRED — a peer still on a build from before PQXDH v2): the held
+    /// session stays, nothing is archived or saved, and the caller hears why.
+    func testRefusedReopenKeepsTheHeldSessionAndSaysWhy() {
+        let core = RecordingCore()
+        core.sessionExistsFor = [bundleDevice]
+        // Shaped as the core really sends it: a flat UniFFI error carries the whole Display text.
+        core.reopenRefusal = CryptoError.SessionInitializationFailed(
+            message: "Session initialization failed: PQ_REQUIRED: bundle has no hybrid identity key"
+        )
+        var archived: [String] = []
+        var saved: [String] = []
+
+        XCTAssertThrowsError(try CryptoSessionInitializationService().initializeSession(
+            for: account,
+            bundle: served(),
+            core: core,
+            archiveSession: { peer, _ in archived.append(peer) },
+            saveSession: { saved.append($0) }
+        )) { error in
+            guard case SessionError.peerNotPostQuantum(let reason)? = error as? SessionError else {
+                return XCTFail("expected peerNotPostQuantum, got \(error)")
+            }
+            XCTAssertTrue(reason.hasPrefix("PQ_REQUIRED"))
+        }
+        XCTAssertEqual(archived, [])
+        XCTAssertEqual(saved, [])
     }
 }

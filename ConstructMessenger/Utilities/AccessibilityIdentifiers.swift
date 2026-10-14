@@ -71,10 +71,17 @@ enum A11y {
         static let input       = "chat.input"
         static let send        = "chat.send"
         static let voice       = "chat.voice"
-        static let back        = "chat.back"
         static let title       = "chat.title"
 
+        static let attach      = "chat.attach"
+
         static func message(_ messageId: String) -> String { "chat.message.\(messageId)" }
+
+        /// A sticker row, by the pack hash's first 16 hex and the index — enough for a stand to
+        /// assert "the same sticker" on both sides without carrying 64 characters.
+        static func sticker(_ ref: StickerReference) -> String {
+            "chat.sticker.\(ref.pack.hex.prefix(16)).\(ref.index)"
+        }
 
         /// The delivery status is encoded *in the identifier* rather than exposed as a
         /// label: the icons carry no text, and the two-sim stand needs to assert
@@ -82,6 +89,21 @@ enum A11y {
         static func messageStatus(_ messageId: String, _ status: DeliveryStatus) -> String {
             "chat.message.\(messageId).status.\(status.a11yToken)"
         }
+    }
+
+    // MARK: - Media picker
+
+    enum MediaPicker {
+        static let tabStickers    = "mediaPicker.tab.stickers"
+        static let installFixture = "mediaPicker.stickers.installFixture"
+
+        static func sticker(_ ref: StickerReference) -> String {
+            "mediaPicker.sticker.\(ref.pack.hex.prefix(16)).\(ref.index)"
+        }
+
+        static let catalogRetry = "mediaPicker.catalog.retry"
+        static func catalogPack(_ id: StickerPackID) -> String { "mediaPicker.catalog.\(id.hex.prefix(16))" }
+        static func installPack(_ id: StickerPackID) -> String { "mediaPicker.catalog.\(id.hex.prefix(16)).get" }
     }
 
     // MARK: - Pairing

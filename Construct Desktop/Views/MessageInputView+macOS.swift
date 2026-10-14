@@ -15,9 +15,9 @@ struct DesktopMessageInputView: View {
     @Binding var text: String
     @Binding var droppedImages: [PlatformImage]
     @Binding var droppedFileURLs: [URL]
-    let replyingTo: Message?
+    let replyingTo: TranscriptRow?
     let quoteOverride: String?
-    let editingMessage: Message?
+    let editingMessage: TranscriptRow?
     let onSend: ([MediaAttachment], [URL]) -> Void
     var onSendVoice: ((URL, TimeInterval, [Float]) -> Void)? = nil
     let onCancelReply: () -> Void
@@ -85,13 +85,13 @@ struct DesktopMessageInputView: View {
     private var replyOrEditBars: some View {
         if let msg = replyingTo {
             MessageReplyBar(
-                content: quoteOverride ?? (msg.displayText.isEmpty ? nil : msg.displayText),
+                content: quoteOverride ?? (msg.legacyBody.isEmpty ? nil : msg.legacyBody),  // parser input: ReplyPreviewContent reads the shapes
                 messageId: msg.id,
                 onCancel: onCancelReply
             )
         }
         if let msg = editingMessage {
-            MessageEditBar(content: msg.displayText, onCancel: onCancelEdit)
+            MessageEditBar(content: msg.readableText, onCancel: onCancelEdit)
         }
     }
 
@@ -128,6 +128,28 @@ struct DesktopMessageInputView: View {
         }
     }
 
+    /// ⌘V in the field: files and pictures are attached, as a drop would; text is left to the
+    /// field. Reads the clipboard only for what `ComposerPaste` says it holds.
+    private func attachFromClipboard() -> Bool {
+        let pasteboard = NSPasteboard.general
+        switch ComposerPaste.kind(types: pasteboard.types?.map(\.rawValue) ?? []) {
+        case .files:
+            let urls = pasteboard.readObjects(
+                forClasses: [NSURL.self],
+                options: [.urlReadingFileURLsOnly: true]
+            ) as? [URL] ?? []
+            guard !urls.isEmpty else { return false }
+            attachments.handlePickedFiles(urls)
+            return true
+        case .image:
+            guard let image = NSImage(pasteboard: pasteboard) else { return false }
+            attachments.appendDroppedImages([image])
+            return true
+        case .text:
+            return false
+        }
+    }
+
     private var inputRow: some View {
         HStack(spacing: 8) {
             attachmentButton
@@ -136,7 +158,9 @@ struct DesktopMessageInputView: View {
                 canSend: canSend,
                 sendOnReturn: sendOnEnter,
                 onSend: sendMessage,
-                onStartVoice: startVoiceRecording
+                onStartVoice: startVoiceRecording,
+                onPasteAttachment: attachFromClipboard,
+                focusOnAppear: true
             )
         }
         .padding(.horizontal, 16)
@@ -146,7 +170,7 @@ struct DesktopMessageInputView: View {
     private var attachmentButton: some View {
         Button { showAttachmentMenu = true } label: {
             Image(systemName: "plus.circle")
-                .font(.system(size: 20))
+                .font(CTFont.ui(20))
                 .foregroundColor(Color.CT.textDim)
         }
         .buttonStyle(.automatic)
@@ -182,24 +206,24 @@ struct DesktopMessageInputView: View {
         HStack(spacing: 12) {
             Button { audioRecorder.cancel() } label: {
                 Image(systemName: "xmark.circle.fill")
-                    .font(.system(size: 18, weight: .light))
+                    .font(CTFont.ui(18, weight: .light))
                     .foregroundStyle(Color.CT.textDim)
             }
             .buttonStyle(.plain)
 
             Image(systemName: "waveform")
-                .font(.system(size: 13, weight: .medium))
+                .font(CTFont.ui(13, weight: .medium))
                 .foregroundStyle(Color.CT.danger)
 
             Text(String(format: "%d:%02d", Int(duration) / 60, Int(duration) % 60))
-                .font(.system(size: 13, weight: .medium).monospacedDigit())
+                .font(CTFont.ui(13, weight: .medium).monospacedDigit())
                 .foregroundStyle(Color.CT.danger)
 
             Spacer()
 
             Button { audioRecorder.stopRecording() } label: {
                 Image(systemName: "stop.circle.fill")
-                    .font(.system(size: 20, weight: .regular))
+                    .font(CTFont.ui(20, weight: .regular))
                     .foregroundStyle(Color.CT.danger)
             }
             .buttonStyle(.plain)
@@ -207,8 +231,8 @@ struct DesktopMessageInputView: View {
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
         .background(Color.CT.outMsgBg)
-        .clipShape(Capsule())
-        .overlay(Capsule().stroke(Color.CT.noise, lineWidth: 1))
+        .clipShape(CTShape.pill())
+        .overlay(CTShape.pill().stroke(Color.CT.noise, lineWidth: 1))
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
     }
@@ -217,17 +241,17 @@ struct DesktopMessageInputView: View {
         HStack(spacing: 12) {
             Button { audioRecorder.cancel() } label: {
                 Image(systemName: "trash.circle.fill")
-                    .font(.system(size: 18, weight: .light))
+                    .font(CTFont.ui(18, weight: .light))
                     .foregroundStyle(Color.CT.danger)
             }
             .buttonStyle(.plain)
 
             Text(String(format: "%d:%02d", Int(duration) / 60, Int(duration) % 60))
-                .font(.system(size: 13, weight: .medium).monospacedDigit())
+                .font(CTFont.ui(13, weight: .medium).monospacedDigit())
                 .foregroundStyle(Color.CT.textDim)
 
             Text(NSLocalizedString("voice_ready_to_send", comment: ""))
-                .font(.system(size: 13, weight: .regular))
+                .font(CTFont.ui(13, weight: .regular))
                 .foregroundStyle(Color.CT.textDim)
 
             Spacer()
@@ -237,7 +261,7 @@ struct DesktopMessageInputView: View {
                 audioRecorder.resetAfterSend()
             } label: {
                 Image(systemName: "arrow.up.circle.fill")
-                    .font(.system(size: 20, weight: .regular))
+                    .font(CTFont.ui(20, weight: .regular))
                     .foregroundStyle(Color.CT.accent)
             }
             .buttonStyle(.plain)
@@ -245,8 +269,8 @@ struct DesktopMessageInputView: View {
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
         .background(Color.CT.outMsgBg)
-        .clipShape(Capsule())
-        .overlay(Capsule().stroke(Color.CT.noise, lineWidth: 1))
+        .clipShape(CTShape.pill())
+        .overlay(CTShape.pill().stroke(Color.CT.noise, lineWidth: 1))
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
     }

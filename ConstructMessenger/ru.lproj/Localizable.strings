@@ -87,7 +87,7 @@
 "preferences" = "Настройки";
 "version" = "Версия";
 "build_channel_beta" = "Бета";
-"build_channel_beta_a11y" = "Это бета или внутренняя сборка, не production App Store";
+"build_channel_beta_a11y" = "Это бета-версия или внутренняя сборка, а не выпуск для App Store";
 "about" = "О приложении";
 "account" = "Идентичность";
 "appearance" = "Внешний вид";
@@ -117,7 +117,7 @@
 "wrong_pin_code" = "Неверный ПИН-код";
 "cant_unlock" = "Не можете войти?";
 "pin_reset_title" = "Сбросить это устройство?";
-"pin_reset_explain" = "Все локальные данные будут стёрты с этого устройства. Identity можно восстановить позже по seed-фразе — только если восстановление было настроено.";
+"pin_reset_explain" = "Все локальные данные будут стёрты с этого устройства. Идентичность можно будет восстановить по фразе восстановления, только если вы настроили её заранее.";
 "pin_reset_action" = "Сбросить";
 "pin_reset_countdown" = "Сброс через %d… введите ПИН, чтобы отменить";
 "lock_delay" = "Блокировать через";
@@ -140,9 +140,9 @@
 "disable" = "Выключить";
 
 // MARK: - Settings -> My QR Code
-"failed_to_generate_qr_code" = "Failed to generate QR code";
-"show_this_code_to_someone_nearby" = "Show this code to someone nearby";
-"scan_with_camera_or_screenshot" = "They can scan this with their camera or take a screenshot";
+"failed_to_generate_qr_code" = "Не удалось создать QR-код";
+"show_this_code_to_someone_nearby" = "Покажите этот код человеку рядом";
+"scan_with_camera_or_screenshot" = "Он может отсканировать код камерой или сделать снимок экрана";
 
 // MARK: - Settings -> Appearance
 
@@ -193,12 +193,12 @@
 "construct_app_name" = "Конструкт";
 "construct_new_message" = "Новое сообщение";
 "construct_new_messages" = "Новые сообщения";
-"construct_new_messages_count" = "У вас %d новое(ых) сообщение(ий)";
+"construct_new_messages_count" = "Новых сообщений: %d";
 "construct_new_messages_from_contacts" = "У вас %d новых сообщений от %d контактов";
 "construct_sync_completed" = "Сообщения синхронизированы";
 "construct_sync_completed_count" = "Синхронизировано %d новых сообщений";
 "background_fetch" = "Фоновая загрузка";
-"background_fetch_footer" = "Периодически получает пропущенные сообщения через зашифрованное gRPC-соединение, когда активный стрим не работает (например, приложение свёрнуто или было прервано соединение). Позволяет держать входящие в актуальном состоянии без полной зависимости от push-уведомлений.";
+"background_fetch_footer" = "Периодически загружает пропущенные сообщения, когда постоянное соединение неактивно (например, приложение работает в фоне или связь прервалась). Чаты остаются актуальными и без push-уведомлений.";
 "enable_background_fetch" = "Включить фоновую загрузку";
 "background_fetch_status" = "Статус фоновой загрузки";
 "background_fetch_disabled" = "Отключено";
@@ -206,7 +206,7 @@
 "background_fetch_last_check" = "Последняя проверка: %@";
 "background_fetch_interval" = "Интервал проверки";
 "background_fetch_interval_settings" = "Интервал проверки";
-"background_fetch_interval_footer" = "Как часто получать пропущенные сообщения, когда активный стрим не работает. iOS может корректировать это в зависимости от ваших шаблонов использования.";
+"background_fetch_interval_footer" = "Как часто загружать пропущенные сообщения, когда постоянное соединение неактивно. iOS может менять интервал в зависимости от того, как вы используете приложение.";
 "background_fetch_interval_minutes" = "%d мин.";
 "background_fetch_interval_hours" = "%d час(ов)";
 "background_fetch_low_power_mode_warning" = "Отключено в режиме энергосбережения";
@@ -234,6 +234,8 @@
 "report_spam_failed" = "Не удалось отправить жалобу, но пользователь заблокирован.";
 "actions" = "Действия";
 "user_is_blocked_footer" = "Этот пользователь заблокирован. Он не может отправлять вам сообщения.";
+"profile_blocked_badge" = "Заблокирован";
+"composer_split_count" = "%d сообщений";
 "block_user_confirmation" = "Заблокировать пользователя";
 "block_user_confirmation_message" = "Вы уверены, что хотите заблокировать этого пользователя? Он не сможет отправлять вам сообщения.";
 "unblock_user_confirmation_message" = "Вы уверены, что хотите разблокировать этого пользователя? Он снова сможет отправлять вам сообщения.";
@@ -245,6 +247,10 @@
 "user_not_found" = "Пользователь не найден";
 "failed_to_encode_profile" = "Не удалось закодировать профиль";
 "search_messages" = "Поиск сообщений";
+"chat_actions" = "Действия";
+"chat_action_search" = "Поиск";
+"chat_action_call" = "Звонок";
+"chat_action_video" = "Видео";
 "select" = "Выбрать";
 "select_messages" = "Выбрать сообщения";
 "delete_selected" = "Удалить выбранное";
@@ -261,18 +267,18 @@
 "delete_account" = "Удалить идентичность";
 "warning" = "Предупреждение";
 "profile_currently_shared" = "Профиль доступен для контакта";
-"stop_sharing_profile" = "Прекратить делиться профилем";
 "share_my_profile" = "Поделиться моим профилем";
 "share_profile_explanation" = "Поделитесь своим именем и фотографией с этим контактом";
+"profile_sharing_section" = "Доступ к профилю";
 "username_invalid_chars" = "Имя пользователя может содержать только буквы, цифры и подчёркивание.";
 "username_too_short" = "Имя пользователя должно быть не короче 3 символов.";
 "username_checking" = "Проверяем доступность...";
 "username_available" = "Имя пользователя доступно.";
 "username_unavailable" = "Имя пользователя уже занято.";
 "username_check_failed" = "Не удалось проверить имя пользователя. Попробуйте ещё раз.";
-"username_hint" = "ваш уникальный публичный идентификатор. нажмите чтобы изменить.";
+"username_hint" = "Ваш уникальный публичный идентификатор.";
 "username_length_error" = "username должен быть от 3 до 20 символов";
-"display_name_hint" = "видно вашим контактам. имя пользователя остаётся постоянным.";
+"display_name_hint" = "Видно вашим контактам.";
 "new_messages" = "Новые сообщения";
 "scroll_to_bottom" = "К последнему";
 
@@ -282,12 +288,12 @@
 "server_applied_title" = "Сервер обновлён";
 "server_applied_message" = "Новый сервер будет использоваться для всех последующих подключений.";
 "close" = "Закрыть";
-"chat_nav_back" = "Назад";
+"back" = "Назад";
 "change_avatar" = "Сменить фото";
 
 // Onboarding (identity gate — create / restore / link)
-"onboarding_tagline" = "интернет — пространство свободы выражения мысли.";
-"onboarding_username_placeholder" = "публичный псевдоним (опционально)";
+"onboarding_tagline" = "Интернет — это пространство свободы выражения мысли";
+"onboarding_username_placeholder" = "Публичный псевдоним (необязательно)";
 "onboarding_create_identity" = "Создать идентичность";
 "onboarding_already_have" = "Уже есть идентичность?";
 "onboarding_existing_title" = "Существующая идентичность";
@@ -301,7 +307,7 @@
 "onboarding_network_settings" = "Настройки сети";
 
 // First-run orientation (product education after identity init)
-"orientation_section_label" = "> orientation";
+"orientation_section_label" = "> знакомство";
 "orientation_skip" = "Пропустить";
 "orientation_next" = "Продолжить";
 "orientation_enter" = "Войти в Конструкт";
@@ -318,7 +324,7 @@
 "orientation_page2_path_qr_title" = "QR / ссылка";
 "orientation_page2_path_qr_sub" = "Показать или сканировать. Каждый код срабатывает один раз.";
 "orientation_page2_path_search_title" = "Поиск";
-"orientation_page2_path_search_sub" = "Только если включили в настройсках безопасности.";
+"orientation_page2_path_search_sub" = "Только если включили в настройках безопасности.";
 "orientation_page3_title" = "Три места";
 "orientation_page3_body" = "Чаты — переписка. Synaps — ваши люди и входящие запросы. Настройки — ваш QR-код, восстановление и устройства.";
 "orientation_page3_caption" = "Начните с Synaps — покажите QR или найдите человека.";
@@ -369,9 +375,7 @@
 "invite_error_invalid_url" = "Указан некорректный URL.";
 "invite_error_unsupported_link" = "Это не поддерживаемая ссылка-приглашение Конструкта.";
 "invite_error_expired" = "Срок действия приглашения истёк. Попросите новое.";
-"invite_error_invalid_fmt" = "Недействительное приглашение: %@";
 "invite_error_already_used" = "Это приглашение уже использовано. Попросите новое.";
-"invite_error_verification_failed_fmt" = "Не удалось проверить приглашение: %@";
 "invite_error_legacy_unsupported" = "Этот формат ссылки больше не поддерживается. Попросите свежий QR или ссылку.";
 "invite_error_malformed" = "Повреждённые данные приглашения";
 "invite_redeem_safety_message" = "Контакт добавлен по приглашению. Имя появится, когда собеседник им поделится.";
@@ -381,15 +385,13 @@
 // iPad Split View
 "select_chat" = "Выберите чат";
 "select_chat_description" = "Выберите разговор на боковой панели, чтобы начать общение.";
-"show_chat_list" = "Показать список чатов";
-"hide_chat_list" = "Скрыть список чатов";
 
 // Security — Recovery & Duress (from EN)
 "account_recovery" = "Восстановление аккаунта";
 "discovery" = "Обнаруживаемость";
-"account_recovery_seed" = "Восстановление аккаунта (Seed-фраза)";
-"account_recovery_seed_hint" = "Восстановите доступ с помощью резервной seed-фразы.";
-"account_recovery_seed_coming_soon" = "Восстановление по seed-фразе появится в одном из следующих обновлений.";
+"account_recovery_seed" = "Фраза восстановления";
+"account_recovery_seed_hint" = "Восстановите доступ с помощью фразы восстановления.";
+"account_recovery_seed_coming_soon" = "Восстановление по фразе появится в одном из следующих обновлений.";
 
 // Duress PIN
 "duress_pin" = "Пин самоуничтожения";
@@ -430,15 +432,24 @@
 "delete_account_local_only_confirm" = "Удалить локально";
 
 // Reset Session
-"reset_session" = "Сбросить сессию";
-"reset_session_title" = "Сбросить сессию?";
-"reset_session_message" = "Будет установлена новая зашифрованная сессия. Сообщения в пути могут быть потеряны.";
 
 // Account Recovery
 "try_again" = "Попробовать снова";
 "recovery_not_configured" = "Не настроено";
 "recovery_intro_title" = "Настройка восстановления аккаунта";
-"recovery_intro_body" = "Сгенерируйте фразу из 12 слов. Если вы потеряете устройство, используйте её, чтобы восстановить идентичность.";
+"recovery_intro_body" = "Сгенерируйте фразу из 12 слов. Контакты пишут вам на адрес, который она задаёт, и она же вернёт аккаунт, если пропадут все устройства.";
+"recovery_gate_nav_title" = "Фраза восстановления";
+"recovery_gate_title" = "Контакты начинаются с фразы восстановления";
+"recovery_gate_why" = "Контакты пишут вам на адрес, который принадлежит вам, а не нашему серверу. Этот адрес выводится из фразы восстановления, и каждое приглашение его несёт. Те же 12 слов вернут аккаунт, если пропадут все устройства. Восстановить их за вас не сможет никто, включая нас.";
+"recovery_gate_setup_note" = "Это займёт около минуты: вы запишете 12 слов и подтвердите три из них.";
+"recovery_gate_setup_action" = "Настроить фразу восстановления";
+"recovery_gate_confirm_note" = "У аккаунта уже есть фраза восстановления, но это устройство её не знает. Введите её один раз. Фраза остаётся на этом устройстве и никуда не отправляется.";
+"recovery_gate_later" = "Позже";
+"recovery_confirm_placeholder" = "12 слов через пробел";
+"recovery_confirm_action" = "Подтвердить";
+"recovery_confirm_invalid_phrase" = "Это не фраза из 12 слов. Проверьте написание каждого слова.";
+"recovery_confirm_other_account" = "Эта фраза от другого аккаунта.";
+"invite_error_recovery_key_required" = "Настройте фразу восстановления, прежде чем добавлять контакты.";
 "recovery_generate" = "Сгенерировать фразу";
 "recovery_write_down" = "Запишите эти 12 слов по порядку. Храните их в надёжном месте — никому не передавайте.";
 "recovery_never_share" = "Никогда не передавайте свою фразу восстановления.";
@@ -469,7 +480,7 @@
 "recovery_restored_body" = "Ваш аккаунт восстановлен на этом устройстве. Предыдущие сессии отозваны.";
 "recovery_banner_title" = "Защитите свой аккаунт";
 "recovery_banner_subtitle" = "Настройте фразу восстановления, чтобы не потерять доступ.";
-"recovery_setup_action" = "НАСТРОИТЬ";
+"recovery_setup_action" = "Настроить";
 
 // macOS Catalyst — push уведомления
 "push_not_available_mac" = "Push-уведомления недоступны на десктопе";
@@ -499,14 +510,14 @@
 "veil_config_scan" = "Сканировать QR конфигурации";
 "veil_config_paste" = "Вставить код конфигурации";
 "veil_config_import" = "Импорт";
-"veil_config_section" = "ДОСТУП VEIL";
+"veil_config_section" = "Доступ VEIL";
 "veil_config_active" = "Доступ настроен";
 "veil_config_none" = "Доступ не настроен";
 
 /* Bootstrap voucher — приём кода (дверь «не подключается?» в онбординге) */
 "onboarding_cant_connect" = "Не подключается?";
 "veil_bootstrap_title" = "Не подключается";
-"veil_bootstrap_intro" = "Если Konstruct не может выйти в сеть здесь, тот, у кого связь уже есть, может выдать вам одноразовый код доступа. Попросите его и отсканируйте или вставьте ниже.";
+"veil_bootstrap_intro" = "Если Конструкт не может подключиться к сети, человек с работающим подключением может дать вам одноразовый код доступа. Попросите код, затем отсканируйте его или вставьте ниже.";
 "veil_bootstrap_scan_subtitle" = "Наведите камеру на его код";
 "veil_bootstrap_paste_subtitle" = "Если код прислали текстом";
 "veil_bootstrap_ok" = "Подключение настроено";
@@ -521,14 +532,15 @@
 "censorship_protection_footer_on" = "Всегда обходит сетевые блокировки. Настройка идёт в фоне.";
 
 // VEIL mode (tri-state)
-"veil_mode_off" = "выкл";
-"veil_mode_auto" = "авто";
-"veil_mode_on" = "вкл";
+"veil_mode_off" = "Выкл.";
+"veil_mode_auto" = "Авто";
+"veil_mode_on" = "Вкл.";
 "veil_footer_off" = "Защита трафика отключена. Только прямое подключение.";
 "veil_footer_off_obf_active" = "VEIL выкл — прямой трафик обфусцирован через QUIC (Salamander).";
 "veil_footer_off_obf_fallback" = "VEIL выкл — обфускация QUIC включена; сейчас откат на H2 (без обфускации).";
 "veil_footer_auto" = "VEIL активируется автоматически при обнаружении блокировки.";
 "veil_footer_on" = "Весь трафик проходит через VEIL.";
+"veil_footer_on_no_front" = "Фронт не отвечает. Пока он не ответит, сообщения не отправляются и не приходят: в режиме «Вкл.» VEIL никогда не подключается напрямую. Выберите «Авто», чтобы подключаться напрямую, пока фронт недоступен.";
 "veil_auto_active" = "Авто · прямое заблокировано";
 "veil_direct_probe_ok" = "Прямое: ОК (%@)";
 "veil_direct_probe_blocked" = "Прямое: заблокировано";
@@ -563,7 +575,7 @@
 "edit_message" = "Изменить";
 "edited" = "изменено";
 "editing_message" = "Редактирование сообщения";
-"edit_message_failed" = "Не удалось изменить сообщение: %@";
+"edit_message_failed" = "Не удалось изменить сообщение";
 "edit_message_limit_reached" = "Достигнут лимит правок (максимум 20)";
 
 // Message reactions
@@ -592,7 +604,31 @@
 "reply_with_selection" = "Ответить на выделенное";
 "photo" = "Фото";
 "video" = "Видео";
+"video_note" = "Видеозаметка";
+"video_note_full_screen" = "На весь экран";
+"video_note_record" = "Записать видеозаметку";
+"video_note_pause" = "Пауза";
+"video_note_resume" = "Продолжить запись";
+"video_note_switch_camera" = "Сменить камеру";
+"video_note_send" = "Отправить видеозаметку";
+"video_note_paused" = "Пауза";
+"video_note_camera_unavailable" = "Камера или микрофон недоступны";
+"video_note_trim_start" = "Начало";
+"video_note_trim_end" = "Конец";
+"playback_speed" = "Скорость воспроизведения";
 "file_attachment" = "Файл";
+"sticker" = "Стикер";
+"media_picker_tab_stickers" = "Стикеры";
+"sticker_picker_recent" = "Недавние";
+"sticker_catalog_empty" = "Наборов стикеров пока нет.";
+"sticker_install_fixture" = "Установить тестовый набор";
+"sticker_picker_more_packs" = "Ещё наборы";
+"sticker_get" = "Добавить";
+"sticker_pack_count" = "%d стикеров";
+"sticker_install_failed" = "Не удалось установить — попробуйте ещё раз";
+"sticker_catalog_failed" = "Не удалось загрузить наборы.";
+"sticker_catalog_retry" = "Повторить";
+"sticker_pack_remove" = "Убрать набор";
 
 // MARK: - Attachments
 "attach" = "Прикрепить";
@@ -631,11 +667,13 @@
 "media_picker_video_1080" = "1080p";
 "media_picker_confirm" = "Подтвердить выбор";
 "failed_to_load" = "Не удалось загрузить";
+"media_unavailable" = "Медиа недоступно";
 "shared_profile" = "Профиль отправлен";
 
 // MARK: - Drafts
 "save_draft" = "Сохранить черновик";
 "drafts" = "Черновики";
+"drafts_empty_title" = "Черновиков нет";
 "drafts_stored_locally" = "Черновики хранятся локально на этом устройстве.";
 
 // MARK: - QR Code
@@ -722,7 +760,7 @@
 // MARK: - Session Management
 "session_management" = "Управление сессиями";
 "sign_out_this_device" = "Выйти с этого устройства";
-"sign_out_this_device_message" = "Вы выйдете только с этого устройства. Другие привязанные устройства останутся активными.";
+"sign_out_this_device_message" = "Всё, что есть на этом устройстве, — чаты, медиа, контакты — будет стёрто. Другие привязанные устройства останутся активными.";
 "sign_out_other_devices" = "Выйти с других устройств";
 "sign_out_other_devices_message" = "Все другие привязанные устройства будут отключены. Это устройство останется активным.";
 "sign_out_all_devices" = "Выйти со всех устройств";
@@ -730,7 +768,8 @@
 "sign_out_all_hint" = "Выход со всех устройств немедленно аннулирует все сессии. Потребуется повторная аутентификация на каждом устройстве.";
 "sign_out" = "Выйти";
 "device_scan_to_approve" = "Сканировать для одобрения";
-"device_revoke_confirm_message" = "Удалённо выйти с устройства «%@»? Оно будет отключено от вашей идентичности.";
+"device_revoke_confirm_message" = "Удалить «%@»? Устройство выйдет и сотрёт всё, что на нём есть, как только подключится.";
+"device_removed_notice" = "Это устройство удалено из вашего аккаунта. Всё, что на нём было, стёрто.";
 "other_devices" = "Другие устройства";
 "other_devices_hint" = "Нажмите − чтобы удалить устройство из вашей идентичности.";
 "device_active_now" = "Активно сейчас";
@@ -781,9 +820,16 @@
 "call_mute" = "Выкл. микрофон";
 "call_unmute" = "Вкл. микрофон";
 "call_speaker" = "Динамик";
+"call_camera" = "Камера";
+"call_flip_camera" = "Сменить";
+"call_peer_camera_off" = "Камера выключена";
+"call_swap_video" = "Поменять окна местами";
+"call_self_view" = "Ваша камера";
 "call_end" = "Завершить";
 "call_connecting" = "Соединение…";
 "call_incoming_audio" = "Входящий аудиозвонок";
+"call_incoming_video" = "Входящий видеозвонок";
+"call_answer_without_video" = "Без видео";
 "call_answer" = "Ответить";
 "call_decline" = "Отклонить";
 
@@ -814,37 +860,35 @@
 "call_minibar_connecting" = "соединение";
 "call_reconnecting" = "переподключение…";
 "call_e2ee_badge" = "сквозное шифрование";
-"edit_identity" = "редактирование";
+"edit_identity" = "Редактирование";
 "delete_account_abort_hint" = "нажмите чтобы отменить · %d с";
 
 // MARK: - Account / Identity Settings
-"change_photo" = "изменить фото";
+"change_photo" = "Изменить фото";
+"choose_photo" = "выбрать фото";
 "identity_section" = "идентичность";
 "account_section" = "аккаунт";
 "bio" = "био";
-"user_id" = "id пользователя";
+"user_id" = "ID пользователя";
 "joined" = "присоединился";
-"changes_encrypted_footer" = "> изменения защищены сквозным шифрованием";
-"delete_account_row" = "удалить аккаунт";
-"delete_action" = "удалить";
-"manage_action" = "управлять";
+"changes_encrypted_footer" = "Изменения защищены сквозным шифрованием.";
+"delete_account_row" = "Удалить аккаунт";
 "add_action" = "добавить";
 
 // MARK: - Profile / User
 "call_voice" = "голосовой звонок";
 "call_video" = "видеозвонок";
 "call_audio_route" = "звук";
-"end_to_end_encrypted" = "изменения защищены сквозным шифрованием";
 
 // MARK: - QR / Invite
-"invite" = "пригласить";
+"invite" = "Пригласить";
 "qr_caption_trust" = "этот код — приглашение связаться.";
 "qr_scan_hint" = "покажи кому-то рядом или сделай скриншот";
 
 // MARK: - Device Link QR
-"device_link_section" = "связать реплику";
+"device_link_section" = "привязать устройство";
 "generating" = "генерация...";
-"device_link_scan_hint" = "отсканируй с другой реплики для связи";
+"device_link_scan_hint" = "отсканируйте другим устройством для привязки";
 
 // MARK: - Settings rows
 "recovery_not_configured_title" = "Резервный ключ не настроен";
@@ -852,16 +896,16 @@
 "share" = "Поделиться";
 
 // MARK: - Keys Recovery
-"keys_recovery_title" = "ключи устройства недоступны";
+"keys_recovery_title" = "Ключи устройства недоступны";
 "keys_recovery_warning_title" = "⚠ КРИПТОКЛЮЧИ НЕ НАЙДЕНЫ";
 "keys_recovery_warning_body" = "Криптографические ключи устройства не удалось загрузить из Keychain. Это может быть временная проблема системы или ключи утеряны безвозвратно.\n\nДоступ к сообщениям и сессиям невозможен до устранения проблемы.";
 "keys_recovery_section_retry" = "повторить попытку";
 "keys_recovery_retry_hint" = "Ключи могут быть временно недоступны из-за системной проблемы. Попробуйте перечитать Keychain.";
 "keys_recovery_retry_action" = "перечитать keychain [→]";
 "keys_recovery_retry_failed" = "всё ещё недоступно";
-"keys_recovery_section_seed" = "восстановить из сид-фразы";
-"keys_recovery_seed_hint" = "Если вы сохранили 12-слов seed-фразу, используйте её для восстановления доступа к своей идентичности.";
-"keys_recovery_seed_action" = "ввести seed-фразу [→]";
+"keys_recovery_section_seed" = "восстановить по фразе";
+"keys_recovery_seed_hint" = "Если вы сохранили фразу восстановления из 12 слов, используйте её для восстановления доступа к своей идентичности.";
+"keys_recovery_seed_action" = "ввести фразу восстановления [→]";
 "keys_recovery_section_new" = "создать новый аккаунт";
 "keys_recovery_new_hint" = "Создать полностью новую идентичность. Существующий аккаунт и сообщения будут утеряны безвозвратно.";
 "keys_recovery_new_action" = "создать новый аккаунт [→]";
@@ -870,15 +914,20 @@
 "keys_recovery_wipe_confirm_action" = "удалить и продолжить";
 
 // MARK: - Device Deregistered (Конструкт больше не знает эту реплику)
-"device_deregistered_warning_title" = "⚠ РЕПЛИКА НЕ ЗАРЕГИСТРИРОВАНА";
-"device_deregistered_warning_body" = "Конструкт больше не распознаёт эту реплику. Такое бывает после сбоя на сервере или если реплику отозвали с другого устройства.\n\nКлючи всё ещё на этом устройстве — ничего не удалено. Повторите попытку ниже или восстановите личность по сид-фразе.";
+"device_deregistered_warning_title" = "⚠ УСТРОЙСТВО НЕ ЗАРЕГИСТРИРОВАНО";
+"device_deregistered_warning_body" = "Конструкт больше не распознаёт это устройство. Такое бывает после временного сбоя или если устройство удалили с другого устройства.\n\nКлючи всё ещё на этом телефоне — ничего не удалено. Повторите попытку ниже или восстановите идентичность по фразе восстановления.";
 "device_deregistered_retry_hint" = "Отказ может быть временным сбоем сервера. Попробуйте пройти аутентификацию ещё раз.";
+"store_import_title" = "Переносим переписку";
+"store_import_body" = "Один раз, после обновления. Не закрывайте Конструкт — это займёт несколько секунд.";
+"local_store_unreadable_title" = "НЕ УДАЛОСЬ ОТКРЫТЬ ЧАТЫ НА ЭТОМ УСТРОЙСТВЕ";
+"local_store_unreadable_body" = "Чаты, сообщения и люди, сохранённые на этом устройстве, не удалось открыть. Ничего не удалено, и ничего нового не сохраняется, пока они снова не откроются.\n\nОбычно это значит, что Keychain ещё не отвечает — например, пока устройство не разблокировано.";
+"local_store_unreadable_retry_hint" = "Попробуйте открыть их снова — например, после разблокировки.";
 
 // MARK: - Logout
-"logout_row" = "выйти";
-"logout_all_row" = "выйти на всех устройствах";
+"logout_row" = "Выйти";
+"logout_all_row" = "Выйти на всех устройствах";
 "logout_confirm_title" = "Выйти?";
-"logout_confirm_message" = "Вы выйдете с этого устройства. Для входа снова потребуется сид-фраза.";
+"logout_confirm_message" = "Вы выйдете с этого устройства, и всё, что на нём есть, — чаты, медиа, контакты — будет стёрто. Войти снова можно по сид-фразе; историю пришлёт другое ваше устройство.";
 "logout_confirm_action" = "Выйти";
 "logout_all_confirm_title" = "Выйти на всех устройствах?";
 "logout_all_confirm_message" = "Все сессии на всех ваших устройствах будут немедленно аннулированы. Для повторного входа на каждом устройстве потребуется сид-фраза.";
@@ -889,15 +938,15 @@
 "logout_no_backup_proceed_action" = "Выйти всё равно";
 
 // MARK: - Discoverable / User Search
-"searchable_toggle_title" = "видимость в поиске";
+"searchable_toggle_title" = "Видимость в поиске";
 "searchable_toggle_footer" = "Когда включено, любой, кто знает ваш точный username, может вас найти. Угадать или перебрать username невозможно — срабатывает только 100% совпадение. По умолчанию выключено.";
 "searchable_confirm_title" = "включить поиск?";
 "searchable_confirm_message" = "Ваш username станет доступен для поиска всем, кто введёт его точно. Отключить можно в любой момент в настройках безопасности.";
 "searchable_confirm_action" = "включить";
-"searchable_no_username_hint" = "сначала задайте username";
-"username_not_set" = "username не задан";
-"searchable_indicator" = "в поиске";
-"searchable_indicator_off" = "не в поиске";
+"searchable_no_username_hint" = "Сначала задайте имя пользователя, чтобы включить поиск.";
+"username_not_set" = "Имя пользователя не задано";
+"searchable_indicator" = "В поиске";
+"searchable_indicator_off" = "Не в поиске";
 "synapses_remote_result_header" = "найдено в Конструкте";
 "synapses_searching" = "поиск...";
 "synapses_not_found" = "не найдено";
@@ -919,7 +968,7 @@
 "contact_request_empty_inbox" = "нет входящих запросов";
 
 // Safety Numbers
-"safety_numbers" = "защитные числа";
+"safety_numbers" = "Защитные числа";
 "safety_numbers_verify_title" = "проверить личность";
 "safety_numbers_instruction" = "Сравните эти числа с %@ устно или при личной встрече. Если числа совпадают, ваш канал безопасен и не перехвачен.";
 "safety_numbers_copy" = "скопировать в буфер";
@@ -930,26 +979,27 @@
 
 // Stealth mode
 "stealth_section" = "стелс";
-"stealth_title" = "анонимность отправителя";
+"stealth_title" = "Анонимность отправителя";
 "stealth_always_on_hint" = "Конструкт никогда не узнаёт, кто отправил сообщение. Работает всегда — выключателя нет, и пополнять ничего не нужно.";
 "stealth_off_hint" = "Выключено — ваши отправки раскрывают Конструкту, кто вы. Только для отладки.";
 
-// Короткие метки для CTModeSelector (переключатель режимов) в настройках stealth.
+// Короткие метки для сегмента режима VEIL в настройках сети.
 
 // Key Transparency
-"kt_section" = "прозрачность ключей";
-"kt_status" = "merkle-лог";
-"kt_verified" = "подтверждено";
-"kt_warning" = "внимание";
+"kt_section" = "Прозрачность ключей";
+"kt_status" = "Merkle-лог";
+"kt_verified" = "Подтверждено";
+"kt_warning" = "Внимание";
 
 // Key-change trust event (thread 5.4)
-"key_change_banner_title" = "Ключ безопасности изменился";
 "key_change_banner_title_failed" = "Проверка личности не удалась";
-"key_change_banner_subtitle_fmt" = "У %@ другой ключ, чем раньше. Сверьте Safety Numbers, прежде чем доверять чату.";
 "key_change_banner_subtitle_failed" = "Не удалось подтвердить ключ этого человека в журнале прозрачности. По возможности проверьте лично.";
 "key_change_verify" = "Проверить";
-"key_change_accept" = "Принять новый ключ";
-"key_change_toast_fmt" = "У %@ изменился ключ безопасности. Откройте чат, чтобы проверить.";
+"address_change_toast_fmt" = "%@ называет другой адрес, чем раньше. Откройте чат, чтобы проверить.";
+"security_notice_address_title" = "Другой адрес";
+"security_notice_address_body_fmt" = "%@ называет другой адрес, чем раньше. Сверьте Safety Numbers, прежде чем доверять чату.";
+"security_notice_acknowledge" = "Проверено";
+"safety_numbers_device_fmt" = "Устройство %@";
 "key_change_toast_open" = "Открыть";
 
 // Identity fingerprint (thread 5.3)
@@ -957,90 +1007,72 @@
 "identity_fingerprint_unknown" = "Ещё не закреплён";
 "identity_fingerprint_copy_hint" = "Копирует отпечаток в буфер";
 "identity_fingerprint_copied" = "Скопировано";
-"kt_no_data" = "нет данных";
+"kt_no_data" = "Нет данных";
 "kt_hint" = "каждый ключ идентификации постоянно записывается в append-only merkle-лог. подделка криптографически обнаруживаема.";
 "kt_failure_hint" = "проверка прозрачности ключей не прошла — возможна подделка.";
 "kt_last_failure_at" = "последний сбой: %@";
 
 // Social Recovery (SLIP-39)
-"social_recovery_title" = "ВОССТАНОВЛЕНИЕ";
-"social_recovery_intro_title" = "социальное восстановление";
-"social_recovery_intro_body" = "ваши ключи будут разделены между доверенными контактами с помощью разделения секрета Шамира. любые M из N смогут восстановить ваш аккаунт.";
-"social_recovery_begin" = "НАЧАТЬ НАСТРОЙКУ [→]";
-"social_recovery_scheme_title" = "СХЕМА ВОССТАНОВЛЕНИЯ";
+"social_recovery_title" = "Социальное восстановление";
+"social_recovery_active" = "Включено";
+"social_recovery_intro_title" = "Социальное восстановление";
+"social_recovery_intro_body" = "Ваши ключи будут разделены между доверенными контактами с помощью разделения секрета Шамира. Любые M из N смогут восстановить ваш аккаунт.";
+"social_recovery_begin" = "Начать настройку";
+"social_recovery_scheme_title" = "Схема восстановления";
 "social_recovery_2of3" = "2 из 3";
 "social_recovery_3of5" = "3 из 5";
 "social_recovery_2of3_hint" = "нужно 2 контакта для восстановления";
 "social_recovery_3of5_hint" = "нужно 3 контакта для восстановления";
-"social_recovery_generate" = "СОЗДАТЬ ШАРЫ [→]";
-"social_recovery_share_title" = "ШАР %d ИЗ %d";
-"social_recovery_share_warning" = "отправьте эти слова доверенному контакту. НЕ передавайте несколько шаров одному человеку.";
-"social_recovery_share_label_caption" = "метка";
-"social_recovery_share_label_placeholder" = "метка (например: отправлено Ане)";
-"social_recovery_share_next" = "СЛЕДУЮЩИЙ ШАР [→]";
-"social_recovery_share_done" = "ЗАВЕРШИТЬ [→]";
-"social_recovery_share_unlabeled" = "шар %d";
-"social_recovery_uploading" = "шифрование бандла...";
-"social_recovery_done_title" = "ВОССТАНОВЛЕНИЕ НАСТРОЕНО";
-"social_recovery_done_body" = "ваша идентичность теперь защищена.";
-"social_recovery_enter_title" = "ВОССТАНОВЛЕНИЕ";
-"social_recovery_enter_subtitle" = "свяжитесь с каждым доверенным лицом и попросите его слова шара.";
-"social_recovery_entered_header" = "ВВЕДЁННЫЕ ШАРЫ (%d/%d нужно)";
-"social_recovery_no_shares_yet" = "шары ещё не введены";
-"social_recovery_add_share" = "+ ДОБАВИТЬ ШАР";
-"social_recovery_shares_needed" = "нужно ещё %d шар(ов)";
-"social_recovery_restore" = "ВОССТАНОВИТЬ ИДЕНТИЧНОСТЬ [→]";
-"social_recovery_enter_words_title" = "ВВЕДИТЕ СЛОВА ШАРА";
-"social_recovery_enter_words_hint" = "вставьте или введите 28 слов через пробел";
-"social_recovery_add_share_confirm" = "ДОБАВИТЬ ШАР [→]";
-"social_recovery_share_n" = "шар %d";
-"social_recovery_word_count" = "%d слов";
-"social_recovery_reconstructing" = "восстановление ключа хранилища...";
-"social_recovery_restored_title" = "ИДЕНТИЧНОСТЬ ВОССТАНОВЛЕНА";
-"social_recovery_restored_body" = "ваши ключи идентичности успешно восстановлены.";
-"social_recovery_row_active" = "■ социальное восстановление — активно";
-"social_recovery_row_inactive" = "○ социальное восстановление — не настроено";
+"social_recovery_generate" = "Создать части";
+"social_recovery_share_title" = "Часть %d из %d";
+"social_recovery_share_warning" = "Отправьте эти слова одному доверенному человеку. Не отдавайте одному человеку больше одной части.";
+"social_recovery_share_label_caption" = "Метка";
+"social_recovery_share_label_placeholder" = "Метка (например: отправлено Ане)";
+"social_recovery_share_next" = "Следующая часть";
+"social_recovery_share_done" = "Завершить";
+"social_recovery_share_unlabeled" = "Часть %d";
+"social_recovery_uploading" = "Шифрование…";
+"social_recovery_done_title" = "Восстановление настроено";
+"social_recovery_done_body" = "Ваша идентичность теперь защищена.";
 
-"social_recovery_identity_header" = "ИДЕНТИФИКАТОР";
-"social_recovery_username_label" = "Имя пользователя";
 
 // MARK: - Local Backup
 "backup_section" = "резервная копия";
-"export_backup" = "экспортировать";
-"import_backup" = "восстановить из копии";
+"export_backup" = "Экспортировать копию";
+"import_backup" = "Восстановить из копии";
 
 "backup_export_title" = "Резервная копия";
 "backup_warning_header" = "ПЕРЕД НАЧАЛОМ";
 "backup_export_warning" = "Создаётся зашифрованная резервная копия всех ваших сообщений и ключей. Файл защищён фразой из 12 слов, которую необходимо записать и хранить в безопасном месте.\n\nХраните файл резервной копии и фразу в разных местах.";
 "backup_mnemonic_warning" = "⚠ Если вы потеряете фразу восстановления, резервную копию невозможно будет расшифровать. Альтернативного способа восстановления нет.";
-"backup_generate_button" = "СОЗДАТЬ ФРАЗУ ВОССТАНОВЛЕНИЯ [→]";
+"backup_generate_button" = "Создать фразу восстановления";
 "backup_mnemonic_title" = "ФРАЗА ВОССТАНОВЛЕНИЯ";
 "backup_mnemonic_subtitle" = "Запишите все 12 слов по порядку. Не делайте скриншот.";
-"backup_copy_words" = "[ СКОПИРОВАТЬ ВСЕ СЛОВА ]";
+"backup_copy_words" = "Скопировать все слова";
 "backup_confirm_saved" = "Я записал(а) все 12 слов";
-"backup_next_button" = "ДАЛЕЕ [→]";
+"backup_next_button" = "Далее";
 "backup_export_step_header" = "СОХРАНИТЬ ФАЙЛ";
 "backup_export_step_subtitle" = "Сохраните файл .ctbackup в надёжном месте за пределами устройства (например, на зашифрованном USB-накопителе). Не храните его в незашифрованном облачном сервисе.";
-"backup_create_file" = "СОЗДАТЬ ФАЙЛ .ctbackup [→]";
-"backup_share_file" = "ПОДЕЛИТЬСЯ ФАЙЛОМ .ctbackup [→]";
+"backup_create_file" = "Создать файл .ctbackup";
+"backup_share_file" = "Поделиться файлом .ctbackup";
 "backup_export_generating" = "создание резервной копии…";
 
 "backup_import_title" = "Восстановление";
 "backup_import_words_header" = "ФРАЗА ВОССТАНОВЛЕНИЯ";
 "backup_import_words_subtitle" = "Введите 12 слов из вашей резервной копии через пробел.";
 "backup_import_file_header" = "ФАЙЛ РЕЗЕРВНОЙ КОПИИ";
-"backup_import_select_file" = "выбрать файл .ctbackup [→]";
+"backup_import_select_file" = "Выбрать файл .ctbackup";
 "backup_restore_warning" = "⚠ Это заменит ВСЕ текущие сообщения и ключи. Действие необратимо.";
-"backup_restore_button" = "ВОССТАНОВИТЬ [→]";
+"backup_restore_button" = "Восстановить";
 "backup_restore_success_title" = "Готово к восстановлению";
 "backup_restore_success_message" = "Резервная копия проверена и подготовлена. Закройте и откройте приложение снова, чтобы завершить восстановление.";
 
 "backup_error_invalid_mnemonic" = "Неверная фраза восстановления. Проверьте все 12 слов и попробуйте снова.";
-"backup_error_invalid_file" = "Это не корректная резервная копия Конструкта, или фраза восстановления неверна.";
+"backup_error_invalid_file" = "Это не резервная копия Конструкта или фраза восстановления неверна.";
 
 // Transfer (P2P nearby)
-"transfer_send_nearby" = "отправить на соседнее устройство";
-"transfer_receive_nearby" = "получить с соседнего устройства";
+"transfer_send_nearby" = "Отправить на соседнее устройство";
+"transfer_receive_nearby" = "Получить с соседнего устройства";
 "transfer_send_title" = "Отправить резервную копию";
 "transfer_receive_title" = "Получить резервную копию";
 "transfer_preparing" = "Подготовка резервной копии...";
@@ -1066,24 +1098,21 @@
 // History Sync (device-to-device after linking)
 "history_sync_send_title" = "Передать историю";
 "history_sync_receive_title" = "Получить историю";
-"history_sync_offer_title" = "Перенести историю сообщений?";
-"history_sync_offer_message" = "Получить историю с телефона, который только что одобрил этот компьютер? Оба устройства должны быть в одной сети Wi‑Fi — код вводить не нужно.";
-"history_sync_offer_yes" = "Получить историю";
 "history_sync_offer_skip" = "Пропустить";
 "history_sync_send_offer_title" = "Синхронизировать историю сообщений?";
-"history_sync_send_offer_message" = "Отправить историю сообщений на новое устройство? Оба устройства должны быть в одной сети Wi‑Fi — коды вводить не нужно.";
+"history_sync_send_offer_message" = "Отправить историю сообщений на новое устройство? Оба устройства должны быть в одной сети Wi‑Fi.";
 "history_sync_send_offer_yes" = "Синхронизировать";
 "history_sync_send_offer_skip" = "Пропустить";
-"history_sync_auto_connecting" = "Подключение к телефону…";
-"history_sync_auto_sending" = "Отправка истории на компьютер…";
+"history_sync_auto_connecting" = "Получение истории…";
+"history_sync_waiting_for_other_device" = "Ждём другое устройство. Перенос запускается на нём.";
+"history_sync_auto_sending" = "Отправка истории на другое устройство…";
 "history_sync_skip_title" = "Пропустить историю";
 "history_sync_skip_sending" = "Завершение без истории…";
 "history_sync_user_mismatch" = "Ошибка переноса истории: история принадлежит другому аккаунту.";
 "history_sync_chats_transferred" = "Чаты переданы. Отправляем фото и файлы…";
-"history_sync_media_incomplete" = "Чаты переданы, медиа неполные — повторите из Настроек или сохраните файл.";
-"history_sync_save_file_instead" = "Сохраните файл.";
-"history_sync_offer_message_with_media" = "Получите чаты, фото и файлы с другого устройства по Wi‑Fi или импортируйте файл. Можно пропустить и начать с пустых чатов.";
-"history_sync_empty_explanation" = "Новые чаты появятся здесь, когда вам напишут. История с другого устройства на этом пока нет.";
+"history_sync_media_incomplete" = "Чаты перенесены. Часть фото и файлов не дошла.";
+"history_sync_save_file_instead" = "Перенос прервался. Историю можно перенести файлом.";
+"history_sync_empty_explanation" = "Если пропустить, на этом устройстве будут только новые сообщения.";
 "history_sync_receive_wifi" = "Получить по Wi‑Fi";
 "history_sync_import_file" = "Импортировать файл";
 "history_sync_save_file" = "Сохранить файл";
@@ -1093,15 +1122,21 @@
 "history_sync_settings_hint" = "Отправьте чаты или оставшиеся фото и файлы на уже привязанное устройство.";
 "history_sync_composer_connecting" = "Это устройство ещё подключается к этому человеку.";
 "history_sync_importing" = "Импорт истории…";
-"history_sync_imported_summary" = "Импортировано записей: %d. Чаты теперь на этом устройстве.";
 "history_sync_qr_pin_absent" = "В коде привязки не было отпечатка. Обновите другое устройство и привяжите заново.";
 "history_sync_local_keys_unavailable" = "Это устройство ещё не готово. Попробуйте через минуту.";
 "history_sync_peer_not_found" = "Другого устройства больше нет в этом аккаунте.";
 "history_sync_file_ready" = "Файл готов. Передайте его на другое устройство и импортируйте сразу — он действует не дольше недели.";
 "history_sync_share_file" = "Поделиться файлом";
 "history_sync_preparing_file" = "Готовим файл…";
+"history_sync_looking" = "Поиск другого устройства…";
+"history_sync_not_seen_hint" = "Другое устройство пока не видно. Держите на нём Конструкт открытым, а оба устройства — в одной сети Wi‑Fi. Или сохраните файл.";
+"history_sync_stage_chats" = "Чаты";
+"history_sync_stage_media" = "Фото и файлы";
+"history_sync_done" = "История перенесена.";
+"history_sync_imported_done" = "Чаты теперь на этом устройстве.";
 "call_error_not_contacts" = "Звонить можно только тем, с кем вы уже связаны.";
 "call_error_busy" = "Вы уже в звонке.";
+"call_error_camera_denied" = "Доступ к камере выключен. Включите его в Настройках, чтобы звонить с видео.";
 "call_error_peer_offline" = "Собеседник не в сети. Попробуйте позже.";
 "call_error_setup_failed" = "Не удалось начать звонок. Попробуйте ещё раз.";
 
@@ -1153,7 +1188,7 @@
 "stt_hide_transcript" = "Скрыть текст";
 "stt_section_header" = "транскрипция";
 "stt_section_footer" = "Голосовые сообщения можно расшифровать локально. Модели качаются один раз и не покидают телефон.";
-"stt_retry_download" = "повторить";
+"stt_retry_download" = "Повторить";
 "stt_engine_label" = "Движок";
 "stt_engine_auto" = "Авто";
 "stt_engine_whisper" = "Whisper";
@@ -1162,21 +1197,21 @@
 "account_discard_changes_message" = "Есть несохранённые изменения профиля. Выйти без сохранения?";
 "account_discard_changes_discard" = "Не сохранять";
 "account_discard_changes_keep_editing" = "Продолжить редактирование";
-"account_editing_profile" = "> Режим редактирования профиля. Нажмите ✓ для сохранения или x для отмены.";
+"account_editing_profile" = "> Режим редактирования профиля. «Сохранить» — оставить изменения, «Отмена» — отменить.";
 
-"liquid_logo.title" = "ЖИДКИЙ ЛОГОТИП";
-"liquid_logo.size" = "РАЗМЕР";
-"liquid_logo.haptics" = "Виброотклик";
-"liquid_logo.replay" = "ПОВТОР";
-"liquid_logo.hint" = "коснитесь экрана для повтора";
 
 /* Silent-transport neutral network indicator (silent-transport-ui decision) */
 "net_status_protected" = "Защищено";
 "net_status_connecting" = "Подключение…";
 "file" = "Файл";
+"audio_file" = "Аудио";
+"audio_play" = "Воспроизвести";
+"audio_pause" = "Пауза";
+"forward" = "Переслать";
+"forward_to" = "Переслать в";
+"forward_failed" = "Часть вложений не переслана: их уже нет ни на устройстве, ни на сервере.";
 
 /* Chat system bubble: the encrypted session broke and incoming messages cannot be read. */
-"system_session_out_of_sync" = "Зашифрованная сессия с этим собеседником рассинхронизирована — новые сообщения не читаются, пока она не будет установлена заново.";
 
 /* Delivery status of an outgoing message. VoiceOver-only: the bubble shows a bare
    icon, so without these the delivery state is inaudible. */
@@ -1211,6 +1246,8 @@
 
 "diagnostics_owned_inset_title" = "Своя вставка в ленте";
 "diagnostics_owned_inset_hint" = "Контейнер прокрутки на UIKit. Применится к следующему открытому чату.";
+"diagnostics_video_calls_title" = "Видеозвонки";
+"diagnostics_video_calls_hint" = "Камера в звонках. Каждый звонок тогда предлагает видео, и на Android тоже.";
 
 "diagnostics_skip_backlog_title" = "Пропустить накопившееся";
 "diagnostics_skip_backlog_held" = "Голова застряла: %@… (%@, %d с). Пропуск может потерять недоставленные сообщения.";
@@ -1237,7 +1274,7 @@
 /* VEIL bootstrap voucher — дать доступ тому, у кого входа ещё нет. */
 "veil_voucher_row" = "Дать кому-то доступ";
 "veil_voucher_title" = "Дать доступ";
-"veil_voucher_instructions" = "Пусть отсканирует этот код в Konstruct. Это настройка подключения, а не приглашение в контакты.";
+"veil_voucher_instructions" = "Пусть отсканирует этот код в Конструкте. Он настроит подключение, но не добавит вас в контакты.";
 "veil_voucher_expires_in" = "Действует ещё %@";
 "veil_voucher_expired" = "Код истёк";
 "veil_voucher_new" = "Создать новый код";
@@ -1246,7 +1283,7 @@
 "veil_voucher_unavailable" = "Выдача доступа сейчас недоступна.";
 "veil_voucher_err_generic" = "Не удалось создать код";
 "veil_voucher_privacy_hint" = "Показывайте код только тому, для кого он предназначен. Не публикуйте его и не отправляйте через открытый канал.";
-"veil_voucher_intro" = "Создаёт одноразовый код, который настроит подключение тому, кто пока не может добраться до Konstruct. Код действует недолго, в сутки можно создать три.";
+"veil_voucher_intro" = "Создаёт одноразовый код для настройки подключения человека, который пока не может связаться с Конструктом. Код действует недолго, в сутки можно создать три.";
 "veil_voucher_create" = "Создать код";
 
 /* Desktop chrome — D2–D7 */
@@ -1286,3 +1323,70 @@
 "desktop_add_invite_placeholder" = "https://konstruct.cc/add?invite=… или konstruct://add?…";
 "desktop_add_paste_clipboard" = "Вставить из буфера";
 "desktop_add_supported" = "konstruct://add?invite=… или https://konstruct.cc/add?invite=…";
+
+"backup_restore_required_title" = "Нужно перезапустить";
+"backup_restore_required_message" = "Закройте и снова откройте Конструкт, чтобы закончить восстановление.";
+"spam_warning_title" = "Отправка…";
+"spam_warning_wait" = "Подождите %d с";
+"spam_strong_warning_title" = "Необычная активность";
+"spam_strong_warning_body" = "Сообщения уходят быстрее обычного. Подождите немного.";
+"spam_seconds" = "сек";
+"spam_force_send" = "Я понимаю риск, отправить всё равно";
+"spam_force_banned" = "Пропустить ожидание нельзя ещё %d мин";
+"stt_error_no_model" = "Модель распознавания ещё не скачана.";
+"stt_error_unavailable" = "Распознавание на этом устройстве недоступно.";
+"call_status_calling" = "Вызов…";
+"call_status_connected" = "На связи";
+"mic_denied_title" = "Нет доступа к микрофону";
+"mic_denied_message_macos" = "Разрешите микрофон в настройках, чтобы отправлять голосовые сообщения.";
+"voice_ready_to_send" = "Можно отправить";
+"save_as" = "Сохранить как…";
+
+// Recovery key made silently, copied later (decisions/recovery-key-backup-is-deferred-not-skipped.md)
+"recovery_backup_auth_reason" = "Показать ключ восстановления";
+"recovery_backup_intro_title" = "Сохраните ключ восстановления";
+"recovery_backup_intro_body" = "У Конструкта нет вашего телефона и почты. Этот ключ — единственный способ вернуть аккаунт, если вы потеряете все устройства. Запишите 12 слов и храните их в надёжном месте.";
+"recovery_backup_show" = "Показать ключ";
+"recovery_backup_pending_title" = "Ключ восстановления не сохранён";
+"recovery_backup_pending_subtitle" = "Запишите ключ восстановления — это единственный способ вернуть аккаунт, если пропадут все устройства.";
+"recovery_backup_pending" = "Ещё не сохранён";
+"recovery_reminder_lost_title" = "Ключ восстановления больше нельзя показать";
+"recovery_reminder_lost_body" = "Код-пароль устройства отключили до того, как ключ был сохранён, и iOS его удалила. На этом устройстве аккаунт работает, но если вы его потеряете или выйдете из аккаунта, вернуть аккаунт будет нельзя.";
+"logout_backup_pending_message" = "Ключ восстановления хранится на этом устройстве и ещё не сохранён. Выход удалит его, и без него аккаунт нельзя будет вернуть.";
+"qr_scanning_unavailable_mac" = "Сканирование QR на Mac недоступно";
+"qr_scanning_unavailable_mac_hint" = "Попросите собеседника прислать ссылку-приглашение.";
+
+"delete_action" = "удалить";
+
+/* Errors a person reads (TODO 128) */
+"error_no_connection" = "Нет соединения с сервером. Проверьте интернет и попробуйте снова.";
+"error_server" = "Сервер сейчас не смог это сделать. Попробуйте позже.";
+"error_rate_limited" = "Слишком много попыток. Подождите немного и попробуйте снова.";
+"error_sign_in_again" = "Войдите снова, чтобы продолжить.";
+"error_generic" = "Что-то пошло не так. Попробуйте снова.";
+"error_encryption" = "Не удалось зашифровать. Попробуйте снова.";
+"error_decryption" = "Не удалось прочитать сообщение. Переписка восстановится сама.";
+"error_peer_unreachable" = "Не удалось связаться с устройством собеседника. Попробуйте позже.";
+"error_upload_failed" = "Не удалось отправить файл. Попробуйте снова.";
+"error_download_failed" = "Не удалось загрузить файл. Попробуйте снова.";
+"error_media_processing" = "Не удалось подготовить фото или видео.";
+"error_no_space" = "На устройстве не хватает места.";
+"error_action_reconnect" = "Переподключить";
+"error_action_sign_in" = "Войти";
+"username_taken" = "Это имя пользователя уже занято.";
+"validation_text_too_large" = "Сообщение слишком длинное. Разделите его на несколько.";
+"validation_file_too_large" = "Файл «%1$@» слишком большой: %2$@, можно не больше %3$@.";
+"validation_unsupported_type" = "Файлы типа .%@ отправить нельзя.";
+"validation_total_too_large" = "Сообщение слишком большое: %1$@, можно не больше %2$@.";
+"validation_empty" = "Сообщение пустое.";
+"validation_self_send" = "Заметки для себя — в Черновиках.";
+"invite_error_invalid" = "Приглашение недействительно. Попросите новое.";
+"invite_error_verification_failed" = "Не удалось проверить приглашение. Проверьте соединение и попробуйте снова.";
+"backup_error_wrong_password" = "Неверный пароль или копия повреждена.";
+"device_link_error_keys" = "Не удалось создать ключи для этого устройства. Попробуйте снова.";
+"device_link_error_invalid_qr" = "Это не код устройства Конструкта.";
+"device_link_error_rejected" = "Другое ваше устройство отклонило запрос.";
+"device_link_error_expired" = "Срок запроса истёк. Покажите новый код.";
+"device_link_error_token" = "Срок действия кода истёк. Отсканируйте новый.";
+"device_link_error_already_linked" = "Это устройство уже привязано.";
+"voice_playback_speed" = "Скорость воспроизведения";

@@ -160,7 +160,7 @@ final class VeilProxyManager: ObservableObject {
     // MARK: - VEIL Mode (tri-state)
 
     /// The current VEIL operation mode. Persists across launches via UserDefaults.
-    /// `.off` = no VEIL, `.auto` = DPI auto-detect (default iOS), `.on` = always VEIL (default macOS).
+    /// `.off` = no VEIL, `.auto` = DPI auto-detect (default), `.on` = always VEIL, never direct.
     @Published var mode: VeilMode {
         didSet {
             VeilProxyStore.saveMode(mode)
@@ -327,7 +327,13 @@ final class VeilProxyManager: ObservableObject {
     /// two hardcodes that had to move before the seed pool can be emptied (phase 6):
     /// with no bundled front, this list must contain only what the device actually
     /// learned, not a constant nothing will pin.
-    func capabilityCandidateAddresses(preferring address: String? = nil) -> [String] {
+    ///
+    /// `learnedFronts` is a parameter so a test can hand it an empty store: the shared one is
+    /// the Keychain, and whatever the simulator has learned would decide the test.
+    func capabilityCandidateAddresses(
+        preferring address: String? = nil,
+        learnedFronts: VeilLearnedFrontStore = .shared
+    ) -> [String] {
         var ordered: [String] = []
         func append(_ candidate: String?) {
             guard let candidate, !candidate.isEmpty, !ordered.contains(candidate) else { return }
@@ -335,7 +341,7 @@ final class VeilProxyManager: ObservableObject {
         }
         append(address)
         append(activeRelay?.address)
-        for front in VeilLearnedFrontStore.shared.all() { append(front.address) }
+        for front in learnedFronts.all() { append(front.address) }
         for seed in VEILConfig.hardcodedRelayAddresses { append(seed) }
         return ordered
     }
@@ -360,8 +366,11 @@ final class VeilProxyManager: ObservableObject {
     /// there is simply nothing to ask for until a voucher or the manifest supplies a
     /// front. Returning a seed constant here would send the pipeline at an address no
     /// anchor can pin.
-    func capabilityTargetAddress(preferring address: String? = nil) -> String? {
-        let candidates = capabilityCandidateAddresses(preferring: address)
+    func capabilityTargetAddress(
+        preferring address: String? = nil,
+        learnedFronts: VeilLearnedFrontStore = .shared
+    ) -> String? {
+        let candidates = capabilityCandidateAddresses(preferring: address, learnedFronts: learnedFronts)
         return candidates.first(where: needsCapabilityWork) ?? candidates.first
     }
 
@@ -387,6 +396,26 @@ final class VeilProxyManager: ObservableObject {
         VeilCapabilityProvisioner.shared.provisionIfNeeded(relayAddress: target)
         VeilCapabilityRenewer.shared.renewIfNeeded(relayAddress: target)
         VeilCapabilityV2Bootstrapper.shared.bootstrapOrRenewIfNeeded(relayAddress: target)
+        // Keep ≥2 usable fronts so losing one never leaves this device on a single point of
+        // failure between the ~46-day renewals. No-ops once the floor is met.
+        VeilFrontFloorMaintainer.shared.topUpIfBelowFloor(
+            candidates: capabilityCandidateAddresses(preferring: address),
+            through: activeRelay?.address ?? target
+        )
+    }
+
+    /// A front's native proxy failed to start or tunnel — it is (at least transiently)
+    /// unavailable. Give the floor maintainer a chance to pull in another front now, before
+    /// the *next* one also fails, rather than waiting for the distant near-expiry renewal.
+    /// The failed address is excluded from the usable count so a capped-but-blocked front
+    /// does not mask that we are effectively down to one.
+    func handleRelayUnavailable(_ address: String) {
+        guard mode != .off else { return }
+        VeilFrontFloorMaintainer.shared.frontBecameUnavailable(
+            address,
+            candidates: capabilityCandidateAddresses(),
+            through: activeRelay?.address
+        )
     }
 
     /// Legacy name — forwards to `startIfNeeded()`.
@@ -424,11 +453,14 @@ final class VeilProxyManager: ObservableObject {
         await TransportRouter.shared.updateRelays(freshRelays)
     }
 
-    /// Foreground hook: the TransportRouter FSM detects stale proxies via the next failed RPC
-    /// (which classifies as `.staleLocalProxy` → rotates). Kept as a no-op for callers that
-    /// still invoke it; once removed in Chunk 4 this method goes away entirely.
+    /// Foreground hook: replace the local listener if iOS reclaimed it during a suspend.
+    ///
+    /// This was a no-op, on the theory that the next failed RPC would classify as
+    /// `.staleLocalProxy` and rotate. That RPC can fail to come: on 2026-10-02 the session restore
+    /// ran before `didBecomeActive`, its stale-proxy failure was a background one and ignored, so
+    /// no token, so no stream, so no foreground RPC — "Connecting…" for good.
     func verifyAliveOrRestart() async {
-        // intentional no-op
+        await TransportRouter.shared.restartVeilForBackgroundWake()
     }
 
     // MARK: - Server-provided configuration
@@ -456,7 +488,6 @@ final class VeilProxyManager: ObservableObject {
     /// Fetches the latest relay config from the server and, if the currently active relay
     /// has been deprecated or removed from the manifest, rotates to a live relay immediately.
     ///
-    /// This is the replacement for bare `VeilCertFetcher.shared.fetchAndCacheRelayList()` calls.
     /// All six post-start background fetches use this so that relay retirement is always handled.
     private func fetchConfigAndEvictIfRemoved() async {
         guard let freshList = await VeilCertFetcher.shared.fetchAndCacheRelayConfig() else { return }

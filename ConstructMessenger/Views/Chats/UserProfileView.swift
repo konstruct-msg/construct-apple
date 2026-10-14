@@ -35,7 +35,13 @@ struct UserProfileView: View {
         return formatter
     }()
 
-    @ObservedObject var user: User
+    let userId: String
+
+    /// The contact as last saved (`ContactsLive`). A row that is gone — pruned while the card was
+    /// open — reads as an empty one rather than taking the card down mid-gesture.
+    private var user: ContactRecord {
+        ContactsLive.shared.contact(userId) ?? .new(id: userId, isContact: false, addedAt: nil)
+    }
 
     /// Hide "Message" when the card is already opened from inside the chat.
     var showMessageButton: Bool = true
@@ -49,7 +55,6 @@ struct UserProfileView: View {
     @State private var callManager: (any CallUIManaging)? = CallRuntimeProvider.makeUIManager()
     @State private var showingBlockConfirmation = false
     @State private var showingReportConfirmation = false
-    @State private var showResetSessionConfirm = false
     @State private var showingShareAlert = false
     @State private var shareAlertMessage = ""
     @State private var isSharingInProgress = false
@@ -62,41 +67,19 @@ struct UserProfileView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            CTNavBar(
-                title: NSLocalizedString("profile", comment: ""),
-                showBack: true,
-                backAction: { dismiss() }
-            ) {
-                EmptyView()
-            } trailing: {
-                EmptyView()
-            }
-            flatDivider(thick: true)
-
             ScrollView(showsIndicators: false) {
-                LazyVStack(spacing: 0) {
+                LazyVStack(spacing: SettingsLayout.sectionSpacing) {
                     avatarHeader
-                    flatDivider(thick: true)
                     identitySection
-                    flatDivider(thick: true)
-                    actionsSection
-                    flatDivider(thick: true)
+                    sharingSection
                     securitySection
-                    flatDivider(thick: true)
                     dangerSection
-                    flatDivider(thick: true)
-
-                    Text("> \(NSLocalizedString("end_to_end_encrypted", comment: ""))")
-                        .font(CTFont.regular(11))
-                        .foregroundStyle(Color.CT.accent.opacity(0.5))
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.horizontal, 20)
-                        .padding(.vertical, 12)
                 }
                 .padding(.bottom, 32)
             }
         }
         .background(Color.CT.bg.ignoresSafeArea())
+        .screenTitle(NSLocalizedString("profile", comment: ""))
         .onAppear {
             viewModel.setContext(viewContext)
             refreshSessionSecurityState()
@@ -121,37 +104,13 @@ struct UserProfileView: View {
         } message: {
             Text(shareAlertMessage)
         }
-        .confirmationDialog(
-            LocalizedStringKey("reset_session_title"),
-            isPresented: $showResetSessionConfirm,
-            titleVisibility: .visible
-        ) {
-            Button(LocalizedStringKey("reset_session"), role: .destructive) {
-                Task {
-                    do {
-                        try await SessionLifecycleController.shared.sendEndSession(to: user.id, reason: "user_requested")
-                    } catch {
-                        Log.error("Failed to send user-requested END_SESSION for \(user.id.prefix(8))…: \(error)", category: "UserProfileView")
-                    }
-                }
-            }
-            Button(LocalizedStringKey("cancel"), role: .cancel) {}
-        } message: {
-            Text(LocalizedStringKey("reset_session_message"))
-        }
         .sheet(isPresented: $showingSafetyNumbers) {
-            if let deviceId = KeyChangeUX.safetyDeviceId(for: user) {
-                SafetyNumberView(
-                    theirDeviceId: deviceId,
-                    theirDisplayName: user.resolvedDisplayName
-                )
-            } else {
-                // Fallback: no pinned identity yet — show unavailable state inside SafetyNumberView
-                SafetyNumberView(
-                    theirDeviceId: "",
-                    theirDisplayName: user.resolvedDisplayName
-                )
-            }
+            // Empty when no device is pinned yet: the view says the number is unavailable.
+            SafetyNumberView(
+                theirDeviceIds: KeyChangeUX.safetyDeviceIds(ofContact: userId),
+                theirDisplayName: user.resolvedDisplayName
+            )
+            .sheetNavigation()
         }
         .alert(LocalizedStringKey("local_name"), isPresented: $showingLocalNameEditor) {
             TextField(NSLocalizedString("local_name_placeholder", comment: ""), text: $draftLocalName)
@@ -168,24 +127,47 @@ struct UserProfileView: View {
     // MARK: - Avatar header
 
     private var avatarHeader: some View {
-        let avatarImage: PlatformImage? = user.avatarData.flatMap { PlatformImage(data: $0) }
+        let avatarImage: PlatformImage? = user.avatar.flatMap { PlatformImage(data: $0) }
         return VStack(spacing: 14) {
             MainAvatarView(
                 userId: user.id,
                 displayName: user.resolvedDisplayName,
                 image: avatarImage,
-                size: 96,
+                size: CTAvatarSize.hero,
                 isActive: false
             )
             // Tap to view the avatar full-screen (only when there is an image).
             .contentShape(Rectangle())
             .onTapGesture { if avatarImage != nil { showAvatarViewer = true } }
 
+            VStack(spacing: 4) {
+                Text(user.resolvedDisplayName)
+                    .font(CTFont.title)
+                    .foregroundStyle(Color.CT.text)
+                    .multilineTextAlignment(.center)
+                if !user.username.isEmpty {
+                    Text("@\(user.username)")
+                        .font(CTFont.secondary)
+                        .foregroundStyle(Color.CT.textDim)
+                }
+            }
+
             if user.isBlocked {
-                Text("[ BLOCKED ]")
-                    .font(CTFont.bold(10))
-                    .foregroundStyle(Color.CT.danger)
-                    .tracking(2)
+                HStack(spacing: 5) {
+                    Image(systemName: "nosign")
+                        .font(CTIcon.font(CTIcon.caption, weight: .semibold))
+                        .accessibilityHidden(true)
+                    Text(NSLocalizedString("profile_blocked_badge", comment: ""))
+                        .font(CTFont.ui(11, weight: .semibold, relativeTo: .caption2))
+                }
+                .foregroundStyle(Color.CT.danger)
+                .padding(.horizontal, 9)
+                .padding(.vertical, 4)
+                .background(Color.CT.danger.opacity(0.14), in: CTShape.badge())
+            }
+
+            if !actionButtons.isEmpty {
+                actionButtonRow.padding(.top, CTLayout.inlinePad)
             }
         }
         .frame(maxWidth: .infinity)
@@ -201,22 +183,9 @@ struct UserProfileView: View {
 
     private var identitySection: some View {
         VStack(alignment: .leading, spacing: 0) {
-            sectionHeader(NSLocalizedString("identity_section", comment: ""))
-            flatRowDivider()
+            CTSettingsSectionHeader(title: NSLocalizedString("identity_section", comment: ""))
 
-            profileRow(label: NSLocalizedString("username", comment: "")) {
-                Text("<@\(user.username.isEmpty ? "—" : user.username)>")
-                    .font(CTFont.regular(14))
-                    .foregroundStyle(Color.CT.textDim)
-            }
-            flatRowDivider()
-
-            profileRow(label: NSLocalizedString("display_name", comment: "")) {
-                Text(user.resolvedDisplayName)
-                    .font(CTFont.regular(14))
-                    .foregroundStyle(Color.CT.text)
-            }
-            flatRowDivider()
+            CTSectionGroup {
 
             // Local-only alias the user assigns. Never leaves the device; overrides the
             // resolved display name everywhere (chat list, header, call screens).
@@ -228,16 +197,16 @@ struct UserProfileView: View {
                     HStack(spacing: 8) {
                         let hasAlias = !(user.localAlias ?? "").isEmpty
                         Text(hasAlias ? (user.localAlias ?? "") : NSLocalizedString("local_name_unset", comment: ""))
-                            .font(CTFont.regular(14))
+                            .font(CTFont.ui(14))
                             .foregroundStyle(hasAlias ? Color.CT.text : Color.CT.textDim)
                         Image(systemName: "pencil")
-                            .font(.system(size: 12, weight: .semibold))
+                            .font(CTIcon.font(CTIcon.caption, weight: .semibold))
                             .foregroundStyle(Color.CT.accent.opacity(0.7))
                     }
                 }
             }
             .buttonStyle(.plain)
-            flatRowDivider()
+            ConstructRowDivider(indent: 20)
 
             // External identity = key fingerprint (thread 5.3). UUID is internal addressing only.
             if let fp = user.knownIdentityKey.flatMap({ IdentityFingerprint.short(from: $0) }) {
@@ -247,12 +216,12 @@ struct UserProfileView: View {
                     profileRow(label: NSLocalizedString("identity_fingerprint", comment: "")) {
                         HStack(spacing: 6) {
                             Text(fp)
-                                .font(CTFont.regular(12))
+                                .font(CTFont.mono(12))
                                 .foregroundStyle(Color.CT.accent)
                                 .lineLimit(1)
                                 .minimumScaleFactor(0.7)
                             Image(systemName: "doc.on.doc")
-                                .font(.system(size: 11, weight: .regular))
+                                .font(CTIcon.font(CTIcon.caption, weight: .regular))
                                 .foregroundStyle(Color.CT.textDim)
                         }
                     }
@@ -263,90 +232,111 @@ struct UserProfileView: View {
             } else {
                 profileRow(label: NSLocalizedString("identity_fingerprint", comment: "")) {
                     Text(NSLocalizedString("identity_fingerprint_unknown", comment: ""))
-                        .font(CTFont.regular(13))
+                        .font(CTFont.body)
                         .foregroundStyle(Color.CT.textDim)
                 }
             }
             // Internal ServerUserId kept off the primary identity surface (addressing only).
             #if DEBUG
-            flatRowDivider()
+            ConstructRowDivider(indent: 20)
             profileRow(label: NSLocalizedString("user_id", comment: "")) {
                 let uid = user.id
                 let short = uid.count > 12 ? "\(uid.prefix(8))...\(uid.suffix(2))" : uid
                 Text(short)
-                    .font(CTFont.regular(13))
+                    .font(CTFont.mono(13))
                     .foregroundStyle(Color.CT.textDim.opacity(0.7))
             }
             #endif
+            }
         }
     }
 
-    // MARK: - Actions section
+    // MARK: - Actions
 
-    private var actionsSection: some View {
+    /// What the card can start right away, as the system's contact cards show it: a row of round
+    /// buttons under the name (owner, 2026-10-08, TODO 130). Message only when the card is not
+    /// opened from the chat itself; calls only when a call can start — no greyed-out rows.
+    private enum ContactAction: Hashable { case message, call, video }
+
+    private var actionButtons: [ContactAction] {
+        var actions: [ContactAction] = []
+        if showMessageButton, onOpenChat != nil { actions.append(.message) }
+        if CallsFeature.isEnabled, let callManager, case .idle = callManager.state {
+            actions.append(.call)
+            if CallsFeature.isVideoEnabled { actions.append(.video) }
+        }
+        return actions
+    }
+
+    private var actionButtonRow: some View {
+        HStack(spacing: CTLayout.sectionGap) {
+            ForEach(actionButtons, id: \.self) { action in
+                switch action {
+                case .message:
+                    ContactActionButton(titleKey: "message", systemImage: "message") {
+                        onOpenChat?(); dismiss()
+                    }
+                case .call:
+                    ContactActionButton(titleKey: "chat_action_call", systemImage: "phone") {
+                        startCall(hasVideo: false)
+                    }
+                case .video:
+                    ContactActionButton(titleKey: "chat_action_video", systemImage: "video") {
+                        startCall(hasVideo: true)
+                    }
+                }
+            }
+        }
+    }
+
+    private func startCall(hasVideo: Bool) {
+        guard let callManager else { return }
+        Task {
+            await callManager.startOutgoingCall(
+                to: user.id,
+                displayName: user.resolvedDisplayName,
+                hasVideo: hasVideo
+            )
+        }
+        dismiss()
+    }
+
+    // MARK: - Sharing section
+
+    /// Whether this person gets my name and photo — a state, so a switch, not a button whose
+    /// title flips between "share" and "stop sharing".
+    private var sharingSection: some View {
         VStack(alignment: .leading, spacing: 0) {
-            sectionHeader(NSLocalizedString("actions", comment: ""))
-            flatRowDivider()
+            CTSettingsSectionHeader(title: NSLocalizedString("profile_sharing_section", comment: ""))
 
-            if showMessageButton, let openChat = onOpenChat {
-                actionRow(label: NSLocalizedString("synapses_open_chat", comment: ""), color: Color.CT.accent) {
-                    openChat(); dismiss()
+            CTSectionGroup {
+
+            Toggle(isOn: Binding(
+                get: { user.amISharingWith },
+                set: { handleShareToggle($0) }
+            )) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(NSLocalizedString("share_my_profile", comment: ""))
+                        .font(CTFont.ui(14))
+                        .foregroundStyle(Color.CT.text)
+                    Text(NSLocalizedString("share_profile_explanation", comment: ""))
+                        .font(CTFont.caption)
+                        .foregroundStyle(Color.CT.textDim)
                 }
-                flatRowDivider()
             }
-
-            if CallsFeature.isEnabled, let callManager, case .idle = callManager.state {
-                actionRow(label: NSLocalizedString("call_voice", comment: "Voice call"), color: Color.CT.accent) {
-                    Task {
-                        await callManager.startOutgoingCall(
-                            to: user.id,
-                            displayName: user.resolvedDisplayName,
-                            hasVideo: false
-                        )
-                    }
-                    dismiss()
-                }
-                flatRowDivider()
-
-                if CallsFeature.isVideoEnabled {
-                    actionRow(label: NSLocalizedString("call_video", comment: "Video call"), color: Color.CT.accent) {
-                        Task {
-                            await callManager.startOutgoingCall(
-                                to: user.id,
-                                displayName: user.resolvedDisplayName,
-                                hasVideo: true
-                            )
-                        }
-                        dismiss()
-                    }
-                    flatRowDivider()
-                }
-            } else if !CallsFeature.isEnabled {
-                disabledRow(label: NSLocalizedString("call_voice", comment: "Voice call"))
-                flatRowDivider()
-            }
-
-            if user.amISharingWith {
-                actionRow(
-                    label: NSLocalizedString("stop_sharing_profile", comment: ""),
-                    color: Color.CT.text,
-                    isLoading: isSharingInProgress
-                ) { handleShareToggle(false) }
-            } else {
-                actionRow(
-                    label: NSLocalizedString("share_my_profile", comment: ""),
-                    color: Color.CT.accent,
-                    isLoading: isSharingInProgress
-                ) { handleShareToggle(true) }
-            }
+            .tint(Color.CT.accent)
+            .disabled(isSharingInProgress)
+            .padding(.horizontal, 20)
+            .padding(.vertical, 12)
 
             if let sharedAt = user.sharedWithMeAt, user.isSharingWithMe {
-                flatRowDivider()
+                ConstructRowDivider(indent: 20)
                 Text(String(format: NSLocalizedString("sharing_with_you", comment: ""), formatDate(sharedAt)))
-                    .font(CTFont.regular(11))
+                    .font(CTFont.caption)
                     .foregroundStyle(Color.CT.textDim)
                     .padding(.horizontal, 20)
                     .padding(.vertical, 10)
+            }
             }
         }
     }
@@ -355,104 +345,73 @@ struct UserProfileView: View {
 
     private var securitySection: some View {
         VStack(alignment: .leading, spacing: 0) {
-            sectionHeader(NSLocalizedString("security", comment: ""))
-            flatRowDivider()
+            CTSettingsSectionHeader(title: NSLocalizedString("security", comment: ""))
 
-            if user.ktStatus == .keyChanged || user.ktStatus == .failed {
-                keyChangeWarningBlock
-                flatRowDivider()
+            CTSectionGroup {
+
+            if let alert = user.trustAlert {
+                keyChangeWarningBlock(alert)
+                ConstructRowDivider(indent: 20)
             }
 
-            profileRow(label: NSLocalizedString("session_crypto_suite", comment: "")) {
-                HStack(spacing: 8) {
-                    Text(hasSession ? "[ENC]" : "[---]")
-                        .font(CTFont.regular(11))
-                        .foregroundStyle(hasSession ? Color.CT.accent.opacity(0.8) : Color.CT.textDim)
-                    if hasSession {
-                        Text("[ OK ]")
-                            .font(CTFont.regular(11))
-                            .foregroundStyle(Color.CT.accent.opacity(0.6))
+            // One row: the state, said with a badge and a word, and the negotiated suite under it.
+            // It was two rows — a badge alone, then the suite as a row with no label.
+            VStack(alignment: .leading, spacing: 0) {
+                profileRow(label: NSLocalizedString("session_crypto_suite", comment: "")) {
+                    HStack(spacing: 6) {
+                        CTStatusBadge(status: hasSession ? .ok : .off, size: 13)
+                        Text(hasSession ? NSLocalizedString("encrypted", comment: "") : sessionSuiteLabel)
+                            .font(CTFont.ui(13, relativeTo: .footnote))
+                            .foregroundStyle(hasSession ? Color.CT.text : Color.CT.textDim)
                     }
                 }
+                if hasSession {
+                    Text(sessionSuiteLabel)
+                        .font(CTFont.mono(11))
+                        .foregroundStyle(Color.CT.textDim)
+                        .padding(.horizontal, 20)
+                        .padding(.top, -6)
+                        .padding(.bottom, 12)
+                }
             }
-            flatRowDivider()
-
-            profileRow(label: "") {
-                Text(sessionSuiteLabel)
-                    .font(CTFont.regular(13))
-                    .foregroundStyle(hasSession ? Color.CT.text : Color.CT.textDim)
-            }
-            flatRowDivider()
+            ConstructRowDivider(indent: 20)
 
             Button {
                 showingSafetyNumbers = true
             } label: {
                 profileRow(label: NSLocalizedString("safety_numbers", comment: "")) {
                     Image(systemName: "chevron.right")
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(CTIcon.font(CTIcon.caption, weight: .semibold))
                         .foregroundStyle(Color.CT.textDim)
                 }
             }
             .buttonStyle(.plain)
+            }
         }
     }
 
-    /// Persistent trust warning until the user verifies or accepts the new key.
-    private var keyChangeWarningBlock: some View {
+    /// Persistent trust warning until the user verifies or acknowledges it.
+    private func keyChangeWarningBlock(_ alert: ContactTrustAlert) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
                 Image(systemName: "exclamationmark.shield.fill")
                     .foregroundStyle(Color.CT.danger)
-                Text(NSLocalizedString(
-                    user.ktStatus == .failed ? "key_change_banner_title_failed" : "key_change_banner_title",
-                    comment: ""
-                ))
-                .font(CTFont.bold(12))
+                Text(NSLocalizedString(alert.titleKey, comment: ""))
+                .font(CTFont.ui(12, weight: .bold))
                 .foregroundStyle(Color.CT.danger)
             }
 
-            Text(user.ktStatus == .failed
-                 ? NSLocalizedString("key_change_banner_subtitle_failed", comment: "")
-                 : String(
-                    format: NSLocalizedString("key_change_banner_subtitle_fmt", comment: ""),
-                    user.resolvedDisplayName
-                 )
-            )
-            .font(CTFont.regular(11))
+            Text(alert.subtitle(contactName: user.resolvedDisplayName))
+            .font(CTFont.caption)
             .foregroundStyle(Color.CT.textDim)
 
             HStack(spacing: 10) {
-                Button {
+                CTButton(label: NSLocalizedString("key_change_verify", comment: ""), role: .destructive) {
                     showingSafetyNumbers = true
-                } label: {
-                    Text(NSLocalizedString("key_change_verify", comment: ""))
-                        .font(CTFont.bold(12))
-                        .foregroundStyle(Color.CT.bg)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
-                        .background(Color.CT.danger)
-                        .clipShape(CTShape.control())
                 }
-                .buttonStyle(.plain)
-
-                Button {
-                    if KeyChangeUX.acknowledgeKeyChange(userId: user.id, context: viewContext) {
-                        // @ObservedObject user will refresh ktStatus from Core Data object
-                    }
-                } label: {
-                    Text(NSLocalizedString("key_change_accept", comment: ""))
-                        .font(CTFont.regular(12))
-                        .foregroundStyle(Color.CT.accent)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
-                        .background(Color.CT.bgMsg)
-                        .clipShape(CTShape.control())
-                        .overlay(
-                            CTShape.control()
-                                .strokeBorder(Color.CT.accent.opacity(0.5), lineWidth: 1)
-                        )
+                CTButton(label: NSLocalizedString("security_notice_acknowledge", comment: ""), role: .secondary) {
+                    _ = KeyChangeUX.acknowledgeKeyChange(userId: user.id)
                 }
-                .buttonStyle(.plain)
             }
         }
         .padding(.horizontal, 20)
@@ -465,69 +424,38 @@ struct UserProfileView: View {
 
     private var dangerSection: some View {
         VStack(alignment: .leading, spacing: 0) {
-            sectionHeader(NSLocalizedString("danger_zone", comment: ""), color: Color.CT.danger)
-            flatRowDivider()
+            CTSettingsSectionHeader(title: NSLocalizedString("danger_zone", comment: ""), color: Color.CT.danger)
+
+            CTSectionGroup {
 
             actionRow(
                 label: NSLocalizedString(user.isBlocked ? "unblock_user" : "block_user", comment: ""),
                 color: user.isBlocked ? Color.CT.text : Color.CT.danger
             ) { showingBlockConfirmation = true }
-            flatRowDivider()
+            ConstructRowDivider(indent: 20)
 
             actionRow(
                 label: NSLocalizedString("report_spam", comment: ""),
                 color: Color.CT.danger
             ) { showingReportConfirmation = true }
-            flatRowDivider()
-
-            actionRow(
-                label: NSLocalizedString("reset_session", comment: ""),
-                color: Color.CT.danger
-            ) { showResetSessionConfirm = true }
 
             if let prune = onPrune {
-                flatRowDivider()
+                ConstructRowDivider(indent: 20)
                 actionRow(label: NSLocalizedString("synapses_prune_action", comment: ""), color: Color.CT.danger) {
                     prune(); dismiss()
                 }
+            }
             }
         }
     }
 
     // MARK: - Layout helpers
 
-    private func flatDivider(thick: Bool = false) -> some View {
-        Rectangle()
-            .fill(thick ? Color.CT.noise : Color.CT.noise.opacity(0.5))
-            .frame(height: 1)
-    }
-
-    private func flatRowDivider() -> some View {
-        Rectangle()
-            .fill(Color.CT.noise.opacity(0.35))
-            .frame(height: 1)
-            .padding(.horizontal, 20)
-    }
-
-    private func sectionHeader(_ title: String, color: Color = Color.CT.accent) -> some View {
-        HStack(spacing: 6) {
-            Text(">")
-                .font(CTFont.bold(12))
-                .foregroundStyle(color)
-            Text(title.uppercased())
-                .font(CTFont.bold(12))
-                .foregroundStyle(color)
-                .tracking(2)
-        }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 10)
-    }
-
     private func profileRow<V: View>(label: String, @ViewBuilder value: () -> V) -> some View {
         HStack {
             if !label.isEmpty {
-                Text(label.lowercased())
-                    .font(CTFont.regular(14))
+                Text(label)
+                    .font(CTFont.ui(14))
                     .foregroundStyle(Color.CT.textDim)
             }
             Spacer()
@@ -540,15 +468,15 @@ struct UserProfileView: View {
     private func actionRow(label: String, color: Color, isLoading: Bool = false, action: @escaping () -> Void) -> some View {
         Button(action: { guard !isLoading else { return }; action() }) {
             HStack {
-                Text(label.lowercased())
-                    .font(CTFont.regular(14))
+                Text(label)
+                    .font(CTFont.ui(14))
                     .foregroundStyle(color)
                 Spacer()
                 if isLoading {
                     ProgressView().scaleEffect(0.75).tint(Color.CT.textDim)
                 } else {
                     Image(systemName: "chevron.right")
-                        .font(CTFont.regular(13))
+                        .font(CTFont.body)
                         .foregroundStyle(color.opacity(0.6))
                 }
             }
@@ -558,20 +486,6 @@ struct UserProfileView: View {
         }
         .buttonStyle(.plain)
         .disabled(isLoading)
-    }
-
-    private func disabledRow(label: String) -> some View {
-        HStack {
-            Text(label.lowercased())
-                .font(CTFont.regular(14))
-                .foregroundStyle(Color.CT.textDim)
-            Spacer()
-            Text("[soon]")
-                .font(CTFont.regular(11))
-                .foregroundStyle(Color.CT.textDim)
-        }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 14)
     }
 
     // MARK: - Helpers
@@ -584,13 +498,18 @@ struct UserProfileView: View {
         let sessionExists = SessionLifecycleController.shared.hasActiveSession(for: user.id)
         // Real negotiated suite from the Rust core (Keychain only as fallback) —
         // suite 3 is negotiated per-session and never appears in the peer's bundle.
-        let suiteId = Int(CryptoManager.shared.sessionSuiteId(for: user.id))
+        let suiteId = Int(CryptoManager.shared.sessionSuiteIdAcrossDevices(ofPeer: user.id))
         hasSession = sessionExists
         if sessionExists && suiteId > 0 {
             var label = cryptoSuiteName(suiteId: suiteId)
-            // PQXDH handshake strengthening failed for this session (Kyber decaps
-            // error) — the session is classical-only even if keys were offered.
-            if KeychainManager.shared.loadPQXDHDowngradeFlag(for: user.id) {
+            // A session opened before PQXDH v2 has no ML-KEM in its first key (or only the old
+            // deferred contribution) until the upgrade sweep replaces it. The core's health report
+            // says which, per device; the Keychain flag this read before is gone with the path
+            // that set it.
+            let preV2 = SessionAddressing.deviceIds(ofPeer: user.id).contains { device in
+                CryptoManager.shared.getSessionHealth(for: device).map { $0.pqHandshake != .initialV2 } ?? false
+            }
+            if preV2 {
                 label += " · PQXDH degraded"
             }
             sessionSuiteLabel = label
@@ -606,8 +525,7 @@ struct UserProfileView: View {
             viewModel.shareProfile(with: user.id) { success, error in
                 isSharingInProgress = false
                 if success {
-                    user.amISharingWith = true
-                    viewContext.saveAndLog(category: "UserProfileView")
+                    write { try $0.setSharingWith(userId, true) }
                     shareAlertMessage = NSLocalizedString("profile_shared_successfully", comment: "")
                 } else {
                     shareAlertMessage = error ?? NSLocalizedString("failed_to_share_profile", comment: "")
@@ -615,8 +533,7 @@ struct UserProfileView: View {
                 showingShareAlert = true
             }
         } else {
-            user.amISharingWith = false
-            viewContext.saveAndLog(category: "UserProfileView")
+            write { try $0.setSharingWith(userId, false) }
             shareAlertMessage = NSLocalizedString("profile_sharing_stopped", comment: "")
             showingShareAlert = true
         }
@@ -628,12 +545,10 @@ struct UserProfileView: View {
     /// is derived locally from the peer's identity key (`SHA256(identity_public)[0..16]`, the same
     /// value the server keys sentinel on), so it works even under sealed sender.
     private func handleReportSpam() {
-        let userId = user.id
-        let reportedDeviceId: String? = user.knownIdentityKey.map { deriveDeviceId(identityPublicKey: [UInt8]($0)) }
+        let reportedDeviceId: String? = user.knownIdentityKey.map { deriveDeviceId(identityPublicKey: $0) }
 
         // Block immediately (local drop + durable server-side); report best-effort alongside.
-        user.isBlocked = true
-        viewContext.saveAndLog(category: "UserProfileView")
+        write { try $0.setBlocked(userId, true) }
 
         Task {
             var reported = false
@@ -657,10 +572,8 @@ struct UserProfileView: View {
     }
 
     private func handleBlockToggle() {
-        user.isBlocked.toggle()
-        let nowBlocked = user.isBlocked
-        let userId = user.id
-        viewContext.saveAndLog(category: "UserProfileView")
+        let nowBlocked = !user.isBlocked
+        write { try $0.setBlocked(userId, nowBlocked) }
         // Persist the block server-side (durable across reinstall; the authoritative
         // `user_blocks` row used on the identified path). The local `isBlocked` already drives
         // the client-side drop, so a failed RPC must NOT revert the local state — best-effort sync.
@@ -680,27 +593,36 @@ struct UserProfileView: View {
     /// Persist the local alias. Empty/whitespace clears it (falls back to the resolved name).
     private func saveLocalName() {
         let trimmed = draftLocalName.trimmingCharacters(in: .whitespacesAndNewlines)
-        user.localAlias = trimmed.isEmpty ? nil : trimmed
-        viewContext.saveAndLog(category: "UserProfileView")
+        write { try $0.setAlias(userId, trimmed.isEmpty ? nil : trimmed) }
     }
 
     private func clearLocalName() {
-        user.localAlias = nil
-        viewContext.saveAndLog(category: "UserProfileView")
+        write { try $0.setAlias(userId, nil) }
+    }
+
+    private func write(_ change: (any ContactStore) throws -> Bool) {
+        do {
+            _ = try change(LocalRepositories.contacts)
+        } catch {
+            Log.error("Contact \(userId.prefix(8))… not saved: \(error)", category: "UserProfileView")
+        }
     }
 }
 
 // MARK: - Preview
 
+// DEBUG only: the previews seed `ContactsLive.useForPreview`, which a release build does not have.
+#if DEBUG
 #Preview {
     let container = PreviewHelpers.createPreviewContainer()
+    ContactsLive.useForPreview(container)
     let context = container.viewContext
     let user = PreviewHelpers.createSampleUser(context: context, id: "user1", username: "alice", displayName: "Alice Wonderland")
     user.isContact = true
     try? context.save()
 
     return UserProfileView(
-        user: user,
+        userId: user.id,
         showMessageButton: true,
         onOpenChat: {},
         onPrune: {}
@@ -710,9 +632,49 @@ struct UserProfileView: View {
 
 #Preview {
     let container = PreviewHelpers.createPreviewContainer()
+    ContactsLive.useForPreview(container)
     let context = container.viewContext
     let user = PreviewHelpers.createSampleUser(context: context, id: "user1", username: "alice", displayName: "Alice")
     try? context.save()
-    return UserProfileView(user: user)
+    return UserProfileView(userId: user.id)
         .environment(\.managedObjectContext, context)
+}
+#endif
+
+/// One of the contact card's round actions: the system's glass circle with a symbol, the title
+/// under it — as the iOS 26 contact cards draw them. The title is part of the button.
+private struct ContactActionButton: View {
+    let titleKey: String
+    let systemImage: String
+    let action: () -> Void
+
+    private let diameter: CGFloat = 52
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 6) {
+                circle
+                Text(NSLocalizedString(titleKey, comment: ""))
+                    .font(CTFont.caption)
+                    .foregroundStyle(Color.CT.text)
+                    .lineLimit(1)
+            }
+            .frame(minWidth: CTLayout.hitTarget + CTLayout.sectionGap)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    @ViewBuilder
+    private var circle: some View {
+        let icon = Image(systemName: systemImage)
+            .font(CTIcon.font(CTIcon.nav))
+            .foregroundStyle(Color.CT.accent)
+            .frame(width: diameter, height: diameter)
+        if #available(iOS 26.0, macOS 26.0, *) {
+            icon.glassEffect(.regular.interactive(), in: Circle())
+        } else {
+            icon.background(Color.CT.bgMsg, in: Circle())
+        }
+    }
 }

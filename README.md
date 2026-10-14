@@ -1,8 +1,8 @@
 # Konstruct
 
-**Privacy-first, end-to-end encrypted messenger with crypto-agility and post-quantum hybrid cryptography.**
+**Privacy-first, end-to-end encrypted messenger whose message content is protected by hybrid post-quantum cryptography.**
 
-[![Rust](https://img.shields.io/badge/Rust-1.92+-orange.svg)](https://www.rust-lang.org/)
+[![Rust](https://img.shields.io/badge/Rust-1.96+-orange.svg)](https://www.rust-lang.org/)
 [![Swift](https://img.shields.io/badge/Swift-5.9+-red.svg)](https://swift.org/)
 [![UniFFI](https://img.shields.io/badge/UniFFI-0.30-blue.svg)](https://mozilla.github.io/uniffi-rs/)
 [![iOS](https://img.shields.io/badge/iOS-18.5+-black.svg)](https://developer.apple.com/ios/)
@@ -27,8 +27,11 @@ security audit has been done yet — that is on the roadmap, not behind us.
   Contact edges are stored as keyed hashes of both user ids, which keeps the graph out of a
   database leak — not out of the operator's reach, since the operator holds the key.
 - ✅ **Forward secrecy & post-compromise security** — Double Ratchet; compromised keys don't reveal history.
-- ✅ **Crypto-agility** — pluggable cipher suites negotiated per session (`suite_id`).
-- ✅ **Post-quantum hybrid** — classical ⊕ PQ, so an attacker must break *both* to win.
+- ✅ **Post-quantum message content** — X25519 and ML-KEM together, mandatory for every session,
+  so an attacker must break *both*. Not every layer is post-quantum yet — see
+  [what is still classical](#what-is-still-classical).
+- ✅ **Versioned suites** — the wire names its cipher suite (`suite_id`); a retired suite is
+  refused, never negotiated down to.
 - ✅ **One Rust core, many platforms** — iOS, macOS, Android share `construct-core` via UniFFI.
 - ✅ **Binary data pipeline** — no base64/JSON in the crypto path; `Data`/`[u8]` end to end.
 
@@ -43,15 +46,15 @@ security audit has been done yet — that is on the roadmap, not behind us.
 |   - CryptoManager: thin UniFFI wrapper over construct-core  |
 +--------------v--------------------------------------------+
 |   construct-core (Rust) via UniFFI (direct path)           |
-|   - X3DH + PQXDH, Double Ratchet, ML-KEM-768, Ed25519+ML-DSA|
-|   - crypto-agile suites                                    |
+|   - PQXDH v2 (ML-KEM-1024), Double Ratchet + PQ ratchet     |
+|     (ML-KEM-768), Ed25519 + ML-DSA-65 hybrid signatures    |
 +--------------+--------------------------------------------+
                | gRPC (H2 primary; H3-QUIC experimental)
                | + optional VEIL (obfs4/WebTunnel) for DPI evasion
                v
 +-------------------------------------------------------------+
 |   Konstruct server (Rust) behind Traefik                    |
-|   - key bundles, Redpanda Streams offline mailbox           |
+|   - key bundles, Redis-Streams mailbox, Redpanda send bus   |
 |   - NO access to plaintext                                  |
 +-------------------------------------------------------------+
 ```
@@ -76,19 +79,38 @@ Verified against `construct-core` source — names follow NIST FIPS, informal na
 | AEAD          | **ChaCha20-Poly1305** | Message encryption           |
 | KDF           | **HKDF-SHA256**       | Key derivation               |
 
-### Post-quantum (`suite_id = 2`) — hybrid
+### Post-quantum — every session
 
-| Component     | Algorithm                         | Status |
-|---------------|-----------------------------------|--------|
-| Key agreement | **X25519 ⊕ ML-KEM-768** (FIPS 203, Kyber-768) | Implemented — PQXDH mixes a Kyber OTPK into the root key |
-| Signatures    | **Ed25519 + ML-DSA-65** (FIPS 204, Dilithium-3) | Implemented in core (client + server, byte-identical), **not yet activated on the wire** — identity signatures are still Ed25519 |
-| AEAD / KDF    | ChaCha20-Poly1305 / HKDF-SHA256   | unchanged |
+| Component | Algorithm | Where |
+|---|---|---|
+| Handshake | **PQXDH v2**: X25519 and an **ML-KEM-1024** (FIPS 203, Kyber-1024) secret in the root key — the first message included | mandatory since construct-core 0.18; a first message without it is refused |
+| Ratchet | **Suite 4**: Double Ratchet plus a sparse continuous **ML-KEM-768** (Kyber-768) ratchet, one post-quantum key per message | since construct-core 0.24; new epochs every few DH turns or 7 days |
+| Bundle signatures | **Ed25519 + ML-DSA-65** (FIPS 204, Dilithium-3), both must verify | required on every Kyber prekey the core encapsulates to |
 
-> **Note:** "Hybrid" means classical **and** PQ — both must verify / both must be broken.
-> The ML-DSA-65 signature path uses RustCrypto `ml-dsa` (seed-based) on **both** client and
-> server, so hybrid signatures cross-verify byte-for-byte; a cross-impl interop test pins this.
-> Earlier docs that said "Kyber-1024" or "Dilithium deployed" are wrong — see
-> `construct-docs` for the authoritative protocol spec.
+> The hybrid identity key is bound to the device by an Ed25519 cross-signature, which a quantum
+> attacker could forge — so the core **pins** the hybrid key the first time it opens a session to
+> a device and refuses a different one later. That is trust on first use, not a PQ chain to a
+> root; key transparency is what would close it. ML-DSA-65 is RustCrypto `ml-dsa` on client and
+> server alike, pinned by a cross-implementation interop test.
+>
+> Earlier versions of this file said the variant was ML-KEM-768 and that "Kyber-1024" was wrong.
+> That was true before PQXDH v2 (2026-09-25): the handshake now uses ML-KEM-1024, and ML-KEM-768
+> is only the ratchet's.
+
+### What is still classical
+
+Post-quantum protection covers the **content** of one-to-one messages and the attachments they
+carry. These layers are not post-quantum yet:
+
+- **Who sent a sealed message.** The sender certificate is sealed with X25519 only; a recorded
+  message reveals its sender to a future quantum attacker, not its content.
+- **Calls.** WebRTC DTLS-SRTP with an ECDHE handshake — a recorded call can be decrypted later.
+- **Groups.** The MLS engine uses a classical ciphersuite; groups do not ship yet.
+- **Authentication to the server** — device and recovery signatures, server-signed sender
+  certificates — is Ed25519. A forgery acts on the account; it does not decrypt messages.
+
+The full table, with sources and the open items `PQC-1`…`PQC-6`, is in the protocol book:
+[Threat Model — Post-quantum coverage](https://konstruct-msg.github.io/construct-protocol/01-threat-model.html#post-quantum-coverage).
 
 ### Suite binding (anti key-substitution)
 
@@ -136,12 +158,12 @@ All three Rust crates must be cloned alongside this repo:
 The `*.xcframework` binaries are **not** tracked in git — build them after cloning:
 
 ```bash
-# 1. Build the crypto core (iOS device + simulator)
+# 1. Build the crypto core — iOS device + simulator + macOS
 cd ~/Code/construct-messenger
-./build_crypto_lib.sh --ios --sim        # or --all for + macOS
+./build_crypto_lib.sh --all
 
 # 2. Build the transport library
-./build_transport_lib.sh                 # wraps construct-transport/build_ios.sh
+./build_transport_lib.sh --all           # wraps construct-transport/build_ios.sh
 
 # 3. Regenerate UniFFI Swift bindings (after any core API change)
 cd ~/Code/construct-messenger
@@ -149,14 +171,20 @@ cd ~/Code/construct-messenger
 
 # 4. Build & run
 xcodebuild -scheme ConstructMessenger \
-  -destination 'platform=iOS Simulator,name=iPhone 17' build
+  -destination 'platform=iOS Simulator,name=iPhone 18 Pro' build
 # …or open ConstructMessenger.xcodeproj in Xcode and ⌘R
 ```
 
-> Do not pin `OS=` in a destination — simulator runtimes are replaced with every Xcode upgrade and
-> a pinned one stops resolving. Check `xcrun simctl list devices available`.
+> **`--all` on both, unless you are rebuilding one platform on purpose.** A narrowed build leaves
+> the other slices from an older core: `build_crypto_lib.sh` warns when it notices, and
+> `build_transport_lib.sh` silently omits `macos-arm64`, which `Construct Desktop/` then fails to
+> link against — an xcframework that looks perfectly well-formed.
+>
+> Nothing in a `-destination` survives an Xcode upgrade: runtimes are replaced, so never pin
+> `OS=`, and simulator **names** turn over with them (`iPhone 17` no longer exists). Read the
+> current one from `xcrun simctl list devices available` rather than from this file.
 
-**Requirements:** Rust 1.92+ · Xcode 16+ · iOS 18.5+ deployment target · UniFFI 0.30.
+**Requirements:** Rust 1.96+ · Xcode 16+ · iOS 18.5+ deployment target · UniFFI 0.30.
 
 ---
 
@@ -172,9 +200,12 @@ construct-messenger/
 │   │   └── CryptoManager.swift # UniFFI wrapper around construct-core
 │   ├── Networking/gRPC/        # gRPC channel + generated protobuf + VEIL
 │   ├── Utilities/              # CT design tokens (ConstructTheme.swift)
-│   ├── en.lproj / ru.lproj/    # localization (Japanese planned)
+│   ├── Fonts/                  # bundled JetBrains Mono (UIAppFonts lists bare file names)
+│   ├── {en,ru,ja,fr}.lproj/    # localization — all four held to key parity by CI
 │   └── construct_core.swift    # generated UniFFI bindings (do not edit)
-├── ConstructUI/                # standalone SwiftPM package — Xcode Previews sandbox
+├── ConstructMessengerTests/    # the Xcode suite (the ConstructMessenger scheme runs it)
+├── Construct Desktop/          # macOS client — same core + gRPC path, no public build
+├── fastlane/metadata/          # App Store listing copy, per locale — reviewed as a diff
 ├── scripts/                    # build/test/simulator tooling
 ├── tests/                      # Python network + DPI probes (not the Xcode suite)
 ├── docs/                       # reference for tooling in this repo
@@ -198,7 +229,8 @@ cd ~/Code/construct-core && cargo test --features post-quantum
 # iOS app (unit + crypto-wire integration)
 cd ~/Code/construct-messenger
 xcodebuild test -scheme ConstructMessenger \
-  -destination 'platform=iOS Simulator,name=iPhone 17'
+  -destination 'platform=iOS Simulator,name=iPhone 18 Pro' \
+  -parallel-testing-enabled NO
 
 # a single class, without simulator clones
 scripts/test_run.sh ConstructMessengerTests/FooTests
@@ -211,12 +243,14 @@ See [`docs/TESTING.md`](docs/TESTING.md) for the tooling and
 
 ## Status
 
-**App:** v0.18.1 (Alpha, TestFlight) · **Core:** construct-core v0.12.4
+**App:** v0.20.0 (686) — Alpha, TestFlight · **Core:** construct-core v0.25.0
 
 ### Working
-- [x] Rust crypto core — X3DH + Double Ratchet, crypto-agile suites
-- [x] PQXDH — ML-KEM-768 hybrid key agreement
-- [x] Hybrid Ed25519 + ML-DSA-65 signatures in core (client + server parity, cross-verified)
+- [x] Rust crypto core — X3DH + Double Ratchet, versioned suites
+- [x] PQXDH v2 — ML-KEM-1024 in every session's initial key, mandatory
+- [x] Post-quantum ratchet (suite 4) — ML-KEM-768 epochs, one post-quantum key per message
+- [x] Hybrid Ed25519 + ML-DSA-65 signatures — required on every Kyber prekey, with the hybrid key
+      pinned per device; client and server share one RustCrypto implementation
 - [x] UniFFI iOS integration; binary (CFE) session persistence
 - [x] QUIC / HTTP-3 / gRPC transport engine (H2 fallback on iOS)
 - [x] VEIL obfuscation (obfs4 + WebTunnel pluggable transports, opt-in)
@@ -230,7 +264,11 @@ See [`docs/TESTING.md`](docs/TESTING.md) for the tooling and
       and that is not the same as working: the two-simulator stand has not yet carried a copy
       through to a second device's transcript, so nothing here has been confirmed on hardware.
       It stays out of the Working list until it has.
-- [ ] Activate hybrid ML-DSA-65 identity signatures on the wire (with smooth migration for existing accounts)
+- [ ] Post-quantum beyond message content: a hybrid sealed-sender box, call keys derived from
+      the post-quantum session, a hybrid MLS ciphersuite before groups ship (`PQC-1`, `PQC-4`,
+      `PQC-5` in the protocol book)
+- [ ] Take the last classical step out of the hybrid signature chain — the hybrid key is bound to
+      a device by an Ed25519 cross-signature and held by a first-use pin
 - [ ] Cluster (group) messaging
 - [ ] macOS Desktop — direct core + gRPC path builds; no public build
 - [ ] Android client

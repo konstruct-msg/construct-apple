@@ -7,7 +7,7 @@
 //
 //  THE INVARIANT: the committed cursor must never advance past a message that is not yet
 //  durably handled. Advancing past a message tells the server to delete it (XTRIM ≤ cursor);
-//  if that message was only sitting in the in-memory PendingSessionQueue (no session yet)
+//  if that message was only waiting in the core's in-memory queue (no session yet)
 //  and the app died, it would be lost forever. (The catastrophic trim-on-read loss is already
 //  fixed server-side; this closes the remaining received-but-not-durable window.)
 //

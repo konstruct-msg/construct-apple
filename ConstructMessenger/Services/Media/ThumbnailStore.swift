@@ -114,9 +114,13 @@ final class ThumbnailStore {
 
     // MARK: - Storage
 
+    /// Thumbnails are sealed at rest like the media they preview (`AtRestFiles`): a preview in the
+    /// clear shows what the sealed original hides.
+    private static func sealContext(_ name: String) -> String { "thumbnail/\(name)" }
+
     func store(_ data: Data, for messageId: String, at index: Int) {
         let name = ThumbnailKey.filename(messageId: messageId, index: index)
-        try? data.write(to: directory.appendingPathComponent(name), options: .atomic)
+        AtRestFiles.write(data, to: directory.appendingPathComponent(name), context: Self.sealContext(name))
         memory.setObject(data as NSData, forKey: name as NSString)
     }
 
@@ -124,7 +128,7 @@ final class ThumbnailStore {
         let name = ThumbnailKey.filename(messageId: messageId, index: index)
         if let cached = memory.object(forKey: name as NSString) { return cached as Data }
 
-        if let data = try? Data(contentsOf: directory.appendingPathComponent(name)) {
+        if let data = AtRestFiles.read(directory.appendingPathComponent(name), context: Self.sealContext(name)) {
             memory.setObject(data as NSData, forKey: name as NSString)
             return data
         }
@@ -169,7 +173,7 @@ final class ThumbnailStore {
                 let name = ThumbnailKey.filename(messageId: parsed.messageId, index: parsed.index)
                 let url = directory.appendingPathComponent(name)
                 if !FileManager.default.fileExists(atPath: url.path) {
-                    try? data.write(to: url, options: .atomic)
+                    AtRestFiles.write(data, to: url, context: Self.sealContext(name))
                 }
             }
             defaults.removeObject(forKey: key)

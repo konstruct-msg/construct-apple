@@ -72,11 +72,13 @@ RUNTIME_CREATED="logs/"
 
 # Paths inside backticks that look like files or directories: a slash or a known extension, and
 # no spaces, globs, placeholders or call parentheses (`CTFont.regular/medium/bold(size)` is an
-# API, `<topic>` and `*.xcframework` are prose).
+# API, `<topic>` and `*.xcframework` are prose). A member list without the parentheses —
+# `CTFont.title/headline/body` — is an API too: a type, a dot, then names joined by slashes.
 paths=$(grep -oE '`[^`]+`' "$DOC" \
     | tr -d '`' \
     | grep -E '(/|\.(md|sh|swift|yml))' \
     | grep -vE '[ *<>|()]' \
+    | grep -vE '^[A-Z][A-Za-z]*\.[a-z][A-Za-z]*(/[a-z][A-Za-z]*)+$' \
     | sort -u)
 
 # Where a path may legitimately live. AGENTS.md writes source paths relative to the app target as

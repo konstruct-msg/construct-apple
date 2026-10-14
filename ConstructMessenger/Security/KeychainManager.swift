@@ -27,14 +27,16 @@ class KeychainManager {
         "deviceSigningKey", "deviceIdentityKey",
         APIConstants.privateKeyKey,
         "identity_key", "signed_prekey", "signing_key",
-        "hybrid_sig_private_key", "crypto_private_keys", "crypto_otpks",
+        "hybrid_sig_private_key", KeychainSessionAccounts.keyRecord, "crypto_otpks",
         // v2: written by callers that used to rely on the WhenUnlocked default.
         "construct.kyber_session_state", "tracked_prekey_ids",
         // v3: at-rest key for partial multi-chunk messages (background decrypt must read it).
         "construct.reassembly_store_key",
         // v4: this account's intake key — a sealed send built during a background push decrypt
         // attaches the peer's tag, so an unreadable key there would silently charge a token.
-        "construct.intake.own"
+        "construct.intake.own",
+        // v5: this account's address, read by the same background sends.
+        "construct.accountAddress"
     ]
 
     /// Account prefixes whose items are created dynamically (per key id / contact / user) and
@@ -115,7 +117,7 @@ class KeychainManager {
             Log.error("Failed to convert deviceId to UTF-8", category: "Keychain")
             return
         }
-        let success = save(data, forKey: "deviceId", accessible: kSecAttrAccessibleAfterFirstUnlock)
+        let success = save(data, forKey: KeychainSessionAccounts.deviceId, accessible: kSecAttrAccessibleAfterFirstUnlock)
         if success {
             Log.info("Device ID saved to Keychain", category: "Keychain")
         }
@@ -123,37 +125,25 @@ class KeychainManager {
     
     /// Load device ID
     func loadDeviceID() -> String? {
-        guard let data = load(forKey: "deviceId") else {
+        guard let data = load(forKey: KeychainSessionAccounts.deviceId) else {
             return nil
         }
         return String(data: data, encoding: .utf8)
     }
     
-    /// Save device signing key (Ed25519 private key, 32 bytes)
-    func saveDeviceSigningKey(_ key: Data) {
-        let success = save(key, forKey: "deviceSigningKey", accessible: Self.cryptoKeyAccessible)
-        if success {
-            Log.info("Device signing key saved to Keychain", category: "Keychain")
+    /// Delete the raw copies of the device keys older builds kept beside the key record
+    /// (`deviceSigningKey`, `deviceIdentityKey`). The record in `crypto_private_keys` is what the
+    /// core loads from; the copies existed so Swift could sign and open with the keys itself, and
+    /// since 2026-09-29 nothing reads them. Called once the core has loaded from the record, so a
+    /// device is never left with neither.
+    func deleteLegacyDeviceKeyCopies() {
+        for account in Self.legacyDeviceKeyAccounts where load(forKey: account) != nil {
+            delete(forKey: account)
+            Log.info("Deleted legacy Keychain copy \(account)", category: "Keychain")
         }
     }
-    
-    /// Load device signing key
-    func loadDeviceSigningKey() -> Data? {
-        return load(forKey: "deviceSigningKey")
-    }
-    
-    /// Save device identity key (for E2EE)
-    func saveDeviceIdentityKey(_ key: Data) {
-        let success = save(key, forKey: "deviceIdentityKey", accessible: Self.cryptoKeyAccessible)
-        if success {
-            Log.info("Device identity key saved to Keychain", category: "Keychain")
-        }
-    }
-    
-    /// Load device identity key
-    func loadDeviceIdentityKey() -> Data? {
-        return load(forKey: "deviceIdentityKey")
-    }
+
+    private static let legacyDeviceKeyAccounts = ["deviceSigningKey", "deviceIdentityKey"]
 
     /// Key that encrypts half-arrived multi-chunk messages at rest (`PendingReassemblyStore`).
     ///
@@ -166,6 +156,19 @@ class KeychainManager {
 
     func loadReassemblyStoreKey() -> Data? {
         return load(forKey: "construct.reassembly_store_key")
+    }
+
+    // MARK: - Local store key
+
+    /// The key this device seals what it keeps at rest under (`LocalStoreKey`). `cryptoKeyAccessible`
+    /// for the reason the reassembly key is: message keys are written during a background push
+    /// decrypt, and a store key unreadable then would leave ciphertext with no key.
+    func saveLocalStoreKey(_ key: Data) -> Bool {
+        save(key, forKey: LocalStoreKey.account, accessible: Self.cryptoKeyAccessible)
+    }
+
+    func deleteLocalStoreKey() {
+        delete(forKey: LocalStoreKey.account)
     }
 
     // MARK: - Intake credentials
@@ -207,34 +210,42 @@ class KeychainManager {
         "construct.intake.peer.\(accountId.trimmingCharacters(in: .whitespacesAndNewlines).lowercased())"
     }
 
-    /// Check if device is registered (has device ID and keys)
+    // MARK: - Account address
+
+    /// This account's address — its recovery public key, derived from the phrase on this device
+    /// (`AccountAddress`). Public, but `cryptoKeyAccessible` all the same: a send built during a
+    /// background push decrypt addresses our own account by it, and an unreadable item there would
+    /// quietly fall back to the server-assigned id.
+    func saveOwnAccountAddress(_ key: Data) {
+        _ = save(key, forKey: "construct.accountAddress", accessible: Self.cryptoKeyAccessible)
+    }
+
+    func loadOwnAccountAddress() -> Data? {
+        return load(forKey: "construct.accountAddress")
+    }
+
+    /// Forget the stored address: it is not this account's (`AccountAddress.confirmedOwn()`), or
+    /// this device just joined an account whose phrase it has never seen.
+    func deleteOwnAccountAddress() {
+        delete(forKey: "construct.accountAddress")
+    }
+
+    /// Check if device is registered: a device id and the key record the core loads from.
     func isDeviceRegistered() -> Bool {
         let deviceId = loadDeviceID()
-        let signingKey = loadDeviceSigningKey()
-        let identityKey = loadDeviceIdentityKey()
-        
-        let hasKeys = deviceId != nil && signingKey != nil && identityKey != nil
-        
-        if hasKeys {
-            Log.debug("Device keys found in Keychain", category: "Keychain")
-            Log.debug("deviceId: \(deviceId?.prefix(16) ?? "<nil>")...", category: "Keychain")
-            Log.debug("signingKey: \(signingKey?.count ?? 0) bytes", category: "Keychain")
-            Log.debug("identityKey: \(identityKey?.count ?? 0) bytes", category: "Keychain")
-        } else {
-            Log.debug("No device keys in Keychain", category: "Keychain")
-            Log.debug("deviceId: \(deviceId != nil ? "✓" : "✗")", category: "Keychain")
-            Log.debug("signingKey: \(signingKey != nil ? "✓" : "✗")", category: "Keychain")
-            Log.debug("identityKey: \(identityKey != nil ? "✓" : "✗")", category: "Keychain")
-        }
-        
+        let keyRecord = loadPrivateKeysData()
+        let hasKeys = deviceId != nil && keyRecord != nil
+        Log.debug(
+            "Device keys in Keychain: deviceId \(deviceId != nil ? "✓" : "✗") keyRecord \(keyRecord != nil ? "✓" : "✗")",
+            category: "Keychain"
+        )
         return hasKeys
     }
     
     /// Delete all device keys (for logout/reset)
     func deleteDeviceKeys() {
-        delete(forKey: "deviceId")
-        delete(forKey: "deviceSigningKey")
-        delete(forKey: "deviceIdentityKey")
+        delete(forKey: KeychainSessionAccounts.deviceId)
+        deleteLegacyDeviceKeyCopies()
         Log.info("Device keys deleted from Keychain", category: "Keychain")
     }
     
@@ -246,7 +257,7 @@ class KeychainManager {
             Log.error("Failed to convert userId to UTF-8 data", category: "Keychain")
             return
         }
-        let success = save(data, forKey: "userId", accessible: kSecAttrAccessibleAfterFirstUnlock)
+        let success = save(data, forKey: KeychainSessionAccounts.userId, accessible: kSecAttrAccessibleAfterFirstUnlock)
         if !success {
             Log.error("Failed to save userId to Keychain", category: "Keychain")
         } else {
@@ -256,7 +267,7 @@ class KeychainManager {
     
     /// Load user ID from Keychain
     func loadUserID() -> String? {
-        guard let data = load(forKey: "userId") else {
+        guard let data = load(forKey: KeychainSessionAccounts.userId) else {
             Log.debug("No userId found in Keychain", category: "Keychain")
             return nil
         }
@@ -270,7 +281,7 @@ class KeychainManager {
     
     /// Delete user ID from Keychain
     func deleteUserID() {
-        delete(forKey: "userId")
+        delete(forKey: KeychainSessionAccounts.userId)
         Log.info("User ID deleted from Keychain", category: "Keychain")
     }
     
@@ -365,17 +376,17 @@ class KeychainManager {
     /// Save private keys in CFE binary format.
     @discardableResult
     func savePrivateKeys(_ data: Data) -> Bool {
-        return save(data, forKey: "crypto_private_keys", accessible: Self.cryptoKeyAccessible)
+        return save(data, forKey: KeychainSessionAccounts.keyRecord, accessible: Self.cryptoKeyAccessible)
     }
 
     /// Load raw private key bytes (CFE binary).
     func loadPrivateKeysData() -> Data? {
-        load(forKey: "crypto_private_keys")
+        load(forKey: KeychainSessionAccounts.keyRecord)
     }
 
     /// Delete private keys CFE blob.
     func deletePrivateKeys() {
-        delete(forKey: "crypto_private_keys")
+        delete(forKey: KeychainSessionAccounts.keyRecord)
     }
 
     // MARK: - One-Time Prekeys (OTPK) persistence
@@ -394,6 +405,23 @@ class KeychainManager {
     /// Delete the OTPK set.
     func deleteOtpks() {
         delete(forKey: "crypto_otpks")
+    }
+
+    // MARK: - Kyber prekeys (ML-KEM-1024) persistence
+
+    /// Save the core's Kyber prekeys (`export_kyber_prekeys`, CFE binary). The seeds are private
+    /// key material and the responder needs them during a locked-device background decrypt.
+    @discardableResult
+    func saveKyberPrekeys(_ data: Data) -> Bool {
+        return save(data, forKey: "crypto_kyber_prekeys", accessible: Self.cryptoKeyAccessible)
+    }
+
+    func loadKyberPrekeysData() -> Data? {
+        load(forKey: "crypto_kyber_prekeys")
+    }
+
+    func deleteKyberPrekeys() {
+        delete(forKey: "crypto_kyber_prekeys")
     }
 
     // MARK: - MLS group store persistence
@@ -459,7 +487,7 @@ class KeychainManager {
         delete(forKey: "identity_key")
         delete(forKey: "signed_prekey")
         delete(forKey: "signing_key")
-        delete(forKey: "userId")
+        delete(forKey: KeychainSessionAccounts.userId)
         deleteHybridSigPrivateKey()
         deletePrivateKeys()
         deleteAllSessions()
@@ -620,32 +648,6 @@ class KeychainManager {
         delete(forKey: spkEpochKey(for: userId))
     }
 
-    // MARK: - PQXDH Downgrade Flag (per-peer)
-    // Tracks whether PQXDH key agreement was degraded to classical-only for a contact.
-    // Security-relevant: stored in Keychain (not UserDefaults) so it survives reinstall.
-    // An attacker who can clear UserDefaults before app launch could otherwise force
-    // a re-attempt of PQ strengthening that already failed, leaking that it failed.
-
-    private func pqxdhDowngradedKey(for userId: String) -> String {
-        "construct.pqxdh.downgraded.\(userId)"
-    }
-
-    func savePQXDHDowngradeFlag(for userId: String) {
-        var value: UInt8 = 1
-        let data = Data(bytes: &value, count: 1)
-        _ = save(data, forKey: pqxdhDowngradedKey(for: userId), accessible: kSecAttrAccessibleAfterFirstUnlock)
-    }
-
-    func loadPQXDHDowngradeFlag(for userId: String) -> Bool {
-        guard let data = load(forKey: pqxdhDowngradedKey(for: userId)),
-              data.count == 1 else { return false }
-        return data[0] != 0
-    }
-
-    func deletePQXDHDowngradeFlag(for userId: String) {
-        delete(forKey: pqxdhDowngradedKey(for: userId))
-    }
-
     // MARK: - At-Risk Session Flag (per-peer)
     // Set when a session was established via DEGRADED init (peer's SPK was past the
     // staleness limit — see the stale-peer-reachability decision). Such a session is
@@ -673,30 +675,14 @@ class KeychainManager {
         delete(forKey: sessionAtRiskKey(for: userId))
     }
 
-    // MARK: - Session Establishment Time (per-peer)
-    // Unix-seconds timestamp of when the current live session with a peer was established.
-    // Persisted so it survives app restart: on launch the Rust core restores live sessions
-    // from CFE but the in-memory SessionReducer phase map starts empty, leaving `establishedAt`
-    // nil — which makes the END_SESSION stale-check unable to filter a re-delivered old
-    // END_SESSION and tears down a healthy session (the SESSION_RESET_INIT churn). Backing it
-    // with Keychain (AfterFirstUnlock, so it is readable during a locked background push
-    // decrypt — the INVARIANT for crypto-lifecycle state) lets the stale-check work post-launch.
-    // Cleared when the session is torn down.
+    // MARK: - Session Establishment Time (legacy)
+
+    // The session establishment time lived here, for the END_SESSION stale-check. Both went on
+    // 2026-09-27; only the delete is kept, to clear the entry older builds left behind when the
+    // session it dated is removed.
 
     private func sessionEstablishedAtKey(for userId: String) -> String {
         "construct.session.establishedAt.\(userId)"
-    }
-
-    func saveSessionEstablishedAt(_ timestamp: UInt64, for userId: String) {
-        var value = timestamp
-        let data = Data(bytes: &value, count: MemoryLayout<UInt64>.size)
-        _ = save(data, forKey: sessionEstablishedAtKey(for: userId), accessible: kSecAttrAccessibleAfterFirstUnlock)
-    }
-
-    func loadSessionEstablishedAt(for userId: String) -> UInt64? {
-        guard let data = load(forKey: sessionEstablishedAtKey(for: userId)),
-              data.count == MemoryLayout<UInt64>.size else { return nil }
-        return data.withUnsafeBytes { $0.loadUnaligned(as: UInt64.self) }
     }
 
     func deleteSessionEstablishedAt(for userId: String) {
@@ -779,18 +765,36 @@ class KeychainManager {
             .filter(KeychainSessionAccounts.isSessionState)
     }
 
+    /// Delete every item whose account starts with `prefix`; returns how many there were.
+    @discardableResult
+    func deleteItems(withAccountPrefix prefix: String) -> Int {
+        let found = accounts(withPrefix: prefix)
+        found.forEach { delete(forKey: $0) }
+        return found.count
+    }
+
+    /// Both keychains on macOS: an item not yet read since the move to the data protection
+    /// keychain is still in the login one, and a listing must not lose it. Attributes only, so
+    /// the login keychain lists without a prompt.
     private func accounts(withPrefix prefix: String) -> [String] {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecMatchLimit as String: kSecMatchLimitAll,
             kSecReturnAttributes as String: true
         ]
+        var found = Self.accounts(matching: KeychainPlacement.current(query))
+        if KeychainPlacement.hasLegacyKeychain {
+            let moved = Set(found)
+            found += Self.accounts(matching: KeychainPlacement.legacy(query)).filter { !moved.contains($0) }
+        }
+        return found.filter { $0.hasPrefix(prefix) }
+    }
+
+    private static func accounts(matching query: [String: Any]) -> [String] {
         var result: CFTypeRef?
         guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess,
               let items = result as? [[String: Any]] else { return [] }
-
         return items.compactMap { $0[kSecAttrAccount as String] as? String }
-                    .filter { $0.hasPrefix(prefix) }
     }
 
     private func save(_ data: Data, forKey key: String, accessible: CFString) -> Bool {
@@ -800,10 +804,10 @@ class KeychainManager {
             return true
         }
 
-        let searchQuery: [String: Any] = [
+        let searchQuery = KeychainPlacement.current([
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrAccount as String: key
-        ]
+        ])
         let attributes: [String: Any] = [
             kSecValueData as String: data,
             kSecAttrAccessible as String: accessible
@@ -827,28 +831,62 @@ class KeychainManager {
     /// Use this wherever acting on a wrong answer is destructive — see `KeychainRead` and the
     /// 2026-08-09 account-reset incident. `load` remains correct for the many callers that only
     /// need the value.
+    ///
+    /// On macOS an item still in the login keychain is read there once and moved
+    /// (`KeychainPlacement`).
     func read(forKey key: String) -> KeychainRead {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrAccount as String: key,
             kSecReturnData as String: true
         ]
+        let outcome = KeychainPlacement.read(
+            current: Self.copy(KeychainPlacement.current(query)),
+            currentUsable: KeychainPlacement.isCurrentUsable,
+            hasLegacy: KeychainPlacement.hasLegacyKeychain,
+            legacy: { Self.copy(KeychainPlacement.legacy(query)) }
+        )
+        if outcome.moveFromLegacy, let data = outcome.answer.data {
+            moveFromLegacy(data, forKey: key)
+        }
+        return outcome.answer
+    }
 
+    private static func copy(_ query: [String: Any]) -> KeychainRead {
         var result: AnyObject?
         let status = SecItemCopyMatching(query as CFDictionary, &result)
         return KeychainRead.classify(status: status, data: result as? Data)
     }
 
+    /// The login keychain's copy goes only once the data protection keychain holds the value.
+    /// The class the item was written with is not known here; the strictest one any caller
+    /// uses for state read in the background is taken, and the next save sets the caller's own.
+    private func moveFromLegacy(_ data: Data, forKey key: String) {
+        guard save(data, forKey: key, accessible: Self.cryptoKeyAccessible) else {
+            Log.error("Keychain item could not move to the data protection keychain; the login keychain keeps it",
+                      category: "Keychain")
+            return
+        }
+        SecItemDelete(KeychainPlacement.legacy([
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrAccount as String: key
+        ]) as CFDictionary)
+        Log.info("Keychain item moved to the data protection keychain", category: "Keychain")
+    }
+
     /// The three-state reads behind the device identity. Their `nil` used to mean "register
     /// a new account", which is why they get the careful API.
-    func readDeviceID() -> KeychainRead { read(forKey: "deviceId") }
-    func readDeviceSigningKey() -> KeychainRead { read(forKey: "deviceSigningKey") }
+    func readDeviceID() -> KeychainRead { read(forKey: KeychainSessionAccounts.deviceId) }
+    func readPrivateKeys() -> KeychainRead { read(forKey: KeychainSessionAccounts.keyRecord) }
 
     private func delete(forKey key: String) {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrAccount as String: key
         ]
-        SecItemDelete(query as CFDictionary)
+        SecItemDelete(KeychainPlacement.current(query) as CFDictionary)
+        if KeychainPlacement.hasLegacyKeychain {
+            SecItemDelete(KeychainPlacement.legacy(query) as CFDictionary)
+        }
     }
 }

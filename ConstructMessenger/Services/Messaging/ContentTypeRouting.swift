@@ -15,7 +15,9 @@ import Foundation
 /// authoritative on its own once a sealed delivery has been unsealed.
 enum WireMessageKind: String, Codable, Equatable, CaseIterable {
     case direct = "DIRECT_MESSAGE"
-    case endSession = "CONTROL_MESSAGE"
+    /// A control envelope read before any decryption: DECRYPTION_ERROR (28), and END_SESSION (21)
+    /// from a build before 2026-09-27. Which one is the byte's to say (`ChatMessage.isDecryptionError`).
+    case control = "CONTROL_MESSAGE"
     case senderSync = "SENDER_SYNC"
     case sessionResetInit = "SESSION_RESET_INIT"
 
@@ -29,7 +31,7 @@ enum WireMessageKind: String, Codable, Equatable, CaseIterable {
     var canonicalContentType: UInt8 {
         switch self {
         case .direct:            return 0
-        case .endSession:        return 21  // CONTENT_TYPE_SESSION_RESET
+        case .control:           return 28  // CONTENT_TYPE_DECRYPTION_ERROR
         case .senderSync:        return 23  // CONTENT_TYPE_SENDER_SYNC
         case .sessionResetInit:  return 24  // CONTENT_TYPE_SESSION_RESET_INIT
         }
@@ -53,8 +55,9 @@ enum SealedEnvelopeType: CaseIterable {
     /// Everything whose real type rides in KNST byte 5: message bodies, delivery receipts, call
     /// signals, heartbeat, session ping/ready.
     case generic
-    /// 21 — sent when the ratchet may be unusable, so it cannot be encrypted with it.
-    case sessionReset
+    /// 28 — "I could not read your message": sent because the ratchet failed, so it cannot be
+    /// encrypted with it. Replaced END_SESSION (21) on 2026-09-27; nothing sends 21 any more.
+    case decryptionError
     /// 24 — the instruction is "archive the session you hold", and reading it from inside the
     /// ciphertext would require establishing the new session, which *is* the archive.
     case sessionResetInit
@@ -62,7 +65,7 @@ enum SealedEnvelopeType: CaseIterable {
     var proto: Shared_Proto_Core_V1_ContentType {
         switch self {
         case .generic:          return .unspecified
-        case .sessionReset:     return .sessionReset
+        case .decryptionError:  return .decryptionError
         case .sessionResetInit: return .sessionResetInit
         }
     }
@@ -74,7 +77,7 @@ enum SealedEnvelopeType: CaseIterable {
     /// nobody remembered this boundary existed.
     init(declaring contentType: Shared_Proto_Core_V1_ContentType) {
         switch contentType {
-        case .sessionReset:     self = .sessionReset
+        case .decryptionError:  self = .decryptionError
         case .sessionResetInit: self = .sessionResetInit
         default:                self = .generic
         }
@@ -105,10 +108,13 @@ enum FrameDisposition: String, Equatable, CaseIterable {
 enum FramedSideChannel: String, Equatable {
     case callSignal = "call_signal"
     case deliveryReceipt = "delivery_receipt"
-    /// 27 — the peer hands us the `intake_key` their account accepts, so our envelopes to them
-    /// can carry an intake tag instead of buying a Privacy Pass token. Framed, and it has to be:
-    /// the key is a secret, so a relay that could read it could use it.
-    case intakeKey = "intake_key"
+    /// 27 — the peer's contact card (`ContactCardPayload`): the `intake_key` their account
+    /// accepts, so our envelopes to them can carry an intake tag instead of buying a Privacy Pass
+    /// token, and their account address. Framed, and it has to be: the key is a secret, so a
+    /// relay that could read it could use it.
+    case contactCard = "contact_card"
+    /// 29 — the peer's profile (`ProfileShare`): its name and avatar, as a version.
+    case profile = "profile"
 }
 
 /// Named mapping used at the unseal boundary and by ingest parsers.
@@ -120,7 +126,7 @@ enum ContentTypeRouting {
         switch contentType {
         case 1:                  return .transcriptIncoming
         case 23:                 return .transcriptOwnDevice
-        case 12, 13, 14, 21, 24, 25, 26, 27:
+        case 12, 13, 14, 21, 24, 25, 26, 27, 28, 29:
                                  return .silentControl
         default:                 return .notCarried
         }
@@ -128,14 +134,15 @@ enum ContentTypeRouting {
 
     /// Which side-channel handler owns a framed payload, or nil when byte 5 names none.
     ///
-    /// Extracted from `MessageRouter.handleFramedSideChannel`'s switch so the mapping is an
+    /// Extracted from `MessageRouter.handleControlFrame`'s switch so the mapping is an
     /// object a test can reach, per the rule about naming boundaries. The switch there now asks
     /// this rather than repeating `case 12` / `case 14`.
     static func framedSideChannel(for contentType: UInt8) -> FramedSideChannel? {
         switch contentType {
         case 12: return .callSignal
         case 14: return .deliveryReceipt
-        case 27: return .intakeKey
+        case 27: return .contactCard
+        case 29: return .profile
         default: return nil
         }
     }
@@ -143,7 +150,7 @@ enum ContentTypeRouting {
     /// Derive routing kind from an authoritative `contentType` (post-unseal or identified outer).
     static func kind(for contentType: UInt8) -> WireMessageKind {
         switch contentType {
-        case 21: return .endSession
+        case 21, 28: return .control
         case 23: return .senderSync
         case 24: return .sessionResetInit
         default: return .direct
@@ -168,7 +175,7 @@ enum ContentTypeRouting {
     static func isKnownControlContentType(_ contentType: UInt8) -> Bool {
         if SessionControlCodec.op(forContentType: Int(contentType)) != nil { return true }
         switch contentType {
-        case 12, 14, 23, 27: return true  // callSignal, deliveryReceipt, senderSync, intakeKey
+        case 12, 14, 23, 27, 28, 29: return true  // callSignal, deliveryReceipt, senderSync, contactCard, decryptionError, profile
         default: return false
         }
     }
@@ -177,8 +184,9 @@ enum ContentTypeRouting {
     ///
     /// Narrowed on 2026-08-03 to the two that genuinely cannot be moved, both traced 2026-08-17:
     ///
-    /// - **21 (END_SESSION)** is sent when the ratchet may be unusable — encrypting it would lose
-    ///   the message in the case it exists for.
+    /// - **28 (DECRYPTION_ERROR)** is sent because the ratchet failed — encrypting it with the
+    ///   ratchet would lose it in the one case it exists for. (21, END_SESSION, held this place
+    ///   for the same reason until 2026-09-27, and is still recognised from older builds.)
     /// - **24 (SESSION_RESET_INIT)** does not announce "this is X3DH": the wire payload already
     ///   says that, since `ephemeralPublicKey` / `oneTimePreKeyId` / `kemCiphertext` are readable
     ///   before any decryption. It says *archive the session you currently hold* — and the
@@ -196,7 +204,7 @@ enum ContentTypeRouting {
     /// read the difference. The baseline is now the field's absence — see `SealedEnvelopeType`.
     static var sealedControlContentTypes: [UInt8] {
         [
-            21, // sessionReset / END_SESSION
+            28, // decryptionError
             24, // sessionResetInit
         ]
     }

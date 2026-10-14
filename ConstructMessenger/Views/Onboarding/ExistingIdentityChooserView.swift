@@ -10,7 +10,6 @@
 import SwiftUI
 
 struct ExistingIdentityChooserView: View {
-    @Environment(\.dismiss) private var dismiss
     @Environment(AccountRecoveryViewModel.self) private var recoveryVM
 
     @State private var showingRecovery = false
@@ -19,17 +18,10 @@ struct ExistingIdentityChooserView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            CTNavBar(
-                title: NSLocalizedString("onboarding_existing_title", comment: ""),
-                showBack: true,
-                isModal: true,
-                backAction: { dismiss() }
-            )
-
             ScrollView {
                 VStack(spacing: CTLayout.sectionGap) {
                     Text(NSLocalizedString("onboarding_existing_intro", comment: ""))
-                        .font(CTFont.regular(13))
+                        .font(CTFont.body)
                         .foregroundColor(Color.CT.textDim)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, CTLayout.sectionGap)
@@ -58,7 +50,7 @@ struct ExistingIdentityChooserView: View {
                     // network. Same door, same weight as on the first screen.
                     Button { showingVeilBootstrap = true } label: {
                         Text(NSLocalizedString("onboarding_cant_connect", comment: ""))
-                            .font(CTFont.regular(12))
+                            .font(CTFont.secondary)
                             .foregroundColor(Color.CT.textDim)
                             .multilineTextAlignment(.center)
                             .frame(maxWidth: .infinity)
@@ -73,16 +65,17 @@ struct ExistingIdentityChooserView: View {
             }
         }
         .background(Color.CT.bg.ignoresSafeArea())
+        .screenTitle(NSLocalizedString("onboarding_existing_title", comment: ""))
         .sheet(isPresented: $showingRecovery) {
             RecoveryEntryView()
                 .environment(recoveryVM)
         }
         .sheet(isPresented: $showingVeilBootstrap) {
-            VeilBootstrapScanView()
+            VeilBootstrapScanView().sheetNavigation()
         }
         .sheet(isPresented: $showingDeviceLink) {
             #if os(iOS)
-            DeviceLinkMethodView()
+            DeviceLinkMethodView().sheetNavigation()
             #else
             DesktopLinkRequestView()
             #endif
@@ -98,22 +91,22 @@ struct ExistingIdentityChooserView: View {
         Button(action: action) {
             HStack(spacing: CTLayout.chromeGap) {
                 Image(systemName: icon)
-                    .font(.system(size: 22, weight: .medium))
+                    .font(CTIcon.font(CTIcon.navLg))
                     .foregroundStyle(Color.CT.accent)
                     .frame(width: 32)
                 VStack(alignment: .leading, spacing: 3) {
                     Text(NSLocalizedString(titleKey, comment: "").uppercased())
-                        .font(CTFont.bold(13))
+                        .font(CTFont.bodyEmphasis)
                         .foregroundStyle(Color.CT.text)
                         .tracking(1)
                     Text(NSLocalizedString(subtitleKey, comment: ""))
-                        .font(CTFont.regular(11))
+                        .font(CTFont.caption)
                         .foregroundStyle(Color.CT.textDim)
                         .multilineTextAlignment(.leading)
                 }
                 Spacer(minLength: 0)
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(CTIcon.font(CTIcon.caption, weight: .semibold))
                     .foregroundStyle(Color.CT.textDim)
             }
             .padding(.horizontal, CTLayout.edgePad)

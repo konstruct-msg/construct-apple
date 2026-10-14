@@ -1,0 +1,330 @@
+//
+//  MessageStoreTests.swift
+//  ConstructMessengerTests
+//
+//  What any `MessageStore` must answer — the same claims `construct-store`'s own tests make of
+//  `LocalStore` (store_test.rs, messages domain), run on both implementations: Core Data here,
+//  `LocalStore` in the subclass below. What only Core Data has — the body sealed per row — is
+//  `CoreDataMessageStoreTests`. Each test names the mutation that must redden it.
+//
+
+import CoreData
+import XCTest
+@testable import Construct_Messenger
+
+@MainActor
+class MessageStoreTests: XCTestCase {
+
+    /// A message store, and the chat and contact stores over the same database to seed with.
+    func makeStores() -> (messages: any MessageStore, chats: any ChatStore, contacts: any ContactStore) {
+        let container = PersistenceController(inMemory: true).container
+        return (CoreDataMessageStore(container: container), CoreDataChatStore(container: container),
+                CoreDataContactStore(container: container))
+    }
+
+    private var store: (any MessageStore)!
+    private var chats: (any ChatStore)!
+    private var contacts: (any ContactStore)!
+    private var chatId = ""
+
+    override func setUp() {
+        super.setUp()
+        let stores = makeStores()
+        store = stores.messages
+        chats = stores.chats
+        contacts = stores.contacts
+        try! stores.contacts.insert(.new(id: "peer", isContact: true, addedAt: nil))
+        chatId = try! stores.chats.openChat(withPeer: "peer").chat.id
+    }
+
+    override func tearDown() {
+        store = nil
+        chats = nil
+        contacts = nil
+        super.tearDown()
+    }
+
+    private func record(_ id: String, key: String, body: String = "hello", mine: Bool = true) -> MessageRecord {
+        MessageRecord(
+            id: id, chatId: chatId, fromUserId: mine ? "me" : "peer", toUserId: mine ? "peer" : "me",
+            isSentByMe: mine, timestamp: Date(timeIntervalSince1970: 1_000), orderKey: key,
+            body: Data(body.utf8), contentType: .regular, deliveryStatus: .sending, retryCount: 0,
+            suiteId: 4, isEdited: false, editedAt: nil, replyToMessageId: nil, replyQuote: nil,
+            transcript: nil, transcriptLanguage: nil, transcriptGeneratedAt: nil
+        )
+    }
+
+    /// Every field the record carries comes back, the sealed ones included. Mutation: write the
+    /// quote before the body in `insert` — it is sealed under no key and reads back nil.
+    func testAMessageReadsBackWhole() throws {
+        var written = record("m1", key: "k1", body: "what it says")
+        written.deliveryStatus = .sent
+        written.retryCount = 2
+        written.isEdited = true
+        written.editedAt = Date(timeIntervalSince1970: 2_000)
+        written.replyToMessageId = "m0"
+        written.replyQuote = "the quote"
+        written.transcript = "spoken words"
+        written.transcriptLanguage = "en"
+        written.transcriptGeneratedAt = Date(timeIntervalSince1970: 3_000)
+        XCTAssertTrue(try store.insert(written, searchText: "what it says"))
+        XCTAssertEqual(try store.message("m1"), written)
+        XCTAssertEqual(try store.message("M1")?.id, "m1", "ids are compared without case")
+        XCTAssertNil(try store.message("nothing"))
+    }
+
+    /// One id, one message; a message needs its chat. Mutation: drop the existing-row check.
+    func testAnIdIsOneMessageAndAMessageNeedsItsChat() throws {
+        XCTAssertTrue(try store.insert(record("m1", key: "k1"), searchText: nil))
+        XCTAssertFalse(try store.insert(record("M1", key: "k9", body: "again"), searchText: nil))
+        XCTAssertEqual(try store.message("m1").map { String(decoding: $0.body, as: UTF8.self) }, "hello")
+        var orphan = record("m2", key: "k2")
+        orphan = MessageRecord(
+            id: orphan.id, chatId: "no-such-chat", fromUserId: orphan.fromUserId, toUserId: orphan.toUserId,
+            isSentByMe: true, timestamp: orphan.timestamp, orderKey: orphan.orderKey, body: orphan.body,
+            contentType: .regular, deliveryStatus: .sending, retryCount: 0, suiteId: 4, isEdited: false,
+            editedAt: nil, replyToMessageId: nil, replyQuote: nil, transcript: nil,
+            transcriptLanguage: nil, transcriptGeneratedAt: nil
+        )
+        XCTAssertThrowsError(try store.insert(orphan, searchText: nil))
+    }
+
+    /// A transport failure is ignorance, not a negative result — the crate's rule, the same
+    /// sequence as its `ignorance_never_overwrites_evidence`. Mutation: write `deliveryStatusRaw`
+    /// directly in `setDeliveryStatus`.
+    func testIgnoranceNeverOverwritesEvidence() throws {
+        try store.insert(record("m1", key: "k1"), searchText: nil)
+        let steps: [(DeliveryStatus, Bool)] = [
+            (.queued, true), (.failed, true), (.sending, true), (.sent, true), (.queued, false),
+            (.failed, false), (.delivered, true), (.sent, false), (.queued, false), (.delivered, false),
+        ]
+        for (status, lands) in steps {
+            XCTAssertEqual(try store.setDeliveryStatus("m1", status), lands, "write \(status)")
+        }
+        XCTAssertEqual(try store.message("m1")?.deliveryStatus, .delivered)
+        XCTAssertFalse(try store.setDeliveryStatus("nothing", .sent))
+    }
+
+    /// Keep the confirmed, queue the rest while attempts last, give up after. Mutation: apply
+    /// `.resend` to a delivered message.
+    func testASessionArchiveKeepsTheConfirmedAndRequeuesTheRest() throws {
+        for id in ["m1", "m2", "m3"] { try store.insert(record(id, key: id), searchText: nil) }
+        try store.setDeliveryStatus("m1", .delivered)
+        try store.setDeliveryStatus("m2", .sent)
+        try store.setDeliveryStatus("m3", .sent)
+        try store.setRetryCount("m3", 3)
+        XCTAssertEqual(try store.applySessionArchive("m1", maxRetries: 3), .keep)
+        XCTAssertEqual(try store.applySessionArchive("m2", maxRetries: 3), .resend)
+        XCTAssertEqual(try store.applySessionArchive("m3", maxRetries: 3), .giveUp)
+        XCTAssertEqual(try ["m1", "m2", "m3"].map { try store.message($0)?.deliveryStatus },
+                       [.delivered, .queued, .failed])
+        XCTAssertNil(try store.applySessionArchive("nothing", maxRetries: 3))
+    }
+
+    /// Each write changes its fields and nothing else; the same value again reports false.
+    /// Mutation: reset `retryCount` from `setOrderKey`.
+    func testEachMessageWriteChangesOnlyItsFields() throws {
+        var expected = record("m1", key: "k1")
+        try store.insert(expected, searchText: nil)
+        XCTAssertTrue(try store.setRetryCount("m1", 2)); expected.retryCount = 2
+        XCTAssertTrue(try store.setOrderKey("m1", "server-7")); expected.orderKey = "server-7"
+        XCTAssertEqual(try store.incrementRetryCount("m1"), 3); expected.retryCount = 3
+        let at = Date(timeIntervalSince1970: 9)
+        XCTAssertTrue(try store.setTranscript("m1", text: "hi", language: "en", generatedAt: at))
+        expected.transcript = "hi"; expected.transcriptLanguage = "en"; expected.transcriptGeneratedAt = at
+        XCTAssertEqual(try store.message("m1"), expected)
+
+        XCTAssertFalse(try store.setOrderKey("m1", "server-7"))
+        XCTAssertFalse(try store.setRetryCount("m1", 3))
+        XCTAssertNil(try store.incrementRetryCount("nothing"))
+    }
+
+    /// An edit replaces what the message says and marks it. Mutation: leave `isEdited` alone.
+    func testAnEditReplacesTheBody() throws {
+        try store.insert(record("m1", key: "k1", body: "first"), searchText: nil)
+        let at = Date(timeIntervalSince1970: 5)
+        XCTAssertTrue(try store.edit("m1", body: Data("second".utf8), searchText: "second", editedAt: at))
+        let read = try XCTUnwrap(store.message("m1"))
+        XCTAssertEqual(String(decoding: read.body, as: UTF8.self), "second")
+        XCTAssertTrue(read.isEdited)
+        XCTAssertEqual(read.editedAt, at)
+        XCTAssertFalse(try store.edit("nothing", body: Data(), searchText: nil, editedAt: at))
+    }
+
+    /// A body read late replaces what is stored and is not an edit. Mutation: mark the message
+    /// edited in `setBody`.
+    func testABodyReadLateIsNotAnEdit() throws {
+        try store.insert(record("m1", key: "k1", body: ""), searchText: nil)
+        XCTAssertTrue(try store.setBody("m1", body: Data("recovered".utf8), searchText: "recovered"))
+        let read = try XCTUnwrap(store.message("m1"))
+        XCTAssertEqual(String(decoding: read.body, as: UTF8.self), "recovered")
+        XCTAssertFalse(read.isEdited)
+        XCTAssertNil(read.editedAt)
+        XCTAssertFalse(try store.setBody("nothing", body: Data("x".utf8), searchText: nil))
+    }
+
+    /// Pages run back through the transcript, oldest first in a page. Mutation: drop the
+    /// `before` condition — the earlier page repeats the newest.
+    func testPagesRunBackOldestFirst() throws {
+        for i in 1...5 { try store.insert(record("m\(i)", key: "k\(i)"), searchText: nil) }
+        let newest = try store.messages(inChat: chatId, before: nil, limit: 2)
+        XCTAssertEqual(newest.map(\.id), ["m4", "m5"])
+        let earlier = try store.messages(inChat: chatId, before: ("k4", "m4"), limit: 2)
+        XCTAssertEqual(earlier.map(\.id), ["m2", "m3"])
+    }
+
+    /// The window an open transcript holds, read forward from its oldest row: that row included,
+    /// a row sharing its key but with a smaller id not, then everything after, in order.
+    /// Mutation: compare the id with `>` — the window's own first row drops out.
+    func testAWindowReadsForwardFromItsOldestRow() throws {
+        for (id, key) in [("a", "k1"), ("b", "k2"), ("c", "k2"), ("d", "k3")] {
+            try store.insert(record(id, key: key), searchText: nil)
+        }
+        XCTAssertEqual(try store.messages(inChat: chatId, from: ("k2", "c"), limit: 10).map(\.id), ["c", "d"])
+        XCTAssertEqual(try store.messages(inChat: chatId, from: ("k1", "a"), limit: 2).map(\.id), ["a", "b"])
+    }
+
+    /// What the queue sends: ours, queued or failed with attempts left; one chat or all, in
+    /// transcript order. The crate's `pending_sends_are_ours_queued_or_failed_with_attempts_left`.
+    /// Mutations (Core Data): drop `retryCount <` — a message out of attempts is sent forever;
+    /// drop `isSentByMe` — a peer's message is sent back to them.
+    func testPendingSendsAreOursQueuedOrFailedWithAttemptsLeft() throws {
+        for i in 1...4 { try store.insert(record("m\(i)", key: "k\(i)"), searchText: nil) }
+        try store.setDeliveryStatus("m1", .queued)
+        try store.setDeliveryStatus("m2", .failed)
+        try store.setDeliveryStatus("m3", .failed)
+        try store.setRetryCount("m3", 3)
+        try store.setDeliveryStatus("m4", .sent)
+        var theirs = record("t1", key: "k0", mine: false)
+        theirs.deliveryStatus = .queued
+        try store.insert(theirs, searchText: nil)
+        try contacts.insert(.new(id: "other", isContact: true, addedAt: nil))
+        let template = record("o1", key: "k5")
+        try store.insert(MessageRecord(
+            id: "o1", chatId: try chats.openChat(withPeer: "other").chat.id, fromUserId: "me",
+            toUserId: "other", isSentByMe: true, timestamp: template.timestamp, orderKey: "k5",
+            body: template.body, contentType: .regular, deliveryStatus: .queued, retryCount: 0,
+            suiteId: 4, isEdited: false, editedAt: nil, replyToMessageId: nil, replyQuote: nil,
+            transcript: nil, transcriptLanguage: nil, transcriptGeneratedAt: nil
+        ), searchText: nil)
+
+        XCTAssertEqual(try store.pendingSends(inChat: chatId, retryCeiling: 3, limit: 50).map(\.id), ["m1", "m2"])
+        XCTAssertEqual(try store.pendingSends(inChat: nil, retryCeiling: 3, limit: 50).map(\.id), ["m1", "m2", "o1"])
+        XCTAssertEqual(try store.pendingSends(inChat: nil, retryCeiling: 3, limit: 1).map(\.id), ["m1"])
+    }
+
+    /// What a launch fails as stuck: ours in the status asked, every chat, nothing else.
+    /// Mutations (Core Data): drop `isSentByMe` — a peer's row is failed; drop the status — a
+    /// sent one is.
+    func testOwnMessagesInAStatusAreOursInThatStatusOnly() throws {
+        for i in 1...4 { try store.insert(record("m\(i)", key: "k\(i)"), searchText: nil) }
+        try store.setDeliveryStatus("m1", .queued)
+        try store.setDeliveryStatus("m3", .sent)
+        try store.insert(record("t1", key: "k0", mine: false), searchText: nil)
+
+        XCTAssertEqual(try store.ownMessages(in: .sending, limit: 50).map(\.id), ["m2", "m4"])
+        XCTAssertEqual(try store.ownMessages(in: .sending, limit: 1).map(\.id), ["m2"])
+        XCTAssertEqual(try store.ownMessages(in: .queued, limit: 50).map(\.id), ["m1"])
+    }
+
+    /// Deleted messages are gone; others stay. Mutation: delete the whole chat's messages.
+    func testDeletingRemovesOnlyTheNamed() throws {
+        for i in 1...3 { try store.insert(record("m\(i)", key: "k\(i)"), searchText: nil) }
+        try store.delete(["m1", "M3"])
+        XCTAssertNil(try store.message("m1"))
+        XCTAssertNil(try store.message("m3"))
+        XCTAssertNotNil(try store.message("m2"))
+    }
+
+    /// A history import lands a batch: what is new is added, what is held is kept. Mutation:
+    /// overwrite a held message in the batch.
+    func testABatchAddsWhatIsNewAndKeepsWhatIsHeld() throws {
+        try store.insert(record("held", key: "k0", body: "old"), searchText: nil)
+        let added = try store.insert([
+            (record("m1", key: "k1"), "one"), (record("held", key: "k9", body: "new"), nil),
+            (record("m2", key: "k2"), nil),
+        ])
+        XCTAssertEqual(added, ["m1", "m2"])
+        XCTAssertEqual(try store.message("held").map { String(decoding: $0.body, as: UTF8.self) }, "old")
+        XCTAssertEqual(try store.messages(inChat: chatId, before: nil, limit: 10).map(\.id), ["held", "m1", "m2"])
+        XCTAssertEqual(try store.insert([]), [])
+    }
+
+    /// A control payload that reached the store typed `.regular` is typed as control, so it never
+    /// shows as a bubble. Mutation: skip `MessageContentType.infer` on insert.
+    func testALeakedControlPayloadIsTypedAsControl() throws {
+        try store.insert(record("ctl", key: "k1", body: "__session_ping"), searchText: nil)
+        XCTAssertEqual(try store.message("ctl")?.contentType, .sessionPing)
+        try store.insert(record("txt", key: "k2", body: "just words"), searchText: nil)
+        XCTAssertEqual(try store.message("txt")?.contentType, .regular)
+    }
+
+    /// Writes are announced by message id. Mutation: return `nil` for a `Message` in the feed.
+    func testWritesAreAnnounced() async throws {
+        var seen = Set<String>()
+        let changes = store.changes()
+        let reading = Task { for await ids in changes { seen.formUnion(ids) } }
+        defer { reading.cancel() }
+        try store.insert(record("m1", key: "k1"), searchText: nil)
+        try store.setDeliveryStatus("m1", .sent)
+        for _ in 0..<200 where !seen.contains("m1") { try? await Task.sleep(nanoseconds: 10_000_000) }
+        XCTAssertTrue(seen.contains("m1"))
+    }
+}
+
+/// The same cases on the crate.
+final class LocalStoreMessageStoreTests: MessageStoreTests {
+    override func makeStores() -> (messages: any MessageStore, chats: any ChatStore, contacts: any ContactStore) {
+        let session = LocalStoreSession.inMemoryForTesting()
+        return (LocalStoreMessageStore(session: session), LocalStoreChatStore(session: session),
+                LocalStoreContactStore(session: session))
+    }
+}
+
+/// What only Core Data has: the body sealed per row (`MessageKeyStore`). The crate encrypts the
+/// whole database instead — `LocalStoreSessionTests` reads its file.
+@MainActor
+final class CoreDataMessageStoreTests: XCTestCase {
+
+    private var container: NSPersistentContainer!
+    private var store: CoreDataMessageStore!
+    private var chatId = ""
+
+    override func setUp() {
+        super.setUp()
+        container = PersistenceController(inMemory: true).container
+        store = CoreDataMessageStore(container: container)
+        try! CoreDataContactStore(container: container).insert(.new(id: "peer", isContact: true, addedAt: nil))
+        chatId = try! CoreDataChatStore(container: container).openChat(withPeer: "peer").chat.id
+    }
+
+    override func tearDown() {
+        store = nil
+        container = nil
+        super.tearDown()
+    }
+
+    private func record(_ id: String, key: String, body: String) -> MessageRecord {
+        MessageRecord(
+            id: id, chatId: chatId, fromUserId: "me", toUserId: "peer", isSentByMe: true,
+            timestamp: Date(timeIntervalSince1970: 1_000), orderKey: key, body: Data(body.utf8),
+            contentType: .regular, deliveryStatus: .sending, retryCount: 0, suiteId: 4,
+            isEdited: false, editedAt: nil, replyToMessageId: nil, replyQuote: nil, transcript: nil,
+            transcriptLanguage: nil, transcriptGeneratedAt: nil
+        )
+    }
+
+    /// The body is sealed at rest in Core Data: the stored bytes are not what the message says.
+    /// Mutation: store the payload as `encryptedContent` in the clear.
+    func testTheBodyIsNotStoredInTheClear() throws {
+        try store.insert(record("m1", key: "k1", body: "a secret sentence"), searchText: nil)
+        let context = container.newBackgroundContext()
+        let stored = try context.performAndWait {
+            let req = Message.fetchRequest()
+            req.predicate = NSPredicate(format: "id == %@", "m1")
+            return try XCTUnwrap(context.fetch(req).first).encryptedContent
+        }
+        XCTAssertFalse(stored.isEmpty)
+        XCTAssertNil(stored.range(of: Data("a secret sentence".utf8)))
+    }
+}

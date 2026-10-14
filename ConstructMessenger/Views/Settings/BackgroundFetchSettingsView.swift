@@ -27,11 +27,11 @@ struct BackgroundFetchSettingsContent: View {
     var body: some View {
         Group {
             // MARK: - Enable/Disable
-            CTSettingsSectionHeader(title: NSLocalizedString("background_fetch", comment: "").uppercased())
+            CTSettingsSectionHeader(title: NSLocalizedString("background_fetch", comment: ""))
             CTSectionGroup {
                 HStack(spacing: BackgroundFetchSettingsLayout.toggleRowSpacing) {
                     Text(LocalizedStringKey("enable_background_fetch"))
-                        .font(CTFont.regular(13))
+                        .font(CTFont.body)
                         .foregroundColor(
                             isLowPowerModeEnabled
                             ? Color.CT.textDim.opacity(BackgroundFetchSettingsLayout.disabledRowOpacity)
@@ -51,11 +51,11 @@ struct BackgroundFetchSettingsContent: View {
                 handleToggleChange(newValue)
             }
 
-            sectionFooter("background_fetch_footer")
+            CTSectionFooter("background_fetch_footer")
 
             // MARK: - Interval
             if isEnabled && !isLowPowerModeEnabled {
-                CTSettingsSectionHeader(title: NSLocalizedString("background_fetch_interval_settings", comment: "").uppercased())
+                CTSettingsSectionHeader(title: NSLocalizedString("background_fetch_interval_settings", comment: ""))
                 CTSectionGroup {
                     VStack(alignment: .leading, spacing: BackgroundFetchSettingsLayout.sliderSectionSpacing) {
                         intervalHeader
@@ -65,34 +65,34 @@ struct BackgroundFetchSettingsContent: View {
                     .padding(.horizontal, BackgroundFetchSettingsLayout.rowHorizontalPadding)
                     .padding(.vertical, BackgroundFetchSettingsLayout.rowVerticalPadding)
                 }
-                sectionFooter("background_fetch_interval_footer")
+                CTSectionFooter("background_fetch_interval_footer")
             }
 
             // MARK: - Fetch status
-            CTSettingsSectionHeader(title: NSLocalizedString("background_fetch_status", comment: "").uppercased())
+            CTSettingsSectionHeader(title: NSLocalizedString("background_fetch_status", comment: ""))
             CTSectionGroup {
                 HStack {
                     Text(LocalizedStringKey("background_fetch_status"))
-                        .font(CTFont.regular(13))
+                        .font(CTFont.body)
                         .foregroundColor(Color.CT.textDim)
                     Spacer()
                     CTStatusBadge(status: statusBadge)
                     Text(statusText)
-                        .font(CTFont.regular(13))
+                        .font(CTFont.body)
                         .foregroundColor(Color.CT.textDim)
                 }
                 .padding(.horizontal, BackgroundFetchSettingsLayout.rowHorizontalPadding)
                 .padding(.vertical, BackgroundFetchSettingsLayout.rowVerticalPadding)
 
                 if let lastFetch = fetchManager.lastFetchDate {
-                    CTSep(style: .thin)
+                    ConstructRowDivider(indent: CTLayout.edgePad)
                     HStack {
                         Text(LocalizedStringKey("background_fetch_last_check"))
-                            .font(CTFont.regular(13))
+                            .font(CTFont.body)
                             .foregroundColor(Color.CT.textDim)
                         Spacer()
                         Text(formatLastCheckDate(lastFetch))
-                            .font(CTFont.regular(13))
+                            .font(CTFont.body)
                             .foregroundColor(Color.CT.textDim)
                     }
                     .padding(.horizontal, BackgroundFetchSettingsLayout.rowHorizontalPadding)
@@ -102,14 +102,14 @@ struct BackgroundFetchSettingsContent: View {
 
             // MARK: - Low Power Mode
             if isLowPowerModeEnabled {
-                CTSettingsSectionHeader(title: NSLocalizedString("background_fetch_energy_saving", comment: "").uppercased())
+                CTSettingsSectionHeader(title: NSLocalizedString("background_fetch_energy_saving", comment: ""))
                 CTSectionGroup {
                     VStack(alignment: .leading, spacing: BackgroundFetchSettingsLayout.warningSpacing) {
                         Text(LocalizedStringKey("background_fetch_low_power_mode_title"))
-                            .font(CTFont.regular(13))
+                            .font(CTFont.body)
                             .foregroundColor(Color.CT.textDim)
                         Text(LocalizedStringKey("background_fetch_low_power_mode_description"))
-                            .font(CTFont.regular(11))
+                            .font(CTFont.caption)
                             .foregroundColor(Color.CT.textDim)
                             .fixedSize(horizontal: false, vertical: true)
                     }
@@ -137,11 +137,11 @@ struct BackgroundFetchSettingsContent: View {
     private var intervalHeader: some View {
         HStack {
             Text(LocalizedStringKey("background_fetch_interval"))
-                .font(CTFont.bold(13))
+                .font(CTFont.bodyEmphasis)
                 .foregroundStyle(Color.CT.text)
             Spacer()
             Text(BackgroundFetchConfig.formatInterval(intervalMinutes))
-                .font(CTFont.regular(13))
+                .font(CTFont.body)
                 .foregroundStyle(Color.CT.accent)
         }
     }
@@ -170,7 +170,7 @@ struct BackgroundFetchSettingsContent: View {
                         )
                     if BackgroundFetchSettingsConfig.intervalPresets.contains(value) {
                         Text(BackgroundFetchConfig.formatInterval(value))
-                            .font(CTFont.regular(BackgroundFetchSettingsLayout.tickLabelFontSize))
+                            .font(CTFont.ui(BackgroundFetchSettingsLayout.tickLabelFontSize))
                             .foregroundStyle(value == intervalMinutes ? Color.CT.accent : Color.CT.textDim)
                             .frame(maxWidth: .infinity)
                             .multilineTextAlignment(.center)
@@ -178,7 +178,7 @@ struct BackgroundFetchSettingsContent: View {
                             .minimumScaleFactor(BackgroundFetchSettingsLayout.tickLabelMinimumScale)
                     } else {
                         Text(" ")
-                            .font(CTFont.regular(BackgroundFetchSettingsLayout.tickLabelFontSize))
+                            .font(CTFont.ui(BackgroundFetchSettingsLayout.tickLabelFontSize))
                             .frame(maxWidth: .infinity)
                     }
                 }
@@ -259,47 +259,14 @@ struct BackgroundFetchSettingsContent: View {
         Self.lastCheckFormatter.localizedString(for: date, relativeTo: Date())
     }
 
-    @ViewBuilder
-    private func sectionFooter(_ key: String) -> some View {
-        Text(LocalizedStringKey(key))
-            .font(CTFont.regular(11))
-            .foregroundStyle(Color.CT.textDim)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, BackgroundFetchSettingsLayout.rowHorizontalPadding)
-            .padding(.bottom, BackgroundFetchSettingsLayout.footerBottomPadding)
-    }
-}
-
-/// Standalone screen (preview / legacy deep links). Production settings use NetworkSettingsView.
-struct BackgroundFetchSettingsView: View {
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        VStack(spacing: 0) {
-            CTNavBar(
-                title: NSLocalizedString("background_fetch", comment: ""),
-                showBack: true,
-                backAction: { dismiss() }
-            ) {
-                EmptyView()
-            } trailing: {
-                EmptyView()
-            }
-            ScrollView {
-                LazyVStack(spacing: 0) {
-                    BackgroundFetchSettingsContent()
-                }
-                .padding(.vertical, BackgroundFetchSettingsLayout.sectionVerticalPadding)
-            }
-        }
-        .background(Color.CT.bg.ignoresSafeArea())
-        .hideSystemNavBar()
-    }
 }
 
 #Preview {
-    BackgroundFetchSettingsView()
-        .preferredColorScheme(.dark)
+    ScrollView {
+        LazyVStack(spacing: 0) { BackgroundFetchSettingsContent() }
+    }
+    .background(Color.CT.bg)
+    .preferredColorScheme(.dark)
 }
 
 #endif

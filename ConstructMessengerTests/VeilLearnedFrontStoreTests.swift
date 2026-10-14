@@ -16,7 +16,7 @@ import XCTest
 @testable import Construct_Messenger
 
 /// In-memory backing so the store's own logic is testable without a Keychain.
-private final class MemoryLearnedFrontPersistence: VeilLearnedFrontPersistence {
+final class MemoryLearnedFrontPersistence: VeilLearnedFrontPersistence {
     var data: Data?
     var saveSucceeds = true
     private(set) var saveCount = 0
@@ -233,8 +233,9 @@ final class VeilLearnedFrontStoreTests: XCTestCase {
             let candidates = VeilRelaySelector.cachedRelayAddresses()
             XCTAssertEqual(candidates.first, address)
             XCTAssertEqual(candidates.filter { $0 == address }.count, 1, "must not be duplicated")
-            XCTAssertTrue(candidates.contains(VEILConfig.ruRelayAddress),
-                          "seed relays remain in the pool as fallback")
+            for seed in VEILConfig.hardcodedRelayAddresses {
+                XCTAssertTrue(candidates.contains(seed), "seed relays remain in the pool as fallback")
+            }
         }
     }
 

@@ -29,7 +29,8 @@ public enum Shared_Proto_Services_V1_MessagingService: Sendable {
             /// Descriptor for "MessageStream".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.MessagingService"),
-                method: "MessageStream"
+                method: "MessageStream",
+                type: .bidirectionalStreaming
             )
         }
         /// Namespace for "SendMessage" metadata.
@@ -41,7 +42,8 @@ public enum Shared_Proto_Services_V1_MessagingService: Sendable {
             /// Descriptor for "SendMessage".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.MessagingService"),
-                method: "SendMessage"
+                method: "SendMessage",
+                type: .unary
             )
         }
         /// Namespace for "SendSealedMessage" metadata.
@@ -53,7 +55,8 @@ public enum Shared_Proto_Services_V1_MessagingService: Sendable {
             /// Descriptor for "SendSealedMessage".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.MessagingService"),
-                method: "SendSealedMessage"
+                method: "SendSealedMessage",
+                type: .unary
             )
         }
         /// Namespace for "PublishIntakeTags" metadata.
@@ -65,7 +68,8 @@ public enum Shared_Proto_Services_V1_MessagingService: Sendable {
             /// Descriptor for "PublishIntakeTags".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.MessagingService"),
-                method: "PublishIntakeTags"
+                method: "PublishIntakeTags",
+                type: .unary
             )
         }
         /// Namespace for "EditMessage" metadata.
@@ -77,7 +81,8 @@ public enum Shared_Proto_Services_V1_MessagingService: Sendable {
             /// Descriptor for "EditMessage".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.MessagingService"),
-                method: "EditMessage"
+                method: "EditMessage",
+                type: .unary
             )
         }
         /// Namespace for "AddReaction" metadata.
@@ -89,7 +94,8 @@ public enum Shared_Proto_Services_V1_MessagingService: Sendable {
             /// Descriptor for "AddReaction".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.MessagingService"),
-                method: "AddReaction"
+                method: "AddReaction",
+                type: .unary
             )
         }
         /// Namespace for "RemoveReaction" metadata.
@@ -101,7 +107,8 @@ public enum Shared_Proto_Services_V1_MessagingService: Sendable {
             /// Descriptor for "RemoveReaction".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.MessagingService"),
-                method: "RemoveReaction"
+                method: "RemoveReaction",
+                type: .unary
             )
         }
         /// Namespace for "GetPendingMessages" metadata.
@@ -113,7 +120,8 @@ public enum Shared_Proto_Services_V1_MessagingService: Sendable {
             /// Descriptor for "GetPendingMessages".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.MessagingService"),
-                method: "GetPendingMessages"
+                method: "GetPendingMessages",
+                type: .unary
             )
         }
         /// Namespace for "RequestKeySync" metadata.
@@ -125,7 +133,8 @@ public enum Shared_Proto_Services_V1_MessagingService: Sendable {
             /// Descriptor for "RequestKeySync".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.MessagingService"),
-                method: "RequestKeySync"
+                method: "RequestKeySync",
+                type: .unary
             )
         }
         /// Descriptors for all methods in the "shared.proto.services.v1.MessagingService" service.

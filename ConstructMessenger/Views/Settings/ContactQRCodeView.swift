@@ -20,7 +20,6 @@ import Combine
 import CoreImage.CIFilterBuiltins
 
 struct ContactQRCodeView: View {
-    @Environment(\.dismiss) private var dismiss
     @Environment(\.containerWidth) private var containerWidth
     let userId: String
     let username: String
@@ -52,18 +51,16 @@ struct ContactQRCodeView: View {
         username.isEmpty ? DisplayNameGenerator.generate(from: userId) : "@\(username)"
     }
 
+    /// Nothing is minted until this device knows the account's address: an invite without one
+    /// cannot be made, and the gate says why rather than showing a failed code.
     var body: some View {
+        // The navigation wraps the page, not the gate: the gate still draws its own bar
+        // (wave 5.3), and a stack around it would show two closes.
+        RecoveryGated { invitePage.sheetNavigation() }
+    }
+
+    private var invitePage: some View {
         VStack(spacing: ContactQRCodeLayout.contentSpacing) {
-            CTNavBar(
-                title: NSLocalizedString("invite", comment: ""),
-                showBack: true,
-                backAction: { dismiss() }
-            ) {
-                EmptyView()
-            } trailing: {
-                EmptyView()
-            }
-            Rectangle().fill(Color.CT.noise).frame(height: 1)
 
             ScrollView(showsIndicators: false) {
                 VStack(spacing: ContactQRCodeLayout.contentSpacing) {
@@ -71,10 +68,10 @@ struct ContactQRCodeView: View {
                     // Identity header
                     VStack(spacing: ContactQRCodeLayout.identityHeaderSpacing) {
                         Text(displayName)
-                            .font(CTFont.bold(15))
+                            .font(CTFont.ui(15, weight: .bold))
                             .foregroundStyle(Color.CT.text)
                         Text(NSLocalizedString("qr_caption_trust", comment: ""))
-                            .font(CTFont.regular(11))
+                            .font(CTFont.caption)
                             .foregroundStyle(Color.CT.accent.opacity(0.5))
                     }
                     .frame(maxWidth: .infinity)
@@ -102,6 +99,7 @@ struct ContactQRCodeView: View {
                 }
             }
         }
+        .screenTitle(NSLocalizedString("invite", comment: ""))
         .background(Color.CT.bg.ignoresSafeArea())
         .frame(
             idealWidth: ContactQRCodeLayout.idealWidth,
@@ -148,10 +146,10 @@ struct ContactQRCodeView: View {
                 .overlay {
                     VStack(spacing: ContactQRCodeLayout.qrCodeErrorSpacing) {
                         Image(systemName: "exclamationmark.triangle.fill")
-                            .font(CTFont.regular(20))
+                            .font(CTFont.ui(20))
                             .foregroundStyle(Color.CT.danger)
                         Text(error)
-                            .font(CTFont.regular(11))
+                            .font(CTFont.caption)
                             .foregroundStyle(Color.CT.textDim)
                             .multilineTextAlignment(.center)
                             .padding(.horizontal, ContactQRCodeLayout.qrCodeErrorHorizontalPadding)
@@ -181,7 +179,7 @@ struct ContactQRCodeView: View {
         if previewPayload == nil, qrPayloadBytes != nil || generationError != nil {
             Button { regenerateQRCode() } label: {
                 Text(NSLocalizedString("qr_new_code", comment: "").lowercased())
-                    .font(CTFont.regular(13))
+                    .font(CTFont.body)
                     .foregroundStyle(Color.CT.accent)
                     .padding(.horizontal, ContactQRCodeLayout.refreshButtonHorizontalPadding)
                     .padding(.vertical, ContactQRCodeLayout.refreshButtonVerticalPadding)
@@ -223,9 +221,9 @@ struct ContactQRCodeView: View {
         Button { copyLink() } label: {
             HStack(spacing: SettingsShareLayout.actionSpacing) {
                 Image(systemName: copyFeedback == .idle ? "link" : "checkmark")
-                    .font(.system(size: SettingsShareLayout.actionIconSize, weight: .regular))
+                    .font(CTIcon.font(CTIcon.row, weight: .regular))
                 Text(copyLabel.uppercased())
-                    .font(CTFont.regular(11))
+                    .font(CTFont.caption)
                     .lineLimit(1)
                     .minimumScaleFactor(0.75)
                     .contentTransition(.numericText())
@@ -255,12 +253,12 @@ struct ContactQRCodeView: View {
                     InviteConfig.ttlDescription
                 )
             )
-            .font(CTFont.regular(11))
+            .font(CTFont.caption)
             .foregroundStyle(Color.CT.textDim)
 
             if let copyError {
                 Text("> \(copyError)")
-                    .font(CTFont.regular(11))
+                    .font(CTFont.caption)
                     .foregroundStyle(Color.CT.danger)
             }
         }
@@ -287,7 +285,7 @@ struct ContactQRCodeView: View {
             return
         }
         do {
-            // HTTPS share can land in third-party messenger logs/previews — never embed `un`.
+            // HTTPS share: the generator leaves the username out (see `generateDeepLink`).
             let minted = try generator.generateDeepLink(
                 userId: userId,
                 deviceId: deviceId,
@@ -331,12 +329,12 @@ struct ContactQRCodeView: View {
             // stringValue for this. Pure byte-mode CIv1 often yields nil stringValue
             // on device (no haptic, no redeem). Scanner still dual-reads Latin-1
             // byte-mode for already-printed binary QRs.
-            // Metadata minimization (thread 5): do not embed plaintext username in the
-            // signed invite by default — identity chrome stays in UI only (`displayName`).
+            // The QR carries our username, so the person scanning it sees who they added. Shown
+            // in person and rotated in seconds; the HTTPS link does not carry it (TODO 95).
             let minted = try generator.generateQRBinary(
                 userId: userId,
                 deviceId: deviceId,
-                username: nil,
+                username: username.isEmpty ? nil : username,
                 server: serverHostname
             )
             let textPayload = InviteBinaryCodec.base64URLEncode(minted.artifact)

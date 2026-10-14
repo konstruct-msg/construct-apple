@@ -29,7 +29,8 @@ public enum Shared_Proto_Services_V1_AuthService: Sendable {
             /// Descriptor for "GetPowChallenge".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.AuthService"),
-                method: "GetPowChallenge"
+                method: "GetPowChallenge",
+                type: .unary
             )
         }
         /// Namespace for "RegisterDevice" metadata.
@@ -41,7 +42,8 @@ public enum Shared_Proto_Services_V1_AuthService: Sendable {
             /// Descriptor for "RegisterDevice".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.AuthService"),
-                method: "RegisterDevice"
+                method: "RegisterDevice",
+                type: .unary
             )
         }
         /// Namespace for "AuthenticateDevice" metadata.
@@ -53,7 +55,8 @@ public enum Shared_Proto_Services_V1_AuthService: Sendable {
             /// Descriptor for "AuthenticateDevice".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.AuthService"),
-                method: "AuthenticateDevice"
+                method: "AuthenticateDevice",
+                type: .unary
             )
         }
         /// Namespace for "RefreshToken" metadata.
@@ -65,7 +68,8 @@ public enum Shared_Proto_Services_V1_AuthService: Sendable {
             /// Descriptor for "RefreshToken".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.AuthService"),
-                method: "RefreshToken"
+                method: "RefreshToken",
+                type: .unary
             )
         }
         /// Namespace for "VerifyToken" metadata.
@@ -77,7 +81,8 @@ public enum Shared_Proto_Services_V1_AuthService: Sendable {
             /// Descriptor for "VerifyToken".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.AuthService"),
-                method: "VerifyToken"
+                method: "VerifyToken",
+                type: .unary
             )
         }
         /// Namespace for "Logout" metadata.
@@ -89,7 +94,8 @@ public enum Shared_Proto_Services_V1_AuthService: Sendable {
             /// Descriptor for "Logout".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.AuthService"),
-                method: "Logout"
+                method: "Logout",
+                type: .unary
             )
         }
         /// Namespace for "SetRecoveryKey" metadata.
@@ -101,7 +107,8 @@ public enum Shared_Proto_Services_V1_AuthService: Sendable {
             /// Descriptor for "SetRecoveryKey".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.AuthService"),
-                method: "SetRecoveryKey"
+                method: "SetRecoveryKey",
+                type: .unary
             )
         }
         /// Namespace for "GetRecoveryStatus" metadata.
@@ -113,7 +120,8 @@ public enum Shared_Proto_Services_V1_AuthService: Sendable {
             /// Descriptor for "GetRecoveryStatus".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.AuthService"),
-                method: "GetRecoveryStatus"
+                method: "GetRecoveryStatus",
+                type: .unary
             )
         }
         /// Namespace for "RecoverAccount" metadata.
@@ -125,7 +133,8 @@ public enum Shared_Proto_Services_V1_AuthService: Sendable {
             /// Descriptor for "RecoverAccount".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.AuthService"),
-                method: "RecoverAccount"
+                method: "RecoverAccount",
+                type: .unary
             )
         }
         /// Namespace for "StoreRecoveryBundle" metadata.
@@ -137,7 +146,8 @@ public enum Shared_Proto_Services_V1_AuthService: Sendable {
             /// Descriptor for "StoreRecoveryBundle".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.AuthService"),
-                method: "StoreRecoveryBundle"
+                method: "StoreRecoveryBundle",
+                type: .unary
             )
         }
         /// Namespace for "GetRecoveryBundle" metadata.
@@ -149,7 +159,8 @@ public enum Shared_Proto_Services_V1_AuthService: Sendable {
             /// Descriptor for "GetRecoveryBundle".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.AuthService"),
-                method: "GetRecoveryBundle"
+                method: "GetRecoveryBundle",
+                type: .unary
             )
         }
         /// Namespace for "GetSenderCertificate" metadata.
@@ -161,7 +172,8 @@ public enum Shared_Proto_Services_V1_AuthService: Sendable {
             /// Descriptor for "GetSenderCertificate".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.AuthService"),
-                method: "GetSenderCertificate"
+                method: "GetSenderCertificate",
+                type: .unary
             )
         }
         /// Namespace for "IssueTokens" metadata.
@@ -173,7 +185,8 @@ public enum Shared_Proto_Services_V1_AuthService: Sendable {
             /// Descriptor for "IssueTokens".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.AuthService"),
-                method: "IssueTokens"
+                method: "IssueTokens",
+                type: .unary
             )
         }
         /// Namespace for "ApproveJoinRequest" metadata.
@@ -185,7 +198,8 @@ public enum Shared_Proto_Services_V1_AuthService: Sendable {
             /// Descriptor for "ApproveJoinRequest".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.AuthService"),
-                method: "ApproveJoinRequest"
+                method: "ApproveJoinRequest",
+                type: .unary
             )
         }
         /// Descriptors for all methods in the "shared.proto.services.v1.AuthService" service.
@@ -2006,7 +2020,8 @@ public enum Shared_Proto_Services_V1_DeviceService: Sendable {
             /// Descriptor for "ListDevices".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.DeviceService"),
-                method: "ListDevices"
+                method: "ListDevices",
+                type: .serverStreaming
             )
         }
         /// Namespace for "RevokeDevice" metadata.
@@ -2018,7 +2033,8 @@ public enum Shared_Proto_Services_V1_DeviceService: Sendable {
             /// Descriptor for "RevokeDevice".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.DeviceService"),
-                method: "RevokeDevice"
+                method: "RevokeDevice",
+                type: .unary
             )
         }
         /// Namespace for "UpdatePushToken" metadata.
@@ -2030,7 +2046,8 @@ public enum Shared_Proto_Services_V1_DeviceService: Sendable {
             /// Descriptor for "UpdatePushToken".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.DeviceService"),
-                method: "UpdatePushToken"
+                method: "UpdatePushToken",
+                type: .unary
             )
         }
         /// Namespace for "UnregisterPushToken" metadata.
@@ -2042,7 +2059,8 @@ public enum Shared_Proto_Services_V1_DeviceService: Sendable {
             /// Descriptor for "UnregisterPushToken".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.DeviceService"),
-                method: "UnregisterPushToken"
+                method: "UnregisterPushToken",
+                type: .unary
             )
         }
         /// Namespace for "VerifyDevice" metadata.
@@ -2054,7 +2072,8 @@ public enum Shared_Proto_Services_V1_DeviceService: Sendable {
             /// Descriptor for "VerifyDevice".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.DeviceService"),
-                method: "VerifyDevice"
+                method: "VerifyDevice",
+                type: .unary
             )
         }
         /// Namespace for "GetDeviceInfo" metadata.
@@ -2066,7 +2085,8 @@ public enum Shared_Proto_Services_V1_DeviceService: Sendable {
             /// Descriptor for "GetDeviceInfo".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.DeviceService"),
-                method: "GetDeviceInfo"
+                method: "GetDeviceInfo",
+                type: .unary
             )
         }
         /// Namespace for "SetDeviceMetadata" metadata.
@@ -2078,7 +2098,8 @@ public enum Shared_Proto_Services_V1_DeviceService: Sendable {
             /// Descriptor for "SetDeviceMetadata".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.DeviceService"),
-                method: "SetDeviceMetadata"
+                method: "SetDeviceMetadata",
+                type: .unary
             )
         }
         /// Namespace for "InitiateDeviceLink" metadata.
@@ -2090,7 +2111,8 @@ public enum Shared_Proto_Services_V1_DeviceService: Sendable {
             /// Descriptor for "InitiateDeviceLink".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.DeviceService"),
-                method: "InitiateDeviceLink"
+                method: "InitiateDeviceLink",
+                type: .unary
             )
         }
         /// Descriptors for all methods in the "shared.proto.services.v1.DeviceService" service.
@@ -3133,7 +3155,8 @@ public enum Shared_Proto_Services_V1_DeviceLinkService: Sendable {
             /// Descriptor for "ConfirmDeviceLink".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.DeviceLinkService"),
-                method: "ConfirmDeviceLink"
+                method: "ConfirmDeviceLink",
+                type: .unary
             )
         }
         /// Namespace for "SubmitJoinRequest" metadata.
@@ -3145,7 +3168,8 @@ public enum Shared_Proto_Services_V1_DeviceLinkService: Sendable {
             /// Descriptor for "SubmitJoinRequest".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.DeviceLinkService"),
-                method: "SubmitJoinRequest"
+                method: "SubmitJoinRequest",
+                type: .unary
             )
         }
         /// Namespace for "CheckJoinRequestStatus" metadata.
@@ -3157,7 +3181,8 @@ public enum Shared_Proto_Services_V1_DeviceLinkService: Sendable {
             /// Descriptor for "CheckJoinRequestStatus".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.DeviceLinkService"),
-                method: "CheckJoinRequestStatus"
+                method: "CheckJoinRequestStatus",
+                type: .unary
             )
         }
         /// Descriptors for all methods in the "shared.proto.services.v1.DeviceLinkService" service.

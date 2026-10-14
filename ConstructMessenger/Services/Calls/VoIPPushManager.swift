@@ -29,6 +29,12 @@ final class VoIPPushManager: NSObject {
     private var registry: PKPushRegistry?
     private var sessionObserverTask: Task<Void, Never>?
 
+    /// Same as `PushNotificationManager.forgetServerRegistration`: the VoIP token stays with the
+    /// install, its registration went with the account.
+    func forgetServerRegistration() {
+        isRegisteredWithServer = false
+    }
+
     private override init() {
         super.init()
 
@@ -209,7 +215,7 @@ extension VoIPPushManager: PKPushRegistryDelegate {
             callId: callId,
             callerId: callerId,
             callerName: NSLocalizedString("construct_app_name", comment: ""),
-            hasVideo: false
+            hasVideo: CallVideoSignal.pushRingsAsVideo(callData, videoEnabled: CallsFeature.isVideoEnabled)
         )
 
         Log.info("Incoming VoIP push — CallKit notified sync (uuid=\(reportedUUID.uuidString.prefix(8))…)", category: "Calls")

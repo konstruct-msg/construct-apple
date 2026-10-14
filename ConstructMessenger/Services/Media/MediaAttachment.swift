@@ -27,13 +27,28 @@ enum MediaQuality: Sendable {
     case original
 }
 
-/// Video send quality. Maps to an `AVAssetExportSession` preset; `.original` is passthrough.
+/// Video send quality: the box the picture is scaled to fit, or the source untouched.
 enum VideoQuality: String, Sendable, CaseIterable {
     case p720
     case p1080
     case original
 
-    var exportPreset: String {
+    /// The long and short edge the picture is scaled down to fit; nil for passthrough.
+    var bounds: (long: CGFloat, short: CGFloat)? {
+        switch self {
+        case .p720:     return (1280, 720)
+        case .p1080:    return (1920, 1080)
+        case .original: return nil
+        }
+    }
+
+    /// What a compressed export renders; nil for passthrough.
+    var render: VideoRender? {
+        bounds.map { VideoRender(bounds: $0, cropAspect: nil, h264Preset: h264Preset) }
+    }
+
+    /// H.264 at the same size, for a source the HEVC encoder refuses.
+    var h264Preset: String {
         switch self {
         case .p720:     return AVAssetExportPreset1280x720
         case .p1080:    return AVAssetExportPreset1920x1080
@@ -49,6 +64,15 @@ enum VideoQuality: String, Sendable, CaseIterable {
         case .original: return NSLocalizedString("quality_original", comment: "Original media quality")
         }
     }
+}
+
+/// What a compressed video export renders (`MediaManager.transcodeVideo`): scaled down to fit
+/// `bounds`, optionally centre-cropped first to an upright `cropAspect` (width / height).
+struct VideoRender: Sendable {
+    let bounds: (long: CGFloat, short: CGFloat)
+    let cropAspect: CGFloat?
+    /// H.264 at the same size, for a source the HEVC encoder refuses.
+    let h264Preset: String
 }
 
 enum MediaKind: Sendable {
@@ -77,6 +101,14 @@ struct MediaAttachment: Identifiable, @unchecked Sendable {
     let videoURL: URL?
     /// Video duration in seconds (nil for images).
     let duration: TimeInterval?
+    /// How the recipient shows it; nil is the ordinary bubble. A video note is recorded in the
+    /// chat and rendered differently (`MediaManager.videoNoteRender`), not chosen in the picker.
+    let presentation: MediaPresentation?
+    /// The stretch of `videoURL` to send — a trim; nil is all of it.
+    let timeRange: CMTimeRange?
+    /// A forward's copy: uploaded under a new key, never matched to an earlier upload of the same
+    /// bytes (`MediaUploadReuse.forSend`).
+    var isForwarded = false
 
     // MARK: - Image initializers
 
@@ -89,6 +121,8 @@ struct MediaAttachment: Identifiable, @unchecked Sendable {
         self.videoQuality = .p1080
         self.videoURL = nil
         self.duration = nil
+        self.presentation = nil
+        self.timeRange = nil
     }
 
     /// Wrap an in-memory image (camera capture, drag-drop, or the crop editor's output) —
@@ -116,7 +150,9 @@ struct MediaAttachment: Identifiable, @unchecked Sendable {
         poster: PlatformImage?,
         duration: TimeInterval?,
         mimeType: String = "video/mp4",
-        videoQuality: VideoQuality = .p1080
+        videoQuality: VideoQuality = .p1080,
+        presentation: MediaPresentation? = nil,
+        timeRange: CMTimeRange? = nil
     ) {
         self.kind = .video
         self.originalData = Data()
@@ -126,5 +162,7 @@ struct MediaAttachment: Identifiable, @unchecked Sendable {
         self.videoQuality = videoQuality
         self.videoURL = videoURL
         self.duration = duration
+        self.presentation = presentation
+        self.timeRange = timeRange
     }
 }

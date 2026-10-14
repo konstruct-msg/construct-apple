@@ -7,81 +7,166 @@
 //
 
 import SwiftUI
+import CoreData
 
 // MARK: - Layout engine
 
-/// Computes deterministic honeycomb positions for a flat contact list.
-/// Even rows: `wideCols` circles. Odd rows: `wideCols - 1` circles, offset right
-/// by half a cell — classic hex packing.
-struct HoneycombLayoutEngine {
-    let contacts:   [User]
-    let canvasSize: CGSize
-    let wideCols = 4
-
-    var cellWidth: CGFloat { canvasSize.width / CGFloat(wideCols) }
-    var cellSize:  CGFloat { cellWidth * 0.74 }
-    /// Vertical pitch between node centres. Classic hex is √3/2 (~0.866), but Synaps
-    /// renders a name under each avatar — stretch slightly so labels clear the next row.
-    var vStep:     CGFloat { cellWidth * 1.02 }
-    /// Bottom pad includes label line under the last row.
-    var totalHeight: CGFloat { CGFloat(rawRows.count) * vStep + cellWidth * 0.85 }
-
-    /// Zoom level that fits the whole grid with ~12% breathing room.
-    var initialScale: CGFloat {
-        guard totalHeight > 0, canvasSize.height > 0 else { return 1.0 }
-        return Swift.min(canvasSize.height / totalHeight * 0.88, 1.0)
-    }
+/// Lays the Synaps cloud out as a hexagonal spiral from the centre, as the Apple Watch home
+/// screen does (TODO 74): one contact in the middle, then rings of 6, 12, 18, … The most active
+/// contact (`ContactMetrics.frequencyScore`) takes the centre and activity falls off ring by ring,
+/// so the people someone talks to are where the eye lands. Until 2026-10-08 this was a rectangle
+/// four wide, filled in list order.
+///
+/// Positions are in points around the cloud's centre at scale 1 — the canvas size plays no part,
+/// so the same contacts keep the same places whatever the screen. Fitting is `fitScale(in:)`.
+struct SynapsCloudLayout {
+    /// Centre-to-centre distance of two neighbours in a row, at scale 1.
+    static let pitch: CGFloat = 96
+    /// Rows sit a little further apart than pure hex packing (√3/2): the names near the centre
+    /// are drawn under their circles and must clear the ring below. Only those are named (the
+    /// lens fades the rest), which is what lets this stay close to 1 and the cloud round — at
+    /// 1.35, with every contact named, it read as rows of a grid.
+    static let rowStretch: CGFloat = 1.15
 
     struct Item: Identifiable {
         let id: String
-        let user: User
+        let user: ContactRecord
+        /// Offset from the cloud's centre, in points at scale 1.
         let position: CGPoint
     }
 
-    /// Hex positions translated so the grid bounding-box centre = canvas centre.
-    var items: [Item] {
-        let raw = rawItems
-        guard !raw.isEmpty else { return [] }
-        let xs = raw.map(\.position.x), ys = raw.map(\.position.y)
-        let gcx = ((xs.min() ?? 0) + (xs.max() ?? 0)) / 2
-        let gcy = ((ys.min() ?? 0) + (ys.max() ?? 0)) / 2
-        let dx = canvasSize.width  / 2 - gcx
-        let dy = canvasSize.height / 2 - gcy
-        return raw.map {
-            Item(id: $0.id, user: $0.user,
-                 position: CGPoint(x: $0.position.x + dx, y: $0.position.y + dy))
+    let items: [Item]
+
+    init(contacts: [ContactRecord], metrics: [String: ContactMetrics]) {
+        let ordered = Self.order(contacts, metrics: metrics)
+        let points = Self.spiral(count: ordered.count)
+        items = zip(ordered, points).map { Item(id: $0.id, user: $0, position: $1) }
+    }
+
+    /// Most active first; ties keep a stable order by id so a contact does not wander between
+    /// launches while nothing about them changed.
+    static func order(_ contacts: [ContactRecord], metrics: [String: ContactMetrics]) -> [ContactRecord] {
+        contacts.sorted { a, b in
+            let sa = metrics[a.id]?.frequencyScore ?? 0
+            let sb = metrics[b.id]?.frequencyScore ?? 0
+            return sa != sb ? sa > sb : a.id < b.id
         }
     }
 
-    private var rawItems: [Item] {
-        var result: [Item] = []
-        for (rowIdx, row) in rawRows.enumerated() {
-            let xShift = rowIdx % 2 == 1 ? cellWidth / 2 : 0
-            for (colIdx, user) in row.enumerated() {
-                let cx = xShift + CGFloat(colIdx) * cellWidth + cellWidth / 2
-                let cy = CGFloat(rowIdx) * vStep + cellWidth / 2
-                result.append(Item(id: user.id, user: user, position: CGPoint(x: cx, y: cy)))
+    /// The first `count` cells of a hexagonal spiral, centre first, ring by ring.
+    static func spiral(count: Int) -> [CGPoint] {
+        guard count > 0 else { return [] }
+        // Axial directions for a pointy-top grid, in walking order around a ring.
+        let directions = [(1, 0), (1, -1), (0, -1), (-1, 0), (-1, 1), (0, 1)]
+        var cells = [(q: 0, r: 0)]
+        var ring = 1
+        while cells.count < count {
+            // A ring starts `ring` steps out along direction 4 and walks its six sides.
+            var q = directions[4].0 * ring, r = directions[4].1 * ring
+            for side in 0..<6 {
+                for _ in 0..<ring {
+                    cells.append((q, r))
+                    q += directions[side].0
+                    r += directions[side].1
+                }
             }
+            ring += 1
         }
-        return result
+        return cells.prefix(count).map(point)
     }
 
-    private var rawRows: [[User]] {
-        var result: [[User]] = []
-        var idx = 0, rowIdx = 0
-        while idx < contacts.count {
-            let n = rowIdx % 2 == 0 ? wideCols : wideCols - 1
-            result.append(Array(contacts[idx ..< Swift.min(idx + n, contacts.count)]))
-            idx += n; rowIdx += 1
-        }
-        return result
+    static func point(_ cell: (q: Int, r: Int)) -> CGPoint {
+        CGPoint(
+            x: pitch * (CGFloat(cell.q) + CGFloat(cell.r) / 2),
+            y: pitch * (3.0.squareRoot() / 2) * rowStretch * CGFloat(cell.r)
+        )
+    }
+
+    /// Half the extent of the cloud on each axis, one cell's margin included.
+    var halfExtent: CGSize {
+        let xs = items.map { abs($0.position.x) }, ys = items.map { abs($0.position.y) }
+        return CGSize(
+            width: (xs.max() ?? 0) + Self.pitch / 2,
+            height: (ys.max() ?? 0) + Self.pitch / 2
+        )
+    }
+
+    /// The zoom at which the whole cloud fits `visible` with some room, never above 1.
+    func fitScale(in visible: CGSize) -> CGFloat {
+        let half = halfExtent
+        guard half.width > 0, half.height > 0, visible.width > 0, visible.height > 0 else { return 1 }
+        let fit = Swift.min(visible.width / (2 * half.width), visible.height / (2 * half.height))
+        return Swift.min(fit * 0.92, 1)
+    }
+}
+
+// MARK: - Lens
+
+/// The Apple Watch lens over the cloud (TODO 74): a contact keeps its size near the middle of
+/// the visible area and shrinks towards the edge, and is pulled in as it goes so the cloud reads
+/// as one round shape rather than as the grid it is laid out on. It works on where a contact is
+/// on screen, so panning moves contacts through the lens, as on the watch.
+///
+/// The lens is an oval filling the visible area, not a circle: a phone's visible area is twice
+/// as tall as it is wide, and a circle as wide as the screen left the top and bottom thirds
+/// empty. Distances are measured in units of the radius along each axis, so "how far out" is
+/// one number, `rim`: 0 in the middle, 1 at the oval's edge.
+struct SynapsLens {
+    /// Half the oval's width and height.
+    let radii: CGSize
+    /// The size of a contact at the rim, relative to one in the middle.
+    static let rimScale: CGFloat = 0.35
+    /// The opacity of a contact at the rim. The outermost ring is pressed against the edge,
+    /// where its circles crowd; dimming it keeps it from reading as a border of its own.
+    static let rimOpacity: Double = 0.35
+
+    /// How far out a contact `rim` units away is drawn: unchanged near the middle, pulled in ever
+    /// harder towards the edge, never past it.
+    static func drawnRim(_ rim: CGFloat) -> CGFloat { tanh(rim) }
+
+    /// Where a point at `screen` is drawn, and how far out (0…1) that is.
+    func draw(_ screen: CGPoint, centre: CGPoint) -> (point: CGPoint, rim: CGFloat) {
+        guard radii.width > 0, radii.height > 0 else { return (screen, 0) }
+        let ux = (screen.x - centre.x) / radii.width
+        let uy = (screen.y - centre.y) / radii.height
+        let rim = hypot(ux, uy)
+        guard rim > 0 else { return (screen, 0) }
+        let drawn = Self.drawnRim(rim)
+        let k = drawn / rim
+        return (CGPoint(x: centre.x + ux * k * radii.width, y: centre.y + uy * k * radii.height), drawn)
+    }
+
+    /// Size at a drawn rim distance: 1 in the inner third, `rimScale` at the edge.
+    static func scale(atRim rim: CGFloat) -> CGFloat {
+        1 - (1 - rimScale) * smoothstep(0.3, 1, rim)
+    }
+
+    /// The circle fades only in the outermost band.
+    static func opacity(atRim rim: CGFloat) -> Double {
+        1 - (1 - rimOpacity) * Double(smoothstep(0.82, 0.98, rim))
+    }
+
+    /// Only the middle contact and the ring around it are named. Measured in points on screen,
+    /// not in rim units: the oval is narrow across, so by rim the first ring's left and right
+    /// neighbours counted as further out than its upper ones and lost their names, while the
+    /// second ring's upper and lower ones kept theirs half-drawn over the circles below.
+    static func labelOpacity(atDistance d: CGFloat) -> Double {
+        let pitch = SynapsCloudLayout.pitch
+        // The first ring is drawn at most ~1.07 pitches out, the second from ~1.48 (measured with
+        // thirty contacts); the fade sits between them.
+        return Double(1 - smoothstep(pitch * 1.15, pitch * 1.4, d))
+    }
+
+    static func smoothstep(_ lo: CGFloat, _ hi: CGFloat, _ x: CGFloat) -> CGFloat {
+        let t = Swift.min(Swift.max((x - lo) / (hi - lo), 0), 1)
+        return t * t * (3 - 2 * t)
     }
 }
 
 // MARK: - Contact activity metrics
 
 /// Locally-derived activity signals — no server data, no social graph.
-/// Used for ambient density on the Synaps honeycomb (P1 spatial track): size, ring, badge.
+/// Used for ambient density on the Synaps cloud (P1 spatial track): place, size, ring, badge.
 struct ContactMetrics {
     /// Normalised message count across all contacts: 0 = fewest/none, 1 = most active.
     let frequencyScore: CGFloat
@@ -127,6 +212,9 @@ struct ContactMetrics {
 struct ZoomableCloud<Content: View>: View {
     @Binding var scale:  CGFloat
     @Binding var offset: CGSize
+    /// The point zoom grows from, as a fraction of the canvas — the middle of what is visible,
+    /// which is not the canvas middle when the canvas runs under the bars.
+    var anchor: UnitPoint = .center
     var minScale: CGFloat = 0.25
     var maxScale: CGFloat = 3.0
     @ViewBuilder var content: () -> Content
@@ -138,7 +226,7 @@ struct ZoomableCloud<Content: View>: View {
         GeometryReader { proxy in
             ZStack {
                 content()
-                    .scaleEffect(scale, anchor: .center)
+                    .scaleEffect(scale, anchor: anchor)
                     .offset(offset)
             }
             .frame(width: proxy.size.width, height: proxy.size.height)
@@ -200,5 +288,44 @@ struct ZoomableCloud<Content: View>: View {
             width:  min(max(offset.width,  -maxX), maxX),
             height: min(max(offset.height, -maxY), maxY)
         )
+    }
+}
+
+extension ContactMetrics {
+    /// Each contact's metrics from their chats, found by the peer each chat names. Shared by
+    /// Synapses on iOS and on the Desktop, which each kept a copy walking `User.chats`. A peer may
+    /// still have two chats until the launch merges them (`DuplicateChats`): the busier one counts.
+    @MainActor
+    static func byContact(
+        _ ids: [String],
+        chats: any ChatStore = LocalRepositories.chats,
+        messages: any MessageStore = LocalRepositories.messages,
+        now: Date = Date()
+    ) -> [String: ContactMetrics] {
+        guard !ids.isEmpty else { return [:] }
+        let wanted = Set(ids)
+        let chatsByPeer = Dictionary(grouping: ((try? chats.chats()) ?? []).filter { wanted.contains($0.peerId) }, by: \.peerId)
+        let counts = Dictionary(uniqueKeysWithValues: ids.map { id in
+            (id, (chatsByPeer[id] ?? []).map { (try? messages.messageCount(inChat: $0.id)) ?? 0 }.max() ?? 0)
+        })
+        let maxCount = counts.values.max() ?? 0
+        var map: [String: ContactMetrics] = [:]
+        for id in ids {
+            let chats = chatsByPeer[id] ?? []
+            let count = counts[id] ?? 0
+            let recency: Recency
+            if let last = chats.compactMap(\.lastMessageTime).max() {
+                let age = now.timeIntervalSince(last)
+                recency = age < 86_400 ? .fresh : age < 604_800 ? .recent : .none
+            } else {
+                recency = .none
+            }
+            map[id] = ContactMetrics(
+                frequencyScore: maxCount > 0 ? CGFloat(count) / CGFloat(maxCount) : 0,
+                recency: recency,
+                unreadCount: chats.reduce(0) { $0 + $1.unreadCount }
+            )
+        }
+        return map
     }
 }

@@ -114,10 +114,6 @@ final class DeliveryReceiptBatcher {
     private var isCensoredPath: Bool { TransportRouterMirror.shared.isUsingVEIL }
 
     private var buffer = ReceiptBatchBuffer()
-    /// The recipient's identity key, resolved on the caller's Core Data queue at enqueue time and
-    /// held until the flush. Resolving it later would mean touching Core Data from the flush, which
-    /// is exactly the queue confinement `sendDeliveryReceipt` exists to respect.
-    private var identityKeys: [String: Data] = [:]
     private var flushTask: Task<Void, Never>?
     private var lifecycleObserver: (any NSObjectProtocol)?
 
@@ -158,9 +154,8 @@ final class DeliveryReceiptBatcher {
     #endif
 
     /// `messageId` is due to `contactId`. Callers have already asked `ReceiptResendThrottle`.
-    func enqueue(messageId: String, to contactId: String, recipientIdentityKey: Data?) {
+    func enqueue(messageId: String, to contactId: String) {
         buffer.add(messageId: messageId, to: contactId)
-        if let recipientIdentityKey { identityKeys[contactId] = recipientIdentityKey }
         scheduleFlush()
     }
 
@@ -186,12 +181,11 @@ final class DeliveryReceiptBatcher {
     func flushPiggyback(to contactId: String) {
         let receipts = buffer.drain(for: contactId)
         guard !receipts.isEmpty else { return }
-        let key = identityKeys.removeValue(forKey: contactId)
         if buffer.isEmpty {
             flushTask?.cancel()
             flushTask = nil
         }
-        send(receipts.map { ($0.contactId, $0.messageIds, key) })
+        send(receipts)
     }
 
     /// Sends whatever is buffered right now, without waiting out the window.
@@ -201,14 +195,11 @@ final class DeliveryReceiptBatcher {
         send(drain())
     }
 
-    private func drain() -> [(contactId: String, messageIds: [String], identityKey: Data?)] {
-        let receipts = buffer.drain()
-        let keys = identityKeys
-        identityKeys.removeAll()
-        return receipts.map { ($0.contactId, $0.messageIds, keys[$0.contactId]) }
+    private func drain() -> [(contactId: String, messageIds: [String])] {
+        buffer.drain()
     }
 
-    private func send(_ receipts: [(contactId: String, messageIds: [String], identityKey: Data?)]) {
+    private func send(_ receipts: [(contactId: String, messageIds: [String])]) {
         for receipt in receipts {
             if receipt.messageIds.count > 1 {
                 PerformanceMetrics.shared.record(
@@ -218,8 +209,7 @@ final class DeliveryReceiptBatcher {
             Task { @MainActor in
                 await OutboundSessionService.shared.sendEncryptedDeliveryReceipt(
                     messageIds: receipt.messageIds,
-                    to: receipt.contactId,
-                    recipientIdentityKey: receipt.identityKey
+                    to: receipt.contactId
                 )
             }
         }
@@ -230,7 +220,6 @@ final class DeliveryReceiptBatcher {
         flushTask?.cancel()
         flushTask = nil
         buffer = ReceiptBatchBuffer()
-        identityKeys.removeAll()
     }
     #endif
 }

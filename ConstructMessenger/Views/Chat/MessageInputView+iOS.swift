@@ -16,11 +16,13 @@ struct IOSMessageInputView: View {
 
     @Binding var text: String
     @Binding var droppedImages: [PlatformImage]
-    let replyingTo: Message?
+    let replyingTo: TranscriptRow?
     let quoteOverride: String?
-    let editingMessage: Message?
+    let editingMessage: TranscriptRow?
     let onSend: ([MediaAttachment], [URL]) -> Void
     var onSendVoice: ((URL, TimeInterval, [Float]) -> Void)? = nil
+    /// From the picker's Stickers tab. Sends at once — no composer strip.
+    var onSendSticker: ((StickerReference) -> Void)? = nil
     let onCancelReply: () -> Void
     let onCancelEdit: () -> Void
 
@@ -28,6 +30,7 @@ struct IOSMessageInputView: View {
     @StateObject private var audioRecorder = AudioRecorderService.shared
     @StateObject private var attachments = MessageInputAttachmentStore()
     @State private var showMicPermissionAlert = false
+    @State private var isRecordingVideoNote = false
     /// Which queued attachment was tapped, and what it opened. Nil means closed — one piece of
     /// state rather than a bool plus an index that can disagree about which item is showing.
     @State private var attachmentTap: AttachmentTapTarget?
@@ -52,15 +55,15 @@ struct IOSMessageInputView: View {
         .fullScreenCover(item: $attachmentTap) { target in
             attachmentDestination(target)
         }
-        .alert("Microphone Access Denied", isPresented: $showMicPermissionAlert) {
-            Button("Cancel", role: .cancel) {}
-            Button("Settings") {
+        .alert(NSLocalizedString("mic_denied_title", comment: ""), isPresented: $showMicPermissionAlert) {
+            Button(NSLocalizedString("cancel", comment: ""), role: .cancel) {}
+            Button(NSLocalizedString("settings", comment: "")) {
                 if let url = URL(string: UIApplication.openSettingsURLString) {
                     UIApplication.shared.open(url)
                 }
             }
         } message: {
-            Text("Please allow microphone access in Settings to send voice messages.")
+            Text(NSLocalizedString("mic_denied_message_macos", comment: ""))
         }
         .onChange(of: droppedImages) { _, newImages in
             attachments.appendDroppedImages(newImages)
@@ -75,7 +78,8 @@ struct IOSMessageInputView: View {
                 },
                 onPickFiles: { urls in
                     attachments.handlePickedFiles(urls)
-                }
+                },
+                onSendSticker: onSendSticker
             )
         }
     }
@@ -115,6 +119,7 @@ struct IOSMessageInputView: View {
                 onEdit: { attachments.replaceImage(at: $0, with: $1) },
                 onDelete: { attachments.removeAttachment(at: $0) }
             )
+            .sheetNavigation()
         }
     }
 
@@ -122,13 +127,13 @@ struct IOSMessageInputView: View {
     private var replyOrEditBars: some View {
         if let msg = replyingTo {
             MessageReplyBar(
-                content: quoteOverride ?? (msg.displayText.isEmpty ? nil : msg.displayText),
+                content: quoteOverride ?? (msg.legacyBody.isEmpty ? nil : msg.legacyBody),  // parser input: ReplyPreviewContent reads the shapes
                 messageId: msg.id,
                 onCancel: onCancelReply
             )
         }
         if let msg = editingMessage {
-            MessageEditBar(content: msg.displayText, onCancel: onCancelEdit)
+            MessageEditBar(content: msg.readableText, onCancel: onCancelEdit)
         }
     }
 
@@ -250,23 +255,34 @@ struct IOSMessageInputView: View {
                 text: $text,
                 canSend: canSend,
                 onSend: sendMessage,
-                onStartVoice: startVoiceRecording
+                onStartVoice: startVoiceRecording,
+                onStartVideoNote: { isRecordingVideoNote = true }
             )
         }
         // No collective capsule — separate floating glass elements (same pill radius).
         .padding(.horizontal, ChatUIConstants.InputBar.rowOuterPad)
+        // Its own cover, on the row: the composer's other cover (`attachmentTap`) sits on the
+        // stack above, and two covers on one view do not both present.
+        .fullScreenCover(isPresented: $isRecordingVideoNote) {
+            VideoNoteRecordingView(
+                onSend: { note in onSend([note], []) },
+                onClose: { isRecordingVideoNote = false }
+            )
+            .presentationBackground(.clear)
+        }
     }
 
     private var attachmentButton: some View {
         Button { showMediaPicker = true } label: {
             Image(systemName: "plus.circle")
-                .font(.system(size: CTLayout.navIconSize))
+                .font(CTIcon.font(CTIcon.nav, weight: .regular))
                 .foregroundColor(Color.CT.textDim)
                 .frame(width: CTLayout.controlHeight, height: CTLayout.controlHeight)
                 .glassCapsule()
         }
         .buttonStyle(.plain)
         .accessibilityLabel(Text(LocalizedStringKey("attach")))
+        .accessibilityIdentifier(A11y.Chat.attach)
     }
 
     private var canSend: Bool {

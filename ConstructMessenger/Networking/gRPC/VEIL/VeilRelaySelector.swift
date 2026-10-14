@@ -38,6 +38,8 @@ enum VeilRelaySelector {
         for address in allAddresses where seen.insert(address).inserted {
             candidates.append(address)
         }
+        // Probed and logged before any `VeilRelay` is made of them (TODO 135).
+        LogRedaction.register(candidates)
         return candidates
     }
 
@@ -54,6 +56,8 @@ enum VeilRelaySelector {
         // A learned front that is dead loses this on its first failure and the pool
         // rotates, so leading costs at most one probe.
         let learned = VeilLearnedFrontStore.shared.addresses()
+        // Probed and logged before any `VeilRelay` is made of them (TODO 135).
+        LogRedaction.register(learned + base + discovered)
         guard !learned.isEmpty || !discovered.isEmpty else { return base }
         var seen = Set<String>()
         return (learned + base + discovered).filter { seen.insert($0).inserted }
@@ -67,32 +71,13 @@ enum VeilRelaySelector {
     }
 
     static func applyRegionPreference(to candidates: [String]) -> [String] {
-        // GeoIP takes priority when resolved; fall through to timezone-based server config otherwise.
-        let geoRegion = GeoIPManager.shared.region
-        if geoRegion != .unknown {
-            return applyGeoIPPreference(to: candidates, region: geoRegion)
-        }
-
-        // Timezone fallback: use server-provided or hardcoded region rules.
+        // Server-provided or hardcoded region rules, chosen by timezone.
         let regions = VeilProxyStore.cachedRelayRegions(fallback: VEILConfig.hardcodedRelayRegions)
         let tzOffset = TimeZone.current.secondsFromGMT() / 3600
         guard let rule = regions.first(where: {
             tzOffset >= $0.tzOffsetMin && tzOffset <= $0.tzOffsetMax
         }) else { return candidates }
         let preferred = rule.preferredRelays
-        let front = preferred.filter { candidates.contains($0) }
-        let back = candidates.filter { !preferred.contains($0) }
-        return front + back
-    }
-
-    // Reorders candidates based on GeoIP region: ruLike countries prefer the RU relay
-    // (WebTunnel/obfs4-capable), all others prefer the AMS relay (lower latency for EU/global).
-    private static func applyGeoIPPreference(to candidates: [String], region: GeoIPRegion) -> [String] {
-        // Only bundled veil-fronts get a regional preference, so every region prefers
-        // the same list. Derived from `seedRelays`, not named outright: with an empty
-        // seed pool this is simply empty and the incoming order stands (phase 6).
-        let preferred = VEILConfig.hardcodedRelayAddresses
-        _ = region
         let front = preferred.filter { candidates.contains($0) }
         let back = candidates.filter { !preferred.contains($0) }
         return front + back

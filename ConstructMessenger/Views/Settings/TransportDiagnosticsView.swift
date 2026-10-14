@@ -8,12 +8,13 @@
 //
 
 #if DEBUG
+// TestFlight builds compile with DEBUG and show this screen: every line of it passes the same
+// front-name rule as the log (`LogRedaction`, TODO 135) — a screenshot travels as a log does.
 
 import SwiftUI
 import Combine
 
 struct TransportDiagnosticsView: View {
-    @Environment(\.dismiss) private var dismiss
     @State private var mirror = TransportRouterMirror.shared
     @State private var now = Date()
     @State private var nativeTLS = VeilProxyStore.veilFrontNativeTLS
@@ -22,15 +23,6 @@ struct TransportDiagnosticsView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            CTNavBar(
-                title: "TRANSPORT DIAGNOSTICS",
-                showBack: true,
-                backAction: { dismiss() }
-            ) {
-                EmptyView()
-            } trailing: {
-                EmptyView()
-            }
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 16) {
                     stateSection
@@ -44,7 +36,7 @@ struct TransportDiagnosticsView: View {
         }
         .ctBackground()
         #if os(iOS)
-        .hideSystemNavBar()
+        .screenTitle("TRANSPORT DIAGNOSTICS")
         #endif
         .onReceive(timer) { now = $0 }
     }
@@ -55,13 +47,13 @@ struct TransportDiagnosticsView: View {
         VStack(alignment: .leading, spacing: 8) {
             CTSettingsSectionHeader(title: "CURRENT STATE", color: .orange)
             VStack(alignment: .leading, spacing: 6) {
-                Text(stateHeadline)
-                    .font(CTFont.bold(18))
+                Text(LogRedaction.redact(stateHeadline))
+                    .font(CTFont.mono(18, weight: .bold))
                     .foregroundStyle(.orange)
                     .textSelection(.enabled)
                 ForEach(stateDetailLines, id: \.self) { line in
-                    Text(line)
-                        .font(CTFont.regular(12))
+                    Text(LogRedaction.redact(line))
+                        .font(CTFont.mono(12))
                         .foregroundStyle(Color.CT.textDim)
                         .textSelection(.enabled)
                 }
@@ -92,10 +84,10 @@ struct TransportDiagnosticsView: View {
             )) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("veil-front native TLS")
-                        .font(CTFont.regular(13))
+                        .font(CTFont.mono(13))
                         .foregroundStyle(.orange)
                     Text("Terminate the veil-front TLS in Network.framework (native Apple ClientHello) instead of rustls-Chrome131. Toggle VEIL off/on to apply. Opt-in / debug.")
-                        .font(CTFont.regular(11))
+                        .font(CTFont.mono(11))
                         .foregroundStyle(Color.CT.textDim)
                 }
             }
@@ -112,14 +104,14 @@ struct TransportDiagnosticsView: View {
                     Task { await TransportRouter.shared.send(.manualReset) }
                 } label: {
                     Text("[ MANUAL RESET ]")
-                        .font(CTFont.regular(12))
+                        .font(CTFont.mono(12))
                         .foregroundStyle(.orange)
                 }
                 Button {
                     mirror.clearHistory()
                 } label: {
                     Text("[ CLEAR LOG ]")
-                        .font(CTFont.regular(12))
+                        .font(CTFont.mono(12))
                         .foregroundStyle(.orange)
                 }
                 Spacer()
@@ -136,7 +128,7 @@ struct TransportDiagnosticsView: View {
             )
             if mirror.recentTransitions.isEmpty {
                 Text("(no transitions yet)")
-                    .font(CTFont.regular(12))
+                    .font(CTFont.mono(12))
                     .foregroundStyle(Color.CT.textDim)
                     .padding(.horizontal, 20)
             } else {
@@ -155,24 +147,24 @@ struct TransportDiagnosticsView: View {
         return VStack(alignment: .leading, spacing: 2) {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text(formatTime(entry.at))
-                    .font(CTFont.regular(11))
+                    .font(CTFont.mono(11))
                     .foregroundStyle(Color.CT.textDim)
-                Text(entry.from.shortLabel)
-                    .font(CTFont.regular(11))
+                Text(LogRedaction.redact(entry.from.shortLabel))
+                    .font(CTFont.mono(11))
                     .foregroundStyle(Color.CT.text)
                 Text(arrow)
-                    .font(CTFont.regular(11))
+                    .font(CTFont.mono(11))
                     .foregroundStyle(.orange)
-                Text(entry.to.shortLabel)
-                    .font(CTFont.bold(11))
+                Text(LogRedaction.redact(entry.to.shortLabel))
+                    .font(CTFont.mono(11, weight: .bold))
                     .foregroundStyle(entry.from == entry.to ? Color.CT.textDim : .orange)
             }
-            Text("event: \(entry.event)")
-                .font(CTFont.regular(10))
+            Text(LogRedaction.redact("event: \(entry.event)"))
+                .font(CTFont.mono(10))
                 .foregroundStyle(Color.CT.textDim)
             if !entry.effects.isEmpty {
-                Text("effects: [\(entry.effects.joined(separator: ", "))]")
-                    .font(CTFont.regular(10))
+                Text(LogRedaction.redact("effects: [\(entry.effects.joined(separator: ", "))]"))
+                    .font(CTFont.mono(10))
                     .foregroundStyle(Color.CT.textDim)
             }
             Rectangle()
@@ -188,11 +180,11 @@ struct TransportDiagnosticsView: View {
     private func row(_ label: String, value: String) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
             Text(label)
-                .font(CTFont.regular(12))
+                .font(CTFont.mono(12))
                 .foregroundStyle(Color.CT.textDim)
                 .frame(width: 100, alignment: .leading)
-            Text(value)
-                .font(CTFont.regular(12))
+            Text(LogRedaction.redact(value))
+                .font(CTFont.mono(12))
                 .foregroundStyle(Color.CT.text)
                 .textSelection(.enabled)
         }

@@ -15,13 +15,13 @@ import SwiftProtobuf
 // incompatible with the version of SwiftProtobuf to which you are linking.
 // Please ensure that you are building against the same version of the API
 // that was used to generate this file.
-fileprivate struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobuf.ProtobufAPIVersionCheck {
+fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobuf.ProtobufAPIVersionCheck {
   struct _2: SwiftProtobuf.ProtobufAPIVersion_2 {}
   typealias Version = _2
 }
 
 /// DevicePlatform - Platform enumeration
-public enum Shared_Proto_Core_V1_DevicePlatform: SwiftProtobuf.Enum, Swift.CaseIterable {
+public nonisolated enum Shared_Proto_Core_V1_DevicePlatform: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
 
   /// Unspecified platform (must be 0)
@@ -87,7 +87,7 @@ public enum Shared_Proto_Core_V1_DevicePlatform: SwiftProtobuf.Enum, Swift.CaseI
 /// Used in DeviceId.capabilities field as bitmask
 /// Note: These are bitflag values, not sequential enum values
 /// Actual usage: capabilities = DEVICE_CAP_WEBRTC | DEVICE_CAP_MLS
-public enum Shared_Proto_Core_V1_DeviceCapabilities: SwiftProtobuf.Enum, Swift.CaseIterable {
+public nonisolated enum Shared_Proto_Core_V1_DeviceCapabilities: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
 
   /// Unspecified capability (must be 0)
@@ -172,7 +172,7 @@ public enum Shared_Proto_Core_V1_DeviceCapabilities: SwiftProtobuf.Enum, Swift.C
 
 /// UserId - Unique identifier for a user in the Construct network
 /// Federation-ready: supports @user:domain format
-public struct Shared_Proto_Core_V1_UserId: Sendable {
+public nonisolated struct Shared_Proto_Core_V1_UserId: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -214,7 +214,7 @@ public struct Shared_Proto_Core_V1_UserId: Sendable {
 
 /// DeviceId - Unique identifier for a user's device
 /// One user can have multiple devices (phone, desktop, tablet, web)
-public struct Shared_Proto_Core_V1_DeviceId: Sendable {
+public nonisolated struct Shared_Proto_Core_V1_DeviceId: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -268,17 +268,17 @@ public struct Shared_Proto_Core_V1_DeviceId: Sendable {
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
 
-fileprivate let _protobuf_package = "shared.proto.core.v1"
+fileprivate nonisolated let _protobuf_package = "shared.proto.core.v1"
 
-extension Shared_Proto_Core_V1_DevicePlatform: SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Core_V1_DevicePlatform: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0DEVICE_PLATFORM_UNSPECIFIED\0\u{1}DEVICE_PLATFORM_IOS\0\u{1}DEVICE_PLATFORM_ANDROID\0\u{1}DEVICE_PLATFORM_DESKTOP\0\u{1}DEVICE_PLATFORM_WEB\0\u{1}DEVICE_PLATFORM_BOT\0")
 }
 
-extension Shared_Proto_Core_V1_DeviceCapabilities: SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Core_V1_DeviceCapabilities: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0DEVICE_CAPABILITIES_UNSPECIFIED\0\u{1}DEVICE_CAPABILITIES_WEBRTC\0\u{1}DEVICE_CAPABILITIES_MLS\0\u{2}\u{2}DEVICE_CAPABILITIES_PQ_CRYPTO\0\u{2}\u{4}DEVICE_CAPABILITIES_SEALED_SENDER\0\u{2}\u{8}DEVICE_CAPABILITIES_PUSH\0\u{2}\u{10}DEVICE_CAPABILITIES_BACKGROUND_SYNC\0\u{2} DEVICE_CAPABILITIES_P2P_MESSAGING\0\u{2}@\u{1}DEVICE_CAPABILITIES_RELAY_NODE\0")
 }
 
-extension Shared_Proto_Core_V1_UserId: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Core_V1_UserId: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".UserId"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}user_id\0\u{1}domain\0\u{3}display_name\0\u{c}\u{4}\u{c}")
 
@@ -322,7 +322,7 @@ extension Shared_Proto_Core_V1_UserId: SwiftProtobuf.Message, SwiftProtobuf._Mes
   }
 }
 
-extension Shared_Proto_Core_V1_DeviceId: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Core_V1_DeviceId: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".DeviceId"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}user\0\u{3}device_id\0\u{1}platform\0\u{3}device_name\0\u{3}registered_at\0\u{3}last_seen\0\u{2}\u{a}capabilities\0\u{c}\u{11}\"")
 

@@ -8,6 +8,7 @@
 //
 
 import SwiftUI
+import Combine
 import CoreData
 import AppKit
 import UniformTypeIdentifiers
@@ -27,12 +28,22 @@ struct DesktopRootView: View {
     @Environment(\.commandBridge) private var commandBridge
     @Environment(\.openSettings) private var openSettings
     @Environment(\.openWindow) private var openWindow
-    @AppStorage("appTheme") private var appTheme: AppTheme = .automatic
+    @Environment(\.dismissWindow) private var dismissWindow
+    @AppStorage("appTheme") private var appTheme: AppTheme = .dark
     @AppStorage(OrientationStore.completedUserIdsKey) private var orientationCompletedUserIds = ""
 
     @State private var showAddContact = false
+    /// The recovery key, offered once right after the first orientation — same as iOS
+    /// `ContentView`. Contacts wait on it (`RecoveryGated`), so this is where it is asked for
+    /// before anyone reaches for an invite.
+    @State private var showingRecoveryPrompt = false
+    /// Read again when the recovery sheet closes: `AccountAddress` is not observable.
+    @State private var hasAccountAddress = AccountAddress.own() != nil
     @State private var callManager = CallManager.shared
     @State private var showReceiveHistorySync = false
+    /// Why the store is not open, or nil (`LocalRepositories.storeFailure`): read at launch, after
+    /// a retry, and whenever the store is replaced.
+    @State private var storeFailure = LocalRepositories.storeFailure
     @State private var historySyncPendingDeviceId: String? = nil
 
     private var orientationCompletedForCurrentUser: Bool {
@@ -42,30 +53,25 @@ struct DesktopRootView: View {
         )
     }
 
-    /// Derives the Nearby-transfer PIN for the post-link history sync. The `pendingDeviceId` the
-    /// phone hashed is THIS device's freshly-linked deviceId (it generated the join request under
-    /// it), which equals `KeychainManager.loadDeviceID()`. Prefer the value plumbed through the
-    /// link phase, but fall back to our own deviceId so the auto-PIN survives a dropped/late phase
-    /// hand-off (otherwise the receiver degrades to a manual 6-digit PIN prompt).
-    private func historySyncPairingPIN(for pendingId: String?) -> String? {
-        guard let userId = authViewModel.currentUserId ?? KeychainManager.shared.loadUserID(),
-              !userId.isEmpty else { return nil }
-        let resolvedPendingId = (pendingId?.isEmpty == false ? pendingId : nil)
-            ?? KeychainManager.shared.loadDeviceID()
-        guard let resolvedPendingId, !resolvedPendingId.isEmpty else { return nil }
-        return HistorySyncPairing.pin(pendingDeviceId: resolvedPendingId, userId: userId)
-    }
-
     var body: some View {
         Group {
-            if authViewModel.hasRegisteredDeviceKeys == nil {
+            if storeFailure != nil {
+                // Before anything else: no screen of the app runs on a store that is not open.
+                NavigationStack {
+                    KeysRecoveryView(reason: .storeUnreadable) {
+                        storeFailure = LocalRepositories.openAppStoreIfNeeded()
+                    }
+                }
+                .environment(authViewModel)
+            } else if authViewModel.hasRegisteredDeviceKeys == nil {
                 SplashView()
             } else if authViewModel.deviceKeysUnavailable {
-                KeysRecoveryView()
+                // A screen of its own, so it brings the stack its title needs.
+                NavigationStack { KeysRecoveryView() }
                     .environment(authViewModel)
             } else if authViewModel.deviceDeregistered {
                 // Server rejected this device as unregistered — recover, don't wipe silently.
-                KeysRecoveryView(reason: .deviceDeregistered)
+                NavigationStack { KeysRecoveryView(reason: .deviceDeregistered) }
                     .environment(authViewModel)
             } else if authViewModel.isAuthenticated || authViewModel.hasRegisteredDeviceKeys == true {
                 if orientationCompletedForCurrentUser {
@@ -83,6 +89,24 @@ struct DesktopRootView: View {
         }
         .errorToast()
         .preferredColorScheme(appTheme.colorScheme)
+        // The People window outlives a sign-out and its @FetchRequest keeps faults into the store
+        // that was just replaced; the next redraw raises. Close it with the data it was showing.
+        .onReceive(NotificationCenter.default.publisher(for: .localStoreReplaced).receive(on: DispatchQueue.main)) { _ in
+            dismissWindow(id: DesktopWindowID.synaps)
+            storeFailure = LocalRepositories.storeFailure
+        }
+        .onChange(of: orientationCompletedForCurrentUser) { _, completed in
+            if completed, AccountAddress.own() == nil {
+                showingRecoveryPrompt = true
+            }
+        }
+        .onChange(of: showingRecoveryPrompt) { _, showing in
+            if !showing { hasAccountAddress = AccountAddress.own() != nil }
+        }
+        .sheet(isPresented: $showingRecoveryPrompt) {
+            RecoveryGateView(reason: .afterRegistration).sheetNavigation(closes: false)
+                .frame(minWidth: 460, minHeight: 560)
+        }
         .onAppear {
             authViewModel.refreshDeviceKeyState()
             chatsViewModel.setContext(viewContext)
@@ -91,12 +115,7 @@ struct DesktopRootView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .openChatForKeyChange)) { note in
             guard let userId = note.userInfo?["userId"] as? String, !userId.isEmpty else { return }
-            let fetch = User.fetchRequest()
-            fetch.predicate = NSPredicate(format: "id == %@", userId)
-            fetch.fetchLimit = 1
-            if let user = try? viewContext.fetch(fetch).first {
-                chatsViewModel.openOrCreateChat(with: user)
-            }
+            chatsViewModel.openOrCreateChat(withContact: userId)
         }
         .onReceive(NotificationCenter.default.publisher(for: .appWillEnterForeground)) { _ in
             if AuthSessionManager.shared.sessionToken == nil || !AuthSessionManager.shared.isSessionValid
@@ -135,6 +154,7 @@ struct DesktopRootView: View {
             NSApplication.shared.dockTile.badgeLabel = count > 0 ? "\(count)" : nil
         }
         .onChange(of: authViewModel.deviceLinkPhase) { _, phase in
+            Log.info("Desktop deviceLinkPhase → \(phase)", category: "DeviceLink")
             if case .historySyncReceive(let pendingId) = phase {
                 historySyncPendingDeviceId = pendingId
                 showReceiveHistorySync = true
@@ -274,8 +294,8 @@ struct DesktopRootView: View {
     @ViewBuilder
     private var detailPane: some View {
         if let chatId = chatsViewModel.chatToOpen,
-                  let chat = fetchChat(id: chatId) {
-            DesktopChatView(chat: chat, context: viewContext)
+           let conversation = ChatsLive.shared.conversation(chatId) {
+            DesktopChatView(conversation: conversation, context: viewContext)
                 // Identity, not decoration. `DesktopChatView` seeds its `ChatViewModel` and every
                 // editing scrap — draft text, reply target, selection, search — from `@State`, and
                 // `@State` takes its initial value once per identity. The detail column keeps the
@@ -285,13 +305,38 @@ struct DesktopRootView: View {
                 // because it pushes onto a NavigationStack, where every push is a new identity.
                 .id(chatId)
                 .onDrop(of: [.image, .fileURL], isTargeted: nil) { providers in
-                    handleDrop(providers: providers, into: chat)
+                    handleDrop(providers: providers)
                 }
         } else {
-            DesktopEmptyStateView()
+            DesktopEmptyStateView(
+                hasAddress: hasAccountAddress,
+                onAddContact: { showAddContact = true },
+                onSetUpRecovery: { showingRecoveryPrompt = true }
+            )
                 .navigationTitle(NSLocalizedString("construct_title", comment: ""))
+                // The same toolbar shape as an open chat (`DesktopChatView`): the system title
+                // removed and the name as a navigation item.
+                .toolbar(removing: .title)
+                .toolbar { emptyStateToolbar }
                 .onDrop(of: [.fileURL], isTargeted: nil) { _ in false }
         }
+    }
+
+    @ToolbarContentBuilder
+    private var emptyStateToolbar: some ToolbarContent {
+        if #available(macOS 26.0, *) {
+            ToolbarItem(placement: .navigation) { emptyStateTitle }
+                .sharedBackgroundVisibility(.hidden)
+        } else {
+            ToolbarItem(placement: .navigation) { emptyStateTitle }
+        }
+    }
+
+    private var emptyStateTitle: some View {
+        Text(NSLocalizedString("construct_title", comment: ""))
+            .font(CTFont.headline)
+            .foregroundStyle(Color.CT.text)
+            .lineLimit(1)
     }
 
     private var sidebarPane: some View {
@@ -299,16 +344,26 @@ struct DesktopRootView: View {
             .environment(chatsViewModel)
             .background(Color.CT.bg)
             .navigationTitle(NSLocalizedString("chats", comment: ""))
-            .toolbar {
-                ToolbarItem(placement: .primaryAction) {
-                    Button {
-                        openWindow(id: DesktopWindowID.synaps)
-                    } label: {
-                        Image(systemName: "person.2")
-                    }
-                    .help(NSLocalizedString("people", comment: ""))
-                }
-            }
+            .safeAreaInset(edge: .bottom, spacing: 0) { synapsesBar }
+    }
+
+    /// The door to Synapses, under the chats — where iOS keeps its tab, with the tab's symbol
+    /// and name. Synapses stays its own window (D2); until 2026-10-13 the door was an unlabeled
+    /// `person.2` in the sidebar's title bar, a symbol iOS uses nowhere for it.
+    private var synapsesBar: some View {
+        Button {
+            openWindow(id: DesktopWindowID.synaps)
+        } label: {
+            Label(NSLocalizedString("synapses", comment: ""), systemImage: "circle.grid.cross")
+                .font(CTFont.body)
+                .foregroundStyle(Color.CT.text)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .padding(.horizontal, CTLayout.edgePad)
+        .padding(.vertical, CTLayout.navVPad)
+        .ctBorderTop()
     }
 
     // MARK: - Call state helpers
@@ -347,7 +402,7 @@ struct DesktopRootView: View {
 
     // MARK: - Drag & Drop into chat
 
-    private func handleDrop(providers: [NSItemProvider], into chat: Chat) -> Bool {
+    private func handleDrop(providers: [NSItemProvider]) -> Bool {
         var handled = false
         for provider in providers {
             if provider.hasItemConformingToTypeIdentifier("public.image") {
@@ -373,29 +428,14 @@ struct DesktopRootView: View {
         return handled
     }
 
-    private func fetchChat(id: String) -> Chat? {
-        let req = Chat.fetchRequest()
-        req.predicate = NSPredicate(format: "id == %@", id)
-        req.fetchLimit = 1
-        return try? viewContext.fetch(req).first
-    }
-
     // MARK: - Deep links
 
     private func handleDeepLink(_ deepLink: DeepLinkType?) {
         Log.debug("DesktopRootView: Deep link changed: \(String(describing: deepLink))", category: "DeepLink")
         if case .contact(let contactInfo) = deepLink {
             Log.info("DesktopRootView: Creating chat for userId: \(contactInfo.userId)", category: "DeepLink")
-            let publicUserInfo = PublicUserInfo(
-                id: contactInfo.userId,
-                username: contactInfo.username,
-                avatarUrl: nil,
-                bio: nil,
-                deviceId: contactInfo.deviceId
-            )
             if let chat = chatsViewModel.startChat(
-                with: publicUserInfo,
-                identityPublicKey: contactInfo.identityPublicKey
+                redeeming: contactInfo
             ) {
                 chatsViewModel.chatToOpen = chat.id
                 InviteRedeemUX.presentPostRedeemSafety(for: contactInfo)
@@ -416,7 +456,7 @@ struct DesktopRootView: View {
 #Preview("Empty state (no chat selected)") {
     // Shows the detail pane when no conversation is open — quick layout check
     // without needing to launch the full app.
-    DesktopEmptyStateView()
+    DesktopEmptyStateView(hasAddress: false, onAddContact: {}, onSetUpRecovery: {})
         .frame(width: 760, height: 500)
 }
 

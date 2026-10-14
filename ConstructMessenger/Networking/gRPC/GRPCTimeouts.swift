@@ -18,6 +18,8 @@ enum GRPCTimeouts {
 
     // VEIL capability renewal (in-band, short unary call)
     static let issueVeilCapability: TimeInterval = NetworkTiming.GRPC.Timeouts.refreshToken
+    /// `ServerTrustService.GetServerTrust` — a small read, the same budget as a token refresh.
+    static let serverTrust: TimeInterval = NetworkTiming.GRPC.Timeouts.refreshToken
 
     // Device linking
     static let initiateDeviceLink: TimeInterval = NetworkTiming.GRPC.Timeouts.initiateDeviceLink
@@ -28,7 +30,7 @@ enum GRPCTimeouts {
     // Messaging (interactive)
     static let sendMessage: TimeInterval = NetworkTiming.GRPC.Timeouts.sendMessage
     static let editMessage: TimeInterval = NetworkTiming.GRPC.Timeouts.editMessage
-    static let endSession: TimeInterval = NetworkTiming.GRPC.Timeouts.endSession
+    static let controlSend: TimeInterval = NetworkTiming.GRPC.Timeouts.controlSend
 
     // Messaging (background/service)
     static let getPendingMessages: TimeInterval = NetworkTiming.GRPC.Timeouts.getPendingMessages
@@ -36,6 +38,8 @@ enum GRPCTimeouts {
     // Key service (session init / rotations)
     static let getPreKeyBundle: TimeInterval = NetworkTiming.GRPC.Timeouts.getPreKeyBundle
     static let getPreKeyBundles: TimeInterval = NetworkTiming.GRPC.Timeouts.getPreKeyBundles
+    static let stickerManifest: TimeInterval = NetworkTiming.GRPC.Timeouts.stickerManifest
+    static let stickerPack: TimeInterval = NetworkTiming.GRPC.Timeouts.stickerPack
     static let uploadPreKeys: TimeInterval = NetworkTiming.GRPC.Timeouts.uploadPreKeys
     static let getPreKeyCount: TimeInterval = NetworkTiming.GRPC.Timeouts.getPreKeyCount
     static let rotateSignedPreKey: TimeInterval = NetworkTiming.GRPC.Timeouts.rotateSignedPreKey

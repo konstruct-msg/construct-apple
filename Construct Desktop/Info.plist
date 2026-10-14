@@ -10,6 +10,13 @@
 	  silently returns nothing. GENERATE_INFOPLIST_FILE=YES merges the standard
 	  generated keys on top of this seed.
 	-->
+	<!--
+	  JetBrains Mono ships in the shared ConstructMessenger folder and lands flattened in
+	  Resources/, so the fonts path is the resources root. Without this key the theme silently
+	  falls back to SF Mono, exactly as it did on every build before the family was bundled.
+	-->
+	<key>ATSApplicationFontsPath</key>
+	<string>.</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Konstruct uses the local network to transfer your message history to a newly linked device over Wi‑Fi.</string>
 	<key>NSBonjourServices</key>

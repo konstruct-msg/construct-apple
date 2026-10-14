@@ -31,13 +31,16 @@ enum VeilProxyStore {
 
     /// Feature flag: terminate the veil-front TLS in Swift Network.framework
     /// (native Apple ClientHello fingerprint) instead of rustls-Chrome131, via
-    /// `VeilFrontExternalDialer` (review §3.1 variant A). **Opt-in, default off** —
-    /// the rustls coordinator path stays the default until this path is validated
-    /// on-device, and it only applies when a veil-front relay with AUTH material is
-    /// selected. Off / non-Apple platforms use the rustls path unchanged.
+    /// `VeilFrontExternalDialer` (review §3.1 variant A). **Default on** — validated
+    /// on-device 2026-10-08 (iOS 27, real network): after the min-TLS 1.2 fix the
+    /// dialer's ClientHello is byte-for-byte a Safari hello (JA3 ecdf4f49…), vs the
+    /// rustls-Chrome131 fingerprint it replaces. It only applies when a veil-front
+    /// relay with AUTH material is selected, and falls back to rustls if there is no
+    /// pinned SPKI / AUTH material or the dial fails. An explicit stored value still
+    /// overrides. Non-Apple platforms use the rustls path unchanged.
     static let veilFrontNativeTLSKey = "veil_front_native_tls"
     static var veilFrontNativeTLS: Bool {
-        get { UserDefaults.standard.object(forKey: veilFrontNativeTLSKey) as? Bool ?? false }
+        get { UserDefaults.standard.object(forKey: veilFrontNativeTLSKey) as? Bool ?? true }
         set { UserDefaults.standard.set(newValue, forKey: veilFrontNativeTLSKey) }
     }
 
@@ -57,6 +60,18 @@ enum VeilProxyStore {
         UserDefaults.standard.set(mode.rawValue, forKey: modeKey)
         // Keep the legacy key in sync for older fast-path readers and migration safety.
         UserDefaults.standard.set(mode == .on, forKey: legacyEnabledKey)
+        publishForExtension(mode)
+    }
+
+    /// Tells the notification extension whether it may connect directly — it cannot read this
+    /// app's defaults, and its fetch would go around the tunnel. Written on every change and at
+    /// launch (`GRPCChannelManager`), so a mode set before this existed is published too.
+    static func publishForExtension(_ mode: VeilMode) {
+        _ = KeychainManager.shared.saveData(
+            ExtensionDirectPath.published(allowed: mode.allowsDirectPath),
+            forKey: KeychainSessionAccounts.extensionDirectPath,
+            accessible: KeychainManager.cryptoKeyAccessible
+        )
     }
 
     static var modeMigrationKey: String {

@@ -28,6 +28,14 @@ jobs:
       - name: Locale parity, duplicates, unresolved keys, format specifiers
         run: ./scripts/check_localization.sh
 
+  ui-tokens:
+    # The design-token debt may shrink, never grow (vault TODO 122). Pure grep.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: No new hand-sized symbols, text styles or colour literals past the tokens
+        run: ./scripts/check_ui_tokens.sh
+
   appstore-metadata:
     # Apple reports an over-length field at upload, once the copy has already been
     # written, reviewed and translated four times. Counting characters here costs a
@@ -37,6 +45,16 @@ jobs:
       - uses: actions/checkout@v4
       - name: Store listing fields fit Apple's limits, in every locale
         run: ./scripts/check_appstore_metadata.sh
+
+  build-versions:
+    # The app and its notification extension must carry one version; App Store Connect rejects
+    # the pair at upload when they differ. Both inherit it from the project, and a build number
+    # typed on a target's General tab quietly breaks that. Pure text, no Xcode.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: The app and its extension inherit one version from the project
+        run: ./scripts/check_build_versions.sh
 
   agents-md:
     # AGENTS.md is the one file every agent reads, and it was the one file nothing checked.

@@ -8,6 +8,7 @@
 import Foundation
 import CoreData
 import CryptoKit
+import GRPCCore
 #if canImport(UIKit)
 import UIKit
 #endif
@@ -58,8 +59,19 @@ class AuthViewModel {
         hasRegisteredDeviceKeys = KeychainManager.shared.loadDeviceID() != nil
     }
     
-    // ✅ REFACTOR Phase 1.2: Single source of truth - Core Data User entity
-    var currentUser: User?
+    /// Our own profile, read when asked. It is written in several places (settings, profile
+    /// sharing, this model's login) and a copy held here would go stale after the first of them;
+    /// the managed `User` this replaces stayed current by being refreshed under us.
+    var currentUser: OwnProfileRecord? {
+        #if DEBUG
+        if let previewProfile { return previewProfile }
+        #endif
+        guard let currentUserId else { return nil }
+        return try? LocalRepositories.ownProfile.profile(accountId: currentUserId)
+    }
+    #if DEBUG
+    private var previewProfile: OwnProfileRecord?
+    #endif
     
     // ✅ Computed properties for convenience (backwards compatibility)
     var currentUsername: String {
@@ -93,6 +105,23 @@ class AuthViewModel {
             refreshDeviceKeyState()
             return
         }
+        beginRuntime()
+    }
+
+    private var runtimeStarted = false
+
+    /// The runtime of a model created with `startRuntime: false` — on iOS once the store import
+    /// at launch has finished (`StoreImportView`): nothing may write to Core Data while it copies.
+    /// Idempotent.
+    func startDeferredRuntime() {
+        beginRuntime()
+    }
+
+    private func beginRuntime() {
+        guard !runtimeStarted else { return }
+        runtimeStarted = true
+        // Back to Splash while the session restores, as on a launch that started it at once.
+        hasRegisteredDeviceKeys = nil
         setupSubscribers()
         startTokenRefreshMonitoring()
         setupSessionExpiredListener()
@@ -195,7 +224,12 @@ class AuthViewModel {
             #if os(macOS)
             Log.debug("Post-auth key maintenance (\(reason), Desktop direct core path)", category: "Auth")
             #endif
-            await PQCKeyManager.migrateIfNeeded(deviceId: deviceId)
+            // Kyber first: its first publish carries the hybrid identity in the same request, which
+            // is what lets the server check the hybrid signature on every Kyber key. The hybrid
+            // publish after it then finds nothing left to do, or re-attaches the classic SPK's
+            // signature after a rotation.
+            await KyberPrekeyService.publishIfNeeded(deviceId: deviceId)
+            Self.announceAppLaunchedOnce()
             await HybridIdentityService.publishIfNeeded(deviceId: deviceId)
             await PreKeyRotationService.shared.rotateIfNeeded(deviceId: deviceId)
             await Self.logOwnDeviceSet(userId: userId, thisDeviceId: deviceId)
@@ -203,6 +237,27 @@ class AuthViewModel {
         Task { [weak self] in
             guard self != nil else { return }
             await ServerKeyManager.shared.prefetch()
+        }
+    }
+
+    private static var appLaunchAnnounced = false
+
+    /// Tell the core the app has launched, once per process: it answers with the launch timers,
+    /// among them `pq_upgrade_sweep`, which reopens pre-v2 classical sessions as PQXDH v2 15 s later.
+    ///
+    /// Nothing sent this event until 2026-09-25 — the enum case existed only in the logging
+    /// switch — so the upgrade sweep never ran on iOS and every classical session stayed
+    /// classical. Here and not at core init because the reopen it leads to fetches the peer's
+    /// bundle, which needs an authenticated transport; once, because re-auth runs this path again
+    /// and the core would re-arm the timers each time.
+    private static func announceAppLaunchedOnce() {
+        guard !appLaunchAnnounced else { return }
+        do {
+            let actions = try CryptoManager.shared.handleOrchestratorEvent(.appLaunched, tag: "post_auth")
+            appLaunchAnnounced = true
+            SessionActionExecutor.shared.executeOffRouter(actions, site: "app_launched")
+        } catch {
+            Log.error("AppLaunched not delivered to the core: \(error)", category: "Auth")
         }
     }
 
@@ -263,8 +318,9 @@ class AuthViewModel {
     
     /// Restore existing session OR authenticate with device keys
     func restoreOrAuthenticateDevice() async {
-        // Registration is in progress — don't interfere. The stream's UNAUTHENTICATED
-        // errors would otherwise fire repeated re-auth attempts every few seconds.
+        // Registration or a join request is in progress — don't interfere. The stream's
+        // UNAUTHENTICATED errors would otherwise fire repeated re-auth attempts every few seconds,
+        // and a join request's keys read as "Device not found" until the phone approves them.
         if isRegistrationInProgress { return }
         // Coalesce repeated calls (scenePhase, permission prompts, etc.)
         if restoreInFlight { return }
@@ -390,7 +446,7 @@ class AuthViewModel {
             // `DeviceKeyAvailability`. Send it to the same recovery screen the token-refresh
             // path has always used.
             handleLostDeviceKeys(userId: currentUserId ?? "", reason: "device auth: \(detail)")
-        case .failed(let description):
+        case .failed(let description, let overDirectTLS, let refusal):
             Log.info("Device authentication failed: \(description)", category: "Auth")
 
             // Only wipe device keys when the server explicitly rejects this device
@@ -418,6 +474,16 @@ class AuthViewModel {
                         Log.info("Device not registered yet — routing back to registration (pending bundle found)", category: "Auth")
                         // Keep keys; RegistrationFlowView will pick them up and retry.
                         hasRegisteredDeviceKeys = false
+                    } else if Self.isRemovedDevice(refusal, overDirectTLS: overDirectTLS) {
+                        // Another device of the account removed this one, or it signed out
+                        // elsewhere: the server deactivates the row and never reactivates it.
+                        // Everything the account left here goes (`LocalDataWipe`).
+                        Log.error("Server says this device was removed — wiping it", category: "Auth")
+                        performLocalSignOut()
+                        ErrorRouter.shared.presentNotice(
+                            NSLocalizedString("device_removed_notice", comment: ""),
+                            autoDismissAfter: 10
+                        )
                     } else {
                         // Server says this device is unregistered, but we still hold valid
                         // crypto keys. Do NOT wipe — a wipe would silently destroy the identity
@@ -434,6 +500,23 @@ class AuthViewModel {
         }
     }
     
+    /// The server's answer for a device whose row it deactivated — `RevokeDevice`, or `Logout` from
+    /// this device's own session elsewhere — and nothing else. Deactivation is permanent, so this is
+    /// the one rejection that may wipe. `.notFound` is not it: an unapproved join request answers
+    /// that too, and so would a server that lost its rows.
+    ///
+    /// The number, never the status text (`DeviceRefusalReading`). A server older than the number
+    /// sends none, and then nothing wipes — the safe side of the two.
+    ///
+    /// Only over a direct TLS connection to our server. Through VEIL the client speaks plaintext
+    /// gRPC to the relay, and a relay able to forge this answer would be able to erase the device.
+    /// A removed device reached only through VEIL keeps its data until it connects directly.
+    nonisolated static func isRemovedDevice(
+        _ refusal: Shared_Proto_Services_V1_DeviceRefusal, overDirectTLS: Bool
+    ) -> Bool {
+        overDirectTLS && refusal == .removed
+    }
+
     /// Legacy method - kept for backward compatibility
     func restoreSession() {
         Task { [weak self] in
@@ -537,6 +620,12 @@ class AuthViewModel {
         isAuthenticated = true
         hasRegisteredDeviceKeys = true
 
+        if outcome.role == .linkedNewDevice {
+            // A device that joins an account has not seen its phrase, so it holds no address for
+            // it. One left from an earlier account on this device would go into the cards.
+            KeychainManager.shared.deleteOwnAccountAddress()
+        }
+
         if outcome.role == .linkedNewDevice, !CryptoManager.shared.isInitialized {
             CryptoManager.shared.resetOrchestratorStateForDeviceLink()
             CryptoManager.shared.setLocalUserId(outcome.userId)
@@ -551,6 +640,7 @@ class AuthViewModel {
             return
         }
 
+        Log.info("Post-link history sync offered role=\(outcome.role)", category: "DeviceLink")
         switch outcome.role {
         case .linkedNewDevice:
             #if os(macOS)
@@ -591,7 +681,7 @@ class AuthViewModel {
         guard !userId.isEmpty else { return }
 
         let stored = LocalStoreOwnership.storedOwner()
-        let hasData = localStoreHasUserData()
+        let hasData = localStoreHasUserData(previousOwner: stored)
 
         switch LocalStoreOwnership.disposition(
             storedOwner: stored,
@@ -613,16 +703,14 @@ class AuthViewModel {
 
     /// True when the store holds anything that identifies people or conversations.
     ///
-    /// Deliberately narrow: these three are what leaked. Counting `Message` alone would miss a
-    /// contact list with no transcript, which is the more sensitive half.
-    private func localStoreHasUserData() -> Bool {
-        guard let context = PersistenceController.shared.safeViewContext else { return false }
-        for entityName in ["User", "Chat", "Message"] {
-            let request = NSFetchRequest<NSFetchRequestResult>(entityName: entityName)
-            request.fetchLimit = 1
-            if let count = try? context.count(for: request), count > 0 { return true }
-        }
-        return false
+    /// Deliberately narrow: people (a contact list with no transcript is the more sensitive half),
+    /// chats (a message needs its chat), and the last owner's own profile, which the crate keeps
+    /// apart from the people and Core Data keeps among them.
+    private func localStoreHasUserData(previousOwner: String?) -> Bool {
+        let people = (try? LocalRepositories.contacts.everyContact(except: nil)) ?? []
+        let chats = (try? LocalRepositories.chats.chats()) ?? []
+        let ownProfile = previousOwner.flatMap { try? LocalRepositories.ownProfile.profile(accountId: $0) }
+        return !people.isEmpty || !chats.isEmpty || ownProfile != nil
     }
 
     /// Deletes every entity the previous identity could have left behind.
@@ -631,6 +719,12 @@ class AuthViewModel {
     /// paths having three different lists is how `performLocalSignOut` ended up never clearing
     /// Core Data at all.
     private func wipeLocalStoreContents() {
+        // The store goes whole, under its key, and an empty one replaces it — macOS, and iOS once
+        // the install has moved to `construct.db`.
+        if LocalRepositories.isOnStore {
+            LocalRepositories.replaceAppStore()
+            return
+        }
         guard let context = PersistenceController.shared.safeViewContext else {
             Log.error("Local store wipe skipped — no persistent store", category: "Auth")
             return
@@ -651,14 +745,31 @@ class AuthViewModel {
                 Log.error("Failed to wipe \(entityName): \(error)", category: "Auth")
             }
         }
+        // What macOS takes with the store lives outside Core Data here: the invite journal and
+        // the fan-out queue in `UserDefaults`, partial messages in sealed files.
+        Self.forgetServiceRows()
         Log.info("Local store wiped — previous identity's data removed", category: "Auth")
+    }
+
+    /// The previous identity's service rows on iOS: issued invites, owed fan-out copies, partial
+    /// messages. Each through its own owner, so none keeps a copy of them in memory.
+    static func forgetServiceRows() {
+        do {
+            let invites = LocalRepositories.issuedInvites
+            try invites.delete(jtis: invites.all().map(\.jti))
+        } catch {
+            Log.error("Ownership gate: issued invites not removed: \(error)", category: "Auth")
+        }
+        InviteJournal.shared.reload()
+        FanoutRetryQueue.shared.removeAll()
+        PendingReassemblyStore.shared.removeAll()
     }
 
     /// Every entity that carries user data. One list, used by both the ownership gate and
     /// account deletion.
     static let userDataEntityNames = [
         "Message", "HealingMessage", "ProcessedMessage", "CallRecord", "Chat", "User",
-        "Reaction", "PeerDevice"
+        "Reaction", "PeerDevice", "ServerMessageId"
     ]
 
     /// Handles the critical case where the user is authenticated (has a session token) but
@@ -733,7 +844,6 @@ class AuthViewModel {
         isAuthenticated = false
         hasRegisteredDeviceKeys = false
         currentUserId = nil
-        currentUser = nil
         OrientationStore.reset()
     }
 
@@ -741,8 +851,9 @@ class AuthViewModel {
         Task { [weak self] in
             guard let self else { return }
             if AuthSessionManager.shared.sessionToken != nil {
-                await SessionLifecycleController.shared.sendEndSessionToAllContacts(reason: "logout")
-                Log.info("END_SESSION sent to all contacts on logout", category: "Auth")
+                // Nothing is announced to contacts: the device leaves the account's directory,
+                // and a peer's next message to it is answered by nobody. Until 2026-09-27 an
+                // END_SESSION went to every contact here.
                 do {
                     try await AuthServiceClient.shared.logout()
                 } catch {
@@ -756,7 +867,8 @@ class AuthViewModel {
         }
     }
 
-    /// Wipes local session + device identity so ContentView routes back to onboarding.
+    /// Wipes the session, the device identity and every local trace of the account
+    /// (`LocalDataWipe`), so ContentView routes back to onboarding.
     /// Safe to call when the server logout RPC is unavailable (revoked/inactive device).
     func performLocalSignOut() {
         cancelTimeouts()
@@ -771,12 +883,15 @@ class AuthViewModel {
         UserDefaults.standard.removeObject(forKey: "recovery_banner_dismissed")
         UserDefaults.standard.removeObject(forKey: "cr_pending_nav_user_ids")
         OrientationStore.reset()
+        // Signing out leaves nothing of the account on this device: the transcript used to stay
+        // for a later seed recovery of the same account. History moves between devices now, and
+        // a device that was signed out — or removed — must not keep reading as the account.
+        LocalDataWipe.run(reason: "sign_out")
         deviceLinkPhase = .idle
         deviceKeysUnavailable = false
         deviceDeregistered = false
         isAuthenticated = false
         currentUserId = nil
-        currentUser = nil
         hasRegisteredDeviceKeys = false
         Log.info("Local sign-out complete — routing to onboarding", category: "Auth")
     }
@@ -816,19 +931,19 @@ class AuthViewModel {
                     self.cancelTimeouts()
                     self.isLoading = false
                     self.deleteAccountFailed = true
-                    ErrorRouter.shared.report(.unknown(Self.friendlyDeleteError(error)))
+                    ErrorRouter.shared.report(Self.friendlyDeleteError(error))
                 }
             }
         }
     }
 
-    private static func friendlyDeleteError(_ error: Error) -> String {
-        let desc = error.localizedDescription
-        // Only hide real error for unimplemented (code 12) — server endpoint not ready yet
-        if desc.contains("unimplemented") || desc == "GRPCCore.RPCError error 12" {
-            return NSLocalizedString("delete_account_not_available", comment: "")
+    private static func friendlyDeleteError(_ error: Error) -> AppError {
+        // Unimplemented (code 12): the server endpoint is not there yet.
+        if let rpc = error as? RPCError, rpc.code == .unimplemented {
+            return .said(UserText("delete_account_not_available"))
         }
-        return String(format: NSLocalizedString("delete_account_failed", comment: ""), desc)
+        // The reason is our own sentence for the failure, never the error's words.
+        return .said(UserText("delete_account_failed", AppError.from(error).userText.resolved))
     }
 
     /// Deletes all local data without contacting the server.
@@ -998,48 +1113,13 @@ class AuthViewModel {
         KeychainManager.shared.deleteDeviceKeys()
         KeychainManager.shared.deleteOtpks()
 
-        // Every `construct.*` key is classified as wiped-or-survives in `AccountWipeKeys`, and a
-        // test fails on an unclassified one. The inline array this replaces had never contained
-        // `construct.stream.cursor`, so a wipe left the resume cursor behind and the "clean start"
-        // resumed from the old watermark.
-        AccountWipeKeys.wipe()
-        
-        // Clear CoreData - delete all user's data
-        let context = viewContext
-        
-        guard context.persistentStoreCoordinator != nil else {
-            Log.info("Core Data persistent store coordinator not ready, skipping data deletion", category: "AuthViewModel")
-            isAuthenticated = false
-            currentUserId = nil
-            currentUser = nil
-            hasRegisteredDeviceKeys = false
-            return
-        }
-        
-        // Delete all entities using batch delete for efficiency. Same list the ownership gate
-        // uses — see `userDataEntityNames`.
-        for entityName in Self.userDataEntityNames {
-            let fetchRequest = NSFetchRequest<NSFetchRequestResult>(entityName: entityName)
-            let batchDelete = NSBatchDeleteRequest(fetchRequest: fetchRequest)
-            batchDelete.resultType = .resultTypeObjectIDs
-            do {
-                let result = try context.execute(batchDelete) as? NSBatchDeleteResult
-                if let objectIDs = result?.result as? [NSManagedObjectID], !objectIDs.isEmpty {
-                    NSManagedObjectContext.mergeChanges(
-                        fromRemoteContextSave: [NSDeletedObjectsKey: objectIDs],
-                        into: [context]
-                    )
-                }
-            } catch {
-                Log.error("Failed to delete \(entityName) from CoreData: \(error)", category: "AuthViewModel")
-            }
-        }
-        Log.info("All user data deleted from CoreData", category: "AuthViewModel")
+        // Rows, files, defaults — `LocalDataWipe`. It replaces the batch delete that stood here,
+        // which left the deleted rows' bytes in the SQLite file and never touched media.
+        LocalDataWipe.run(reason: "account_deleted")
 
         // Reset auth state
         isAuthenticated = false
         currentUserId = nil
-        currentUser = nil
         hasRegisteredDeviceKeys = false
 
         // The store is now empty and unowned. Leaving the old owner recorded would make the
@@ -1062,65 +1142,49 @@ class AuthViewModel {
             return
         }
         
-        // No more multi-account filtering
-        let fetchRequest = User.fetchRequest()
-        fetchRequest.predicate = NSPredicate(format: "id == %@", userId)
-        
         Log.info("loadUserFromCoreData: Searching for userId: \(userId)")
         if let username = username {
             Log.info("   Username from parameter: \(username)")
         }
-        
+
         do {
-            let user: User
-            var needsSave = false
-            
-            if let existingUser = try viewContext.fetch(fetchRequest).first {
-                user = existingUser
-                Log.info("Found existing user in Core Data: \(user.displayName)")
-                
+            let profiles = LocalRepositories.ownProfile
+            if var me = try profiles.profile(accountId: userId) {
+                Log.info("Found existing user in Core Data: \(me.displayName)")
                 // Update username if provided and different
-                if let newUsername = username, !newUsername.isEmpty {
-                    if user.username.isEmpty || user.username != newUsername {
-                        Log.info("Updating username: '\(user.username)' -> '\(newUsername)'")
-                        let oldUsername = user.username
-                        user.username = newUsername
-                        // Also update displayName if it's empty or was same as old username
-                        if user.displayName.isEmpty || user.displayName == oldUsername {
-                            user.displayName = newUsername
-                        }
-                        needsSave = true
+                if let newUsername = username, !newUsername.isEmpty, me.username != newUsername {
+                    Log.info("Updating username: '\(me.username)' -> '\(newUsername)'")
+                    let oldUsername = me.username
+                    me.username = newUsername
+                    // Also update displayName if it's empty or was same as old username
+                    if me.displayName.isEmpty || me.displayName == oldUsername {
+                        me.displayName = newUsername
+                        me.markEdited()
                     }
+                    try profiles.save(me)
+                    Log.info("Saved user changes to Core Data")
                 }
             } else {
                 Log.info("No user found, creating new user...")
-                // First login on this device, create a new User entity
-                user = User(context: viewContext)
-                user.id = userId
-                user.username = username ?? ""
-                user.displayName = username ?? ""
-                user.isSharingWithMe = false
-                user.isBlocked = false
-                user.amISharingWith = false
-                needsSave = true
+                // First login on this device: our row.
+                try profiles.save(OwnProfileRecord(
+                    accountId: userId, username: username ?? "", displayName: username ?? "",
+                    avatar: nil, profileEditedAtMs: 0
+                ))
                 Log.info("Created new user in Core Data for ID: \(userId)")
-                Log.info("   username: \(user.username)")
+                Log.info("   username: \(username ?? "")")
             }
-            
-            // Save if needed
-            if needsSave {
-                try viewContext.save()
-                Log.info("Saved user changes to Core Data")
+            guard let user = try profiles.profile(accountId: userId) else {
+                throw NSError(domain: "AuthViewModel", code: 1,
+                              userInfo: [NSLocalizedDescriptionKey: "own profile \(userId.prefix(8))… not written"])
             }
-            
-            // Set currentUser - single source of truth!
-            self.currentUserId = user.id
-            self.currentUser = user
-            CryptoManager.shared.setLocalUserId(user.id)
+
+            self.currentUserId = user.accountId
+            CryptoManager.shared.setLocalUserId(user.accountId)
             AuthSessionManager.shared.saveDisplayName(user.displayName.isEmpty ? (user.username.isEmpty ? "" : user.username) : user.displayName)
             
             Log.info("Restored user data from Core Data:")
-            Log.info("   userId: \(user.id)")
+            Log.info("   userId: \(user.accountId)")
             Log.info("   username: \(user.username)")
             Log.info("   displayName: \(user.displayName)")
             
@@ -1134,15 +1198,6 @@ class AuthViewModel {
 
 #if DEBUG
 extension AuthViewModel {
-    /// Creates a mock User for SwiftUI previews
-    static func createMockUser(context: NSManagedObjectContext, username: String = "john_doe", displayName: String = "John Doe") -> User {
-        let user = User(context: context)
-        user.id = UUID().uuidString
-        user.username = username
-        user.displayName = displayName
-        return user
-    }
-
     static func makePreview(
         context: NSManagedObjectContext,
         username: String = "john_doe",
@@ -1156,9 +1211,12 @@ extension AuthViewModel {
     /// Configures AuthViewModel for previews with mock data
     func configureMockAuth(username: String = "john_doe", displayName: String = "John Doe") {
         self.isAuthenticated = true
-        self.currentUserId = UUID().uuidString
+        let id = UUID().uuidString
+        self.currentUserId = id
         self.hasRegisteredDeviceKeys = true
-        self.currentUser = AuthViewModel.createMockUser(context: viewContext, username: username, displayName: displayName)
+        self.previewProfile = OwnProfileRecord(
+            accountId: id, username: username, displayName: displayName, avatar: nil, profileEditedAtMs: 0
+        )
     }
 }
 #endif

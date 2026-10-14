@@ -137,7 +137,7 @@ enum NetworkTiming {
             // Messaging (interactive)
             static let sendMessage: TimeInterval = 20
             static let editMessage: TimeInterval = 20
-            static let endSession: TimeInterval = 20
+            static let controlSend: TimeInterval = 20
 
             // Messaging (background/service)
             // 5s was too tight for VEIL+obfs4 RU paths — server's XREAD + response
@@ -149,6 +149,10 @@ enum NetworkTiming {
             // Key service (session init / rotations)
             static let getPreKeyBundle: TimeInterval = 20
             static let getPreKeyBundles: TimeInterval = 25
+            /// One small message.
+            static let stickerManifest: TimeInterval = 20
+            /// Up to 120 blobs of 100 KiB in one stream; a slow link gets a minute.
+            static let stickerPack: TimeInterval = 60
             static let uploadPreKeys: TimeInterval = 30
             static let getPreKeyCount: TimeInterval = 15
             static let rotateSignedPreKey: TimeInterval = 20
@@ -296,6 +300,9 @@ enum NetworkTiming {
         /// archived the session 1 s after CallKit start). Shorter than the 45 s offer
         /// wait — the user is staring at a dial tone, not an answered call.
         static let sessionReadyWait: TimeInterval = 12
+        /// How long an incoming call may ring unanswered before this side ends it with TIMEOUT.
+        /// Same value as Android's, so a call nobody picks up ends on both platforms at once.
+        static let unansweredIncomingTimeout: TimeInterval = 90
         static let sessionReadyPoll: TimeInterval = 0.2
         static let audioPreferredSampleRateHz: Double = 48_000
         static let audioPreferredIOBufferDuration: TimeInterval = 0.01

@@ -1,0 +1,91 @@
+//
+//  StickerPackFetcher.swift
+//  Construct Messenger
+//
+//  The wire half of the sticker service: the manifest, then every blob, over the
+//  unauthenticated channel. Nothing here is trusted — `StickerService` verifies the manifest
+//  and `StickerBlobStore` verifies every blob. This only moves bytes.
+//
+
+import Foundation
+import GRPCCore
+import SwiftProtobuf   // serializedData — explicit under #MemberImportVisibility
+
+/// The test seam. A fetcher returns bytes; what they mean is decided above it.
+protocol StickerPackFetching: Sendable {
+    /// The manifest's serialized bytes, exactly as the server holds them.
+    func manifestBytes(for pack: StickerPackID) async throws -> Data
+    /// Every blob of the pack the client does not already hold, delivered as they arrive.
+    /// `onBlob` may throw to abort the stream (a blob the store refused).
+    func blobs(
+        for pack: StickerPackID,
+        have: [Data],
+        onBlob: @escaping @Sendable (_ sha256: Data, _ data: Data) throws -> Void
+    ) async throws
+    /// The catalog, all pages.
+    func catalog() async throws -> [Shared_Proto_Services_V1_StickerPackSummary]
+    /// One blob by hash. A catalog cover, or cache repair — never a sticker on receive: that
+    /// is the per-sticker access pattern the design forbids.
+    func blob(_ sha256: Data) async throws -> Data
+}
+
+/// gRPC over the same channel prekey bundles use: the sealed one, which carries no credentials.
+/// The RPCs read no caller, so a pack fetch never needed an account; on the sealed channel the
+/// server does not see one at all.
+struct StickerPackFetcher: StickerPackFetching {
+
+    func manifestBytes(for pack: StickerPackID) async throws -> Data {
+        try await GRPCChannelManager.shared.performSealedRPC(timeout: GRPCTimeouts.stickerManifest) { grpc in
+            let client = Shared_Proto_Services_V1_StickerService.Client(wrapping: grpc)
+            var request = Shared_Proto_Services_V1_GetStickerPackManifestRequest()
+            request.packID = pack.bytes
+            let response = try await client.getStickerPackManifest(request: .init(message: request))
+            // Re-serialized from the decoded message: for this message the encoding is
+            // deterministic, and it is what every client hashes (knst_sticker_pack vectors).
+            return try response.manifest.serializedData()
+        }
+    }
+
+    func blobs(
+        for pack: StickerPackID,
+        have: [Data],
+        onBlob: @escaping @Sendable (_ sha256: Data, _ data: Data) throws -> Void
+    ) async throws {
+        try await GRPCChannelManager.shared.performSealedRPC(timeout: GRPCTimeouts.stickerPack) { grpc in
+            let client = Shared_Proto_Services_V1_StickerService.Client(wrapping: grpc)
+            var request = Shared_Proto_Services_V1_GetStickerPackBlobsRequest()
+            request.packID = pack.bytes
+            request.haveSha256 = have
+            try await client.getStickerPackBlobs(request: .init(message: request)) { response in
+                for try await message in response.messages {
+                    try onBlob(message.sha256, message.data)
+                }
+            }
+        }
+    }
+
+    func blob(_ sha256: Data) async throws -> Data {
+        try await GRPCChannelManager.shared.performSealedRPC(timeout: GRPCTimeouts.stickerManifest) { grpc in
+            let client = Shared_Proto_Services_V1_StickerService.Client(wrapping: grpc)
+            var request = Shared_Proto_Services_V1_GetStickerBlobRequest()
+            request.sha256 = sha256
+            return try await client.getStickerBlob(request: .init(message: request)).data
+        }
+    }
+
+    func catalog() async throws -> [Shared_Proto_Services_V1_StickerPackSummary] {
+        try await GRPCChannelManager.shared.performSealedRPC(timeout: GRPCTimeouts.stickerManifest) { grpc in
+            let client = Shared_Proto_Services_V1_StickerService.Client(wrapping: grpc)
+            var all: [Shared_Proto_Services_V1_StickerPackSummary] = []
+            var token = Data()
+            repeat {
+                var request = Shared_Proto_Services_V1_ListStickerPacksRequest()
+                request.pageToken = token
+                let page = try await client.listStickerPacks(request: .init(message: request))
+                all.append(contentsOf: page.packs)
+                token = page.nextPageToken
+            } while !token.isEmpty && all.count < StickerService.catalogCeiling
+            return all
+        }
+    }
+}

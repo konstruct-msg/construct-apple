@@ -32,7 +32,7 @@ import CryptoKit
 
 // MARK: - Errors
 
-enum NearbyTransferError: LocalizedError {
+enum NearbyTransferError: LocalizedError, UserFacingError {
     case authenticationFailed
     case connectionClosed
     case malformedFrame
@@ -42,18 +42,20 @@ enum NearbyTransferError: LocalizedError {
     case kemKeyIdMismatch
     case noHybridKey
 
-    var errorDescription: String? {
+    var userText: UserText {
         switch self {
-        case .authenticationFailed: return NSLocalizedString("transfer_error_auth", comment: "")
-        case .connectionClosed:     return NSLocalizedString("transfer_error_connection", comment: "")
-        case .malformedFrame:       return NSLocalizedString("transfer_error_corrupt", comment: "")
-        case .transferCancelled:    return NSLocalizedString("transfer_error_cancelled", comment: "")
-        case .v1RefusedForHistory:  return NSLocalizedString("transfer_error_history_v1_refused", comment: "")
-        case .qrPinMismatch:        return NSLocalizedString("history_sync_qr_pin_mismatch", comment: "")
-        case .kemKeyIdMismatch:     return NSLocalizedString("history_sync_kem_key_id_mismatch", comment: "")
-        case .noHybridKey:          return NSLocalizedString("history_sync_no_hybrid_key", comment: "")
+        case .authenticationFailed: return UserText("transfer_error_auth")
+        case .connectionClosed:     return UserText("transfer_error_connection")
+        case .malformedFrame:       return UserText("transfer_error_corrupt")
+        case .transferCancelled:    return UserText("transfer_error_cancelled")
+        case .v1RefusedForHistory:  return UserText("transfer_error_history_v1_refused")
+        case .qrPinMismatch:        return UserText("history_sync_qr_pin_mismatch")
+        case .kemKeyIdMismatch:     return UserText("history_sync_kem_key_id_mismatch")
+        case .noHybridKey:          return UserText("history_sync_no_hybrid_key")
         }
     }
+
+    var errorDescription: String? { userText.resolved }
 }
 
 // MARK: - Service
@@ -182,7 +184,7 @@ final class NearbyTransferService {
                 // cancel() already reset state
             } catch {
                 if !Task.isCancelled {
-                    transferState = .failed(error.localizedDescription)
+                    transferState = .failed(error.userFacingMessage)
                 }
             }
         }
@@ -204,7 +206,7 @@ final class NearbyTransferService {
                 // cancel() already reset state
             } catch {
                 if !Task.isCancelled {
-                    transferState = .failed(error.localizedDescription)
+                    transferState = .failed(error.userFacingMessage)
                 }
             }
         }
@@ -387,20 +389,17 @@ final class NearbyTransferService {
     // MARK: - Receiver Handshake
 
     private func receiverHandshake(conn: NWConnection, pin: String) async throws -> (SymmetricKey, TransferType, Int) {
-        // Two-step read: 46-byte prefix, then 6529 more only if version == 0x02.
-        let raw = try await receiveExact(conn, length: CTT1V2Layout.prefixCount)
-        let prefix = try CTT1V2Prefix.parse(raw)
-        if prefix.version == CTT1V2Layout.versionV2 {
-            // Remainder is consumed so a v2 peer is not left half-read. Full v2
-            // verify + reply is stage 6 (streaming). History must not fall through
-            // to PIN-HMAC.
-            _ = try await receiveExact(conn, length: CTT1V2Layout.openingAfterPrefixCount)
+        // The 46 bytes both CTT1 versions begin with. This listener is the v1 PIN-HMAC backup:
+        // a v2 frame is history, which travels through the core (HistoryNearbyChannel) and never
+        // falls through to PIN-HMAC, and history on v1 is refused before any PIN is compared.
+        let raw = try await receiveExact(conn, length: HandshakeFrame.byteCount)
+        if raw[raw.startIndex + 4] == 0x02 {
             throw NearbyTransferError.malformedFrame
         }
-        if prefix.type != .backup {
+        let frame = try HandshakeFrame.parse(raw)
+        if frame.type != .backup {
             throw NearbyTransferError.v1RefusedForHistory
         }
-        let frame = try HandshakeFrame.parse(raw)
         let senderPub = frame.senderPub
 
         let myKey = Curve25519.KeyAgreement.PrivateKey()

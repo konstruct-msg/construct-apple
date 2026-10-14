@@ -63,18 +63,23 @@ final class OutgoingMirrorTests: XCTestCase {
     }
 
     /// Mutation: call `sendSenderSync` directly from `MessageRetryManager` again — this reddens.
+    ///
+    /// Since 2026-09-22 the mirror has one half — the recipient's devices are reached by the
+    /// send itself (`OutboundMessagePipeline.sendToRecipientDevices`), which is why that name is
+    /// the second entry here: a send path that calls `sendSenderSync` and the pipeline separately
+    /// has re-created the two halves under new names.
     func testNobodyOutsideTheCoordinatorCallsOneHalfOfTheMirror() throws {
-        for half in ["sendSenderSync", "fanOutToRecipientDevices"] {
-            let outside = try callers(of: half)
-            XCTAssertTrue(
-                outside.isEmpty,
-                """
-                \(outside.sorted().joined(separator: ", ")) call \(half) directly.
-                A send path must mirror through `mirrorOutgoing`, which does both halves — \
-                calling one is how the retry path came to sync nothing and fan out nothing.
-                """
-            )
-        }
+        let outside = try callers(of: "sendSenderSync")
+        XCTAssertTrue(
+            outside.isEmpty,
+            """
+            \(outside.sorted().joined(separator: ", ")) call sendSenderSync directly.
+            A send path must mirror through `mirrorOutgoing` — calling the half is how the retry \
+            path came to sync nothing.
+            """
+        )
+        XCTAssertTrue(try callers(of: "fanOutToRecipientDevices").isEmpty,
+                      "the fan-out was removed with the primary send; nothing may grow one back")
     }
 
     /// Both retry branches have to call it, or the defect is back with the calls merely renamed.
@@ -99,28 +104,16 @@ final class OutgoingMirrorTests: XCTestCase {
 ///
 /// The stored wire payload cannot serve: it is ciphertext bound to one ratchet, so a copy for
 /// another device has to be re-encrypted from the message itself.
-@MainActor
 final class RecoveredWirePlaintextTests: XCTestCase {
 
-    private var context: NSManagedObjectContext!
-
-    override func setUp() {
-        super.setUp()
-        context = PersistenceController(inMemory: true).container.viewContext
-    }
-
-    override func tearDown() {
-        context = nil
-        super.tearDown()
-    }
-
-    private func makeMessage(text: String, contentType: MessageContentType = .regular) -> Construct_Messenger.Message {
-        let message = Construct_Messenger.Message(context: context)
-        message.id = UUID().uuidString
-        message.timestamp = Date()
-        message.decryptedContent = text
-        message.contentTypeRaw = contentType.rawValue
-        return message
+    private func makeMessage(text: String, contentType: MessageContentType = .regular) -> MessageRecord {
+        MessageRecord(
+            id: UUID().uuidString.lowercased(), chatId: "c", fromUserId: "me", toUserId: "peer",
+            isSentByMe: true, timestamp: Date(), orderKey: "k", body: LocalMessagePayload.encodeText(text),
+            contentType: contentType, deliveryStatus: .failed, retryCount: 0, suiteId: 4, isEdited: false,
+            editedAt: nil, replyToMessageId: nil, replyQuote: nil, transcript: nil,
+            transcriptLanguage: nil, transcriptGeneratedAt: nil
+        )
     }
 
     /// The recovered bytes must be the same shape the primary send used — a `MessageContent`
@@ -134,9 +127,9 @@ final class RecoveredWirePlaintextTests: XCTestCase {
 
     /// A reply keeps its quote: the mirror copy is the message, not an approximation of it.
     func testAReplyKeepsItsQuote() throws {
-        let message = makeMessage(text: "answering")
+        var message = makeMessage(text: "answering")
         message.replyToMessageId = "8a0c1f6e-0000-0000-0000-000000000001"
-        message.replyToContent = "the question"
+        message.replyQuote = "the question"
         let recovered = try XCTUnwrap(MessageRetryManager.recoverWirePlaintext(for: message))
         let content = try Shared_Proto_Messaging_V1_MessageContent(serializedBytes: recovered)
         XCTAssertEqual(content.text.quoted.messageID, "8a0c1f6e-0000-0000-0000-000000000001")

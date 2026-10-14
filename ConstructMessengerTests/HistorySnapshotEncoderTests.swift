@@ -11,10 +11,22 @@ import SwiftProtobuf
 import XCTest
 @testable import Construct_Messenger
 
+/// `@MainActor` because every test here works on `container.viewContext`, which belongs to the
+/// main queue. Without it the `async` test bodies ran on a cooperative-pool thread and fetched and
+/// saved that context off its queue; Core Data answers that with whatever the main queue happens
+/// to be doing at the moment — Cocoa 133010 "references outside of their own stores", or
+/// "_referenceData64 only defined for abstract class" on a temporary object id. That was TODO 120:
+/// it failed in full runs, where the main queue was busy, and passed alone.
+@MainActor
 final class HistorySnapshotEncoderTests: XCTestCase {
 
     private var container: NSPersistentContainer!
-    private var context: NSManagedObjectContext { container.viewContext }
+    /// Mutation: drop `@MainActor` from the class — every test fails here instead of one in
+    /// several full runs failing somewhere inside Core Data.
+    private var context: NSManagedObjectContext {
+        XCTAssertTrue(Thread.isMainThread, "viewContext used off the main queue — see the class comment")
+        return container.viewContext
+    }
 
     private let local = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee"
     private let peer = "11111111-2222-4333-8444-555555555555"
@@ -35,10 +47,23 @@ final class HistorySnapshotEncoderTests: XCTestCase {
     override func setUp() {
         super.setUp()
         container = PersistenceController(inMemory: true).container
+        LocalRepositories.usePeerDevicesForTesting(CoreDataPeerDeviceStore(container: container))
+        useRepositories(container)
         MessageDisplayCache.shared.evictAll()
     }
 
+    /// Every repository the encoder reads and the importer writes, over one device's store.
+    private func useRepositories(_ container: NSPersistentContainer?) {
+        LocalRepositories.usePeerDevicesForTesting(container.map { CoreDataPeerDeviceStore(container: $0) })
+        LocalRepositories.useContactsForTesting(container)
+        LocalRepositories.useChatsForTesting(container)
+        LocalRepositories.useMessagesForTesting(container)
+        LocalRepositories.useReactionsForTesting(container)
+        LocalRepositories.useCallsForTesting(container)
+    }
+
     override func tearDown() {
+        useRepositories(nil)
         MessageDisplayCache.shared.evictAll()
         container = nil
         super.tearDown()
@@ -49,10 +74,10 @@ final class HistorySnapshotEncoderTests: XCTestCase {
     func testFiveFixtureRowsAreClassified() async throws {
         try seedFiveFixtures()
         let encoder = HistorySnapshotEncoder(identity: identity)
-        let records = try await collect(encoder.encodeTranscript(context: context))
+        let records = try await collect(encoder.encodeTranscript(context: context)).records
         let messages = records.compactMap { rec -> Construct_Client_History_V1_HistoryMessage? in
-            if case .message(let m) = rec { return m }
-            return nil
+            guard case .transcript(HistoryRecordType.message, let proto) = rec else { return nil }
+            return try? Construct_Client_History_V1_HistoryMessage(serializedBytes: proto)
         }
         XCTAssertEqual(messages.count, 2, "normal + legacy text; the other three are skipped")
         XCTAssertEqual(encoder.counters.messageControlSkipped, 1)
@@ -71,8 +96,9 @@ final class HistorySnapshotEncoderTests: XCTestCase {
     func testEmittedBytesContainNoCTM1AndNoOmittedSecrets() async throws {
         try seedFiveFixtures()
         let encoder = HistorySnapshotEncoder(identity: identity)
-        let records = try await collect(encoder.encodeTranscript(context: context))
-        let bytes = try HistorySnapshotCodec.encode(records)
+        let records = try await collect(encoder.encodeTranscript(context: context)).records
+        // What reaches the core: each record's protobuf bytes.
+        let bytes = try records.map { try $0.wire().proto }.reduce(Data(), +)
         XCTAssertNil(bytes.range(of: Data("CTM1".utf8)), "wire body is proto, not the iOS envelope")
         XCTAssertNil(bytes.range(of: Data(leakSession.utf8)))
         XCTAssertNil(bytes.range(of: Data(leakPublicKey.utf8)))
@@ -82,10 +108,9 @@ final class HistorySnapshotEncoderTests: XCTestCase {
     func testPhase1StreamHasNoMediaBlob() async throws {
         try seedFiveFixtures()
         let encoder = HistorySnapshotEncoder(identity: identity)
-        let records = try await collect(encoder.encodeTranscript(context: context))
-        XCTAssertTrue(records.contains { if case .manifest = $0 { return true }; return false })
-        XCTAssertTrue(records.contains { if case .end = $0 { return true }; return false })
-        XCTAssertFalse(records.contains { if case .mediaBlob = $0 { return true }; return false })
+        let out = try await collect(encoder.encodeTranscript(context: context))
+        XCTAssertTrue(out.records.contains { if case .manifest = $0 { return true }; return false })
+        XCTAssertEqual(out.media, [])
     }
 
     func testPhase2StreamIsManifestMediaEnd() async throws {
@@ -95,18 +120,13 @@ final class HistorySnapshotEncoderTests: XCTestCase {
         try seedAlbumMessage(mediaId: mediaId)
 
         let encoder = HistorySnapshotEncoder(identity: identity)
-        let records = try await collect(encoder.encodeMedia(context: context))
-        XCTAssertGreaterThanOrEqual(records.count, 2)
-        guard case .manifest(let manifest) = records.first else {
+        let out = try await collect(encoder.encodeMedia(context: context))
+        guard case .manifest(let manifest) = out.records.first else {
             return XCTFail("phase 2 must start with a manifest")
         }
         XCTAssertEqual(manifest.phase, 2)
-        XCTAssertTrue(records.contains { if case .mediaBlob = $0 { return true }; return false })
-        XCTAssertFalse(records.contains { if case .message = $0 { return true }; return false })
-        XCTAssertFalse(records.contains { if case .contact = $0 { return true }; return false })
-        guard case .end = records.last else {
-            return XCTFail("phase 2 must end with End")
-        }
+        XCTAssertEqual(out.records.count, 1, "phase 2 carries no transcript record")
+        XCTAssertEqual(out.media, [mediaId], "the media file, by reference")
     }
 
     func testOversizedMediaIsCountedAndStreamCompletes() async throws {
@@ -115,17 +135,14 @@ final class HistorySnapshotEncoderTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: url) }
         FileManager.default.createFile(atPath: url.path, contents: nil)
         let handle = try FileHandle(forWritingTo: url)
-        try handle.truncate(atOffset: HistorySnapshotCodec.maxRecordBytes)
+        try handle.truncate(atOffset: historyMaxBlobBytes() + 1)
         try handle.close()
 
         try seedAlbumMessage(mediaId: mediaId)
         let encoder = HistorySnapshotEncoder(identity: identity)
-        let records = try await collect(encoder.encodeMedia(context: context))
+        let out = try await collect(encoder.encodeMedia(context: context))
         XCTAssertEqual(encoder.counters.mediaTooLarge, 1)
-        XCTAssertFalse(records.contains { if case .mediaBlob = $0 { return true }; return false })
-        guard case .end = records.last else {
-            return XCTFail("oversized media must not fail the snapshot")
-        }
+        XCTAssertEqual(out.media, [], "left out, not sent to fail the stream")
     }
 
     func testRoundTripEncodeImportEncode() async throws {
@@ -139,12 +156,15 @@ final class HistorySnapshotEncoderTests: XCTestCase {
 
         let storeB = PersistenceController(inMemory: true).container
         let contextB = storeB.viewContext
-        _ = try HistorySnapshotImporter().importRecords(fromA, expectedUserId: local, in: contextB)
+        // Device B's own tables, or B would re-encode A's rows and prove nothing.
+        useRepositories(storeB)
+        _ = try HistorySnapshotImporter(expectedUserId: local).importRecords(fromA.records)
 
         let encoderB = HistorySnapshotEncoder(identity: identity)
         let fromB = try await collect(encoderB.encodeAll(context: contextB))
 
-        XCTAssertEqual(try fingerprints(fromA), try fingerprints(fromB))
+        XCTAssertEqual(try fingerprints(fromA.records), try fingerprints(fromB.records))
+        XCTAssertEqual(fromA.media, fromB.media)
     }
 
     // MARK: - Seeds
@@ -231,13 +251,12 @@ final class HistorySnapshotEncoderTests: XCTestCase {
         reaction.timestampMs = 1_700_000_000_500
 
         let key = Data(repeating: 0x11, count: 32)
-        let hint = PeerDevice(context: context)
-        hint.accountId = peer
-        hint.deviceId = deriveDeviceId(identityPublicKey: [UInt8](key))
-        hint.identityKey = key
-        hint.firstSeenAt = Date(timeIntervalSince1970: 1_700_000_000)
+        _ = try LocalRepositories.peerDevices.record([PeerDeviceRecord(
+            deviceId: deriveDeviceId(identityPublicKey: key), accountId: peer,
+            identityKey: key, firstSeenAt: Date(timeIntervalSince1970: 1_700_000_000)
+        )])
 
-        _ = CTCallRecord.create(
+        try LocalRepositories.calls.upsert(CallRecord(
             id: "call-1",
             peerUserId: peer,
             peerName: "should-not-travel",
@@ -245,9 +264,8 @@ final class HistorySnapshotEncoderTests: XCTestCase {
             status: .completed,
             startedAt: Date(timeIntervalSince1970: 1_700_000_000),
             endedAt: Date(timeIntervalSince1970: 1_700_000_030),
-            durationSeconds: 30,
-            in: context
-        )
+            durationSeconds: 30
+        ))
         try context.save()
     }
 
@@ -313,10 +331,19 @@ final class HistorySnapshotEncoderTests: XCTestCase {
         msg.applyStoredEncryption(plaintextData: stored, contactId: peer)
     }
 
-    private func collect(_ stream: AsyncThrowingStream<HistoryRecord, Error>) async throws -> [HistoryRecord] {
-        var out: [HistoryRecord] = []
-        for try await rec in stream { out.append(rec) }
-        return out
+    /// The encoder's output split: transcript records, and media files by id.
+    private func collect(
+        _ stream: AsyncThrowingStream<HistoryOutbound, Error>
+    ) async throws -> (records: [HistoryRecord], media: [String]) {
+        var records: [HistoryRecord] = []
+        var media: [String] = []
+        for try await item in stream {
+            switch item {
+            case .record(let r): records.append(r)
+            case .media(let id, _): media.append(id)
+            }
+        }
+        return (records, media)
     }
 
     /// Manifest snapshot_id / created_at stay; compare everything else by type+id.
@@ -324,24 +351,32 @@ final class HistorySnapshotEncoderTests: XCTestCase {
         var map: [String: Data] = [:]
         for rec in records {
             switch rec {
-            case .manifest, .end:
+            case .manifest:
                 break
-            case .contact(let c):
-                map["c:\(HistoryAccountID.dashed(c.userID) ?? "")"] = try c.serializedData()
-            case .chat(let c):
-                map["h:\(HistoryAccountID.dashed(c.otherUserID) ?? "")"] = try c.serializedData()
-            case .message(let m):
-                map["m:\(m.id)"] = try m.serializedData()
-            case .reaction(let r):
-                map["r:\(r.targetMessageID):\(HistoryAccountID.dashed(r.reactorUserID) ?? "")"] = try r.serializedData()
-            case .peerDevice(let p):
-                map["p:\(p.deviceID)"] = try p.serializedData()
-            case .call(let c):
-                map["k:\(c.id)"] = try c.serializedData()
-            case .mediaBlob(let b):
-                map["b:\(b.mediaID)"] = try b.serializedData()
-            case .skipped(let type, let payload):
-                map["s:\(type)"] = payload
+            case .transcript(let type, let proto):
+                let key: String
+                switch type {
+                case HistoryRecordType.contact:
+                    let c = try Construct_Client_History_V1_HistoryContact(serializedBytes: proto)
+                    key = "c:\(HistoryAccountID.dashed(c.userID) ?? "")"
+                case HistoryRecordType.chat:
+                    let c = try Construct_Client_History_V1_HistoryChat(serializedBytes: proto)
+                    key = "h:\(HistoryAccountID.dashed(c.otherUserID) ?? "")"
+                case HistoryRecordType.message:
+                    key = "m:\(try Construct_Client_History_V1_HistoryMessage(serializedBytes: proto).id)"
+                case HistoryRecordType.reaction:
+                    let r = try Construct_Client_History_V1_HistoryReaction(serializedBytes: proto)
+                    key = "r:\(r.targetMessageID):\(HistoryAccountID.dashed(r.reactorUserID) ?? "")"
+                case HistoryRecordType.peer:
+                    key = "p:\(try Construct_Client_History_V1_HistoryPeerDevice(serializedBytes: proto).deviceID)"
+                case HistoryRecordType.call:
+                    key = "k:\(try Construct_Client_History_V1_HistoryCall(serializedBytes: proto).id)"
+                default:
+                    key = "t:\(type)"
+                }
+                map[key] = proto
+            case .skipped(let type):
+                map["s:\(type)"] = Data()
             }
         }
         return map

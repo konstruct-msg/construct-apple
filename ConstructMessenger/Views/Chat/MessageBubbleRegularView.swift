@@ -15,33 +15,31 @@ import UIKit
 struct MessageBubbleRegularView: View {
     /// Observed so the view re-renders when deliveryStatusRaw (or any @NSManaged property) changes.
     /// NSManagedObject conforms to ObservableObject via KVO, so SwiftUI subscribes automatically.
-    @ObservedObject var message: Message
+    let message: TranscriptRow
 
     let isLastInGroup: Bool
     let isSelected: Bool
     let isEditMode: Bool
     let containerWidth: CGFloat
 
-    let onRetry: ((Message) -> Void)?
-    let onReply: ((Message) -> Void)?
-    let onDelete: ((Message) -> Void)?
-    let onSelect: ((Message) -> Void)?
-    let onEnterSelectMode: ((Message) -> Void)?
+    let onRetry: ((TranscriptRow) -> Void)?
+    let onReply: ((TranscriptRow) -> Void)?
+    let onDelete: ((TranscriptRow) -> Void)?
+    let onSelect: ((TranscriptRow) -> Void)?
+    let onEnterSelectMode: ((TranscriptRow) -> Void)?
     /// Media open — second argument is the album tile index (0 for single-item).
-    let onTapMedia: ((Message, Int) -> Void)?
-    let onEdit: ((Message) -> Void)?
-    let onReplyWithQuote: ((Message, String) -> Void)?
+    let onTapMedia: ((TranscriptRow, Int) -> Void)?
+    let onEdit: ((TranscriptRow) -> Void)?
+    let onReplyWithQuote: ((TranscriptRow, String) -> Void)?
     /// Tap on the in-bubble reply strip — parent jump + soft focus.
-    let onJumpToReply: ((Message) -> Void)?
-    let onReact: ((Message, String) -> Void)?
+    let onJumpToReply: ((TranscriptRow) -> Void)?
+    let onReact: ((TranscriptRow, String) -> Void)?
+    let onForward: ((TranscriptRow) -> Void)?
 
     @GestureState private var swipeOffset: CGFloat = 0
     @State private var isTranscribingVoice = false
     @State private var reactionBadges: [ReactionBadge] = []
-    @State private var showReactionCapsule = false
     @State private var showFullEmojiPicker = false
-    @State private var capsulePlacement: ReactionCapsulePlacement = .below
-    @State private var bubbleGlobalFrame: CGRect = .zero
 
     #if os(macOS)
     @AppStorage("desktopShowTimestamps") private var showDesktopTimestamps = true
@@ -64,38 +62,45 @@ struct MessageBubbleRegularView: View {
         message.isSentByMe || message.isEdited || shouldShowTimestamp
     }
 
+    private var hasReplyReference: Bool {
+        message.replyToMessageId?.isEmpty == false
+    }
+
+    /// The selection checkbox in edit mode: filled when the message is selected. It drew the
+    /// other way round until 2026-10-08 — every message but the chosen one looked chosen.
+    private var selectionToggle: some View {
+        Button {
+            onSelect?(message)
+        } label: {
+            Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                .font(CTFont.ui(14))
+                .foregroundColor(isSelected ? Color.CT.accent : Color.CT.textDim)
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+
     var body: some View {
         // Parse once per body pass to avoid repeated JSON decode attempts.
-        let profileData = MessageBubbleContentParsing.parseProfileMessage(message.displayText)
-        let mediaContent = profileData == nil ? MessageBubbleContentParsing.parseMediaMessage(message.displayText) : nil
-        let fileContent = (profileData == nil && mediaContent == nil) ? MessageBubbleContentParsing.parseFileMessage(message.displayText) : nil
-        let voiceContent = (profileData == nil && mediaContent == nil && fileContent == nil) ? MessageBubbleContentParsing.parseVoiceMessage(message.displayText) : nil
+        // The sticker is asked first and typed: it has no text form, so no parser below would
+        // find it, and `legacyBody` is empty for it on purpose.
+        let sticker = message.stickerReference
+        let profileData = sticker == nil ? MessageBubbleContentParsing.parseProfileMessage(message.legacyBody) : nil
+        let mediaContent = (sticker == nil && profileData == nil) ? MessageBubbleContentParsing.parseMediaMessage(message.legacyBody) : nil
+        let fileContent = (profileData == nil && mediaContent == nil) ? MessageBubbleContentParsing.parseFileMessage(message.legacyBody) : nil
+        let voiceContent = (profileData == nil && mediaContent == nil && fileContent == nil) ? MessageBubbleContentParsing.parseVoiceMessage(message.legacyBody) : nil
         let hasActionableText = MessageBubbleContentParsing.carriesActionableText(
             isProfile: profileData != nil,
             isMedia: mediaContent != nil,
             isFile: fileContent != nil,
             isVoice: voiceContent != nil,
-            text: message.displayText
+            text: message.legacyBody  // parser input: decides, never shown
         )
 
         HStack(spacing: ChatUIConstants.Bubble.rowSpacing) {
             // Selection checkbox in edit mode - positioned based on message direction
             if isEditMode && !message.isSentByMe {
-                Button {
-                    onSelect?(message)
-                } label: {
-                    if isSelected {
-                        Image(systemName: "circle")
-                            .font(CTFont.regular(14))
-                            .foregroundColor(Color.CT.textDim)
-                    }
-                    else {
-                        Image(systemName: "checkmark.circle.fill")
-                            .font(CTFont.regular(14))
-                            .foregroundColor(Color.CT.accentDim)
-                    }
-                }
-                .buttonStyle(.plain)
+                selectionToggle
             }
 
             if message.isSentByMe {
@@ -103,21 +108,13 @@ struct MessageBubbleRegularView: View {
             }
 
             VStack(alignment: message.isSentByMe ? .trailing : .leading, spacing: ChatUIConstants.Bubble.stackSpacing) {
-                // The capsule is a row of this stack, not an overlay on the bubble.
-                //
-                // As an overlay it drew outside the bubble's bounds and covered whatever was there —
-                // which, for any message that is not the last one, is the next message. Reported
-                // from device 2026-08-22 with the capsule sitting across the message below it. The
-                // placement decision could not have prevented that: it asks which side has room *on
-                // screen*, and screen room is not room free of other messages.
-                //
-                // Taking space is what makes covering impossible. The transcript grows by the
-                // capsule's height while it is open, and the viewport holds the reader through it —
-                // opening below the anchor row leaves the anchor still, opening above shifts it and
-                // the hold rule moves the offset by exactly that. This is the case that rule is for.
-                if capsulePlacement == .above { reactionCapsuleRow }
                 Group {
-                if let profileData {
+                if let sticker {
+                    VStack(alignment: .leading, spacing: 0) {
+                        replyIndicatorView
+                        StickerBubbleView(reference: sticker, isSelected: isSelected)
+                    }
+                } else if let profileData {
                     ProfileShareBubbleView(profileData: profileData)
                         .overlay(
                             CTShape.control()
@@ -154,7 +151,7 @@ struct MessageBubbleRegularView: View {
                         isSentByMe: message.isSentByMe,
                         deliveryStatus: message.deliveryStatus,
                         onRetry: onRetry != nil ? { onRetry?(message) } : nil,
-                        transcript: message.transcriptText,
+                        transcript: message.transcript,
                         isTranscribing: isTranscribingVoice,
                         onTranscribe: {
                             guard !isTranscribingVoice else { return }
@@ -167,13 +164,10 @@ struct MessageBubbleRegularView: View {
                                         mediaUrl: voiceContent.mediaUrl,
                                         mediaKey: voiceContent.mediaKey
                                     )
-                                    if let ctx = message.managedObjectContext {
-                                        try await VoiceTranscriptionService.shared.transcribe(
-                                            audioData: data,
-                                            message: message,
-                                            context: ctx
-                                        )
-                                    }
+                                    try await VoiceTranscriptionService.shared.transcribe(
+                                        audioData: data,
+                                        messageId: message.id
+                                    )
                                 } catch {
                                     Log.error("Transcription failed: \(error)", category: "MessageBubbleRegularView")
                                 }
@@ -193,7 +187,7 @@ struct MessageBubbleRegularView: View {
                         replyIndicatorView
 
                         VStack(alignment: .leading, spacing: ChatUIConstants.Bubble.stackSpacing) {
-                            let text = message.displayText
+                            let text = message.readableText
                             if text.isEmpty {
                                 Text((NSLocalizedString("message_unavailable", comment: "")))
                                     .font(CTFont.message(ChatUIConstants.Typography.messageTextSize))
@@ -211,7 +205,7 @@ struct MessageBubbleRegularView: View {
                         .padding(.horizontal, ChatUIConstants.Bubble.horizontalPadding)
                         .padding(
                             .top,
-                            message.replyToContent != nil
+                            hasReplyReference
                                 ? ChatUIConstants.Bubble.tightVerticalPadding
                                 : ChatUIConstants.Bubble.verticalPadding
                         )
@@ -244,16 +238,10 @@ struct MessageBubbleRegularView: View {
                 .overlay(alignment: ChatUIConstants.Reaction.badgeAlignment(isSentByMe: message.isSentByMe)) {
                     reactionBadgeRow
                 }
-                .background {
-                    GeometryReader { geo in
-                        Color.clear
-                            .onAppear { bubbleGlobalFrame = geo.frame(in: .global) }
-                            .onChange(of: geo.frame(in: .global).minY) { _, _ in
-                                bubbleGlobalFrame = geo.frame(in: .global)
-                                if showReactionCapsule { updateCapsulePlacement() }
-                            }
-                    }
-                }
+                .padding(
+                    .bottom,
+                    ReactionBadgeLayout.reservedOverflow(hasBadges: !reactionBadges.isEmpty)
+                )
 
                 if isLastInGroup && shouldShowMetaRow {
                     HStack(spacing: ChatUIConstants.Bubble.stackSpacing) {
@@ -272,32 +260,32 @@ struct MessageBubbleRegularView: View {
 
                         if message.isEdited {
                             Text(NSLocalizedString("edited", comment: ""))
-                                .font(CTFont.regular(ChatUIConstants.Typography.metaSize))
+                                .font(CTFont.micro)
                                 .foregroundColor(Color.CT.textDim)
                         }
 
                         if shouldShowTimestamp {
                             Text(message.safeTimestamp, style: .time)
-                                .font(CTFont.regular(ChatUIConstants.Typography.metaSize))
+                                .font(CTFont.micro)
                                 .foregroundColor(Color.CT.textDim)
                         }
                     }
                     .padding(.horizontal, ChatUIConstants.Bubble.metaHorizontalPadding)
                 }
-
-                // After the timestamp, so the bubble keeps its own meta line adjacent to it.
-                if capsulePlacement == .below { reactionCapsuleRow }
             }
             // Guard non-finite / tiny container widths from mid-layout geometry passes
             // (they produce "Invalid frame dimension" in the layout engine).
             .frame(
-                maxWidth: max(
-                    ChatUIConstants.Bubble.minColumnWidth,
-                    (containerWidth.isFinite
-                        ? containerWidth
-                        : ChatUIConstants.Bubble.defaultContainerWidth)
-                        * ChatUIConstants.Bubble.maxWidthFraction
-                ),
+                maxWidth: VideoNotePlayback.shared.expanded?.messageId == message.id
+                    // A video note playing in place is wider than any other bubble on purpose.
+                    ? ChatUIConstants.VideoNote.expandedWidth(in: containerWidth)
+                    : max(
+                        ChatUIConstants.Bubble.minColumnWidth,
+                        (containerWidth.isFinite
+                            ? containerWidth
+                            : ChatUIConstants.Bubble.defaultContainerWidth)
+                            * ChatUIConstants.Bubble.maxWidthFraction
+                    ),
                 alignment: message.isSentByMe ? .trailing : .leading
             )
             .contentShape(.interaction, Rectangle())
@@ -307,8 +295,6 @@ struct MessageBubbleRegularView: View {
             .onTapGesture {
                 if isEditMode {
                     onSelect?(message)
-                } else if showReactionCapsule {
-                    showReactionCapsule = false
                 }
             }
             #if os(iOS)
@@ -317,7 +303,7 @@ struct MessageBubbleRegularView: View {
             .simultaneousGesture(doubleTapLikeGesture)
             #endif
             .onAppear { reloadReactionBadges() }
-            .onReceive(NotificationCenter.default.publisher(for: ReactionStore.didChange)) { note in
+            .onReceive(NotificationCenter.default.publisher(for: Reactions.didChange)) { note in
                 guard let target = note.object as? String,
                       target.caseInsensitiveCompare(message.id) == .orderedSame
                 else { return }
@@ -325,12 +311,12 @@ struct MessageBubbleRegularView: View {
             }
             .contextMenu {
                 if !isEditMode {
-                    if onReact != nil {
-                        Button {
-                            openReactionCapsule()
-                        } label: {
-                            Label(NSLocalizedString("react", comment: ""), systemImage: "face.smiling")
-                        }
+                    if let onReact {
+                        ReactionMenuRow(
+                            currentEmoji: ownReactionEmoji,
+                            onPick: { emoji in onReact(message, emoji) },
+                            onPickMore: { showFullEmojiPicker = true }
+                        )
                     }
 
                     if let onReply {
@@ -340,7 +326,7 @@ struct MessageBubbleRegularView: View {
                     }
 
                     if let onReplyWithQuote, hasActionableText {
-                        Button { onReplyWithQuote(message, message.displayText) } label: {
+                        Button { onReplyWithQuote(message, message.readableText) } label: {
                             Label(NSLocalizedString("quote_reply", comment: ""), systemImage: "text.quote")
                         }
                     }
@@ -364,8 +350,16 @@ struct MessageBubbleRegularView: View {
                     }
 
                     if hasActionableText {
-                        Button { PlatformClipboard.copy(message.displayText) } label: {
+                        Button { PlatformClipboard.copy(message.readableText) } label: {
                             Label("copy", systemImage: "doc.on.doc")
+                        }
+                    }
+
+                    // Any message a person wrote, except a shared profile: its meaning is who shared
+                    // it. What goes is the content alone (`ForwardItem`).
+                    if let onForward, profileData == nil, ForwardItem.isForwardable(message) {
+                        Button { onForward(message) } label: {
+                            Label("forward", systemImage: "arrowshape.turn.up.right")
                         }
                     }
 
@@ -400,17 +394,12 @@ struct MessageBubbleRegularView: View {
             // `@GestureState` resets instantly, so the animation has to live here.
             .animation(.interactiveSpring(response: 0.28, dampingFraction: 0.8), value: swipeOffset)
             .gesture(swipeToReplyGesture)
-            .onChange(of: swipeOffset) { _, offset in
-                if offset > 0 { showReactionCapsule = false }
-            }
             #endif
-            .onChange(of: isEditMode) { _, editing in
-                if editing { showReactionCapsule = false }
-            }
             .sheet(isPresented: $showFullEmojiPicker) {
                 ReactionEmojiPickerSheet { emoji in
                     onReact?(message, emoji)
                 }
+                .sheetNavigation()
                 #if os(iOS)
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
@@ -427,21 +416,7 @@ struct MessageBubbleRegularView: View {
             }
 
             if isEditMode && message.isSentByMe {
-                Button {
-                    onSelect?(message)
-                } label: {
-                    if isSelected {
-                        Image(systemName: "circle")
-                            .font(CTFont.regular(14))
-                            .foregroundColor(Color.CT.textDim)
-                    }
-                    else {
-                        Image(systemName: "checkmark.circle.fill")
-                            .font(CTFont.regular(14))
-                            .foregroundColor(Color.CT.accentDim)
-                    }
-                }
-                .buttonStyle(.plain)
+                selectionToggle
             }
         }
     }
@@ -451,23 +426,23 @@ struct MessageBubbleRegularView: View {
         switch message.deliveryStatus {
         case .sending:
             Image(systemName: "circle")
-                .font(CTFont.regular(ChatUIConstants.Typography.metaSize))
+                .font(CTFont.micro)
                 .foregroundColor(Color.CT.textDim)
 
         case .sent:
             Image(systemName: "circle.fill")
-                .font(CTFont.regular(ChatUIConstants.Typography.metaSize))
+                .font(CTFont.micro)
                 .foregroundColor(Color.CT.textDim)
 
         case .delivered:
             Image(systemName: "checkmark.circle")
-                .font(CTFont.regular(ChatUIConstants.Typography.metaSize))
+                .font(CTFont.micro)
                 .foregroundColor(.green)
 
         case .queued:
             Button { onRetry?(message) } label: {
                 Image(systemName: "arrow.clockwise")
-                    .font(CTFont.regular(ChatUIConstants.Typography.metaSize))
+                    .font(CTFont.micro)
                     .foregroundColor(Color.CT.textDim)
             }
             .buttonStyle(.plain)
@@ -475,7 +450,7 @@ struct MessageBubbleRegularView: View {
         case .failed:
             Button { onRetry?(message) } label: {
                 Image(systemName: "exclamationmark.circle.fill")
-                    .font(CTFont.regular(ChatUIConstants.Typography.metaSize))
+                    .font(CTFont.micro)
                     .foregroundColor(Color.CT.danger)
             }
             .buttonStyle(.plain)
@@ -484,40 +459,12 @@ struct MessageBubbleRegularView: View {
 
     @ViewBuilder
     private var replyIndicatorView: some View {
-        let hasReply = message.replyToMessageId != nil && !(message.replyToMessageId ?? "").isEmpty
-        if hasReply {
-            Button {
-                onJumpToReply?(message)
-            } label: {
-                HStack(spacing: ChatUIConstants.Bubble.stackSpacing) {
-                    Rectangle()
-                        .fill(Color.CT.accentDim)
-                        .frame(width: ChatUIConstants.Bubble.replyAccentWidth)
-
-                    if let replyContent = message.replyToContent {
-                        ReplyPreviewContent(
-                            content: replyContent,
-                            messageId: message.replyToMessageId,
-                            thumbnailSize: ChatUIConstants.Bubble.replyThumbnailSize,
-                            lineLimit: 2
-                        )
-                        .padding(.vertical, ChatUIConstants.Bubble.tightVerticalPadding)
-                        .padding(.trailing, ChatUIConstants.Bubble.tightVerticalPadding)
-                    } else {
-                        Text("Original message")
-                            .font(CTFont.regular(ChatUIConstants.Typography.systemSize))
-                            .foregroundColor(Color.CT.textDim)
-                            .padding(.vertical, ChatUIConstants.Bubble.tightVerticalPadding)
-                            .padding(.trailing, ChatUIConstants.Bubble.tightVerticalPadding)
-                    }
-                }
-                .padding(.horizontal, ChatUIConstants.Bubble.horizontalPadding)
-                .padding(.top, ChatUIConstants.Bubble.verticalPadding)
-                .padding(.bottom, ChatUIConstants.Bubble.tightVerticalPadding)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(NSLocalizedString("jump_to_replied_message", comment: "Jump to the message this reply quotes"))
+        if hasReplyReference {
+            MessageBubbleReplyPreview(
+                content: message.replyQuote,
+                messageId: message.replyToMessageId,
+                onTap: { onJumpToReply?(message) }
+            )
         }
     }
 
@@ -536,11 +483,7 @@ struct MessageBubbleRegularView: View {
     }
 
     private func reloadReactionBadges() {
-        guard let context = message.managedObjectContext else {
-            reactionBadges = []
-            return
-        }
-        reactionBadges = ReactionStore.reactions(on: message.id, in: context).map {
+        reactionBadges = ((try? LocalRepositories.reactions.reactions(on: message.id)) ?? []).map {
             ReactionBadge(emoji: $0.emoji, reactorUserId: $0.reactorUserId)
         }
     }
@@ -555,7 +498,7 @@ struct MessageBubbleRegularView: View {
                         onReact?(message, badge.emoji)
                     } label: {
                         Text(badge.emoji)
-                            .font(CTFont.regular(ChatUIConstants.Reaction.badgeFontSize))
+                            .font(CTFont.ui(ChatUIConstants.Reaction.badgeFontSize))
                             .padding(.horizontal, ChatUIConstants.Reaction.badgePadH)
                             .padding(.vertical, ChatUIConstants.Reaction.badgePadV)
                     }
@@ -577,66 +520,6 @@ struct MessageBubbleRegularView: View {
         return reactionBadges.first {
             $0.reactorUserId.caseInsensitiveCompare(me) == .orderedSame
         }?.emoji
-    }
-
-    @ViewBuilder
-    private var reactionCapsuleRow: some View {
-        if showReactionCapsule, !isEditMode, onReact != nil {
-            MessageReactionCapsule(
-                currentEmoji: ownReactionEmoji,
-                onPick: { emoji in
-                    onReact?(message, emoji)
-                    showReactionCapsule = false
-                },
-                onPickMore: {
-                    showReactionCapsule = false
-                    showFullEmojiPicker = true
-                }
-            )
-            // The gap the alignment guide used to open by hand. A row in a stack only needs
-            // padding on the side facing the bubble.
-            .padding(capsulePlacement == .above ? .bottom : .top, ChatUIConstants.Reaction.capsuleGap)
-            .fixedSize(horizontal: true, vertical: true)
-            .transition(.opacity)
-        }
-    }
-
-    private func openReactionCapsule() {
-        updateCapsulePlacement()
-        // Inserting the row under an implicit animation grows its height from 0 and
-        // clips the glass for a beat. Appear at full size.
-        var t = Transaction()
-        t.animation = nil
-        withTransaction(t) { showReactionCapsule = true }
-    }
-
-    private func updateCapsulePlacement() {
-        let reservedTop = CTLayout.navBarHeight + CTLayout.sectionGap
-        let composerHeight = CTLayout.controlHeight + CTLayout.edgePad
-        capsulePlacement = ReactionCapsulePlacement.decide(
-            spaceAbove: bubbleGlobalFrame.minY - reservedTop,
-            spaceBelow: ReactionCapsulePlacement.spaceBelow(
-                bubbleMaxY: bubbleGlobalFrame.maxY,
-                visibleBottom: capsuleVisibleBottom,
-                composerHeight: composerHeight
-            ),
-            capsuleHeight: ChatUIConstants.Reaction.capsuleHeight
-                + ChatUIConstants.Reaction.capsuleGap
-        )
-    }
-
-    private var capsuleVisibleBottom: CGFloat {
-        #if canImport(UIKit)
-        let windows = UIApplication.shared.connectedScenes
-            .compactMap { $0 as? UIWindowScene }
-            .flatMap(\.windows)
-        if let window = windows.first(where: \.isKeyWindow) ?? windows.first {
-            return window.keyboardLayoutGuide.layoutFrame.minY
-        }
-        return UIScreen.main.bounds.height
-        #else
-        return bubbleGlobalFrame.maxY + CTLayout.controlHeight + CTLayout.edgePad
-        #endif
     }
 
     /// How far the bubble should trail the finger, or nil when this drag is not a reply
@@ -699,7 +582,7 @@ struct MessageBubbleRegularView: View {
     private var swipeIndicatorOverlay: some View {
         if swipeOffset > ChatUIConstants.ReplySwipe.indicatorThreshold {
             Image(systemName: "arrow.uturn.left")
-                .font(CTFont.regular(14))
+                .font(CTFont.ui(14))
                 .foregroundColor(Color.CT.accent)
                 .opacity(min(max(Double(swipeOffset / ChatUIConstants.ReplySwipe.commitOffset), 0), 1))
                 // The overlay is attached after `.offset(x: -swipeOffset)` and therefore moves
@@ -707,5 +590,55 @@ struct MessageBubbleRegularView: View {
                 // under it, and the 8pt is the gap it settles into.
                 .offset(x: swipeOffset + 8)
         }
+    }
+}
+
+/// One owner for in-bubble reply geometry. The old implementation padded both the preview content
+/// and its button, producing a large inert band. This keeps one compact inset while retaining the
+/// platform hit target for the jump action.
+struct MessageBubbleReplyPreview: View {
+    let content: String?
+    let messageId: String?
+    let onTap: () -> Void
+
+    var body: some View {
+        Button(action: onTap) {
+            HStack(spacing: ChatUIConstants.Bubble.stackSpacing) {
+                Rectangle()
+                    .fill(Color.CT.accentDim)
+                    .frame(
+                        width: ChatUIConstants.Bubble.replyAccentWidth,
+                        height: CTLayout.hitTarget
+                            - (2 * ChatUIConstants.Bubble.tightVerticalPadding)
+                    )
+
+                Group {
+                    if let content {
+                        ReplyPreviewContent(
+                            content: content,
+                            messageId: messageId,
+                            thumbnailSize: ChatUIConstants.Bubble.replyThumbnailSize,
+                            lineLimit: 2
+                        )
+                    } else {
+                        Text(NSLocalizedString("message_unavailable", comment: ""))
+                            .font(CTFont.ui(ChatUIConstants.Typography.systemSize))
+                            .foregroundColor(Color.CT.textDim)
+                    }
+                }
+                .padding(.trailing, ChatUIConstants.Bubble.tightVerticalPadding)
+            }
+            .padding(.horizontal, ChatUIConstants.Bubble.horizontalPadding)
+            .padding(.vertical, ChatUIConstants.Bubble.tightVerticalPadding)
+            .frame(minHeight: CTLayout.hitTarget, alignment: .leading)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(
+            NSLocalizedString(
+                "jump_to_replied_message",
+                comment: "Jump to the message this reply quotes"
+            )
+        )
     }
 }

@@ -10,22 +10,12 @@ import SwiftUI
 struct AppearanceSettingsView: View {
     @AppStorage("appTheme") private var appTheme: AppTheme = .dark
     @AppStorage("textSize") private var textSize: TextSize = .standard
-    @AppStorage(ChatTextPreference.faceKey) private var chatFace: ChatTextPreference.Face = .mono
-    @Environment(\.dismiss) private var dismiss
+    @AppStorage(ChatTextPreference.faceKey) private var chatFace: ChatTextPreference.Face = ChatTextPreference.defaultFace
     private let allThemes = AppTheme.allCases
 
     var body: some View {
         ScrollView {
             LazyVStack(spacing: SettingsLayout.sectionSpacing) {
-                CTNavBar(
-                    title: NSLocalizedString("appearance", comment: ""),
-                    showBack: true,
-                    backAction: { dismiss() }
-                ) {
-                    EmptyView()
-                } trailing: {
-                    EmptyView()
-                }
                 
                 VStack(alignment: .leading, spacing: SettingsLayout.sectionHeaderSpacing) {
                     VStack(alignment: .leading, spacing: 0) {
@@ -46,12 +36,12 @@ struct AppearanceSettingsView: View {
                                             color: theme.isAvailable ? theme.color : Color.CT.textDim
                                         )
                                         Text(theme.displayName)
-                                            .font(CTFont.bold(16))
+                                            .font(CTFont.ui(16, weight: .bold))
                                             .foregroundStyle(theme.isAvailable ? Color.CT.text : Color.CT.textDim)
                                         Spacer()
                                         if !theme.isAvailable {
                                             Text(LocalizedStringKey("settings_coming_soon"))
-                                                .font(CTFont.regular(10))
+                                                .font(CTFont.micro)
                                                 .foregroundStyle(Color.CT.textDim)
                                                 .padding(.horizontal, AppearanceSettingsConfig.availabilityBadgeHorizontalPadding)
                                                 .padding(.vertical, AppearanceSettingsConfig.availabilityBadgeVerticalPadding)
@@ -61,7 +51,7 @@ struct AppearanceSettingsView: View {
                                                 )
                                         } else if appTheme == theme {
                                             Image(systemName: "checkmark")
-                                                .font(.system(size: 14, weight: .semibold))
+                                                .font(CTIcon.font(CTIcon.row, weight: .semibold))
                                                 .foregroundStyle(Color.CT.accent)
                                         }
                                     }
@@ -75,7 +65,7 @@ struct AppearanceSettingsView: View {
                         }
                     }
                     Text(LocalizedStringKey("theme_footer"))
-                        .font(CTFont.regular(11))
+                        .font(CTFont.caption)
                         .foregroundStyle(Color.CT.textDim)
                         .padding(.horizontal, SettingsLayout.footerHorizontalPadding)
                 }
@@ -99,14 +89,16 @@ struct AppearanceSettingsView: View {
                                     // The row is set in the face it offers, so the choice is
                                     // visible before it is made. `CTFont.message` cannot be used
                                     // here — it reads the current preference, which would render
-                                    // both rows in the selected face and show nothing.
+                                    // both rows in the selected face and show nothing. Nor can
+                                    // `CTFont.ui`: that is the chrome, and the chrome is mono
+                                    // regardless of what the reader picked for their text.
                                     Text(face.displayName)
-                                        .font(face == .mono ? CTFont.bold(16) : .system(size: 16, weight: .bold))
+                                        .font(face == .mono ? CTFont.mono(16, weight: .bold) : .system(size: 16, weight: .bold))
                                         .foregroundStyle(Color.CT.text)
                                     Spacer()
                                     if chatFace == face {
                                         Image(systemName: "checkmark")
-                                            .font(.system(size: 14, weight: .semibold))
+                                            .font(CTIcon.font(CTIcon.row, weight: .semibold))
                                             .foregroundStyle(Color.CT.accent)
                                     }
                                 }
@@ -118,7 +110,7 @@ struct AppearanceSettingsView: View {
                         }
                     }
                     Text(LocalizedStringKey("chat_font_footer"))
-                        .font(CTFont.regular(11))
+                        .font(CTFont.caption)
                         .foregroundStyle(Color.CT.textDim)
                         .padding(.horizontal, SettingsLayout.footerHorizontalPadding)
                 }
@@ -134,12 +126,12 @@ struct AppearanceSettingsView: View {
                             } label: {
                                 HStack(spacing: AppearanceSettingsLayout.themeRowContentSpacing) {
                                     Text(size.displayName)
-                                        .font(CTFont.bold(16))
+                                        .font(CTFont.ui(16, weight: .bold))
                                         .foregroundStyle(Color.CT.text)
                                     Spacer()
                                     if textSize == size {
                                         Image(systemName: "checkmark")
-                                            .font(.system(size: 14, weight: .semibold))
+                                            .font(CTIcon.font(CTIcon.row, weight: .semibold))
                                             .foregroundStyle(Color.CT.accent)
                                     }
                                 }
@@ -151,7 +143,7 @@ struct AppearanceSettingsView: View {
                         }
                     }
                     Text(LocalizedStringKey("text_size_footer"))
-                        .font(CTFont.regular(11))
+                        .font(CTFont.caption)
                         .foregroundStyle(Color.CT.textDim)
                         .padding(.horizontal, SettingsLayout.footerHorizontalPadding)
                 }
@@ -160,7 +152,7 @@ struct AppearanceSettingsView: View {
         }
         .background(Color.CT.bg.ignoresSafeArea())
         #if os(iOS)
-        .hideSystemNavBar()
+        .screenTitle(NSLocalizedString("appearance", comment: ""))
         #endif
         .onAppear {
             // If user previously selected an unavailable theme, reset to dark

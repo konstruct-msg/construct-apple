@@ -22,6 +22,22 @@ import XCTest
 final class DurableReassemblyTests: XCTestCase {
 
     private let store = PendingReassemblyStore.shared
+    private let sender = "0a1c609f-b37d-4d67-b7b2-b0f8ec16d167"
+    private var root: URL!
+
+    /// What a relaunch does to the chunk store: a fresh one over the same directory, holding
+    /// nothing but what is on disk.
+    private func restart() {
+        LocalRepositories.usePendingChunksForTesting(FilePendingChunkStore(root: root))
+    }
+
+    override func setUp() {
+        super.setUp()
+        root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("reassembly-\(UUID().uuidString)", isDirectory: true)
+        restart()
+        store.resetSweepThrottleForTesting()
+    }
 
     private func chunks(count: Int, size: Int = 64) -> [Data] {
         (0..<count).map { Data(repeating: UInt8($0 + 1), count: size) }
@@ -29,16 +45,17 @@ final class DurableReassemblyTests: XCTestCase {
 
     private func putChunk(
         _ messageId: UUID, index: UInt16, of total: UInt16, payload: Data,
-        plaintextLength: Int, now: Date = Date()
+        plaintextLength: Int, from senderId: String? = nil, now: Date = Date()
     ) -> PendingReassembly? {
         store.put(
-            messageId: messageId, chunkIndex: index, totalChunks: total,
-            plaintextLength: plaintextLength, contentType: 1, payload: payload,
-            envelopeId: "env-\(messageId.uuidString.prefix(4))-\(index)", now: now
+            senderId: senderId ?? sender, messageId: messageId, chunkIndex: index, totalChunks: total,
+            plaintextLength: plaintextLength, contentType: 1, payload: payload, now: now
         )
     }
 
     override func tearDown() {
+        LocalRepositories.usePendingChunksForTesting(nil)
+        if let root { try? FileManager.default.removeItem(at: root) }
         super.tearDown()
     }
 
@@ -55,7 +72,7 @@ final class DurableReassemblyTests: XCTestCase {
 
         // Stand in for the kill: drop everything the store holds in memory and make it read the
         // disk again, which is exactly what a relaunch does.
-        store.forgetInMemoryStateForTesting()
+        restart()
 
         let completed = try XCTUnwrap(
             putChunk(id, index: 2, of: 3, payload: parts[2], plaintextLength: total),
@@ -63,7 +80,7 @@ final class DurableReassemblyTests: XCTestCase {
         )
         XCTAssertEqual(completed.assembled(), Data(parts.joined()),
                        "restored chunks must rejoin in order and intact")
-        store.remove(messageId: id)
+        store.remove(senderId: sender, messageId: id)
     }
 
     /// `put` returning means the bytes are durable. This is load-bearing: `MessageRouter` marks the
@@ -75,12 +92,12 @@ final class DurableReassemblyTests: XCTestCase {
         let total = parts.reduce(0) { $0 + $1.count }
 
         XCTAssertNil(putChunk(id, index: 0, of: 2, payload: parts[0], plaintextLength: total))
-        store.forgetInMemoryStateForTesting()
+        restart()
 
         let completed = try XCTUnwrap(putChunk(id, index: 1, of: 2, payload: parts[1], plaintextLength: total))
         XCTAssertEqual(completed.receivedChunks.count, 2,
                        "the chunk written before the restart must come back")
-        store.remove(messageId: id)
+        store.remove(senderId: sender, messageId: id)
     }
 
     /// A completed reassembly leaves nothing behind — otherwise every photo would accumulate on
@@ -93,9 +110,9 @@ final class DurableReassemblyTests: XCTestCase {
 
         _ = putChunk(id, index: 0, of: 2, payload: parts[0], plaintextLength: total)
         _ = putChunk(id, index: 1, of: 2, payload: parts[1], plaintextLength: total)
-        store.remove(messageId: id)
+        store.remove(senderId: sender, messageId: id)
 
-        store.forgetInMemoryStateForTesting()
+        restart()
         XCTAssertEqual(store.pendingCount(), before,
                        "an assembled message must leave no files behind")
     }
@@ -118,10 +135,10 @@ final class DurableReassemblyTests: XCTestCase {
         XCTAssertEqual(PerformanceMetrics.shared.count(event: .chunkReassemblyExpired), before + 1,
                        "past the window the message is unrecoverable and must be counted")
 
-        store.forgetInMemoryStateForTesting()
+        restart()
         XCTAssertNil(putChunk(id, index: 1, of: 2, payload: parts[1], plaintextLength: total),
                      "an expired partial must be gone from disk, not silently completed later")
-        store.remove(messageId: id)
+        store.remove(senderId: sender, messageId: id)
     }
 
     /// Retention must outlive a relaunch. 60 s was the old *memory* bound; reusing it here would
@@ -150,11 +167,11 @@ final class DurableReassemblyTests: XCTestCase {
         XCTAssertGreaterThan(frames.count, 1)
 
         for frame in frames.dropLast() {
-            guard case .incomplete = reassembler.process(data: frame, envelopeId: "e") else {
+            guard case .incomplete = reassembler.process(data: frame, senderId: sender) else {
                 return XCTFail("only the last chunk may complete the message")
             }
         }
-        switch reassembler.process(data: frames[frames.count - 1], envelopeId: "e") {
+        switch reassembler.process(data: frames[frames.count - 1], senderId: sender) {
         case .assembled(let assembled, _, _, _, _):
             XCTAssertEqual(assembled, text, "chunks must rejoin in order and intact")
         default:
@@ -177,11 +194,88 @@ final class DurableReassemblyTests: XCTestCase {
         // A plain unframed message — not a chunk of anything — arriving past the window.
         _ = reassembler.process(
             data: Data("hello".utf8),
-            envelopeId: "unrelated",
+            senderId: "someone-else",
             now: Date().addingTimeInterval(PendingReassemblyStore.retention + 60)
         )
 
         XCTAssertEqual(PerformanceMetrics.shared.count(event: .chunkReassemblyExpired), before + 1,
                        "an unrelated message must still surface the stalled reassembly")
+    }
+
+    // MARK: - One sender's message
+
+    /// A message is one sender's. Another sender's chunk under the same message id — a guessed or
+    /// learned id — is not added to it, and does not complete it.
+    ///
+    /// Mutation: ignore the sender in `FilePendingChunkStore` — the second assertion reddens.
+    func testAnotherSendersChunkIsNotAddedToTheMessage() throws {
+        let id = UUID()
+        let parts = chunks(count: 2)
+        let total = parts.reduce(0) { $0 + $1.count }
+
+        XCTAssertNil(putChunk(id, index: 0, of: 2, payload: parts[0], plaintextLength: total))
+        XCTAssertNil(
+            putChunk(id, index: 1, of: 2, payload: Data(repeating: 0xEE, count: 64), plaintextLength: total, from: "intruder"),
+            "a chunk from another sender must not complete this sender's message"
+        )
+        let completed = try XCTUnwrap(putChunk(id, index: 1, of: 2, payload: parts[1], plaintextLength: total))
+        XCTAssertEqual(completed.assembled(), Data(parts.joined()), "only the sender's own bytes")
+        store.remove(senderId: sender, messageId: id)
+    }
+
+    /// A directory as the build before 2026-10-11 wrote it: its meta names no sender.
+    private func writeLegacyPartial(_ id: UUID, total: Int, first chunk: Data, startedAt: Date) throws {
+        struct LegacyMeta: Codable {
+            let totalChunks: UInt16
+            let plaintextLength: Int
+            let contentType: UInt8
+            let startedAt: TimeInterval
+            let envelopeIds: [String]
+        }
+        // Make sure the store key exists, as it does on any device that has received a chunk.
+        _ = try LocalRepositories.pendingChunks.messages()
+        let key = try XCTUnwrap(KeychainManager.shared.loadReassemblyStoreKey())
+        let dir = root.appendingPathComponent(id.uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let meta = LegacyMeta(totalChunks: 2, plaintextLength: total, contentType: 1,
+                              startedAt: startedAt.timeIntervalSince1970, envelopeIds: ["env-0"])
+        try MessageStorageCrypto.encrypt(plaintext: JSONEncoder().encode(meta), key: key)
+            .write(to: dir.appendingPathComponent("meta"))
+        try MessageStorageCrypto.encrypt(plaintext: chunk, key: key)
+            .write(to: dir.appendingPathComponent("0"))
+        restart()
+    }
+
+    /// A partial from before the update that nobody completes is still given up at retention —
+    /// counted as the loss it is, and removed — though no sender has claimed it.
+    ///
+    /// Mutation: a meta with no sender belongs to no one — this reddens (the partial is never read
+    /// back, so it is neither reported nor removed).
+    func testAPartialFromBeforeTheUpdateStillExpires() throws {
+        let id = UUID()
+        let parts = chunks(count: 2)
+        let before = PerformanceMetrics.shared.count(event: .chunkReassemblyExpired)
+        try writeLegacyPartial(id, total: 128, first: parts[0], startedAt: Date())
+
+        store.sweepExpired(now: Date().addingTimeInterval(PendingReassemblyStore.retention + 60))
+
+        XCTAssertEqual(PerformanceMetrics.shared.count(event: .chunkReassemblyExpired), before + 1)
+        XCTAssertEqual(try LocalRepositories.pendingChunks.messages().map(\.messageId), [],
+                       "the expired directory is gone")
+    }
+
+    /// A partial written by the build before this one — a directory whose meta names no sender —
+    /// still completes after the update, and belongs to the sender who adds to it.
+    ///
+    /// Mutation: refuse a meta with no sender — this reddens.
+    func testAPartialWrittenBeforeTheUpdateStillCompletes() throws {
+        let id = UUID()
+        let parts = chunks(count: 2)
+        let total = parts.reduce(0) { $0 + $1.count }
+        try writeLegacyPartial(id, total: total, first: parts[0], startedAt: Date())
+
+        let completed = try XCTUnwrap(putChunk(id, index: 1, of: 2, payload: parts[1], plaintextLength: total))
+        XCTAssertEqual(completed.assembled(), Data(parts.joined()))
+        store.remove(senderId: sender, messageId: id)
     }
 }

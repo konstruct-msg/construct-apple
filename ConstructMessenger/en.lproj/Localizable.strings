@@ -96,7 +96,7 @@
 "notifications" = "Notifications";
 
 // MARK: - Settings -> Account
-"display_name" = "Display Name";
+"display_name" = "Display name";
 "local_name" = "Local name";
 "local_name_unset" = "Not set";
 "local_name_placeholder" = "Enter a name";
@@ -107,9 +107,9 @@
 "share_contact_footer" = "Share your QR code or link to let others add you as a contact";
 
 "pin_code" = "PIN Code";
-"enable_pin_code" = "Enable PIN Code";
-"disable_pin_code" = "Disable PIN Code";
-"change_pin_code" = "Change PIN Code";
+"enable_pin_code" = "Enable PIN code";
+"disable_pin_code" = "Disable PIN code";
+"change_pin_code" = "Change PIN code";
 "enter_pin_code" = "Enter PIN Code";
 "create_pin_code" = "Create PIN Code";
 "confirm_pin_code" = "Confirm PIN Code";
@@ -121,7 +121,7 @@
 "pin_reset_explain" = "All local data will be erased from this device. Your identity can be restored later with your seed phrase, only if recovery was set up.";
 "pin_reset_action" = "Reset";
 "pin_reset_countdown" = "Resetting in %d… enter your PIN to cancel";
-"lock_delay" = "Lock After";
+"lock_delay" = "Lock after";
 "lock_now" = "Lock Now";
 "lock_delay_immediate" = "Immediately";
 "lock_delay_30s" = "30 Seconds";
@@ -157,7 +157,7 @@
 "disconnected" = "Disconnected";
 "connection" = "Connection";
 "subscriptions" = "Subscriptions";
-"last_heartbeat" = "Last Heartbeat";
+"last_heartbeat" = "Last heartbeat";
 "custom_server_debug" = "Custom Server (Debug)";
 "apply_changes" = "Apply Changes";
 "environment" = "Environment";
@@ -170,27 +170,27 @@
 "custom_server" = "Custom Server";
 
 // MARK: - Notifications Settings
-"enable_notifications" = "Enable Notifications";
+"enable_notifications" = "Enable notifications";
 "notifications_footer" = "Control how and when you receive notifications";
-"message_notifications" = "Message Notifications";
-"show_message_notifications" = "Show Message Notifications";
+"message_notifications" = "Message notifications";
+"show_message_notifications" = "Show message notifications";
 "preview_name_and_message" = "Name and Message";
 "preview_name_only" = "Name Only";
 "preview_none" = "No Preview";
 "sound_and_haptics" = "Sound & Haptics";
-"notification_sound" = "Notification Sound";
+"notification_sound" = "Notification sound";
 "vibration" = "Vibration";
 "sound_haptics_footer" = "Customize notification sound and vibration";
-"push_notifications" = "Push Notifications";
-"enable_push_notifications" = "Enable Push Notifications";
+"push_notifications" = "Push notifications";
+"enable_push_notifications" = "Enable push notifications";
 "push_notifications_footer" = "Receive notifications when the app is in the background. Your messages remain end-to-end encrypted.";
-"push_privacy_notice" = "Privacy Notice";
+"push_privacy_notice" = "Privacy notice";
 "push_privacy_notice_text" = "Push notifications are delivered using encrypted, anonymous tokens. The server cannot read your messages or identify who you're talking to.";
-"system_notification_settings" = "System Notification Settings";
+"system_notification_settings" = "System notification settings";
 "open_system_settings" = "Open System Settings";
 "system_settings_footer" = "Manage notification permissions in iOS Settings";
 "notification_permissions_required" = "Notification permissions are required to receive alerts";
-"grant_permission" = "Grant Permission";
+"grant_permission" = "Grant permission";
 "not_determined" = "Not Set";
 "authorized" = "Authorized";
 "denied" = "Denied";
@@ -203,25 +203,25 @@
 "construct_new_messages_from_contacts" = "You have %d new messages from %d contacts";
 "construct_sync_completed" = "Messages Synced";
 "construct_sync_completed_count" = "Synced %d new messages";
-"background_fetch" = "Background Refresh";
+"background_fetch" = "Background refresh";
 "background_fetch_footer" = "Periodically fetches missed messages when the live connection is not active (for example when the app is backgrounded or the network was interrupted). Keeps your chats up to date without relying on push notifications alone.";
-"enable_background_fetch" = "Enable Background Refresh";
-"background_fetch_status" = "Background Refresh Status";
+"enable_background_fetch" = "Enable background refresh";
+"background_fetch_status" = "Background refresh status";
 "background_fetch_disabled" = "Disabled";
 "background_fetch_enabled" = "Enabled";
 "background_fetch_last_check" = "Last check: %@";
-"background_fetch_interval" = "Check Interval";
-"background_fetch_interval_settings" = "Check Interval";
+"background_fetch_interval" = "Check interval";
+"background_fetch_interval_settings" = "Check interval";
 "background_fetch_interval_footer" = "How often to fetch missed messages when the live connection is inactive. iOS may adjust this based on your usage patterns.";
 "background_fetch_interval_minutes" = "%d min";
-"background_fetch_interval_hours" = "%d hour";
+"background_fetch_interval_hours" = "%d hr";
 "background_fetch_low_power_mode_warning" = "Disabled in Low Power Mode";
-"background_fetch_low_power_mode_title" = "Low Power Mode Active";
+"background_fetch_low_power_mode_title" = "Low Power Mode is on";
 "background_fetch_low_power_mode_description" = "Background refresh is automatically disabled when Low Power Mode is enabled to save battery.";
 "background_fetch_low_power_mode_alert_title" = "Low Power Mode Detected";
 "background_fetch_low_power_mode_alert_message" = "Background refresh has been disabled because Low Power Mode is enabled. It will be re-enabled automatically when Low Power Mode is turned off.";
 "background_fetch_disabled_low_power" = "Disabled (Low Power Mode)";
-"background_fetch_energy_saving" = "Energy Saving";
+"background_fetch_energy_saving" = "Energy saving";
 
 // MARK: - Profile Sharing
 "profile" = "Profile";
@@ -231,15 +231,17 @@
 "profile_sharing_info" = "Profile Sharing Info";
 "profile_sharing_info_footer" = "This user can choose to share their profile data (display name and avatar) with you via encrypted messages. Profile data is not stored on the server.";
 "share_my_data" = "Share My Data";
-"block_user" = "Block User";
-"unblock_user" = "Unblock User";
-"report_spam" = "Report Spam";
+"block_user" = "Block user";
+"unblock_user" = "Unblock user";
+"report_spam" = "Report spam";
 "report_spam_confirmation" = "Report Spam?";
 "report_spam_confirmation_message" = "This person will be reported and blocked. Reports help us stop abuse — we never see your messages.";
 "report_spam_success" = "Report sent. This person is now blocked.";
 "report_spam_failed" = "Couldn't send the report, but this person is now blocked.";
 "actions" = "Actions";
 "user_is_blocked_footer" = "This user is blocked. They cannot send you messages.";
+"profile_blocked_badge" = "Blocked";
+"composer_split_count" = "%d messages";
 "block_user_confirmation" = "Block User";
 "block_user_confirmation_message" = "Are you sure you want to block this user? They will not be able to send you messages.";
 "unblock_user_confirmation_message" = "Are you sure you want to unblock this user? They will be able to send you messages again.";
@@ -251,6 +253,10 @@
 "user_not_found" = "User not found";
 "failed_to_encode_profile" = "Failed to encode profile";
 "search_messages" = "Search messages";
+"chat_actions" = "Actions";
+"chat_action_search" = "Search";
+"chat_action_call" = "Call";
+"chat_action_video" = "Video";
 "select" = "Select";
 "select_messages" = "Select Messages";
 "delete_selected" = "Delete Selected";
@@ -273,7 +279,7 @@
 "warning" = "Warning";"DANGER_ZONE" = "Danger Zone";
 "account_recovery" = "Account Recovery";
 "discovery" = "Discovery";
-"account_recovery_seed" = "Identity Recovery (Seed Phrase)";
+"account_recovery_seed" = "Recovery phrase";
 "account_recovery_seed_hint" = "Restore access using your recovery seed phrase.";
 "account_recovery_seed_coming_soon" = "Seed phrase recovery will be available in a future update.";
 
@@ -281,9 +287,9 @@
 "duress_pin" = "Destruction PIN";
 "duress_pin_hint" = "A separate PIN that silently wipes all data when entered on the lock screen.";
 "duress_pin_coming_soon" = "Destruction PIN will be available in a future update.";
-"enable_duress_pin" = "Enable Destruction PIN";
-"disable_duress_pin" = "Disable Destruction PIN";
-"duress_pin_change" = "Change Destruction PIN";
+"enable_duress_pin" = "Enable destruction PIN";
+"disable_duress_pin" = "Disable destruction PIN";
+"duress_pin_change" = "Change destruction PIN";
 "create_duress_pin" = "Create Destruction PIN";
 "confirm_duress_pin" = "Confirm Destruction PIN";
 "duress_pin_setup_warning" = "When entered on the lock screen, this PIN silently wipes all local data and attempts to delete your account from the server. This action is irreversible.";
@@ -292,7 +298,7 @@
 "duress_pin_requires_main_pin" = "Enable a main PIN first to use the Destruction PIN.";
 
 // Linked Devices
-"linked_devices" = "Linked Devices";
+"linked_devices" = "Linked devices";
 "linked_devices_hint" = "Use the same identity on multiple devices at once.";
 "linked_devices_coming_soon" = "Linking additional devices will be available in a future update.";
 "link_new_device" = "Link New Device";
@@ -301,18 +307,18 @@
 "transfer_history_hint" = "Send your message history to a device on the same WiFi network.";
 "this_device" = "This Device";
 "profile_currently_shared" = "Profile currently shared";
-"stop_sharing_profile" = "Stop Sharing Profile";
-"share_my_profile" = "Share My Profile";
+"share_my_profile" = "Share my profile";
 "share_profile_explanation" = "Share your name and photo with this contact";
+"profile_sharing_section" = "Profile sharing";
 "username_invalid_chars" = "Username can only contain letters, numbers, and underscores.";
 "username_too_short" = "Username must be at least 3 characters.";
 "username_checking" = "Checking availability...";
 "username_available" = "Username is available.";
 "username_unavailable" = "Username is already taken.";
 "username_check_failed" = "Could not verify username right now. Try again.";
-"username_hint" = "your unique public identifier. tap to change.";
+"username_hint" = "Your unique public identifier.";
 "username_length_error" = "username must be 3–20 characters";
-"display_name_hint" = "shown to your contacts. username stays permanent.";
+"display_name_hint" = "Shown to your contacts.";
 "new_messages" = "New Messages";
 "scroll_to_bottom" = "Back to Latest";
 
@@ -322,12 +328,12 @@
 "server_applied_title" = "Server Updated";
 "server_applied_message" = "The new gRPC server will be used for all future connections.";
 "close" = "Close";
-"chat_nav_back" = "Back";
+"back" = "Back";
 "change_avatar" = "Change Photo";
 
 // Onboarding (identity gate — create / restore / link)
-"onboarding_tagline" = "the internet is a space of free thought.";
-"onboarding_username_placeholder" = "choose a public alias (optional)";
+"onboarding_tagline" = "The internet is a space of free thought";
+"onboarding_username_placeholder" = "Choose a public alias (optional)";
 "onboarding_create_identity" = "Create identity";
 "onboarding_already_have" = "Already have an identity?";
 "onboarding_existing_title" = "Use existing identity";
@@ -379,7 +385,7 @@
 "reg_mode_anonymous" = "Anonymous";
 "reg_error_title" = "Something went wrong";
 "reg_continue" = "Continue";
-"reg_try_again" = "Try Again";
+"reg_try_again" = "Try again";
 "reg_cancel" = "Cancel";
 "reg_phase_entropy" = "randomness collected";
 "reg_phase_nonce" = "anti-spam proof in progress";
@@ -409,9 +415,7 @@
 "invite_error_invalid_url" = "The provided URL is invalid.";
 "invite_error_unsupported_link" = "This is not a supported Konstruct invite link.";
 "invite_error_expired" = "This invite has expired. Ask for a new one.";
-"invite_error_invalid_fmt" = "Invalid invite: %@";
 "invite_error_already_used" = "This invite was already used. Ask for a new one.";
-"invite_error_verification_failed_fmt" = "Could not verify invite: %@";
 "invite_error_legacy_unsupported" = "This link format is no longer supported. Ask for a fresh invite QR or link.";
 "invite_error_malformed" = "Malformed invite data";
 "invite_redeem_safety_message" = "Contact added from an invite. Their name appears once they share it.";
@@ -421,23 +425,30 @@
 // iPad Split View
 "select_chat" = "Select a Chat";
 "select_chat_description" = "Choose a conversation from the sidebar to start messaging.";
-"show_chat_list" = "Show chat list";
-"hide_chat_list" = "Hide chat list";
 
 // QR Code
 
 // Account Settings
 
 // Reset Session
-"reset_session" = "Reset Session";
-"reset_session_title" = "Reset Session?";
-"reset_session_message" = "This will re-establish a new encrypted session. Messages in transit may be lost.";
 
 // Account Recovery
 "try_again" = "Try Again";
 "recovery_not_configured" = "Not set up";
 "recovery_intro_title" = "Set Up Account Recovery";
-"recovery_intro_body" = "Generate a 12-word recovery phrase. If you lose this device, use the phrase to recover your identity.";
+"recovery_intro_body" = "Generate a 12-word phrase. Contacts reach you at the address it gives you, and it brings your account back if you lose every device.";
+"recovery_gate_nav_title" = "Recovery phrase";
+"recovery_gate_title" = "Contacts start with your recovery phrase";
+"recovery_gate_why" = "Your contacts reach you at an address that belongs to you, not to our server. That address comes from your recovery phrase, and every invite carries it. The same 12 words bring your account back if you lose every device. Nobody can restore them for you, including us.";
+"recovery_gate_setup_note" = "Takes about a minute: you write down 12 words and confirm three of them.";
+"recovery_gate_setup_action" = "Set up recovery phrase";
+"recovery_gate_confirm_note" = "Your account already has a recovery phrase, but this device hasn't seen it. Enter it once. The phrase stays on this device and is never sent.";
+"recovery_gate_later" = "Later";
+"recovery_confirm_placeholder" = "12 words, separated by spaces";
+"recovery_confirm_action" = "Confirm";
+"recovery_confirm_invalid_phrase" = "That isn't a valid 12-word phrase. Check the spelling of each word.";
+"recovery_confirm_other_account" = "This phrase belongs to a different account.";
+"invite_error_recovery_key_required" = "Set up your recovery phrase before adding contacts.";
 "recovery_generate" = "Generate Recovery Phrase";
 "recovery_write_down" = "Write down these 12 words in order. Store them somewhere safe — never share them.";
 "recovery_never_share" = "Never share your recovery phrase with anyone.";
@@ -468,10 +479,10 @@
 "recovery_restored_body" = "Your account has been recovered on this device. Previous sessions have been revoked.";
 "recovery_banner_title" = "Protect Your Account";
 "recovery_banner_subtitle" = "Set up your recovery phrase to avoid losing access.";
-"recovery_setup_action" = "CONFIGURE";
+"recovery_setup_action" = "Set up";
 
 // macOS Catalyst — push notifications
-"push_not_available_mac" = "Push Notifications Unavailable on Desktop";
+"push_not_available_mac" = "Push notifications unavailable on desktop";
 "push_not_available_mac_hint" = "The desktop app uses a persistent connection for real-time delivery. Push notifications are available on the iOS app.";
 
 // Profile sharing
@@ -498,7 +509,7 @@
 "veil_config_scan" = "Scan configuration QR";
 "veil_config_paste" = "Paste configuration code";
 "veil_config_import" = "Import";
-"veil_config_section" = "VEIL ACCESS";
+"veil_config_section" = "VEIL access";
 "veil_config_active" = "Access configured";
 "veil_config_none" = "No access configured";
 
@@ -510,7 +521,7 @@
 "veil_bootstrap_paste_subtitle" = "If they sent you the code as text";
 "veil_bootstrap_ok" = "Connection configured";
 "veil_bootstrap_ok_hint" = "Go back and create or restore your identity — it will now go through this connection.";
-"traffic_protection" = "Traffic Protection";
+"traffic_protection" = "Traffic protection";
 "veil_footer_short" = "VEIL masks traffic as standard HTTPS. Configuration is provided automatically.";
 
 // Censorship protection (production soft control — no VEIL / relay disclosure)
@@ -520,49 +531,50 @@
 "censorship_protection_footer_on" = "Always routes around network blocks. Setup happens in the background.";
 
 // VEIL mode (tri-state)
-"veil_mode_off" = "off";
-"veil_mode_auto" = "auto";
-"veil_mode_on" = "on";
+"veil_mode_off" = "Off";
+"veil_mode_auto" = "Auto";
+"veil_mode_on" = "On";
 "veil_footer_off" = "Traffic protection disabled. Direct connection only.";
 "veil_footer_off_obf_active" = "VEIL off — direct traffic is obfuscated via QUIC (Salamander).";
 "veil_footer_off_obf_fallback" = "VEIL off — QUIC obfuscation enabled; currently on H2 fallback (not obfuscated).";
 "veil_footer_auto" = "VEIL activates automatically when network blocking is detected.";
 "veil_footer_on" = "All traffic routed through VEIL relay.";
+"veil_footer_on_no_front" = "The relay is not answering. Until it does, nothing is sent or received: with On, VEIL never connects directly. Choose Auto to connect directly while the relay is unreachable.";
 "veil_auto_active" = "Auto-activated · direct blocked";
 "veil_direct_probe_ok" = "Direct: OK (%@)";
 "veil_direct_probe_blocked" = "Direct: blocked";
 
 // Data & Storage
-"data_and_storage" = "Data & Storage";
-"storage_media_cache" = "Media Cache";
+"data_and_storage" = "Data & storage";
+"storage_media_cache" = "Media cache";
 "storage_media_cache_footer" = "Cached media files let you view photos and files instantly without re-downloading. Stored in the system Caches folder — iOS may clear this automatically when storage is low.";
 "media_cache" = "Media Cache";
 "storage_of_quota" = "%@ of %@";
 "storage_clearing" = "Clearing…";
-"storage_clear_media_cache" = "Clear Media Cache";
-"storage_clear_confirm_title" = "Clear Media Cache?";
+"storage_clear_media_cache" = "Clear media cache";
+"storage_clear_confirm_title" = "Clear media cache?";
 "storage_clear_confirm_message" = "All cached photos, videos and files will be removed. They will be re-downloaded when needed.";
-"storage_limit" = "Storage Limit";
+"storage_limit" = "Storage limit";
 "storage_limit_footer" = "Oldest files are automatically removed when the cache exceeds this limit.";
-"storage_no_limit" = "No Limit";
+"storage_no_limit" = "No limit";
 "storage_no_limit_footer" = "Media files will be kept until you clear them manually or iOS reclaims the space.";
-"media_autodownload" = "Auto-Download Media";
+"media_autodownload" = "Auto-download media";
 "media_autodownload_never" = "Never";
-"media_autodownload_unmetered" = "Wi-Fi Only";
+"media_autodownload_unmetered" = "Wi-Fi only";
 "media_autodownload_always" = "Always";
 "media_autodownload_footer" = "Attachments are fetched as messages arrive. The server keeps files for 7 days, so media in a chat you have not opened within a week cannot be downloaded later.";
-"storage_auto_clear" = "Keep Media For";
+"storage_auto_clear" = "Keep media for";
 "storage_auto_clear_footer" = "Media older than the selected period is removed each time the app launches.";
 "storage_keep_forever" = "Forever";
-"storage_keep_7_days" = "7 Days";
-"storage_keep_30_days" = "30 Days";
-"storage_keep_90_days" = "90 Days";
+"storage_keep_7_days" = "7 days";
+"storage_keep_30_days" = "30 days";
+"storage_keep_90_days" = "90 days";
 
 // Message editing
 "edit_message" = "Edit";
 "edited" = "edited";
 "editing_message" = "Editing message";
-"edit_message_failed" = "Failed to edit message: %@";
+"edit_message_failed" = "Couldn’t edit the message";
 "edit_message_limit_reached" = "Edit limit reached (20 edits max)";
 
 // Message reactions
@@ -591,7 +603,31 @@
 "reply_with_selection" = "Reply to Selection";
 "photo" = "Photo";
 "video" = "Video";
+"video_note" = "Video note";
+"video_note_full_screen" = "Full screen";
+"video_note_record" = "Record video note";
+"video_note_pause" = "Pause";
+"video_note_resume" = "Resume recording";
+"video_note_switch_camera" = "Switch camera";
+"video_note_send" = "Send video note";
+"video_note_paused" = "Paused";
+"video_note_camera_unavailable" = "Camera or microphone unavailable";
+"video_note_trim_start" = "Trim start";
+"video_note_trim_end" = "Trim end";
+"playback_speed" = "Playback speed";
 "file_attachment" = "File";
+"sticker" = "Sticker";
+"media_picker_tab_stickers" = "Stickers";
+"sticker_picker_recent" = "Recent";
+"sticker_catalog_empty" = "No sticker packs yet.";
+"sticker_install_fixture" = "Install fixture pack";
+"sticker_picker_more_packs" = "More packs";
+"sticker_get" = "Get";
+"sticker_pack_count" = "%d stickers";
+"sticker_install_failed" = "Could not install — try again";
+"sticker_catalog_failed" = "Could not load packs.";
+"sticker_catalog_retry" = "Retry";
+"sticker_pack_remove" = "Remove pack";
 
 // MARK: - Attachments
 "attach" = "Attach";
@@ -630,11 +666,13 @@
 "media_picker_video_1080" = "1080p";
 "media_picker_confirm" = "Confirm selection";
 "failed_to_load" = "Failed to load";
+"media_unavailable" = "Media unavailable";
 "shared_profile" = "Shared profile";
 
 // MARK: - Drafts
-"save_draft" = "Save Draft";
+"save_draft" = "Save draft";
 "drafts" = "Drafts";
+"drafts_empty_title" = "No drafts";
 "drafts_stored_locally" = "Drafts are stored locally on this device.";
 
 // MARK: - QR Code
@@ -643,7 +681,7 @@
 
 // MARK: - Settings & Diagnostics
 "diagnostics" = "Diagnostics";
-"diagnostics_logs" = "Diagnostics & Logs";
+"diagnostics_logs" = "Diagnostics & logs";
 "tls" = "TLS";
 "interval" = "Interval";
 "preview" = "Preview";
@@ -721,7 +759,7 @@
 // MARK: - Session Management
 "session_management" = "Session Management";
 "sign_out_this_device" = "Sign Out This Device";
-"sign_out_this_device_message" = "You will be signed out on this device only. Other linked devices remain active.";
+"sign_out_this_device_message" = "Everything on this device — chats, media, contacts — will be erased. Other linked devices remain active.";
 "sign_out_other_devices" = "Sign Out Other Devices";
 "sign_out_other_devices_message" = "All other linked devices will be signed out. This device stays active.";
 "sign_out_all_devices" = "Sign Out All Devices";
@@ -729,7 +767,8 @@
 "sign_out_all_hint" = "Signing out of all devices invalidates all sessions immediately. You will need to re-authenticate on every device.";
 "sign_out" = "Sign Out";
 "device_scan_to_approve" = "Scan to Approve New Device";
-"device_revoke_confirm_message" = "Sign out \"%@\" remotely? This device will be disconnected from your identity.";
+"device_revoke_confirm_message" = "Remove \"%@\"? It will be signed out and erase everything it holds the next time it connects.";
+"device_removed_notice" = "This device was removed from your account. Everything it held has been erased.";
 "other_devices" = "Other Devices";
 "other_devices_hint" = "Tap − to remove a device from your identity.";
 "device_active_now" = "Active now";
@@ -740,7 +779,7 @@
 "flood_banner_subtitle" = "Notifications from this contact are paused. Review and decide.";
 "session_at_risk_title" = "Contact's keys aren't fresh";
 "session_at_risk_subtitle" = "They've been offline a while. Messages still send securely; keys refresh when they're back.";
-"lockdown_mode" = "Lockdown Mode";
+"lockdown_mode" = "Lockdown mode";
 "lockdown_active_since" = "Active since %@";
 "lockdown_mode_hint" = "Only contacts added before activation receive notifications. New senders are silently saved — you can review them anytime.";
 "allow" = "Allow";
@@ -779,9 +818,16 @@
 "call_mute" = "Mute";
 "call_unmute" = "Unmute";
 "call_speaker" = "Speaker";
+"call_camera" = "Camera";
+"call_flip_camera" = "Flip";
+"call_peer_camera_off" = "Camera off";
+"call_swap_video" = "Swap video";
+"call_self_view" = "Your camera";
 "call_end" = "End Call";
 "call_connecting" = "Connecting…";
 "call_incoming_audio" = "Incoming audio call";
+"call_incoming_video" = "Incoming video call";
+"call_answer_without_video" = "Without video";
 "call_answer" = "Answer";
 "call_decline" = "Decline";
 
@@ -806,33 +852,31 @@
 "call_busy" = "Busy";
 "call_no_relay" = "No connection (relay unavailable)";
 "call_dismiss" = "Dismiss";
-"call_call_back" = "Call Back";
+"call_call_back" = "Call back";
 "call_minimize" = "Minimize";
 "call_minibar_in_call" = "in call";
 "call_minibar_connecting" = "connecting";
 "call_reconnecting" = "reconnecting…";
 "call_e2ee_badge" = "end-to-end encrypted";
-"edit_identity" = "edit identity";
+"edit_identity" = "Edit identity";
 "delete_account_abort_hint" = "tap to abort · %ds";
 "share" = "Share";
-"recovery_not_configured_title" = "Recovery Not Configured";
+"recovery_not_configured_title" = "Recovery not configured";
 "developer" = "Developer";
-"change_photo" = "change photo";
+"change_photo" = "Change photo";
+"choose_photo" = "choose photo";
 "identity_section" = "identity";
 "account_section" = "account";
 "bio" = "bio";
-"user_id" = "user id";
+"user_id" = "User ID";
 "joined" = "joined";
-"changes_encrypted_footer" = "> changes are end-to-end encrypted";
-"delete_account_row" = "delete account";
-"delete_action" = "delete";
-"manage_action" = "manage";
+"changes_encrypted_footer" = "Changes are end-to-end encrypted.";
+"delete_account_row" = "Delete account";
 "add_action" = "add";
 "call_voice" = "voice call";
 "call_video" = "video call";
 "call_audio_route" = "audio";
-"end_to_end_encrypted" = "changes are end-to-end encrypted";
-"invite" = "invite";
+"invite" = "Invite";
 "qr_caption_trust" = "this code is an invitation to connect.";
 "qr_scan_hint" = "show to someone nearby or take a screenshot";
 
@@ -842,7 +886,7 @@
 "device_link_scan_hint" = "scan with another device to link";
 
 // MARK: - Keys Recovery
-"keys_recovery_title" = "device keys unavailable";
+"keys_recovery_title" = "Device keys unavailable";
 "keys_recovery_warning_title" = "⚠ CRYPTO KEYS NOT FOUND";
 "keys_recovery_warning_body" = "Your device crypto keys could not be loaded from Keychain. This may be a temporary system issue, or the keys may be permanently lost.\n\nYour messages and sessions cannot be accessed until this is resolved.";
 "keys_recovery_section_retry" = "retry";
@@ -863,12 +907,17 @@
 "device_deregistered_warning_title" = "⚠ DEVICE NOT REGISTERED";
 "device_deregistered_warning_body" = "Konstruct no longer recognizes this device. This can happen after a temporary outage or if the device was removed elsewhere.\n\nYour keys are still on this phone — nothing has been deleted. Retry below, or restore your identity from your recovery phrase.";
 "device_deregistered_retry_hint" = "The rejection may be a temporary server issue. Try authenticating again.";
+"store_import_title" = "Moving your chats";
+"store_import_body" = "Once, after the update. Keep Konstruct open — it takes a few seconds.";
+"local_store_unreadable_title" = "THE CHATS ON THIS DEVICE CAN'T BE OPENED";
+"local_store_unreadable_body" = "The chats, messages and people kept on this device could not be opened. Nothing has been deleted, and nothing new is saved until they open again.\n\nUsually the Keychain is not answering yet — for example before the device has been unlocked.";
+"local_store_unreadable_retry_hint" = "Try opening them again, for example after unlocking.";
 
 // MARK: - Logout
-"logout_row" = "sign out";
-"logout_all_row" = "sign out all devices";
+"logout_row" = "Sign out";
+"logout_all_row" = "Sign out all devices";
 "logout_confirm_title" = "Sign Out?";
-"logout_confirm_message" = "You will be signed out on this device. You can sign back in with your seed phrase.";
+"logout_confirm_message" = "You will be signed out on this device, and everything it holds — chats, media, contacts — will be erased. Sign back in with your seed phrase; your other devices can send the history back.";
 "logout_confirm_action" = "Sign Out";
 "logout_all_confirm_title" = "Sign Out All Devices?";
 "logout_all_confirm_message" = "All sessions on all your devices will be invalidated immediately. You will need to re-authenticate on every device using your seed phrase.";
@@ -879,15 +928,15 @@
 "logout_no_backup_proceed_action" = "Sign Out Anyway";
 
 // MARK: - Discoverable / User Search
-"searchable_toggle_title" = "searchable by username";
+"searchable_toggle_title" = "Searchable by username";
 "searchable_toggle_footer" = "When enabled, anyone who knows your exact username can find you. This cannot be used to guess or enumerate usernames — only 100% exact matches work. Off by default.";
 "searchable_confirm_title" = "enable search?";
 "searchable_confirm_message" = "Your username will be findable by anyone who types it exactly. Disable at any time in Security settings.";
 "searchable_confirm_action" = "enable";
-"searchable_no_username_hint" = "set a username first to enable search";
-"username_not_set" = "no username";
-"searchable_indicator" = "searchable";
-"searchable_indicator_off" = "not searchable";
+"searchable_no_username_hint" = "Set a username first to turn on search.";
+"username_not_set" = "No username";
+"searchable_indicator" = "Searchable";
+"searchable_indicator_off" = "Not searchable";
 "synapses_remote_result_header" = "found on Konstruct";
 "synapses_searching" = "searching...";
 "synapses_not_found" = "not found";
@@ -909,7 +958,7 @@
 "contact_request_empty_inbox" = "no pending requests";
 
 // Safety Numbers
-"safety_numbers" = "safety numbers";
+"safety_numbers" = "Safety numbers";
 "safety_numbers_verify_title" = "verify identity";
 "safety_numbers_instruction" = "Compare these numbers with %@ verbally or in person. If the numbers match, your connection is secure and has not been intercepted.";
 "safety_numbers_copy" = "copy to clipboard";
@@ -920,25 +969,26 @@
 
 // Stealth mode
 "stealth_section" = "stealth";
-"stealth_title" = "sender anonymity";
+"stealth_title" = "Sender anonymity";
 "stealth_always_on_hint" = "Konstruct never learns who sent a message. Always on — there is no switch, and nothing to keep topped up.";
 "stealth_off_hint" = "Off — your sends disclose who you are to Konstruct. Debug override only.";
 
 
 // Key Transparency
-"kt_section" = "key transparency";
-"kt_status" = "merkle log";
-"kt_verified" = "verified";
-"kt_warning" = "warning";
+"kt_section" = "Key transparency";
+"kt_status" = "Merkle log";
+"kt_verified" = "Verified";
+"kt_warning" = "Warning";
 
 // Key-change trust event (thread 5.4)
-"key_change_banner_title" = "Security key changed";
 "key_change_banner_title_failed" = "Identity check failed";
-"key_change_banner_subtitle_fmt" = "%@'s security key is different from before. Compare Safety Numbers before you trust this chat.";
 "key_change_banner_subtitle_failed" = "We could not confirm this person's security key with the transparency log. Verify in person if you can.";
 "key_change_verify" = "Verify";
-"key_change_accept" = "Accept new key";
-"key_change_toast_fmt" = "%@'s security key changed. Open the chat to verify.";
+"address_change_toast_fmt" = "%@ is now claiming a different address. Open the chat to verify.";
+"security_notice_address_title" = "Different address";
+"security_notice_address_body_fmt" = "%@ is claiming a different address than before. Compare Safety Numbers before you trust this chat.";
+"security_notice_acknowledge" = "I've checked";
+"safety_numbers_device_fmt" = "Device %@";
 "key_change_toast_open" = "Open";
 
 // Identity fingerprint (thread 5.3 — external identity form)
@@ -946,81 +996,63 @@
 "identity_fingerprint_unknown" = "Not pinned yet";
 "identity_fingerprint_copy_hint" = "Copies fingerprint to clipboard";
 "identity_fingerprint_copied" = "Copied";
-"kt_no_data" = "no data";
+"kt_no_data" = "No data";
 "kt_hint" = "Public identity keys are recorded in an append-only log so tampering can be detected.";
 "kt_failure_hint" = "key transparency verification failed — possible tampering detected.";
 "kt_last_failure_at" = "last failure: %@";
 
 // Social Recovery (SLIP-39)
-"social_recovery_title" = "SOCIAL RECOVERY";
-"social_recovery_intro_title" = "social recovery";
+"social_recovery_title" = "Social recovery";
+"social_recovery_active" = "Active";
+"social_recovery_intro_title" = "Social recovery";
 "social_recovery_intro_body" = "Your identity keys will be split across people you trust. Any M of N of them can help restore your identity if you lose access.";
-"social_recovery_begin" = "BEGIN SETUP [→]";
-"social_recovery_scheme_title" = "RECOVERY SCHEME";
+"social_recovery_begin" = "Begin setup";
+"social_recovery_scheme_title" = "Recovery scheme";
 "social_recovery_2of3" = "2 of 3";
 "social_recovery_3of5" = "3 of 5";
 "social_recovery_2of3_hint" = "2 contacts needed to restore";
 "social_recovery_3of5_hint" = "3 contacts needed to restore";
-"social_recovery_generate" = "GENERATE SHARES [→]";
-"social_recovery_share_title" = "SHARE %d OF %d";
-"social_recovery_share_warning" = "send these words to a trusted contact. do NOT share multiple shares with the same person.";
-"social_recovery_share_label_caption" = "label";
-"social_recovery_share_label_placeholder" = "label (e.g. sent to Anna)";
-"social_recovery_share_next" = "NEXT SHARE [→]";
-"social_recovery_share_done" = "FINISH SETUP [→]";
-"social_recovery_share_unlabeled" = "share %d";
-"social_recovery_uploading" = "encrypting bundle...";
-"social_recovery_done_title" = "RECOVERY CONFIGURED";
-"social_recovery_done_body" = "your identity is now protected.";
-"social_recovery_enter_title" = "SOCIAL RECOVERY";
-"social_recovery_enter_subtitle" = "contact each trustee and ask for their share words.";
-"social_recovery_entered_header" = "ENTERED SHARES (%d/%d needed)";
-"social_recovery_no_shares_yet" = "no shares entered yet";
-"social_recovery_add_share" = "+ ADD SHARE";
-"social_recovery_shares_needed" = "need %d more share(s) to restore";
-"social_recovery_restore" = "RESTORE IDENTITY [→]";
-"social_recovery_enter_words_title" = "ENTER SHARE WORDS";
-"social_recovery_enter_words_hint" = "paste or type the 28 words separated by spaces";
-"social_recovery_add_share_confirm" = "ADD SHARE [→]";
-"social_recovery_share_n" = "share %d";
-"social_recovery_word_count" = "%d words";
-"social_recovery_reconstructing" = "reconstructing vault key...";
-"social_recovery_restored_title" = "IDENTITY RESTORED";
-"social_recovery_restored_body" = "your identity keys have been restored successfully.";
-"social_recovery_row_active" = "■ social recovery — active";
-"social_recovery_row_inactive" = "○ social recovery — not configured";
+"social_recovery_generate" = "Generate shares";
+"social_recovery_share_title" = "Share %d of %d";
+"social_recovery_share_warning" = "Send these words to one trusted contact. Do not give more than one share to the same person.";
+"social_recovery_share_label_caption" = "Label";
+"social_recovery_share_label_placeholder" = "Label (e.g. sent to Anna)";
+"social_recovery_share_next" = "Next share";
+"social_recovery_share_done" = "Finish setup";
+"social_recovery_share_unlabeled" = "Share %d";
+"social_recovery_uploading" = "Encrypting…";
+"social_recovery_done_title" = "Recovery set up";
+"social_recovery_done_body" = "Your identity is now protected.";
 
-"social_recovery_identity_header" = "IDENTITY";
-"social_recovery_username_label" = "Username";
 
 // MARK: - Local Backup
 "backup_section" = "backup";
-"export_backup" = "export backup";
-"import_backup" = "import backup";
+"export_backup" = "Export backup";
+"import_backup" = "Import backup";
 
-"backup_export_title" = "Export Backup";
+"backup_export_title" = "Export backup";
 "backup_warning_header" = "BEFORE YOU PROCEED";
 "backup_export_warning" = "This creates an encrypted backup of all your messages and keys. The file is protected by a 12-word recovery phrase that you must write down and keep safe.\n\nStore the backup file and the recovery phrase separately.";
 "backup_mnemonic_warning" = "⚠ If you lose the recovery phrase, the backup cannot be decrypted. There is no recovery option.";
-"backup_generate_button" = "GENERATE RECOVERY PHRASE [→]";
+"backup_generate_button" = "Generate recovery phrase";
 "backup_mnemonic_title" = "RECOVERY PHRASE";
 "backup_mnemonic_subtitle" = "Write down all 12 words in order. Do not take a screenshot.";
-"backup_copy_words" = "[ COPY ALL WORDS ]";
+"backup_copy_words" = "Copy all words";
 "backup_confirm_saved" = "I have written down all 12 words";
-"backup_next_button" = "NEXT [→]";
+"backup_next_button" = "Next";
 "backup_export_step_header" = "SAVE BACKUP FILE";
 "backup_export_step_subtitle" = "Save the .ctbackup file to a secure location outside this device (e.g. an encrypted USB drive). Do not store it in an unencrypted cloud service.";
-"backup_create_file" = "CREATE .ctbackup FILE [→]";
-"backup_share_file" = "SHARE .ctbackup FILE [→]";
+"backup_create_file" = "Create .ctbackup file";
+"backup_share_file" = "Share .ctbackup file";
 "backup_export_generating" = "generating backup…";
 
-"backup_import_title" = "Import Backup";
+"backup_import_title" = "Import backup";
 "backup_import_words_header" = "RECOVERY PHRASE";
 "backup_import_words_subtitle" = "Enter the 12 words from your backup, separated by spaces.";
 "backup_import_file_header" = "BACKUP FILE";
-"backup_import_select_file" = "select .ctbackup file [→]";
+"backup_import_select_file" = "Select a .ctbackup file";
 "backup_restore_warning" = "⚠ This will replace ALL your current messages and keys. This cannot be undone.";
-"backup_restore_button" = "RESTORE BACKUP [→]";
+"backup_restore_button" = "Restore backup";
 "backup_restore_success_title" = "Backup Ready";
 "backup_restore_success_message" = "Your backup has been verified and staged. Close and reopen the app to complete the restore.";
 
@@ -1028,8 +1060,8 @@
 "backup_error_invalid_file" = "This is not a valid Konstruct backup, or the recovery phrase is incorrect.";
 
 // Transfer (P2P nearby)
-"transfer_send_nearby" = "send to nearby device";
-"transfer_receive_nearby" = "receive from nearby device";
+"transfer_send_nearby" = "Send to a nearby device";
+"transfer_receive_nearby" = "Receive from a nearby device";
 "transfer_send_title" = "Send Backup";
 "transfer_receive_title" = "Receive Backup";
 "transfer_preparing" = "Preparing backup...";
@@ -1055,24 +1087,21 @@
 // History Sync (device-to-device after linking)
 "history_sync_send_title" = "Transfer History";
 "history_sync_receive_title" = "Receive History";
-"history_sync_offer_title" = "Transfer Message History?";
-"history_sync_offer_message" = "Receive your message history from the phone that just approved this device? Both devices must be on the same Wi‑Fi — no code entry needed.";
-"history_sync_offer_yes" = "Receive History";
 "history_sync_offer_skip" = "Skip";
 "history_sync_send_offer_title" = "Sync Message History?";
-"history_sync_send_offer_message" = "Send your message history to the new device? Both devices must be on the same Wi‑Fi — no codes needed.";
+"history_sync_send_offer_message" = "Send your message history to the new device? Both devices need to be on the same Wi‑Fi.";
 "history_sync_send_offer_yes" = "Sync History";
 "history_sync_send_offer_skip" = "Skip";
-"history_sync_auto_connecting" = "Connecting to your phone…";
-"history_sync_auto_sending" = "Sending history to your computer…";
+"history_sync_auto_connecting" = "Receiving history…";
+"history_sync_waiting_for_other_device" = "Waiting for your other device. The transfer starts there.";
+"history_sync_auto_sending" = "Sending history to your other device…";
 "history_sync_skip_title" = "Skip History";
 "history_sync_skip_sending" = "Finishing without history…";
 "history_sync_user_mismatch" = "History transfer failed: this history belongs to a different identity.";
 "history_sync_chats_transferred" = "Chats transferred. Sending photos and files…";
-"history_sync_media_incomplete" = "Chats transferred, media incomplete — retry from Settings or save a file.";
-"history_sync_save_file_instead" = "Save a file instead.";
-"history_sync_offer_message_with_media" = "Receive chats, photos and files from your other device over Wi‑Fi, or import a file. You can skip and start with empty chats.";
-"history_sync_empty_explanation" = "New chats will appear here as people write to you. History from your other device is not on this one yet.";
+"history_sync_media_incomplete" = "Chats are transferred. Some photos and files did not arrive.";
+"history_sync_save_file_instead" = "The transfer stopped. You can move the history with a file instead.";
+"history_sync_empty_explanation" = "If you skip, this device shows only new messages.";
 "history_sync_receive_wifi" = "Receive over Wi‑Fi";
 "history_sync_import_file" = "Import a file";
 "history_sync_save_file" = "Save a file";
@@ -1082,15 +1111,21 @@
 "history_sync_settings_hint" = "Send chats or leftover photos and files to a device you already linked.";
 "history_sync_composer_connecting" = "This device is still connecting to this person.";
 "history_sync_importing" = "Importing history…";
-"history_sync_imported_summary" = "%d records imported. Chats are on this device now.";
 "history_sync_qr_pin_absent" = "The link code carried no fingerprint. Update the other device and link again.";
 "history_sync_local_keys_unavailable" = "This device is not ready yet. Try again in a moment.";
 "history_sync_peer_not_found" = "Your other device is no longer in this account.";
 "history_sync_file_ready" = "File ready. Share it to your other device and import it there now — it expires within a week.";
 "history_sync_share_file" = "Share file";
 "history_sync_preparing_file" = "Preparing file…";
+"history_sync_looking" = "Looking for your other device…";
+"history_sync_not_seen_hint" = "Your other device is not visible yet. Keep Konstruct open on it, and both devices on the same Wi‑Fi. Or save a file instead.";
+"history_sync_stage_chats" = "Chats";
+"history_sync_stage_media" = "Photos and files";
+"history_sync_done" = "History transferred.";
+"history_sync_imported_done" = "Chats are on this device now.";
 "call_error_not_contacts" = "You can only call people you are connected with.";
 "call_error_busy" = "You're already in a call.";
+"call_error_camera_denied" = "Camera access is off. Turn it on in Settings to use video in calls.";
 "call_error_peer_offline" = "They are offline. Try again later.";
 "call_error_setup_failed" = "Couldn't start the call. Try again.";
 
@@ -1134,7 +1169,7 @@
 "stt_no_models" = "None";
 "stt_footer" = "On-device transcription via WhisperKit. No audio leaves your device.";
 "stt_download" = "Download";
-"stt_delete_model" = "Delete Model";
+"stt_delete_model" = "Delete model";
 "stt_delete_confirm_title" = "Delete this model?";
 "stt_transcribe_button" = "Transcribe";
 "stt_transcribing" = "Transcribing…";
@@ -1142,7 +1177,7 @@
 "stt_hide_transcript" = "Hide transcript";
 "stt_section_header" = "transcription";
 "stt_section_footer" = "Voice messages can be transcribed on-device. Models are downloaded once and never leave the phone.";
-"stt_retry_download" = "retry";
+"stt_retry_download" = "Retry";
 "stt_engine_label" = "Engine";
 "stt_engine_auto" = "Auto";
 "stt_engine_whisper" = "Whisper";
@@ -1151,21 +1186,21 @@
 "account_discard_changes_message" = "You have unsaved profile changes. Leave without saving?";
 "account_discard_changes_discard" = "Discard";
 "account_discard_changes_keep_editing" = "Keep Editing";
-"account_editing_profile" = "> Editing profile fields. Tap ✓ to save or x to cancel.";
+"account_editing_profile" = "> Editing profile fields. Save keeps them, Cancel discards them.";
 
-"liquid_logo.title" = "LIQUID LOGO";
-"liquid_logo.size" = "SIZE";
-"liquid_logo.haptics" = "Haptics";
-"liquid_logo.replay" = "REPLAY";
-"liquid_logo.hint" = "tap anywhere to replay";
 
 /* Silent-transport neutral network indicator (silent-transport-ui decision) */
 "net_status_protected" = "Protected";
 "net_status_connecting" = "Connecting…";
 "file" = "File";
+"audio_file" = "Audio";
+"audio_play" = "Play";
+"audio_pause" = "Pause";
+"forward" = "Forward";
+"forward_to" = "Forward to";
+"forward_failed" = "Some items were not forwarded: they are no longer on this device or the server.";
 
 /* Chat system bubble: the encrypted session broke and incoming messages cannot be read. */
-"system_session_out_of_sync" = "The encrypted session with this contact is out of sync — new messages can't be read until it is re-established.";
 
 /* Delivery status of an outgoing message. VoiceOver-only: the bubble shows a bare
    icon, so without these the delivery state is inaudible. */
@@ -1200,6 +1235,8 @@
 
 "diagnostics_owned_inset_title" = "Owned-inset transcript";
 "diagnostics_owned_inset_hint" = "UIKit scroll container. Applies to the next chat you open.";
+"diagnostics_video_calls_title" = "Video calls";
+"diagnostics_video_calls_hint" = "Camera in calls. Every call then offers video, including to Android.";
 
 "diagnostics_skip_backlog_title" = "Skip held backlog";
 "diagnostics_skip_backlog_held" = "Head stuck: %@… (%@, %ds). Skipping may drop messages that were never delivered.";
@@ -1275,3 +1312,70 @@
 "desktop_add_invite_placeholder" = "https://konstruct.cc/add?invite=… or konstruct://add?…";
 "desktop_add_paste_clipboard" = "Paste from Clipboard";
 "desktop_add_supported" = "konstruct://add?invite=… or https://konstruct.cc/add?invite=…";
+
+"backup_restore_required_title" = "Restart required";
+"backup_restore_required_message" = "Close and reopen Konstruct to finish restoring this backup.";
+"spam_warning_title" = "Sending…";
+"spam_warning_wait" = "Please wait %d seconds";
+"spam_strong_warning_title" = "Unusual activity";
+"spam_strong_warning_body" = "You're sending messages faster than usual. Please wait a moment.";
+"spam_seconds" = "sec";
+"spam_force_send" = "I understand the risk, send anyway";
+"spam_force_banned" = "You can’t skip the wait for %d min";
+"stt_error_no_model" = "No transcription model is downloaded yet.";
+"stt_error_unavailable" = "Transcription isn’t available on this device.";
+"call_status_calling" = "Calling…";
+"call_status_connected" = "Connected";
+"mic_denied_title" = "Microphone access denied";
+"mic_denied_message_macos" = "Allow microphone access in Settings to send voice messages.";
+"voice_ready_to_send" = "Ready to send";
+"save_as" = "Save As…";
+
+// Recovery key made silently, copied later (decisions/recovery-key-backup-is-deferred-not-skipped.md)
+"recovery_backup_auth_reason" = "Show your recovery key";
+"recovery_backup_intro_title" = "Save your recovery key";
+"recovery_backup_intro_body" = "Konstruct has no phone number or email for you. This key is the only way back into your account if you lose every device. Write the 12 words down and keep them somewhere safe.";
+"recovery_backup_show" = "Show the key";
+"recovery_backup_pending_title" = "Recovery key not saved";
+"recovery_backup_pending_subtitle" = "Write down your recovery key — it is the only way back if you lose every device.";
+"recovery_backup_pending" = "Not saved yet";
+"recovery_reminder_lost_title" = "Recovery key can no longer be shown";
+"recovery_reminder_lost_body" = "The device passcode was turned off before the key was saved, and iOS deleted it. Your account works on this device, but if you lose it or sign out, the account cannot be recovered.";
+"logout_backup_pending_message" = "Your recovery key is on this device and has not been saved. Signing out deletes it, and the account cannot be recovered without it.";
+"qr_scanning_unavailable_mac" = "QR scanning is not available on Mac";
+"qr_scanning_unavailable_mac_hint" = "Ask your contact to share their invite link instead.";
+
+"delete_action" = "delete";
+
+/* Errors a person reads (TODO 128) */
+"error_no_connection" = "No connection to the server. Check the internet and try again.";
+"error_server" = "The server couldn’t do this right now. Try again later.";
+"error_rate_limited" = "Too many attempts. Wait a little and try again.";
+"error_sign_in_again" = "Sign in again to continue.";
+"error_generic" = "Something went wrong. Try again.";
+"error_encryption" = "Couldn’t encrypt. Try again.";
+"error_decryption" = "Couldn’t read a message. The conversation will recover on its own.";
+"error_peer_unreachable" = "Couldn’t reach this person’s device. Try again later.";
+"error_upload_failed" = "Couldn’t send the file. Try again.";
+"error_download_failed" = "Couldn’t download the file. Try again.";
+"error_media_processing" = "Couldn’t prepare the photo or video.";
+"error_no_space" = "Not enough space on this device.";
+"error_action_reconnect" = "Reconnect";
+"error_action_sign_in" = "Sign in";
+"username_taken" = "This username is already taken.";
+"validation_text_too_large" = "The message is too long. Split it into several.";
+"validation_file_too_large" = "%1$@ is too large: %2$@, at most %3$@.";
+"validation_unsupported_type" = "Files of type .%@ can’t be sent.";
+"validation_total_too_large" = "The message is too large: %1$@, at most %2$@.";
+"validation_empty" = "The message is empty.";
+"validation_self_send" = "Notes to yourself go in Drafts.";
+"invite_error_invalid" = "This invite isn’t valid. Ask for a new one.";
+"invite_error_verification_failed" = "Couldn’t verify this invite. Check the connection and try again.";
+"backup_error_wrong_password" = "Wrong password, or the backup is damaged.";
+"device_link_error_keys" = "Couldn’t create keys for this device. Try again.";
+"device_link_error_invalid_qr" = "This isn’t a Konstruct device code.";
+"device_link_error_rejected" = "Your other device declined the request.";
+"device_link_error_expired" = "The request has expired. Show a new code.";
+"device_link_error_token" = "This code has expired. Scan a new one.";
+"device_link_error_already_linked" = "This device is already linked.";
+"voice_playback_speed" = "Playback speed";

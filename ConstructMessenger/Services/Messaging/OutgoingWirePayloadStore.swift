@@ -4,6 +4,13 @@ import Foundation
 ///
 /// Critical: retries must re-send the exact same encrypted payload bytes.
 /// Re-encrypting advances Double Ratchet state and causes decryption failures on the peer.
+///
+/// A chunk is stored **with the device it was encrypted for**. One message is N ciphertexts, one
+/// per recipient device, each bound to that device's ratchet and sealed to that device's key; a
+/// retry that re-seals a chunk has to seal it to the same device, and the chunk id alone does not
+/// say which — the tag in it is a MAC, unreadable by design. An entry written before 2026-09-22
+/// carries no device; a retry then falls back to the recipient's pinned device, which is the only
+/// device that path ever encrypted for.
 final class OutgoingWirePayloadStore {
     static let shared = OutgoingWirePayloadStore()
 
@@ -13,28 +20,47 @@ final class OutgoingWirePayloadStore {
 
     private init() {}
 
-    func saveChunk(baseMessageId: String, chunkMessageId: String, wirePayload: Data) {
+    /// One stored ciphertext: the wire id it went out under, the bytes, and the device whose
+    /// ratchet produced them (`nil` only for an entry from before devices were recorded).
+    struct StoredChunk: Equatable {
+        let chunkMessageId: String
+        let wirePayload: Data
+        let recipientDeviceId: String?
+    }
+
+    func saveChunk(baseMessageId: String, chunkMessageId: String, wirePayload: Data, recipientDeviceId: String?) {
         queue.sync {
             let baseKey = normalize(baseMessageId)
             let chunkKey = normalize(chunkMessageId)
 
             var entry = loadEntry(baseKey) ?? Entry(createdAt: Date().timeIntervalSince1970, chunks: [:])
             entry.chunks[chunkKey] = wirePayload
+            if let recipientDeviceId, !recipientDeviceId.isEmpty {
+                var devices = entry.devices ?? [:]
+                devices[chunkKey] = recipientDeviceId
+                entry.devices = devices
+            }
             saveEntry(entry, baseKey: baseKey)
         }
     }
 
-    /// Loads all chunks for a base message ID, sorted by chunk index.
-    func loadChunks(baseMessageId: String) -> [(chunkMessageId: String, wirePayload: Data)]? {
+    /// Every stored chunk of a message, chunk index first and wire id second — a fixed order, so
+    /// a retry re-sends the copies of one message device by device rather than in whatever order
+    /// the dictionary hands back.
+    func loadChunks(baseMessageId: String) -> [StoredChunk]? {
         queue.sync {
             let baseKey = normalize(baseMessageId)
             purgeIfExpired(baseKey: baseKey)
             guard let entry = loadEntry(baseKey) else { return nil }
 
             let sortedKeys = entry.chunks.keys.sorted(by: chunkSort)
-            let decoded: [(String, Data)] = sortedKeys.compactMap { chunkId in
+            let decoded: [StoredChunk] = sortedKeys.compactMap { chunkId in
                 guard let data = entry.chunks[chunkId] else { return nil }
-                return (chunkId, data)
+                return StoredChunk(
+                    chunkMessageId: chunkId,
+                    wirePayload: data,
+                    recipientDeviceId: entry.devices?[chunkId]
+                )
             }
             return decoded.isEmpty ? nil : decoded
         }
@@ -92,6 +118,9 @@ final class OutgoingWirePayloadStore {
     private struct Entry: Codable {
         var createdAt: TimeInterval
         var chunks: [String: Data] // chunkMessageId -> wirePayload
+        /// chunkMessageId -> the device the chunk was encrypted for. Optional so an entry written
+        /// before the field existed still decodes; its chunks then read as device-less.
+        var devices: [String: String]?
     }
 
     private func loadEntry(_ baseKey: String) -> Entry? {
@@ -114,7 +143,8 @@ final class OutgoingWirePayloadStore {
     }
 
     private func chunkSort(_ a: String, _ b: String) -> Bool {
-        chunkIndex(of: a) < chunkIndex(of: b)
+        let (ia, ib) = (chunkIndex(of: a), chunkIndex(of: b))
+        return ia == ib ? a < b : ia < ib
     }
 
     private func chunkIndex(of chunkId: String) -> Int {

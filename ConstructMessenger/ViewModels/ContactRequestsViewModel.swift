@@ -81,7 +81,7 @@ final class ContactRequestsViewModel {
             )
         } catch {
             Log.error("Failed to load contact requests: \(error)", category: "ContactRequests")
-            self.error = error.localizedDescription
+            self.error = error.userFacingMessage
         }
     }
 
@@ -125,10 +125,9 @@ final class ContactRequestsViewModel {
     ///
     /// - Parameters:
     ///   - request: The full incoming request (contains fromUserId, displayName, username).
-    ///   - context: CoreData context to write the new User into.
-    /// - Returns: The created or updated `User` entity for the new contact.
+    /// - Returns: The new contact's row.
     @discardableResult
-    func accept(request: IncomingRequest, context: NSManagedObjectContext) async throws -> User {
+    func accept(request: IncomingRequest) async throws -> ContactRecord {
         try await userServiceClient.respondToContactRequest(
             requestId: request.id,
             action: Shared_Proto_Services_V1_ContactRequestAction.accept
@@ -150,8 +149,7 @@ final class ContactRequestsViewModel {
         let user = try ContactLinkService.shared.createOrUpdateContact(
             userId: request.fromUserId,
             username: username,
-            displayName: displayName,
-            context: context
+            displayName: displayName
         )
 
         // Rebuild the message-stream subscription set and prewarm the session for
@@ -185,18 +183,12 @@ final class ContactRequestsViewModel {
 
     private func resolveDisplayName(for userId: String) -> String? {
         guard !userId.isEmpty else { return nil }
-        let request = NSFetchRequest<User>(entityName: "User")
-        request.predicate = NSPredicate(format: "id == %@", userId)
-        request.fetchLimit = 1
-        return try? viewContext.fetch(request).first?.displayName
+        return (try? LocalRepositories.contacts.contact(userId))?.displayName
     }
 
     private func resolveUsername(for userId: String) -> String? {
         guard !userId.isEmpty else { return nil }
-        let request = NSFetchRequest<User>(entityName: "User")
-        request.predicate = NSPredicate(format: "id == %@", userId)
-        request.fetchLimit = 1
-        return try? viewContext.fetch(request).first?.username
+        return (try? LocalRepositories.contacts.contact(userId))?.username
     }
 
     private func normalizedValue(_ value: String) -> String? {
@@ -254,7 +246,7 @@ extension ContactRequestsViewModel {
     /// - Returns: Newly-created `User` entities. Empty if all acceptances were already
     ///   processed by a background push handler.
     @discardableResult
-    func checkAcceptedRequests(context: NSManagedObjectContext) async -> [User] {
+    func checkAcceptedRequests() async -> [ContactRecord] {
         // Contact creation: handled by service (idempotent, Keychain-backed).
         let newContacts = await ContactRequestService.shared.checkAndCreateContacts()
 

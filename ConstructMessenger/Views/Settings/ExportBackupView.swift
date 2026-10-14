@@ -27,21 +27,6 @@ struct ExportBackupView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            CTNavBar(
-                title: NSLocalizedString("backup_export_title", comment: ""),
-                showBack: step > 0,
-                backAction: { step -= 1 }
-            ) {
-                EmptyView()
-            } trailing: {
-                Button(action: { dismiss() }) {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 18))
-                        .foregroundColor(Color.CT.accent)
-                }
-                .buttonStyle(.plain)
-            }
-
             switch step {
             case 0:  warningStep
             case 1:  mnemonicStep
@@ -49,6 +34,21 @@ struct ExportBackupView: View {
             }
         }
         .background(Color.CT.bg.ignoresSafeArea())
+        .screenTitle(NSLocalizedString("backup_export_title", comment: ""))
+        // Steps go back inside the sheet; close leaves it from any step.
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                CloseButton { dismiss() }
+            }
+            if step > 0 {
+                ToolbarItem(placement: .navigation) {
+                    Button { step -= 1 } label: {
+                        Label(NSLocalizedString("back", comment: ""), systemImage: "chevron.backward")
+                    }
+                    .barItem()
+                }
+            }
+        }
     }
 
     // MARK: - Step 0: Warning
@@ -59,7 +59,7 @@ struct ExportBackupView: View {
                 CTSettingsSectionHeader(title: NSLocalizedString("backup_warning_header", comment: ""))
 
                 Text(NSLocalizedString("backup_export_warning", comment: ""))
-                    .font(CTFont.regular(14))
+                    .font(CTFont.ui(14))
                     .foregroundStyle(Color.CT.text)
                     .padding(.horizontal, 20)
                     .padding(.top, 12)
@@ -68,7 +68,7 @@ struct ExportBackupView: View {
                 Rectangle().fill(Color.CT.noise).frame(height: 1)
 
                 Text(NSLocalizedString("backup_mnemonic_warning", comment: ""))
-                    .font(CTFont.regular(13))
+                    .font(CTFont.body)
                     .foregroundStyle(Color.CT.danger)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 20)
@@ -79,24 +79,16 @@ struct ExportBackupView: View {
 
                 if let err = errorMessage {
                     Text(err)
-                        .font(CTFont.regular(13))
+                        .font(CTFont.body)
                         .foregroundStyle(Color.CT.danger)
                         .padding(.horizontal, 20)
                         .padding(.bottom, 12)
                 }
 
-                Button { generateAndAdvance() } label: {
-                    HStack {
-                        if isWorking { ProgressView().tint(Color.CT.bg).padding(.trailing, 6) }
-                        Text(NSLocalizedString("backup_generate_button", comment: ""))
-                            .font(CTFont.bold(14))
-                            .foregroundStyle(Color.CT.bg)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 14)
-                    .background(isWorking ? Color.CT.accent.opacity(0.5) : Color.CT.accent)
-                }
-                .disabled(isWorking)
+                CTButton(
+                    label: NSLocalizedString("backup_generate_button", comment: ""),
+                    isLoading: isWorking
+                ) { generateAndAdvance() }
                 .padding(.horizontal, 20)
             }
             .padding(.bottom, 32)
@@ -111,7 +103,7 @@ struct ExportBackupView: View {
                 CTSettingsSectionHeader(title: NSLocalizedString("backup_mnemonic_title", comment: ""))
 
                 Text(NSLocalizedString("backup_mnemonic_subtitle", comment: ""))
-                    .font(CTFont.regular(13))
+                    .font(CTFont.body)
                     .foregroundStyle(Color.CT.textDim)
                     .padding(.horizontal, 20)
                     .padding(.top, 4)
@@ -123,11 +115,11 @@ struct ExportBackupView: View {
                     forEachIndexed(words) { idx, word in
                         HStack(spacing: 4) {
                             Text("\(idx + 1).")
-                                .font(CTFont.regular(11))
+                                .font(CTFont.caption)
                                 .foregroundStyle(Color.CT.textDim)
                                 .frame(width: 20, alignment: .trailing)
                             Text(word)
-                                .font(CTFont.bold(13))
+                                .font(CTFont.bodyEmphasis)
                                 .foregroundStyle(Color.CT.text)
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -139,15 +131,8 @@ struct ExportBackupView: View {
                 .padding(.horizontal, 20)
                 .padding(.bottom, 16)
 
-                Button {
+                CTButton(label: NSLocalizedString("backup_copy_words", comment: ""), role: .secondary) {
                     PlatformClipboard.copy(mnemonic)
-                } label: {
-                    Text(NSLocalizedString("backup_copy_words", comment: ""))
-                        .font(CTFont.regular(13))
-                        .foregroundStyle(Color.CT.accent)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
-                        .overlay(CTShape.card().stroke(Color.CT.accent.opacity(0.5), lineWidth: 1))
                 }
                 .padding(.horizontal, 20)
                 .padding(.bottom, 16)
@@ -155,7 +140,7 @@ struct ExportBackupView: View {
                 Rectangle().fill(Color.CT.noise).frame(height: 1)
 
                 Text(NSLocalizedString("backup_mnemonic_warning", comment: ""))
-                    .font(CTFont.regular(12))
+                    .font(CTFont.secondary)
                     .foregroundStyle(Color.CT.danger)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 20)
@@ -164,31 +149,19 @@ struct ExportBackupView: View {
                 Rectangle().fill(Color.CT.noise).frame(height: 1)
                     .padding(.bottom, 20)
 
-                Button { confirmedSaved.toggle() } label: {
-                    HStack(spacing: 10) {
-                        Image(systemName: confirmedSaved ? "checkmark.square.fill" : "square")
-                            .font(.system(size: 16, weight: .regular))
-                            .foregroundStyle(confirmedSaved ? Color.CT.accent : Color.CT.textDim)
-                        Text(NSLocalizedString("backup_confirm_saved", comment: ""))
-                            .font(CTFont.regular(13))
-                            .foregroundStyle(Color.CT.text)
-                        Spacer()
-                    }
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 4)
+                // A state the next step waits on, so a switch — not a drawn checkbox.
+                Toggle(isOn: $confirmedSaved) {
+                    Text(NSLocalizedString("backup_confirm_saved", comment: ""))
+                        .font(CTFont.body)
+                        .foregroundStyle(Color.CT.text)
                 }
-                .buttonStyle(.plain)
+                .tint(Color.CT.accent)
+                .padding(.horizontal, 20)
                 .padding(.bottom, 20)
 
-                Button { step = 2 } label: {
-                    Text(NSLocalizedString("backup_next_button", comment: ""))
-                        .font(CTFont.bold(14))
-                        .foregroundStyle(Color.CT.bg)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 14)
-                        .background(confirmedSaved ? Color.CT.accent : Color.CT.accent.opacity(0.3))
+                CTButton(label: NSLocalizedString("backup_next_button", comment: ""), isEnabled: confirmedSaved) {
+                    step = 2
                 }
-                .disabled(!confirmedSaved)
                 .padding(.horizontal, 20)
             }
             .padding(.bottom, 32)
@@ -203,7 +176,7 @@ struct ExportBackupView: View {
                 CTSettingsSectionHeader(title: NSLocalizedString("backup_export_step_header", comment: ""))
 
                 Text(NSLocalizedString("backup_export_step_subtitle", comment: ""))
-                    .font(CTFont.regular(13))
+                    .font(CTFont.body)
                     .foregroundStyle(Color.CT.textDim)
                     .padding(.horizontal, 20)
                     .padding(.top, 4)
@@ -211,7 +184,7 @@ struct ExportBackupView: View {
 
                 if let err = errorMessage {
                     Text(err)
-                        .font(CTFont.regular(13))
+                        .font(CTFont.body)
                         .foregroundStyle(Color.CT.danger)
                         .padding(.horizontal, 20)
                         .padding(.bottom, 16)
@@ -220,34 +193,20 @@ struct ExportBackupView: View {
                 if let url = backupURL {
                     ShareLink(item: url, preview: SharePreview(url.lastPathComponent)) {
                         Text(NSLocalizedString("backup_share_file", comment: ""))
-                            .font(CTFont.bold(14))
-                            .foregroundStyle(Color.CT.bg)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 14)
-                            .background(Color.CT.accent)
                     }
+                    .buttonStyle(CTButtonStyle(role: .primary))
                     .padding(.horizontal, 20)
 
                     Text(url.lastPathComponent)
-                        .font(CTFont.regular(11))
+                        .font(CTFont.caption)
                         .foregroundStyle(Color.CT.textDim)
                         .padding(.horizontal, 20)
                         .padding(.top, 8)
                 } else {
-                    Button { generateBackupFile() } label: {
-                        HStack {
-                            if isWorking { ProgressView().tint(Color.CT.bg).padding(.trailing, 6) }
-                            Text(isWorking
-                                 ? NSLocalizedString("backup_export_generating", comment: "")
-                                 : NSLocalizedString("backup_create_file", comment: ""))
-                                .font(CTFont.bold(14))
-                                .foregroundStyle(Color.CT.bg)
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 14)
-                        .background(isWorking ? Color.CT.accent.opacity(0.5) : Color.CT.accent)
-                    }
-                    .disabled(isWorking)
+                    CTButton(
+                        label: NSLocalizedString(isWorking ? "backup_export_generating" : "backup_create_file", comment: ""),
+                        isLoading: isWorking
+                    ) { generateBackupFile() }
                     .padding(.horizontal, 20)
                 }
             }
@@ -267,7 +226,7 @@ struct ExportBackupView: View {
                 mnemonicWords = m.split(separator: " ").map(String.init)
                 step = 1
             } catch {
-                errorMessage = error.localizedDescription
+                errorMessage = error.userFacingMessage
             }
             isWorking = false
         }
@@ -281,7 +240,7 @@ struct ExportBackupView: View {
             do {
                 backupURL = try await service.exportBackup(mnemonic: mnemonic, context: viewContext)
             } catch {
-                errorMessage = error.localizedDescription
+                errorMessage = error.userFacingMessage
             }
             isWorking = false
         }

@@ -112,6 +112,11 @@ class MediaManager {
         onDiskDirectory.appendingPathComponent(mediaId)
     }
 
+    /// What a media file is sealed to: its id, so a file renamed to another id does not open.
+    nonisolated static func sealContext(for mediaId: String) -> String {
+        "media/\(mediaId)"
+    }
+
     nonisolated static func hasOnDiskFile(mediaId: String) -> Bool {
         FileManager.default.fileExists(atPath: onDiskURL(for: mediaId).path)
     }
@@ -122,35 +127,46 @@ class MediaManager {
     nonisolated static func importHistoryBlob(_ data: Data, mediaId: String) -> Bool {
         let url = onDiskURL(for: mediaId)
         if FileManager.default.fileExists(atPath: url.path) { return false }
-        try? data.write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
-        return true
+        return AtRestFiles.write(data, to: url, context: sealContext(for: mediaId))
     }
 
     nonisolated static func onDiskFileSize(mediaId: String) -> UInt64? {
-        let url = onDiskURL(for: mediaId)
-        guard FileManager.default.fileExists(atPath: url.path),
-              let values = try? url.resourceValues(forKeys: [.fileSizeKey]),
-              let size = values.fileSize else { return nil }
-        return UInt64(size)
+        AtRestFiles.clearSize(of: onDiskURL(for: mediaId))
     }
 
     nonisolated static func loadOnDisk(mediaId: String) -> Data? {
-        try? Data(contentsOf: onDiskURL(for: mediaId))
+        AtRestFiles.read(onDiskURL(for: mediaId), context: sealContext(for: mediaId))
     }
 
     private func saveToDiskcache(_ data: Data, mediaId: String) {
-        let url = diskCacheURL(for: mediaId)
-        try? data.write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+        AtRestFiles.write(data, to: diskCacheURL(for: mediaId), context: Self.sealContext(for: mediaId))
     }
 
     private func loadFromDiskCache(mediaId: String) -> Data? {
-        if let data = try? Data(contentsOf: diskCacheURL(for: mediaId)) { return data }
+        if let data = AtRestFiles.read(diskCacheURL(for: mediaId), context: Self.sealContext(for: mediaId)) {
+            return data
+        }
 
         // Not migrated yet. Move it rather than copy: two copies of a video is not a rounding error.
         let legacy = legacyCacheDirectory.appendingPathComponent(mediaId)
         guard let data = try? Data(contentsOf: legacy) else { return nil }
-        try? FileManager.default.moveItem(at: legacy, to: diskCacheURL(for: mediaId))
+        if AtRestFiles.write(data, to: diskCacheURL(for: mediaId), context: Self.sealContext(for: mediaId)) {
+            try? FileManager.default.removeItem(at: legacy)
+        }
         return data
+    }
+
+    /// Seals every media file still in the clear — written before 2026-09-30, when media lay open
+    /// in the container. Streaming, so a video is not loaded whole. Launch, background.
+    nonisolated static func sealClearFiles() {
+        guard let entries = try? FileManager.default.contentsOfDirectory(
+            at: onDiskDirectory, includingPropertiesForKeys: nil
+        ) else { return }
+        var sealed = 0
+        for url in entries where !url.lastPathComponent.hasPrefix(".") {
+            if AtRestFiles.sealInPlace(url, context: sealContext(for: url.lastPathComponent)) { sealed += 1 }
+        }
+        if sealed > 0 { Log.info("Media: sealed \(sealed) clear file(s)", category: "MediaManager") }
     }
 
     /// Moves everything still sitting in `Library/Caches/media/` into the durable store.
@@ -180,6 +196,7 @@ class MediaManager {
                     [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication],
                     ofItemAtPath: destination.path
                 )
+                AtRestFiles.sealInPlace(destination, context: Self.sealContext(for: source.lastPathComponent))
                 moved += 1
                 bytes += size
             } catch {
@@ -373,7 +390,7 @@ class MediaManager {
         let optimized = try MediaOptimizer.optimizeImage(image)
 
         // Upload with 1 automatic retry on stream failure
-        let uploadResult = try await Self.uploadWithRetry(data: optimized.data, mimeType: optimized.metadata.mimeType, onProgress: onProgress)
+        let uploadResult = try await Self.uploadWithRetry(data: optimized.data, mimeType: optimized.metadata.mimeType, reuse: .forSend(to: recipientId, forwarded: attachment.isForwarded), onProgress: onProgress)
         Log.info("Image uploaded: \(uploadResult.mediaId)", category: "MediaManager")
 
         let width = optimized.metadata.width
@@ -392,25 +409,28 @@ class MediaManager {
             thumbnail: optimized.thumbnail,
             hash: uploadResult.hash,
             filename: nil,
-            compressed: false,
             blurhash: blurhash
         )
     }
 
-    /// Upload the original source bytes untouched (no JPEG re-encode), preserving the
-    /// real mime (HEIC/PNG/JPEG). A small JPEG thumbnail + pixel dimensions are still
-    /// derived from the display image so bubbles render before the full download.
+    /// Upload the original picture (no JPEG re-encode), preserving the real mime
+    /// (HEIC/PNG/JPEG) — without its metadata: the library's file carries GPS, capture time and
+    /// camera, and went out with them until 2026-09-30 (`ImageMetadataStripper`). A small JPEG
+    /// thumbnail + pixel dimensions are still derived from the display image so bubbles render
+    /// before the full download.
     private func uploadOriginalImage(
         _ attachment: MediaAttachment,
         for recipientId: String,
         onProgress: (@Sendable (Double) -> Void)? = nil
     ) async throws -> MediaMessageData {
-        let data = attachment.originalData
+        guard let data = ImageMetadataStripper.strip(attachment.originalData) else {
+            throw MediaOptimizationError.conversionFailed
+        }
         Log.info("Uploading ORIGINAL image for recipient: \(recipientId) (mime=\(attachment.mimeType), \(data.count) bytes)", category: "MediaManager")
         guard Int64(data.count) <= MessageSizeLimits.maxImageBytes else {
             throw MediaUploadError.fileTooLarge(data.count, Int(MessageSizeLimits.maxImageBytes))
         }
-        let uploadResult = try await Self.uploadWithRetry(data: data, mimeType: attachment.mimeType, onProgress: onProgress)
+        let uploadResult = try await Self.uploadWithRetry(data: data, mimeType: attachment.mimeType, reuse: .forSend(to: recipientId, forwarded: attachment.isForwarded), onProgress: onProgress)
         Log.info("Original image uploaded: \(uploadResult.mediaId)", category: "MediaManager")
 
         // Wire budget: this thumbnail's only consumer is `MediaWireCodec.albumContent`. The local
@@ -433,7 +453,6 @@ class MediaManager {
             thumbnail: thumbnail,
             hash: uploadResult.hash,
             filename: nil,
-            compressed: false,
             blurhash: blurhash
         )
     }
@@ -460,7 +479,8 @@ class MediaManager {
         let transcodedURL = try await Self.transcodeVideo(
             asset: asset,
             to: outputURL,
-            quality: attachment.videoQuality,
+            render: attachment.presentation == .videoNote ? Self.videoNoteRender : attachment.videoQuality.render,
+            timeRange: attachment.timeRange,
             onProgress: onProgress.map { cb in { @Sendable v in cb(v * 0.5) } }
         )
         defer {
@@ -476,6 +496,7 @@ class MediaManager {
         let uploadResult = try await Self.uploadWithRetry(
             data: videoData,
             mimeType: "video/mp4",
+            reuse: .forSend(to: recipientId, forwarded: attachment.isForwarded),
             onProgress: onProgress.map { cb in { @Sendable v in cb(0.5 + v * 0.5) } }
         )
         Log.info("Video uploaded: \(uploadResult.mediaId) (\(videoData.count) bytes)", category: "MediaManager")
@@ -502,27 +523,67 @@ class MediaManager {
             thumbnail: thumbnail,
             hash: uploadResult.hash,
             filename: nil,
-            compressed: attachment.videoQuality != .original,
-            blurhash: blurhash
+            blurhash: blurhash,
+            presentation: attachment.presentation
         )
     }
 
     /// Export `asset` to `outputURL` at the given quality. `.original` uses passthrough
     /// (container remux only). Reports export progress via `onProgress` (0…1).
-    private static func transcodeVideo(
+    ///
+    /// `.p720` / `.p1080` are HEVC — about half the bytes of H.264 at the same quality, and a
+    /// hardware encoder on every supported iPhone — scaled to fit the quality's box, in SDR and at
+    /// no more than 30 frames a second (`sdrVideoComposition`). H.264 at the same size only when
+    /// the HEVC preset refuses the source. Until 2026-10-04 both qualities were H.264 presets.
+    static func transcodeVideo(
         asset: AVURLAsset,
         to outputURL: URL,
         quality: VideoQuality,
         onProgress: (@Sendable (Double) -> Void)?
     ) async throws -> URL {
+        try await transcodeVideo(asset: asset, to: outputURL, render: quality.render, onProgress: onProgress)
+    }
+
+    /// A video note: the centre 3:4 of the frame — what the viewfinder showed — at 720×960.
+    static let videoNoteRender = VideoRender(
+        bounds: (960, 720), cropAspect: 3.0 / 4.0, h264Preset: AVAssetExportPreset1280x720
+    )
+
+    /// `render` nil is passthrough; `timeRange` nil sends the whole asset.
+    static func transcodeVideo(
+        asset: AVAsset,
+        to outputURL: URL,
+        render: VideoRender?,
+        timeRange: CMTimeRange? = nil,
+        onProgress: (@Sendable (Double) -> Void)?
+    ) async throws -> URL {
         try? FileManager.default.removeItem(at: outputURL)
 
-        // Fall back to passthrough if the requested preset isn't compatible with the source.
-        let compatible = await AVAssetExportSession.compatibility(ofExportPreset: quality.exportPreset, with: asset, outputFileType: .mp4)
-        let preset = compatible ? quality.exportPreset : AVAssetExportPreset1280x720
+        // The picture and nothing about where or when it was shot. Exported directly, the session
+        // copies the source's metadata — a camera's location and capture date went out with every
+        // video until 2026-09-30, at every quality — and neither `metadata = []` (read as "unset")
+        // nor `.forSharing()` (keeps the date) stops it. A composition of the source's tracks has
+        // no metadata to copy; the orientation is the track's transform and is carried over.
+        let source = try await metadataFreeComposition(of: asset, range: timeRange)
 
-        guard let export = AVAssetExportSession(asset: asset, presetName: preset) else {
-            throw MediaUploadError.uploadFailed("Cannot create video export session")
+        let export: AVAssetExportSession
+        if let render {
+            var chosen: AVAssetExportSession?
+            for preset in [AVAssetExportPresetHEVC1920x1080, render.h264Preset]
+            where await AVAssetExportSession.compatibility(ofExportPreset: preset, with: source, outputFileType: .mp4) {
+                chosen = AVAssetExportSession(asset: source, presetName: preset)
+                if chosen != nil { break }
+            }
+            guard let chosen else {
+                throw MediaUploadError.uploadFailed("Cannot create video export session")
+            }
+            chosen.videoComposition = try await sdrVideoComposition(for: source, render: render)
+            export = chosen
+        } else {
+            guard let passthrough = AVAssetExportSession(asset: source, presetName: AVAssetExportPresetPassthrough) else {
+                throw MediaUploadError.uploadFailed("Cannot create video export session")
+            }
+            export = passthrough
         }
 
         let progressTask: Task<Void, Never>? = onProgress.map { cb in
@@ -539,6 +600,83 @@ class MediaManager {
         try await export.export(to: outputURL, as: .mp4)
         onProgress?(1.0)
         return outputURL
+    }
+
+    /// Most frames a second a compressed video keeps. A phone's 60 — or a slow-motion clip's 240 —
+    /// is mostly bytes nobody sees in a chat.
+    static let maxSentFrameRate: Float = 30
+
+    /// How the picture is rendered for `.p720` / `.p1080` and video notes: upright, centre-cropped
+    /// to `render.cropAspect` if it names one, scaled to fit `render.bounds` (never up), in Rec. 709
+    /// SDR, at most `maxSentFrameRate`. The rotation is applied to the pixels, so
+    /// the exported track's transform is identity.
+    ///
+    /// SDR because an iPhone films HDR (HLG / Dolby Vision) by default: it costs bits, and on a
+    /// screen or a player that does not tone-map it the picture comes out washed out or blown out.
+    /// The H.264 presets always converted; the HEVC ones keep HDR unless the composition says not to.
+    /// Nil for a source with no video track — the preset then exports the audio as it would.
+    private static func sdrVideoComposition(
+        for source: AVComposition,
+        render: VideoRender
+    ) async throws -> AVVideoComposition? {
+        let bounds = render.bounds
+        guard let track = try await source.loadTracks(withMediaType: .video).first else { return nil }
+        let (natural, transform, fps) = try await track.load(.naturalSize, .preferredTransform, .nominalFrameRate)
+        // Where the transform puts the picture. A camera's transform carries the translation
+        // that brings it back to the origin; one that does not would render off the canvas.
+        let placed = CGRect(origin: .zero, size: natural).applying(transform)
+        guard placed.width > 0, placed.height > 0 else { return nil }
+
+        // The centre of the upright picture at `cropAspect`, or all of it.
+        var width = placed.width, height = placed.height
+        if let aspect = render.cropAspect {
+            if width / height > aspect { width = height * aspect } else { height = width / aspect }
+        }
+        let cropX = (placed.width - width) / 2, cropY = (placed.height - height) / 2
+
+        let scale = min(1, bounds.long / max(width, height), bounds.short / min(width, height))
+        // Encoders want even dimensions; rounding down keeps the picture inside the box.
+        let even = { (v: CGFloat) in max(2, (v * scale / 2).rounded(.down) * 2) }
+
+        let composition = AVMutableVideoComposition()
+        composition.renderSize = CGSize(width: even(width), height: even(height))
+        let rate = fps > 0 ? min(fps, maxSentFrameRate) : maxSentFrameRate
+        composition.frameDuration = CMTime(value: 1, timescale: CMTimeScale(rate.rounded()))
+        composition.colorPrimaries = AVVideoColorPrimaries_ITU_R_709_2
+        composition.colorTransferFunction = AVVideoTransferFunction_ITU_R_709_2
+        composition.colorYCbCrMatrix = AVVideoYCbCrMatrix_ITU_R_709_2
+
+        let layer = AVMutableVideoCompositionLayerInstruction(assetTrack: track)
+        // Turn the picture upright, move the kept part to the origin, then shrink it there.
+        let upright = transform
+            .concatenating(CGAffineTransform(translationX: -placed.minX - cropX, y: -placed.minY - cropY))
+            .concatenating(CGAffineTransform(scaleX: scale, y: scale))
+        layer.setTransform(upright, at: .zero)
+        let instruction = AVMutableVideoCompositionInstruction()
+        instruction.timeRange = CMTimeRange(start: .zero, duration: try await source.load(.duration))
+        instruction.layerInstructions = [layer]
+        composition.instructions = [instruction]
+        return composition
+    }
+
+    /// The video and audio tracks of `asset`, whole, in a composition that carries none of its
+    /// metadata. See `transcodeVideo`.
+    /// `range` nil is the whole asset; a range keeps that stretch, starting at zero — a trim made
+    /// here is exact to the frame, since every export but passthrough re-encodes.
+    private static func metadataFreeComposition(of asset: AVAsset, range: CMTimeRange? = nil) async throws -> AVComposition {
+        let composition = AVMutableComposition()
+        let whole = CMTimeRange(start: .zero, duration: try await asset.load(.duration))
+        let range = range.map { $0.intersection(whole) } ?? whole
+        for track in try await asset.load(.tracks) where track.mediaType == .video || track.mediaType == .audio {
+            guard let copy = composition.addMutableTrack(
+                withMediaType: track.mediaType, preferredTrackID: kCMPersistentTrackID_Invalid
+            ) else { continue }
+            try copy.insertTimeRange(range, of: track, at: .zero)
+            if track.mediaType == .video {
+                copy.preferredTransform = try await track.load(.preferredTransform)
+            }
+        }
+        return composition
     }
 
     /// Orientation-corrected display dimensions of a video's first video track.
@@ -583,12 +721,13 @@ class MediaManager {
     static func uploadWithRetry(
         data: Data,
         mimeType: String,
+        reuse: MediaUploadReuse,
         onProgress: (@Sendable (Double) -> Void)? = nil
     ) async throws -> MediaServiceClient.UploadedMedia {
         // Cache hit: same plaintext already uploaded recently → reuse mediaId + AES key.
         // Safe: the key is carried inside the DR-encrypted message payload, so each
         // recipient still gets an independent encrypted envelope.
-        if let cached = await MediaSendCache.shared.cachedUpload(for: data) {
+        if let cached = await MediaSendCache.shared.cachedUpload(for: data, reuse: reuse) {
             Log.info("Media send cache hit — reusing \(cached.mediaId)", category: "MediaManager")
             onProgress?(1.0)
             MediaManager.shared.cacheSentMedia(data, mediaId: cached.mediaId)
@@ -612,7 +751,7 @@ class MediaManager {
                 }
                 let result = try await MediaServiceClient.shared.uploadData(data, mimeType: mimeType, onProgress: onProgress)
                 onProgress?(1.0)
-                await MediaSendCache.shared.storeUpload(result, for: data)
+                await MediaSendCache.shared.storeUpload(result, for: data, reuse: reuse)
                 // Keep the plaintext locally so the SENDER never re-downloads their own upload.
                 //
                 // This used to be the caller's job, and three of the six upload paths did it while
@@ -675,38 +814,42 @@ class MediaManager {
     /// Text-based files are transparently compressed with ZLIB before encryption if beneficial.
     /// - Parameter url: Security-scoped URL of the file
     /// - Returns: Media metadata for message content
-    func uploadFile(_ url: URL) async throws -> MediaMessageData {
+    func uploadFile(_ url: URL, for recipientId: String) async throws -> MediaMessageData {
         let filename = url.lastPathComponent
         Log.info("Uploading file: \(filename)", category: "MediaManager")
 
-        guard url.startAccessingSecurityScopedResource() else {
-            throw MediaUploadError.uploadFailed("Cannot access file")
-        }
-        defer { url.stopAccessingSecurityScopedResource() }
+        // A picked file is security-scoped; a forwarded one is the app's own temporary copy and
+        // is not, which `startAccessingSecurityScopedResource` answers with false. Unreadable
+        // files still fail, at the read below.
+        let scoped = url.startAccessingSecurityScopedResource()
+        defer { if scoped { url.stopAccessingSecurityScopedResource() } }
 
         let originalData = try Data(contentsOf: url)
         let detectedMimeType = UTType(filenameExtension: url.pathExtension)?.preferredMIMEType
             ?? "application/octet-stream"
 
-        // Attempt ZLIB compression for compressible file types
-        let (dataToUpload, compressed) = Self.compressIfBeneficial(originalData, mimeType: detectedMimeType)
-
-        let uploadResult = try await Self.uploadWithRetry(data: dataToUpload, mimeType: detectedMimeType)
-        Log.info("File uploaded: \(uploadResult.mediaId) compressed=\(compressed)", category: "MediaManager")
+        // Sent as it is. Until 2026-09-30 a compressible document was DEFLATEd first, but no
+        // field on the wire said so: receivers showed the compressed bytes (Android now guesses by
+        // trying to inflate). Compression before encryption would also let the sealed size speak
+        // for the contents.
+        let uploadResult = try await Self.uploadWithRetry(
+            data: originalData, mimeType: detectedMimeType, reuse: ForwardStaging.reuse(for: url, to: recipientId))
+        Log.info("File uploaded: \(uploadResult.mediaId)", category: "MediaManager")
+        // A forward's copy has served its purpose; until now a failed upload could still retry it.
+        ForwardStaging.discard(url)
 
         return MediaMessageData(
             mediaId: uploadResult.mediaId,
             mediaUrl: uploadResult.mediaUrl,
             mediaKey: uploadResult.encryptionKey,
             mediaType: detectedMimeType,
-            size: originalData.count,         // original size shown to user
+            size: originalData.count,
             width: nil,
             height: nil,
             duration: nil,
             thumbnail: nil,
             hash: uploadResult.hash,
-            filename: filename,
-            compressed: compressed
+            filename: filename
         )
     }
 
@@ -718,10 +861,12 @@ class MediaManager {
     ///   - duration: Recording duration in seconds
     ///   - waveform: ~100 normalized amplitude samples (0.0–1.0) for waveform display
     /// - Returns: `VoiceMessageContent` ready to be JSON-encoded as the message payload
-    func uploadAudio(_ url: URL, duration: TimeInterval, waveform: [Float]) async throws -> VoiceMessageContent {
+    func uploadAudio(_ url: URL, duration: TimeInterval, waveform: [Float], for recipientId: String) async throws -> VoiceMessageContent {
         Log.info("Uploading voice message (duration \(Int(duration))s)", category: "MediaManager")
         let data = try Data(contentsOf: url)
-        let uploadResult = try await Self.uploadWithRetry(data: data, mimeType: "audio/m4a")
+        let uploadResult = try await Self.uploadWithRetry(
+            data: data, mimeType: "audio/m4a", reuse: ForwardStaging.reuse(for: url, to: recipientId))
+        ForwardStaging.discard(url)
         Log.info("Voice uploaded: \(uploadResult.mediaId)", category: "MediaManager")
         return VoiceMessageContent(
             type: "voice",
@@ -736,60 +881,24 @@ class MediaManager {
         )
     }
 
-    // MARK: - Compression Helpers
-
-    /// MIME types that are already compressed — re-compressing is wasteful
-    private static let alreadyCompressedMimeTypes: Set<String> = [
-        "image/jpeg", "image/png", "image/gif", "image/webp", "image/heic",
-        "video/mp4", "video/quicktime", "video/mpeg", "video/x-msvideo",
-        "audio/mpeg", "audio/aac", "audio/mp4", "audio/ogg",
-        "application/pdf",
-        "application/zip", "application/gzip", "application/x-bzip2",
-        "application/x-rar-compressed", "application/x-7z-compressed"
-    ]
-
-    /// Compress with ZLIB if:
-    ///   a) the MIME type is not already compressed, AND
-    ///   b) compression reduces size by at least 10%
-    /// Returns (data, wasCompressed).
-    static func compressIfBeneficial(_ data: Data, mimeType: String) -> (Data, Bool) {
-        guard !alreadyCompressedMimeTypes.contains(mimeType),
-              data.count > 512 else {   // no point compressing tiny files
-            return (data, false)
-        }
-        guard let compressed = try? (data as NSData).compressed(using: .zlib) as Data else {
-            return (data, false)
-        }
-        let ratio = Double(compressed.count) / Double(data.count)
-        if ratio < 0.90 {
-            Log.debug("Compressed \(data.count) → \(compressed.count) bytes (\(Int(ratio * 100))%)", category: "MediaManager")
-            return (compressed, true)
-        }
-        return (data, false)
-    }
-
-    /// Decompress ZLIB-compressed data (used on the receiver side)
-    static func decompress(_ data: Data) throws -> Data {
-        guard let decompressed = try? (data as NSData).decompressed(using: .zlib) as Data else {
-            throw MediaUploadError.encryptionFailed   // reuse existing error type
-        }
-        return decompressed
-    }
-
     /// Upload avatar image (profile sharing)
     /// - Parameter image: Avatar image to upload
     /// - Returns: Avatar upload result with raw encryption key
     func uploadAvatar(_ image: PlatformImage) async throws -> AvatarUploadResult {
         Log.info("Uploading avatar", category: "MediaManager")
         
-        // Optimize avatar (resize + compress) using ImageHelper
-        guard let avatarData = ImageHelper.prepareAvatarImage(image) else {
+        // Optimize avatar (resize + compress) using ImageHelper, then bring it to the one length
+        // every avatar has on the wire (`AvatarPadding`).
+        guard let avatarData = ImageHelper.prepareAvatarImage(image).map(AvatarPadding.padded) else {
             throw MediaManagerError.optimizationFailed
         }
         
+        // One new object per contact the profile goes to (`ProfileShareViewModel`): never a reuse,
+        // or the cache would hand every contact the same object again.
         let uploadResult = try await Self.uploadWithRetry(
                 data: avatarData,
-                mimeType: "image/jpeg"
+                mimeType: "image/jpeg",
+                reuse: .freshObject
             )
         Log.info("Avatar uploaded: \(uploadResult.mediaId)", category: "MediaManager")
         
@@ -871,31 +980,6 @@ class MediaManager {
         return decryptedData
     }
 
-    /// Download, decrypt, and optionally decompress a file attachment.
-    /// - Parameters:
-    ///   - mediaId: UUID of the media file
-    ///   - mediaUrl: Download URL (used for logging)
-    ///   - mediaKey: Raw 32-byte AES-256-GCM key
-    ///   - compressed: Whether the payload was ZLIB-compressed before encryption
-    /// - Returns: Original (decompressed if needed) file data
-    func downloadAndDecryptFile(
-        mediaId: String,
-        mediaUrl: String,
-        mediaKey: Data,
-        compressed: Bool
-    ) async throws -> Data {
-        let decryptedData = try await downloadAndDecryptMedia(
-            mediaId: mediaId,
-            mediaUrl: mediaUrl,
-            mediaKey: mediaKey
-        )
-        guard compressed else { return decryptedData }
-
-        Log.debug("Decompressing file attachment (\(decryptedData.count) bytes)", category: "MediaManager")
-        let decompressed = try Self.decompress(decryptedData)
-        Log.info("Decompressed: \(decryptedData.count) → \(decompressed.count) bytes", category: "MediaManager")
-        return decompressed
-    }
     /// `includingDisk: true` deletes the user's received media permanently — anything past the
     /// server's 7-day retention cannot be fetched again. That is a legitimate thing for a person to
     /// ask for (it is wired to an explicit control in Data & Storage settings) and it is not

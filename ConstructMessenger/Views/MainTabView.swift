@@ -13,10 +13,6 @@ struct MainTabView: View {
     @Environment(AuthViewModel.self) private var authViewModel
     @Environment(ChatsViewModel.self) private var chatsViewModel
 
-    /// Compact = iPhone (or iPad in narrow split-screen multitasking)
-    /// Regular = iPad full-screen or landscape
-    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
-
     // Call overlays
     @State private var callManager: (any CallUIManaging)? = CallRuntimeProvider.makeUIManager()
 
@@ -44,14 +40,12 @@ struct MainTabView: View {
                 }
             }
             .fullScreenCover(isPresented: fullScreenCoverBinding) {
-                if let session = activeCallSession {
-                    InCallView(
+                if let session = activeCallSession ?? incomingVideoSession, let callManager {
+                    ObservedInCallView(
+                        manager: callManager,
                         session: session,
                         isConnecting: isConnectingState,
                         endReason: callEndReason,
-                        quality: callManager?.callQuality ?? .good,
-                        onEnd: { callManager?.endCall() },
-                        onMuteChanged: { muted in callManager?.setMuted(muted) },
                         onMinimize: { isCallExpanded = false }
                     )
                 }
@@ -61,9 +55,11 @@ struct MainTabView: View {
                 // ended in the minimised state.
                 if isActive { isCallExpanded = true }
             }
+            .onChange(of: incomingVideoSession != nil) { _, isRinging in
+                if isRinging { isCallExpanded = true }
+            }
             .onReceive(NotificationCenter.default.publisher(for: .openSynapsTab)) { _ in
-                // Compact: TabView selection. Regular: ChatsSplitView also listens and
-                // switches its sidebar tab; keep selectedTab in sync for SynapsView guards.
+                // The tab view's selection, at every width.
                 chatsViewModel.selectedTab = 1
             }
     }
@@ -74,64 +70,60 @@ struct MainTabView: View {
     /// as a minimise request — the call itself stays alive on `CallManager`.
     private var fullScreenCoverBinding: Binding<Bool> {
         Binding(
-            get: { CallsFeature.isEnabled && callManager != nil && isActiveOrConnecting && isCallExpanded },
+            get: { CallsFeature.isEnabled && callManager != nil && (isActiveOrConnecting || incomingVideoSession != nil) && isCallExpanded },
             set: { newValue in
                 if !newValue { isCallExpanded = false }
             }
         )
     }
 
+    /// One tab view at every width (wave 5.5c, owner 2026-10-08): a tab bar on the phone, the
+    /// system sidebar on the iPad, which folds into a tab bar of its own. Every tab carries a
+    /// title as well as a symbol — a vertical bar (iPhone Duo) and the sidebar show the title.
+    /// SwiftUI loads each tab's content lazily on first selection. Tab values match the legacy
+    /// indices: chats 0, synaps 1, calls 2 (when enabled), settings 3-or-2. A conversation hides
+    /// the tab bar itself (`ChatView`, `hidesTabBar()`).
     @ViewBuilder
     private var callContent: some View {
-        if horizontalSizeClass == .regular {
-            ChatsSplitView()
-                .environment(chatsViewModel)
-        } else {
-            @Bindable var vm = chatsViewModel
-            // Standard system tab bar. SwiftUI loads each tab's content lazily on
-            // first selection, so there is no @FetchRequest burst at launch — the
-            // reason the old ZStack/visitedTabs workaround existed no longer applies.
-            // Tab values match the legacy indices: chats 0, synaps 1, calls 2
-            // (when enabled), settings 3-or-2. The per-tab tab-bar hiding inside a
-            // conversation lives on the ChatView navigation destination.
-            TabView(selection: $vm.selectedTab) {
-                Tab(value: 0) {
-                    ChatsListView()
-                        .environment(chatsViewModel)
-                } label: {
-                    Image(systemName: "message")
-                        .accessibilityIdentifier(A11y.Tab.chats)
-                }
+        @Bindable var vm = chatsViewModel
+        TabView(selection: $vm.selectedTab) {
+            Tab(value: 0) {
+                ChatsListView()
+                    .environment(chatsViewModel)
+            } label: {
+                Label(NSLocalizedString("chats", comment: ""), systemImage: "message")
+                    .accessibilityIdentifier(A11y.Tab.chats)
+            }
 
-                Tab(value: 1) {
-                    SynapsView()
-                        .environment(chatsViewModel)
-                } label: {
-                    Image(systemName: "circle.grid.cross")
-                        .accessibilityIdentifier(A11y.Tab.synaps)
-                }
+            Tab(value: 1) {
+                SynapsView()
+                    .environment(chatsViewModel)
+            } label: {
+                Label(NSLocalizedString("synapses", comment: ""), systemImage: "circle.grid.cross")
+                    .accessibilityIdentifier(A11y.Tab.synaps)
+            }
 
-                if CallsFeature.isEnabled {
-                    Tab(value: 2) {
-                        CallHistoryView()
-                    } label: {
-                        Image(systemName: "phone")
-                            .accessibilityIdentifier(A11y.Tab.calls)
-                    }
-                }
-
-                Tab(value: settingsTab) {
-                    SettingsView()
-                        .environment(chatsViewModel)
+            if CallsFeature.isEnabled {
+                Tab(value: 2) {
+                    CallHistoryView()
                 } label: {
-                    Image(systemName: "gearshape")
-                        .accessibilityIdentifier(A11y.Tab.settings)
+                    Label(NSLocalizedString("calls_recents", comment: ""), systemImage: "phone")
+                        .accessibilityIdentifier(A11y.Tab.calls)
                 }
             }
-            .tint(Color.CT.accent)
-            .toolbarBackground(.hidden, for: .tabBar)
-            .ctBackground()
+
+            Tab(value: settingsTab) {
+                SettingsView()
+                    .environment(chatsViewModel)
+            } label: {
+                Label(NSLocalizedString("settings", comment: ""), systemImage: "gearshape")
+                    .accessibilityIdentifier(A11y.Tab.settings)
+            }
         }
+        .tabViewStyle(.sidebarAdaptable)
+        .tint(Color.CT.accent)
+        .toolbarBackground(.hidden, for: .tabBar)
+        .ctBackground()
     }
 
     /// Settings tab value — shifts to 3 when the calls tab is present, else 2.
@@ -164,6 +156,13 @@ struct MainTabView: View {
         }
     }
 
+    /// A video call ringing while the app is open gets the app's own screen too
+    /// (`IncomingVideoScreen`); not the mini bar, which is for a call in progress.
+    private var incomingVideoSession: CallSession? {
+        guard let callManager else { return nil }
+        return IncomingVideoScreen.session(for: callManager.state, video: callManager.video)
+    }
+
     private var callEndReason: CallEndReason? {
         guard let callManager else { return nil }
         if case .ended(_, let reason) = callManager.state { return reason }
@@ -190,10 +189,10 @@ struct InCallMiniBar: View {
         Button(action: onTap) {
             HStack(spacing: 8) {
                 Image(systemName: "chevron.up")
-                    .font(.system(size: 11, weight: .bold))
+                    .font(CTIcon.font(CTIcon.caption, weight: .bold))
                     .foregroundStyle(Color.CT.bg)
                 Text("> \(peerName)")
-                    .font(CTFont.bold(12))
+                    .font(CTFont.ui(12, weight: .bold))
                     .foregroundStyle(Color.CT.bg)
                     .lineLimit(1)
                 Spacer(minLength: 8)
@@ -201,7 +200,7 @@ struct InCallMiniBar: View {
                     isConnecting ? "call_minibar_connecting" : "call_minibar_in_call",
                     comment: ""
                 ))
-                .font(CTFont.regular(11))
+                .font(CTFont.caption)
                 .foregroundStyle(Color.CT.bg.opacity(0.75))
             }
             .padding(.horizontal, 14)
@@ -248,5 +247,48 @@ private final class MainTabPreviewState {
         .environment(SecurityViewModel())
 }
 #endif
+
+/// The call screen, reading the call's live state in a body of its own.
+///
+/// `MainTabView` used to read `callManager.video` and `callQuality` inside the `fullScreenCover`
+/// closure, which is not its body: Observation tracks what a body reads, and a closure run later
+/// is outside it. The cover was rebuilt only when something the tab view did read changed — the
+/// call state — so a `MediaUpdate` from the peer changed `video` and nothing redrew. Two devices,
+/// 2026-10-05: the callee saw the caller's avatar until someone toggled a camera, while the log
+/// said "Peer camera on".
+private struct ObservedInCallView: View {
+    let manager: any CallUIManaging
+    let session: CallSession
+    let isConnecting: Bool
+    let endReason: CallEndReason?
+    let onMinimize: () -> Void
+
+    var body: some View {
+        if IncomingVideoScreen.session(for: manager.state, video: manager.video) != nil {
+            IncomingVideoCallView(
+                session: session,
+                onAnswer: { manager.answerIncomingCall(withCamera: $0) },
+                onDecline: { manager.declineIncomingCall() }
+            )
+        } else {
+            inCall
+        }
+    }
+
+    private var inCall: some View {
+        InCallView(
+            session: session,
+            isConnecting: isConnecting,
+            endReason: endReason,
+            quality: manager.callQuality,
+            onEnd: { manager.endCall() },
+            onMuteChanged: { manager.setMuted($0) },
+            onMinimize: onMinimize,
+            video: manager.video,
+            onCameraChanged: { manager.setCameraOn($0) },
+            onSwitchCamera: { manager.switchCamera() }
+        )
+    }
+}
 
 #endif

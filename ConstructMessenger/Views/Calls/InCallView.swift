@@ -10,6 +10,7 @@ import SwiftUI
 #if os(iOS)
 import AVKit
 import AVFoundation
+import Combine
 #endif
 
 struct InCallView: View {
@@ -27,14 +28,74 @@ struct InCallView: View {
     /// cover without ending the call. `MainTabView` then shows a top-of-screen
     /// `InCallMiniBar` and lets the user keep using the rest of the app.
     var onMinimize: (() -> Void)? = nil
+    /// The camera on both sides. With video calls off it stays the default, and so does the
+    /// screen: no video, no camera buttons.
+    var video = CallVideoState()
+    var onCameraChanged: (Bool) -> Void = { _ in }
+    var onSwitchCamera: () -> Void = {}
 
     @State private var isMuted = false
     @State private var elapsed: Int = 0
     @State private var timer: Timer? = nil
 
     private var isEnded: Bool { endReason != nil }
+    /// Which face is on the big screen when both cameras are on.
+    @State private var videoSwapped = false
+
+    /// The video screen while a camera is on; nil is this audio screen.
+    private var videoStage: VideoCallStage? {
+        #if os(iOS)
+        VideoCallStage.make(video, isConnecting: isConnecting, isEnded: isEnded, swapped: videoSwapped)
+        #else
+        nil
+        #endif
+    }
 
     var body: some View {
+        Group {
+            #if os(iOS)
+            if let videoStage {
+                VideoCallView(
+                    session: session,
+                    stage: videoStage,
+                    video: video,
+                    status: statusText,
+                    quality: quality,
+                    isConnecting: isConnecting,
+                    isMuted: $isMuted,
+                    swapped: $videoSwapped,
+                    onMuteChanged: onMuteChanged,
+                    onEnd: onEnd,
+                    onMinimize: isEnded ? nil : onMinimize,
+                    onCameraChanged: onCameraChanged,
+                    onSwitchCamera: onSwitchCamera
+                )
+            } else {
+                audioScreen
+            }
+            #else
+            audioScreen
+            #endif
+        }
+        .onAppear {
+            guard !isConnecting && !isEnded else { return }
+            startTimer()
+        }
+        .onChange(of: isConnecting) { _, connecting in
+            if !connecting && !isEnded { startTimer() } else { stopTimer() }
+        }
+        .onChange(of: isEnded) { _, ended in
+            if ended { stopTimer() }
+        }
+        .onDisappear { stopTimer() }
+        // What the screen shows, beside what the call says: the two disagreed once without a
+        // trace (`ObservedInCallView`).
+        .onChange(of: videoStage) { _, stage in
+            Log.info("VIDEO[screen] \(stage.map { "big=\($0.big) small=\($0.small.map { "\($0)" } ?? "none")" } ?? "audio")", category: "Calls")
+        }
+    }
+
+    private var audioScreen: some View {
         ZStack {
             Color.CT.bg
                 .ignoresSafeArea()
@@ -47,7 +108,7 @@ struct InCallView: View {
                     if let onMinimize, !isEnded {
                         Button(action: onMinimize) {
                             Image(systemName: "chevron.down")
-                                .font(.system(size: CTLayout.navIconSizeLg, weight: .medium))
+                                .font(CTIcon.font(CTIcon.navLg))
                                 .foregroundStyle(Color.CT.textDim)
                                 .frame(width: CTLayout.hitTarget, height: CTLayout.hitTarget, alignment: .leading)
                                 .contentShape(Rectangle())
@@ -65,22 +126,22 @@ struct InCallView: View {
                 // Avatar + name
                 VStack(spacing: 16) {
                     ZStack {
-                        ContactMainAvatarView(userId: session.peerUserId, displayName: session.peerName, size: 96)
+                        ContactMainAvatarView(userId: session.peerUserId, displayName: session.peerName, size: CTAvatarSize.hero)
                         // Pulse appears in two distinct UX moments:
                         // 1. While the call is dialling / ringing (connecting=true)
                         // 2. While ICE has transiently dropped (.reconnecting)
                         // Static avatar otherwise = "everything's fine".
                         if !isEnded && (isConnecting || quality == .reconnecting) {
-                            PulseRingView(size: 96)
+                            PulseRingView(size: CTAvatarSize.hero)
                         }
                     }
 
                     Text(session.peerName)
-                        .font(.title2.weight(.semibold))
+                        .font(CTFont.ui(22, weight: .bold))
                         .foregroundStyle(Color.CT.text)
 
                     Text(statusText)
-                        .font(CTFont.regular(14))
+                        .font(CTFont.ui(14))
                         .foregroundStyle(isEnded ? Color.CT.danger.opacity(0.85) : Color.CT.textDim)
                         .animation(.easeInOut(duration: 0.3), value: isConnecting)
 
@@ -89,9 +150,9 @@ struct InCallView: View {
                     if !isEnded {
                         HStack(spacing: 4) {
                             Image(systemName: "lock.fill")
-                                .font(.system(size: 10, weight: .medium))
+                                .font(CTIcon.font(CTIcon.caption))
                             Text(NSLocalizedString("call_e2ee_badge", comment: ""))
-                                .font(CTFont.regular(11))
+                                .font(CTFont.caption)
                         }
                         .foregroundStyle(Color.CT.textDim)
                         .padding(.horizontal, 10)
@@ -112,24 +173,17 @@ struct InCallView: View {
                     CallControlsBar(onEnd: onEnd) {
                         CallControlButton(config: muteConfig)
                         #if os(iOS)
-                        AudioRoutePickerButton()
+                        AudioRouteControl()
                         #endif
+                        // Turning the camera on here is what moves the call to the video screen.
+                        if video.canSend {
+                            CallControlButton(config: cameraConfig)
+                        }
                     }
                     .padding(.bottom, 52)
                 }
             }
         }
-        .onAppear {
-            guard !isConnecting && !isEnded else { return }
-            startTimer()
-        }
-        .onChange(of: isConnecting) { _, connecting in
-            if !connecting && !isEnded { startTimer() } else { stopTimer() }
-        }
-        .onChange(of: isEnded) { _, ended in
-            if ended { stopTimer() }
-        }
-        .onDisappear { stopTimer() }
     }
 
     // MARK: - Secondary controls
@@ -143,6 +197,15 @@ struct InCallView: View {
                 isMuted.toggle()
                 onMuteChanged(isMuted)
             }
+        )
+    }
+
+    private var cameraConfig: CallControlConfig {
+        CallControlConfig(
+            systemImage: video.localCameraOn ? "video.fill" : "video.slash.fill",
+            label: NSLocalizedString("call_camera", comment: ""),
+            tint: video.localCameraOn ? Color.CT.accent : Color.CT.textDim,
+            action: { onCameraChanged(!video.localCameraOn) }
         )
     }
 
@@ -240,7 +303,7 @@ private struct CallControlsBar<Secondary: View>: View {
 
             Button(action: onEnd) {
                 Image(systemName: "phone.down.fill")
-                    .font(.system(size: CTLayout.callIconSize, weight: .medium))
+                    .font(CTIcon.font(CTIcon.control))
                     .foregroundStyle(.white)
                     .frame(width: CTLayout.callEndSize, height: CTLayout.callEndSize)
                     .background(Color.CT.danger)
@@ -266,14 +329,14 @@ struct CallControlButton: View {
         Button(action: config.action) {
             VStack(spacing: 6) {
                 Image(systemName: config.systemImage)
-                    .font(.system(size: CTLayout.callIconSize, weight: .medium))
+                    .font(CTIcon.font(CTIcon.control))
                     .foregroundStyle(config.tint)
                     .frame(width: CTLayout.callControlSize, height: CTLayout.callControlSize)
                     .background(Color.CT.bgMsg)
                     .clipShape(Circle())
                     .overlay(Circle().stroke(config.tint.opacity(0.4), lineWidth: 1))
                 Text(config.label)
-                    .font(CTFont.regular(10))
+                    .font(CTFont.micro)
                     .foregroundStyle(Color.CT.textDim)
             }
         }
@@ -285,6 +348,70 @@ struct CallControlButton: View {
 // MARK: - Audio route picker
 
 #if os(iOS)
+/// Which control the audio button is.
+///
+/// With only the phone's own earpiece and loudspeaker there are two places for the sound to go,
+/// and the control is a toggle, as in the Phone app. It used to be the system route picker in
+/// every case, laid transparently over our icon; on 2026-10-01 a tap on it did nothing on a
+/// device without a headset. With a headset, Bluetooth or AirPlay present there is a real choice,
+/// and the system picker is the control.
+enum CallAudioRouteControl: Equatable {
+    case speakerToggle(isOn: Bool)
+    case routePicker
+
+    /// Ports that are not the phone itself. Any of them, in use or merely available, makes the
+    /// choice more than earpiece-or-speaker.
+    static let externalPorts: Set<AVAudioSession.Port> = [
+        .bluetoothA2DP, .bluetoothHFP, .bluetoothLE, .airPlay,
+        .headphones, .headsetMic, .carAudio, .usbAudio,
+    ]
+
+    static func control(outputs: [AVAudioSession.Port], availableInputs: [AVAudioSession.Port]) -> Self {
+        if (outputs + availableInputs).contains(where: externalPorts.contains) { return .routePicker }
+        return .speakerToggle(isOn: outputs.contains(.builtInSpeaker))
+    }
+}
+
+/// The call's audio button: a loudspeaker toggle or the system route picker, whichever
+/// `CallAudioRouteControl` says, re-read on every route change.
+struct AudioRouteControl: View {
+    @State private var control: CallAudioRouteControl = .speakerToggle(isOn: false)
+
+    var body: some View {
+        Group {
+            switch control {
+            case .speakerToggle(let isOn):
+                CallControlButton(config: CallControlConfig(
+                    systemImage: isOn ? "speaker.wave.3.fill" : "speaker.fill",
+                    label: NSLocalizedString("call_speaker", comment: ""),
+                    tint: isOn ? Color.CT.accent : Color.CT.textDim,
+                    action: {
+                        CallAudioController.setSpeaker(!isOn)
+                        refresh()
+                    }
+                ))
+                .accessibilityAddTraits(isOn ? .isSelected : [])
+            case .routePicker:
+                AudioRoutePickerButton()
+            }
+        }
+        .onAppear { refresh() }
+        .onReceive(
+            NotificationCenter.default
+                .publisher(for: AVAudioSession.routeChangeNotification)
+                .receive(on: RunLoop.main)
+        ) { _ in refresh() }
+    }
+
+    private func refresh() {
+        let session = AVAudioSession.sharedInstance()
+        control = .control(
+            outputs: session.currentRoute.outputs.map(\.portType),
+            availableInputs: (session.availableInputs ?? []).map(\.portType)
+        )
+    }
+}
+
 /// Custom-styled audio-route button. Renders our CT 56pt circular control with
 /// a route-aware SF Symbol, and overlays a transparent `AVRoutePickerView` that
 /// captures taps and presents the system AirPlay / Bluetooth / Speaker picker.
@@ -296,7 +423,7 @@ struct AudioRoutePickerButton: View {
         VStack(spacing: 6) {
             ZStack {
                 Image(systemName: routeSymbol)
-                    .font(.system(size: CTLayout.callIconSize, weight: .medium))
+                    .font(CTIcon.font(CTIcon.control))
                     .foregroundStyle(Color.CT.textDim)
                     .frame(width: CTLayout.callControlSize, height: CTLayout.callControlSize)
                     .background(Color.CT.bgMsg)
@@ -312,7 +439,7 @@ struct AudioRoutePickerButton: View {
             }
 
             Text(NSLocalizedString("call_audio_route", comment: ""))
-                .font(CTFont.regular(10))
+                .font(CTFont.micro)
                 .foregroundStyle(Color.CT.textDim)
         }
         .onAppear { updateSymbol() }
@@ -341,7 +468,7 @@ struct AudioRoutePickerButton: View {
     }
 }
 
-private struct AVRoutePickerViewRepresentable: UIViewRepresentable {
+struct AVRoutePickerViewRepresentable: UIViewRepresentable {
     func makeUIView(context: Context) -> AVRoutePickerView {
         let v = AVRoutePickerView()
         // Render system glyph transparent — our SwiftUI Image underneath is the visible icon.

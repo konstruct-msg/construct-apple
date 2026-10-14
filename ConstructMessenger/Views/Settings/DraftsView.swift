@@ -11,7 +11,6 @@ import UIKit
 #endif
 
 struct DraftsView: View {
-    @Environment(\.dismiss) private var dismiss
     @State private var draftText: String = ""
     @State private var drafts: [DraftItem] = []
     @State private var hasLoadedDrafts = false
@@ -26,58 +25,49 @@ struct DraftsView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            CTNavBar(
-                title: NSLocalizedString("drafts", comment: ""),
-                showBack: true,
-                backAction: { dismiss() }
-            ) {
-                EmptyView()
-            } trailing: {
-                EmptyView()
-            }
             VStack(spacing: 16) {
                 VStack(spacing: 8) {
                     TextEditor(text: $draftText)
                         .frame(minHeight: 120, maxHeight: 180)
                         .padding(8)
                         .background(Color.CT.bgMsg)
-                        .font(CTFont.regular(13))
+                        .font(CTFont.body)
                         .foregroundColor(Color.CT.text)
                         .scrollContentBackground(.hidden)
                         .scrollIndicators(.hidden)
                         .clipShape(CTShape.card())
                         .overlay(CTShape.card().stroke(Color.CT.noise, lineWidth: 1))
 
-                    Button {
+                    CTButton(
+                        label: NSLocalizedString("save_draft", comment: ""),
+                        role: .secondary,
+                        isEnabled: canSaveDraft
+                    ) {
                         addDraft()
-                    } label: {
-                        Text(LocalizedStringKey("save_draft"))
-                            .font(CTFont.regular(13))
-                            .foregroundColor(Color.CT.text)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 10)
-                            .background(Color.CT.bgMsg)
-                            .clipShape(CTShape.card())
-                            .overlay(CTShape.card().stroke(Color.CT.accent, lineWidth: 1))
                     }
-                    .disabled(!canSaveDraft)
                 }
 
                 if drafts.isEmpty {
-                    Spacer()
-                    Text(LocalizedStringKey("drafts_stored_locally"))
-                        .font(.footnote)
-                        .foregroundColor(.secondary)
-                    Spacer()
+                    ContentUnavailableView {
+                        Label {
+                            Text(LocalizedStringKey("drafts_empty_title"))
+                                .font(CTFont.headline)
+                        } icon: {
+                            Image(systemName: "doc.text")
+                        }
+                    } description: {
+                        Text(LocalizedStringKey("drafts_stored_locally"))
+                            .font(CTFont.body)
+                    }
                 } else {
                     List {
                         ForEach(drafts) { draft in
                             VStack(alignment: .leading, spacing: 6) {
                                 Text(draft.text)
-                                    .font(.body)
+                                    .font(CTFont.message(15))
                                     .lineLimit(3)
                                 Text(draft.createdAt, style: .date)
-                                    .font(.caption)
+                                    .font(CTFont.secondary)
                                     .foregroundColor(.secondary)
                             }
                             .padding(.vertical, 6)
@@ -95,9 +85,7 @@ struct DraftsView: View {
             }
         }
         .background(Color.CT.bg.ignoresSafeArea())
-        #if os(iOS)
-        .hideSystemNavBar()
-        #endif
+        .screenTitle(NSLocalizedString("drafts", comment: ""))
     }
 
     private func addDraft() {

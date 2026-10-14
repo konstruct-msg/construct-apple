@@ -16,56 +16,43 @@ import SwiftUI
 #if os(iOS)
 struct DeviceLinkMethodView: View {
 
-    @Environment(\.dismiss) private var dismiss
-
     @State private var showScan = false
     @State private var showQR = false
 
     var body: some View {
-        NavigationStack {
-            VStack(spacing: 0) {
-                CTNavBar(
-                    title: NSLocalizedString("link_method_title", comment: ""),
-                    showBack: true,
-                    backAction: { dismiss() }
-                ) {
-                    EmptyView()
-                } trailing: {
-                    EmptyView()
+        VStack(spacing: 0) {
+            ScrollView {
+                VStack(spacing: CTLayout.sectionGap) {
+                    Text(NSLocalizedString("link_method_intro", comment: ""))
+                        .font(CTFont.body)
+                        .foregroundColor(Color.CT.textDim)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, CTLayout.sectionGap)
+                        .padding(.top, CTLayout.sectionGap)
+
+                    methodCard(
+                        icon: "qrcode.viewfinder",
+                        titleKey: "link_method_scan_title",
+                        subtitleKey: "link_method_scan_subtitle"
+                    ) { showScan = true }
+
+                    methodCard(
+                        icon: "qrcode",
+                        titleKey: "link_method_show_title",
+                        subtitleKey: "link_method_show_subtitle"
+                    ) { showQR = true }
                 }
-                Rectangle().fill(Color.CT.noise).frame(height: 1)
-
-                ScrollView {
-                    VStack(spacing: CTLayout.sectionGap) {
-                        Text(NSLocalizedString("link_method_intro", comment: ""))
-                            .font(CTFont.regular(13))
-                            .foregroundColor(Color.CT.textDim)
-                            .multilineTextAlignment(.center)
-                            .padding(.horizontal, CTLayout.sectionGap)
-                            .padding(.top, CTLayout.sectionGap)
-
-                        methodCard(
-                            icon: "qrcode.viewfinder",
-                            titleKey: "link_method_scan_title",
-                            subtitleKey: "link_method_scan_subtitle"
-                        ) { showScan = true }
-
-                        methodCard(
-                            icon: "qrcode",
-                            titleKey: "link_method_show_title",
-                            subtitleKey: "link_method_show_subtitle"
-                        ) { showQR = true }
-                    }
-                    .padding(.horizontal, CTLayout.edgePad)
-                    .padding(.bottom, CTLayout.sectionGap)
-                    .frame(maxWidth: 480)
-                    .frame(maxWidth: .infinity)
-                }
+                .padding(.horizontal, CTLayout.edgePad)
+                .padding(.bottom, CTLayout.sectionGap)
+                .frame(maxWidth: 480)
+                .frame(maxWidth: .infinity)
             }
-            .background(Color.CT.bg.ignoresSafeArea())
         }
+        .background(Color.CT.bg.ignoresSafeArea())
+        .screenTitle(NSLocalizedString("link_method_title", comment: ""))
         .fullScreenCover(isPresented: $showScan) { DeviceLinkScanView() }
-        .fullScreenCover(isPresented: $showQR) { DeviceLinkShowQRView() }
+        // Its own close: leaving stops the poll for the phone's approval.
+        .fullScreenCover(isPresented: $showQR) { DeviceLinkShowQRView().sheetNavigation(closes: false) }
     }
 
     private func methodCard(
@@ -77,22 +64,22 @@ struct DeviceLinkMethodView: View {
         Button(action: action) {
             HStack(spacing: CTLayout.chromeGap) {
                 Image(systemName: icon)
-                    .font(.system(size: 22, weight: .medium))
+                    .font(CTIcon.font(CTIcon.navLg))
                     .foregroundStyle(Color.CT.accent)
                     .frame(width: 32)
                 VStack(alignment: .leading, spacing: 3) {
                     Text(NSLocalizedString(titleKey, comment: "").uppercased())
-                        .font(CTFont.bold(13))
+                        .font(CTFont.bodyEmphasis)
                         .foregroundStyle(Color.CT.text)
                         .tracking(1)
                     Text(NSLocalizedString(subtitleKey, comment: ""))
-                        .font(CTFont.regular(11))
+                        .font(CTFont.caption)
                         .foregroundStyle(Color.CT.textDim)
                         .multilineTextAlignment(.leading)
                 }
                 Spacer(minLength: 0)
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(CTIcon.font(CTIcon.caption, weight: .semibold))
                     .foregroundStyle(Color.CT.textDim)
             }
             .padding(.horizontal, CTLayout.edgePad)

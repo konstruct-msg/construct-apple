@@ -44,12 +44,12 @@ struct ConstructActionRow: View {
         } label: {
             HStack(spacing: 12) {
                 Image(systemName: systemImage)
-                    .font(.system(size: 16, weight: .medium))
+                    .font(CTIcon.font(CTIcon.row))
                     .foregroundStyle(rowForeground)
                     .frame(minWidth: 20, alignment: .center)
 
                 Text(title)
-                    .font(CTFont.bold(16))
+                    .font(CTFont.ui(16, weight: .bold))
 
                 Spacer()
 
@@ -76,7 +76,7 @@ struct ConstructActionRow: View {
 
     private func badgeView(_ text: String) -> some View {
         Text(text)
-            .font(CTFont.regular(10))
+            .font(CTFont.micro)
             .foregroundStyle(Color.CT.textDim)
             .padding(.horizontal, 6).padding(.vertical, 2)
             .background(Rectangle().fill(Color.CT.bgMsg))
@@ -133,13 +133,13 @@ struct ConstructNavRow<Destination: View>: View {
                 .frame(minWidth: 22, alignment: .center)
 
             Text(title)
-                .font(CTFont.bold(16))
+                .font(CTFont.ui(16, weight: .bold))
                 .foregroundStyle(Color.CT.text)
 
             Spacer()
 
             Image(systemName: "chevron.right")
-                .font(CTFont.regular(12))
+                .font(CTFont.secondary)
                 .foregroundStyle(Color.CT.textDim)
         }
         .padding(.horizontal, 16)
@@ -151,13 +151,13 @@ struct ConstructNavRow<Destination: View>: View {
     private func navIconView(_ icon: String, color: Color) -> some View {
         if icon.hasPrefix("[") || icon.hasPrefix("●") {
             Text(icon)
-                .font(CTFont.regular(13))
+                .font(CTFont.body)
                 .foregroundStyle(color)
                 .lineLimit(1)
                 .fixedSize()
         } else {
             Image(systemName: icon)
-                .font(.system(size: 16))
+                .font(CTIcon.font(CTIcon.row, weight: .regular))
                 .foregroundStyle(color)
         }
     }
@@ -178,19 +178,19 @@ struct ConstructButtonRow: View {
         Button(action: action) {
             HStack(spacing: 14) {
                 Image(systemName: systemImage)
-                    .font(.system(size: 16, weight: .medium))
+                    .font(CTIcon.font(CTIcon.row))
                     .foregroundStyle(iconColor)
                     .frame(minWidth: 22, alignment: .center)
 
                 Text(title)
-                    .font(CTFont.bold(16))
+                    .font(CTFont.ui(16, weight: .bold))
                     .foregroundStyle(Color.CT.text)
 
                 Spacer()
 
                 if showChevron {
                     Image(systemName: "chevron.right")
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(CTIcon.font(CTIcon.caption, weight: .semibold))
                         .foregroundStyle(Color.CT.textDim)
                 }
             }

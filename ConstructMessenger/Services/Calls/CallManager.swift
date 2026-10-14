@@ -37,6 +37,8 @@ final class CallManager: CallUIManaging {
     /// .disconnected` (transient network blip). Resets to `good` on every
     /// new call so a stale value from a previous call never leaks into the UI.
     private(set) var callQuality: CallQuality = .good
+    /// The camera on both sides of the current call. Fresh for every call, like `callQuality`.
+    private(set) var video = CallVideoState()
 
     func clearLastError() { lastError = nil }
 
@@ -81,6 +83,28 @@ final class CallManager: CallUIManaging {
         return Date().timeIntervalSince(endedAt) < Self.endedCallMemory
     }
 
+    /// Our outgoing call to `userId` is the one in progress — a call from them now is glare, which
+    /// the offer's tie-break resolves, not a second caller to refuse.
+    private func isOutgoingCall(to userId: String) -> Bool {
+        guard let active, case .outgoing = active.session.direction else { return false }
+        return active.session.peerUserId == userId
+    }
+
+    /// Refuse a second call while one is in progress: hangup BUSY to its caller over E2EE, and the
+    /// id remembered as ended, so the push and the offer — whichever comes second — find it ended
+    /// instead of ringing. The call in progress is not touched. Not over the signaling stream: that
+    /// stream belongs to the call in progress; the caller's client tells the server when it ends.
+    private func declineAsBusy(callId: String, callerUserId: String) {
+        rememberEnded(callId: callId)
+        var sig = Shared_Proto_Signaling_V1_WebRTCSignal()
+        sig.callID = callId
+        sig.senderDeviceID = Self.currentDeviceId()
+        sig.timestamp = Self.nowMs()
+        sig.signal = .hangup(Self.makeCallHangup(deviceId: Self.currentDeviceId(), timestampMs: Self.nowMs(), reason: .busy))
+        let result = sendCallSignalProto(sig, to: callerUserId)
+        Log.info("Busy hangup for callId=\(callId.prefix(8))… to \(callerUserId.prefix(8))… (\(result))", category: "Calls")
+    }
+
     /// Pull the message backlog so an SDP that is already on the server can land
     /// without waiting for a zombie MessageStream to time out (7CDE9769: 15 s).
     /// Coalesced with silent-push fetches; a no-op if the offer is already in hand.
@@ -98,7 +122,12 @@ final class CallManager: CallUIManaging {
     /// be running as RESPONDER (D858E6FE). `reestablishSessionForQueuedOutbound`
     /// no-ops when an init is in flight or a session already exists.
     private func ensureSessionForOutgoingSignal(to userId: String) async throws {
-        switch outgoingCallSessionDisposition(hasSession: CryptoManager.shared.hasSession(for: userId)) {
+        // The device the offer will actually be encrypted for — the pinned one, as call
+        // signalling still is. Asking about any device of the account would answer yes on a
+        // session this send cannot use.
+        let signalDevice = SessionAddressing.pinnedDevice(ofPeer: userId)
+        let holds = { signalDevice.map { CryptoManager.shared.hasSession(for: $0) } ?? false }
+        switch outgoingCallSessionDisposition(hasSession: holds()) {
         case .encryptNow:
             return
         case .waitThenInit:
@@ -111,7 +140,7 @@ final class CallManager: CallUIManaging {
         SessionLifecycleController.shared.reestablishSessionForQueuedOutbound(to: userId)
         let deadline = Date().addingTimeInterval(NetworkTiming.Calls.sessionReadyWait)
         while Date() < deadline {
-            if CryptoManager.shared.hasSession(for: userId) {
+            if holds() {
                 Log.info("DR session ready for call signal to \(userId.prefix(8))…", category: "Calls")
                 return
             }
@@ -129,6 +158,11 @@ final class CallManager: CallUIManaging {
         var stream: SignalStream?
         var turn: Shared_Proto_Signaling_V1_TurnCredentials?
         var webrtc: (any WebRTCSessionProtocol)?
+        /// Asked for with the video button: the camera comes on as soon as there is a sender.
+        var startsWithCamera = false
+        /// Answered with "without video": a video offer that arrives after the answer does not
+        /// turn the camera on.
+        var answeredWithoutCamera = false
         var keepaliveTask: Task<Void, Never>?
         var receiveTask: Task<Void, Never>?
         var acceptTask: Task<Void, Never>?
@@ -161,6 +195,8 @@ final class CallManager: CallUIManaging {
         var awaitingOfferAfterAnswer: Bool = false
         /// Bounds that wait. Without it the callee waits forever on an offer that may never come.
         var offerWaitTimeout: Task<Void, Never>?
+        /// Ends an incoming call nobody answers. See `startUnansweredTimeout`.
+        var unansweredTimeout: Task<Void, Never>?
         /// ICE candidates received via E2EE before the remote offer was applied.
         /// Applied automatically when pendingRemoteOfferSdp is consumed in answer().
         var pendingIceCandidates: [WebRTCIceCandidate] = []
@@ -204,6 +240,7 @@ final class CallManager: CallUIManaging {
             iceFlushTask?.cancel()
             iceRestartTask?.cancel()
             offerWaitTimeout?.cancel()
+            unansweredTimeout?.cancel()
             iceFlushTask = nil
             iceRestartTask = nil
             offerWaitTimeout = nil
@@ -236,6 +273,16 @@ final class CallManager: CallUIManaging {
         }
         // Audio session lifecycle is owned by CallAudioController; CallKit's
         // didActivate/didDeactivate forward to it directly (see CallKitProvider).
+        NotificationCenter.default.addObserver(
+            forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.setInBackground(true) }
+        }
+        NotificationCenter.default.addObserver(
+            forName: UIApplication.willEnterForegroundNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.setInBackground(false) }
+        }
         #endif
     }
 
@@ -249,8 +296,7 @@ final class CallManager: CallUIManaging {
 
         // Client-authoritative mutuality (sealed-sender future): only local contacts.
         // Server reciprocity cannot survive when the server does not see the caller.
-        let ctx = PersistenceController.shared.container.viewContext
-        if !ContactPolicy.isCallableContact(userId, in: ctx) {
+        if !ContactPolicy.isCallableContact(userId) {
             Log.info(
                 "SECURITY[call_gate]: outgoing call blocked — not a local contact \(userId.prefix(8))…",
                 category: "Calls"
@@ -290,6 +336,7 @@ final class CallManager: CallUIManaging {
         )
         begin(session: session, initialState: .dialing(session))
         guard let call = active else { return }
+        call.startsWithCamera = hasVideo && CallsFeature.isVideoEnabled
         #if os(iOS)
         // Arm the ringback tone; it starts once CallKit activates audio.
         CallAudioController.shared.notifyDialing()
@@ -316,7 +363,6 @@ final class CallManager: CallUIManaging {
             let initResp = try await SignalingServiceClient.shared.initiateCall(
                 callId: callId,
                 calleeUserId: userId,
-                callerName: AuthSessionManager.shared.currentDisplayName,
                 hasVideo: hasVideo
             )
             guard self.active === call else { Log.info("Call replaced during initiateCall — aborting outgoing setup", category: "Calls"); return }
@@ -413,9 +459,8 @@ final class CallManager: CallUIManaging {
         // call to CallKit synchronously in the PushKit delegate (or the app is terminated), so
         // we cannot simply drop it — instead report it ended immediately so a blocked /
         // non-contact never actually rings. See sealed-sender-authenticated-transitional.
-        let pushCtx = PersistenceController.shared.container.viewContext
-        if BlockedContacts.isBlocked(callerId, in: pushCtx)
-            || !ContactPolicy.isCallableContact(callerId, in: pushCtx) {
+        if BlockedContacts.isBlocked(callerId)
+            || !ContactPolicy.isCallableContact(callerId) {
             Log.info(
                 "SECURITY[call_gate]: incoming push from non-callable \(callerId.prefix(8))… — reporting ended (callId=\(callId.prefix(8))…)",
                 category: "Calls"
@@ -426,22 +471,25 @@ final class CallManager: CallUIManaging {
             return
         }
 
-        let isBusyState: Bool = {
-            switch state {
-            case .active, .connecting, .dialing, .ringing: return true
-            default: return false
-            }
-        }()
         switch incomingPushDisposition(
             hasActiveCall: active != nil,
-            isBusyState: isBusyState,
-            matchesTrackedCallId: active?.session.id == callId
+            isBusyState: callStateIsBusy(state),
+            matchesTrackedCallId: active?.session.id == callId,
+            isGlareWithCaller: isOutgoingCall(to: callerId)
         ) {
         case .declineBusy:
             // `begin()` would silently close the active call via active?.close() — don't let that happen.
             Log.info("Busy — declining second incoming push (uuid=\(reportedUUID.uuidString.prefix(8))…)", category: "Calls")
             #if os(iOS)
             // PushKit already reported this to CallKit synchronously; tell it the call ended.
+            CallKitProvider.shared.reportCallEnded(uuid: reportedUUID)
+            #endif
+            declineAsBusy(callId: callId, callerUserId: callerId)
+            return
+
+        case .deferToGlareTieBreak:
+            Log.info("Push from \(callerId.prefix(8))… while our call to them is up — the offer's tie-break decides", category: "Calls")
+            #if os(iOS)
             CallKitProvider.shared.reportCallEnded(uuid: reportedUUID)
             #endif
             return
@@ -477,6 +525,7 @@ final class CallManager: CallUIManaging {
             direction: .incoming
         )
         begin(session: session, initialState: .incoming(session))
+        video.ringsAsVideo = CallVideoSignal.pushRingsAsVideo(callData, videoEnabled: CallsFeature.isVideoEnabled)
         pullMissedCallSignalsIfNeeded()
 
         #if os(iOS)
@@ -567,6 +616,7 @@ final class CallManager: CallUIManaging {
             throw WebRTCSessionError.invalidState("WebRTC not ready after ensureWebRTC")
         }
         try await webrtc.setRemoteOffer(sdp: sdp)
+        applyCamera()
         active?.pendingRemoteOfferSdp = nil
         active?.awaitingOfferAfterAnswer = false
         active?.offerWaitTimeout?.cancel()
@@ -621,6 +671,26 @@ final class CallManager: CallUIManaging {
         }
     }
 
+    /// End an incoming call that is still ringing after `unansweredIncomingTimeout`.
+    ///
+    /// Nothing else ends it. The callee opens its signaling stream only on answer, so the server's
+    /// reaper — which sends `ErrorToCaller` at 45 s without ringing, and `HangupBoth` only over a
+    /// stream — never reaches a callee that has not answered. The caller's E2EE hangup usually does;
+    /// a caller that crashed or lost the network sends none, and the call rang on — and now that
+    /// `.incoming` counts as busy, it would refuse every later caller. Android ends it at 90 s with
+    /// TIMEOUT; the
+    /// same value here, so both platforms give up on one schedule.
+    private func startUnansweredTimeout(for call: ActiveCall) {
+        call.unansweredTimeout?.cancel()
+        call.unansweredTimeout = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(NetworkTiming.Calls.unansweredIncomingTimeout))
+            guard !Task.isCancelled, let self, self.active === call, case .incoming = self.state else { return }
+            Log.info("Incoming call unanswered for \(Int(NetworkTiming.Calls.unansweredIncomingTimeout))s — ending (call_id=\(call.session.id.prefix(8))…)", category: "Calls")
+            self.sendHangup(reason: .timeout, origin: .local)
+            self.endActiveCall(reason: .hangup(.timeout), reportToCallKit: true)
+        }
+    }
+
     // MARK: - Convenience UI actions
 
     /// End the active call (for in-app end-call button).
@@ -637,9 +707,26 @@ final class CallManager: CallUIManaging {
         if case .ended = state { state = .idle }
     }
 
-    /// Answer the current incoming call from in-app UI (bypasses CallKit transaction).
-    func answerIncomingCall() {
+    /// Answer the current incoming call from the app's own incoming screen. Through CallKit when
+    /// it rings there, so CallKit knows the call is answered and activates the audio session —
+    /// answering past it leaves the call silent. Without the camera, a video offer arriving later
+    /// does not turn it on (`takeUpVideoCall`).
+    func answerIncomingCall(withCamera: Bool) {
         guard let active, case .incoming = state else { return }
+        if !withCamera {
+            active.answeredWithoutCamera = true
+            active.startsWithCamera = false
+        }
+        #if os(iOS)
+        if active.callKitRegistered {
+            let uuid = active.session.uuid
+            Task { @MainActor [weak self] in
+                guard await !CallKitProvider.shared.requestAnswerCall(uuid: uuid) else { return }
+                self?.answer(callUUID: uuid)
+            }
+            return
+        }
+        #endif
         answer(callUUID: active.session.uuid)
     }
 
@@ -652,6 +739,114 @@ final class CallManager: CallUIManaging {
     /// Mute or unmute the local microphone.
     func setMuted(_ muted: Bool) {
         active?.webrtc?.setMuted(muted)
+    }
+
+    // MARK: - Camera
+
+    /// Turn the camera on or off. Asks for camera access the first time; a refusal leaves the
+    /// camera off and says why.
+    func setCameraOn(_ on: Bool) {
+        guard CallsFeature.isVideoEnabled, active != nil else { return }
+        #if os(iOS)
+        if on {
+            switch AVCaptureDevice.authorizationStatus(for: .video) {
+            case .authorized:
+                break
+            case .notDetermined:
+                Task { @MainActor [weak self] in
+                    let granted = await AVCaptureDevice.requestAccess(for: .video)
+                    if granted { self?.setCameraOn(true) } else { self?.lastError = NSLocalizedString("call_error_camera_denied", comment: "") }
+                }
+                return
+            default:
+                lastError = NSLocalizedString("call_error_camera_denied", comment: "")
+                return
+            }
+        }
+        #endif
+        let wasSending = video.canSend && video.localCameraOn
+        updateCamera { $0.localCameraOn = on }
+        #if os(iOS)
+        if CallVideoAudio.movesToSpeaker(
+            wasSending: wasSending,
+            isSending: video.canSend && video.localCameraOn,
+            outputIsEarpiece: Self.outputIsEarpiece()
+        ) {
+            CallAudioController.setSpeaker(true)
+        }
+        #endif
+    }
+
+    #if os(iOS)
+    private static func outputIsEarpiece() -> Bool {
+        AVAudioSession.sharedInstance().currentRoute.outputs.contains { $0.portType == .builtInReceiver }
+    }
+    #endif
+
+    /// An incoming video call is answered with the camera on (`CallVideoSignal.answersWithCamera`).
+    /// When the offer comes after the answer — the push can beat it by seconds — the session is
+    /// already there, and the camera comes on now.
+    private func takeUpVideoCall(_ offer: Shared_Proto_Signaling_V1_CallOffer, for call: ActiveCall) {
+        guard case .incoming = call.session.direction, !call.startsWithCamera,
+              CallVideoSignal.turnsCameraOn(
+                  offerCallType: offer.callType,
+                  videoEnabled: CallsFeature.isVideoEnabled,
+                  answeredWithoutCamera: call.answeredWithoutCamera
+              )
+        else { return }
+        call.startsWithCamera = true
+        if call.webrtc != nil { setCameraOn(true) }
+    }
+
+    /// The push rang the call as its `call_type` said; the offer, from inside the ratchet, has the
+    /// last word on how CallKit shows it.
+    private func ringAsOffered(_ offer: Shared_Proto_Signaling_V1_CallOffer, for call: ActiveCall) {
+        let isVideo = CallVideoSignal.answersWithCamera(offerCallType: offer.callType, videoEnabled: CallsFeature.isVideoEnabled)
+        video.ringsAsVideo = isVideo
+        #if os(iOS)
+        guard call.callKitRegistered else { return }
+        CallKitProvider.shared.updateCallHasVideo(uuid: call.session.uuid, hasVideo: isVideo)
+        #endif
+    }
+
+    /// The session the video views draw from. Nothing else outside this class needs it.
+    var activeWebRTC: (any WebRTCSessionProtocol)? { active?.webrtc }
+
+    func switchCamera() {
+        guard video.localCameraOn else { return }
+        updateCamera { $0.facing = $0.facing.flipped }
+    }
+
+    private func setInBackground(_ background: Bool) {
+        guard active != nil, video.isInBackground != background else { return }
+        updateCamera { $0.isInBackground = background }
+    }
+
+    /// Bring the sender in line with `video` — after an offer, when the sender may have appeared.
+    private func applyCamera() {
+        updateCamera { _ in }
+    }
+
+    /// The one way our side of `video` changes: the change (`CallVideoState.apply`, which says
+    /// what the peer must be told), then the sender brought in line, then the peer told.
+    private func updateCamera(_ change: (inout CallVideoState) -> Void) {
+        let webrtc = active?.webrtc
+        let announce = video.apply(change, canSend: webrtc?.canSendVideo)
+        webrtc?.setCameraOn(video.canSend && video.localCameraOn, facing: video.facing)
+        // Before media connects nothing is sent: `onConnected` says it then.
+        guard let announce, let active, active.mediaConnected else { return }
+        sendMediaUpdate(cameraOn: announce)
+    }
+
+    private func sendMediaUpdate(cameraOn: Bool) {
+        guard let active else { return }
+        var sig = Shared_Proto_Signaling_V1_WebRTCSignal()
+        sig.callID = active.session.id
+        sig.senderDeviceID = Self.currentDeviceId()
+        sig.timestamp = Self.nowMs()
+        sig.signal = .mediaUpdate(CallVideoSignal.mediaUpdate(cameraOn: cameraOn, atMs: sig.timestamp))
+        sendCallSignalProto(sig, to: active.session.peerUserId)
+        Log.info("Camera \(cameraOn ? "on" : "off") announced (call_id=\(active.session.id.prefix(8))…)", category: "Calls")
     }
 
     /// End the call identified by `callUUID`.
@@ -707,7 +902,9 @@ final class CallManager: CallUIManaging {
         // Nil (don't cancel) so any still-in-flight send from the old call can finish.
         callSignalSendChain = nil
         active = ActiveCall(session: session)
+        video = CallVideoState()
         state = initialState
+        if case .incoming = initialState, let active { startUnansweredTimeout(for: active) }
         PerformanceMetrics.shared.start(.callSetupStart, label: String(session.id.prefix(8)))
     }
 
@@ -798,24 +995,34 @@ final class CallManager: CallUIManaging {
             await MainActor.run { [weak self, weak active] in
                 guard let self, let active else { return }
                 guard self.active === active, active.stream === stream else { return }
-                if active.mediaConnected {
-                    // Media (WebRTC/TURN) is P2P and independent of the signaling stream.
-                    // Closing the call here was the ~30s drop: the server closes the idle
-                    // signaling stream and this teardown killed an otherwise-healthy call.
-                    // Keep the call alive and reconnect the stream in the background (needed
-                    // only for renegotiation/hangup; hangup also rides the E2EE path). The
-                    // call ends only on iceConnectionState=failed (onConnectionFailed) or an
-                    // explicit hangup. Capped to avoid a tight loop on repeated closes.
+                let canReconnect = active.mediaConnected
+                    ? active.postMediaStreamReconnects < ActiveCall.maxPostMediaReconnects
+                    : active.streamRetryCount < ActiveCall.maxStreamRetries
+                switch signalingStreamClosedDisposition(
+                    mediaConnected: active.mediaConnected,
+                    awaitingOfferAfterAnswer: active.awaitingOfferAfterAnswer,
+                    canReconnect: canReconnect
+                ) {
+                case .reconnect:
                     active.stream = nil
-                    if active.postMediaStreamReconnects < ActiveCall.maxPostMediaReconnects {
+                    if active.mediaConnected {
                         active.postMediaStreamReconnects += 1
                         Log.info("Signaling stream closed but media is up — reconnecting (\(active.postMediaStreamReconnects)/\(ActiveCall.maxPostMediaReconnects)), keeping call", category: "Calls")
-                        try? self.openStreamIfNeeded()
                     } else {
-                        Log.info("Signaling stream closed but media is up — reconnect cap reached, keeping call on E2EE-only path", category: "Calls")
+                        active.streamRetryCount += 1
+                        Log.info("Signaling stream closed before media — retrying (\(active.streamRetryCount)/\(ActiveCall.maxStreamRetries)), call stays up", category: "Calls")
                     }
-                } else {
-                    Log.error("Signaling stream closed before media connected — ending call", category: "Calls")
+                    try? self.openStreamIfNeeded()
+                case .keepOnMessagePath:
+                    active.stream = nil
+                    Log.info(
+                        active.mediaConnected
+                            ? "Signaling stream closed but media is up — reconnect cap reached, keeping call on E2EE-only path"
+                            : "Signaling stream closed before media — E2EE-only until the \(Int(Self.offerAfterAnswerTimeout))s offer wait decides",
+                        category: "Calls"
+                    )
+                case .endCall:
+                    Log.error("Signaling stream gone before media and nothing else bounds this call — ending", category: "Calls")
                     self.endActiveCall(reason: .local("Signal stream closed"))
                 }
             }
@@ -844,11 +1051,15 @@ final class CallManager: CallUIManaging {
             guard CallsFeature.isEnabled else { return }
             if case .idle = state {
                 Log.info("IncomingCallNotification received (call_id=\(call.callID.prefix(8))…)", category: "Calls")
+                // `call.callerName` is server-supplied and empty since 2026-10-01 — the name is
+                // resolved from our own contacts, as on the push path.
+                let callerName = Self.resolveContactDisplayName(userId: call.callerID)
+                    ?? NSLocalizedString("call_incoming_audio", comment: "")
                 #if os(iOS)
                 let reportedUUID = CallKitProvider.shared.reportIncomingCall(
                     callId: call.callID,
                     callerId: call.callerID,
-                    callerName: call.callerName,
+                    callerName: callerName,
                     hasVideo: false
                 )
                 let payload: [AnyHashable: Any] = [
@@ -862,7 +1073,7 @@ final class CallManager: CallUIManaging {
                     id: call.callID,
                     uuid: UUID(),
                     peerUserId: call.callerID,
-                    peerName: call.callerName,
+                    peerName: callerName,
                     direction: .incoming
                 )
                 begin(session: session, initialState: .incoming(session))
@@ -917,7 +1128,7 @@ final class CallManager: CallUIManaging {
         PerformanceMetrics.shared.cancelStart(.callSignalOpenStart, label: metricsLabel)
 
         // Determine call status for history
-        let historyStatus: CTCallRecord.Status
+        let historyStatus: CallRecord.Status
         switch reason {
         case .hangup(let r):
             switch r {
@@ -933,6 +1144,7 @@ final class CallManager: CallUIManaging {
 
         active.close()
         self.active = nil
+        video = CallVideoState()
         rememberEnded(callId: session.id)
         clearIdentityKeyCache()
         // Return the signal-send chain to idle. sendHangup() above already chained this
@@ -1100,7 +1312,8 @@ final class CallManager: CallUIManaging {
         guard let active else { throw RPCError(code: .failedPrecondition, message: "No active call") }
         if active.webrtc != nil { return }
 
-        let webrtc = try WebRTCSession(role: role, turn: active.turn)
+        let webrtc = try WebRTCSession(role: role, turn: active.turn, video: CallsFeature.isVideoEnabled,
+                                       veilOn: VeilProxyManager.shared.mode == .on)
         webrtc.onLocalIceCandidate = { [weak self] c in
             Task { @MainActor in
                 self?.sendIceCandidate(c)
@@ -1118,6 +1331,7 @@ final class CallManager: CallUIManaging {
                 guard let self else { return }
                 // Media path is up — from now on the call survives signaling-stream drops
                 // (see receive-loop close handler in openStreamIfNeeded).
+                let firstConnect = self.active?.mediaConnected == false
                 self.active?.mediaConnected = true
                 self.active?.iceRestartTask?.cancel()
                 self.active?.iceRestartTask = nil
@@ -1127,6 +1341,9 @@ final class CallManager: CallUIManaging {
                 // ringing-without-answer reaper stops applying (E2EE answer never reaches
                 // the signaling stream). Non-SDP presence signal; note_connected is idempotent.
                 self.sendConnected()
+                // The peer has assumed the camera is off; say otherwise. Again on every
+                // reconnect, which costs one message and covers one lost on the way.
+                if self.video.announcedCameraOn { self.sendMediaUpdate(cameraOn: true) }
                 // Media is up — stop the ringback tone (its AVAudioEngine otherwise
                 // holds the shared .playAndRecord playback bus and silences WebRTC's
                 // voice-processing unit) and, as a safety net, enable audio if CallKit
@@ -1134,6 +1351,13 @@ final class CallManager: CallUIManaging {
                 // bounce through .connected on reconnects.
                 #if os(iOS)
                 CallAudioController.shared.notifyMediaConnected(hasAnswered: self.active?.answeredAt != nil)
+                if CallVideoAudio.movesToSpeakerWhenMediaConnects(
+                    firstConnect: firstConnect,
+                    isSending: self.video.canSend && self.video.localCameraOn,
+                    outputIsEarpiece: Self.outputIsEarpiece()
+                ) {
+                    CallAudioController.setSpeaker(true)
+                }
                 #endif
             }
         }
@@ -1152,6 +1376,10 @@ final class CallManager: CallUIManaging {
         }
         callQuality = .good   // reset for a fresh call
         active.webrtc = webrtc
+        // The caller's sender exists now; the callee's appears with the offer (`applyCamera`
+        // again after `setRemoteOffer`). Through `setCameraOn`, so a video call asks for camera
+        // access like the button does.
+        if active.startsWithCamera { setCameraOn(true) } else { applyCamera() }
         Log.info("WebRTC session created (role=\(role), turn=\(active.turn != nil ? "yes" : "STUN-only"))", category: "Calls")
     }
 
@@ -1213,6 +1441,7 @@ final class CallManager: CallUIManaging {
                 throw WebRTCSessionError.invalidState("WebRTC nil after ensureWebRTC")
             }
             try await webrtc.setRemoteOffer(sdp: sdp)
+            applyCamera()
             let answerSdp = try await webrtc.createAnswer()
             guard !answerSdp.isEmpty else {
                 throw WebRTCSessionError.invalidState("createAnswer returned empty SDP")
@@ -1298,7 +1527,13 @@ final class CallManager: CallUIManaging {
         // (VoIP push is unaffected — it comes from signaling-service's own RPC, not from this
         // envelope's type.) See decisions/sealed-content-type-inside-the-plaintext-frame.md.
         // Seam: the orchestrator keeps sessions under a device id like the rest of the core.
-        guard let peerContactId = SessionAddressing.contactId(forPeer: peerUserId) else {
+        //
+        // **Still the pinned device, and named as such.** Call signalling is the one surface step
+        // 6 did not convert: an offer reaches whichever device the pin happens to hold, so a
+        // person's second device never rings. Fixing it is not a rename — it is deciding what a
+        // call to someone with two devices means, which is its own decision and not this one.
+        // `decisions/a-peer-is-a-set-of-devices.md`.
+        guard let peerContactId = SessionAddressing.pinnedDevice(ofPeer: peerUserId) else {
             Log.error("Call signal: cannot name a device for \(peerUserId.prefix(8))… — no pinned identity key", category: "Calls")
             return .failed
         }
@@ -1361,21 +1596,16 @@ final class CallManager: CallUIManaging {
                                         afterCredentialRejection: afterCredentialRejection
                                     )
                                 }, send: { inner in
-                                    if FeatureFlags.sealedSenderUnauthenticatedTransport {
-                                        // stealth-sealed-sender-v2 Phase 2: dedicated unauthenticated RPC/channel.
-                                        return try await MessagingServiceClient.shared.sendSealedMessage(sealedInner: inner)
-                                    } else {
-                                        return try await MessagingServiceClient.shared.sendMessage(
-                                            messageId: msgId,
-                                            recipientId: to,
-                                            senderId: currentUserId,
-                                            conversationId: "",
-                                            encryptedPayload: payload,
-                                            timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
-                                            contentType: .unspecified,
-                                            sealing: .sealed(inner)
-                                        )
-                                    }
+                                    try await MessagingServiceClient.shared.sendMessage(
+                                        messageId: msgId,
+                                        recipientId: to,
+                                        senderId: currentUserId,
+                                        conversationId: "",
+                                        encryptedPayload: payload,
+                                        timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+                                        contentType: .unspecified,
+                                        sealing: .sealed(inner)
+                                    )
                                 })
                             } else {
                                 _ = try await MessagingServiceClient.shared.sendMessage(
@@ -1400,7 +1630,7 @@ final class CallManager: CallUIManaging {
                     // copy of the `session_` prefix rule and did nothing at all for every other
                     // slot — silently, because a string key has no case the compiler can miss.
                     if case .session(let contactId) = slot {
-                        CryptoManager.shared.saveSessionToKeychain(for: contactId)
+                        CryptoManager.shared.saveSessionToKeychain(forDevice: contactId)
                         CryptoManager.shared.saveOrchestratorStateCFE()
                     }
                 case .notifyError(let code, let msg):
@@ -1494,9 +1724,8 @@ final class CallManager: CallUIManaging {
 
         // Client-side block + mutuality. Under sealed sender the server can't see the caller,
         // so it does not stop a non-contact from ringing you — drop every call signal here.
-        let signalCtx = PersistenceController.shared.container.viewContext
-        if BlockedContacts.isBlocked(senderUserId, in: signalCtx)
-            || !ContactPolicy.isCallableContact(senderUserId, in: signalCtx) {
+        if BlockedContacts.isBlocked(senderUserId)
+            || !ContactPolicy.isCallableContact(senderUserId) {
             Log.info(
                 "SECURITY[call_gate]: dropped call signal from non-callable \(senderUserId.prefix(8))… (callId=\(signal.callID.prefix(8))…)",
                 category: "Calls"
@@ -1512,6 +1741,8 @@ final class CallManager: CallUIManaging {
                     hasAnswered: active.answeredAt != nil
                 ) {
                 case .holdUntilAnswered:
+                    ringAsOffered(offer, for: active)
+                    takeUpVideoCall(offer, for: active)
                     holdRemoteOffer(offer, for: active)
                 case .renegotiate:
                     Task { @MainActor [weak self] in
@@ -1524,8 +1755,12 @@ final class CallManager: CallUIManaging {
                 // local CoreData like the PushKit path does.
                 handleIncomingCallOffer(callId: signal.callID, callerUserId: senderUserId,
                                         callerName: nil,
-                                        sdp: offer.sdp)
-                _ = offer  // currently unused; reserved for future video-flag etc.
+                                        sdp: offer.sdp,
+                                        hasVideo: CallVideoSignal.answersWithCamera(
+                                            offerCallType: offer.callType, videoEnabled: CallsFeature.isVideoEnabled))
+                if let active, active.session.id == signal.callID {
+                    takeUpVideoCall(offer, for: active)
+                }
             }
         case .answer(let answer):
             guard active?.session.id == signal.callID else { return }
@@ -1608,7 +1843,12 @@ final class CallManager: CallUIManaging {
         case .ringing:
             guard let active, active.session.id == signal.callID else { return }
             if case .dialing = state { state = .ringing(active.session) }
-        case .connected, .mediaUpdate, nil:
+        case .mediaUpdate(let update):
+            guard active?.session.id == signal.callID,
+                  let on = CallVideoSignal.remoteCameraOn(after: update) else { return }
+            video.remoteCameraOn = on
+            Log.info("Peer camera \(on ? "on" : "off") (call_id=\(signal.callID.prefix(8))…)", category: "Calls")
+        case .connected, nil:
             // .connected is a server-side presence marker forwarded over the signaling
             // stream (handled there); nothing to do on the E2EE path.
             break
@@ -1619,7 +1859,7 @@ final class CallManager: CallUIManaging {
     ///
     /// `sdp` is plaintext, like every other writer of `pendingRemoteOfferSdp` — see
     /// `holdRemoteOffer` for what the removed `decryptSdp` hop was hiding.
-    private func handleIncomingCallOffer(callId: String, callerUserId: String, callerName: String?, sdp: String) {
+    private func handleIncomingCallOffer(callId: String, callerUserId: String, callerName: String?, sdp: String, hasVideo: Bool) {
         // Refused here rather than stored: an unusable offer that gets filed rings CallKit for a
         // call that cannot be negotiated, and the caller learns nothing until a human hangs up.
         guard offerSdpIsUsable(sdp) else {
@@ -1639,11 +1879,21 @@ final class CallManager: CallUIManaging {
             return active
         }()
 
+        let isBusyWithAnotherCall = active.map { $0.session.id != callId } == true
+            && callStateIsBusy(state)
+            && !isOutgoingCall(to: callerUserId)
+
         switch callOfferDisposition(
             hasRecentlyEnded: hasRecentlyEnded(callId: callId),
             matchesActiveIncomingCall: matchingIncoming != nil,
-            awaitingOfferAfterAnswer: matchingIncoming?.awaitingOfferAfterAnswer ?? false
+            awaitingOfferAfterAnswer: matchingIncoming?.awaitingOfferAfterAnswer ?? false,
+            isBusyWithAnotherCall: isBusyWithAnotherCall
         ) {
+        case .declineBusy:
+            Log.info("Busy — declining offer for a second call from \(callerUserId.prefix(8))… (callId=\(callId.prefix(8))…)", category: "Calls")
+            declineAsBusy(callId: callId, callerUserId: callerUserId)
+            return
+
         case .ignoreCallEnded:
             Log.info("Ignoring offer for already-ended call \(callId.prefix(8))… — not re-reporting to CallKit", category: "Calls")
             PerformanceMetrics.shared.record(.callSignalAfterEnd, label: "offer")
@@ -1710,13 +1960,14 @@ final class CallManager: CallUIManaging {
         // next outgoing CXStartCallAction doesn't fail with maximumCallGroupsReached.
         #if os(iOS)
         let uuid = CallKitProvider.shared.reportIncomingCall(
-            callId: callId, callerId: callerUserId, callerName: name, hasVideo: false
+            callId: callId, callerId: callerUserId, callerName: name, hasVideo: hasVideo
         )
         #else
         let uuid = UUID()
         #endif
         let session = CallSession(id: callId, uuid: uuid, peerUserId: callerUserId, peerName: name, direction: .incoming)
         begin(session: session, initialState: .incoming(session))
+        video.ringsAsVideo = hasVideo
         active?.pendingRemoteOfferSdp = sdp
         #if os(iOS)
         active?.callKitRegistered = true
@@ -1782,7 +2033,7 @@ final class CallManager: CallUIManaging {
         }
         var offer = Shared_Proto_Signaling_V1_CallOffer()
         offer.sdp = plainSdp
-        offer.callType = .audio
+        offer.callType = video.announcedCameraOn || active.startsWithCamera ? .video : .audio
         offer.callerDeviceID = Self.currentDeviceId()
         offer.callerUserID = AuthSessionManager.shared.currentUserId ?? ""
         offer.offeredAt = Self.nowMs()
@@ -1852,7 +2103,8 @@ final class CallManager: CallUIManaging {
             active.iceFlushTask = nil
 
             // Split the flush into size-bounded signals: each candidate field is an
-            // v3 `CallSignalFrame` that can carry a PQ-ratchet blob on suite-3 sessions, so one
+            // `CallSignalFrame` carrying a whole wire payload (a PQ-ratchet blob on suite-3
+            // sessions, a KEM identity answer until the peer proves itself), so one
             // burst can exceed the Rust E2EE padding cap of 65536 bytes (observed on
             // device: a 134KB batch → CALL_SIGNAL_ENCRYPT_FAILED → the whole batch
             // silently lost). Chunks stay well under the cap, leaving headroom for the
@@ -1908,11 +2160,7 @@ final class CallManager: CallUIManaging {
     /// deterministic generated fallback). Returns `nil` when the contact is
     /// completely unknown to this device.
     private static func resolveContactDisplayName(userId: String) -> String? {
-        let ctx = PersistenceController.shared.container.viewContext
-        let req = User.fetchRequest()
-        req.predicate = NSPredicate(format: "id == %@", userId)
-        req.fetchLimit = 1
-        return (try? ctx.fetch(req))?.first?.resolvedDisplayName
+        (try? LocalRepositories.contacts.contact(userId))?.resolvedDisplayName
     }
 
     private func describeEndContext(active: ActiveCall) -> String {

@@ -123,18 +123,63 @@ enum LocalMessagePayload: Equatable {
         }
     }
 
+    /// The words a person wrote: what the app shows, copies, quotes, edits and searches. A media
+    /// or file message's caption (often empty); nothing for voice, stickers and profiles.
+    ///
+    /// Not `displayString`, which rehydrates media to the legacy JSON the bubble parsers read.
+    /// That JSON is a parser input with nothing to say to a person, and it has reached the screen
+    /// more than once through a reader that took "display" at its word — the edit banner, copy,
+    /// quote and search on 2026-10-05. Anything a person reads goes through this.
+    var readableText: String {
+        Self.readableText(fromBody: displayString)
+    }
+
+    /// The text of a text message, or nil for anything else. What may be sent again as a text
+    /// message: a media body sent as text arrives at the peer as a bubble of JSON.
+    var plainText: String? {
+        switch self {
+        case .text(let s):
+            return s
+        case .messageContent(let body):
+            guard let content = try? Shared_Proto_Messaging_V1_MessageContent(serializedBytes: body),
+                  case .text(let msg)? = content.content else { return nil }
+            return msg.text
+        case .legacyUTF8(let data):
+            guard let s = String(data: data, encoding: .utf8), !s.isEmpty,
+                  Self.readableText(fromBody: s) == s else { return nil }
+            return s
+        case .mediaAlbum, .profileBinary:
+            return nil
+        }
+    }
+
+    /// The legacy body (`displayString`, or a pre-CTM1 row) reduced to its readable words. A body
+    /// that is not one of the media shapes is someone's text, even if it starts with `{`.
+    static func readableText(fromBody body: String) -> String {
+        guard body.hasPrefix("{") else { return body }
+        if let media = parseMediaContent(from: body) { return media.caption }
+        if let file = MessageBubbleContentParsing.parseFileMessage(body) { return file.caption }
+        if parseVoiceContent(from: body) != nil { return "" }
+        return body
+    }
+
     /// Short preview for chat list.
     var previewHint: String {
         switch self {
         case .text(let s):
             return s
         case .legacyUTF8(let data):
+            // A pre-CTM1 row is text or one of the legacy JSON shapes. Until 2026-10-05 a media
+            // one fell through to `return s`, and the chat list showed its JSON.
             let s = String(data: data, encoding: .utf8) ?? ""
-            if s.contains("\"type\":\"voice\"") {
+            if parseVoiceContent(from: s) != nil {
                 return NSLocalizedString("voice_message", comment: "")
             }
-            if s.contains("\"type\":\"file\"") {
-                return NSLocalizedString("file", comment: "")
+            if let file = MessageBubbleContentParsing.parseFileMessage(s) {
+                return file.caption.isEmpty ? NSLocalizedString("file", comment: "") : file.caption
+            }
+            if let media = parseMediaContent(from: s) {
+                return media.caption.isEmpty ? NSLocalizedString("photo", comment: "") : media.caption
             }
             return s
         case .mediaAlbum(let body):
@@ -147,6 +192,20 @@ enum LocalMessagePayload: Equatable {
         case .profileBinary:
             return ""
         }
+    }
+
+    // MARK: - Typed content
+
+    /// The sticker this row carries, validated, or nil. Typed on purpose: a sticker is never a
+    /// JSON shape in `displayString` the way media still is — the spec forbids it — so the bubble
+    /// asks this and not the text. A stored reference that fails validation reads as nil too; the
+    /// receive path refuses to persist one, so that is defence, not a case.
+    var stickerReference: StickerReference? {
+        guard case .messageContent(let body) = self,
+              let content = try? Shared_Proto_Messaging_V1_MessageContent(serializedBytes: body),
+              case .sticker(let wire)? = content.content
+        else { return nil }
+        return StickerReference(wire: wire)
     }
 
     // MARK: - Private display
@@ -178,6 +237,9 @@ enum LocalMessagePayload: Equatable {
             return MediaWireCodec.mediaJSON(from: album) ?? ""
         case .voice(let v):
             return MediaWireCodec.voiceJSON(from: v) ?? ""
+        case .sticker:
+            // Nothing to copy, quote or search: the bubble reads `stickerReference`.
+            return ""
         default:
             return ""
         }
@@ -190,7 +252,12 @@ enum LocalMessagePayload: Equatable {
         let caption = album.hasCaption ? album.caption : ""
         if !caption.isEmpty { return caption }
         if MediaWireCodec.looksLikeFileAlbum(album) {
-            return NSLocalizedString("file", comment: "")
+            return NSLocalizedString(MediaWireCodec.isAudioAlbum(album) ? "audio_file" : "file", comment: "")
+        }
+        // Named by the first item, as the bubble is. A video read "Photo" here until 2026-10-04.
+        if let first = album.items.first {
+            if first.presentation == .videoNote { return NSLocalizedString("video_note", comment: "") }
+            if first.mimeType.lowercased().hasPrefix("video/") { return NSLocalizedString("video", comment: "") }
         }
         return NSLocalizedString("photo", comment: "")
     }
@@ -206,6 +273,12 @@ enum LocalMessagePayload: Equatable {
             return NSLocalizedString("photo", comment: "")
         case .voice:
             return NSLocalizedString("voice_message", comment: "")
+        case .sticker(let wire):
+            // The emoji is what the sender's manifest said the sticker means; a chat list line
+            // is exactly the place it was duplicated for.
+            let label = NSLocalizedString("sticker", comment: "")
+            guard let ref = StickerReference(wire: wire) else { return label }
+            return "\(ref.emoji) \(label)"
         default:
             return NSLocalizedString("message_unavailable", comment: "")
         }

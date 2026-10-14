@@ -11,7 +11,9 @@ import Foundation
 import os.log
 
 struct Log {
-    private static func log(level: OSLogType, category: String, message: String) {
+    private static func log(level: OSLogType, category: String, message raw: String) {
+        // The one place a VEIL front's name is taken out of a line (`LogRedaction`, TODO 135).
+        let message = LogRedaction.redact(raw)
         let logger = OSLog(subsystem: Bundle.main.bundleIdentifier ?? "cc.konstruct.messenger", category: category)
         os_log("%@", log: logger, type: level, message)
 

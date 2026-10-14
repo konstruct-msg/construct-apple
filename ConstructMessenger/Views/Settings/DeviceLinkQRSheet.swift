@@ -21,13 +21,6 @@ struct DeviceLinkQRSheet: View {
             case .skip: return "skip"
             }
         }
-
-        var mode: SendBackupNearbyView.Mode {
-            switch self {
-            case .send: return .historySync
-            case .skip: return .historySyncSkip
-            }
-        }
     }
 
     @Environment(\.dismiss) private var dismiss
@@ -46,16 +39,6 @@ struct DeviceLinkQRSheet: View {
 
     var body: some View {
         VStack(spacing: DeviceLinkQRLayout.rootSpacing) {
-            CTNavBar(
-                title: NSLocalizedString("device_link_qr_title", comment: ""),
-                showBack: true,
-                backAction: { dismiss() }
-            ) {
-                EmptyView()
-            } trailing: {
-                EmptyView()
-            }
-            Rectangle().fill(Color.CT.noise).frame(height: 1)
 
             if vm.isGenerating {
                 loadingState
@@ -69,6 +52,7 @@ struct DeviceLinkQRSheet: View {
                 loadingState
             }
         }
+        .screenTitle(NSLocalizedString("device_link_qr_title", comment: ""))
         .background(Color.CT.bg.ignoresSafeArea())
         .task {
             await vm.generateLinkCode()
@@ -89,7 +73,7 @@ struct DeviceLinkQRSheet: View {
             }
             Button(NSLocalizedString("history_sync_send_offer_skip", comment: ""), role: .cancel) {
                 showHistorySyncOffer = false
-                if historySyncPIN != nil {
+                if newlyLinkedDeviceId != nil {
                     activeHistorySyncSender = .skip
                 } else {
                     dismiss()
@@ -99,18 +83,17 @@ struct DeviceLinkQRSheet: View {
             Text(NSLocalizedString("history_sync_send_offer_message", comment: ""))
         }
         .sheet(item: $activeHistorySyncSender) { sheet in
-            SendBackupNearbyView(mode: sheet.mode, autoPairingPIN: historySyncPIN)
+            // The same sender as the scanning path (`DeviceLinkScanView`): the new device listens
+            // on the history channel, not the backup transfer this sheet used until 2026-10-11.
+            HistoryTransferSendView(
+                skip: sheet == .skip,
+                userId: KeychainManager.shared.loadUserID() ?? "",
+                peerDeviceId: newlyLinkedDeviceId ?? ""
+            )
+                .sheetNavigation()
                 .environment(\.managedObjectContext, PersistenceController.shared.container.viewContext)
                 .onDisappear { dismiss() }
         }
-    }
-
-    /// PIN derived from the newly-linked device id — matches the receiver, which derives the
-    /// same value from its own device id (`HistorySyncPairing`).
-    private var historySyncPIN: String? {
-        guard let deviceId = newlyLinkedDeviceId,
-              let userId = AuthSessionManager.shared.currentUserId else { return nil }
-        return HistorySyncPairing.pin(pendingDeviceId: deviceId, userId: userId)
     }
 
     /// Snapshot the current devices, then poll until a new one appears (the scanner that just
@@ -145,7 +128,7 @@ struct DeviceLinkQRSheet: View {
                 .tint(Color.CT.textDim)
                 .scaleEffect(DeviceLinkQRLayout.loadingIndicatorScale)
             Text(NSLocalizedString("generating", comment: ""))
-                .font(CTFont.regular(13))
+                .font(CTFont.body)
                 .foregroundColor(Color.CT.textDim)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -159,11 +142,11 @@ struct DeviceLinkQRSheet: View {
                 // Sub-header
                 HStack(spacing: DeviceLinkQRLayout.sectionHeaderSpacing) {
                     Text(">")
-                        .font(CTFont.bold(11))
-                        .foregroundColor(Color.CT.accentDim)
+                        .font(CTFont.badge)
+                        .foregroundColor(Color.CT.accent)
                     Text(NSLocalizedString("device_link_section", comment: "").uppercased())
-                        .font(CTFont.bold(11))
-                        .foregroundColor(Color.CT.accentDim)
+                        .font(CTFont.badge)
+                        .foregroundColor(Color.CT.accent)
                         .tracking(2)
                     Spacer()
                 }
@@ -171,7 +154,7 @@ struct DeviceLinkQRSheet: View {
                 .padding(.top, DeviceLinkQRLayout.sectionHeaderTopPadding)
 
                 Text(NSLocalizedString("device_link_qr_instructions", comment: ""))
-                    .font(CTFont.regular(13))
+                    .font(CTFont.body)
                     .foregroundColor(Color.CT.textDim)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, DeviceLinkQRLayout.instructionsHorizontalPadding)
@@ -182,13 +165,13 @@ struct DeviceLinkQRSheet: View {
 
                 if !countdown.isEmpty {
                     Text(countdown)
-                        .font(CTFont.regular(12))
+                        .font(CTFont.secondary)
                         .foregroundColor(Color.CT.textDim)
                         .onAppear { startCountdown() }
                 }
 
                 Text(NSLocalizedString("device_link_scan_hint", comment: ""))
-                    .font(CTFont.regular(11))
+                    .font(CTFont.caption)
                     .foregroundColor(Color.CT.textDim)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, DeviceLinkQRLayout.scanHintHorizontalPadding)
@@ -227,17 +210,17 @@ struct DeviceLinkQRSheet: View {
     private var expiredView: some View {
         VStack(spacing: DeviceLinkQRLayout.expiredStateSpacing) {
             Image(systemName: "exclamationmark.triangle.fill")
-                .font(CTFont.regular(DeviceLinkQRLayout.statusIconSize))
+                .font(CTFont.ui(DeviceLinkQRLayout.statusIconSize))
                 .foregroundColor(Color.CT.danger)
             Text(NSLocalizedString("device_link_expired", comment: ""))
-                .font(CTFont.regular(13))
+                .font(CTFont.body)
                 .foregroundColor(Color.CT.textDim)
             Button {
                 Task { await vm.generateLinkCode() }
             } label: {
-                Text("[\(NSLocalizedString("device_link_refresh", comment: "")) →]")
-                    .font(CTFont.regular(13))
-                    .foregroundColor(Color.CT.accent)
+                Label(NSLocalizedString("device_link_refresh", comment: ""), systemImage: "arrow.clockwise")
+                    .font(CTFont.ui(13, weight: .medium, relativeTo: .footnote))
+                    .foregroundStyle(Color.CT.accent)
                     .padding(.horizontal, DeviceLinkQRLayout.actionButtonHorizontalPadding)
                     .padding(.vertical, DeviceLinkQRLayout.actionButtonVerticalPadding)
                     .clipShape(CTShape.card())
@@ -253,10 +236,10 @@ struct DeviceLinkQRSheet: View {
     private func errorView(message: String) -> some View {
         VStack(spacing: DeviceLinkQRLayout.expiredStateSpacing) {
             Image(systemName: "exclamationmark.triangle.fill")
-                .font(CTFont.regular(DeviceLinkQRLayout.statusIconSize))
+                .font(CTFont.ui(DeviceLinkQRLayout.statusIconSize))
                 .foregroundColor(.orange)
             Text(message)
-                .font(CTFont.regular(13))
+                .font(CTFont.body)
                 .foregroundColor(Color.CT.textDim)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, DeviceLinkQRLayout.errorMessageHorizontalPadding)
@@ -264,9 +247,9 @@ struct DeviceLinkQRSheet: View {
                 vm.errorMessage = nil
                 Task { await vm.generateLinkCode() }
             } label: {
-                Text("[\(NSLocalizedString("device_link_refresh", comment: "")) →]")
-                    .font(CTFont.regular(13))
-                    .foregroundColor(Color.CT.accent)
+                Label(NSLocalizedString("device_link_refresh", comment: ""), systemImage: "arrow.clockwise")
+                    .font(CTFont.ui(13, weight: .medium, relativeTo: .footnote))
+                    .foregroundStyle(Color.CT.accent)
                     .padding(.horizontal, DeviceLinkQRLayout.actionButtonHorizontalPadding)
                     .padding(.vertical, DeviceLinkQRLayout.actionButtonVerticalPadding)
                     .clipShape(CTShape.card())

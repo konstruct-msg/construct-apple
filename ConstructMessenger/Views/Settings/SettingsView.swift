@@ -27,7 +27,6 @@ struct SettingsView: View {
     @State private var showEmergencyImport = false
     @State private var emergencyPasteText = ""
     @State private var emergencyImportMsg: String?
-
     /// Content cap on regular width (iPad two-column); unbounded on compact iPhone.
     private var settingsContentMaxWidth: CGFloat {
         horizontalSizeClass == .regular ? 980 : .infinity
@@ -36,22 +35,10 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack(path: $navigationPath) {
             VStack(spacing: SettingsRootLayout.rootSpacing) {
-                
-                // Section title as plain left-aligned label (not a capsule)
-                HStack {
-                    Text(NSLocalizedString("settings", comment: "").uppercased())
-                        .font(CTFont.bold(14))
-                        .foregroundColor(Color.CT.text)
-                        .tracking(4)
-                    Spacer()
-                }
-                .padding(.horizontal, CTLayout.edgePad)
-                .frame(height: CTLayout.navBarHeight)
-
                 ScrollView {
                     LazyVStack(spacing: SettingsRootLayout.listSpacing) {
                         // MARK: Recovery warning (full width in both layouts)
-                        if recoveryVM.statusLoaded && !recoveryVM.isSetup && !recoveryBannerDismissed {
+                        if recoveryVM.needsBackup && !recoveryBannerDismissed {
                             recoveryBanner
                         }
 
@@ -97,7 +84,8 @@ struct SettingsView: View {
             .frame(maxWidth: settingsContentMaxWidth)
             .frame(maxWidth: .infinity)
             .ctBackground()
-            .hideSystemNavBar()
+            .screenTitle(NSLocalizedString("settings", comment: ""))
+            .connectionSubtitle()
             .onAppear {
                 viewModel.setContext(viewContext)
                 if viewModel.needsUserInfoRefresh(from: authViewModel) {
@@ -130,28 +118,28 @@ struct SettingsView: View {
                 guard let ui = viewModel.profileImage else { return nil }
                 return Image(uiImage: ui)
             }()
-            CTHexAvatar(initials: profileInitials, image: img, size: .large, colorSeed: viewModel.userId)
+            CTHexAvatar(initials: profileInitials, image: img, size: CTAvatarSize.header, colorSeed: viewModel.userId)
 
             VStack(alignment: .leading, spacing: SettingsRootLayout.profileMetaSpacing) {
-                Text(profileDisplayName.uppercased())
-                    .font(CTFont.bold(15))
+                Text(profileDisplayName)
+                    .font(CTFont.ui(15, weight: .bold))
                     .foregroundColor(Color.CT.text)
                 Text(viewModel.username.isEmpty ? NSLocalizedString("username_not_set", comment: "") : "@\(viewModel.username)")
-                    .font(CTFont.regular(12))
+                    .font(CTFont.secondary)
                     .foregroundColor(Color.CT.textDim)
                 HStack(spacing: 5) {
                     CTStatusBadge(status: viewModel.isDiscoverable ? .on : .off, size: 11)
                     Text(viewModel.isDiscoverable
                         ? NSLocalizedString("searchable_indicator", comment: "")
                         : NSLocalizedString("searchable_indicator_off", comment: ""))
-                        .font(CTFont.regular(11))
+                        .font(CTFont.caption)
                         .foregroundColor(viewModel.isDiscoverable ? Color.CT.accent : Color.CT.textDim)
                 }
             }
             Spacer()
             Image(systemName: "chevron.right")
-                .font(CTFont.bold(14))
-                .foregroundColor(Color.CT.accent)
+                .font(CTIcon.font(CTIcon.caption, weight: .semibold))
+                .foregroundColor(Color.CT.textDim)
         }
         .padding(.horizontal, SettingsRootLayout.profileRowHorizontalPadding)
         .padding(.vertical, SettingsRootLayout.profileRowVerticalPadding)
@@ -189,28 +177,28 @@ struct SettingsView: View {
                         guard let ui = viewModel.profileImage else { return nil }
                         return Image(uiImage: ui)
                     }()
-                    CTHexAvatar(initials: profileInitials, image: img, size: .large, colorSeed: viewModel.userId)
+                    CTHexAvatar(initials: profileInitials, image: img, size: CTAvatarSize.header, colorSeed: viewModel.userId)
 
                     VStack(alignment: .leading, spacing: 6) {
-                        Text(profileDisplayName.uppercased())
-                            .font(CTFont.bold(22))
+                        Text(profileDisplayName)
+                            .font(CTFont.ui(22, weight: .bold))
                             .foregroundColor(Color.CT.text)
                         Text(viewModel.username.isEmpty ? NSLocalizedString("username_not_set", comment: "") : "@\(viewModel.username)")
-                            .font(CTFont.regular(14))
+                            .font(CTFont.ui(14))
                             .foregroundColor(Color.CT.textDim)
                         HStack(spacing: 5) {
                             CTStatusBadge(status: viewModel.isDiscoverable ? .on : .off, size: 11)
                             Text(viewModel.isDiscoverable
                                 ? NSLocalizedString("searchable_indicator", comment: "")
                                 : NSLocalizedString("searchable_indicator_off", comment: ""))
-                                .font(CTFont.regular(11))
+                                .font(CTFont.caption)
                                 .foregroundColor(viewModel.isDiscoverable ? Color.CT.accent : Color.CT.textDim)
                         }
                     }
                     Spacer()
                     Image(systemName: "chevron.right")
-                        .font(CTFont.bold(15))
-                        .foregroundColor(Color.CT.accent)
+                        .font(CTIcon.font(CTIcon.caption, weight: .semibold))
+                        .foregroundColor(Color.CT.textDim)
                 }
                 .padding(.horizontal, SettingsRootLayout.profileRowHorizontalPadding)
                 .padding(.vertical, 24)
@@ -230,7 +218,7 @@ struct SettingsView: View {
         CTSectionGroup {
             Button { showingQRCode = true } label: {
                 CTSettingsRow(
-                    label: NSLocalizedString("invite", comment: "").uppercased(),
+                    label: NSLocalizedString("invite", comment: ""),
                     icon: "qrcode",
                     disclosure: true
                 )
@@ -243,54 +231,54 @@ struct SettingsView: View {
     private var mainSettingsSection: some View {
         CTSectionGroup {
             NavigationLink(destination: DevicesView()) {
-                CTSettingsRow(label: NSLocalizedString("linked_devices", comment: "").uppercased(), icon: "laptopcomputer", disclosure: true)
+                CTSettingsRow(label: NSLocalizedString("linked_devices", comment: ""), icon: "laptopcomputer", disclosure: true)
             }
             .buttonStyle(.plain)
             // On the link, not on the row inside it: an identifier applied within `CTSettingsRow`
             // is inherited by each of its children, and the tree comes back with the string
             // tripled on the container plus a copy on the icon, the label and the chevron.
             .accessibilityIdentifier(A11y.Settings.devices)
-            CTSep(style: .thin)
+            ConstructRowDivider(indent: CTSettingsRow.dividerIndent)
             NavigationLink(destination: AppearanceSettingsView()) {
-                CTSettingsRow(label: NSLocalizedString("appearance", comment: "").uppercased(), icon: "paintbrush", disclosure: true)
+                CTSettingsRow(label: NSLocalizedString("appearance", comment: ""), icon: "paintbrush", disclosure: true)
             }
             .buttonStyle(.plain)
-            CTSep(style: .thin)
+            ConstructRowDivider(indent: CTSettingsRow.dividerIndent)
             NavigationLink(destination: SecurityView()
                 .environment(viewModel)) {
-                CTSettingsRow(label: NSLocalizedString("security", comment: "").uppercased(), icon: "lock", disclosure: true)
+                CTSettingsRow(label: NSLocalizedString("security", comment: ""), icon: "lock", disclosure: true)
             }
             .buttonStyle(.plain)
-            CTSep(style: .thin)
+            ConstructRowDivider(indent: CTSettingsRow.dividerIndent)
             NavigationLink(destination: DataStorageSettingsView()) {
-                CTSettingsRow(label: NSLocalizedString("data_and_storage", comment: "").uppercased(), icon: "externaldrive", disclosure: true)
+                CTSettingsRow(label: NSLocalizedString("data_and_storage", comment: ""), icon: "externaldrive", disclosure: true)
             }
             .buttonStyle(.plain)
-            CTSep(style: .thin)
+            ConstructRowDivider(indent: CTSettingsRow.dividerIndent)
             NavigationLink(destination: TranscriptionSettingsView()) {
-                CTSettingsRow(label: NSLocalizedString("transcription", comment: "").uppercased(), icon: "mic", disclosure: true)
+                CTSettingsRow(label: NSLocalizedString("stt_section_title", comment: ""), icon: "mic", disclosure: true)
             }
             .buttonStyle(.plain)
-            CTSep(style: .thin)
+            ConstructRowDivider(indent: CTSettingsRow.dividerIndent)
             NavigationLink(destination: NotificationsSettingsView()) {
-                CTSettingsRow(label: NSLocalizedString("notifications", comment: "").uppercased(), icon: "bell", disclosure: true)
+                CTSettingsRow(label: NSLocalizedString("notifications", comment: ""), icon: "bell", disclosure: true)
             }
             .buttonStyle(.plain)
-            CTSep(style: .thin)
+            ConstructRowDivider(indent: CTSettingsRow.dividerIndent)
             // Network + Background Refresh merged (silent-transport-ui left Network nearly empty
             // on production — one Connectivity-style entry with live status + BG controls).
             NavigationLink(destination: NetworkSettingsView()) {
                 CTSettingsRow(
-                    label: NSLocalizedString("network", comment: "").uppercased(),
+                    label: NSLocalizedString("network", comment: ""),
                     status: connectionStatus.isConnected ? .ok : .error,
                     icon: "globe",
                     disclosure: true
                 )
             }
             .buttonStyle(.plain)
-            CTSep(style: .thin)
+            ConstructRowDivider(indent: CTSettingsRow.dividerIndent)
             NavigationLink(destination: DraftsView()) {
-                CTSettingsRow(label: NSLocalizedString("drafts", comment: "").uppercased(), icon: "folder", disclosure: true)
+                CTSettingsRow(label: NSLocalizedString("drafts", comment: ""), icon: "folder", disclosure: true)
             }
             .buttonStyle(.plain)
         }
@@ -307,7 +295,7 @@ struct SettingsView: View {
                 if vm.mode != .off { vm.stop(); await vm.startIfEnabled() }
             }
         case .failure(let e):
-            emergencyImportMsg = e.localizedDescription
+            emergencyImportMsg = e.userFacingMessage
         }
     }
 
@@ -315,16 +303,16 @@ struct SettingsView: View {
         CTSectionGroup {
             Button { showingOrientation = true } label: {
                 CTSettingsRow(
-                    label: NSLocalizedString("orientation_settings_replay", comment: "").uppercased(),
+                    label: NSLocalizedString("orientation_settings_replay", comment: ""),
                     icon: "text.book.closed",
                     isAction: true,
                     disclosure: true
                 )
             }
             .buttonStyle(.plain)
-            CTSep(style: .thin)
+            ConstructRowDivider(indent: CTSettingsRow.dividerIndent)
             CTSettingsRow(
-                label: NSLocalizedString("version", comment: "").uppercased(),
+                label: NSLocalizedString("version", comment: ""),
                 value: AppConstants.versionDisplayString,
                 icon: "info.circle",
                 valueColor: AppConstants.isNonProductionBuild ? .orange : Color.CT.textDim
@@ -352,7 +340,7 @@ struct SettingsView: View {
     private var developerSection: some View {
         CTSectionGroup {
             NavigationLink(destination: DiagnosticsView()) {
-                CTSettingsRow(label: NSLocalizedString("diagnostics_logs", comment: "").uppercased(), labelColor: .orange, disclosure: true)
+                CTSettingsRow(label: NSLocalizedString("diagnostics_logs", comment: ""), labelColor: .orange, disclosure: true)
             }
             .buttonStyle(.plain)
         }
@@ -363,23 +351,31 @@ struct SettingsView: View {
     private var recoveryBanner: some View {
         HStack(alignment: .top, spacing: SettingsRootLayout.recoveryBannerContentSpacing) {
             Image(systemName: "exclamationmark.circle.fill")
-                .font(.system(size: SettingsRootLayout.recoveryBannerIconSize, weight: .semibold))
+                .font(CTIcon.font(CTIcon.row, weight: .semibold))
                 .foregroundColor(Color.CT.danger)
             VStack(alignment: .leading, spacing: SettingsRootLayout.recoveryBannerTextSpacing) {
-                Text(NSLocalizedString("recovery_not_configured_title", comment: "").uppercased())
-                    .font(CTFont.bold(11))
+                // A key made silently and not yet copied is the common case since 2026-10-04;
+                // "not configured" is left for devices that could not make one.
+                Text(NSLocalizedString(
+                    recoveryVM.isSetup ? "recovery_backup_pending_title" : "recovery_not_configured_title",
+                    comment: ""
+                ))
+                    .font(CTFont.bodyEmphasis)
                     .foregroundColor(Color.CT.danger)
-                Text(NSLocalizedString("recovery_banner_subtitle", comment: ""))
-                    .font(CTFont.regular(11))
+                Text(NSLocalizedString(
+                    recoveryVM.isSetup ? "recovery_backup_pending_subtitle" : "recovery_banner_subtitle",
+                    comment: ""
+                ))
+                    .font(CTFont.caption)
                     .foregroundColor(Color.CT.textDim)
                 Button {
                     showingRecoverySetup = true
                 } label: {
                     HStack(spacing: SettingsRootLayout.recoveryBannerActionSpacing) {
                         Text(NSLocalizedString("recovery_setup_action", comment: ""))
-                            .font(CTFont.bold(11))
+                            .font(CTFont.badge)
                         Image(systemName: "chevron.right")
-                            .font(.system(size: SettingsRootLayout.recoveryBannerChevronSize, weight: .semibold))
+                            .font(CTIcon.font(CTIcon.caption, weight: .semibold))
                     }
                     .foregroundColor(Color.CT.accent)
                 }
@@ -390,7 +386,7 @@ struct SettingsView: View {
                 UserDefaults.standard.set(true, forKey: "recovery_banner_dismissed")
             } label: {
                 Image(systemName: "xmark")
-                    .font(.system(size: SettingsRootLayout.recoveryBannerDismissIconSize))
+                    .font(CTIcon.font(CTIcon.caption, weight: .regular))
                     .foregroundColor(Color.CT.textDim)
             }
         }

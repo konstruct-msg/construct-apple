@@ -24,7 +24,8 @@ hdr()  { echo -e "\n${BOLD}━━━  $1  ━━━${NC}"; }
 
 # ── Пути ─────────────────────────────────────────────────────────────────────
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-CORE_PATH="$HOME/Code/construct-core"
+# CONSTRUCT_CORE_PATH: another checkout (a git worktree of construct-core) to build from.
+CORE_PATH="${CONSTRUCT_CORE_PATH:-$HOME/Code/construct-core}"
 
 [ -d "$CORE_PATH" ] || \
   CORE_PATH="$PROJECT_ROOT/../construct-core"

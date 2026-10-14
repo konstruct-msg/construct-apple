@@ -14,7 +14,6 @@ struct SocialRecoverySetupView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            navBar
             Group {
                 switch service.setupStep {
                 case .idle:
@@ -33,26 +32,31 @@ struct SocialRecoverySetupView: View {
             }
         }
         .background(Color.CT.bg.ignoresSafeArea())
+        .screenTitle(NSLocalizedString("social_recovery_title", comment: ""))
+        .toolbar { barItems }
     }
 
-    // MARK: - Nav bar
+    // MARK: - Bar
 
-    private var navBar: some View {
-        CTNavBar(
-            title: NSLocalizedString("social_recovery_title", comment: ""),
-            showBack: showsBack,
-            backAction: showsBack ? { service.setupStep = .configure } : nil
-        ) {
-            EmptyView()
-        } trailing: {
-            if showsCancel {
+    /// Cancel resets the flow, so it is ours rather than `sheetNavigation`'s close; back returns
+    /// from a share to the configuration, a step inside the sheet rather than a pop.
+    @ToolbarContentBuilder
+    private var barItems: some ToolbarContent {
+        if showsCancel {
+            ToolbarItem(placement: .cancellationAction) {
                 Button(NSLocalizedString("cancel", comment: "")) {
                     service.reset()
                     dismiss()
                 }
-                .font(CTFont.bold(13))
-                .foregroundColor(Color.CT.textDim)
-                .buttonStyle(.plain)
+                .barItem()
+            }
+        }
+        if showsBack {
+            ToolbarItem(placement: .navigation) {
+                Button { service.setupStep = .configure } label: {
+                    Label(NSLocalizedString("back", comment: ""), systemImage: "chevron.backward")
+                }
+                .barItem()
             }
         }
     }
@@ -74,16 +78,16 @@ struct SocialRecoverySetupView: View {
     private var introView: some View {
         VStack(spacing: 24) {
             Spacer()
-            Text("[share]")
-                .font(CTFont.bold(48))
-                .foregroundColor(Color.CT.accent)
-                .lineLimit(1).fixedSize()
-            Text(NSLocalizedString("social_recovery_intro_title", comment: "").uppercased())
-                .font(CTFont.bold(18))
+            Image(systemName: "person.2.wave.2.fill")
+                .font(CTIcon.font(CTIcon.hero, weight: .regular))
+                .foregroundStyle(Color.CT.accent)
+                .accessibilityHidden(true)
+            Text(NSLocalizedString("social_recovery_intro_title", comment: ""))
+                .font(CTFont.title)
                 .foregroundColor(Color.CT.text)
                 .multilineTextAlignment(.center)
             Text(NSLocalizedString("social_recovery_intro_body", comment: ""))
-                .font(CTFont.regular(13))
+                .font(CTFont.body)
                 .foregroundColor(Color.CT.textDim)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 24)
@@ -142,16 +146,18 @@ struct SocialRecoverySetupView: View {
     private func schemeRow(label: String, hint: String, selected: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(alignment: .top, spacing: 12) {
-                Text(selected ? "[●]" : "[○]")
-                    .font(CTFont.regular(14))
-                    .foregroundColor(selected ? Color.CT.accent : Color.CT.textDim)
-                    .fixedSize()
+                // Selection state. Was `[●]` / `[○]` in accent, which read as a label
+                // rather than as the radio it is.
+                Image(systemName: selected ? "checkmark.circle.fill" : "circle")
+                    .font(CTIcon.font(CTIcon.nav, weight: .regular))
+                    .foregroundStyle(selected ? Color.CT.accent : Color.CT.textDim)
+                    .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 4) {
                     Text(label)
-                        .font(CTFont.regular(14))
+                        .font(CTFont.ui(14))
                         .foregroundColor(selected ? Color.CT.text : Color.CT.textDim)
                     Text(hint)
-                        .font(CTFont.regular(11))
+                        .font(CTFont.caption)
                         .foregroundColor(Color.CT.textDim)
                 }
                 Spacer()
@@ -196,7 +202,7 @@ struct SocialRecoverySetupView: View {
                     Rectangle().fill(Color.CT.noise).frame(height: 1)
 
                     Text(NSLocalizedString("social_recovery_share_warning", comment: ""))
-                        .font(CTFont.regular(12))
+                        .font(CTFont.secondary)
                         .foregroundColor(Color.CT.textDim)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 20)
@@ -205,7 +211,7 @@ struct SocialRecoverySetupView: View {
 
                     VStack(alignment: .leading, spacing: 6) {
                         Text(NSLocalizedString("social_recovery_share_label_caption", comment: ""))
-                            .font(CTFont.regular(11))
+                            .font(CTFont.caption)
                             .foregroundColor(Color.CT.textDim)
                         TextField(
                             NSLocalizedString("social_recovery_share_label_placeholder", comment: ""),
@@ -216,7 +222,7 @@ struct SocialRecoverySetupView: View {
                         )
                         .autocorrectionDisabled()
                         .autocapNever()
-                        .font(CTFont.regular(13))
+                        .font(CTFont.body)
                         .foregroundColor(Color.CT.text)
                         .padding(10)
                         .background(Color.CT.bg)
@@ -241,11 +247,11 @@ struct SocialRecoverySetupView: View {
     private func wordCell(number: Int, word: String) -> some View {
         HStack(spacing: 4) {
             Text("\(number).")
-                .font(CTFont.regular(10))
+                .font(CTFont.micro)
                 .foregroundColor(Color.CT.textDim)
                 .frame(width: 24, alignment: .trailing)
             Text(word)
-                .font(CTFont.regular(12))
+                .font(CTFont.secondary)
                 .foregroundColor(Color.CT.text)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
@@ -290,12 +296,12 @@ struct SocialRecoverySetupView: View {
     private var doneView: some View {
         VStack(spacing: 24) {
             Spacer()
-            Text("[✓]")
-                .font(CTFont.bold(48))
-                .foregroundColor(Color.CT.accent)
-                .lineLimit(1).fixedSize()
+            Image(systemName: "checkmark.circle.fill")
+                .font(CTIcon.font(CTIcon.hero, weight: .regular))
+                .foregroundStyle(Color.CT.accent)
+                .accessibilityHidden(true)
             Text(NSLocalizedString("social_recovery_done_title", comment: ""))
-                .font(CTFont.bold(16))
+                .font(CTFont.ui(16, weight: .bold))
                 .foregroundColor(Color.CT.text)
                 .multilineTextAlignment(.center)
 
@@ -306,13 +312,13 @@ struct SocialRecoverySetupView: View {
                         : labelValue
                     HStack(spacing: 8) {
                         Text("share \(i + 1)")
-                            .font(CTFont.regular(12))
+                            .font(CTFont.secondary)
                             .foregroundColor(Color.CT.textDim)
                         Image(systemName: "chevron.right")
-                            .font(CTFont.regular(12))
+                            .font(CTFont.secondary)
                             .foregroundColor(Color.CT.accent)
                         Text(label)
-                            .font(CTFont.regular(12))
+                            .font(CTFont.secondary)
                             .foregroundColor(Color.CT.text)
                     }
                 }
@@ -323,7 +329,7 @@ struct SocialRecoverySetupView: View {
             .padding(.horizontal, 20)
 
             Text(NSLocalizedString("social_recovery_done_body", comment: ""))
-                .font(CTFont.regular(13))
+                .font(CTFont.body)
                 .foregroundColor(Color.CT.textDim)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal)
@@ -341,19 +347,19 @@ struct SocialRecoverySetupView: View {
         VStack(spacing: 20) {
             Spacer()
             Image(systemName: "exclamationmark.triangle.fill")
-                .font(CTFont.regular(48))
+                .font(CTFont.ui(48))
                 .foregroundColor(.orange)
                 .lineLimit(1).fixedSize()
             Text(NSLocalizedString("recovery_error_title", comment: ""))
-                .font(CTFont.bold(16))
+                .font(CTFont.ui(16, weight: .bold))
                 .foregroundColor(Color.CT.text)
             Text(message)
-                .font(CTFont.regular(13))
+                .font(CTFont.body)
                 .foregroundColor(Color.CT.textDim)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal)
             Spacer()
-            actionButton(label: NSLocalizedString("try_again", comment: ""), enabled: true) {
+            actionButton(label: NSLocalizedString("try_again", comment: ""), enabled: true, role: .secondary) {
                 service.reset()
             }
         }
@@ -361,59 +367,32 @@ struct SocialRecoverySetupView: View {
 
     // MARK: - Shared button
 
-    private func actionButton(label: String, enabled: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Text(label)
-                .font(CTFont.regular(13))
-                .foregroundColor(enabled ? Color.CT.text : Color.CT.textDim)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 12)
-                .background(Color.CT.bg)
-                .overlay(
-                    Rectangle().stroke(
-                        enabled ? Color.CT.accent : Color.CT.noise,
-                        lineWidth: 1
-                    )
-                )
-        }
-        .disabled(!enabled)
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+    private func actionButton(
+        label: String,
+        enabled: Bool,
+        role: CTButtonRole = .primary,
+        action: @escaping () -> Void
+    ) -> some View {
+        CTButton(label: label, role: role, isEnabled: enabled, action: action)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
     }
 }
 
 // MARK: - Animated loading block
 
+/// Work under way, said in words under the system's spinner. It was a ten-frame ASCII bar on a
+/// timer — a status drawn in glyphs, which the design rules retired.
 private struct AnimatedLoadingBlock: View {
     let label: String
-    @State private var frame: Int = 0
-
-    private let frames = [
-        "[■□□□□□□□□□]",
-        "[■■□□□□□□□□]",
-        "[■■■□□□□□□□]",
-        "[■■■■□□□□□□]",
-        "[■■■■■□□□□□]",
-        "[■■■■■■□□□□]",
-        "[■■■■■■■□□□]",
-        "[■■■■■■■■□□]",
-        "[■■■■■■■■■□]",
-        "[■■■■■■■■■■]",
-    ]
 
     var body: some View {
         VStack(spacing: 16) {
-            Text(frames[frame])
-                .font(CTFont.bold(14))
-                .foregroundColor(Color.CT.accent)
+            ProgressView()
+                .tint(Color.CT.accent)
             Text(label)
-                .font(CTFont.regular(12))
+                .font(CTFont.secondary)
                 .foregroundColor(Color.CT.textDim)
-        }
-        .onAppear {
-            Timer.scheduledTimer(withTimeInterval: 0.18, repeats: true) { timer in
-                frame = (frame + 1) % frames.count
-            }
         }
     }
 }

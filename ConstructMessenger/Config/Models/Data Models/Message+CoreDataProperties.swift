@@ -82,13 +82,24 @@ enum MessageContentType: Int16 {
         return .regular
     }
 
+    /// A delivery receipt persisted as text — `{"type":"delivery_receipt",…}` — by a build from
+    /// before receipts were routed by content type. Never a bubble. The string pre-check keeps
+    /// the JSON parse off ordinary messages.
+    static func isLegacyDeliveryReceipt(_ text: String) -> Bool {
+        guard text.hasPrefix("{"), text.contains("\"delivery_receipt\"") else { return false }
+        guard let data = text.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else { return false }
+        return (json["type"] as? String) == "delivery_receipt"
+    }
+
     /// Single source of truth for "this decrypted plaintext is an internal control
     /// signal that must NEVER render as a chat bubble". Covers every handshake/session
     /// marker emitted by current and legacy clients (with or without `__` framing).
     ///
     /// Prefix-on-`decryptedContent` Core Data predicates cannot enforce this: messages
     /// are encrypted at rest (`decryptedContent == nil`), so filtering must run on the
-    /// decrypted `displayText` in Swift. Keep this list aligned with the discard checks
+    /// decrypted `legacyBody` in Swift. Keep this list aligned with the discard checks
     /// in `MessageRouter` and `SessionCoordinator`.
     static func isControlPayload(_ plaintext: String) -> Bool {
         plaintext.hasPrefix("__session_ping")
@@ -122,8 +133,8 @@ enum DeliveryStatus: Int16 {
     case delivered = 2
     /// Not sent yet, and something will try again: a send that timed out
     /// (`MessageQueueManager`), a message buffered until the peer's session is established
-    /// (`ChatSendCoordinator`, waiting for `session_ready`), a server rejection flagged
-    /// retryable, or a send interrupted by the app being killed (reset on launch).
+    /// (`ChatSendCoordinator`, waiting for `session_ready`), or a server rejection flagged
+    /// retryable. A send interrupted by the app being killed is not left here — see `StuckSend`.
     ///
     /// NOT "the recipient is offline" — that is what the comment here used to say, and it is
     /// what got published on the website's FAQ before anyone checked the call sites.
@@ -153,13 +164,21 @@ extension Message {
     @NSManaged public var deliveryStatusRaw: Int16
     @NSManaged public var retryCount: Int16
     @NSManaged public var replyToMessageId: String?
+    /// Legacy plaintext column — read and write `replyQuote` instead. Emptied at launch
+    /// (`StorageMigrationService`), removed in the next model (TODO 115).
     @NSManaged public var replyToContent: String?
+    /// `replyQuote`, sealed with the row's storage key.
+    @NSManaged public var encryptedReplyQuote: Data?
     @NSManaged public var isEdited: Bool
     @NSManaged public var editedAt: Date?
     @NSManaged public var chat: Chat?
 
     // Voice message transcript (on-device STT via WhisperKit)
+    /// Legacy plaintext column — read and write `transcript` instead. Emptied at launch
+    /// (`StorageMigrationService`), removed in the next model (TODO 115).
     @NSManaged public var transcriptText: String?
+    /// `transcript`, sealed with the row's storage key.
+    @NSManaged public var encryptedTranscript: Data?
     @NSManaged public var transcriptLanguage: String?
     @NSManaged public var transcriptGeneratedAt: Date?
 

@@ -15,7 +15,6 @@ import SwiftUI
 
 struct VeilVoucherQRSheet: View {
 
-    @Environment(\.dismiss) private var dismiss
 
     @State private var vm = VeilVoucherViewModel()
     @State private var countdown: String = ""
@@ -23,16 +22,6 @@ struct VeilVoucherQRSheet: View {
 
     var body: some View {
         VStack(spacing: VeilVoucherLayout.rootSpacing) {
-            CTNavBar(
-                title: NSLocalizedString("veil_voucher_title", comment: ""),
-                showBack: true,
-                backAction: { dismiss() }
-            ) {
-                EmptyView()
-            } trailing: {
-                EmptyView()
-            }
-            Rectangle().fill(Color.CT.noise).frame(height: 1)
 
             switch vm.state {
             case .idle:
@@ -59,6 +48,7 @@ struct VeilVoucherQRSheet: View {
                 message(icon: "exclamationmark.triangle", text: text, retry: true)
             }
         }
+        .screenTitle(NSLocalizedString("veil_voucher_title", comment: ""))
         .background(Color.CT.bg.ignoresSafeArea())
         .onDisappear { stopCountdown() }
     }
@@ -70,17 +60,17 @@ struct VeilVoucherQRSheet: View {
     private var intro: some View {
         VStack(spacing: VeilVoucherLayout.messageSpacing) {
             Image(systemName: "qrcode")
-                .font(.system(size: VeilVoucherLayout.statusIconSize))
+                .font(CTIcon.font(CTIcon.overlay, weight: .regular))
                 .foregroundColor(Color.CT.textDim)
             Text(NSLocalizedString("veil_voucher_intro", comment: ""))
-                .font(CTFont.regular(13))
+                .font(CTFont.body)
                 .foregroundColor(Color.CT.textDim)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, VeilVoucherLayout.textHorizontalPadding)
             Button(NSLocalizedString("veil_voucher_create", comment: "")) {
                 Task { await vm.mint() }
             }
-            .font(CTFont.regular(13))
+            .font(CTFont.body)
             .foregroundColor(Color.CT.accent)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -92,7 +82,7 @@ struct VeilVoucherQRSheet: View {
                 .tint(Color.CT.textDim)
                 .scaleEffect(VeilVoucherLayout.loadingIndicatorScale)
             Text(NSLocalizedString("generating", comment: ""))
-                .font(CTFont.regular(13))
+                .font(CTFont.body)
                 .foregroundColor(Color.CT.textDim)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -102,7 +92,7 @@ struct VeilVoucherQRSheet: View {
         ScrollView {
             VStack(spacing: VeilVoucherLayout.contentSpacing) {
                 Text(NSLocalizedString("veil_voucher_instructions", comment: ""))
-                    .font(CTFont.regular(13))
+                    .font(CTFont.body)
                     .foregroundColor(Color.CT.textDim)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, VeilVoucherLayout.textHorizontalPadding)
@@ -115,12 +105,12 @@ struct VeilVoucherQRSheet: View {
 
                 if !countdown.isEmpty {
                     Text(countdown)
-                        .font(CTFont.regular(12))
+                        .font(CTFont.secondary)
                         .foregroundColor(Color.CT.textDim)
                 }
 
                 Text(NSLocalizedString("veil_voucher_privacy_hint", comment: ""))
-                    .font(CTFont.regular(11))
+                    .font(CTFont.caption)
                     .foregroundColor(Color.CT.textDim)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, VeilVoucherLayout.textHorizontalPadding)
@@ -156,10 +146,10 @@ struct VeilVoucherQRSheet: View {
     private func message(icon: String, text: String, retry: Bool) -> some View {
         VStack(spacing: VeilVoucherLayout.messageSpacing) {
             Image(systemName: icon)
-                .font(.system(size: VeilVoucherLayout.statusIconSize))
+                .font(CTIcon.font(CTIcon.overlay, weight: .regular))
                 .foregroundColor(Color.CT.textDim)
             Text(text)
-                .font(CTFont.regular(13))
+                .font(CTFont.body)
                 .foregroundColor(Color.CT.textDim)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, VeilVoucherLayout.textHorizontalPadding)
@@ -168,7 +158,7 @@ struct VeilVoucherQRSheet: View {
                     stopCountdown()
                     Task { await vm.mint() }
                 }
-                .font(CTFont.regular(13))
+                .font(CTFont.body)
                 .foregroundColor(Color.CT.accent)
             }
         }

@@ -53,7 +53,7 @@ enum MessageBubbleContentParsing {
     /// in a comment. Quote & Reply tested media and file and forgot voice and profile. Copy tested
     /// nothing at all.
     ///
-    /// So on a voice message the menu offered both Copy and Quote & Reply, and `displayText` there
+    /// So on a voice message the menu offered both Copy and Quote & Reply, and `legacyBody` there
     /// is not a transcript — it is the serialised voice payload the bubble parses to find the audio.
     /// Copy put that on the clipboard; quoting would have pasted it into a reply. Reported from
     /// device 2026-08-22 as "невыполнимые действия на голосовом сообщении".

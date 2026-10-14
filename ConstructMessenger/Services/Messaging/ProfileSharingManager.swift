@@ -9,6 +9,7 @@
 
 import Foundation
 import CoreData
+import GRPCCore
 
 /// Manages profile sharing between users
 @MainActor
@@ -62,76 +63,57 @@ class ProfileSharingManager {
     
     // MARK: - Profile Handling
     
-    /// Handle incoming profile message
-    /// - Parameters:
-    ///   - profileData: Parsed profile data
-    ///   - userId: User ID who sent the profile
-    ///   - context: Core Data context
-    func handleProfileMessage(
-        _ profileData: ProfileShareData,
-        from userId: String,
-        in context: NSManagedObjectContext
-    ) {
-        let userFetchRequest = User.fetchRequest()
-        // Combine with additional predicate
-        let userIdPredicate = NSPredicate(format: "id == %@", userId)
-        userFetchRequest.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [userIdPredicate])
-        
-        guard let user = try? context.fetch(userFetchRequest).first else {
+    /// Handle incoming profile message (the untyped layout). Onto an existing row only.
+    func handleProfileMessage(_ profileData: ProfileShareData, from userId: String) {
+        let contacts = LocalRepositories.contacts
+        guard let held = try? contacts.contact(userId) else {
             Log.error("User not found for profile update: \(userId)", category: "ProfileSharingManager")
             return
         }
-        
-        // Update display name immediately so chat list / headers show the real name
-        // even while the avatar is still downloading.
-        let trimmedName = profileData.displayName.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !trimmedName.isEmpty {
-            user.displayName = trimmedName
+        // An untyped profile carries the send time, not a version, so it cannot be ordered against
+        // a typed one: once a typed profile is held, the old layout is a resend from a build that
+        // predates the type, and applying it could put an older name back.
+        guard held.profileEditedAtMs == 0 else {
+            Log.info("Untyped profile from \(userId.prefix(8))… ignored — a typed profile is held", category: "ProfileSharingManager")
+            return
         }
 
-        // Always mark sharing now — name is already trusted; avatar may arrive async.
-        user.isSharingWithMe = true
-        user.sharedWithMeAt = Date()
+        // The name goes in at once, so the chat list shows it while the avatar downloads. The
+        // generated name is no name (`ProfileShare.chosenName`): the username stays.
+        let shared = profileData.displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedName = DisplayNameGenerator.isGenerated(shared, for: userId) ? "" : shared
+        do {
+            try contacts.applySharedProfile(
+                userId, displayName: trimmedName.isEmpty ? held.displayName : trimmedName,
+                sharedWithMeAt: Date(), profileEditedAtMs: held.profileEditedAtMs
+            )
+            Log.info("Profile data updated for user \(userId): displayName=\(profileData.displayName)", category: "ProfileSharingManager")
+        } catch {
+            Log.error("Failed to save profile data: \(error)", category: "ProfileSharingManager")
+            return
+        }
 
-        // Update avatar if provided
-        // Priority: new format (Media Upload API) > old format (base64)
+        // The avatar. Priority: new format (Media Upload API) > old format (base64).
         if let avatarMediaId = profileData.avatarMediaId,
            let avatarMediaUrl = profileData.avatarMediaUrl,
            let avatarMediaKey = profileData.avatarMediaKey {
-            // New format: download and decrypt media from Media Upload API
-            // Capture objectID to safely re-fetch after async boundary.
-            // Use viewContext for the save — the passed `context` may be a short-lived
-            // background context that's deallocated before the download completes.
-            let userObjectID = user.objectID
             let nameSnapshot = trimmedName
             Task {
                 do {
                     Log.info("Downloading avatar from Media Upload API: \(avatarMediaId)", category: "ProfileSharingManager")
-
                     let decryptedData = try await MediaManager.shared.downloadAndDecryptAvatar(
                         mediaId: avatarMediaId,
                         mediaUrl: avatarMediaUrl,
                         mediaKey: avatarMediaKey
                     )
-
-                    await MainActor.run {
-                        let viewContext = PersistenceController.shared.container.viewContext
-                        guard let liveUser = viewContext.object(with: userObjectID) as? User else { return }
-                        // Re-apply name in case a server username refresh raced the download.
-                        if !nameSnapshot.isEmpty {
-                            liveUser.displayName = nameSnapshot
-                        }
-                        liveUser.avatarData = decryptedData
-                        liveUser.isSharingWithMe = true
-                        liveUser.sharedWithMeAt = liveUser.sharedWithMeAt ?? Date()
-
-                        do {
-                            try viewContext.save()
-                            Log.info("Avatar downloaded and saved for user \(userId)", category: "ProfileSharingManager")
-                        } catch {
-                            Log.error("Failed to save avatar: \(error)", category: "ProfileSharingManager")
-                        }
-                    }
+                    guard let live = try contacts.contact(userId) else { return }
+                    // Re-apply the name in case a server username refresh raced the download.
+                    try contacts.applySharedProfile(
+                        userId, displayName: nameSnapshot.isEmpty ? live.displayName : nameSnapshot,
+                        sharedWithMeAt: live.sharedWithMeAt ?? Date(), profileEditedAtMs: live.profileEditedAtMs
+                    )
+                    try contacts.setAvatarKeepingPending(userId, decryptedData)
+                    Log.info("Avatar downloaded and saved for user \(userId)", category: "ProfileSharingManager")
                 } catch {
                     Log.error("Failed to download avatar: \(error.localizedDescription)", category: "ProfileSharingManager")
                 }
@@ -139,16 +121,105 @@ class ProfileSharingManager {
         } else if let avatarBase64 = profileData.avatarData,
                   let avatarData = Data(base64Encoded: avatarBase64) {
             // Old format: base64 data (backward compatibility)
-            user.avatarData = avatarData
+            do {
+                try contacts.setAvatarKeepingPending(userId, avatarData)
+            } catch {
+                Log.error("Failed to save avatar: \(error)", category: "ProfileSharingManager")
+            }
+        }
+    }
+
+    // MARK: - Typed profile (content type 29)
+
+    /// A typed profile from `userId`, applied only if newer than the one held
+    /// (`ProfileShare.decision`). Onto an existing row only: a sender must not be able to put a
+    /// contact in our store by sending to us.
+    ///
+    /// `startDownload` is what happens to a newly pending avatar; a test passes a recorder so the
+    /// rule can be checked without the media store.
+    func apply(
+        _ profile: ProfileShare,
+        from userId: String,
+        startDownload: (String) -> Void = { id in Task { await ProfileSharingManager.fetchPendingAvatar(of: id) } }
+    ) {
+        let contacts = LocalRepositories.contacts
+        guard let held = try? contacts.contact(userId) else {
+            Log.error("Profile from \(userId.prefix(8))… for a contact we do not hold", category: "ProfileSharingManager")
+            return
+        }
+        guard let action = profile.decision(heldEditedAtMs: held.profileEditedAtMs) else {
+            Log.info("Profile from \(userId.prefix(8))… not newer than the one held — ignored", category: "ProfileSharingManager")
+            return
         }
 
         do {
-            try context.save()
-            Log.info("Profile data updated for user \(userId): displayName=\(profileData.displayName)", category: "ProfileSharingManager")
-            Log.debug("Chat list row should refresh — User.displayName/avatarData changed", category: "ProfileSharingManager")
+            // A profile is the sender's whole state at its version: no chosen name means none, so
+            // a name shared earlier is dropped and the username shows again — never the generated
+            // name.
+            try contacts.applySharedProfile(
+                userId, displayName: profile.chosenName(of: userId) ?? "",
+                sharedWithMeAt: Date(), profileEditedAtMs: Int64(clamping: profile.editedAtMs)
+            )
+            switch action {
+            case .download(let ref):
+                try contacts.setPendingAvatar(userId, ref: try ref.stored(), since: Date())
+            case .clear:
+                try contacts.setAvatar(userId, nil, pendingRef: nil, pendingSince: nil)
+            case .keep:
+                break
+            }
         } catch {
-            Log.error("Failed to save profile data: \(error)", category: "ProfileSharingManager")
+            Log.error("Failed to save profile from \(userId.prefix(8))…: \(error)", category: "ProfileSharingManager")
+            return
+        }
+        if case .download = action {
+            startDownload(userId)
         }
     }
-    
+
+    /// How long a pending avatar is worth asking for: the media store deletes everything after
+    /// `MEDIA_FILE_TTL_SECONDS` (7 days), and an avatar is media like any other.
+    static let pendingAvatarLifetime: TimeInterval = 7 * 24 * 3600
+
+    /// Download the avatar a contact's profile named, if one is still pending. On success it
+    /// replaces the avatar; if the store says the file is gone, or it is older than the store keeps
+    /// anything, the reference is dropped and the avatar held stays. Any other failure leaves it
+    /// pending for the next stream connect (`AvatarRetryService`).
+    static func fetchPendingAvatar(of contactId: String) async {
+        let contacts = LocalRepositories.contacts
+        guard let held = try? contacts.contact(contactId), let stored = held.pendingAvatarRef else { return }
+        let contact = contactId.prefix(8)
+        if let since = held.pendingAvatarSince, Date().timeIntervalSince(since) > pendingAvatarLifetime {
+            Log.info("Avatar of \(contact)… expired in the media store — dropped", category: "ProfileSharingManager")
+            clearPending(contactId, ifStill: stored)
+            return
+        }
+        guard let ref = ProfileShare.AvatarRef(stored: stored) else {
+            clearPending(contactId, ifStill: stored)
+            return
+        }
+        do {
+            let data = try await MediaManager.shared.downloadAndDecryptAvatar(
+                mediaId: ref.mediaId, mediaUrl: ref.mediaUrl, mediaKey: ref.mediaKey
+            )
+            // A newer profile may have named another avatar while this one downloaded; the store
+            // checks that in the write.
+            if (try? contacts.completePendingAvatar(contactId, expected: stored, avatar: data)) == true {
+                Log.info("Avatar of \(contact)… downloaded", category: "ProfileSharingManager")
+            } else {
+                Log.info("Avatar of \(contact)… downloaded after a newer one was named — not used", category: "ProfileSharingManager")
+            }
+        } catch let error as RPCError where error.code == .notFound {
+            Log.info("Avatar of \(contact)… is gone from the media store — dropped", category: "ProfileSharingManager")
+            clearPending(contactId, ifStill: stored)
+        } catch {
+            Log.info("Avatar of \(contact)… not downloaded (\(error.localizedDescription)) — retried on reconnect", category: "ProfileSharingManager")
+        }
+    }
+
+    /// The pending reference goes, the avatar held stays — unless a newer profile has named
+    /// another one meanwhile.
+    private static func clearPending(_ contactId: String, ifStill stored: Data) {
+        _ = try? LocalRepositories.contacts.dropPendingAvatar(contactId, expected: stored)
+    }
 }

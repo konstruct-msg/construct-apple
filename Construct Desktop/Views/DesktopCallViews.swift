@@ -17,15 +17,15 @@ struct DesktopIncomingCallView: View {
 
     var body: some View {
         HStack(spacing: 16) {
-            MainAvatarView(userId: session.peerUserId, displayName: session.peerName, size: 40)
+            MainAvatarView(userId: session.peerUserId, displayName: session.peerName, size: CTAvatarSize.row)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(session.peerName.uppercased())
-                    .font(CTFont.bold(12))
+                    .font(CTFont.ui(12, weight: .bold))
                     .tracking(1)
                     .foregroundStyle(Color.CT.text)
                 Text(NSLocalizedString("call_incoming_audio", comment: ""))
-                    .font(CTFont.regular(11))
+                    .font(CTFont.caption)
                     .foregroundStyle(Color.CT.textDim)
             }
 
@@ -36,7 +36,7 @@ struct DesktopIncomingCallView: View {
                 CallManager.shared.declineIncomingCall()
             } label: {
                 Image(systemName: "phone.down.fill")
-                    .font(.system(size: 16, weight: .medium))
+                    .font(CTFont.ui(16, weight: .medium))
                     .foregroundStyle(.white)
                     .frame(width: 36, height: 36)
                     .background(Color.CT.danger)
@@ -47,10 +47,10 @@ struct DesktopIncomingCallView: View {
 
             // Answer
             Button {
-                CallManager.shared.answerIncomingCall()
+                CallManager.shared.answerIncomingCall(withCamera: false)
             } label: {
                 Image(systemName: "phone.fill")
-                    .font(.system(size: 16, weight: .medium))
+                    .font(CTFont.ui(16, weight: .medium))
                     .foregroundStyle(.white)
                     .frame(width: 36, height: 36)
                     .background(Color.CT.accent)
@@ -86,16 +86,16 @@ struct DesktopInCallView: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            MainAvatarView(userId: session.peerUserId, displayName: session.peerName, size: 32)
+            MainAvatarView(userId: session.peerUserId, displayName: session.peerName, size: CTAvatarSize.compact)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(session.peerName.uppercased())
-                    .font(CTFont.bold(11))
+                    .font(CTFont.badge)
                     .tracking(1)
                     .foregroundStyle(Color.CT.text)
                     .lineLimit(1)
                 Text(statusText)
-                    .font(CTFont.regular(10))
+                    .font(CTFont.micro)
                     .foregroundStyle(isEnded ? Color.red.opacity(0.85) : Color.CT.textDim)
                     .animation(.easeInOut(duration: 0.3), value: isConnecting)
             }
@@ -106,7 +106,7 @@ struct DesktopInCallView: View {
                     CallManager.shared.endCall()
                 } label: {
                     Text(NSLocalizedString("call_dismiss", comment: ""))
-                        .font(CTFont.regular(11))
+                        .font(CTFont.caption)
                         .foregroundStyle(Color.CT.textDim)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 6)
@@ -121,7 +121,7 @@ struct DesktopInCallView: View {
                     CallManager.shared.setMuted(isMuted)
                 } label: {
                     Image(systemName: isMuted ? "mic.slash.fill" : "mic.fill")
-                        .font(.system(size: 14, weight: .medium))
+                        .font(CTFont.ui(14, weight: .medium))
                         .foregroundStyle(isMuted ? Color.CT.accent : Color.CT.textDim)
                         .frame(width: 28, height: 28)
                 }
@@ -133,7 +133,7 @@ struct DesktopInCallView: View {
                     CallManager.shared.endCall()
                 } label: {
                     Image(systemName: "phone.down.fill")
-                        .font(.system(size: 14, weight: .medium))
+                        .font(CTFont.ui(14, weight: .medium))
                         .foregroundStyle(.white)
                         .frame(width: 28, height: 28)
                         .background(Color.CT.danger)
@@ -170,19 +170,19 @@ struct DesktopInCallView: View {
             switch endReason {
             case .hangup(let r):
                 switch r {
-                case .declined:  return NSLocalizedString("call_status_declined", comment: "")
-                case .busy:      return NSLocalizedString("call_status_busy", comment: "")
-                default:         return elapsed > 0 ? formatDuration(elapsed) : NSLocalizedString("call_status_ended", comment: "")
+                case .declined:  return NSLocalizedString("call_declined", comment: "")
+                case .busy:      return NSLocalizedString("call_busy", comment: "")
+                default:         return elapsed > 0 ? formatDuration(elapsed) : NSLocalizedString("call_ended", comment: "")
                 }
-            case .error:   return NSLocalizedString("call_status_failed", comment: "")
-            case .local:   return NSLocalizedString("call_status_ended", comment: "")
-            case .none:    return NSLocalizedString("call_status_ended", comment: "")
+            case .error:   return NSLocalizedString("call_failed", comment: "")
+            case .local:   return NSLocalizedString("call_ended", comment: "")
+            case .none:    return NSLocalizedString("call_ended", comment: "")
             }
         }
         if isConnecting {
             switch session.direction {
             case .outgoing: return NSLocalizedString("call_status_calling", comment: "")
-            case .incoming: return NSLocalizedString("call_status_connecting", comment: "")
+            case .incoming: return NSLocalizedString("call_connecting", comment: "")
             }
         }
         return elapsed > 0 ? formatDuration(elapsed) : NSLocalizedString("call_status_connected", comment: "")

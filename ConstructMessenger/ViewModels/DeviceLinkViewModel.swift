@@ -53,8 +53,6 @@ final class DeviceLinkViewModel {
 
     private var pollingTask: Task<Void, Never>? = nil
     private var joinDeviceId: String? = nil
-    private var joinSigningKey: Data? = nil
-    private var joinIdentityKey: Data? = nil
 
     // MARK: - Device A: Generate QR
 
@@ -70,9 +68,7 @@ final class DeviceLinkViewModel {
             if let identity = try? CryptoManager.shared.localBundlePublicKeys().identityPublic,
                let hybrid = CryptoManager.shared.hybridIdentityPublicKey(),
                !hybrid.isEmpty {
-                let fp = HistorySnapshotDisposition.qrFingerprint(
-                    identityPublic: identity, hybridPublic: hybrid
-                )
+                let fp = historyQrFingerprint(identityPublic: identity, hybridPublic: hybrid)
                 url += "&fp=" + fp.map { String(format: "%02x", $0) }.joined()
             }
             qrContent = url
@@ -131,14 +127,14 @@ final class DeviceLinkViewModel {
         do {
             CryptoManager.shared.prepareForDeviceLink()
             KeychainManager.shared.deleteDeviceKeys()
-            let (deviceId, bundle, signingKey, identityKey) = try CryptoManager.shared.generateRegistrationBundle()
-            persistDeviceKeys(deviceId: deviceId, signingKey: signingKey, identityKey: identityKey)
+            let (deviceId, bundle) = try CryptoManager.shared.generateRegistrationBundle()
+            KeychainManager.shared.saveDeviceID(deviceId)
 
             var publicKeys = Shared_Proto_Services_V1_DevicePublicKeys()
-            publicKeys.verifyingKey = Data(bundle.verifyingKey)
-            publicKeys.identityPublic = Data(bundle.identityPublic)
-            publicKeys.signedPrekeyPublic = Data(bundle.signedPrekeyPublic)
-            publicKeys.signedPrekeySignature = Data(bundle.signature)
+            publicKeys.verifyingKey = bundle.verifyingKey
+            publicKeys.identityPublic = bundle.identityPublic
+            publicKeys.signedPrekeyPublic = bundle.signedPrekeyPublic
+            publicKeys.signedPrekeySignature = bundle.signature
             publicKeys.cryptoSuite = "Curve25519+Ed25519"
 
             Log.info("Device B: generated deviceId=\(deviceId) for link confirmation", category: "DeviceLink")
@@ -180,15 +176,13 @@ final class DeviceLinkViewModel {
         do {
             CryptoManager.shared.prepareForDeviceLink()
             KeychainManager.shared.deleteDeviceKeys()
-            let (deviceId, bundle, signingKey, identityKey) = try CryptoManager.shared.generateRegistrationBundle()
+            let (deviceId, bundle) = try CryptoManager.shared.generateRegistrationBundle()
             joinDeviceId = deviceId
-            joinSigningKey = signingKey
-            joinIdentityKey = identityKey
-            persistDeviceKeys(deviceId: deviceId, signingKey: signingKey, identityKey: identityKey)
+            KeychainManager.shared.saveDeviceID(deviceId)
             let name = DeviceInfo.deviceName
             let platform = platformString()
             let encoded = name.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? name
-            let pubkeyB64 = Data(bundle.identityPublic).base64EncodedString()
+            let pubkeyB64 = bundle.identityPublic.base64EncodedString()
             var queryValueAllowed = CharacterSet.alphanumerics
             queryValueAllowed.insert(charactersIn: "-._~")
             let pubkeyEncoded = pubkeyB64.addingPercentEncoding(withAllowedCharacters: queryValueAllowed) ?? pubkeyB64
@@ -203,6 +197,12 @@ final class DeviceLinkViewModel {
             Log.info("Join request submitted to server — deviceId=\(deviceId.prefix(8))…", category: "DeviceLink")
 
             joinRequestQRContent = url
+            #if DEBUG
+            // Same reason as the Flow A token above: a simulator phone cannot scan this Mac's QR,
+            // so `scripts/history_stand.sh` reads it here. It names a device and its public key and
+            // grants nothing — the phone's approval does.
+            Log.info("DeviceLink stand join request: \(url)", category: "DeviceLink")
+            #endif
             isWaitingForApproval = true
             startPollingForApproval(pendingId: deviceId)
             Log.info("Join request QR generated — deviceId=\(deviceId.prefix(8))…", category: "DeviceLink")
@@ -229,9 +229,8 @@ final class DeviceLinkViewModel {
                 do {
                     if let result = try await AuthServiceClient.shared.checkDeviceLinkStatus(pendingId: pendingId) {
                         let deviceId = self.joinDeviceId ?? pendingId
-                        if let signingKey = self.joinSigningKey, let identityKey = self.joinIdentityKey {
-                            self.persistDeviceKeys(deviceId: deviceId, signingKey: signingKey, identityKey: identityKey)
-                        }
+                        // The keys are already in the key record `generateRegistrationBundle` saved.
+                        KeychainManager.shared.saveDeviceID(deviceId)
                         self.isWaitingForApproval = false
                         await self.finishLink(
                             result: result,
@@ -320,12 +319,6 @@ final class DeviceLinkViewModel {
 
     // MARK: - Private helpers
 
-    private func persistDeviceKeys(deviceId: String, signingKey: Data, identityKey: Data) {
-        KeychainManager.shared.saveDeviceID(deviceId)
-        KeychainManager.shared.saveDeviceSigningKey(signingKey)
-        KeychainManager.shared.saveDeviceIdentityKey(identityKey)
-    }
-
     /// Persists session tokens (with expiry + GRPC cache sync), initializes crypto, uploads OTPKs.
     private func finishLink(
         result: AuthServiceClient.ConfirmLinkResult,
@@ -407,39 +400,32 @@ final class DeviceLinkViewModel {
     private func localizedError(_ error: Error) -> String {
         if let grpcError = error as? RPCError {
             switch grpcError.code {
-            case .unauthenticated:
-                return "Link token expired or invalid — please scan a fresh QR code"
-            case .alreadyExists:
-                return "This device is already linked"
-            case .resourceExhausted:
-                return "Rate limit reached — try again in 24 hours"
-            case .deadlineExceeded:
-                return "Network timeout — please check your connection and retry"
-            default:
-                return "Failed: \(grpcError.message)"
+            case .unauthenticated: return UserText("device_link_error_token").resolved
+            case .alreadyExists:   return UserText("device_link_error_already_linked").resolved
+            default:               break
             }
         }
-        if let deviceLinkError = error as? DeviceLinkError {
-            return deviceLinkError.localizedDescription
-        }
-        return error.localizedDescription
+        // Everything else — a timeout, the rate limit, an error of ours — through the one set.
+        return error.userFacingMessage
     }
 }
 
 // MARK: - DeviceLinkError
 
-enum DeviceLinkError: LocalizedError {
+enum DeviceLinkError: LocalizedError, UserFacingError {
     case keyGenerationFailed
     case invalidQRCode
     case rejected
     case expired
 
-    var errorDescription: String? {
+    var userText: UserText {
         switch self {
-        case .keyGenerationFailed: return "Failed to generate device keys — please try again"
-        case .invalidQRCode:       return "Could not read QR code — make sure it's a valid Construct link"
-        case .rejected:            return "Device link request was rejected by the existing device"
-        case .expired:             return "Device link request expired — please generate a new QR code"
+        case .keyGenerationFailed: return UserText("device_link_error_keys")
+        case .invalidQRCode:       return UserText("device_link_error_invalid_qr")
+        case .rejected:            return UserText("device_link_error_rejected")
+        case .expired:             return UserText("device_link_error_expired")
         }
     }
+
+    var errorDescription: String? { userText.resolved }
 }

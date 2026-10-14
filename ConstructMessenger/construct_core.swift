@@ -2,6 +2,12 @@
 // Trust me, you don't want to mess with it!
 
 // swiftlint:disable all
+/**
+ * History records ↔ local store rows (`construct-docs/decisions/history-projection-in-the-core.md`).
+ * Import merges into what the receiver holds: names and avatar only fill in, sharing flags only
+ * rise, a block is never lifted, our own message lands sent, an imported message takes a local
+ * order key. Times are ms.
+ */
 import Foundation
 
 // Depending on the consumer's build setup, the low-level FFI code
@@ -457,6 +463,22 @@ fileprivate struct FfiConverterUInt16: FfiConverterPrimitive {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterInt16: FfiConverterPrimitive {
+    typealias FfiType = Int16
+    typealias SwiftType = Int16
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> Int16 {
+        return try lift(readInt(&buf))
+    }
+
+    public static func write(_ value: Int16, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterUInt32: FfiConverterPrimitive {
     typealias FfiType = UInt32
     typealias SwiftType = UInt32
@@ -466,6 +488,22 @@ fileprivate struct FfiConverterUInt32: FfiConverterPrimitive {
     }
 
     public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterInt32: FfiConverterPrimitive {
+    typealias FfiType = Int32
+    typealias SwiftType = Int32
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> Int32 {
+        return try lift(readInt(&buf))
+    }
+
+    public static func write(_ value: Int32, into buf: inout [UInt8]) {
         writeInt(&buf, lower(value))
     }
 }
@@ -606,33 +644,15 @@ fileprivate struct FfiConverterData: FfiConverterRustBuffer {
 
 public protocol ClassicCryptoCoreProtocol: AnyObject, Sendable {
     
-    /**
-     * Mix a ML-KEM-768 shared secret into an existing session's root key.
-     *
-     * Call after init_session (sender) with kem_ss from mlkem768_encapsulate,
-     * or after init_receiving_session (receiver) with kem_ss from mlkem768_decapsulate.
-     * Both sides must call this with the same shared secret to stay in sync.
-     */
-    func applyPqContribution(contactId: String, kemSharedSecret: [UInt8]) throws 
+    func exportOneTimePrekeys() throws  -> Data
     
-    func decryptMessage(sessionId: String, ephemeralPublicKey: [UInt8], messageNumber: UInt32, content: [UInt8], suiteId: UInt16, pqMessageEpoch: UInt32, pqRatchetField: [UInt8]) throws  -> DecryptedMessageResult
+    func exportPrivateKeys() throws  -> Data
     
-    func encryptMessage(sessionId: String, plaintext: String) throws  -> EncryptedMessageComponents
-    
-    func exportOneTimePrekeys() throws  -> [UInt8]
-    
-    func exportPrivateKeys() throws  -> [UInt8]
-    
-    func exportSession(contactId: String) throws  -> [UInt8]
+    func exportSession(contactId: String) throws  -> Data
     
     func generateOneTimePrekeys(count: UInt32) throws  -> [OtpkPair]
     
     func getAllSessionContactIds()  -> [String]
-    
-    /**
-     * Raw identity secret key bytes (32 bytes, X25519).
-     */
-    func getIdentityKeyBytes() throws  -> Data
     
     /**
      * Typed registration bundle fields.
@@ -641,18 +661,11 @@ public protocol ClassicCryptoCoreProtocol: AnyObject, Sendable {
     
     func getSessionHealth(contactId: String)  -> SessionHealthReport?
     
-    /**
-     * Raw Ed25519 signing secret key bytes (64 bytes).
-     */
-    func getSigningKeyBytes() throws  -> Data
+    func importOneTimePrekeys(data: Data) throws 
     
-    func importOneTimePrekeys(data: [UInt8]) throws 
+    func importPrivateKeys(data: Data) throws 
     
-    func importPrivateKeys(data: [UInt8]) throws 
-    
-    func importSession(contactId: String, data: [UInt8]) throws  -> String
-    
-    func initReceivingSession(contactId: String, recipientBundle: BinaryKeyBundle, firstMessage: BinaryFirstMessage) throws  -> SessionInitResult
+    func importSession(contactId: String, data: Data) throws  -> String
     
     func initSession(contactId: String, recipientBundle: BinaryKeyBundle) throws  -> String
     
@@ -674,7 +687,7 @@ public protocol ClassicCryptoCoreProtocol: AnyObject, Sendable {
     
     func setLocalUserId(userId: String) 
     
-    func signBundleData(bundleDataJson: [UInt8]) throws  -> [UInt8]
+    func signBundleData(bundleDataJson: Data) throws  -> Data
     
 }
 open class ClassicCryptoCore: ClassicCryptoCoreProtocol, @unchecked Sendable {
@@ -725,65 +738,24 @@ open class ClassicCryptoCore: ClassicCryptoCoreProtocol, @unchecked Sendable {
     
 
     
-    /**
-     * Mix a ML-KEM-768 shared secret into an existing session's root key.
-     *
-     * Call after init_session (sender) with kem_ss from mlkem768_encapsulate,
-     * or after init_receiving_session (receiver) with kem_ss from mlkem768_decapsulate.
-     * Both sides must call this with the same shared secret to stay in sync.
-     */
-open func applyPqContribution(contactId: String, kemSharedSecret: [UInt8])throws   {try rustCallWithError(FfiConverterTypeCryptoError_lift) {
-    uniffi_construct_core_fn_method_classiccryptocore_apply_pq_contribution(
-            self.uniffiCloneHandle(),
-        FfiConverterString.lower(contactId),
-        FfiConverterSequenceUInt8.lower(kemSharedSecret),$0
-    )
-}
-}
-    
-open func decryptMessage(sessionId: String, ephemeralPublicKey: [UInt8], messageNumber: UInt32, content: [UInt8], suiteId: UInt16, pqMessageEpoch: UInt32, pqRatchetField: [UInt8])throws  -> DecryptedMessageResult  {
-    return try  FfiConverterTypeDecryptedMessageResult_lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
-    uniffi_construct_core_fn_method_classiccryptocore_decrypt_message(
-            self.uniffiCloneHandle(),
-        FfiConverterString.lower(sessionId),
-        FfiConverterSequenceUInt8.lower(ephemeralPublicKey),
-        FfiConverterUInt32.lower(messageNumber),
-        FfiConverterSequenceUInt8.lower(content),
-        FfiConverterUInt16.lower(suiteId),
-        FfiConverterUInt32.lower(pqMessageEpoch),
-        FfiConverterSequenceUInt8.lower(pqRatchetField),$0
-    )
-})
-}
-    
-open func encryptMessage(sessionId: String, plaintext: String)throws  -> EncryptedMessageComponents  {
-    return try  FfiConverterTypeEncryptedMessageComponents_lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
-    uniffi_construct_core_fn_method_classiccryptocore_encrypt_message(
-            self.uniffiCloneHandle(),
-        FfiConverterString.lower(sessionId),
-        FfiConverterString.lower(plaintext),$0
-    )
-})
-}
-    
-open func exportOneTimePrekeys()throws  -> [UInt8]  {
-    return try  FfiConverterSequenceUInt8.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+open func exportOneTimePrekeys()throws  -> Data  {
+    return try  FfiConverterData.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
     uniffi_construct_core_fn_method_classiccryptocore_export_one_time_prekeys(
             self.uniffiCloneHandle(),$0
     )
 })
 }
     
-open func exportPrivateKeys()throws  -> [UInt8]  {
-    return try  FfiConverterSequenceUInt8.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+open func exportPrivateKeys()throws  -> Data  {
+    return try  FfiConverterData.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
     uniffi_construct_core_fn_method_classiccryptocore_export_private_keys(
             self.uniffiCloneHandle(),$0
     )
 })
 }
     
-open func exportSession(contactId: String)throws  -> [UInt8]  {
-    return try  FfiConverterSequenceUInt8.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+open func exportSession(contactId: String)throws  -> Data  {
+    return try  FfiConverterData.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
     uniffi_construct_core_fn_method_classiccryptocore_export_session(
             self.uniffiCloneHandle(),
         FfiConverterString.lower(contactId),$0
@@ -809,17 +781,6 @@ open func getAllSessionContactIds() -> [String]  {
 }
     
     /**
-     * Raw identity secret key bytes (32 bytes, X25519).
-     */
-open func getIdentityKeyBytes()throws  -> Data  {
-    return try  FfiConverterData.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
-    uniffi_construct_core_fn_method_classiccryptocore_get_identity_key_bytes(
-            self.uniffiCloneHandle(),$0
-    )
-})
-}
-    
-    /**
      * Typed registration bundle fields.
      */
 open func getRegistrationBundleFields()throws  -> RegistrationBundleFields  {
@@ -839,50 +800,28 @@ open func getSessionHealth(contactId: String) -> SessionHealthReport?  {
 })
 }
     
-    /**
-     * Raw Ed25519 signing secret key bytes (64 bytes).
-     */
-open func getSigningKeyBytes()throws  -> Data  {
-    return try  FfiConverterData.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
-    uniffi_construct_core_fn_method_classiccryptocore_get_signing_key_bytes(
-            self.uniffiCloneHandle(),$0
-    )
-})
-}
-    
-open func importOneTimePrekeys(data: [UInt8])throws   {try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+open func importOneTimePrekeys(data: Data)throws   {try rustCallWithError(FfiConverterTypeCryptoError_lift) {
     uniffi_construct_core_fn_method_classiccryptocore_import_one_time_prekeys(
             self.uniffiCloneHandle(),
-        FfiConverterSequenceUInt8.lower(data),$0
+        FfiConverterData.lower(data),$0
     )
 }
 }
     
-open func importPrivateKeys(data: [UInt8])throws   {try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+open func importPrivateKeys(data: Data)throws   {try rustCallWithError(FfiConverterTypeCryptoError_lift) {
     uniffi_construct_core_fn_method_classiccryptocore_import_private_keys(
             self.uniffiCloneHandle(),
-        FfiConverterSequenceUInt8.lower(data),$0
+        FfiConverterData.lower(data),$0
     )
 }
 }
     
-open func importSession(contactId: String, data: [UInt8])throws  -> String  {
+open func importSession(contactId: String, data: Data)throws  -> String  {
     return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
     uniffi_construct_core_fn_method_classiccryptocore_import_session(
             self.uniffiCloneHandle(),
         FfiConverterString.lower(contactId),
-        FfiConverterSequenceUInt8.lower(data),$0
-    )
-})
-}
-    
-open func initReceivingSession(contactId: String, recipientBundle: BinaryKeyBundle, firstMessage: BinaryFirstMessage)throws  -> SessionInitResult  {
-    return try  FfiConverterTypeSessionInitResult_lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
-    uniffi_construct_core_fn_method_classiccryptocore_init_receiving_session(
-            self.uniffiCloneHandle(),
-        FfiConverterString.lower(contactId),
-        FfiConverterTypeBinaryKeyBundle_lower(recipientBundle),
-        FfiConverterTypeBinaryFirstMessage_lower(firstMessage),$0
+        FfiConverterData.lower(data),$0
     )
 })
 }
@@ -953,11 +892,11 @@ open func setLocalUserId(userId: String)  {try! rustCall() {
 }
 }
     
-open func signBundleData(bundleDataJson: [UInt8])throws  -> [UInt8]  {
-    return try  FfiConverterSequenceUInt8.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+open func signBundleData(bundleDataJson: Data)throws  -> Data  {
+    return try  FfiConverterData.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
     uniffi_construct_core_fn_method_classiccryptocore_sign_bundle_data(
             self.uniffiCloneHandle(),
-        FfiConverterSequenceUInt8.lower(bundleDataJson),$0
+        FfiConverterData.lower(bundleDataJson),$0
     )
 })
 }
@@ -1013,6 +952,2006 @@ public func FfiConverterTypeClassicCryptoCore_lower(_ value: ClassicCryptoCore) 
 
 
 /**
+ * The new device's end. Read exactly `need()` bytes, `feed` them, act on the status.
+ */
+public protocol HistoryReceiverProtocol: AnyObject, Sendable {
+    
+    /**
+     * After `AwaitKeys`: the directory's keys for that device and the QR pin. Returns the reply
+     * to write back (nearby), or nothing (file, or a verified skip).
+     */
+    func accept(known: HistoryKnownKeys, pin: HistoryPin) throws  -> Data?
+    
+    /**
+     * The socket closed or the file ended: `Truncated` unless the stream finished.
+     */
+    func endOfInput() throws 
+    
+    func feed(data: Data) throws  -> HistoryStep
+    
+    func need()  -> UInt32
+    
+}
+/**
+ * The new device's end. Read exactly `need()` bytes, `feed` them, act on the status.
+ */
+open class HistoryReceiver: HistoryReceiverProtocol, @unchecked Sendable {
+    fileprivate let handle: UInt64
+
+    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoHandle {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromHandle handle: UInt64) {
+        self.handle = handle
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noHandle: NoHandle) {
+        self.handle = 0
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiCloneHandle() -> UInt64 {
+        return try! rustCall { uniffi_construct_core_fn_clone_historyreceiver(self.handle, $0) }
+    }
+    // No primary constructor declared for this class.
+
+    deinit {
+        try! rustCall { uniffi_construct_core_fn_free_historyreceiver(handle, $0) }
+    }
+
+    
+
+    
+    /**
+     * After `AwaitKeys`: the directory's keys for that device and the QR pin. Returns the reply
+     * to write back (nearby), or nothing (file, or a verified skip).
+     */
+open func accept(known: HistoryKnownKeys, pin: HistoryPin)throws  -> Data?  {
+    return try  FfiConverterOptionData.lift(try rustCallWithError(FfiConverterTypeHistoryError_lift) {
+    uniffi_construct_core_fn_method_historyreceiver_accept(
+            self.uniffiCloneHandle(),
+        FfiConverterTypeHistoryKnownKeys_lower(known),
+        FfiConverterTypeHistoryPin_lower(pin),$0
+    )
+})
+}
+    
+    /**
+     * The socket closed or the file ended: `Truncated` unless the stream finished.
+     */
+open func endOfInput()throws   {try rustCallWithError(FfiConverterTypeHistoryError_lift) {
+    uniffi_construct_core_fn_method_historyreceiver_end_of_input(
+            self.uniffiCloneHandle(),$0
+    )
+}
+}
+    
+open func feed(data: Data)throws  -> HistoryStep  {
+    return try  FfiConverterTypeHistoryStep_lift(try rustCallWithError(FfiConverterTypeHistoryError_lift) {
+    uniffi_construct_core_fn_method_historyreceiver_feed(
+            self.uniffiCloneHandle(),
+        FfiConverterData.lower(data),$0
+    )
+})
+}
+    
+open func need() -> UInt32  {
+    return try!  FfiConverterUInt32.lift(try! rustCall() {
+    uniffi_construct_core_fn_method_historyreceiver_need(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+
+    
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeHistoryReceiver: FfiConverter {
+    typealias FfiType = UInt64
+    typealias SwiftType = HistoryReceiver
+
+    public static func lift(_ handle: UInt64) throws -> HistoryReceiver {
+        return HistoryReceiver(unsafeFromHandle: handle)
+    }
+
+    public static func lower(_ value: HistoryReceiver) -> UInt64 {
+        return value.uniffiCloneHandle()
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> HistoryReceiver {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+    public static func write(_ value: HistoryReceiver, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeHistoryReceiver_lift(_ handle: UInt64) throws -> HistoryReceiver {
+    return try FfiConverterTypeHistoryReceiver.lift(handle)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeHistoryReceiver_lower(_ value: HistoryReceiver) -> UInt64 {
+    return FfiConverterTypeHistoryReceiver.lower(value)
+}
+
+
+
+
+
+
+/**
+ * The offering device's end. Every call returns bytes to write verbatim: frames, sealed
+ * chunks, the EOF — the platform never frames.
+ */
+public protocol HistorySenderProtocol: AnyObject, Sendable {
+    
+    func acceptReply(reply: Data) throws 
+    
+    func beginMedia(mediaId: String, mimeType: String, byteLen: UInt64) throws  -> Data
+    
+    /**
+     * End record, last chunk, EOF.
+     */
+    func finish() throws  -> Data
+    
+    func firstFrame()  -> Data
+    
+    /**
+     * The next piece of the blob, in any size; exactly `byte_len` in all.
+     */
+    func pushMedia(piece: Data) throws  -> Data
+    
+    /**
+     * A batch of transcript records; returns every chunk they completed.
+     */
+    func pushRecords(records: [HistoryRecordOut]) throws  -> Data
+    
+    /**
+     * The snapshot id the manifest must carry.
+     */
+    func snapshotId()  -> Data
+    
+}
+/**
+ * The offering device's end. Every call returns bytes to write verbatim: frames, sealed
+ * chunks, the EOF — the platform never frames.
+ */
+open class HistorySender: HistorySenderProtocol, @unchecked Sendable {
+    fileprivate let handle: UInt64
+
+    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoHandle {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromHandle handle: UInt64) {
+        self.handle = handle
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noHandle: NoHandle) {
+        self.handle = 0
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiCloneHandle() -> UInt64 {
+        return try! rustCall { uniffi_construct_core_fn_clone_historysender(self.handle, $0) }
+    }
+    // No primary constructor declared for this class.
+
+    deinit {
+        try! rustCall { uniffi_construct_core_fn_free_historysender(handle, $0) }
+    }
+
+    
+
+    
+open func acceptReply(reply: Data)throws   {try rustCallWithError(FfiConverterTypeHistoryError_lift) {
+    uniffi_construct_core_fn_method_historysender_accept_reply(
+            self.uniffiCloneHandle(),
+        FfiConverterData.lower(reply),$0
+    )
+}
+}
+    
+open func beginMedia(mediaId: String, mimeType: String, byteLen: UInt64)throws  -> Data  {
+    return try  FfiConverterData.lift(try rustCallWithError(FfiConverterTypeHistoryError_lift) {
+    uniffi_construct_core_fn_method_historysender_begin_media(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(mediaId),
+        FfiConverterString.lower(mimeType),
+        FfiConverterUInt64.lower(byteLen),$0
+    )
+})
+}
+    
+    /**
+     * End record, last chunk, EOF.
+     */
+open func finish()throws  -> Data  {
+    return try  FfiConverterData.lift(try rustCallWithError(FfiConverterTypeHistoryError_lift) {
+    uniffi_construct_core_fn_method_historysender_finish(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+open func firstFrame() -> Data  {
+    return try!  FfiConverterData.lift(try! rustCall() {
+    uniffi_construct_core_fn_method_historysender_first_frame(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+    /**
+     * The next piece of the blob, in any size; exactly `byte_len` in all.
+     */
+open func pushMedia(piece: Data)throws  -> Data  {
+    return try  FfiConverterData.lift(try rustCallWithError(FfiConverterTypeHistoryError_lift) {
+    uniffi_construct_core_fn_method_historysender_push_media(
+            self.uniffiCloneHandle(),
+        FfiConverterData.lower(piece),$0
+    )
+})
+}
+    
+    /**
+     * A batch of transcript records; returns every chunk they completed.
+     */
+open func pushRecords(records: [HistoryRecordOut])throws  -> Data  {
+    return try  FfiConverterData.lift(try rustCallWithError(FfiConverterTypeHistoryError_lift) {
+    uniffi_construct_core_fn_method_historysender_push_records(
+            self.uniffiCloneHandle(),
+        FfiConverterSequenceTypeHistoryRecordOut.lower(records),$0
+    )
+})
+}
+    
+    /**
+     * The snapshot id the manifest must carry.
+     */
+open func snapshotId() -> Data  {
+    return try!  FfiConverterData.lift(try! rustCall() {
+    uniffi_construct_core_fn_method_historysender_snapshot_id(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+
+    
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeHistorySender: FfiConverter {
+    typealias FfiType = UInt64
+    typealias SwiftType = HistorySender
+
+    public static func lift(_ handle: UInt64) throws -> HistorySender {
+        return HistorySender(unsafeFromHandle: handle)
+    }
+
+    public static func lower(_ value: HistorySender) -> UInt64 {
+        return value.uniffiCloneHandle()
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> HistorySender {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+    public static func write(_ value: HistorySender, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeHistorySender_lift(_ handle: UInt64) throws -> HistorySender {
+    return try FfiConverterTypeHistorySender.lift(handle)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeHistorySender_lower(_ value: HistorySender) -> UInt64 {
+    return FfiConverterTypeHistorySender.lower(value)
+}
+
+
+
+
+
+
+public protocol LocalStoreProtocol: AnyObject, Sendable {
+    
+    /**
+     * A redelivered chunk keeps the copy held. Returns whether it was new.
+     */
+    func addPendingChunk(chunk: LocalPendingChunk) throws  -> Bool
+    
+    /**
+     * Each write below changes its named fields of one chat in one statement; false: no such chat.
+     * Moves the preview unless the one shown is newer; false also when it is.
+     */
+    func advanceChatPreview(id: String, text: String, time: Int64) throws  -> Bool
+    
+    /**
+     * Every chat's messages after (`after_order_key`, `after_id`) — both null from the start — a
+     * page at a time, in that order: a history snapshot.
+     */
+    func allMessagesAfter(afterOrderKey: String?, afterId: String?, limit: UInt32) throws  -> [LocalMessage]
+    
+    func allPeerDevices() throws  -> [LocalPeerDevice]
+    
+    /**
+     * Every reaction, oldest first: a history snapshot.
+     */
+    func allReactions() throws  -> [LocalReaction]
+    
+    /**
+     * The session the message was encrypted under was archived: keep, queue again, or fail
+     * once `max_retries` is spent — the one write that may lower `sent`. Null: no message.
+     */
+    func applySessionArchive(id: String, maxRetries: Int16) throws  -> LocalArchiveOutcome?
+    
+    /**
+     * Sharing on, with the name and both times the client chose.
+     */
+    func applySharedProfile(id: String, displayName: String, sharedWithMeAt: Int64, profileEditedAtMs: Int64) throws  -> Bool
+    
+    func calls(limit: UInt32) throws  -> [LocalCall]
+    
+    func chat(id: String) throws  -> LocalChat?
+    
+    func chatForPeer(peerId: String) throws  -> LocalChat?
+    
+    /**
+     * How many messages a chat holds.
+     */
+    func chatMessageCount(chatId: String) throws  -> UInt64
+    
+    /**
+     * Pinned first, then most recent, chats with no message last.
+     */
+    func chats() throws  -> [LocalChat]
+    
+    /**
+     * Each of the two below acts only while `expected_ref` is still the one waiting, checked in
+     * the same statement; false when another was announced meanwhile, or there is no such row.
+     * The download finished: it becomes the avatar and the wait ends.
+     */
+    func completePendingAvatar(id: String, expectedRef: Data, avatar: Data) throws  -> Bool
+    
+    func contact(id: String) throws  -> LocalContact?
+    
+    /**
+     * People marked as contacts, by the name shown for them.
+     */
+    func contacts() throws  -> [LocalContact]
+    
+    func contactsWithPendingAvatar() throws  -> [LocalContact]
+    
+    /**
+     * The attempts now, or null when not queued.
+     */
+    func countResendAttempt(messageId: String, deviceId: String) throws  -> UInt32?
+    
+    /**
+     * The whole call log out ("clear history"); how many entries it held.
+     */
+    func deleteAllCalls() throws  -> UInt32
+    
+    /**
+     * One entry out of the call log; false: no such row.
+     */
+    func deleteCall(id: String) throws  -> Bool
+    
+    func deleteChat(id: String) throws 
+    
+    /**
+     * Takes the contact's chats and their messages with it; false: no such row.
+     */
+    func deleteContact(id: String) throws  -> Bool
+    
+    func deleteIssuedInvites(jtis: [String]) throws 
+    
+    func deleteMessage(id: String) throws 
+    
+    func deletePendingChunks(senderId: String, messageId: String) throws 
+    
+    func deleteReaction(targetMessageId: String, reactorUserId: String) throws 
+    
+    func deleteResend(messageId: String, deviceId: String) throws 
+    
+    /**
+     * The wait ends without it; the avatar shown stays.
+     */
+    func dropPendingAvatar(id: String, expectedRef: Data) throws  -> Bool
+    
+    func editMessage(id: String, body: Data, searchText: String?, editedAt: Int64) throws  -> Bool
+    
+    /**
+     * Every entry whose key starts with `prefix`, by key; no pattern characters.
+     */
+    func entriesWithPrefix(prefix: String) throws  -> [LocalKvEntry]
+    
+    /**
+     * Every row, contacts or not, by id; `except_account` (our own) left out.
+     */
+    func everyContact(exceptAccount: String?) throws  -> [LocalContact]
+    
+    /**
+     * Forget reactions whose message is not here, received at or before `cutoff` (ms). A reaction
+     * on a held message is never expired; one with no receipt time stays.
+     */
+    func expireReactions(cutoff: Int64) throws  -> UInt32
+    
+    func forgetPendingChunksBefore(cutoff: Int64) throws  -> UInt64
+    
+    func forgetProcessedBefore(cutoff: Int64) throws  -> UInt64
+    
+    func forgetResendsBefore(cutoff: Int64) throws  -> UInt64
+    
+    func forgetServerMessageIdsBefore(cutoff: Int64) throws  -> UInt64
+    
+    func get(key: String) throws  -> Data?
+    
+    /**
+     * An empty key pins nothing.
+     */
+    func identityKeyPins() throws  -> [LocalIdentityKeyPin]
+    
+    /**
+     * One more attempt, counted in the store; the new count, null for no message.
+     */
+    func incrementRetryCount(id: String) throws  -> Int16?
+    
+    func incrementUnread(id: String) throws  -> Bool
+    
+    /**
+     * `AlreadyPresent` when the id or the peer has a chat — then use `chat_for_peer`.
+     */
+    func insertChat(chat: LocalChat) throws  -> LocalInsert
+    
+    /**
+     * The whole row, unless one with its id is held — that row is left as it is.
+     */
+    func insertContact(contact: LocalContact) throws  -> LocalInsert
+    
+    /**
+     * `search_text` is what the message says, for the full-text index; null for media/control.
+     */
+    func insertMessage(message: LocalMessage, searchText: String?) throws  -> LocalInsert
+    
+    /**
+     * `insert_message` for each, in one transaction; the ids added, in order. One failure (a
+     * chat that is not there) writes none of them.
+     */
+    func insertMessages(messages: [LocalMessageInsert]) throws  -> [String]
+    
+    func isProcessed(messageId: String) throws  -> Bool
+    
+    /**
+     * Newest first.
+     */
+    func issuedInvites() throws  -> [LocalIssuedInvite]
+    
+    func localMessageId(serverId: String) throws  -> String?
+    
+    /**
+     * Each write below changes its named fields of one row in one statement; false: no such row.
+     * A contact from now on; `added_at` is kept if it was set.
+     */
+    func markContact(id: String, addedAt: Int64) throws  -> Bool
+    
+    /**
+     * An envelope processed, so a redelivery is not; exact ids. Returns whether it was new.
+     */
+    func markProcessed(messageId: String, senderId: String, processedAt: Int64) throws  -> Bool
+    
+    func message(id: String) throws  -> LocalMessage?
+    
+    func messageCount() throws  -> UInt64
+    
+    /**
+     * Up to `limit` messages just before (`before_order_key`, `before_id`) — both null for the
+     * newest page — oldest first.
+     */
+    func messagesBefore(chatId: String, beforeOrderKey: String?, beforeId: String?, limit: UInt32) throws  -> [LocalMessage]
+    
+    /**
+     * Up to `limit` messages from (`from_order_key`, `from_id`), that one included, oldest first.
+     */
+    func messagesFrom(chatId: String, fromOrderKey: String, fromId: String, limit: UInt32) throws  -> [LocalMessage]
+    
+    /**
+     * Ours in `status`, every chat, transcript order.
+     */
+    func ownMessagesInStatus(status: Int16, limit: UInt32) throws  -> [LocalMessage]
+    
+    func ownProfile() throws  -> LocalOwnProfile?
+    
+    func peerDevice(deviceId: String) throws  -> LocalPeerDevice?
+    
+    /**
+     * Oldest first; devices first seen in the same millisecond by id.
+     */
+    func peerDevices(accountId: String) throws  -> [LocalPeerDevice]
+    
+    func pendingChunkCount(senderId: String, messageId: String) throws  -> UInt32
+    
+    /**
+     * Every message with chunks held, by its first chunk's arrival.
+     */
+    func pendingChunkMessages() throws  -> [LocalPendingChunkMessage]
+    
+    /**
+     * One sender's message, by chunk index.
+     */
+    func pendingChunks(senderId: String, messageId: String) throws  -> [LocalPendingChunk]
+    
+    /**
+     * Oldest first.
+     */
+    func pendingResends() throws  -> [LocalPendingResend]
+    
+    /**
+     * Ours, queued or failed with `retry_count < retry_ceiling`; one chat, or every chat for null.
+     */
+    func pendingSends(chatId: String?, retryCeiling: Int16, limit: UInt32) throws  -> [LocalMessage]
+    
+    /**
+     * Every id held: to warm an in-memory cache at launch.
+     */
+    func processedMessageIds() throws  -> [String]
+    
+    func put(key: String, value: Data) throws 
+    
+    /**
+     * A second request for the same copy keeps the first row. Returns whether it was new.
+     */
+    func queueResend(resend: LocalPendingResend) throws  -> Bool
+    
+    func reactions(targetMessageId: String) throws  -> [LocalReaction]
+    
+    /**
+     * Every reaction on a chat's messages, by message then time — one read per transcript.
+     */
+    func reactionsInChat(chatId: String) throws  -> [LocalReaction]
+    
+    /**
+     * Insert, or replace the row of its jti.
+     */
+    func recordIssuedInvite(invite: LocalIssuedInvite) throws 
+    
+    /**
+     * An id already known keeps its first account.
+     */
+    func recordPeerDevice(device: LocalPeerDevice) throws  -> LocalInsert
+    
+    /**
+     * The server's id of a sealed copy we sent → our message id; lowercase, kept 30 days.
+     */
+    func recordServerMessageId(serverId: String, localId: String, recordedAt: Int64) throws 
+    
+    func remove(key: String) throws 
+    
+    /**
+     * Every field of the row `contact.id` set to `contact`'s, for a merge already decided; false:
+     * no such row (a row deleted meanwhile stays deleted).
+     */
+    func replaceContact(contact: LocalContact) throws  -> Bool
+    
+    /**
+     * Forget devices the server no longer lists; an empty list forgets nothing. Returns the removed.
+     */
+    func retainPeerDevices(accountId: String, active: [String]) throws  -> [String]
+    
+    /**
+     * Messages whose text contains `query` (one phrase, three characters at least), newest first.
+     */
+    func search(query: String, limit: UInt32) throws  -> [LocalSearchHit]
+    
+    func setAccountAddress(id: String, address: Data?) throws  -> Bool
+    
+    func setChatPinned(id: String, pinned: Bool) throws  -> Bool
+    
+    /**
+     * Sets the preview whatever it was — after a deletion; both null when no message is left.
+     */
+    func setChatPreview(id: String, text: String?, time: Int64?) throws  -> Bool
+    
+    func setContactAlias(id: String, alias: String?) throws  -> Bool
+    
+    /**
+     * The avatar and the one still to download, set together.
+     */
+    func setContactAvatar(id: String, avatar: Data?, pendingRef: Data?, pendingSince: Int64?) throws  -> Bool
+    
+    /**
+     * The avatar alone; one announced and still waiting keeps waiting.
+     */
+    func setContactAvatarKeepingPending(id: String, avatar: Data?) throws  -> Bool
+    
+    func setContactBlocked(id: String, blocked: Bool) throws  -> Bool
+    
+    func setContactNames(id: String, username: String, displayName: String) throws  -> Bool
+    
+    /**
+     * Statuses: 0 sending, 1 sent, 2 delivered, 3 queued, 4 failed. A write that would replace
+     * stronger evidence of arrival (delivered > sent > the rest) is refused: false, as for no
+     * change and no message.
+     */
+    func setDeliveryStatus(id: String, status: Int16) throws  -> Bool
+    
+    func setIdentityKey(id: String, key: Data?) throws  -> Bool
+    
+    func setKtStatus(id: String, status: Int16) throws  -> Bool
+    
+    /**
+     * The body and its search text replaced, the message not marked edited: a body read late —
+     * stored undecryptable, sent again under the same id. False: no message.
+     */
+    func setMessageBody(id: String, body: Data, searchText: String?) throws  -> Bool
+    
+    func setObserver(observer: LocalStoreObserver?) 
+    
+    func setOrderKey(id: String, orderKey: String) throws  -> Bool
+    
+    /**
+     * Replaces our profile — there is one.
+     */
+    func setOwnProfile(profile: LocalOwnProfile) throws 
+    
+    /**
+     * An avatar announced; the one shown stays until the download replaces it.
+     */
+    func setPendingAvatar(id: String, pendingRef: Data, since: Int64) throws  -> Bool
+    
+    /**
+     * Each write below changes its named fields of one message; false: no message or no change.
+     */
+    func setRetryCount(id: String, count: Int16) throws  -> Bool
+    
+    func setSecurityNotice(id: String, notice: Int16) throws  -> Bool
+    
+    func setSharingWith(id: String, sharing: Bool) throws  -> Bool
+    
+    /**
+     * All null clears the transcript.
+     */
+    func setTranscript(id: String, text: String?, language: String?, generatedAt: Int64?) throws  -> Bool
+    
+    func setUnread(id: String, count: Int32) throws  -> Bool
+    
+    /**
+     * The ids we share our profile with; `except_account` (our own) left out.
+     */
+    func sharingWith(exceptAccount: String?) throws  -> [String]
+    
+    func upsertCall(call: LocalCall) throws 
+    
+    /**
+     * The whole row; a second chat for a peer that has one is an error.
+     */
+    func upsertChat(chat: LocalChat) throws 
+    
+    /**
+     * The whole row, created or overwritten.
+     */
+    func upsertContact(contact: LocalContact) throws 
+    
+    func upsertReaction(reaction: LocalReaction) throws 
+    
+    /**
+     * Close and delete every file of the store. Every later call is `Closed`. The platform
+     * deletes the key.
+     */
+    func wipe() throws 
+    
+}
+open class LocalStore: LocalStoreProtocol, @unchecked Sendable {
+    fileprivate let handle: UInt64
+
+    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoHandle {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromHandle handle: UInt64) {
+        self.handle = handle
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noHandle: NoHandle) {
+        self.handle = 0
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiCloneHandle() -> UInt64 {
+        return try! rustCall { uniffi_construct_core_fn_clone_localstore(self.handle, $0) }
+    }
+    /**
+     * Open — creating if absent — the store at `path` under `key`. A key that does not open it
+     * is `WrongKey`, never a fresh empty store.
+     */
+public convenience init(path: String, key: Data)throws  {
+    let handle =
+        try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_constructor_localstore_new(
+        FfiConverterString.lower(path),
+        FfiConverterData.lower(key),$0
+    )
+}
+    self.init(unsafeFromHandle: handle)
+}
+
+    deinit {
+        try! rustCall { uniffi_construct_core_fn_free_localstore(handle, $0) }
+    }
+
+    
+    /**
+     * A store in memory only, under the same encryption path. Tests and previews.
+     */
+public static func inMemory(key: Data)throws  -> LocalStore  {
+    return try  FfiConverterTypeLocalStore_lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_constructor_localstore_in_memory(
+        FfiConverterData.lower(key),$0
+    )
+})
+}
+    
+
+    
+    /**
+     * A redelivered chunk keeps the copy held. Returns whether it was new.
+     */
+open func addPendingChunk(chunk: LocalPendingChunk)throws  -> Bool  {
+    return try  FfiConverterBool.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_add_pending_chunk(
+            self.uniffiCloneHandle(),
+        FfiConverterTypeLocalPendingChunk_lower(chunk),$0
+    )
+})
+}
+    
+    /**
+     * Each write below changes its named fields of one chat in one statement; false: no such chat.
+     * Moves the preview unless the one shown is newer; false also when it is.
+     */
+open func advanceChatPreview(id: String, text: String, time: Int64)throws  -> Bool  {
+    return try  FfiConverterBool.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_advance_chat_preview(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(id),
+        FfiConverterString.lower(text),
+        FfiConverterInt64.lower(time),$0
+    )
+})
+}
+    
+    /**
+     * Every chat's messages after (`after_order_key`, `after_id`) — both null from the start — a
+     * page at a time, in that order: a history snapshot.
+     */
+open func allMessagesAfter(afterOrderKey: String?, afterId: String?, limit: UInt32)throws  -> [LocalMessage]  {
+    return try  FfiConverterSequenceTypeLocalMessage.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_all_messages_after(
+            self.uniffiCloneHandle(),
+        FfiConverterOptionString.lower(afterOrderKey),
+        FfiConverterOptionString.lower(afterId),
+        FfiConverterUInt32.lower(limit),$0
+    )
+})
+}
+    
+open func allPeerDevices()throws  -> [LocalPeerDevice]  {
+    return try  FfiConverterSequenceTypeLocalPeerDevice.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_all_peer_devices(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+    /**
+     * Every reaction, oldest first: a history snapshot.
+     */
+open func allReactions()throws  -> [LocalReaction]  {
+    return try  FfiConverterSequenceTypeLocalReaction.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_all_reactions(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+    /**
+     * The session the message was encrypted under was archived: keep, queue again, or fail
+     * once `max_retries` is spent — the one write that may lower `sent`. Null: no message.
+     */
+open func applySessionArchive(id: String, maxRetries: Int16)throws  -> LocalArchiveOutcome?  {
+    return try  FfiConverterOptionTypeLocalArchiveOutcome.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_apply_session_archive(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(id),
+        FfiConverterInt16.lower(maxRetries),$0
+    )
+})
+}
+    
+    /**
+     * Sharing on, with the name and both times the client chose.
+     */
+open func applySharedProfile(id: String, displayName: String, sharedWithMeAt: Int64, profileEditedAtMs: Int64)throws  -> Bool  {
+    return try  FfiConverterBool.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_apply_shared_profile(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(id),
+        FfiConverterString.lower(displayName),
+        FfiConverterInt64.lower(sharedWithMeAt),
+        FfiConverterInt64.lower(profileEditedAtMs),$0
+    )
+})
+}
+    
+open func calls(limit: UInt32)throws  -> [LocalCall]  {
+    return try  FfiConverterSequenceTypeLocalCall.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_calls(
+            self.uniffiCloneHandle(),
+        FfiConverterUInt32.lower(limit),$0
+    )
+})
+}
+    
+open func chat(id: String)throws  -> LocalChat?  {
+    return try  FfiConverterOptionTypeLocalChat.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_chat(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(id),$0
+    )
+})
+}
+    
+open func chatForPeer(peerId: String)throws  -> LocalChat?  {
+    return try  FfiConverterOptionTypeLocalChat.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_chat_for_peer(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(peerId),$0
+    )
+})
+}
+    
+    /**
+     * How many messages a chat holds.
+     */
+open func chatMessageCount(chatId: String)throws  -> UInt64  {
+    return try  FfiConverterUInt64.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_chat_message_count(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(chatId),$0
+    )
+})
+}
+    
+    /**
+     * Pinned first, then most recent, chats with no message last.
+     */
+open func chats()throws  -> [LocalChat]  {
+    return try  FfiConverterSequenceTypeLocalChat.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_chats(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+    /**
+     * Each of the two below acts only while `expected_ref` is still the one waiting, checked in
+     * the same statement; false when another was announced meanwhile, or there is no such row.
+     * The download finished: it becomes the avatar and the wait ends.
+     */
+open func completePendingAvatar(id: String, expectedRef: Data, avatar: Data)throws  -> Bool  {
+    return try  FfiConverterBool.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_complete_pending_avatar(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(id),
+        FfiConverterData.lower(expectedRef),
+        FfiConverterData.lower(avatar),$0
+    )
+})
+}
+    
+open func contact(id: String)throws  -> LocalContact?  {
+    return try  FfiConverterOptionTypeLocalContact.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_contact(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(id),$0
+    )
+})
+}
+    
+    /**
+     * People marked as contacts, by the name shown for them.
+     */
+open func contacts()throws  -> [LocalContact]  {
+    return try  FfiConverterSequenceTypeLocalContact.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_contacts(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+open func contactsWithPendingAvatar()throws  -> [LocalContact]  {
+    return try  FfiConverterSequenceTypeLocalContact.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_contacts_with_pending_avatar(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+    /**
+     * The attempts now, or null when not queued.
+     */
+open func countResendAttempt(messageId: String, deviceId: String)throws  -> UInt32?  {
+    return try  FfiConverterOptionUInt32.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_count_resend_attempt(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(messageId),
+        FfiConverterString.lower(deviceId),$0
+    )
+})
+}
+    
+    /**
+     * The whole call log out ("clear history"); how many entries it held.
+     */
+open func deleteAllCalls()throws  -> UInt32  {
+    return try  FfiConverterUInt32.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_delete_all_calls(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+    /**
+     * One entry out of the call log; false: no such row.
+     */
+open func deleteCall(id: String)throws  -> Bool  {
+    return try  FfiConverterBool.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_delete_call(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(id),$0
+    )
+})
+}
+    
+open func deleteChat(id: String)throws   {try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_delete_chat(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(id),$0
+    )
+}
+}
+    
+    /**
+     * Takes the contact's chats and their messages with it; false: no such row.
+     */
+open func deleteContact(id: String)throws  -> Bool  {
+    return try  FfiConverterBool.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_delete_contact(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(id),$0
+    )
+})
+}
+    
+open func deleteIssuedInvites(jtis: [String])throws   {try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_delete_issued_invites(
+            self.uniffiCloneHandle(),
+        FfiConverterSequenceString.lower(jtis),$0
+    )
+}
+}
+    
+open func deleteMessage(id: String)throws   {try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_delete_message(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(id),$0
+    )
+}
+}
+    
+open func deletePendingChunks(senderId: String, messageId: String)throws   {try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_delete_pending_chunks(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(senderId),
+        FfiConverterString.lower(messageId),$0
+    )
+}
+}
+    
+open func deleteReaction(targetMessageId: String, reactorUserId: String)throws   {try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_delete_reaction(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(targetMessageId),
+        FfiConverterString.lower(reactorUserId),$0
+    )
+}
+}
+    
+open func deleteResend(messageId: String, deviceId: String)throws   {try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_delete_resend(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(messageId),
+        FfiConverterString.lower(deviceId),$0
+    )
+}
+}
+    
+    /**
+     * The wait ends without it; the avatar shown stays.
+     */
+open func dropPendingAvatar(id: String, expectedRef: Data)throws  -> Bool  {
+    return try  FfiConverterBool.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_drop_pending_avatar(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(id),
+        FfiConverterData.lower(expectedRef),$0
+    )
+})
+}
+    
+open func editMessage(id: String, body: Data, searchText: String?, editedAt: Int64)throws  -> Bool  {
+    return try  FfiConverterBool.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_edit_message(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(id),
+        FfiConverterData.lower(body),
+        FfiConverterOptionString.lower(searchText),
+        FfiConverterInt64.lower(editedAt),$0
+    )
+})
+}
+    
+    /**
+     * Every entry whose key starts with `prefix`, by key; no pattern characters.
+     */
+open func entriesWithPrefix(prefix: String)throws  -> [LocalKvEntry]  {
+    return try  FfiConverterSequenceTypeLocalKvEntry.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_entries_with_prefix(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(prefix),$0
+    )
+})
+}
+    
+    /**
+     * Every row, contacts or not, by id; `except_account` (our own) left out.
+     */
+open func everyContact(exceptAccount: String?)throws  -> [LocalContact]  {
+    return try  FfiConverterSequenceTypeLocalContact.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_every_contact(
+            self.uniffiCloneHandle(),
+        FfiConverterOptionString.lower(exceptAccount),$0
+    )
+})
+}
+    
+    /**
+     * Forget reactions whose message is not here, received at or before `cutoff` (ms). A reaction
+     * on a held message is never expired; one with no receipt time stays.
+     */
+open func expireReactions(cutoff: Int64)throws  -> UInt32  {
+    return try  FfiConverterUInt32.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_expire_reactions(
+            self.uniffiCloneHandle(),
+        FfiConverterInt64.lower(cutoff),$0
+    )
+})
+}
+    
+open func forgetPendingChunksBefore(cutoff: Int64)throws  -> UInt64  {
+    return try  FfiConverterUInt64.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_forget_pending_chunks_before(
+            self.uniffiCloneHandle(),
+        FfiConverterInt64.lower(cutoff),$0
+    )
+})
+}
+    
+open func forgetProcessedBefore(cutoff: Int64)throws  -> UInt64  {
+    return try  FfiConverterUInt64.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_forget_processed_before(
+            self.uniffiCloneHandle(),
+        FfiConverterInt64.lower(cutoff),$0
+    )
+})
+}
+    
+open func forgetResendsBefore(cutoff: Int64)throws  -> UInt64  {
+    return try  FfiConverterUInt64.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_forget_resends_before(
+            self.uniffiCloneHandle(),
+        FfiConverterInt64.lower(cutoff),$0
+    )
+})
+}
+    
+open func forgetServerMessageIdsBefore(cutoff: Int64)throws  -> UInt64  {
+    return try  FfiConverterUInt64.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_forget_server_message_ids_before(
+            self.uniffiCloneHandle(),
+        FfiConverterInt64.lower(cutoff),$0
+    )
+})
+}
+    
+open func get(key: String)throws  -> Data?  {
+    return try  FfiConverterOptionData.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_get(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(key),$0
+    )
+})
+}
+    
+    /**
+     * An empty key pins nothing.
+     */
+open func identityKeyPins()throws  -> [LocalIdentityKeyPin]  {
+    return try  FfiConverterSequenceTypeLocalIdentityKeyPin.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_identity_key_pins(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+    /**
+     * One more attempt, counted in the store; the new count, null for no message.
+     */
+open func incrementRetryCount(id: String)throws  -> Int16?  {
+    return try  FfiConverterOptionInt16.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_increment_retry_count(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(id),$0
+    )
+})
+}
+    
+open func incrementUnread(id: String)throws  -> Bool  {
+    return try  FfiConverterBool.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_increment_unread(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(id),$0
+    )
+})
+}
+    
+    /**
+     * `AlreadyPresent` when the id or the peer has a chat — then use `chat_for_peer`.
+     */
+open func insertChat(chat: LocalChat)throws  -> LocalInsert  {
+    return try  FfiConverterTypeLocalInsert_lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_insert_chat(
+            self.uniffiCloneHandle(),
+        FfiConverterTypeLocalChat_lower(chat),$0
+    )
+})
+}
+    
+    /**
+     * The whole row, unless one with its id is held — that row is left as it is.
+     */
+open func insertContact(contact: LocalContact)throws  -> LocalInsert  {
+    return try  FfiConverterTypeLocalInsert_lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_insert_contact(
+            self.uniffiCloneHandle(),
+        FfiConverterTypeLocalContact_lower(contact),$0
+    )
+})
+}
+    
+    /**
+     * `search_text` is what the message says, for the full-text index; null for media/control.
+     */
+open func insertMessage(message: LocalMessage, searchText: String?)throws  -> LocalInsert  {
+    return try  FfiConverterTypeLocalInsert_lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_insert_message(
+            self.uniffiCloneHandle(),
+        FfiConverterTypeLocalMessage_lower(message),
+        FfiConverterOptionString.lower(searchText),$0
+    )
+})
+}
+    
+    /**
+     * `insert_message` for each, in one transaction; the ids added, in order. One failure (a
+     * chat that is not there) writes none of them.
+     */
+open func insertMessages(messages: [LocalMessageInsert])throws  -> [String]  {
+    return try  FfiConverterSequenceString.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_insert_messages(
+            self.uniffiCloneHandle(),
+        FfiConverterSequenceTypeLocalMessageInsert.lower(messages),$0
+    )
+})
+}
+    
+open func isProcessed(messageId: String)throws  -> Bool  {
+    return try  FfiConverterBool.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_is_processed(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(messageId),$0
+    )
+})
+}
+    
+    /**
+     * Newest first.
+     */
+open func issuedInvites()throws  -> [LocalIssuedInvite]  {
+    return try  FfiConverterSequenceTypeLocalIssuedInvite.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_issued_invites(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+open func localMessageId(serverId: String)throws  -> String?  {
+    return try  FfiConverterOptionString.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_local_message_id(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(serverId),$0
+    )
+})
+}
+    
+    /**
+     * Each write below changes its named fields of one row in one statement; false: no such row.
+     * A contact from now on; `added_at` is kept if it was set.
+     */
+open func markContact(id: String, addedAt: Int64)throws  -> Bool  {
+    return try  FfiConverterBool.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_mark_contact(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(id),
+        FfiConverterInt64.lower(addedAt),$0
+    )
+})
+}
+    
+    /**
+     * An envelope processed, so a redelivery is not; exact ids. Returns whether it was new.
+     */
+open func markProcessed(messageId: String, senderId: String, processedAt: Int64)throws  -> Bool  {
+    return try  FfiConverterBool.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_mark_processed(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(messageId),
+        FfiConverterString.lower(senderId),
+        FfiConverterInt64.lower(processedAt),$0
+    )
+})
+}
+    
+open func message(id: String)throws  -> LocalMessage?  {
+    return try  FfiConverterOptionTypeLocalMessage.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_message(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(id),$0
+    )
+})
+}
+    
+open func messageCount()throws  -> UInt64  {
+    return try  FfiConverterUInt64.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_message_count(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+    /**
+     * Up to `limit` messages just before (`before_order_key`, `before_id`) — both null for the
+     * newest page — oldest first.
+     */
+open func messagesBefore(chatId: String, beforeOrderKey: String?, beforeId: String?, limit: UInt32)throws  -> [LocalMessage]  {
+    return try  FfiConverterSequenceTypeLocalMessage.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_messages_before(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(chatId),
+        FfiConverterOptionString.lower(beforeOrderKey),
+        FfiConverterOptionString.lower(beforeId),
+        FfiConverterUInt32.lower(limit),$0
+    )
+})
+}
+    
+    /**
+     * Up to `limit` messages from (`from_order_key`, `from_id`), that one included, oldest first.
+     */
+open func messagesFrom(chatId: String, fromOrderKey: String, fromId: String, limit: UInt32)throws  -> [LocalMessage]  {
+    return try  FfiConverterSequenceTypeLocalMessage.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_messages_from(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(chatId),
+        FfiConverterString.lower(fromOrderKey),
+        FfiConverterString.lower(fromId),
+        FfiConverterUInt32.lower(limit),$0
+    )
+})
+}
+    
+    /**
+     * Ours in `status`, every chat, transcript order.
+     */
+open func ownMessagesInStatus(status: Int16, limit: UInt32)throws  -> [LocalMessage]  {
+    return try  FfiConverterSequenceTypeLocalMessage.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_own_messages_in_status(
+            self.uniffiCloneHandle(),
+        FfiConverterInt16.lower(status),
+        FfiConverterUInt32.lower(limit),$0
+    )
+})
+}
+    
+open func ownProfile()throws  -> LocalOwnProfile?  {
+    return try  FfiConverterOptionTypeLocalOwnProfile.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_own_profile(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+open func peerDevice(deviceId: String)throws  -> LocalPeerDevice?  {
+    return try  FfiConverterOptionTypeLocalPeerDevice.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_peer_device(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(deviceId),$0
+    )
+})
+}
+    
+    /**
+     * Oldest first; devices first seen in the same millisecond by id.
+     */
+open func peerDevices(accountId: String)throws  -> [LocalPeerDevice]  {
+    return try  FfiConverterSequenceTypeLocalPeerDevice.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_peer_devices(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(accountId),$0
+    )
+})
+}
+    
+open func pendingChunkCount(senderId: String, messageId: String)throws  -> UInt32  {
+    return try  FfiConverterUInt32.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_pending_chunk_count(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(senderId),
+        FfiConverterString.lower(messageId),$0
+    )
+})
+}
+    
+    /**
+     * Every message with chunks held, by its first chunk's arrival.
+     */
+open func pendingChunkMessages()throws  -> [LocalPendingChunkMessage]  {
+    return try  FfiConverterSequenceTypeLocalPendingChunkMessage.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_pending_chunk_messages(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+    /**
+     * One sender's message, by chunk index.
+     */
+open func pendingChunks(senderId: String, messageId: String)throws  -> [LocalPendingChunk]  {
+    return try  FfiConverterSequenceTypeLocalPendingChunk.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_pending_chunks(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(senderId),
+        FfiConverterString.lower(messageId),$0
+    )
+})
+}
+    
+    /**
+     * Oldest first.
+     */
+open func pendingResends()throws  -> [LocalPendingResend]  {
+    return try  FfiConverterSequenceTypeLocalPendingResend.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_pending_resends(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+    /**
+     * Ours, queued or failed with `retry_count < retry_ceiling`; one chat, or every chat for null.
+     */
+open func pendingSends(chatId: String?, retryCeiling: Int16, limit: UInt32)throws  -> [LocalMessage]  {
+    return try  FfiConverterSequenceTypeLocalMessage.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_pending_sends(
+            self.uniffiCloneHandle(),
+        FfiConverterOptionString.lower(chatId),
+        FfiConverterInt16.lower(retryCeiling),
+        FfiConverterUInt32.lower(limit),$0
+    )
+})
+}
+    
+    /**
+     * Every id held: to warm an in-memory cache at launch.
+     */
+open func processedMessageIds()throws  -> [String]  {
+    return try  FfiConverterSequenceString.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_processed_message_ids(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+open func put(key: String, value: Data)throws   {try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_put(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(key),
+        FfiConverterData.lower(value),$0
+    )
+}
+}
+    
+    /**
+     * A second request for the same copy keeps the first row. Returns whether it was new.
+     */
+open func queueResend(resend: LocalPendingResend)throws  -> Bool  {
+    return try  FfiConverterBool.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_queue_resend(
+            self.uniffiCloneHandle(),
+        FfiConverterTypeLocalPendingResend_lower(resend),$0
+    )
+})
+}
+    
+open func reactions(targetMessageId: String)throws  -> [LocalReaction]  {
+    return try  FfiConverterSequenceTypeLocalReaction.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_reactions(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(targetMessageId),$0
+    )
+})
+}
+    
+    /**
+     * Every reaction on a chat's messages, by message then time — one read per transcript.
+     */
+open func reactionsInChat(chatId: String)throws  -> [LocalReaction]  {
+    return try  FfiConverterSequenceTypeLocalReaction.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_reactions_in_chat(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(chatId),$0
+    )
+})
+}
+    
+    /**
+     * Insert, or replace the row of its jti.
+     */
+open func recordIssuedInvite(invite: LocalIssuedInvite)throws   {try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_record_issued_invite(
+            self.uniffiCloneHandle(),
+        FfiConverterTypeLocalIssuedInvite_lower(invite),$0
+    )
+}
+}
+    
+    /**
+     * An id already known keeps its first account.
+     */
+open func recordPeerDevice(device: LocalPeerDevice)throws  -> LocalInsert  {
+    return try  FfiConverterTypeLocalInsert_lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_record_peer_device(
+            self.uniffiCloneHandle(),
+        FfiConverterTypeLocalPeerDevice_lower(device),$0
+    )
+})
+}
+    
+    /**
+     * The server's id of a sealed copy we sent → our message id; lowercase, kept 30 days.
+     */
+open func recordServerMessageId(serverId: String, localId: String, recordedAt: Int64)throws   {try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_record_server_message_id(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(serverId),
+        FfiConverterString.lower(localId),
+        FfiConverterInt64.lower(recordedAt),$0
+    )
+}
+}
+    
+open func remove(key: String)throws   {try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_remove(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(key),$0
+    )
+}
+}
+    
+    /**
+     * Every field of the row `contact.id` set to `contact`'s, for a merge already decided; false:
+     * no such row (a row deleted meanwhile stays deleted).
+     */
+open func replaceContact(contact: LocalContact)throws  -> Bool  {
+    return try  FfiConverterBool.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_replace_contact(
+            self.uniffiCloneHandle(),
+        FfiConverterTypeLocalContact_lower(contact),$0
+    )
+})
+}
+    
+    /**
+     * Forget devices the server no longer lists; an empty list forgets nothing. Returns the removed.
+     */
+open func retainPeerDevices(accountId: String, active: [String])throws  -> [String]  {
+    return try  FfiConverterSequenceString.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_retain_peer_devices(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(accountId),
+        FfiConverterSequenceString.lower(active),$0
+    )
+})
+}
+    
+    /**
+     * Messages whose text contains `query` (one phrase, three characters at least), newest first.
+     */
+open func search(query: String, limit: UInt32)throws  -> [LocalSearchHit]  {
+    return try  FfiConverterSequenceTypeLocalSearchHit.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_search(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(query),
+        FfiConverterUInt32.lower(limit),$0
+    )
+})
+}
+    
+open func setAccountAddress(id: String, address: Data?)throws  -> Bool  {
+    return try  FfiConverterBool.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_set_account_address(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(id),
+        FfiConverterOptionData.lower(address),$0
+    )
+})
+}
+    
+open func setChatPinned(id: String, pinned: Bool)throws  -> Bool  {
+    return try  FfiConverterBool.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_set_chat_pinned(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(id),
+        FfiConverterBool.lower(pinned),$0
+    )
+})
+}
+    
+    /**
+     * Sets the preview whatever it was — after a deletion; both null when no message is left.
+     */
+open func setChatPreview(id: String, text: String?, time: Int64?)throws  -> Bool  {
+    return try  FfiConverterBool.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_set_chat_preview(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(id),
+        FfiConverterOptionString.lower(text),
+        FfiConverterOptionInt64.lower(time),$0
+    )
+})
+}
+    
+open func setContactAlias(id: String, alias: String?)throws  -> Bool  {
+    return try  FfiConverterBool.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_set_contact_alias(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(id),
+        FfiConverterOptionString.lower(alias),$0
+    )
+})
+}
+    
+    /**
+     * The avatar and the one still to download, set together.
+     */
+open func setContactAvatar(id: String, avatar: Data?, pendingRef: Data?, pendingSince: Int64?)throws  -> Bool  {
+    return try  FfiConverterBool.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_set_contact_avatar(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(id),
+        FfiConverterOptionData.lower(avatar),
+        FfiConverterOptionData.lower(pendingRef),
+        FfiConverterOptionInt64.lower(pendingSince),$0
+    )
+})
+}
+    
+    /**
+     * The avatar alone; one announced and still waiting keeps waiting.
+     */
+open func setContactAvatarKeepingPending(id: String, avatar: Data?)throws  -> Bool  {
+    return try  FfiConverterBool.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_set_contact_avatar_keeping_pending(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(id),
+        FfiConverterOptionData.lower(avatar),$0
+    )
+})
+}
+    
+open func setContactBlocked(id: String, blocked: Bool)throws  -> Bool  {
+    return try  FfiConverterBool.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_set_contact_blocked(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(id),
+        FfiConverterBool.lower(blocked),$0
+    )
+})
+}
+    
+open func setContactNames(id: String, username: String, displayName: String)throws  -> Bool  {
+    return try  FfiConverterBool.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_set_contact_names(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(id),
+        FfiConverterString.lower(username),
+        FfiConverterString.lower(displayName),$0
+    )
+})
+}
+    
+    /**
+     * Statuses: 0 sending, 1 sent, 2 delivered, 3 queued, 4 failed. A write that would replace
+     * stronger evidence of arrival (delivered > sent > the rest) is refused: false, as for no
+     * change and no message.
+     */
+open func setDeliveryStatus(id: String, status: Int16)throws  -> Bool  {
+    return try  FfiConverterBool.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_set_delivery_status(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(id),
+        FfiConverterInt16.lower(status),$0
+    )
+})
+}
+    
+open func setIdentityKey(id: String, key: Data?)throws  -> Bool  {
+    return try  FfiConverterBool.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_set_identity_key(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(id),
+        FfiConverterOptionData.lower(key),$0
+    )
+})
+}
+    
+open func setKtStatus(id: String, status: Int16)throws  -> Bool  {
+    return try  FfiConverterBool.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_set_kt_status(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(id),
+        FfiConverterInt16.lower(status),$0
+    )
+})
+}
+    
+    /**
+     * The body and its search text replaced, the message not marked edited: a body read late —
+     * stored undecryptable, sent again under the same id. False: no message.
+     */
+open func setMessageBody(id: String, body: Data, searchText: String?)throws  -> Bool  {
+    return try  FfiConverterBool.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_set_message_body(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(id),
+        FfiConverterData.lower(body),
+        FfiConverterOptionString.lower(searchText),$0
+    )
+})
+}
+    
+open func setObserver(observer: LocalStoreObserver?)  {try! rustCall() {
+    uniffi_construct_core_fn_method_localstore_set_observer(
+            self.uniffiCloneHandle(),
+        FfiConverterOptionCallbackInterfaceLocalStoreObserver.lower(observer),$0
+    )
+}
+}
+    
+open func setOrderKey(id: String, orderKey: String)throws  -> Bool  {
+    return try  FfiConverterBool.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_set_order_key(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(id),
+        FfiConverterString.lower(orderKey),$0
+    )
+})
+}
+    
+    /**
+     * Replaces our profile — there is one.
+     */
+open func setOwnProfile(profile: LocalOwnProfile)throws   {try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_set_own_profile(
+            self.uniffiCloneHandle(),
+        FfiConverterTypeLocalOwnProfile_lower(profile),$0
+    )
+}
+}
+    
+    /**
+     * An avatar announced; the one shown stays until the download replaces it.
+     */
+open func setPendingAvatar(id: String, pendingRef: Data, since: Int64)throws  -> Bool  {
+    return try  FfiConverterBool.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_set_pending_avatar(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(id),
+        FfiConverterData.lower(pendingRef),
+        FfiConverterInt64.lower(since),$0
+    )
+})
+}
+    
+    /**
+     * Each write below changes its named fields of one message; false: no message or no change.
+     */
+open func setRetryCount(id: String, count: Int16)throws  -> Bool  {
+    return try  FfiConverterBool.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_set_retry_count(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(id),
+        FfiConverterInt16.lower(count),$0
+    )
+})
+}
+    
+open func setSecurityNotice(id: String, notice: Int16)throws  -> Bool  {
+    return try  FfiConverterBool.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_set_security_notice(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(id),
+        FfiConverterInt16.lower(notice),$0
+    )
+})
+}
+    
+open func setSharingWith(id: String, sharing: Bool)throws  -> Bool  {
+    return try  FfiConverterBool.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_set_sharing_with(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(id),
+        FfiConverterBool.lower(sharing),$0
+    )
+})
+}
+    
+    /**
+     * All null clears the transcript.
+     */
+open func setTranscript(id: String, text: String?, language: String?, generatedAt: Int64?)throws  -> Bool  {
+    return try  FfiConverterBool.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_set_transcript(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(id),
+        FfiConverterOptionString.lower(text),
+        FfiConverterOptionString.lower(language),
+        FfiConverterOptionInt64.lower(generatedAt),$0
+    )
+})
+}
+    
+open func setUnread(id: String, count: Int32)throws  -> Bool  {
+    return try  FfiConverterBool.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_set_unread(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(id),
+        FfiConverterInt32.lower(count),$0
+    )
+})
+}
+    
+    /**
+     * The ids we share our profile with; `except_account` (our own) left out.
+     */
+open func sharingWith(exceptAccount: String?)throws  -> [String]  {
+    return try  FfiConverterSequenceString.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_sharing_with(
+            self.uniffiCloneHandle(),
+        FfiConverterOptionString.lower(exceptAccount),$0
+    )
+})
+}
+    
+open func upsertCall(call: LocalCall)throws   {try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_upsert_call(
+            self.uniffiCloneHandle(),
+        FfiConverterTypeLocalCall_lower(call),$0
+    )
+}
+}
+    
+    /**
+     * The whole row; a second chat for a peer that has one is an error.
+     */
+open func upsertChat(chat: LocalChat)throws   {try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_upsert_chat(
+            self.uniffiCloneHandle(),
+        FfiConverterTypeLocalChat_lower(chat),$0
+    )
+}
+}
+    
+    /**
+     * The whole row, created or overwritten.
+     */
+open func upsertContact(contact: LocalContact)throws   {try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_upsert_contact(
+            self.uniffiCloneHandle(),
+        FfiConverterTypeLocalContact_lower(contact),$0
+    )
+}
+}
+    
+open func upsertReaction(reaction: LocalReaction)throws   {try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_upsert_reaction(
+            self.uniffiCloneHandle(),
+        FfiConverterTypeLocalReaction_lower(reaction),$0
+    )
+}
+}
+    
+    /**
+     * Close and delete every file of the store. Every later call is `Closed`. The platform
+     * deletes the key.
+     */
+open func wipe()throws   {try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
+    uniffi_construct_core_fn_method_localstore_wipe(
+            self.uniffiCloneHandle(),$0
+    )
+}
+}
+    
+
+    
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeLocalStore: FfiConverter {
+    typealias FfiType = UInt64
+    typealias SwiftType = LocalStore
+
+    public static func lift(_ handle: UInt64) throws -> LocalStore {
+        return LocalStore(unsafeFromHandle: handle)
+    }
+
+    public static func lower(_ value: LocalStore) -> UInt64 {
+        return value.uniffiCloneHandle()
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> LocalStore {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+    public static func write(_ value: LocalStore, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLocalStore_lift(_ handle: UInt64) throws -> LocalStore {
+    return try FfiConverterTypeLocalStore.lift(handle)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLocalStore_lower(_ value: LocalStore) -> UInt64 {
+    return FfiConverterTypeLocalStore.lower(value)
+}
+
+
+
+
+
+
+/**
  * Device-level MLS store (RFC 9420): ONE long-lived OpenMLS storage holding
  * all group states plus key-package private material. A Welcome can only be
  * decrypted by the store that generated the KeyPackage it addresses, so key
@@ -1029,66 +2968,66 @@ public protocol MlsStoreProtocol: AnyObject, Sendable {
      * Add a member by their published KeyPackage. The commit is merged
      * locally — call only when about to SubmitCommit.
      */
-    func addMember(groupId: [UInt8], keyPackage: [UInt8]) throws  -> MemberAddition
+    func addMember(groupId: Data, keyPackage: Data) throws  -> MemberAddition
     
     /**
      * Create a new group with this device as the sole member.
      * Returns the group id — the handle for every other group call.
      */
-    func createGroup() throws  -> [UInt8]
+    func createGroup() throws  -> Data
     
     /**
      * Decrypt an application message from another member.
      */
-    func decrypt(groupId: [UInt8], ciphertext: [UInt8]) throws  -> [UInt8]
+    func decrypt(groupId: Data, ciphertext: Data) throws  -> Data
     
     /**
      * Encrypt an application message to the group.
      */
-    func encrypt(groupId: [UInt8], plaintext: [UInt8]) throws  -> [UInt8]
+    func encrypt(groupId: Data, plaintext: Data) throws  -> Data
     
     /**
      * Current MLS epoch. Increments on every commit.
      */
-    func epoch(groupId: [UInt8]) throws  -> UInt64
+    func epoch(groupId: Data) throws  -> UInt64
     
     /**
      * Snapshot the entire MLS storage as a CFE blob (msg_type 0x44).
      */
-    func exportCfe() throws  -> [UInt8]
+    func exportCfe() throws  -> Data
     
     /**
      * Generate a KeyPackage for publishing (PublishKeyPackage). Writes its
      * private material into this store — persist before uploading.
      */
-    func generateKeyPackage() throws  -> [UInt8]
+    func generateKeyPackage() throws  -> Data
     
     /**
      * Join a group from a Welcome message addressed to a KeyPackage
      * generated by this store. Returns the joined group's id.
      */
-    func joinFromWelcome(welcome: [UInt8]) throws  -> [UInt8]
+    func joinFromWelcome(welcome: Data) throws  -> Data
     
     /**
      * Propose leaving. Broadcast the returned message; another member's
      * commit actually removes us.
      */
-    func leaveGroup(groupId: [UInt8]) throws  -> [UInt8]
+    func leaveGroup(groupId: Data) throws  -> Data
     
     /**
      * Current number of members in the group.
      */
-    func memberCount(groupId: [UInt8]) throws  -> UInt32
+    func memberCount(groupId: Data) throws  -> UInt32
     
     /**
      * Process and merge a commit produced by another member.
      */
-    func processCommit(groupId: [UInt8], commit: [UInt8]) throws 
+    func processCommit(groupId: Data, commit: Data) throws 
     
     /**
      * Remove a member by leaf index. Commit is merged locally.
      */
-    func removeMember(groupId: [UInt8], leafIndex: UInt32) throws  -> [UInt8]
+    func removeMember(groupId: Data, leafIndex: UInt32) throws  -> Data
     
 }
 /**
@@ -1141,19 +3080,7 @@ open class MlsStore: MlsStoreProtocol, @unchecked Sendable {
     public func uniffiCloneHandle() -> UInt64 {
         return try! rustCall { uniffi_construct_core_fn_clone_mlsstore(self.handle, $0) }
     }
-    /**
-     * A fresh store bound to the device's Ed25519 identity keypair.
-     */
-public convenience init(signerPrivateKey: [UInt8], signerPublicKey: [UInt8]) {
-    let handle =
-        try! rustCall() {
-    uniffi_construct_core_fn_constructor_mlsstore_new(
-        FfiConverterSequenceUInt8.lower(signerPrivateKey),
-        FfiConverterSequenceUInt8.lower(signerPublicKey),$0
-    )
-}
-    self.init(unsafeFromHandle: handle)
-}
+    // No primary constructor declared for this class.
 
     deinit {
         try! rustCall { uniffi_construct_core_fn_free_mlsstore(handle, $0) }
@@ -1166,12 +3093,12 @@ public convenience init(signerPrivateKey: [UInt8], signerPublicKey: [UInt8]) {
      * Add a member by their published KeyPackage. The commit is merged
      * locally — call only when about to SubmitCommit.
      */
-open func addMember(groupId: [UInt8], keyPackage: [UInt8])throws  -> MemberAddition  {
+open func addMember(groupId: Data, keyPackage: Data)throws  -> MemberAddition  {
     return try  FfiConverterTypeMemberAddition_lift(try rustCallWithError(FfiConverterTypeMlsError_lift) {
     uniffi_construct_core_fn_method_mlsstore_add_member(
             self.uniffiCloneHandle(),
-        FfiConverterSequenceUInt8.lower(groupId),
-        FfiConverterSequenceUInt8.lower(keyPackage),$0
+        FfiConverterData.lower(groupId),
+        FfiConverterData.lower(keyPackage),$0
     )
 })
 }
@@ -1180,8 +3107,8 @@ open func addMember(groupId: [UInt8], keyPackage: [UInt8])throws  -> MemberAddit
      * Create a new group with this device as the sole member.
      * Returns the group id — the handle for every other group call.
      */
-open func createGroup()throws  -> [UInt8]  {
-    return try  FfiConverterSequenceUInt8.lift(try rustCallWithError(FfiConverterTypeMlsError_lift) {
+open func createGroup()throws  -> Data  {
+    return try  FfiConverterData.lift(try rustCallWithError(FfiConverterTypeMlsError_lift) {
     uniffi_construct_core_fn_method_mlsstore_create_group(
             self.uniffiCloneHandle(),$0
     )
@@ -1191,12 +3118,12 @@ open func createGroup()throws  -> [UInt8]  {
     /**
      * Decrypt an application message from another member.
      */
-open func decrypt(groupId: [UInt8], ciphertext: [UInt8])throws  -> [UInt8]  {
-    return try  FfiConverterSequenceUInt8.lift(try rustCallWithError(FfiConverterTypeMlsError_lift) {
+open func decrypt(groupId: Data, ciphertext: Data)throws  -> Data  {
+    return try  FfiConverterData.lift(try rustCallWithError(FfiConverterTypeMlsError_lift) {
     uniffi_construct_core_fn_method_mlsstore_decrypt(
             self.uniffiCloneHandle(),
-        FfiConverterSequenceUInt8.lower(groupId),
-        FfiConverterSequenceUInt8.lower(ciphertext),$0
+        FfiConverterData.lower(groupId),
+        FfiConverterData.lower(ciphertext),$0
     )
 })
 }
@@ -1204,12 +3131,12 @@ open func decrypt(groupId: [UInt8], ciphertext: [UInt8])throws  -> [UInt8]  {
     /**
      * Encrypt an application message to the group.
      */
-open func encrypt(groupId: [UInt8], plaintext: [UInt8])throws  -> [UInt8]  {
-    return try  FfiConverterSequenceUInt8.lift(try rustCallWithError(FfiConverterTypeMlsError_lift) {
+open func encrypt(groupId: Data, plaintext: Data)throws  -> Data  {
+    return try  FfiConverterData.lift(try rustCallWithError(FfiConverterTypeMlsError_lift) {
     uniffi_construct_core_fn_method_mlsstore_encrypt(
             self.uniffiCloneHandle(),
-        FfiConverterSequenceUInt8.lower(groupId),
-        FfiConverterSequenceUInt8.lower(plaintext),$0
+        FfiConverterData.lower(groupId),
+        FfiConverterData.lower(plaintext),$0
     )
 })
 }
@@ -1217,11 +3144,11 @@ open func encrypt(groupId: [UInt8], plaintext: [UInt8])throws  -> [UInt8]  {
     /**
      * Current MLS epoch. Increments on every commit.
      */
-open func epoch(groupId: [UInt8])throws  -> UInt64  {
+open func epoch(groupId: Data)throws  -> UInt64  {
     return try  FfiConverterUInt64.lift(try rustCallWithError(FfiConverterTypeMlsError_lift) {
     uniffi_construct_core_fn_method_mlsstore_epoch(
             self.uniffiCloneHandle(),
-        FfiConverterSequenceUInt8.lower(groupId),$0
+        FfiConverterData.lower(groupId),$0
     )
 })
 }
@@ -1229,8 +3156,8 @@ open func epoch(groupId: [UInt8])throws  -> UInt64  {
     /**
      * Snapshot the entire MLS storage as a CFE blob (msg_type 0x44).
      */
-open func exportCfe()throws  -> [UInt8]  {
-    return try  FfiConverterSequenceUInt8.lift(try rustCallWithError(FfiConverterTypeMlsError_lift) {
+open func exportCfe()throws  -> Data  {
+    return try  FfiConverterData.lift(try rustCallWithError(FfiConverterTypeMlsError_lift) {
     uniffi_construct_core_fn_method_mlsstore_export_cfe(
             self.uniffiCloneHandle(),$0
     )
@@ -1241,8 +3168,8 @@ open func exportCfe()throws  -> [UInt8]  {
      * Generate a KeyPackage for publishing (PublishKeyPackage). Writes its
      * private material into this store — persist before uploading.
      */
-open func generateKeyPackage()throws  -> [UInt8]  {
-    return try  FfiConverterSequenceUInt8.lift(try rustCallWithError(FfiConverterTypeMlsError_lift) {
+open func generateKeyPackage()throws  -> Data  {
+    return try  FfiConverterData.lift(try rustCallWithError(FfiConverterTypeMlsError_lift) {
     uniffi_construct_core_fn_method_mlsstore_generate_key_package(
             self.uniffiCloneHandle(),$0
     )
@@ -1253,11 +3180,11 @@ open func generateKeyPackage()throws  -> [UInt8]  {
      * Join a group from a Welcome message addressed to a KeyPackage
      * generated by this store. Returns the joined group's id.
      */
-open func joinFromWelcome(welcome: [UInt8])throws  -> [UInt8]  {
-    return try  FfiConverterSequenceUInt8.lift(try rustCallWithError(FfiConverterTypeMlsError_lift) {
+open func joinFromWelcome(welcome: Data)throws  -> Data  {
+    return try  FfiConverterData.lift(try rustCallWithError(FfiConverterTypeMlsError_lift) {
     uniffi_construct_core_fn_method_mlsstore_join_from_welcome(
             self.uniffiCloneHandle(),
-        FfiConverterSequenceUInt8.lower(welcome),$0
+        FfiConverterData.lower(welcome),$0
     )
 })
 }
@@ -1266,11 +3193,11 @@ open func joinFromWelcome(welcome: [UInt8])throws  -> [UInt8]  {
      * Propose leaving. Broadcast the returned message; another member's
      * commit actually removes us.
      */
-open func leaveGroup(groupId: [UInt8])throws  -> [UInt8]  {
-    return try  FfiConverterSequenceUInt8.lift(try rustCallWithError(FfiConverterTypeMlsError_lift) {
+open func leaveGroup(groupId: Data)throws  -> Data  {
+    return try  FfiConverterData.lift(try rustCallWithError(FfiConverterTypeMlsError_lift) {
     uniffi_construct_core_fn_method_mlsstore_leave_group(
             self.uniffiCloneHandle(),
-        FfiConverterSequenceUInt8.lower(groupId),$0
+        FfiConverterData.lower(groupId),$0
     )
 })
 }
@@ -1278,11 +3205,11 @@ open func leaveGroup(groupId: [UInt8])throws  -> [UInt8]  {
     /**
      * Current number of members in the group.
      */
-open func memberCount(groupId: [UInt8])throws  -> UInt32  {
+open func memberCount(groupId: Data)throws  -> UInt32  {
     return try  FfiConverterUInt32.lift(try rustCallWithError(FfiConverterTypeMlsError_lift) {
     uniffi_construct_core_fn_method_mlsstore_member_count(
             self.uniffiCloneHandle(),
-        FfiConverterSequenceUInt8.lower(groupId),$0
+        FfiConverterData.lower(groupId),$0
     )
 })
 }
@@ -1290,11 +3217,11 @@ open func memberCount(groupId: [UInt8])throws  -> UInt32  {
     /**
      * Process and merge a commit produced by another member.
      */
-open func processCommit(groupId: [UInt8], commit: [UInt8])throws   {try rustCallWithError(FfiConverterTypeMlsError_lift) {
+open func processCommit(groupId: Data, commit: Data)throws   {try rustCallWithError(FfiConverterTypeMlsError_lift) {
     uniffi_construct_core_fn_method_mlsstore_process_commit(
             self.uniffiCloneHandle(),
-        FfiConverterSequenceUInt8.lower(groupId),
-        FfiConverterSequenceUInt8.lower(commit),$0
+        FfiConverterData.lower(groupId),
+        FfiConverterData.lower(commit),$0
     )
 }
 }
@@ -1302,11 +3229,11 @@ open func processCommit(groupId: [UInt8], commit: [UInt8])throws   {try rustCall
     /**
      * Remove a member by leaf index. Commit is merged locally.
      */
-open func removeMember(groupId: [UInt8], leafIndex: UInt32)throws  -> [UInt8]  {
-    return try  FfiConverterSequenceUInt8.lift(try rustCallWithError(FfiConverterTypeMlsError_lift) {
+open func removeMember(groupId: Data, leafIndex: UInt32)throws  -> Data  {
+    return try  FfiConverterData.lift(try rustCallWithError(FfiConverterTypeMlsError_lift) {
     uniffi_construct_core_fn_method_mlsstore_remove_member(
             self.uniffiCloneHandle(),
-        FfiConverterSequenceUInt8.lower(groupId),
+        FfiConverterData.lower(groupId),
         FfiConverterUInt32.lower(leafIndex),$0
     )
 })
@@ -1363,6 +3290,148 @@ public func FfiConverterTypeMlsStore_lower(_ value: MlsStore) -> UInt64 {
 
 
 /**
+ * A throwaway view of this device's sessions for the notification extension. Built from the key
+ * record and the orchestrator state the app saved; it answers `peek` and nothing else. Nothing it
+ * does is saved, sent or marked, and no session state leaves it.
+ */
+public protocol NotificationPeekProtocol: AnyObject, Sendable {
+    
+    /**
+     * The verdict on one delivery: `sealed_inner` is its `SealedInner` as the server returned it.
+     * Peek a fetch's deliveries in server order on one instance.
+     */
+    func peek(messageId: String, sealedInner: Data, sessions: PeekSessionSource)  -> PeekVerdict
+    
+}
+/**
+ * A throwaway view of this device's sessions for the notification extension. Built from the key
+ * record and the orchestrator state the app saved; it answers `peek` and nothing else. Nothing it
+ * does is saved, sent or marked, and no session state leaves it.
+ */
+open class NotificationPeek: NotificationPeekProtocol, @unchecked Sendable {
+    fileprivate let handle: UInt64
+
+    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoHandle {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromHandle handle: UInt64) {
+        self.handle = handle
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noHandle: NoHandle) {
+        self.handle = 0
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiCloneHandle() -> UInt64 {
+        return try! rustCall { uniffi_construct_core_fn_clone_notificationpeek(self.handle, $0) }
+    }
+public convenience init(keyRecord: Data, myUserId: String, orchestratorState: Data?)throws  {
+    let handle =
+        try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_constructor_notificationpeek_new(
+        FfiConverterData.lower(keyRecord),
+        FfiConverterString.lower(myUserId),
+        FfiConverterOptionData.lower(orchestratorState),$0
+    )
+}
+    self.init(unsafeFromHandle: handle)
+}
+
+    deinit {
+        try! rustCall { uniffi_construct_core_fn_free_notificationpeek(handle, $0) }
+    }
+
+    
+
+    
+    /**
+     * The verdict on one delivery: `sealed_inner` is its `SealedInner` as the server returned it.
+     * Peek a fetch's deliveries in server order on one instance.
+     */
+open func peek(messageId: String, sealedInner: Data, sessions: PeekSessionSource) -> PeekVerdict  {
+    return try!  FfiConverterTypePeekVerdict_lift(try! rustCall() {
+    uniffi_construct_core_fn_method_notificationpeek_peek(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(messageId),
+        FfiConverterData.lower(sealedInner),
+        FfiConverterCallbackInterfacePeekSessionSource_lower(sessions),$0
+    )
+})
+}
+    
+
+    
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeNotificationPeek: FfiConverter {
+    typealias FfiType = UInt64
+    typealias SwiftType = NotificationPeek
+
+    public static func lift(_ handle: UInt64) throws -> NotificationPeek {
+        return NotificationPeek(unsafeFromHandle: handle)
+    }
+
+    public static func lower(_ value: NotificationPeek) -> UInt64 {
+        return value.uniffiCloneHandle()
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> NotificationPeek {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+    public static func write(_ value: NotificationPeek, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeNotificationPeek_lift(_ handle: UInt64) throws -> NotificationPeek {
+    return try FfiConverterTypeNotificationPeek.lift(handle)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeNotificationPeek_lower(_ value: NotificationPeek) -> UInt64 {
+    return FfiConverterTypeNotificationPeek.lower(value)
+}
+
+
+
+
+
+
+/**
  * Top-level orchestration facade.
  *
  * Swift / Kotlin call `handle_event_json` with a JSON-encoded `IncomingEvent`
@@ -1384,68 +3453,88 @@ public protocol OrchestratorCoreProtocol: AnyObject, Sendable {
      */
     func ackMarkProcessed(messageId: String) 
     
-    func applyPqContribution(contactId: String, kemSharedSecret: [UInt8]) throws 
-    
-    func buildHybridIdentityBindMessage(hybridPublicKey: [UInt8])  -> [UInt8]
-    
-    func buildX3dhSignMessage(suiteId: UInt8, publicKey: [UInt8])  -> [UInt8]
-    
-    func decryptMessage(contactId: String, ephemeralPublicKey: [UInt8], messageNumber: UInt32, content: [UInt8], suiteId: UInt16, pqMessageEpoch: UInt32, pqRatchetField: [UInt8]) throws  -> DecryptedMessageResult
+    func admitServerDelegations(delegations: [Data])  -> UInt32
     
     /**
-     * Batch offline decrypt — single mutex acquisition for the whole batch.
-     * Session is never archived on per-message failure.
+     * Start a Kyber SPK rotation (with the classic SPK): the key to upload. Calling it again
+     * before commit/rollback returns the same key, so a retried upload uploads the same key.
      */
-    func decryptOfflineBatch(messages: [OfflineBatchMessage])  -> [OfflineBatchResult]
+    func beginKyberSpkRotation() throws  -> KyberPrekeyUpload
     
-    func encryptMessage(contactId: String, plaintext: Data) throws  -> EncryptedMessageComponents
+    func buildHybridIdentityBindMessage(hybridPublicKey: Data)  -> Data
     
-    func ensureHybridSignatureKey() throws  -> [UInt8]
+    func buildX3dhSignMessage(suiteId: UInt8, publicKey: Data)  -> Data
+    
+    func certificateVerdict(certificate: SenderCertificate)  -> CertificateVerdict
     
     /**
-     * Export the PQContributionManager state as a CFE binary blob.
-     * Persist under CfeSecureStoreSlot::KyberSessionState.
+     * The server confirmed the upload. Returns false if nothing was pending.
      */
-    func exportKyberSessionState() throws  -> [UInt8]
-    
-    func exportOneTimePrekeys() throws  -> [UInt8]
+    func commitKyberSpkRotation()  -> Bool
     
     /**
-     * Export the full orchestrator coordination state (ACK cache, healing queue,
-     * init locks, archive index, prekey tracker) as a CFE binary blob.
+     * The current Kyber SPK's upload record again, or null before the first commit.
+     */
+    func currentKyberSpkUpload() throws  -> KyberPrekeyUpload?
+    
+    /**
+     * Decrypt a whole wire payload on the states held with a device.
+     */
+    func decryptWirePayload(contactId: String, wirePayload: Data) throws  -> DecryptedMessageResult
+    
+    /**
+     * `device_copy_tag` with our identity key.
+     */
+    func deviceCopyTag(baseMessageId: String, targetDeviceId: String, peerIdentityPublic: Data) throws  -> String
+    
+    /**
+     * `device_copy_tag_matches` with our identity key and our device id, which the core derives
+     * from that key rather than taking it from the caller.
+     */
+    func deviceCopyTagMatches(tag: String, baseMessageId: String, peerIdentityPublic: Data)  -> Bool
+    
+    /**
+     * Encrypt for a device and return the whole wire payload. Sent as it is: a payload rebuilt
+     * from components dropped fields (decisions/responder-authenticates-initiator-by-kem.md).
+     */
+    func encryptToWire(contactId: String, plaintext: Data) throws  -> Data
+    
+    func ensureHybridSignatureKey() throws  -> Data
+    
+    func exportKyberPrekeys() throws  -> Data
+    
+    func exportOneTimePrekeys() throws  -> Data
+    
+    /**
+     * Export the full orchestrator coordination state (init locks, prekey tracker, pins) as a
+     * CFE binary blob.
      * Persist under CfeSecureStoreSlot::OrchestratorState.
      */
-    func exportOrchestratorState() throws  -> [UInt8]
+    func exportOrchestratorState() throws  -> Data
     
-    func exportPrivateKeys() throws  -> [UInt8]
+    func exportPrivateKeys() throws  -> Data
     
-    func exportSession(contactId: String) throws  -> [UInt8]
+    func exportSession(contactId: String) throws  -> Data
     
     /**
      * Drop every piece of local orchestration state this core holds about `contact_id`:
-     * the ratchet, the archive and its timestamp, the prekey counter, the heal record, the PQ
-     * contribution, the init lock, the cooldown, the pending END_SESSION, the prewarm mark and
-     * the active-chat mark.
+     * the ratchet and its previous states, the prekey counter, the PQ contribution, the init lock,
+     * the queue, the prewarm mark and the active-chat mark.
      *
      * `remove_session` removes the ratchet **and nothing else**, so all of the above outlive it
      * and steer the next add for the same device — a contact the platform has already forgotten.
      * None of them is reachable from outside this crate, which is why "the platform deleted this
      * contact" had no expression here until now.
      *
-     * Silent on the wire on purpose: a local deletion boundary, not a protocol reset. It archives
-     * nothing and emits no END_SESSION. A caller that wants the peer told does that first, with
-     * `plan_teardown`, and forgets afterwards.
+     * Silent on the wire on purpose: a local deletion boundary, not a protocol reset.
      */
     func forgetContactState(contactId: String) 
+    
+    func generateKyberOneTimePrekeys(count: UInt32) throws  -> [KyberPrekeyUpload]
     
     func generateOneTimePrekeys(count: UInt32) throws  -> [OtpkPair]
     
     func getAllSessionContactIds()  -> [String]
-    
-    /**
-     * Raw identity secret key bytes (32 bytes, X25519).
-     */
-    func getIdentityKeyBytes() throws  -> Data
     
     /**
      * Typed registration bundle — replaces `export_registration_bundle_json()` parsing.
@@ -1461,11 +3550,6 @@ public protocol OrchestratorCoreProtocol: AnyObject, Sendable {
     func getSessionSuiteId(contactId: String)  -> UInt16
     
     /**
-     * Raw Ed25519 signing secret key bytes (64 bytes).
-     */
-    func getSigningKeyBytes() throws  -> Data
-    
-    /**
      * Typed event handler — accepts a typed `CfeIncomingEvent` and returns typed `CfeAction` list.
      */
     func handleEvent(event: CfeIncomingEvent) throws  -> [CfeAction]
@@ -1473,75 +3557,167 @@ public protocol OrchestratorCoreProtocol: AnyObject, Sendable {
     func hasSession(contactId: String)  -> Bool
     
     /**
-     * `true` iff `msg_number == 0` (healing-eligible message).
+     * The history-file (CTHF) channel key on the receiving side: HKDF-SHA256 over
+     * X25519(identity, sender_eph) ‖ the ML-KEM decapsulation of `kem_ciphertext` under Kyber
+     * prekey `kem_key_id`, salt "construct_history_file_v1", info `snapshot_id`. The channel key,
+     * not the X25519 output: that would open every box sealed to this device.
      */
-    func healingCanHeal(msgNumber: UInt32)  -> Bool
-    
-    func hybridSignaturePublicKey()  -> [UInt8]?
-    
-    func importHybridSignaturePrivateKey(privBytes: [UInt8]) throws 
+    func historyFileChannelKey(senderEphPub: Data, kemKeyId: UInt32, kemCiphertext: Data, snapshotId: Data) throws  -> Data
     
     /**
-     * Restore the PQContributionManager state from a CFE blob.
+     * Offer history as a CTHF file for `peer`: write `first_frame()`, then stream.
      */
-    func importKyberSessionState(data: [UInt8]) throws 
+    func historyOfferFile(userId: Data, peer: HistoryPeerKeys) throws  -> HistorySender
     
-    func importOneTimePrekeys(data: [UInt8]) throws 
+    /**
+     * Offer history over the local network to the device `peer` names. Write
+     * `first_frame()`, read `HISTORY_REPLY_LEN` bytes into `accept_reply`, then stream. A skip
+     * is the same signed opening and nothing after it. `pinned_receiver_identity` is the new
+     * device's identity from a Flow B QR, when this side scanned one.
+     */
+    func historyOfferNearby(userId: Data, peer: HistoryPeerKeys, skip: Bool, pinnedReceiverIdentity: Data?) throws  -> HistorySender
+    
+    /**
+     * Receive history, over the local network or from a file.
+     */
+    func historyReceive(userId: Data, fromFile: Bool)  -> HistoryReceiver
+    
+    func hybridSignaturePublicKey()  -> Data?
+    
+    func importHybridSignaturePrivateKey(privBytes: Data) throws 
+    
+    func importKyberPrekeys(data: Data) throws 
+    
+    /**
+     * An MLS store restored from `MlsStore.export_cfe()`, signing with this device's key.
+     */
+    func importMlsStore(data: Data) throws  -> MlsStore
+    
+    func importOneTimePrekeys(data: Data) throws 
     
     /**
      * Restore the full orchestrator coordination state from a CFE blob.
      * Call at app start before processing any messages.
      */
-    func importOrchestratorState(data: [UInt8]) throws 
+    func importOrchestratorState(data: Data) throws 
     
-    func importSession(contactId: String, data: [UInt8]) throws  -> String
+    func importSession(contactId: String, data: Data) throws  -> String
     
-    func initReceivingSession(contactId: String, recipientBundle: BinaryKeyBundle, firstMessage: BinaryFirstMessage) throws  -> SessionInitResult
+    func initReceivingSessionFromWirePayload(senderCertificate: SenderCertificate, wirePayload: Data) throws  -> SessionInitResult
     
     func initSession(contactId: String, recipientBundle: BinaryKeyBundle) throws  -> String
     
     func initSessionAllowingStale(contactId: String, recipientBundle: BinaryKeyBundle) throws  -> String
     
-    func kyberSpk()  -> KyberSpkRecord?
+    func kyberOneTimePrekeyCount()  -> UInt32
+    
+    /**
+     * Decapsulate with our Kyber prekey `key_id` (0 = current SPK). For history transfer; the
+     * handshake decapsulates inside the core.
+     */
+    func kyberPrekeyDecapsulate(keyId: UInt32, ciphertext: Data) throws  -> Data
+    
+    /**
+     * A fresh MLS store signing with this device's Ed25519 key.
+     */
+    func newMlsStore() throws  -> MlsStore
     
     func oneTimePrekeyCount()  -> UInt32
     
     /**
-     * Every (carrier, bundle) pair worth attempting when opening a receiving session, in order.
-     * Both dimensions vary: fixing the carrier and rotating only the bundle finds the session
-     * only if the right carrier was guessed, and a wrong guess looks exactly like a broken bundle.
+     * Who wrote `envelope`, by its tag, and its opened body; null when no pair matches.
      */
-    func planReceivingInit(carriers: [ReceivingInitCarrier], bundleCount: UInt32)  -> [ReceivingInitAttempt]
+    func openEnvelope(envelope: Data)  -> EnvelopeOpened?
     
     /**
-     * Which of `candidate_device_ids` a teardown goes to, and what to do with each.
-     * The caller passes the device set (it owns the account→devices translation, which this
-     * crate deliberately cannot do); the decision over the set is made here.
+     * Open a `SealedInner.first_flight` sealed to this device. Throws when it does not open — a
+     * Kyber prekey no longer held (`FIRST_FLIGHT_KEY_UNAVAILABLE`), or not ours.
      */
-    func planTeardown(candidateDeviceIds: [String], peerOnDeadSession: Bool)  -> [TeardownDecision]
+    func openFirstFlight(sealed: Data) throws  -> FirstFlightOpened
+    
+    func openReceiving(device: String)  -> ReceivingOpenResult
+    
+    /**
+     * Open a box sealed to this device's X25519 identity key (`sealed_seal_sender_cert`,
+     * `seal_to_device_key`): a sender certificate, a sibling's device metadata. A box sealed to
+     * another key fails with DecryptionFailed, which is how a caller finds its own copy.
+     */
+    func openSealedToDevice(sealedBox: Data) throws  -> Data
+    
+    func peerHandshakeHeld(devices: [String])  -> Bool
+    
+    func pendingMessageCount(contactId: String)  -> UInt32
     
     func prekeysAvailableCount()  -> UInt32
     
-    func pruneOneTimePrekeysBelow(minKeepId: UInt32)  -> UInt32
-    
     /**
-     * Register a KEM shared secret as a deferred contribution.
+     * After a replace-all upload of Kyber one-time keys; returns how many were removed.
      */
-    func registerPqDeferred(contactId: String, otpkId: UInt32, sharedSecret: [UInt8]) 
+    func pruneKyberOneTimePrekeysBelow(minKeepId: UInt32)  -> UInt32
+    
+    func pruneOneTimePrekeysBelow(minKeepId: UInt32)  -> UInt32
     
     func removeSession(contactId: String)  -> Bool
     
+    func reopenSession(contactId: String, recipientBundle: BinaryKeyBundle) throws  -> String
+    
+    /**
+     * How late messages have arrived since the process started (PQR-4).
+     */
+    func reorderStats()  -> ReorderStats
+    
+    /**
+     * The person reset the session with `contact_id`: the current state is retired locally and
+     * the next send opens a new one. Nothing is sent. Execute the returned save.
+     */
+    func retireSession(contactId: String)  -> [CfeAction]
+    
+    /**
+     * The upload failed.
+     */
+    func rollbackKyberSpkRotation() 
+    
     func rotateSignedPrekey() throws  -> RotatedSpkBundle
     
-    func setKyberSpk(keyId: UInt32, secretKey: [UInt8], publicKey: [UInt8]) 
+    /**
+     * Seal a wire payload just encrypted for `contact_id` as a session envelope; null when it
+     * must go with a certificate (first flight, or a session made before the envelope).
+     */
+    func sealEnvelope(contactId: String, wirePayload: Data)  -> Data?
+    
+    /**
+     * Seal a first flight — a wire payload written on a session the peer has not answered yet —
+     * with the sender certificate, to `recipient_identity` (the X25519 key the session was opened
+     * to; it must derive to `contact_id`). Goes in `SealedInner.first_flight`. Null when the
+     * payload carries no handshake — not a first flight; it goes with a certificate. Throws for a
+     * first flight that cannot be sealed: never send that one any other way.
+     */
+    func sealFirstFlight(contactId: String, recipientIdentity: Data, wirePayload: Data, certificate: Data) throws  -> Data?
+    
+    /**
+     * This device's social-recovery bundle (device keys, derived device id, `created_at`) sealed
+     * under the 32-byte `vault_key` — the `sr_seal_recovery_bundle` format, packed in the core so
+     * only the ciphertext leaves it.
+     */
+    func sealOwnRecoveryBundle(vaultKey: Data, createdAt: Int64) throws  -> Data
     
     func setLocalUserId(userId: String) 
     
-    func signBundleData(bundleDataJson: [UInt8]) throws  -> [UInt8]
+    func setTrustedServerKeys(keys: [Data]) 
     
-    func signHybrid(message: [UInt8]) throws  -> [UInt8]
+    func signBundleData(bundleDataJson: Data) throws  -> Data
     
-    func signHybridPrekey(suiteId: UInt8, publicKey: [UInt8]) throws  -> [UInt8]
+    func signHybrid(message: Data) throws  -> Data
+    
+    func signHybridPrekey(suiteId: UInt8, publicKey: Data) throws  -> Data
+    
+    /**
+     * Ed25519 over `message` with this device's signing key (device auth, invites). The same
+     * signature `sign_invite_data` / CryptoKit made from the exported key: Ed25519 is deterministic.
+     */
+    func signWithDeviceKey(message: Data) throws  -> Data
+    
+    func verifyKtProofs(deviceId: String, identityKey: Data, identityProof: KtInclusionProof, hybridIdentityKey: Data?, hybridProof: KtInclusionProof?, treeHead: KtSignedTreeHead?)  -> KtVerdicts
     
 }
 /**
@@ -1625,65 +3801,126 @@ open func ackMarkProcessed(messageId: String)  {try! rustCall() {
 }
 }
     
-open func applyPqContribution(contactId: String, kemSharedSecret: [UInt8])throws   {try rustCallWithError(FfiConverterTypeCryptoError_lift) {
-    uniffi_construct_core_fn_method_orchestratorcore_apply_pq_contribution(
+open func admitServerDelegations(delegations: [Data]) -> UInt32  {
+    return try!  FfiConverterUInt32.lift(try! rustCall() {
+    uniffi_construct_core_fn_method_orchestratorcore_admit_server_delegations(
             self.uniffiCloneHandle(),
-        FfiConverterString.lower(contactId),
-        FfiConverterSequenceUInt8.lower(kemSharedSecret),$0
-    )
-}
-}
-    
-open func buildHybridIdentityBindMessage(hybridPublicKey: [UInt8]) -> [UInt8]  {
-    return try!  FfiConverterSequenceUInt8.lift(try! rustCall() {
-    uniffi_construct_core_fn_method_orchestratorcore_build_hybrid_identity_bind_message(
-            self.uniffiCloneHandle(),
-        FfiConverterSequenceUInt8.lower(hybridPublicKey),$0
-    )
-})
-}
-    
-open func buildX3dhSignMessage(suiteId: UInt8, publicKey: [UInt8]) -> [UInt8]  {
-    return try!  FfiConverterSequenceUInt8.lift(try! rustCall() {
-    uniffi_construct_core_fn_method_orchestratorcore_build_x3dh_sign_message(
-            self.uniffiCloneHandle(),
-        FfiConverterUInt8.lower(suiteId),
-        FfiConverterSequenceUInt8.lower(publicKey),$0
-    )
-})
-}
-    
-open func decryptMessage(contactId: String, ephemeralPublicKey: [UInt8], messageNumber: UInt32, content: [UInt8], suiteId: UInt16, pqMessageEpoch: UInt32, pqRatchetField: [UInt8])throws  -> DecryptedMessageResult  {
-    return try  FfiConverterTypeDecryptedMessageResult_lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
-    uniffi_construct_core_fn_method_orchestratorcore_decrypt_message(
-            self.uniffiCloneHandle(),
-        FfiConverterString.lower(contactId),
-        FfiConverterSequenceUInt8.lower(ephemeralPublicKey),
-        FfiConverterUInt32.lower(messageNumber),
-        FfiConverterSequenceUInt8.lower(content),
-        FfiConverterUInt16.lower(suiteId),
-        FfiConverterUInt32.lower(pqMessageEpoch),
-        FfiConverterSequenceUInt8.lower(pqRatchetField),$0
+        FfiConverterSequenceData.lower(delegations),$0
     )
 })
 }
     
     /**
-     * Batch offline decrypt — single mutex acquisition for the whole batch.
-     * Session is never archived on per-message failure.
+     * Start a Kyber SPK rotation (with the classic SPK): the key to upload. Calling it again
+     * before commit/rollback returns the same key, so a retried upload uploads the same key.
      */
-open func decryptOfflineBatch(messages: [OfflineBatchMessage]) -> [OfflineBatchResult]  {
-    return try!  FfiConverterSequenceTypeOfflineBatchResult.lift(try! rustCall() {
-    uniffi_construct_core_fn_method_orchestratorcore_decrypt_offline_batch(
-            self.uniffiCloneHandle(),
-        FfiConverterSequenceTypeOfflineBatchMessage.lower(messages),$0
+open func beginKyberSpkRotation()throws  -> KyberPrekeyUpload  {
+    return try  FfiConverterTypeKyberPrekeyUpload_lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_method_orchestratorcore_begin_kyber_spk_rotation(
+            self.uniffiCloneHandle(),$0
     )
 })
 }
     
-open func encryptMessage(contactId: String, plaintext: Data)throws  -> EncryptedMessageComponents  {
-    return try  FfiConverterTypeEncryptedMessageComponents_lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
-    uniffi_construct_core_fn_method_orchestratorcore_encrypt_message(
+open func buildHybridIdentityBindMessage(hybridPublicKey: Data) -> Data  {
+    return try!  FfiConverterData.lift(try! rustCall() {
+    uniffi_construct_core_fn_method_orchestratorcore_build_hybrid_identity_bind_message(
+            self.uniffiCloneHandle(),
+        FfiConverterData.lower(hybridPublicKey),$0
+    )
+})
+}
+    
+open func buildX3dhSignMessage(suiteId: UInt8, publicKey: Data) -> Data  {
+    return try!  FfiConverterData.lift(try! rustCall() {
+    uniffi_construct_core_fn_method_orchestratorcore_build_x3dh_sign_message(
+            self.uniffiCloneHandle(),
+        FfiConverterUInt8.lower(suiteId),
+        FfiConverterData.lower(publicKey),$0
+    )
+})
+}
+    
+open func certificateVerdict(certificate: SenderCertificate) -> CertificateVerdict  {
+    return try!  FfiConverterTypeCertificateVerdict_lift(try! rustCall() {
+    uniffi_construct_core_fn_method_orchestratorcore_certificate_verdict(
+            self.uniffiCloneHandle(),
+        FfiConverterTypeSenderCertificate_lower(certificate),$0
+    )
+})
+}
+    
+    /**
+     * The server confirmed the upload. Returns false if nothing was pending.
+     */
+open func commitKyberSpkRotation() -> Bool  {
+    return try!  FfiConverterBool.lift(try! rustCall() {
+    uniffi_construct_core_fn_method_orchestratorcore_commit_kyber_spk_rotation(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+    /**
+     * The current Kyber SPK's upload record again, or null before the first commit.
+     */
+open func currentKyberSpkUpload()throws  -> KyberPrekeyUpload?  {
+    return try  FfiConverterOptionTypeKyberPrekeyUpload.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_method_orchestratorcore_current_kyber_spk_upload(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+    /**
+     * Decrypt a whole wire payload on the states held with a device.
+     */
+open func decryptWirePayload(contactId: String, wirePayload: Data)throws  -> DecryptedMessageResult  {
+    return try  FfiConverterTypeDecryptedMessageResult_lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_method_orchestratorcore_decrypt_wire_payload(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(contactId),
+        FfiConverterData.lower(wirePayload),$0
+    )
+})
+}
+    
+    /**
+     * `device_copy_tag` with our identity key.
+     */
+open func deviceCopyTag(baseMessageId: String, targetDeviceId: String, peerIdentityPublic: Data)throws  -> String  {
+    return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_method_orchestratorcore_device_copy_tag(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(baseMessageId),
+        FfiConverterString.lower(targetDeviceId),
+        FfiConverterData.lower(peerIdentityPublic),$0
+    )
+})
+}
+    
+    /**
+     * `device_copy_tag_matches` with our identity key and our device id, which the core derives
+     * from that key rather than taking it from the caller.
+     */
+open func deviceCopyTagMatches(tag: String, baseMessageId: String, peerIdentityPublic: Data) -> Bool  {
+    return try!  FfiConverterBool.lift(try! rustCall() {
+    uniffi_construct_core_fn_method_orchestratorcore_device_copy_tag_matches(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(tag),
+        FfiConverterString.lower(baseMessageId),
+        FfiConverterData.lower(peerIdentityPublic),$0
+    )
+})
+}
+    
+    /**
+     * Encrypt for a device and return the whole wire payload. Sent as it is: a payload rebuilt
+     * from components dropped fields (decisions/responder-authenticates-initiator-by-kem.md).
+     */
+open func encryptToWire(contactId: String, plaintext: Data)throws  -> Data  {
+    return try  FfiConverterData.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_method_orchestratorcore_encrypt_to_wire(
             self.uniffiCloneHandle(),
         FfiConverterString.lower(contactId),
         FfiConverterData.lower(plaintext),$0
@@ -1691,28 +3928,24 @@ open func encryptMessage(contactId: String, plaintext: Data)throws  -> Encrypted
 })
 }
     
-open func ensureHybridSignatureKey()throws  -> [UInt8]  {
-    return try  FfiConverterSequenceUInt8.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+open func ensureHybridSignatureKey()throws  -> Data  {
+    return try  FfiConverterData.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
     uniffi_construct_core_fn_method_orchestratorcore_ensure_hybrid_signature_key(
             self.uniffiCloneHandle(),$0
     )
 })
 }
     
-    /**
-     * Export the PQContributionManager state as a CFE binary blob.
-     * Persist under CfeSecureStoreSlot::KyberSessionState.
-     */
-open func exportKyberSessionState()throws  -> [UInt8]  {
-    return try  FfiConverterSequenceUInt8.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
-    uniffi_construct_core_fn_method_orchestratorcore_export_kyber_session_state(
+open func exportKyberPrekeys()throws  -> Data  {
+    return try  FfiConverterData.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_method_orchestratorcore_export_kyber_prekeys(
             self.uniffiCloneHandle(),$0
     )
 })
 }
     
-open func exportOneTimePrekeys()throws  -> [UInt8]  {
-    return try  FfiConverterSequenceUInt8.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+open func exportOneTimePrekeys()throws  -> Data  {
+    return try  FfiConverterData.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
     uniffi_construct_core_fn_method_orchestratorcore_export_one_time_prekeys(
             self.uniffiCloneHandle(),$0
     )
@@ -1720,28 +3953,28 @@ open func exportOneTimePrekeys()throws  -> [UInt8]  {
 }
     
     /**
-     * Export the full orchestrator coordination state (ACK cache, healing queue,
-     * init locks, archive index, prekey tracker) as a CFE binary blob.
+     * Export the full orchestrator coordination state (init locks, prekey tracker, pins) as a
+     * CFE binary blob.
      * Persist under CfeSecureStoreSlot::OrchestratorState.
      */
-open func exportOrchestratorState()throws  -> [UInt8]  {
-    return try  FfiConverterSequenceUInt8.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+open func exportOrchestratorState()throws  -> Data  {
+    return try  FfiConverterData.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
     uniffi_construct_core_fn_method_orchestratorcore_export_orchestrator_state(
             self.uniffiCloneHandle(),$0
     )
 })
 }
     
-open func exportPrivateKeys()throws  -> [UInt8]  {
-    return try  FfiConverterSequenceUInt8.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+open func exportPrivateKeys()throws  -> Data  {
+    return try  FfiConverterData.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
     uniffi_construct_core_fn_method_orchestratorcore_export_private_keys(
             self.uniffiCloneHandle(),$0
     )
 })
 }
     
-open func exportSession(contactId: String)throws  -> [UInt8]  {
-    return try  FfiConverterSequenceUInt8.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+open func exportSession(contactId: String)throws  -> Data  {
+    return try  FfiConverterData.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
     uniffi_construct_core_fn_method_orchestratorcore_export_session(
             self.uniffiCloneHandle(),
         FfiConverterString.lower(contactId),$0
@@ -1751,18 +3984,15 @@ open func exportSession(contactId: String)throws  -> [UInt8]  {
     
     /**
      * Drop every piece of local orchestration state this core holds about `contact_id`:
-     * the ratchet, the archive and its timestamp, the prekey counter, the heal record, the PQ
-     * contribution, the init lock, the cooldown, the pending END_SESSION, the prewarm mark and
-     * the active-chat mark.
+     * the ratchet and its previous states, the prekey counter, the PQ contribution, the init lock,
+     * the queue, the prewarm mark and the active-chat mark.
      *
      * `remove_session` removes the ratchet **and nothing else**, so all of the above outlive it
      * and steer the next add for the same device — a contact the platform has already forgotten.
      * None of them is reachable from outside this crate, which is why "the platform deleted this
      * contact" had no expression here until now.
      *
-     * Silent on the wire on purpose: a local deletion boundary, not a protocol reset. It archives
-     * nothing and emits no END_SESSION. A caller that wants the peer told does that first, with
-     * `plan_teardown`, and forgets afterwards.
+     * Silent on the wire on purpose: a local deletion boundary, not a protocol reset.
      */
 open func forgetContactState(contactId: String)  {try! rustCall() {
     uniffi_construct_core_fn_method_orchestratorcore_forget_contact_state(
@@ -1770,6 +4000,15 @@ open func forgetContactState(contactId: String)  {try! rustCall() {
         FfiConverterString.lower(contactId),$0
     )
 }
+}
+    
+open func generateKyberOneTimePrekeys(count: UInt32)throws  -> [KyberPrekeyUpload]  {
+    return try  FfiConverterSequenceTypeKyberPrekeyUpload.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_method_orchestratorcore_generate_kyber_one_time_prekeys(
+            self.uniffiCloneHandle(),
+        FfiConverterUInt32.lower(count),$0
+    )
+})
 }
     
 open func generateOneTimePrekeys(count: UInt32)throws  -> [OtpkPair]  {
@@ -1784,17 +4023,6 @@ open func generateOneTimePrekeys(count: UInt32)throws  -> [OtpkPair]  {
 open func getAllSessionContactIds() -> [String]  {
     return try!  FfiConverterSequenceString.lift(try! rustCall() {
     uniffi_construct_core_fn_method_orchestratorcore_get_all_session_contact_ids(
-            self.uniffiCloneHandle(),$0
-    )
-})
-}
-    
-    /**
-     * Raw identity secret key bytes (32 bytes, X25519).
-     */
-open func getIdentityKeyBytes()throws  -> Data  {
-    return try  FfiConverterData.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
-    uniffi_construct_core_fn_method_orchestratorcore_get_identity_key_bytes(
             self.uniffiCloneHandle(),$0
     )
 })
@@ -1834,17 +4062,6 @@ open func getSessionSuiteId(contactId: String) -> UInt16  {
 }
     
     /**
-     * Raw Ed25519 signing secret key bytes (64 bytes).
-     */
-open func getSigningKeyBytes()throws  -> Data  {
-    return try  FfiConverterData.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
-    uniffi_construct_core_fn_method_orchestratorcore_get_signing_key_bytes(
-            self.uniffiCloneHandle(),$0
-    )
-})
-}
-    
-    /**
      * Typed event handler — accepts a typed `CfeIncomingEvent` and returns typed `CfeAction` list.
      */
 open func handleEvent(event: CfeIncomingEvent)throws  -> [CfeAction]  {
@@ -1866,48 +4083,107 @@ open func hasSession(contactId: String) -> Bool  {
 }
     
     /**
-     * `true` iff `msg_number == 0` (healing-eligible message).
+     * The history-file (CTHF) channel key on the receiving side: HKDF-SHA256 over
+     * X25519(identity, sender_eph) ‖ the ML-KEM decapsulation of `kem_ciphertext` under Kyber
+     * prekey `kem_key_id`, salt "construct_history_file_v1", info `snapshot_id`. The channel key,
+     * not the X25519 output: that would open every box sealed to this device.
      */
-open func healingCanHeal(msgNumber: UInt32) -> Bool  {
-    return try!  FfiConverterBool.lift(try! rustCall() {
-    uniffi_construct_core_fn_method_orchestratorcore_healing_can_heal(
+open func historyFileChannelKey(senderEphPub: Data, kemKeyId: UInt32, kemCiphertext: Data, snapshotId: Data)throws  -> Data  {
+    return try  FfiConverterData.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_method_orchestratorcore_history_file_channel_key(
             self.uniffiCloneHandle(),
-        FfiConverterUInt32.lower(msgNumber),$0
+        FfiConverterData.lower(senderEphPub),
+        FfiConverterUInt32.lower(kemKeyId),
+        FfiConverterData.lower(kemCiphertext),
+        FfiConverterData.lower(snapshotId),$0
     )
 })
 }
     
-open func hybridSignaturePublicKey() -> [UInt8]?  {
-    return try!  FfiConverterOptionSequenceUInt8.lift(try! rustCall() {
+    /**
+     * Offer history as a CTHF file for `peer`: write `first_frame()`, then stream.
+     */
+open func historyOfferFile(userId: Data, peer: HistoryPeerKeys)throws  -> HistorySender  {
+    return try  FfiConverterTypeHistorySender_lift(try rustCallWithError(FfiConverterTypeHistoryError_lift) {
+    uniffi_construct_core_fn_method_orchestratorcore_history_offer_file(
+            self.uniffiCloneHandle(),
+        FfiConverterData.lower(userId),
+        FfiConverterTypeHistoryPeerKeys_lower(peer),$0
+    )
+})
+}
+    
+    /**
+     * Offer history over the local network to the device `peer` names. Write
+     * `first_frame()`, read `HISTORY_REPLY_LEN` bytes into `accept_reply`, then stream. A skip
+     * is the same signed opening and nothing after it. `pinned_receiver_identity` is the new
+     * device's identity from a Flow B QR, when this side scanned one.
+     */
+open func historyOfferNearby(userId: Data, peer: HistoryPeerKeys, skip: Bool, pinnedReceiverIdentity: Data?)throws  -> HistorySender  {
+    return try  FfiConverterTypeHistorySender_lift(try rustCallWithError(FfiConverterTypeHistoryError_lift) {
+    uniffi_construct_core_fn_method_orchestratorcore_history_offer_nearby(
+            self.uniffiCloneHandle(),
+        FfiConverterData.lower(userId),
+        FfiConverterTypeHistoryPeerKeys_lower(peer),
+        FfiConverterBool.lower(skip),
+        FfiConverterOptionData.lower(pinnedReceiverIdentity),$0
+    )
+})
+}
+    
+    /**
+     * Receive history, over the local network or from a file.
+     */
+open func historyReceive(userId: Data, fromFile: Bool) -> HistoryReceiver  {
+    return try!  FfiConverterTypeHistoryReceiver_lift(try! rustCall() {
+    uniffi_construct_core_fn_method_orchestratorcore_history_receive(
+            self.uniffiCloneHandle(),
+        FfiConverterData.lower(userId),
+        FfiConverterBool.lower(fromFile),$0
+    )
+})
+}
+    
+open func hybridSignaturePublicKey() -> Data?  {
+    return try!  FfiConverterOptionData.lift(try! rustCall() {
     uniffi_construct_core_fn_method_orchestratorcore_hybrid_signature_public_key(
             self.uniffiCloneHandle(),$0
     )
 })
 }
     
-open func importHybridSignaturePrivateKey(privBytes: [UInt8])throws   {try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+open func importHybridSignaturePrivateKey(privBytes: Data)throws   {try rustCallWithError(FfiConverterTypeCryptoError_lift) {
     uniffi_construct_core_fn_method_orchestratorcore_import_hybrid_signature_private_key(
             self.uniffiCloneHandle(),
-        FfiConverterSequenceUInt8.lower(privBytes),$0
+        FfiConverterData.lower(privBytes),$0
+    )
+}
+}
+    
+open func importKyberPrekeys(data: Data)throws   {try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_method_orchestratorcore_import_kyber_prekeys(
+            self.uniffiCloneHandle(),
+        FfiConverterData.lower(data),$0
     )
 }
 }
     
     /**
-     * Restore the PQContributionManager state from a CFE blob.
+     * An MLS store restored from `MlsStore.export_cfe()`, signing with this device's key.
      */
-open func importKyberSessionState(data: [UInt8])throws   {try rustCallWithError(FfiConverterTypeCryptoError_lift) {
-    uniffi_construct_core_fn_method_orchestratorcore_import_kyber_session_state(
+open func importMlsStore(data: Data)throws  -> MlsStore  {
+    return try  FfiConverterTypeMlsStore_lift(try rustCallWithError(FfiConverterTypeMlsError_lift) {
+    uniffi_construct_core_fn_method_orchestratorcore_import_mls_store(
             self.uniffiCloneHandle(),
-        FfiConverterSequenceUInt8.lower(data),$0
+        FfiConverterData.lower(data),$0
     )
-}
+})
 }
     
-open func importOneTimePrekeys(data: [UInt8])throws   {try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+open func importOneTimePrekeys(data: Data)throws   {try rustCallWithError(FfiConverterTypeCryptoError_lift) {
     uniffi_construct_core_fn_method_orchestratorcore_import_one_time_prekeys(
             self.uniffiCloneHandle(),
-        FfiConverterSequenceUInt8.lower(data),$0
+        FfiConverterData.lower(data),$0
     )
 }
 }
@@ -1916,31 +4192,30 @@ open func importOneTimePrekeys(data: [UInt8])throws   {try rustCallWithError(Ffi
      * Restore the full orchestrator coordination state from a CFE blob.
      * Call at app start before processing any messages.
      */
-open func importOrchestratorState(data: [UInt8])throws   {try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+open func importOrchestratorState(data: Data)throws   {try rustCallWithError(FfiConverterTypeCryptoError_lift) {
     uniffi_construct_core_fn_method_orchestratorcore_import_orchestrator_state(
             self.uniffiCloneHandle(),
-        FfiConverterSequenceUInt8.lower(data),$0
+        FfiConverterData.lower(data),$0
     )
 }
 }
     
-open func importSession(contactId: String, data: [UInt8])throws  -> String  {
+open func importSession(contactId: String, data: Data)throws  -> String  {
     return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
     uniffi_construct_core_fn_method_orchestratorcore_import_session(
             self.uniffiCloneHandle(),
         FfiConverterString.lower(contactId),
-        FfiConverterSequenceUInt8.lower(data),$0
+        FfiConverterData.lower(data),$0
     )
 })
 }
     
-open func initReceivingSession(contactId: String, recipientBundle: BinaryKeyBundle, firstMessage: BinaryFirstMessage)throws  -> SessionInitResult  {
+open func initReceivingSessionFromWirePayload(senderCertificate: SenderCertificate, wirePayload: Data)throws  -> SessionInitResult  {
     return try  FfiConverterTypeSessionInitResult_lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
-    uniffi_construct_core_fn_method_orchestratorcore_init_receiving_session(
+    uniffi_construct_core_fn_method_orchestratorcore_init_receiving_session_from_wire_payload(
             self.uniffiCloneHandle(),
-        FfiConverterString.lower(contactId),
-        FfiConverterTypeBinaryKeyBundle_lower(recipientBundle),
-        FfiConverterTypeBinaryFirstMessage_lower(firstMessage),$0
+        FfiConverterTypeSenderCertificate_lower(senderCertificate),
+        FfiConverterData.lower(wirePayload),$0
     )
 })
 }
@@ -1965,9 +4240,34 @@ open func initSessionAllowingStale(contactId: String, recipientBundle: BinaryKey
 })
 }
     
-open func kyberSpk() -> KyberSpkRecord?  {
-    return try!  FfiConverterOptionTypeKyberSpkRecord.lift(try! rustCall() {
-    uniffi_construct_core_fn_method_orchestratorcore_kyber_spk(
+open func kyberOneTimePrekeyCount() -> UInt32  {
+    return try!  FfiConverterUInt32.lift(try! rustCall() {
+    uniffi_construct_core_fn_method_orchestratorcore_kyber_one_time_prekey_count(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+    /**
+     * Decapsulate with our Kyber prekey `key_id` (0 = current SPK). For history transfer; the
+     * handshake decapsulates inside the core.
+     */
+open func kyberPrekeyDecapsulate(keyId: UInt32, ciphertext: Data)throws  -> Data  {
+    return try  FfiConverterData.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_method_orchestratorcore_kyber_prekey_decapsulate(
+            self.uniffiCloneHandle(),
+        FfiConverterUInt32.lower(keyId),
+        FfiConverterData.lower(ciphertext),$0
+    )
+})
+}
+    
+    /**
+     * A fresh MLS store signing with this device's Ed25519 key.
+     */
+open func newMlsStore()throws  -> MlsStore  {
+    return try  FfiConverterTypeMlsStore_lift(try rustCallWithError(FfiConverterTypeMlsError_lift) {
+    uniffi_construct_core_fn_method_orchestratorcore_new_mls_store(
             self.uniffiCloneHandle(),$0
     )
 })
@@ -1982,31 +4282,67 @@ open func oneTimePrekeyCount() -> UInt32  {
 }
     
     /**
-     * Every (carrier, bundle) pair worth attempting when opening a receiving session, in order.
-     * Both dimensions vary: fixing the carrier and rotating only the bundle finds the session
-     * only if the right carrier was guessed, and a wrong guess looks exactly like a broken bundle.
+     * Who wrote `envelope`, by its tag, and its opened body; null when no pair matches.
      */
-open func planReceivingInit(carriers: [ReceivingInitCarrier], bundleCount: UInt32) -> [ReceivingInitAttempt]  {
-    return try!  FfiConverterSequenceTypeReceivingInitAttempt.lift(try! rustCall() {
-    uniffi_construct_core_fn_method_orchestratorcore_plan_receiving_init(
+open func openEnvelope(envelope: Data) -> EnvelopeOpened?  {
+    return try!  FfiConverterOptionTypeEnvelopeOpened.lift(try! rustCall() {
+    uniffi_construct_core_fn_method_orchestratorcore_open_envelope(
             self.uniffiCloneHandle(),
-        FfiConverterSequenceTypeReceivingInitCarrier.lower(carriers),
-        FfiConverterUInt32.lower(bundleCount),$0
+        FfiConverterData.lower(envelope),$0
     )
 })
 }
     
     /**
-     * Which of `candidate_device_ids` a teardown goes to, and what to do with each.
-     * The caller passes the device set (it owns the account→devices translation, which this
-     * crate deliberately cannot do); the decision over the set is made here.
+     * Open a `SealedInner.first_flight` sealed to this device. Throws when it does not open — a
+     * Kyber prekey no longer held (`FIRST_FLIGHT_KEY_UNAVAILABLE`), or not ours.
      */
-open func planTeardown(candidateDeviceIds: [String], peerOnDeadSession: Bool) -> [TeardownDecision]  {
-    return try!  FfiConverterSequenceTypeTeardownDecision.lift(try! rustCall() {
-    uniffi_construct_core_fn_method_orchestratorcore_plan_teardown(
+open func openFirstFlight(sealed: Data)throws  -> FirstFlightOpened  {
+    return try  FfiConverterTypeFirstFlightOpened_lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_method_orchestratorcore_open_first_flight(
             self.uniffiCloneHandle(),
-        FfiConverterSequenceString.lower(candidateDeviceIds),
-        FfiConverterBool.lower(peerOnDeadSession),$0
+        FfiConverterData.lower(sealed),$0
+    )
+})
+}
+    
+open func openReceiving(device: String) -> ReceivingOpenResult  {
+    return try!  FfiConverterTypeReceivingOpenResult_lift(try! rustCall() {
+    uniffi_construct_core_fn_method_orchestratorcore_open_receiving(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(device),$0
+    )
+})
+}
+    
+    /**
+     * Open a box sealed to this device's X25519 identity key (`sealed_seal_sender_cert`,
+     * `seal_to_device_key`): a sender certificate, a sibling's device metadata. A box sealed to
+     * another key fails with DecryptionFailed, which is how a caller finds its own copy.
+     */
+open func openSealedToDevice(sealedBox: Data)throws  -> Data  {
+    return try  FfiConverterData.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_method_orchestratorcore_open_sealed_to_device(
+            self.uniffiCloneHandle(),
+        FfiConverterData.lower(sealedBox),$0
+    )
+})
+}
+    
+open func peerHandshakeHeld(devices: [String]) -> Bool  {
+    return try!  FfiConverterBool.lift(try! rustCall() {
+    uniffi_construct_core_fn_method_orchestratorcore_peer_handshake_held(
+            self.uniffiCloneHandle(),
+        FfiConverterSequenceString.lower(devices),$0
+    )
+})
+}
+    
+open func pendingMessageCount(contactId: String) -> UInt32  {
+    return try!  FfiConverterUInt32.lift(try! rustCall() {
+    uniffi_construct_core_fn_method_orchestratorcore_pending_message_count(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(contactId),$0
     )
 })
 }
@@ -2015,6 +4351,18 @@ open func prekeysAvailableCount() -> UInt32  {
     return try!  FfiConverterUInt32.lift(try! rustCall() {
     uniffi_construct_core_fn_method_orchestratorcore_prekeys_available_count(
             self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+    /**
+     * After a replace-all upload of Kyber one-time keys; returns how many were removed.
+     */
+open func pruneKyberOneTimePrekeysBelow(minKeepId: UInt32) -> UInt32  {
+    return try!  FfiConverterUInt32.lift(try! rustCall() {
+    uniffi_construct_core_fn_method_orchestratorcore_prune_kyber_one_time_prekeys_below(
+            self.uniffiCloneHandle(),
+        FfiConverterUInt32.lower(minKeepId),$0
     )
 })
 }
@@ -2028,19 +4376,6 @@ open func pruneOneTimePrekeysBelow(minKeepId: UInt32) -> UInt32  {
 })
 }
     
-    /**
-     * Register a KEM shared secret as a deferred contribution.
-     */
-open func registerPqDeferred(contactId: String, otpkId: UInt32, sharedSecret: [UInt8])  {try! rustCall() {
-    uniffi_construct_core_fn_method_orchestratorcore_register_pq_deferred(
-            self.uniffiCloneHandle(),
-        FfiConverterString.lower(contactId),
-        FfiConverterUInt32.lower(otpkId),
-        FfiConverterSequenceUInt8.lower(sharedSecret),$0
-    )
-}
-}
-    
 open func removeSession(contactId: String) -> Bool  {
     return try!  FfiConverterBool.lift(try! rustCall() {
     uniffi_construct_core_fn_method_orchestratorcore_remove_session(
@@ -2048,6 +4383,50 @@ open func removeSession(contactId: String) -> Bool  {
         FfiConverterString.lower(contactId),$0
     )
 })
+}
+    
+open func reopenSession(contactId: String, recipientBundle: BinaryKeyBundle)throws  -> String  {
+    return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_method_orchestratorcore_reopen_session(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(contactId),
+        FfiConverterTypeBinaryKeyBundle_lower(recipientBundle),$0
+    )
+})
+}
+    
+    /**
+     * How late messages have arrived since the process started (PQR-4).
+     */
+open func reorderStats() -> ReorderStats  {
+    return try!  FfiConverterTypeReorderStats_lift(try! rustCall() {
+    uniffi_construct_core_fn_method_orchestratorcore_reorder_stats(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+    /**
+     * The person reset the session with `contact_id`: the current state is retired locally and
+     * the next send opens a new one. Nothing is sent. Execute the returned save.
+     */
+open func retireSession(contactId: String) -> [CfeAction]  {
+    return try!  FfiConverterSequenceTypeCfeAction.lift(try! rustCall() {
+    uniffi_construct_core_fn_method_orchestratorcore_retire_session(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(contactId),$0
+    )
+})
+}
+    
+    /**
+     * The upload failed.
+     */
+open func rollbackKyberSpkRotation()  {try! rustCall() {
+    uniffi_construct_core_fn_method_orchestratorcore_rollback_kyber_spk_rotation(
+            self.uniffiCloneHandle(),$0
+    )
+}
 }
     
 open func rotateSignedPrekey()throws  -> RotatedSpkBundle  {
@@ -2058,14 +4437,52 @@ open func rotateSignedPrekey()throws  -> RotatedSpkBundle  {
 })
 }
     
-open func setKyberSpk(keyId: UInt32, secretKey: [UInt8], publicKey: [UInt8])  {try! rustCall() {
-    uniffi_construct_core_fn_method_orchestratorcore_set_kyber_spk(
+    /**
+     * Seal a wire payload just encrypted for `contact_id` as a session envelope; null when it
+     * must go with a certificate (first flight, or a session made before the envelope).
+     */
+open func sealEnvelope(contactId: String, wirePayload: Data) -> Data?  {
+    return try!  FfiConverterOptionData.lift(try! rustCall() {
+    uniffi_construct_core_fn_method_orchestratorcore_seal_envelope(
             self.uniffiCloneHandle(),
-        FfiConverterUInt32.lower(keyId),
-        FfiConverterSequenceUInt8.lower(secretKey),
-        FfiConverterSequenceUInt8.lower(publicKey),$0
+        FfiConverterString.lower(contactId),
+        FfiConverterData.lower(wirePayload),$0
     )
+})
 }
+    
+    /**
+     * Seal a first flight — a wire payload written on a session the peer has not answered yet —
+     * with the sender certificate, to `recipient_identity` (the X25519 key the session was opened
+     * to; it must derive to `contact_id`). Goes in `SealedInner.first_flight`. Null when the
+     * payload carries no handshake — not a first flight; it goes with a certificate. Throws for a
+     * first flight that cannot be sealed: never send that one any other way.
+     */
+open func sealFirstFlight(contactId: String, recipientIdentity: Data, wirePayload: Data, certificate: Data)throws  -> Data?  {
+    return try  FfiConverterOptionData.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_method_orchestratorcore_seal_first_flight(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(contactId),
+        FfiConverterData.lower(recipientIdentity),
+        FfiConverterData.lower(wirePayload),
+        FfiConverterData.lower(certificate),$0
+    )
+})
+}
+    
+    /**
+     * This device's social-recovery bundle (device keys, derived device id, `created_at`) sealed
+     * under the 32-byte `vault_key` — the `sr_seal_recovery_bundle` format, packed in the core so
+     * only the ciphertext leaves it.
+     */
+open func sealOwnRecoveryBundle(vaultKey: Data, createdAt: Int64)throws  -> Data  {
+    return try  FfiConverterData.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_method_orchestratorcore_seal_own_recovery_bundle(
+            self.uniffiCloneHandle(),
+        FfiConverterData.lower(vaultKey),
+        FfiConverterInt64.lower(createdAt),$0
+    )
+})
 }
     
 open func setLocalUserId(userId: String)  {try! rustCall() {
@@ -2076,30 +4493,65 @@ open func setLocalUserId(userId: String)  {try! rustCall() {
 }
 }
     
-open func signBundleData(bundleDataJson: [UInt8])throws  -> [UInt8]  {
-    return try  FfiConverterSequenceUInt8.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+open func setTrustedServerKeys(keys: [Data])  {try! rustCall() {
+    uniffi_construct_core_fn_method_orchestratorcore_set_trusted_server_keys(
+            self.uniffiCloneHandle(),
+        FfiConverterSequenceData.lower(keys),$0
+    )
+}
+}
+    
+open func signBundleData(bundleDataJson: Data)throws  -> Data  {
+    return try  FfiConverterData.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
     uniffi_construct_core_fn_method_orchestratorcore_sign_bundle_data(
             self.uniffiCloneHandle(),
-        FfiConverterSequenceUInt8.lower(bundleDataJson),$0
+        FfiConverterData.lower(bundleDataJson),$0
     )
 })
 }
     
-open func signHybrid(message: [UInt8])throws  -> [UInt8]  {
-    return try  FfiConverterSequenceUInt8.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+open func signHybrid(message: Data)throws  -> Data  {
+    return try  FfiConverterData.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
     uniffi_construct_core_fn_method_orchestratorcore_sign_hybrid(
             self.uniffiCloneHandle(),
-        FfiConverterSequenceUInt8.lower(message),$0
+        FfiConverterData.lower(message),$0
     )
 })
 }
     
-open func signHybridPrekey(suiteId: UInt8, publicKey: [UInt8])throws  -> [UInt8]  {
-    return try  FfiConverterSequenceUInt8.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+open func signHybridPrekey(suiteId: UInt8, publicKey: Data)throws  -> Data  {
+    return try  FfiConverterData.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
     uniffi_construct_core_fn_method_orchestratorcore_sign_hybrid_prekey(
             self.uniffiCloneHandle(),
         FfiConverterUInt8.lower(suiteId),
-        FfiConverterSequenceUInt8.lower(publicKey),$0
+        FfiConverterData.lower(publicKey),$0
+    )
+})
+}
+    
+    /**
+     * Ed25519 over `message` with this device's signing key (device auth, invites). The same
+     * signature `sign_invite_data` / CryptoKit made from the exported key: Ed25519 is deterministic.
+     */
+open func signWithDeviceKey(message: Data)throws  -> Data  {
+    return try  FfiConverterData.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_method_orchestratorcore_sign_with_device_key(
+            self.uniffiCloneHandle(),
+        FfiConverterData.lower(message),$0
+    )
+})
+}
+    
+open func verifyKtProofs(deviceId: String, identityKey: Data, identityProof: KtInclusionProof, hybridIdentityKey: Data?, hybridProof: KtInclusionProof?, treeHead: KtSignedTreeHead?) -> KtVerdicts  {
+    return try!  FfiConverterTypeKtVerdicts_lift(try! rustCall() {
+    uniffi_construct_core_fn_method_orchestratorcore_verify_kt_proofs(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(deviceId),
+        FfiConverterData.lower(identityKey),
+        FfiConverterTypeKtInclusionProof_lower(identityProof),
+        FfiConverterOptionData.lower(hybridIdentityKey),
+        FfiConverterOptionTypeKtInclusionProof.lower(hybridProof),
+        FfiConverterOptionTypeKtSignedTreeHead.lower(treeHead),$0
     )
 })
 }
@@ -2338,459 +4790,11 @@ public func FfiConverterTypeRustAckStore_lower(_ value: RustAckStore) -> UInt64 
 
 
 
-/**
- * Thread-safe session healing queue.
- *
- * Replaces Swift `SessionHealingService`.
- */
-public protocol RustHealingQueueProtocol: AnyObject, Sendable {
-    
-    /**
-     * `true` iff `msg_number == 0` — the only case eligible for healing.
-     */
-    func canHeal(msgNumber: UInt32)  -> Bool
-    
-    /**
-     * Enqueue `message_json` for `contact_id` (idempotent).
-     * Persistence is handled by the orchestrator CFE state export.
-     */
-    func enqueue(contactId: String, messageJson: String) 
-    
-    /**
-     * Serialise the queue state to a CFE blob for Keychain persistence.
-     * Returns an empty sequence on serialisation failure.
-     */
-    func exportState()  -> [UInt8]
-    
-    /**
-     * Restore queue state from a CFE blob produced by `export_state`.
-     * Silently no-ops on decode failure.
-     */
-    func importState(data: [UInt8]) 
-    
-    /**
-     * Number of pending healing records.
-     */
-    func len()  -> UInt64
-    
-    /**
-     * Remove expired healing records. Persistence handled by orchestrator CFE.
-     */
-    func pruneExpired() 
-    
-    /**
-     * Increment attempt counter for `contact_id`.
-     */
-    func recordAttempt(contactId: String)  -> HealingAttemptResult
-    
-    /**
-     * Remove the healing record after successful re-key.
-     */
-    func removeRecord(contactId: String)  -> Bool
-    
-}
-/**
- * Thread-safe session healing queue.
- *
- * Replaces Swift `SessionHealingService`.
- */
-open class RustHealingQueue: RustHealingQueueProtocol, @unchecked Sendable {
-    fileprivate let handle: UInt64
-
-    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
-#if swift(>=5.8)
-    @_documentation(visibility: private)
-#endif
-    public struct NoHandle {
-        public init() {}
-    }
-
-    // TODO: We'd like this to be `private` but for Swifty reasons,
-    // we can't implement `FfiConverter` without making this `required` and we can't
-    // make it `required` without making it `public`.
-#if swift(>=5.8)
-    @_documentation(visibility: private)
-#endif
-    required public init(unsafeFromHandle handle: UInt64) {
-        self.handle = handle
-    }
-
-    // This constructor can be used to instantiate a fake object.
-    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
-    //
-    // - Warning:
-    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
-#if swift(>=5.8)
-    @_documentation(visibility: private)
-#endif
-    public init(noHandle: NoHandle) {
-        self.handle = 0
-    }
-
-#if swift(>=5.8)
-    @_documentation(visibility: private)
-#endif
-    public func uniffiCloneHandle() -> UInt64 {
-        return try! rustCall { uniffi_construct_core_fn_clone_rusthealingqueue(self.handle, $0) }
-    }
-public convenience init() {
-    let handle =
-        try! rustCall() {
-    uniffi_construct_core_fn_constructor_rusthealingqueue_new($0
-    )
-}
-    self.init(unsafeFromHandle: handle)
-}
-
-    deinit {
-        try! rustCall { uniffi_construct_core_fn_free_rusthealingqueue(handle, $0) }
-    }
-
-    
-
-    
-    /**
-     * `true` iff `msg_number == 0` — the only case eligible for healing.
-     */
-open func canHeal(msgNumber: UInt32) -> Bool  {
-    return try!  FfiConverterBool.lift(try! rustCall() {
-    uniffi_construct_core_fn_method_rusthealingqueue_can_heal(
-            self.uniffiCloneHandle(),
-        FfiConverterUInt32.lower(msgNumber),$0
-    )
-})
-}
-    
-    /**
-     * Enqueue `message_json` for `contact_id` (idempotent).
-     * Persistence is handled by the orchestrator CFE state export.
-     */
-open func enqueue(contactId: String, messageJson: String)  {try! rustCall() {
-    uniffi_construct_core_fn_method_rusthealingqueue_enqueue(
-            self.uniffiCloneHandle(),
-        FfiConverterString.lower(contactId),
-        FfiConverterString.lower(messageJson),$0
-    )
-}
-}
-    
-    /**
-     * Serialise the queue state to a CFE blob for Keychain persistence.
-     * Returns an empty sequence on serialisation failure.
-     */
-open func exportState() -> [UInt8]  {
-    return try!  FfiConverterSequenceUInt8.lift(try! rustCall() {
-    uniffi_construct_core_fn_method_rusthealingqueue_export_state(
-            self.uniffiCloneHandle(),$0
-    )
-})
-}
-    
-    /**
-     * Restore queue state from a CFE blob produced by `export_state`.
-     * Silently no-ops on decode failure.
-     */
-open func importState(data: [UInt8])  {try! rustCall() {
-    uniffi_construct_core_fn_method_rusthealingqueue_import_state(
-            self.uniffiCloneHandle(),
-        FfiConverterSequenceUInt8.lower(data),$0
-    )
-}
-}
-    
-    /**
-     * Number of pending healing records.
-     */
-open func len() -> UInt64  {
-    return try!  FfiConverterUInt64.lift(try! rustCall() {
-    uniffi_construct_core_fn_method_rusthealingqueue_len(
-            self.uniffiCloneHandle(),$0
-    )
-})
-}
-    
-    /**
-     * Remove expired healing records. Persistence handled by orchestrator CFE.
-     */
-open func pruneExpired()  {try! rustCall() {
-    uniffi_construct_core_fn_method_rusthealingqueue_prune_expired(
-            self.uniffiCloneHandle(),$0
-    )
-}
-}
-    
-    /**
-     * Increment attempt counter for `contact_id`.
-     */
-open func recordAttempt(contactId: String) -> HealingAttemptResult  {
-    return try!  FfiConverterTypeHealingAttemptResult_lift(try! rustCall() {
-    uniffi_construct_core_fn_method_rusthealingqueue_record_attempt(
-            self.uniffiCloneHandle(),
-        FfiConverterString.lower(contactId),$0
-    )
-})
-}
-    
-    /**
-     * Remove the healing record after successful re-key.
-     */
-open func removeRecord(contactId: String) -> Bool  {
-    return try!  FfiConverterBool.lift(try! rustCall() {
-    uniffi_construct_core_fn_method_rusthealingqueue_remove_record(
-            self.uniffiCloneHandle(),
-        FfiConverterString.lower(contactId),$0
-    )
-})
-}
-    
-
-    
-}
-
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public struct FfiConverterTypeRustHealingQueue: FfiConverter {
-    typealias FfiType = UInt64
-    typealias SwiftType = RustHealingQueue
-
-    public static func lift(_ handle: UInt64) throws -> RustHealingQueue {
-        return RustHealingQueue(unsafeFromHandle: handle)
-    }
-
-    public static func lower(_ value: RustHealingQueue) -> UInt64 {
-        return value.uniffiCloneHandle()
-    }
-
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> RustHealingQueue {
-        let handle: UInt64 = try readInt(&buf)
-        return try lift(handle)
-    }
-
-    public static func write(_ value: RustHealingQueue, into buf: inout [UInt8]) {
-        writeInt(&buf, lower(value))
-    }
-}
-
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypeRustHealingQueue_lift(_ handle: UInt64) throws -> RustHealingQueue {
-    return try FfiConverterTypeRustHealingQueue.lift(handle)
-}
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypeRustHealingQueue_lower(_ value: RustHealingQueue) -> UInt64 {
-    return FfiConverterTypeRustHealingQueue.lower(value)
-}
-
-
-
-
-
-
-/**
- * Thread-safe store for deferred PQXDH shared secrets.
- *
- * Replaces `pendingPQContributions: [String: [UInt8]] + NSLock` in PQCKeyManager.
- *
- * Protocol: encapsulate (session init) → store SS here → encrypt msg0 with
- * classic-only DR state → consume SS here → applyPqContribution to DR session.
- * Both sides must apply PQ at the same moment; if consume returns null, skip PQ.
- */
-public protocol RustPqContributionsProtocol: AnyObject, Sendable {
-    
-    /**
-     * Discard any pending contribution (e.g. on send failure).
-     */
-    func clear(contactId: String) 
-    
-    /**
-     * `true` if a deferred contribution exists for `contact_id`.
-     */
-    func hasPending(contactId: String)  -> Bool
-    
-    /**
-     * Store the KEM shared secret for `contact_id`.
-     */
-    func storeDeferred(contactId: String, sharedSecret: [UInt8]) 
-    
-    /**
-     * Remove and return the stored shared secret. Returns null if not found.
-     */
-    func takeDeferred(contactId: String)  -> [UInt8]?
-    
-}
-/**
- * Thread-safe store for deferred PQXDH shared secrets.
- *
- * Replaces `pendingPQContributions: [String: [UInt8]] + NSLock` in PQCKeyManager.
- *
- * Protocol: encapsulate (session init) → store SS here → encrypt msg0 with
- * classic-only DR state → consume SS here → applyPqContribution to DR session.
- * Both sides must apply PQ at the same moment; if consume returns null, skip PQ.
- */
-open class RustPqContributions: RustPqContributionsProtocol, @unchecked Sendable {
-    fileprivate let handle: UInt64
-
-    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
-#if swift(>=5.8)
-    @_documentation(visibility: private)
-#endif
-    public struct NoHandle {
-        public init() {}
-    }
-
-    // TODO: We'd like this to be `private` but for Swifty reasons,
-    // we can't implement `FfiConverter` without making this `required` and we can't
-    // make it `required` without making it `public`.
-#if swift(>=5.8)
-    @_documentation(visibility: private)
-#endif
-    required public init(unsafeFromHandle handle: UInt64) {
-        self.handle = handle
-    }
-
-    // This constructor can be used to instantiate a fake object.
-    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
-    //
-    // - Warning:
-    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
-#if swift(>=5.8)
-    @_documentation(visibility: private)
-#endif
-    public init(noHandle: NoHandle) {
-        self.handle = 0
-    }
-
-#if swift(>=5.8)
-    @_documentation(visibility: private)
-#endif
-    public func uniffiCloneHandle() -> UInt64 {
-        return try! rustCall { uniffi_construct_core_fn_clone_rustpqcontributions(self.handle, $0) }
-    }
-public convenience init() {
-    let handle =
-        try! rustCall() {
-    uniffi_construct_core_fn_constructor_rustpqcontributions_new($0
-    )
-}
-    self.init(unsafeFromHandle: handle)
-}
-
-    deinit {
-        try! rustCall { uniffi_construct_core_fn_free_rustpqcontributions(handle, $0) }
-    }
-
-    
-
-    
-    /**
-     * Discard any pending contribution (e.g. on send failure).
-     */
-open func clear(contactId: String)  {try! rustCall() {
-    uniffi_construct_core_fn_method_rustpqcontributions_clear(
-            self.uniffiCloneHandle(),
-        FfiConverterString.lower(contactId),$0
-    )
-}
-}
-    
-    /**
-     * `true` if a deferred contribution exists for `contact_id`.
-     */
-open func hasPending(contactId: String) -> Bool  {
-    return try!  FfiConverterBool.lift(try! rustCall() {
-    uniffi_construct_core_fn_method_rustpqcontributions_has_pending(
-            self.uniffiCloneHandle(),
-        FfiConverterString.lower(contactId),$0
-    )
-})
-}
-    
-    /**
-     * Store the KEM shared secret for `contact_id`.
-     */
-open func storeDeferred(contactId: String, sharedSecret: [UInt8])  {try! rustCall() {
-    uniffi_construct_core_fn_method_rustpqcontributions_store_deferred(
-            self.uniffiCloneHandle(),
-        FfiConverterString.lower(contactId),
-        FfiConverterSequenceUInt8.lower(sharedSecret),$0
-    )
-}
-}
-    
-    /**
-     * Remove and return the stored shared secret. Returns null if not found.
-     */
-open func takeDeferred(contactId: String) -> [UInt8]?  {
-    return try!  FfiConverterOptionSequenceUInt8.lift(try! rustCall() {
-    uniffi_construct_core_fn_method_rustpqcontributions_take_deferred(
-            self.uniffiCloneHandle(),
-        FfiConverterString.lower(contactId),$0
-    )
-})
-}
-    
-
-    
-}
-
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public struct FfiConverterTypeRustPQContributions: FfiConverter {
-    typealias FfiType = UInt64
-    typealias SwiftType = RustPqContributions
-
-    public static func lift(_ handle: UInt64) throws -> RustPqContributions {
-        return RustPqContributions(unsafeFromHandle: handle)
-    }
-
-    public static func lower(_ value: RustPqContributions) -> UInt64 {
-        return value.uniffiCloneHandle()
-    }
-
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> RustPqContributions {
-        let handle: UInt64 = try readInt(&buf)
-        return try lift(handle)
-    }
-
-    public static func write(_ value: RustPqContributions, into buf: inout [UInt8]) {
-        writeInt(&buf, lower(value))
-    }
-}
-
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypeRustPQContributions_lift(_ handle: UInt64) throws -> RustPqContributions {
-    return try FfiConverterTypeRustPQContributions.lift(handle)
-}
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypeRustPQContributions_lower(_ value: RustPqContributions) -> UInt64 {
-    return FfiConverterTypeRustPQContributions.lower(value)
-}
-
-
-
-
-
-
 public protocol TrafficProtectionManagerProtocol: AnyObject, Sendable {
     
     func currentIntervalMs()  -> UInt64
     
-    func generateDummy()  -> [UInt8]
+    func generateDummy()  -> Data
     
     func getMetrics()  -> EnergyMetrics
     
@@ -2869,8 +4873,8 @@ open func currentIntervalMs() -> UInt64  {
 })
 }
     
-open func generateDummy() -> [UInt8]  {
-    return try!  FfiConverterSequenceUInt8.lift(try! rustCall() {
+open func generateDummy() -> Data  {
+    return try!  FfiConverterData.lift(try! rustCall() {
     uniffi_construct_core_fn_method_trafficprotectionmanager_generate_dummy(
             self.uniffiCloneHandle(),$0
     )
@@ -2972,191 +4976,57 @@ public func FfiConverterTypeTrafficProtectionManager_lower(_ value: TrafficProte
 
 
 /**
- * Токены аутентификации (JWT)
- */
-public struct AuthTokens: Equatable, Hashable {
-    /**
-     * Access token (JWT, живёт 1 час)
-     */
-    public var accessToken: String
-    /**
-     * Refresh token (JWT, живёт 30 дней)
-     */
-    public var refreshToken: String
-    /**
-     * Unix timestamp когда истекает access token
-     */
-    public var expiresAt: Int64
-    /**
-     * User ID (UUID)
-     */
-    public var userId: String
-
-    // Default memberwise initializers are never public by default, so we
-    // declare one manually.
-    public init(
-        /**
-         * Access token (JWT, живёт 1 час)
-         */accessToken: String, 
-        /**
-         * Refresh token (JWT, живёт 30 дней)
-         */refreshToken: String, 
-        /**
-         * Unix timestamp когда истекает access token
-         */expiresAt: Int64, 
-        /**
-         * User ID (UUID)
-         */userId: String) {
-        self.accessToken = accessToken
-        self.refreshToken = refreshToken
-        self.expiresAt = expiresAt
-        self.userId = userId
-    }
-
-    
-}
-
-#if compiler(>=6)
-extension AuthTokens: Sendable {}
-#endif
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public struct FfiConverterTypeAuthTokens: FfiConverterRustBuffer {
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> AuthTokens {
-        return
-            try AuthTokens(
-                accessToken: FfiConverterString.read(from: &buf), 
-                refreshToken: FfiConverterString.read(from: &buf), 
-                expiresAt: FfiConverterInt64.read(from: &buf), 
-                userId: FfiConverterString.read(from: &buf)
-        )
-    }
-
-    public static func write(_ value: AuthTokens, into buf: inout [UInt8]) {
-        FfiConverterString.write(value.accessToken, into: &buf)
-        FfiConverterString.write(value.refreshToken, into: &buf)
-        FfiConverterInt64.write(value.expiresAt, into: &buf)
-        FfiConverterString.write(value.userId, into: &buf)
-    }
-}
-
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypeAuthTokens_lift(_ buf: RustBuffer) throws -> AuthTokens {
-    return try FfiConverterTypeAuthTokens.lift(buf)
-}
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypeAuthTokens_lower(_ value: AuthTokens) -> RustBuffer {
-    return FfiConverterTypeAuthTokens.lower(value)
-}
-
-
-/**
- * Binary first-message bundle for init_receiving_session — no JSON encoding.
- */
-public struct BinaryFirstMessage: Equatable, Hashable {
-    public var ephemeralPublicKey: [UInt8]
-    public var messageNumber: UInt32
-    public var content: [UInt8]
-    public var oneTimePrekeyId: UInt32
-    public var suiteId: UInt16
-    public var pqMessageEpoch: UInt32
-    public var pqRatchetField: [UInt8]
-
-    // Default memberwise initializers are never public by default, so we
-    // declare one manually.
-    public init(ephemeralPublicKey: [UInt8], messageNumber: UInt32, content: [UInt8], oneTimePrekeyId: UInt32, suiteId: UInt16, pqMessageEpoch: UInt32, pqRatchetField: [UInt8]) {
-        self.ephemeralPublicKey = ephemeralPublicKey
-        self.messageNumber = messageNumber
-        self.content = content
-        self.oneTimePrekeyId = oneTimePrekeyId
-        self.suiteId = suiteId
-        self.pqMessageEpoch = pqMessageEpoch
-        self.pqRatchetField = pqRatchetField
-    }
-
-    
-}
-
-#if compiler(>=6)
-extension BinaryFirstMessage: Sendable {}
-#endif
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public struct FfiConverterTypeBinaryFirstMessage: FfiConverterRustBuffer {
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> BinaryFirstMessage {
-        return
-            try BinaryFirstMessage(
-                ephemeralPublicKey: FfiConverterSequenceUInt8.read(from: &buf), 
-                messageNumber: FfiConverterUInt32.read(from: &buf), 
-                content: FfiConverterSequenceUInt8.read(from: &buf), 
-                oneTimePrekeyId: FfiConverterUInt32.read(from: &buf), 
-                suiteId: FfiConverterUInt16.read(from: &buf), 
-                pqMessageEpoch: FfiConverterUInt32.read(from: &buf), 
-                pqRatchetField: FfiConverterSequenceUInt8.read(from: &buf)
-        )
-    }
-
-    public static func write(_ value: BinaryFirstMessage, into buf: inout [UInt8]) {
-        FfiConverterSequenceUInt8.write(value.ephemeralPublicKey, into: &buf)
-        FfiConverterUInt32.write(value.messageNumber, into: &buf)
-        FfiConverterSequenceUInt8.write(value.content, into: &buf)
-        FfiConverterUInt32.write(value.oneTimePrekeyId, into: &buf)
-        FfiConverterUInt16.write(value.suiteId, into: &buf)
-        FfiConverterUInt32.write(value.pqMessageEpoch, into: &buf)
-        FfiConverterSequenceUInt8.write(value.pqRatchetField, into: &buf)
-    }
-}
-
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypeBinaryFirstMessage_lift(_ buf: RustBuffer) throws -> BinaryFirstMessage {
-    return try FfiConverterTypeBinaryFirstMessage.lift(buf)
-}
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypeBinaryFirstMessage_lower(_ value: BinaryFirstMessage) -> RustBuffer {
-    return FfiConverterTypeBinaryFirstMessage.lower(value)
-}
-
-
-/**
  * Binary key bundle passed across the FFI boundary — no JSON encoding.
- * Replaces the former sequence<u8> JSON payload for init_session / init_receiving_session.
+ * Replaces the former bytes JSON payload for init_session / init_receiving_session.
  */
 public struct BinaryKeyBundle: Equatable, Hashable {
-    public var identityPublic: [UInt8]
-    public var signedPrekeyPublic: [UInt8]
-    public var signature: [UInt8]
-    public var verifyingKey: [UInt8]
+    public var identityPublic: Data
+    public var signedPrekeyPublic: Data
+    public var signature: Data
+    public var verifyingKey: Data
     public var suiteId: UInt16
-    public var oneTimePrekeyPublic: [UInt8]?
+    public var oneTimePrekeyPublic: Data?
     public var oneTimePrekeyId: UInt32?
     public var spkUploadedAt: UInt64
     public var spkRotationEpoch: UInt32
     public var kyberSpkUploadedAt: UInt64
     public var kyberSpkRotationEpoch: UInt32
-    public var kyberPreKeyPublic: [UInt8]?
-    public var kyberOneTimePrekeyPublic: [UInt8]?
+    /**
+     * Kyber signed prekey (ML-KEM-1024, 1568 bytes), its id and signed creation time.
+     */
+    public var kyberPreKeyPublic: Data?
+    public var kyberPreKeyId: UInt32?
+    public var kyberPreKeyCreatedAt: UInt64?
+    public var kyberPreKeySignature: Data?
+    public var kyberPreKeyHybridSignature: Data?
+    /**
+     * Kyber one-time prekey (id from 1 000 000), preferred when present and signed.
+     */
+    public var kyberOneTimePrekeyPublic: Data?
     public var kyberOneTimePrekeyId: UInt32?
-    public var supportsPqRatchet: Bool
+    public var kyberOneTimePrekeyCreatedAt: UInt64?
+    public var kyberOneTimePrekeySignature: Data?
+    public var kyberOneTimePrekeyHybridSignature: Data?
+    /**
+     * Hybrid identity key (Ed25519 + ML-DSA-65, 1984 bytes; field 20) and the Ed25519
+     * cross-signature binding it to `verifying_key` (field 21). Pinned per device on first use.
+     */
+    public var hybridIdentityKey: Data?
+    public var hybridIdentitySignature: Data?
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(identityPublic: [UInt8], signedPrekeyPublic: [UInt8], signature: [UInt8], verifyingKey: [UInt8], suiteId: UInt16, oneTimePrekeyPublic: [UInt8]?, oneTimePrekeyId: UInt32?, spkUploadedAt: UInt64, spkRotationEpoch: UInt32, kyberSpkUploadedAt: UInt64, kyberSpkRotationEpoch: UInt32, kyberPreKeyPublic: [UInt8]?, kyberOneTimePrekeyPublic: [UInt8]?, kyberOneTimePrekeyId: UInt32?, supportsPqRatchet: Bool) {
+    public init(identityPublic: Data, signedPrekeyPublic: Data, signature: Data, verifyingKey: Data, suiteId: UInt16, oneTimePrekeyPublic: Data?, oneTimePrekeyId: UInt32?, spkUploadedAt: UInt64, spkRotationEpoch: UInt32, kyberSpkUploadedAt: UInt64, kyberSpkRotationEpoch: UInt32, 
+        /**
+         * Kyber signed prekey (ML-KEM-1024, 1568 bytes), its id and signed creation time.
+         */kyberPreKeyPublic: Data?, kyberPreKeyId: UInt32? = nil, kyberPreKeyCreatedAt: UInt64? = nil, kyberPreKeySignature: Data? = nil, kyberPreKeyHybridSignature: Data? = nil, 
+        /**
+         * Kyber one-time prekey (id from 1 000 000), preferred when present and signed.
+         */kyberOneTimePrekeyPublic: Data?, kyberOneTimePrekeyId: UInt32?, kyberOneTimePrekeyCreatedAt: UInt64? = nil, kyberOneTimePrekeySignature: Data? = nil, kyberOneTimePrekeyHybridSignature: Data? = nil, 
+        /**
+         * Hybrid identity key (Ed25519 + ML-DSA-65, 1984 bytes; field 20) and the Ed25519
+         * cross-signature binding it to `verifying_key` (field 21). Pinned per device on first use.
+         */hybridIdentityKey: Data? = nil, hybridIdentitySignature: Data? = nil) {
         self.identityPublic = identityPublic
         self.signedPrekeyPublic = signedPrekeyPublic
         self.signature = signature
@@ -3169,9 +5039,17 @@ public struct BinaryKeyBundle: Equatable, Hashable {
         self.kyberSpkUploadedAt = kyberSpkUploadedAt
         self.kyberSpkRotationEpoch = kyberSpkRotationEpoch
         self.kyberPreKeyPublic = kyberPreKeyPublic
+        self.kyberPreKeyId = kyberPreKeyId
+        self.kyberPreKeyCreatedAt = kyberPreKeyCreatedAt
+        self.kyberPreKeySignature = kyberPreKeySignature
+        self.kyberPreKeyHybridSignature = kyberPreKeyHybridSignature
         self.kyberOneTimePrekeyPublic = kyberOneTimePrekeyPublic
         self.kyberOneTimePrekeyId = kyberOneTimePrekeyId
-        self.supportsPqRatchet = supportsPqRatchet
+        self.kyberOneTimePrekeyCreatedAt = kyberOneTimePrekeyCreatedAt
+        self.kyberOneTimePrekeySignature = kyberOneTimePrekeySignature
+        self.kyberOneTimePrekeyHybridSignature = kyberOneTimePrekeyHybridSignature
+        self.hybridIdentityKey = hybridIdentityKey
+        self.hybridIdentitySignature = hybridIdentitySignature
     }
 
     
@@ -3188,40 +5066,56 @@ public struct FfiConverterTypeBinaryKeyBundle: FfiConverterRustBuffer {
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> BinaryKeyBundle {
         return
             try BinaryKeyBundle(
-                identityPublic: FfiConverterSequenceUInt8.read(from: &buf), 
-                signedPrekeyPublic: FfiConverterSequenceUInt8.read(from: &buf), 
-                signature: FfiConverterSequenceUInt8.read(from: &buf), 
-                verifyingKey: FfiConverterSequenceUInt8.read(from: &buf), 
+                identityPublic: FfiConverterData.read(from: &buf), 
+                signedPrekeyPublic: FfiConverterData.read(from: &buf), 
+                signature: FfiConverterData.read(from: &buf), 
+                verifyingKey: FfiConverterData.read(from: &buf), 
                 suiteId: FfiConverterUInt16.read(from: &buf), 
-                oneTimePrekeyPublic: FfiConverterOptionSequenceUInt8.read(from: &buf), 
+                oneTimePrekeyPublic: FfiConverterOptionData.read(from: &buf), 
                 oneTimePrekeyId: FfiConverterOptionUInt32.read(from: &buf), 
                 spkUploadedAt: FfiConverterUInt64.read(from: &buf), 
                 spkRotationEpoch: FfiConverterUInt32.read(from: &buf), 
                 kyberSpkUploadedAt: FfiConverterUInt64.read(from: &buf), 
                 kyberSpkRotationEpoch: FfiConverterUInt32.read(from: &buf), 
-                kyberPreKeyPublic: FfiConverterOptionSequenceUInt8.read(from: &buf), 
-                kyberOneTimePrekeyPublic: FfiConverterOptionSequenceUInt8.read(from: &buf), 
+                kyberPreKeyPublic: FfiConverterOptionData.read(from: &buf), 
+                kyberPreKeyId: FfiConverterOptionUInt32.read(from: &buf), 
+                kyberPreKeyCreatedAt: FfiConverterOptionUInt64.read(from: &buf), 
+                kyberPreKeySignature: FfiConverterOptionData.read(from: &buf), 
+                kyberPreKeyHybridSignature: FfiConverterOptionData.read(from: &buf), 
+                kyberOneTimePrekeyPublic: FfiConverterOptionData.read(from: &buf), 
                 kyberOneTimePrekeyId: FfiConverterOptionUInt32.read(from: &buf), 
-                supportsPqRatchet: FfiConverterBool.read(from: &buf)
+                kyberOneTimePrekeyCreatedAt: FfiConverterOptionUInt64.read(from: &buf), 
+                kyberOneTimePrekeySignature: FfiConverterOptionData.read(from: &buf), 
+                kyberOneTimePrekeyHybridSignature: FfiConverterOptionData.read(from: &buf), 
+                hybridIdentityKey: FfiConverterOptionData.read(from: &buf), 
+                hybridIdentitySignature: FfiConverterOptionData.read(from: &buf)
         )
     }
 
     public static func write(_ value: BinaryKeyBundle, into buf: inout [UInt8]) {
-        FfiConverterSequenceUInt8.write(value.identityPublic, into: &buf)
-        FfiConverterSequenceUInt8.write(value.signedPrekeyPublic, into: &buf)
-        FfiConverterSequenceUInt8.write(value.signature, into: &buf)
-        FfiConverterSequenceUInt8.write(value.verifyingKey, into: &buf)
+        FfiConverterData.write(value.identityPublic, into: &buf)
+        FfiConverterData.write(value.signedPrekeyPublic, into: &buf)
+        FfiConverterData.write(value.signature, into: &buf)
+        FfiConverterData.write(value.verifyingKey, into: &buf)
         FfiConverterUInt16.write(value.suiteId, into: &buf)
-        FfiConverterOptionSequenceUInt8.write(value.oneTimePrekeyPublic, into: &buf)
+        FfiConverterOptionData.write(value.oneTimePrekeyPublic, into: &buf)
         FfiConverterOptionUInt32.write(value.oneTimePrekeyId, into: &buf)
         FfiConverterUInt64.write(value.spkUploadedAt, into: &buf)
         FfiConverterUInt32.write(value.spkRotationEpoch, into: &buf)
         FfiConverterUInt64.write(value.kyberSpkUploadedAt, into: &buf)
         FfiConverterUInt32.write(value.kyberSpkRotationEpoch, into: &buf)
-        FfiConverterOptionSequenceUInt8.write(value.kyberPreKeyPublic, into: &buf)
-        FfiConverterOptionSequenceUInt8.write(value.kyberOneTimePrekeyPublic, into: &buf)
+        FfiConverterOptionData.write(value.kyberPreKeyPublic, into: &buf)
+        FfiConverterOptionUInt32.write(value.kyberPreKeyId, into: &buf)
+        FfiConverterOptionUInt64.write(value.kyberPreKeyCreatedAt, into: &buf)
+        FfiConverterOptionData.write(value.kyberPreKeySignature, into: &buf)
+        FfiConverterOptionData.write(value.kyberPreKeyHybridSignature, into: &buf)
+        FfiConverterOptionData.write(value.kyberOneTimePrekeyPublic, into: &buf)
         FfiConverterOptionUInt32.write(value.kyberOneTimePrekeyId, into: &buf)
-        FfiConverterBool.write(value.supportsPqRatchet, into: &buf)
+        FfiConverterOptionUInt64.write(value.kyberOneTimePrekeyCreatedAt, into: &buf)
+        FfiConverterOptionData.write(value.kyberOneTimePrekeySignature, into: &buf)
+        FfiConverterOptionData.write(value.kyberOneTimePrekeyHybridSignature, into: &buf)
+        FfiConverterOptionData.write(value.hybridIdentityKey, into: &buf)
+        FfiConverterOptionData.write(value.hybridIdentitySignature, into: &buf)
     }
 }
 
@@ -3314,12 +5208,12 @@ public func FfiConverterTypeCoverTrafficConfig_lower(_ value: CoverTrafficConfig
 
 
 public struct DecryptedMessageResult: Equatable, Hashable {
-    public var plaintext: [UInt8]
-    public var storageKey: [UInt8]
+    public var plaintext: Data
+    public var storageKey: Data
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(plaintext: [UInt8], storageKey: [UInt8]) {
+    public init(plaintext: Data, storageKey: Data) {
         self.plaintext = plaintext
         self.storageKey = storageKey
     }
@@ -3338,14 +5232,14 @@ public struct FfiConverterTypeDecryptedMessageResult: FfiConverterRustBuffer {
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> DecryptedMessageResult {
         return
             try DecryptedMessageResult(
-                plaintext: FfiConverterSequenceUInt8.read(from: &buf), 
-                storageKey: FfiConverterSequenceUInt8.read(from: &buf)
+                plaintext: FfiConverterData.read(from: &buf), 
+                storageKey: FfiConverterData.read(from: &buf)
         )
     }
 
     public static func write(_ value: DecryptedMessageResult, into buf: inout [UInt8]) {
-        FfiConverterSequenceUInt8.write(value.plaintext, into: &buf)
-        FfiConverterSequenceUInt8.write(value.storageKey, into: &buf)
+        FfiConverterData.write(value.plaintext, into: &buf)
+        FfiConverterData.write(value.storageKey, into: &buf)
     }
 }
 
@@ -3417,82 +5311,6 @@ public func FfiConverterTypeDeliveryTarget_lower(_ value: DeliveryTarget) -> Rus
 }
 
 
-public struct EncryptedMessageComponents: Equatable, Hashable {
-    public var ephemeralPublicKey: [UInt8]
-    public var messageNumber: UInt32
-    public var content: [UInt8]
-    public var oneTimePrekeyId: UInt32
-    public var storageKey: [UInt8]
-    public var suiteId: UInt16
-    public var pqMessageEpoch: UInt32
-    public var pqRatchetField: [UInt8]
-
-    // Default memberwise initializers are never public by default, so we
-    // declare one manually.
-    public init(ephemeralPublicKey: [UInt8], messageNumber: UInt32, content: [UInt8], oneTimePrekeyId: UInt32, storageKey: [UInt8], suiteId: UInt16, pqMessageEpoch: UInt32, pqRatchetField: [UInt8]) {
-        self.ephemeralPublicKey = ephemeralPublicKey
-        self.messageNumber = messageNumber
-        self.content = content
-        self.oneTimePrekeyId = oneTimePrekeyId
-        self.storageKey = storageKey
-        self.suiteId = suiteId
-        self.pqMessageEpoch = pqMessageEpoch
-        self.pqRatchetField = pqRatchetField
-    }
-
-    
-}
-
-#if compiler(>=6)
-extension EncryptedMessageComponents: Sendable {}
-#endif
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public struct FfiConverterTypeEncryptedMessageComponents: FfiConverterRustBuffer {
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> EncryptedMessageComponents {
-        return
-            try EncryptedMessageComponents(
-                ephemeralPublicKey: FfiConverterSequenceUInt8.read(from: &buf), 
-                messageNumber: FfiConverterUInt32.read(from: &buf), 
-                content: FfiConverterSequenceUInt8.read(from: &buf), 
-                oneTimePrekeyId: FfiConverterUInt32.read(from: &buf), 
-                storageKey: FfiConverterSequenceUInt8.read(from: &buf), 
-                suiteId: FfiConverterUInt16.read(from: &buf), 
-                pqMessageEpoch: FfiConverterUInt32.read(from: &buf), 
-                pqRatchetField: FfiConverterSequenceUInt8.read(from: &buf)
-        )
-    }
-
-    public static func write(_ value: EncryptedMessageComponents, into buf: inout [UInt8]) {
-        FfiConverterSequenceUInt8.write(value.ephemeralPublicKey, into: &buf)
-        FfiConverterUInt32.write(value.messageNumber, into: &buf)
-        FfiConverterSequenceUInt8.write(value.content, into: &buf)
-        FfiConverterUInt32.write(value.oneTimePrekeyId, into: &buf)
-        FfiConverterSequenceUInt8.write(value.storageKey, into: &buf)
-        FfiConverterUInt16.write(value.suiteId, into: &buf)
-        FfiConverterUInt32.write(value.pqMessageEpoch, into: &buf)
-        FfiConverterSequenceUInt8.write(value.pqRatchetField, into: &buf)
-    }
-}
-
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypeEncryptedMessageComponents_lift(_ buf: RustBuffer) throws -> EncryptedMessageComponents {
-    return try FfiConverterTypeEncryptedMessageComponents.lift(buf)
-}
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypeEncryptedMessageComponents_lower(_ value: EncryptedMessageComponents) -> RustBuffer {
-    return FfiConverterTypeEncryptedMessageComponents.lower(value)
-}
-
-
 public struct EnergyMetrics: Equatable, Hashable {
     public var dummiesSent: UInt64
     public var coalescedCount: UInt64
@@ -3549,13 +5367,81 @@ public func FfiConverterTypeEnergyMetrics_lower(_ value: EnergyMetrics) -> RustB
 }
 
 
-public struct EphemeralKeyPair: Equatable, Hashable {
-    public var secretKey: [UInt8]
-    public var publicKey: [UInt8]
+/**
+ * A session envelope opened by `OrchestratorCore.open_envelope`
+ * (construct-docs decisions/sealed-envelope-keyed-by-the-session.md).
+ */
+public struct EnvelopeOpened: Equatable, Hashable {
+    public var contactId: String
+    public var sessionId: String
+    public var kind: UInt8
+    public var body: Data
+    public var retired: Bool
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(secretKey: [UInt8], publicKey: [UInt8]) {
+    public init(contactId: String, sessionId: String, kind: UInt8, body: Data, retired: Bool) {
+        self.contactId = contactId
+        self.sessionId = sessionId
+        self.kind = kind
+        self.body = body
+        self.retired = retired
+    }
+
+    
+}
+
+#if compiler(>=6)
+extension EnvelopeOpened: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeEnvelopeOpened: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> EnvelopeOpened {
+        return
+            try EnvelopeOpened(
+                contactId: FfiConverterString.read(from: &buf), 
+                sessionId: FfiConverterString.read(from: &buf), 
+                kind: FfiConverterUInt8.read(from: &buf), 
+                body: FfiConverterData.read(from: &buf), 
+                retired: FfiConverterBool.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: EnvelopeOpened, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.contactId, into: &buf)
+        FfiConverterString.write(value.sessionId, into: &buf)
+        FfiConverterUInt8.write(value.kind, into: &buf)
+        FfiConverterData.write(value.body, into: &buf)
+        FfiConverterBool.write(value.retired, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeEnvelopeOpened_lift(_ buf: RustBuffer) throws -> EnvelopeOpened {
+    return try FfiConverterTypeEnvelopeOpened.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeEnvelopeOpened_lower(_ value: EnvelopeOpened) -> RustBuffer {
+    return FfiConverterTypeEnvelopeOpened.lower(value)
+}
+
+
+public struct EphemeralKeyPair: Equatable, Hashable {
+    public var secretKey: Data
+    public var publicKey: Data
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(secretKey: Data, publicKey: Data) {
         self.secretKey = secretKey
         self.publicKey = publicKey
     }
@@ -3574,14 +5460,14 @@ public struct FfiConverterTypeEphemeralKeyPair: FfiConverterRustBuffer {
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> EphemeralKeyPair {
         return
             try EphemeralKeyPair(
-                secretKey: FfiConverterSequenceUInt8.read(from: &buf), 
-                publicKey: FfiConverterSequenceUInt8.read(from: &buf)
+                secretKey: FfiConverterData.read(from: &buf), 
+                publicKey: FfiConverterData.read(from: &buf)
         )
     }
 
     public static func write(_ value: EphemeralKeyPair, into buf: inout [UInt8]) {
-        FfiConverterSequenceUInt8.write(value.secretKey, into: &buf)
-        FfiConverterSequenceUInt8.write(value.publicKey, into: &buf)
+        FfiConverterData.write(value.secretKey, into: &buf)
+        FfiConverterData.write(value.publicKey, into: &buf)
     }
 }
 
@@ -3602,63 +5488,43 @@ public func FfiConverterTypeEphemeralKeyPair_lower(_ value: EphemeralKeyPair) ->
 
 
 /**
- * Packed result of `RustHealingQueue.record_attempt`.
+ * A session's first flight opened by `OrchestratorCore.open_first_flight`
+ * (construct-docs decisions/first-flight-sealed-whole.md): handled as before — the
+ * certificate names the writer, the wire payload goes to MessageReceived.
  */
-public struct HealingAttemptResult: Equatable, Hashable {
-    /**
-     * "retry_allowed" | "max_attempts_reached" | "not_found"
-     */
-    public var decision: String
-    /**
-     * 1-based attempt number (valid when decision == "retry_allowed").
-     */
-    public var attempt: UInt32
-    /**
-     * Minimum delay before the next retry in ms (exponential backoff: 2s/4s/8s).
-     */
-    public var retryAfterMs: UInt64
+public struct FirstFlightOpened: Equatable, Hashable {
+    public var certificate: Data
+    public var wirePayload: Data
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(
-        /**
-         * "retry_allowed" | "max_attempts_reached" | "not_found"
-         */decision: String, 
-        /**
-         * 1-based attempt number (valid when decision == "retry_allowed").
-         */attempt: UInt32, 
-        /**
-         * Minimum delay before the next retry in ms (exponential backoff: 2s/4s/8s).
-         */retryAfterMs: UInt64) {
-        self.decision = decision
-        self.attempt = attempt
-        self.retryAfterMs = retryAfterMs
+    public init(certificate: Data, wirePayload: Data) {
+        self.certificate = certificate
+        self.wirePayload = wirePayload
     }
 
     
 }
 
 #if compiler(>=6)
-extension HealingAttemptResult: Sendable {}
+extension FirstFlightOpened: Sendable {}
 #endif
 
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-public struct FfiConverterTypeHealingAttemptResult: FfiConverterRustBuffer {
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> HealingAttemptResult {
+public struct FfiConverterTypeFirstFlightOpened: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> FirstFlightOpened {
         return
-            try HealingAttemptResult(
-                decision: FfiConverterString.read(from: &buf), 
-                attempt: FfiConverterUInt32.read(from: &buf), 
-                retryAfterMs: FfiConverterUInt64.read(from: &buf)
+            try FirstFlightOpened(
+                certificate: FfiConverterData.read(from: &buf), 
+                wirePayload: FfiConverterData.read(from: &buf)
         )
     }
 
-    public static func write(_ value: HealingAttemptResult, into buf: inout [UInt8]) {
-        FfiConverterString.write(value.decision, into: &buf)
-        FfiConverterUInt32.write(value.attempt, into: &buf)
-        FfiConverterUInt64.write(value.retryAfterMs, into: &buf)
+    public static func write(_ value: FirstFlightOpened, into buf: inout [UInt8]) {
+        FfiConverterData.write(value.certificate, into: &buf)
+        FfiConverterData.write(value.wirePayload, into: &buf)
     }
 }
 
@@ -3666,15 +5532,352 @@ public struct FfiConverterTypeHealingAttemptResult: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-public func FfiConverterTypeHealingAttemptResult_lift(_ buf: RustBuffer) throws -> HealingAttemptResult {
-    return try FfiConverterTypeHealingAttemptResult.lift(buf)
+public func FfiConverterTypeFirstFlightOpened_lift(_ buf: RustBuffer) throws -> FirstFlightOpened {
+    return try FfiConverterTypeFirstFlightOpened.lift(buf)
 }
 
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-public func FfiConverterTypeHealingAttemptResult_lower(_ value: HealingAttemptResult) -> RustBuffer {
-    return FfiConverterTypeHealingAttemptResult.lower(value)
+public func FfiConverterTypeFirstFlightOpened_lower(_ value: FirstFlightOpened) -> RustBuffer {
+    return FfiConverterTypeFirstFlightOpened.lower(value)
+}
+
+
+/**
+ * What a chat record asks of the receiver's chat with `peer_id`: that it exist, pinned if `pin`
+ * (never unpinned), its unread count cleared.
+ */
+public struct HistoryChatImport: Equatable, Hashable {
+    public var peerId: String
+    public var pin: Bool
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(peerId: String, pin: Bool) {
+        self.peerId = peerId
+        self.pin = pin
+    }
+
+    
+}
+
+#if compiler(>=6)
+extension HistoryChatImport: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeHistoryChatImport: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> HistoryChatImport {
+        return
+            try HistoryChatImport(
+                peerId: FfiConverterString.read(from: &buf), 
+                pin: FfiConverterBool.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: HistoryChatImport, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.peerId, into: &buf)
+        FfiConverterBool.write(value.pin, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeHistoryChatImport_lift(_ buf: RustBuffer) throws -> HistoryChatImport {
+    return try FfiConverterTypeHistoryChatImport.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeHistoryChatImport_lower(_ value: HistoryChatImport) -> RustBuffer {
+    return FfiConverterTypeHistoryChatImport.lower(value)
+}
+
+
+/**
+ * The keys the directory holds for the device a frame names. Checked against the frame's own,
+ * and the signature is verified with these.
+ */
+public struct HistoryKnownKeys: Equatable, Hashable {
+    public var identityPublic: Data
+    public var hybridPublic: Data
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(identityPublic: Data, hybridPublic: Data) {
+        self.identityPublic = identityPublic
+        self.hybridPublic = hybridPublic
+    }
+
+    
+}
+
+#if compiler(>=6)
+extension HistoryKnownKeys: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeHistoryKnownKeys: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> HistoryKnownKeys {
+        return
+            try HistoryKnownKeys(
+                identityPublic: FfiConverterData.read(from: &buf), 
+                hybridPublic: FfiConverterData.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: HistoryKnownKeys, into buf: inout [UInt8]) {
+        FfiConverterData.write(value.identityPublic, into: &buf)
+        FfiConverterData.write(value.hybridPublic, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeHistoryKnownKeys_lift(_ buf: RustBuffer) throws -> HistoryKnownKeys {
+    return try FfiConverterTypeHistoryKnownKeys.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeHistoryKnownKeys_lower(_ value: HistoryKnownKeys) -> RustBuffer {
+    return FfiConverterTypeHistoryKnownKeys.lower(value)
+}
+
+
+/**
+ * A media file a body refers to.
+ */
+public struct HistoryMediaRef: Equatable, Hashable {
+    public var id: String
+    public var mime: String
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(id: String, mime: String) {
+        self.id = id
+        self.mime = mime
+    }
+
+    
+}
+
+#if compiler(>=6)
+extension HistoryMediaRef: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeHistoryMediaRef: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> HistoryMediaRef {
+        return
+            try HistoryMediaRef(
+                id: FfiConverterString.read(from: &buf), 
+                mime: FfiConverterString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: HistoryMediaRef, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.id, into: &buf)
+        FfiConverterString.write(value.mime, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeHistoryMediaRef_lift(_ buf: RustBuffer) throws -> HistoryMediaRef {
+    return try FfiConverterTypeHistoryMediaRef.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeHistoryMediaRef_lower(_ value: HistoryMediaRef) -> RustBuffer {
+    return FfiConverterTypeHistoryMediaRef.lower(value)
+}
+
+
+/**
+ * The other device's keys from our own account's directory entry (`GetPreKeyBundles`).
+ */
+public struct HistoryPeerKeys: Equatable, Hashable {
+    public var identityPublic: Data
+    public var hybridPublic: Data
+    public var kyberPrekeyPublic: Data
+    public var kyberPrekeyId: UInt32
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(identityPublic: Data, hybridPublic: Data, kyberPrekeyPublic: Data, kyberPrekeyId: UInt32) {
+        self.identityPublic = identityPublic
+        self.hybridPublic = hybridPublic
+        self.kyberPrekeyPublic = kyberPrekeyPublic
+        self.kyberPrekeyId = kyberPrekeyId
+    }
+
+    
+}
+
+#if compiler(>=6)
+extension HistoryPeerKeys: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeHistoryPeerKeys: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> HistoryPeerKeys {
+        return
+            try HistoryPeerKeys(
+                identityPublic: FfiConverterData.read(from: &buf), 
+                hybridPublic: FfiConverterData.read(from: &buf), 
+                kyberPrekeyPublic: FfiConverterData.read(from: &buf), 
+                kyberPrekeyId: FfiConverterUInt32.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: HistoryPeerKeys, into buf: inout [UInt8]) {
+        FfiConverterData.write(value.identityPublic, into: &buf)
+        FfiConverterData.write(value.hybridPublic, into: &buf)
+        FfiConverterData.write(value.kyberPrekeyPublic, into: &buf)
+        FfiConverterUInt32.write(value.kyberPrekeyId, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeHistoryPeerKeys_lift(_ buf: RustBuffer) throws -> HistoryPeerKeys {
+    return try FfiConverterTypeHistoryPeerKeys.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeHistoryPeerKeys_lower(_ value: HistoryPeerKeys) -> RustBuffer {
+    return FfiConverterTypeHistoryPeerKeys.lower(value)
+}
+
+
+/**
+ * One transcript record to send: its type (0x01 manifest … 0x07 call) and protobuf bytes.
+ */
+public struct HistoryRecordOut: Equatable, Hashable {
+    public var recordType: UInt8
+    public var proto: Data
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(recordType: UInt8, proto: Data) {
+        self.recordType = recordType
+        self.proto = proto
+    }
+
+    
+}
+
+#if compiler(>=6)
+extension HistoryRecordOut: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeHistoryRecordOut: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> HistoryRecordOut {
+        return
+            try HistoryRecordOut(
+                recordType: FfiConverterUInt8.read(from: &buf), 
+                proto: FfiConverterData.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: HistoryRecordOut, into buf: inout [UInt8]) {
+        FfiConverterUInt8.write(value.recordType, into: &buf)
+        FfiConverterData.write(value.proto, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeHistoryRecordOut_lift(_ buf: RustBuffer) throws -> HistoryRecordOut {
+    return try FfiConverterTypeHistoryRecordOut.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeHistoryRecordOut_lower(_ value: HistoryRecordOut) -> RustBuffer {
+    return FfiConverterTypeHistoryRecordOut.lower(value)
+}
+
+
+public struct HistoryStep: Equatable, Hashable {
+    public var events: [HistoryEvent]
+    public var status: HistoryStatus
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(events: [HistoryEvent], status: HistoryStatus) {
+        self.events = events
+        self.status = status
+    }
+
+    
+}
+
+#if compiler(>=6)
+extension HistoryStep: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeHistoryStep: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> HistoryStep {
+        return
+            try HistoryStep(
+                events: FfiConverterSequenceTypeHistoryEvent.read(from: &buf), 
+                status: FfiConverterTypeHistoryStatus.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: HistoryStep, into buf: inout [UInt8]) {
+        FfiConverterSequenceTypeHistoryEvent.write(value.events, into: &buf)
+        FfiConverterTypeHistoryStatus.write(value.status, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeHistoryStep_lift(_ buf: RustBuffer) throws -> HistoryStep {
+    return try FfiConverterTypeHistoryStep.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeHistoryStep_lower(_ value: HistoryStep) -> RustBuffer {
+    return FfiConverterTypeHistoryStep.lower(value)
 }
 
 
@@ -3687,12 +5890,12 @@ public struct HybridSignatureKeyPair: Equatable, Hashable {
      * Hybrid private key: 2016 bytes
      * [ed25519_seed (32)] [mldsa65_seed (32)] [mldsa65_pk (1952)]
      */
-    public var privateKey: [UInt8]
+    public var privateKey: Data
     /**
      * Hybrid public key: 1984 bytes
      * [ed25519_pk (32)] [mldsa65_pk (1952)]
      */
-    public var publicKey: [UInt8]
+    public var publicKey: Data
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
@@ -3700,11 +5903,11 @@ public struct HybridSignatureKeyPair: Equatable, Hashable {
         /**
          * Hybrid private key: 2016 bytes
          * [ed25519_seed (32)] [mldsa65_seed (32)] [mldsa65_pk (1952)]
-         */privateKey: [UInt8], 
+         */privateKey: Data, 
         /**
          * Hybrid public key: 1984 bytes
          * [ed25519_pk (32)] [mldsa65_pk (1952)]
-         */publicKey: [UInt8]) {
+         */publicKey: Data) {
         self.privateKey = privateKey
         self.publicKey = publicKey
     }
@@ -3723,14 +5926,14 @@ public struct FfiConverterTypeHybridSignatureKeyPair: FfiConverterRustBuffer {
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> HybridSignatureKeyPair {
         return
             try HybridSignatureKeyPair(
-                privateKey: FfiConverterSequenceUInt8.read(from: &buf), 
-                publicKey: FfiConverterSequenceUInt8.read(from: &buf)
+                privateKey: FfiConverterData.read(from: &buf), 
+                publicKey: FfiConverterData.read(from: &buf)
         )
     }
 
     public static func write(_ value: HybridSignatureKeyPair, into buf: inout [UInt8]) {
-        FfiConverterSequenceUInt8.write(value.privateKey, into: &buf)
-        FfiConverterSequenceUInt8.write(value.publicKey, into: &buf)
+        FfiConverterData.write(value.privateKey, into: &buf)
+        FfiConverterData.write(value.publicKey, into: &buf)
     }
 }
 
@@ -3756,13 +5959,12 @@ public func FfiConverterTypeHybridSignatureKeyPair_lower(_ value: HybridSignatur
  */
 public struct InitiationContext: Equatable, Hashable {
     /**
-     * Ours and theirs in the space the session is addressed by. Anything else ranks a
-     * different pair — see tie_break_role.
+     * Ours and theirs in the space the session is addressed by.
      */
     public var myDeviceId: String
     public var peerDeviceId: String
     /**
-     * We sent a SESSION_RESET_INIT to this device; it is neither acknowledged nor expired.
+     * We are opening a session with this device right now (bundle fetch and init).
      */
     public var ourInitInFlight: Bool
     /**
@@ -3778,11 +5980,10 @@ public struct InitiationContext: Equatable, Hashable {
     // declare one manually.
     public init(
         /**
-         * Ours and theirs in the space the session is addressed by. Anything else ranks a
-         * different pair — see tie_break_role.
+         * Ours and theirs in the space the session is addressed by.
          */myDeviceId: String, peerDeviceId: String, 
         /**
-         * We sent a SESSION_RESET_INIT to this device; it is neither acknowledged nor expired.
+         * We are opening a session with this device right now (bundle fetch and init).
          */ourInitInFlight: Bool, 
         /**
          * We hold the peer's init — received, not yet completed.
@@ -3844,12 +6045,150 @@ public func FfiConverterTypeInitiationContext_lower(_ value: InitiationContext) 
 }
 
 
-public struct InviteSignature: Equatable, Hashable {
-    public var signature: [UInt8]
+public struct KnstFrame: Equatable, Hashable {
+    public var contentType: UInt8
+    public var messageId: String
+    public var chunkIndex: UInt16
+    public var totalChunks: UInt16
+    public var plaintextLength: UInt32
+    public var payload: Data
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(signature: [UInt8]) {
+    public init(contentType: UInt8, messageId: String, chunkIndex: UInt16, totalChunks: UInt16, plaintextLength: UInt32, payload: Data) {
+        self.contentType = contentType
+        self.messageId = messageId
+        self.chunkIndex = chunkIndex
+        self.totalChunks = totalChunks
+        self.plaintextLength = plaintextLength
+        self.payload = payload
+    }
+
+    
+}
+
+#if compiler(>=6)
+extension KnstFrame: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeKnstFrame: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> KnstFrame {
+        return
+            try KnstFrame(
+                contentType: FfiConverterUInt8.read(from: &buf), 
+                messageId: FfiConverterString.read(from: &buf), 
+                chunkIndex: FfiConverterUInt16.read(from: &buf), 
+                totalChunks: FfiConverterUInt16.read(from: &buf), 
+                plaintextLength: FfiConverterUInt32.read(from: &buf), 
+                payload: FfiConverterData.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: KnstFrame, into buf: inout [UInt8]) {
+        FfiConverterUInt8.write(value.contentType, into: &buf)
+        FfiConverterString.write(value.messageId, into: &buf)
+        FfiConverterUInt16.write(value.chunkIndex, into: &buf)
+        FfiConverterUInt16.write(value.totalChunks, into: &buf)
+        FfiConverterUInt32.write(value.plaintextLength, into: &buf)
+        FfiConverterData.write(value.payload, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeKnstFrame_lift(_ buf: RustBuffer) throws -> KnstFrame {
+    return try FfiConverterTypeKnstFrame.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeKnstFrame_lower(_ value: KnstFrame) -> RustBuffer {
+    return FfiConverterTypeKnstFrame.lower(value)
+}
+
+
+public struct KtInclusionProof: Equatable, Hashable {
+    public var leafIndex: UInt64
+    public var treeSize: UInt64
+    public var rootHash: Data
+    public var proofHashes: [Data]
+    public var treeHeadSignature: Data
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(leafIndex: UInt64, treeSize: UInt64, rootHash: Data, proofHashes: [Data], treeHeadSignature: Data) {
+        self.leafIndex = leafIndex
+        self.treeSize = treeSize
+        self.rootHash = rootHash
+        self.proofHashes = proofHashes
+        self.treeHeadSignature = treeHeadSignature
+    }
+
+    
+}
+
+#if compiler(>=6)
+extension KtInclusionProof: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeKtInclusionProof: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> KtInclusionProof {
+        return
+            try KtInclusionProof(
+                leafIndex: FfiConverterUInt64.read(from: &buf), 
+                treeSize: FfiConverterUInt64.read(from: &buf), 
+                rootHash: FfiConverterData.read(from: &buf), 
+                proofHashes: FfiConverterSequenceData.read(from: &buf), 
+                treeHeadSignature: FfiConverterData.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: KtInclusionProof, into buf: inout [UInt8]) {
+        FfiConverterUInt64.write(value.leafIndex, into: &buf)
+        FfiConverterUInt64.write(value.treeSize, into: &buf)
+        FfiConverterData.write(value.rootHash, into: &buf)
+        FfiConverterSequenceData.write(value.proofHashes, into: &buf)
+        FfiConverterData.write(value.treeHeadSignature, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeKtInclusionProof_lift(_ buf: RustBuffer) throws -> KtInclusionProof {
+    return try FfiConverterTypeKtInclusionProof.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeKtInclusionProof_lower(_ value: KtInclusionProof) -> RustBuffer {
+    return FfiConverterTypeKtInclusionProof.lower(value)
+}
+
+
+public struct KtSignedTreeHead: Equatable, Hashable {
+    public var treeSize: UInt64
+    public var rootHash: Data
+    public var kid: Data
+    public var signature: Data
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(treeSize: UInt64, rootHash: Data, kid: Data, signature: Data) {
+        self.treeSize = treeSize
+        self.rootHash = rootHash
+        self.kid = kid
         self.signature = signature
     }
 
@@ -3857,22 +6196,28 @@ public struct InviteSignature: Equatable, Hashable {
 }
 
 #if compiler(>=6)
-extension InviteSignature: Sendable {}
+extension KtSignedTreeHead: Sendable {}
 #endif
 
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-public struct FfiConverterTypeInviteSignature: FfiConverterRustBuffer {
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> InviteSignature {
+public struct FfiConverterTypeKtSignedTreeHead: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> KtSignedTreeHead {
         return
-            try InviteSignature(
-                signature: FfiConverterSequenceUInt8.read(from: &buf)
+            try KtSignedTreeHead(
+                treeSize: FfiConverterUInt64.read(from: &buf), 
+                rootHash: FfiConverterData.read(from: &buf), 
+                kid: FfiConverterData.read(from: &buf), 
+                signature: FfiConverterData.read(from: &buf)
         )
     }
 
-    public static func write(_ value: InviteSignature, into buf: inout [UInt8]) {
-        FfiConverterSequenceUInt8.write(value.signature, into: &buf)
+    public static func write(_ value: KtSignedTreeHead, into buf: inout [UInt8]) {
+        FfiConverterUInt64.write(value.treeSize, into: &buf)
+        FfiConverterData.write(value.rootHash, into: &buf)
+        FfiConverterData.write(value.kid, into: &buf)
+        FfiConverterData.write(value.signature, into: &buf)
     }
 }
 
@@ -3880,60 +6225,51 @@ public struct FfiConverterTypeInviteSignature: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-public func FfiConverterTypeInviteSignature_lift(_ buf: RustBuffer) throws -> InviteSignature {
-    return try FfiConverterTypeInviteSignature.lift(buf)
+public func FfiConverterTypeKtSignedTreeHead_lift(_ buf: RustBuffer) throws -> KtSignedTreeHead {
+    return try FfiConverterTypeKtSignedTreeHead.lift(buf)
 }
 
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-public func FfiConverterTypeInviteSignature_lower(_ value: InviteSignature) -> RustBuffer {
-    return FfiConverterTypeInviteSignature.lower(value)
+public func FfiConverterTypeKtSignedTreeHead_lower(_ value: KtSignedTreeHead) -> RustBuffer {
+    return FfiConverterTypeKtSignedTreeHead.lower(value)
 }
 
 
-/**
- * ML-KEM-768 signed prekey held in the core key-state (PQXDH KEM leg).
- * Persisted atomically inside the private-keys CFE blob — replaces the
- * standalone platform Keychain triple (key-store consolidation Phase 2).
- */
-public struct KyberSpkRecord: Equatable, Hashable {
-    public var keyId: UInt32
-    public var publicKey: [UInt8]
-    public var secretKey: [UInt8]
+public struct KtVerdicts: Equatable, Hashable {
+    public var identity: KtVerdict
+    public var hybrid: KtVerdict?
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(keyId: UInt32, publicKey: [UInt8], secretKey: [UInt8]) {
-        self.keyId = keyId
-        self.publicKey = publicKey
-        self.secretKey = secretKey
+    public init(identity: KtVerdict, hybrid: KtVerdict?) {
+        self.identity = identity
+        self.hybrid = hybrid
     }
 
     
 }
 
 #if compiler(>=6)
-extension KyberSpkRecord: Sendable {}
+extension KtVerdicts: Sendable {}
 #endif
 
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-public struct FfiConverterTypeKyberSpkRecord: FfiConverterRustBuffer {
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> KyberSpkRecord {
+public struct FfiConverterTypeKtVerdicts: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> KtVerdicts {
         return
-            try KyberSpkRecord(
-                keyId: FfiConverterUInt32.read(from: &buf), 
-                publicKey: FfiConverterSequenceUInt8.read(from: &buf), 
-                secretKey: FfiConverterSequenceUInt8.read(from: &buf)
+            try KtVerdicts(
+                identity: FfiConverterTypeKtVerdict.read(from: &buf), 
+                hybrid: FfiConverterOptionTypeKtVerdict.read(from: &buf)
         )
     }
 
-    public static func write(_ value: KyberSpkRecord, into buf: inout [UInt8]) {
-        FfiConverterUInt32.write(value.keyId, into: &buf)
-        FfiConverterSequenceUInt8.write(value.publicKey, into: &buf)
-        FfiConverterSequenceUInt8.write(value.secretKey, into: &buf)
+    public static func write(_ value: KtVerdicts, into buf: inout [UInt8]) {
+        FfiConverterTypeKtVerdict.write(value.identity, into: &buf)
+        FfiConverterOptionTypeKtVerdict.write(value.hybrid, into: &buf)
     }
 }
 
@@ -3941,15 +6277,1228 @@ public struct FfiConverterTypeKyberSpkRecord: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-public func FfiConverterTypeKyberSpkRecord_lift(_ buf: RustBuffer) throws -> KyberSpkRecord {
-    return try FfiConverterTypeKyberSpkRecord.lift(buf)
+public func FfiConverterTypeKtVerdicts_lift(_ buf: RustBuffer) throws -> KtVerdicts {
+    return try FfiConverterTypeKtVerdicts.lift(buf)
 }
 
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-public func FfiConverterTypeKyberSpkRecord_lower(_ value: KyberSpkRecord) -> RustBuffer {
-    return FfiConverterTypeKyberSpkRecord.lower(value)
+public func FfiConverterTypeKtVerdicts_lower(_ value: KtVerdicts) -> RustBuffer {
+    return FfiConverterTypeKtVerdicts.lower(value)
+}
+
+
+/**
+ * One ML-KEM-1024 Kyber prekey to upload (PQXDH v2). Both signatures are over
+ * `"KonstruktX3DH-v1" || 0x00 0x11 || created_at (u64 BE) || public_key`; upload `created_at`
+ * with the key — the signatures cover it.
+ */
+public struct KyberPrekeyUpload: Equatable, Hashable {
+    public var keyId: UInt32
+    public var publicKey: Data
+    public var createdAt: UInt64
+    public var signature: Data
+    public var hybridSignature: Data
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(keyId: UInt32, publicKey: Data, createdAt: UInt64, signature: Data, hybridSignature: Data) {
+        self.keyId = keyId
+        self.publicKey = publicKey
+        self.createdAt = createdAt
+        self.signature = signature
+        self.hybridSignature = hybridSignature
+    }
+
+    
+}
+
+#if compiler(>=6)
+extension KyberPrekeyUpload: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeKyberPrekeyUpload: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> KyberPrekeyUpload {
+        return
+            try KyberPrekeyUpload(
+                keyId: FfiConverterUInt32.read(from: &buf), 
+                publicKey: FfiConverterData.read(from: &buf), 
+                createdAt: FfiConverterUInt64.read(from: &buf), 
+                signature: FfiConverterData.read(from: &buf), 
+                hybridSignature: FfiConverterData.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: KyberPrekeyUpload, into buf: inout [UInt8]) {
+        FfiConverterUInt32.write(value.keyId, into: &buf)
+        FfiConverterData.write(value.publicKey, into: &buf)
+        FfiConverterUInt64.write(value.createdAt, into: &buf)
+        FfiConverterData.write(value.signature, into: &buf)
+        FfiConverterData.write(value.hybridSignature, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeKyberPrekeyUpload_lift(_ buf: RustBuffer) throws -> KyberPrekeyUpload {
+    return try FfiConverterTypeKyberPrekeyUpload.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeKyberPrekeyUpload_lower(_ value: KyberPrekeyUpload) -> RustBuffer {
+    return FfiConverterTypeKyberPrekeyUpload.lower(value)
+}
+
+
+public struct LocalCall: Equatable, Hashable {
+    public var id: String
+    public var peerUserId: String
+    public var peerName: String
+    public var direction: Int16
+    public var status: Int16
+    public var startedAt: Int64?
+    public var endedAt: Int64?
+    public var durationSeconds: Int32
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(id: String, peerUserId: String, peerName: String, direction: Int16, status: Int16, startedAt: Int64?, endedAt: Int64?, durationSeconds: Int32) {
+        self.id = id
+        self.peerUserId = peerUserId
+        self.peerName = peerName
+        self.direction = direction
+        self.status = status
+        self.startedAt = startedAt
+        self.endedAt = endedAt
+        self.durationSeconds = durationSeconds
+    }
+
+    
+}
+
+#if compiler(>=6)
+extension LocalCall: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeLocalCall: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> LocalCall {
+        return
+            try LocalCall(
+                id: FfiConverterString.read(from: &buf), 
+                peerUserId: FfiConverterString.read(from: &buf), 
+                peerName: FfiConverterString.read(from: &buf), 
+                direction: FfiConverterInt16.read(from: &buf), 
+                status: FfiConverterInt16.read(from: &buf), 
+                startedAt: FfiConverterOptionInt64.read(from: &buf), 
+                endedAt: FfiConverterOptionInt64.read(from: &buf), 
+                durationSeconds: FfiConverterInt32.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: LocalCall, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.id, into: &buf)
+        FfiConverterString.write(value.peerUserId, into: &buf)
+        FfiConverterString.write(value.peerName, into: &buf)
+        FfiConverterInt16.write(value.direction, into: &buf)
+        FfiConverterInt16.write(value.status, into: &buf)
+        FfiConverterOptionInt64.write(value.startedAt, into: &buf)
+        FfiConverterOptionInt64.write(value.endedAt, into: &buf)
+        FfiConverterInt32.write(value.durationSeconds, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLocalCall_lift(_ buf: RustBuffer) throws -> LocalCall {
+    return try FfiConverterTypeLocalCall.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLocalCall_lower(_ value: LocalCall) -> RustBuffer {
+    return FfiConverterTypeLocalCall.lower(value)
+}
+
+
+public struct LocalChat: Equatable, Hashable {
+    public var id: String
+    /**
+     * One chat per peer.
+     */
+    public var peerId: String
+    /**
+     * The list's preview, as the client formatted it.
+     */
+    public var lastMessageText: String?
+    /**
+     * Milliseconds since the Unix epoch.
+     */
+    public var lastMessageTime: Int64?
+    public var isPinned: Bool
+    public var unreadCount: Int32
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(id: String, 
+        /**
+         * One chat per peer.
+         */peerId: String, 
+        /**
+         * The list's preview, as the client formatted it.
+         */lastMessageText: String?, 
+        /**
+         * Milliseconds since the Unix epoch.
+         */lastMessageTime: Int64?, isPinned: Bool, unreadCount: Int32) {
+        self.id = id
+        self.peerId = peerId
+        self.lastMessageText = lastMessageText
+        self.lastMessageTime = lastMessageTime
+        self.isPinned = isPinned
+        self.unreadCount = unreadCount
+    }
+
+    
+}
+
+#if compiler(>=6)
+extension LocalChat: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeLocalChat: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> LocalChat {
+        return
+            try LocalChat(
+                id: FfiConverterString.read(from: &buf), 
+                peerId: FfiConverterString.read(from: &buf), 
+                lastMessageText: FfiConverterOptionString.read(from: &buf), 
+                lastMessageTime: FfiConverterOptionInt64.read(from: &buf), 
+                isPinned: FfiConverterBool.read(from: &buf), 
+                unreadCount: FfiConverterInt32.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: LocalChat, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.id, into: &buf)
+        FfiConverterString.write(value.peerId, into: &buf)
+        FfiConverterOptionString.write(value.lastMessageText, into: &buf)
+        FfiConverterOptionInt64.write(value.lastMessageTime, into: &buf)
+        FfiConverterBool.write(value.isPinned, into: &buf)
+        FfiConverterInt32.write(value.unreadCount, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLocalChat_lift(_ buf: RustBuffer) throws -> LocalChat {
+    return try FfiConverterTypeLocalChat.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLocalChat_lower(_ value: LocalChat) -> RustBuffer {
+    return FfiConverterTypeLocalChat.lower(value)
+}
+
+
+public struct LocalContact: Equatable, Hashable {
+    public var id: String
+    public var username: String
+    public var displayName: String
+    public var localAlias: String?
+    public var avatar: Data?
+    public var knownIdentityKey: Data?
+    public var accountAddress: Data?
+    public var isContact: Bool
+    public var isBlocked: Bool
+    public var isSharingWithMe: Bool
+    public var amISharingWith: Bool
+    public var sharedWithMeAt: Int64?
+    public var addedAt: Int64?
+    public var ktStatus: Int16
+    public var securityNotice: Int16
+    /**
+     * When the peer last edited the profile they share; 0 when never told.
+     */
+    public var profileEditedAtMs: Int64
+    /**
+     * An announced avatar not yet downloaded, and since when.
+     */
+    public var pendingAvatarRef: Data?
+    public var pendingAvatarSince: Int64?
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(id: String, username: String, displayName: String, localAlias: String?, avatar: Data?, knownIdentityKey: Data?, accountAddress: Data?, isContact: Bool, isBlocked: Bool, isSharingWithMe: Bool, amISharingWith: Bool, sharedWithMeAt: Int64?, addedAt: Int64?, ktStatus: Int16, securityNotice: Int16, 
+        /**
+         * When the peer last edited the profile they share; 0 when never told.
+         */profileEditedAtMs: Int64, 
+        /**
+         * An announced avatar not yet downloaded, and since when.
+         */pendingAvatarRef: Data?, pendingAvatarSince: Int64?) {
+        self.id = id
+        self.username = username
+        self.displayName = displayName
+        self.localAlias = localAlias
+        self.avatar = avatar
+        self.knownIdentityKey = knownIdentityKey
+        self.accountAddress = accountAddress
+        self.isContact = isContact
+        self.isBlocked = isBlocked
+        self.isSharingWithMe = isSharingWithMe
+        self.amISharingWith = amISharingWith
+        self.sharedWithMeAt = sharedWithMeAt
+        self.addedAt = addedAt
+        self.ktStatus = ktStatus
+        self.securityNotice = securityNotice
+        self.profileEditedAtMs = profileEditedAtMs
+        self.pendingAvatarRef = pendingAvatarRef
+        self.pendingAvatarSince = pendingAvatarSince
+    }
+
+    
+}
+
+#if compiler(>=6)
+extension LocalContact: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeLocalContact: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> LocalContact {
+        return
+            try LocalContact(
+                id: FfiConverterString.read(from: &buf), 
+                username: FfiConverterString.read(from: &buf), 
+                displayName: FfiConverterString.read(from: &buf), 
+                localAlias: FfiConverterOptionString.read(from: &buf), 
+                avatar: FfiConverterOptionData.read(from: &buf), 
+                knownIdentityKey: FfiConverterOptionData.read(from: &buf), 
+                accountAddress: FfiConverterOptionData.read(from: &buf), 
+                isContact: FfiConverterBool.read(from: &buf), 
+                isBlocked: FfiConverterBool.read(from: &buf), 
+                isSharingWithMe: FfiConverterBool.read(from: &buf), 
+                amISharingWith: FfiConverterBool.read(from: &buf), 
+                sharedWithMeAt: FfiConverterOptionInt64.read(from: &buf), 
+                addedAt: FfiConverterOptionInt64.read(from: &buf), 
+                ktStatus: FfiConverterInt16.read(from: &buf), 
+                securityNotice: FfiConverterInt16.read(from: &buf), 
+                profileEditedAtMs: FfiConverterInt64.read(from: &buf), 
+                pendingAvatarRef: FfiConverterOptionData.read(from: &buf), 
+                pendingAvatarSince: FfiConverterOptionInt64.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: LocalContact, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.id, into: &buf)
+        FfiConverterString.write(value.username, into: &buf)
+        FfiConverterString.write(value.displayName, into: &buf)
+        FfiConverterOptionString.write(value.localAlias, into: &buf)
+        FfiConverterOptionData.write(value.avatar, into: &buf)
+        FfiConverterOptionData.write(value.knownIdentityKey, into: &buf)
+        FfiConverterOptionData.write(value.accountAddress, into: &buf)
+        FfiConverterBool.write(value.isContact, into: &buf)
+        FfiConverterBool.write(value.isBlocked, into: &buf)
+        FfiConverterBool.write(value.isSharingWithMe, into: &buf)
+        FfiConverterBool.write(value.amISharingWith, into: &buf)
+        FfiConverterOptionInt64.write(value.sharedWithMeAt, into: &buf)
+        FfiConverterOptionInt64.write(value.addedAt, into: &buf)
+        FfiConverterInt16.write(value.ktStatus, into: &buf)
+        FfiConverterInt16.write(value.securityNotice, into: &buf)
+        FfiConverterInt64.write(value.profileEditedAtMs, into: &buf)
+        FfiConverterOptionData.write(value.pendingAvatarRef, into: &buf)
+        FfiConverterOptionInt64.write(value.pendingAvatarSince, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLocalContact_lift(_ buf: RustBuffer) throws -> LocalContact {
+    return try FfiConverterTypeLocalContact.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLocalContact_lower(_ value: LocalContact) -> RustBuffer {
+    return FfiConverterTypeLocalContact.lower(value)
+}
+
+
+public struct LocalIdentityKeyPin: Equatable, Hashable {
+    public var contactId: String
+    public var key: Data
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(contactId: String, key: Data) {
+        self.contactId = contactId
+        self.key = key
+    }
+
+    
+}
+
+#if compiler(>=6)
+extension LocalIdentityKeyPin: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeLocalIdentityKeyPin: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> LocalIdentityKeyPin {
+        return
+            try LocalIdentityKeyPin(
+                contactId: FfiConverterString.read(from: &buf), 
+                key: FfiConverterData.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: LocalIdentityKeyPin, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.contactId, into: &buf)
+        FfiConverterData.write(value.key, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLocalIdentityKeyPin_lift(_ buf: RustBuffer) throws -> LocalIdentityKeyPin {
+    return try FfiConverterTypeLocalIdentityKeyPin.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLocalIdentityKeyPin_lower(_ value: LocalIdentityKeyPin) -> RustBuffer {
+    return FfiConverterTypeLocalIdentityKeyPin.lower(value)
+}
+
+
+/**
+ * An invite capability this device minted; `sitting` groups the codes of one QR showing.
+ */
+public struct LocalIssuedInvite: Equatable, Hashable {
+    public var jti: String
+    public var kind: String
+    public var issuedAt: Int64
+    public var ttlSeconds: UInt32
+    public var sitting: String?
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(jti: String, kind: String, issuedAt: Int64, ttlSeconds: UInt32, sitting: String?) {
+        self.jti = jti
+        self.kind = kind
+        self.issuedAt = issuedAt
+        self.ttlSeconds = ttlSeconds
+        self.sitting = sitting
+    }
+
+    
+}
+
+#if compiler(>=6)
+extension LocalIssuedInvite: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeLocalIssuedInvite: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> LocalIssuedInvite {
+        return
+            try LocalIssuedInvite(
+                jti: FfiConverterString.read(from: &buf), 
+                kind: FfiConverterString.read(from: &buf), 
+                issuedAt: FfiConverterInt64.read(from: &buf), 
+                ttlSeconds: FfiConverterUInt32.read(from: &buf), 
+                sitting: FfiConverterOptionString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: LocalIssuedInvite, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.jti, into: &buf)
+        FfiConverterString.write(value.kind, into: &buf)
+        FfiConverterInt64.write(value.issuedAt, into: &buf)
+        FfiConverterUInt32.write(value.ttlSeconds, into: &buf)
+        FfiConverterOptionString.write(value.sitting, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLocalIssuedInvite_lift(_ buf: RustBuffer) throws -> LocalIssuedInvite {
+    return try FfiConverterTypeLocalIssuedInvite.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLocalIssuedInvite_lower(_ value: LocalIssuedInvite) -> RustBuffer {
+    return FfiConverterTypeLocalIssuedInvite.lower(value)
+}
+
+
+public struct LocalKvEntry: Equatable, Hashable {
+    public var key: String
+    public var value: Data
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(key: String, value: Data) {
+        self.key = key
+        self.value = value
+    }
+
+    
+}
+
+#if compiler(>=6)
+extension LocalKvEntry: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeLocalKvEntry: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> LocalKvEntry {
+        return
+            try LocalKvEntry(
+                key: FfiConverterString.read(from: &buf), 
+                value: FfiConverterData.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: LocalKvEntry, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.key, into: &buf)
+        FfiConverterData.write(value.value, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLocalKvEntry_lift(_ buf: RustBuffer) throws -> LocalKvEntry {
+    return try FfiConverterTypeLocalKvEntry.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLocalKvEntry_lower(_ value: LocalKvEntry) -> RustBuffer {
+    return FfiConverterTypeLocalKvEntry.lower(value)
+}
+
+
+public struct LocalMessage: Equatable, Hashable {
+    public var id: String
+    public var chatId: String
+    public var fromUserId: String
+    public var toUserId: String
+    public var isSentByMe: Bool
+    public var timestamp: Int64
+    public var orderKey: String
+    public var body: Data
+    public var contentType: Int16
+    public var deliveryStatus: Int16
+    public var retryCount: Int16
+    public var suiteId: Int16
+    public var isEdited: Bool
+    public var editedAt: Int64?
+    public var replyToMessageId: String?
+    public var replyToContent: String?
+    public var transcriptText: String?
+    public var transcriptLanguage: String?
+    public var transcriptGeneratedAt: Int64?
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(id: String, chatId: String, fromUserId: String, toUserId: String, isSentByMe: Bool, timestamp: Int64, orderKey: String, body: Data, contentType: Int16, deliveryStatus: Int16, retryCount: Int16, suiteId: Int16, isEdited: Bool, editedAt: Int64?, replyToMessageId: String?, replyToContent: String?, transcriptText: String?, transcriptLanguage: String?, transcriptGeneratedAt: Int64?) {
+        self.id = id
+        self.chatId = chatId
+        self.fromUserId = fromUserId
+        self.toUserId = toUserId
+        self.isSentByMe = isSentByMe
+        self.timestamp = timestamp
+        self.orderKey = orderKey
+        self.body = body
+        self.contentType = contentType
+        self.deliveryStatus = deliveryStatus
+        self.retryCount = retryCount
+        self.suiteId = suiteId
+        self.isEdited = isEdited
+        self.editedAt = editedAt
+        self.replyToMessageId = replyToMessageId
+        self.replyToContent = replyToContent
+        self.transcriptText = transcriptText
+        self.transcriptLanguage = transcriptLanguage
+        self.transcriptGeneratedAt = transcriptGeneratedAt
+    }
+
+    
+}
+
+#if compiler(>=6)
+extension LocalMessage: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeLocalMessage: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> LocalMessage {
+        return
+            try LocalMessage(
+                id: FfiConverterString.read(from: &buf), 
+                chatId: FfiConverterString.read(from: &buf), 
+                fromUserId: FfiConverterString.read(from: &buf), 
+                toUserId: FfiConverterString.read(from: &buf), 
+                isSentByMe: FfiConverterBool.read(from: &buf), 
+                timestamp: FfiConverterInt64.read(from: &buf), 
+                orderKey: FfiConverterString.read(from: &buf), 
+                body: FfiConverterData.read(from: &buf), 
+                contentType: FfiConverterInt16.read(from: &buf), 
+                deliveryStatus: FfiConverterInt16.read(from: &buf), 
+                retryCount: FfiConverterInt16.read(from: &buf), 
+                suiteId: FfiConverterInt16.read(from: &buf), 
+                isEdited: FfiConverterBool.read(from: &buf), 
+                editedAt: FfiConverterOptionInt64.read(from: &buf), 
+                replyToMessageId: FfiConverterOptionString.read(from: &buf), 
+                replyToContent: FfiConverterOptionString.read(from: &buf), 
+                transcriptText: FfiConverterOptionString.read(from: &buf), 
+                transcriptLanguage: FfiConverterOptionString.read(from: &buf), 
+                transcriptGeneratedAt: FfiConverterOptionInt64.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: LocalMessage, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.id, into: &buf)
+        FfiConverterString.write(value.chatId, into: &buf)
+        FfiConverterString.write(value.fromUserId, into: &buf)
+        FfiConverterString.write(value.toUserId, into: &buf)
+        FfiConverterBool.write(value.isSentByMe, into: &buf)
+        FfiConverterInt64.write(value.timestamp, into: &buf)
+        FfiConverterString.write(value.orderKey, into: &buf)
+        FfiConverterData.write(value.body, into: &buf)
+        FfiConverterInt16.write(value.contentType, into: &buf)
+        FfiConverterInt16.write(value.deliveryStatus, into: &buf)
+        FfiConverterInt16.write(value.retryCount, into: &buf)
+        FfiConverterInt16.write(value.suiteId, into: &buf)
+        FfiConverterBool.write(value.isEdited, into: &buf)
+        FfiConverterOptionInt64.write(value.editedAt, into: &buf)
+        FfiConverterOptionString.write(value.replyToMessageId, into: &buf)
+        FfiConverterOptionString.write(value.replyToContent, into: &buf)
+        FfiConverterOptionString.write(value.transcriptText, into: &buf)
+        FfiConverterOptionString.write(value.transcriptLanguage, into: &buf)
+        FfiConverterOptionInt64.write(value.transcriptGeneratedAt, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLocalMessage_lift(_ buf: RustBuffer) throws -> LocalMessage {
+    return try FfiConverterTypeLocalMessage.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLocalMessage_lower(_ value: LocalMessage) -> RustBuffer {
+    return FfiConverterTypeLocalMessage.lower(value)
+}
+
+
+/**
+ * One message with chunks held.
+ * A message and what it says, for the full-text index (null for media and control).
+ */
+public struct LocalMessageInsert: Equatable, Hashable {
+    public var message: LocalMessage
+    public var searchText: String?
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(message: LocalMessage, searchText: String?) {
+        self.message = message
+        self.searchText = searchText
+    }
+
+    
+}
+
+#if compiler(>=6)
+extension LocalMessageInsert: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeLocalMessageInsert: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> LocalMessageInsert {
+        return
+            try LocalMessageInsert(
+                message: FfiConverterTypeLocalMessage.read(from: &buf), 
+                searchText: FfiConverterOptionString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: LocalMessageInsert, into buf: inout [UInt8]) {
+        FfiConverterTypeLocalMessage.write(value.message, into: &buf)
+        FfiConverterOptionString.write(value.searchText, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLocalMessageInsert_lift(_ buf: RustBuffer) throws -> LocalMessageInsert {
+    return try FfiConverterTypeLocalMessageInsert.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLocalMessageInsert_lower(_ value: LocalMessageInsert) -> RustBuffer {
+    return FfiConverterTypeLocalMessageInsert.lower(value)
+}
+
+
+/**
+ * Our own profile — one row, not a contact.
+ */
+public struct LocalOwnProfile: Equatable, Hashable {
+    public var accountId: String
+    public var username: String
+    public var displayName: String
+    public var avatar: Data?
+    public var profileEditedAtMs: Int64
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(accountId: String, username: String, displayName: String, avatar: Data?, profileEditedAtMs: Int64) {
+        self.accountId = accountId
+        self.username = username
+        self.displayName = displayName
+        self.avatar = avatar
+        self.profileEditedAtMs = profileEditedAtMs
+    }
+
+    
+}
+
+#if compiler(>=6)
+extension LocalOwnProfile: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeLocalOwnProfile: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> LocalOwnProfile {
+        return
+            try LocalOwnProfile(
+                accountId: FfiConverterString.read(from: &buf), 
+                username: FfiConverterString.read(from: &buf), 
+                displayName: FfiConverterString.read(from: &buf), 
+                avatar: FfiConverterOptionData.read(from: &buf), 
+                profileEditedAtMs: FfiConverterInt64.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: LocalOwnProfile, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.accountId, into: &buf)
+        FfiConverterString.write(value.username, into: &buf)
+        FfiConverterString.write(value.displayName, into: &buf)
+        FfiConverterOptionData.write(value.avatar, into: &buf)
+        FfiConverterInt64.write(value.profileEditedAtMs, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLocalOwnProfile_lift(_ buf: RustBuffer) throws -> LocalOwnProfile {
+    return try FfiConverterTypeLocalOwnProfile.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLocalOwnProfile_lower(_ value: LocalOwnProfile) -> RustBuffer {
+    return FfiConverterTypeLocalOwnProfile.lower(value)
+}
+
+
+public struct LocalPeerDevice: Equatable, Hashable {
+    public var deviceId: String
+    public var accountId: String
+    public var identityKey: Data
+    public var firstSeenAt: Int64
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(deviceId: String, accountId: String, identityKey: Data, firstSeenAt: Int64) {
+        self.deviceId = deviceId
+        self.accountId = accountId
+        self.identityKey = identityKey
+        self.firstSeenAt = firstSeenAt
+    }
+
+    
+}
+
+#if compiler(>=6)
+extension LocalPeerDevice: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeLocalPeerDevice: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> LocalPeerDevice {
+        return
+            try LocalPeerDevice(
+                deviceId: FfiConverterString.read(from: &buf), 
+                accountId: FfiConverterString.read(from: &buf), 
+                identityKey: FfiConverterData.read(from: &buf), 
+                firstSeenAt: FfiConverterInt64.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: LocalPeerDevice, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.deviceId, into: &buf)
+        FfiConverterString.write(value.accountId, into: &buf)
+        FfiConverterData.write(value.identityKey, into: &buf)
+        FfiConverterInt64.write(value.firstSeenAt, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLocalPeerDevice_lift(_ buf: RustBuffer) throws -> LocalPeerDevice {
+    return try FfiConverterTypeLocalPeerDevice.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLocalPeerDevice_lower(_ value: LocalPeerDevice) -> RustBuffer {
+    return FfiConverterTypeLocalPeerDevice.lower(value)
+}
+
+
+/**
+ * One decrypted chunk of an incoming message not yet complete.
+ */
+public struct LocalPendingChunk: Equatable, Hashable {
+    public var senderId: String
+    public var messageId: String
+    public var chunkIndex: UInt32
+    public var totalChunks: UInt32
+    public var plaintextLength: UInt64
+    public var contentType: UInt8
+    public var payload: Data
+    /**
+     * The envelope that carried it.
+     */
+    public var envelopeId: String?
+    public var receivedAt: Int64
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(senderId: String, messageId: String, chunkIndex: UInt32, totalChunks: UInt32, plaintextLength: UInt64, contentType: UInt8, payload: Data, 
+        /**
+         * The envelope that carried it.
+         */envelopeId: String?, receivedAt: Int64) {
+        self.senderId = senderId
+        self.messageId = messageId
+        self.chunkIndex = chunkIndex
+        self.totalChunks = totalChunks
+        self.plaintextLength = plaintextLength
+        self.contentType = contentType
+        self.payload = payload
+        self.envelopeId = envelopeId
+        self.receivedAt = receivedAt
+    }
+
+    
+}
+
+#if compiler(>=6)
+extension LocalPendingChunk: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeLocalPendingChunk: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> LocalPendingChunk {
+        return
+            try LocalPendingChunk(
+                senderId: FfiConverterString.read(from: &buf), 
+                messageId: FfiConverterString.read(from: &buf), 
+                chunkIndex: FfiConverterUInt32.read(from: &buf), 
+                totalChunks: FfiConverterUInt32.read(from: &buf), 
+                plaintextLength: FfiConverterUInt64.read(from: &buf), 
+                contentType: FfiConverterUInt8.read(from: &buf), 
+                payload: FfiConverterData.read(from: &buf), 
+                envelopeId: FfiConverterOptionString.read(from: &buf), 
+                receivedAt: FfiConverterInt64.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: LocalPendingChunk, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.senderId, into: &buf)
+        FfiConverterString.write(value.messageId, into: &buf)
+        FfiConverterUInt32.write(value.chunkIndex, into: &buf)
+        FfiConverterUInt32.write(value.totalChunks, into: &buf)
+        FfiConverterUInt64.write(value.plaintextLength, into: &buf)
+        FfiConverterUInt8.write(value.contentType, into: &buf)
+        FfiConverterData.write(value.payload, into: &buf)
+        FfiConverterOptionString.write(value.envelopeId, into: &buf)
+        FfiConverterInt64.write(value.receivedAt, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLocalPendingChunk_lift(_ buf: RustBuffer) throws -> LocalPendingChunk {
+    return try FfiConverterTypeLocalPendingChunk.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLocalPendingChunk_lower(_ value: LocalPendingChunk) -> RustBuffer {
+    return FfiConverterTypeLocalPendingChunk.lower(value)
+}
+
+
+public struct LocalPendingChunkMessage: Equatable, Hashable {
+    public var senderId: String
+    public var messageId: String
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(senderId: String, messageId: String) {
+        self.senderId = senderId
+        self.messageId = messageId
+    }
+
+    
+}
+
+#if compiler(>=6)
+extension LocalPendingChunkMessage: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeLocalPendingChunkMessage: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> LocalPendingChunkMessage {
+        return
+            try LocalPendingChunkMessage(
+                senderId: FfiConverterString.read(from: &buf), 
+                messageId: FfiConverterString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: LocalPendingChunkMessage, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.senderId, into: &buf)
+        FfiConverterString.write(value.messageId, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLocalPendingChunkMessage_lift(_ buf: RustBuffer) throws -> LocalPendingChunkMessage {
+    return try FfiConverterTypeLocalPendingChunkMessage.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLocalPendingChunkMessage_lower(_ value: LocalPendingChunkMessage) -> RustBuffer {
+    return FfiConverterTypeLocalPendingChunkMessage.lower(value)
+}
+
+
+/**
+ * A message the core asked to send again to one device; `message_id` is the id the reader named.
+ */
+public struct LocalPendingResend: Equatable, Hashable {
+    public var messageId: String
+    public var deviceId: String
+    public var accountId: String
+    public var createdAt: Int64
+    public var attempts: UInt32
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(messageId: String, deviceId: String, accountId: String, createdAt: Int64, attempts: UInt32) {
+        self.messageId = messageId
+        self.deviceId = deviceId
+        self.accountId = accountId
+        self.createdAt = createdAt
+        self.attempts = attempts
+    }
+
+    
+}
+
+#if compiler(>=6)
+extension LocalPendingResend: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeLocalPendingResend: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> LocalPendingResend {
+        return
+            try LocalPendingResend(
+                messageId: FfiConverterString.read(from: &buf), 
+                deviceId: FfiConverterString.read(from: &buf), 
+                accountId: FfiConverterString.read(from: &buf), 
+                createdAt: FfiConverterInt64.read(from: &buf), 
+                attempts: FfiConverterUInt32.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: LocalPendingResend, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.messageId, into: &buf)
+        FfiConverterString.write(value.deviceId, into: &buf)
+        FfiConverterString.write(value.accountId, into: &buf)
+        FfiConverterInt64.write(value.createdAt, into: &buf)
+        FfiConverterUInt32.write(value.attempts, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLocalPendingResend_lift(_ buf: RustBuffer) throws -> LocalPendingResend {
+    return try FfiConverterTypeLocalPendingResend.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLocalPendingResend_lower(_ value: LocalPendingResend) -> RustBuffer {
+    return FfiConverterTypeLocalPendingResend.lower(value)
+}
+
+
+public struct LocalReaction: Equatable, Hashable {
+    public var targetMessageId: String
+    public var reactorUserId: String
+    public var emoji: String
+    public var timestampMs: Int64
+    public var receivedAt: Int64?
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(targetMessageId: String, reactorUserId: String, emoji: String, timestampMs: Int64, receivedAt: Int64?) {
+        self.targetMessageId = targetMessageId
+        self.reactorUserId = reactorUserId
+        self.emoji = emoji
+        self.timestampMs = timestampMs
+        self.receivedAt = receivedAt
+    }
+
+    
+}
+
+#if compiler(>=6)
+extension LocalReaction: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeLocalReaction: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> LocalReaction {
+        return
+            try LocalReaction(
+                targetMessageId: FfiConverterString.read(from: &buf), 
+                reactorUserId: FfiConverterString.read(from: &buf), 
+                emoji: FfiConverterString.read(from: &buf), 
+                timestampMs: FfiConverterInt64.read(from: &buf), 
+                receivedAt: FfiConverterOptionInt64.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: LocalReaction, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.targetMessageId, into: &buf)
+        FfiConverterString.write(value.reactorUserId, into: &buf)
+        FfiConverterString.write(value.emoji, into: &buf)
+        FfiConverterInt64.write(value.timestampMs, into: &buf)
+        FfiConverterOptionInt64.write(value.receivedAt, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLocalReaction_lift(_ buf: RustBuffer) throws -> LocalReaction {
+    return try FfiConverterTypeLocalReaction.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLocalReaction_lower(_ value: LocalReaction) -> RustBuffer {
+    return FfiConverterTypeLocalReaction.lower(value)
+}
+
+
+public struct LocalSearchHit: Equatable, Hashable {
+    public var messageId: String
+    public var chatId: String
+    public var timestamp: Int64
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(messageId: String, chatId: String, timestamp: Int64) {
+        self.messageId = messageId
+        self.chatId = chatId
+        self.timestamp = timestamp
+    }
+
+    
+}
+
+#if compiler(>=6)
+extension LocalSearchHit: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeLocalSearchHit: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> LocalSearchHit {
+        return
+            try LocalSearchHit(
+                messageId: FfiConverterString.read(from: &buf), 
+                chatId: FfiConverterString.read(from: &buf), 
+                timestamp: FfiConverterInt64.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: LocalSearchHit, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.messageId, into: &buf)
+        FfiConverterString.write(value.chatId, into: &buf)
+        FfiConverterInt64.write(value.timestamp, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLocalSearchHit_lift(_ buf: RustBuffer) throws -> LocalSearchHit {
+    return try FfiConverterTypeLocalSearchHit.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLocalSearchHit_lower(_ value: LocalSearchHit) -> RustBuffer {
+    return FfiConverterTypeLocalSearchHit.lower(value)
+}
+
+
+public struct LocalStoreChange: Equatable, Hashable {
+    public var table: LocalStoreTable
+    public var ids: [String]
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(table: LocalStoreTable, ids: [String]) {
+        self.table = table
+        self.ids = ids
+    }
+
+    
+}
+
+#if compiler(>=6)
+extension LocalStoreChange: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeLocalStoreChange: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> LocalStoreChange {
+        return
+            try LocalStoreChange(
+                table: FfiConverterTypeLocalStoreTable.read(from: &buf), 
+                ids: FfiConverterSequenceString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: LocalStoreChange, into buf: inout [UInt8]) {
+        FfiConverterTypeLocalStoreTable.write(value.table, into: &buf)
+        FfiConverterSequenceString.write(value.ids, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLocalStoreChange_lift(_ buf: RustBuffer) throws -> LocalStoreChange {
+    return try FfiConverterTypeLocalStoreChange.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLocalStoreChange_lower(_ value: LocalStoreChange) -> RustBuffer {
+    return FfiConverterTypeLocalStoreChange.lower(value)
 }
 
 
@@ -3960,21 +7509,21 @@ public struct MldsaKeyPair: Equatable, Hashable {
     /**
      * Secret key: 32-byte signing seed (RustCrypto ml-dsa; expanded key re-derived on sign)
      */
-    public var secretKey: [UInt8]
+    public var secretKey: Data
     /**
      * Public key: 1952 bytes
      */
-    public var publicKey: [UInt8]
+    public var publicKey: Data
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
     public init(
         /**
          * Secret key: 32-byte signing seed (RustCrypto ml-dsa; expanded key re-derived on sign)
-         */secretKey: [UInt8], 
+         */secretKey: Data, 
         /**
          * Public key: 1952 bytes
-         */publicKey: [UInt8]) {
+         */publicKey: Data) {
         self.secretKey = secretKey
         self.publicKey = publicKey
     }
@@ -3993,14 +7542,14 @@ public struct FfiConverterTypeMLDSAKeyPair: FfiConverterRustBuffer {
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> MldsaKeyPair {
         return
             try MldsaKeyPair(
-                secretKey: FfiConverterSequenceUInt8.read(from: &buf), 
-                publicKey: FfiConverterSequenceUInt8.read(from: &buf)
+                secretKey: FfiConverterData.read(from: &buf), 
+                publicKey: FfiConverterData.read(from: &buf)
         )
     }
 
     public static func write(_ value: MldsaKeyPair, into buf: inout [UInt8]) {
-        FfiConverterSequenceUInt8.write(value.secretKey, into: &buf)
-        FfiConverterSequenceUInt8.write(value.publicKey, into: &buf)
+        FfiConverterData.write(value.secretKey, into: &buf)
+        FfiConverterData.write(value.publicKey, into: &buf)
     }
 }
 
@@ -4021,15 +7570,15 @@ public func FfiConverterTypeMLDSAKeyPair_lower(_ value: MldsaKeyPair) -> RustBuf
 
 
 /**
- * Result of ML-KEM-768 encapsulation (sender side of PQXDH handshake).
+ * Result of an ML-KEM-1024 encapsulation (history transfer to a peer's Kyber SPK).
  */
 public struct MlkemEncapsulation: Equatable, Hashable {
-    public var ciphertext: [UInt8]
-    public var sharedSecret: [UInt8]
+    public var ciphertext: Data
+    public var sharedSecret: Data
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(ciphertext: [UInt8], sharedSecret: [UInt8]) {
+    public init(ciphertext: Data, sharedSecret: Data) {
         self.ciphertext = ciphertext
         self.sharedSecret = sharedSecret
     }
@@ -4048,14 +7597,14 @@ public struct FfiConverterTypeMLKEMEncapsulation: FfiConverterRustBuffer {
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> MlkemEncapsulation {
         return
             try MlkemEncapsulation(
-                ciphertext: FfiConverterSequenceUInt8.read(from: &buf), 
-                sharedSecret: FfiConverterSequenceUInt8.read(from: &buf)
+                ciphertext: FfiConverterData.read(from: &buf), 
+                sharedSecret: FfiConverterData.read(from: &buf)
         )
     }
 
     public static func write(_ value: MlkemEncapsulation, into buf: inout [UInt8]) {
-        FfiConverterSequenceUInt8.write(value.ciphertext, into: &buf)
-        FfiConverterSequenceUInt8.write(value.sharedSecret, into: &buf)
+        FfiConverterData.write(value.ciphertext, into: &buf)
+        FfiConverterData.write(value.sharedSecret, into: &buf)
     }
 }
 
@@ -4076,73 +7625,18 @@ public func FfiConverterTypeMLKEMEncapsulation_lower(_ value: MlkemEncapsulation
 
 
 /**
- * Generated ML-KEM-768 keypair (for Kyber Signed Pre-Key or One-Time Pre-Key upload).
- */
-public struct MlkemKeyPair: Equatable, Hashable {
-    public var publicKey: [UInt8]
-    public var secretKey: [UInt8]
-
-    // Default memberwise initializers are never public by default, so we
-    // declare one manually.
-    public init(publicKey: [UInt8], secretKey: [UInt8]) {
-        self.publicKey = publicKey
-        self.secretKey = secretKey
-    }
-
-    
-}
-
-#if compiler(>=6)
-extension MlkemKeyPair: Sendable {}
-#endif
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public struct FfiConverterTypeMLKEMKeyPair: FfiConverterRustBuffer {
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> MlkemKeyPair {
-        return
-            try MlkemKeyPair(
-                publicKey: FfiConverterSequenceUInt8.read(from: &buf), 
-                secretKey: FfiConverterSequenceUInt8.read(from: &buf)
-        )
-    }
-
-    public static func write(_ value: MlkemKeyPair, into buf: inout [UInt8]) {
-        FfiConverterSequenceUInt8.write(value.publicKey, into: &buf)
-        FfiConverterSequenceUInt8.write(value.secretKey, into: &buf)
-    }
-}
-
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypeMLKEMKeyPair_lift(_ buf: RustBuffer) throws -> MlkemKeyPair {
-    return try FfiConverterTypeMLKEMKeyPair.lift(buf)
-}
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypeMLKEMKeyPair_lower(_ value: MlkemKeyPair) -> RustBuffer {
-    return FfiConverterTypeMLKEMKeyPair.lower(value)
-}
-
-
-/**
  * Result of adding a member to an MLS group.
  * `commit` is broadcast to current members (SubmitCommit); `welcome` is
  * delivered to the new member (InviteToGroup).
  */
 public struct MemberAddition: Equatable, Hashable {
-    public var commit: [UInt8]
-    public var welcome: [UInt8]
+    public var commit: Data
+    public var welcome: Data
     public var memberCount: UInt32
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(commit: [UInt8], welcome: [UInt8], memberCount: UInt32) {
+    public init(commit: Data, welcome: Data, memberCount: UInt32) {
         self.commit = commit
         self.welcome = welcome
         self.memberCount = memberCount
@@ -4162,15 +7656,15 @@ public struct FfiConverterTypeMemberAddition: FfiConverterRustBuffer {
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> MemberAddition {
         return
             try MemberAddition(
-                commit: FfiConverterSequenceUInt8.read(from: &buf), 
-                welcome: FfiConverterSequenceUInt8.read(from: &buf), 
+                commit: FfiConverterData.read(from: &buf), 
+                welcome: FfiConverterData.read(from: &buf), 
                 memberCount: FfiConverterUInt32.read(from: &buf)
         )
     }
 
     public static func write(_ value: MemberAddition, into buf: inout [UInt8]) {
-        FfiConverterSequenceUInt8.write(value.commit, into: &buf)
-        FfiConverterSequenceUInt8.write(value.welcome, into: &buf)
+        FfiConverterData.write(value.commit, into: &buf)
+        FfiConverterData.write(value.welcome, into: &buf)
         FfiConverterUInt32.write(value.memberCount, into: &buf)
     }
 }
@@ -4191,156 +7685,13 @@ public func FfiConverterTypeMemberAddition_lower(_ value: MemberAddition) -> Rus
 }
 
 
-/**
- * Input slot for decrypt_offline_batch.
- */
-public struct OfflineBatchMessage: Equatable, Hashable {
-    public var id: String
-    public var contactId: String
-    public var ephemeralPublicKey: [UInt8]
-    public var messageNumber: UInt32
-    public var content: [UInt8]
-    public var suiteId: UInt16
-    public var pqMessageEpoch: UInt32
-    public var pqRatchetField: [UInt8]
-
-    // Default memberwise initializers are never public by default, so we
-    // declare one manually.
-    public init(id: String, contactId: String, ephemeralPublicKey: [UInt8], messageNumber: UInt32, content: [UInt8], suiteId: UInt16, pqMessageEpoch: UInt32, pqRatchetField: [UInt8]) {
-        self.id = id
-        self.contactId = contactId
-        self.ephemeralPublicKey = ephemeralPublicKey
-        self.messageNumber = messageNumber
-        self.content = content
-        self.suiteId = suiteId
-        self.pqMessageEpoch = pqMessageEpoch
-        self.pqRatchetField = pqRatchetField
-    }
-
-    
-}
-
-#if compiler(>=6)
-extension OfflineBatchMessage: Sendable {}
-#endif
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public struct FfiConverterTypeOfflineBatchMessage: FfiConverterRustBuffer {
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> OfflineBatchMessage {
-        return
-            try OfflineBatchMessage(
-                id: FfiConverterString.read(from: &buf), 
-                contactId: FfiConverterString.read(from: &buf), 
-                ephemeralPublicKey: FfiConverterSequenceUInt8.read(from: &buf), 
-                messageNumber: FfiConverterUInt32.read(from: &buf), 
-                content: FfiConverterSequenceUInt8.read(from: &buf), 
-                suiteId: FfiConverterUInt16.read(from: &buf), 
-                pqMessageEpoch: FfiConverterUInt32.read(from: &buf), 
-                pqRatchetField: FfiConverterSequenceUInt8.read(from: &buf)
-        )
-    }
-
-    public static func write(_ value: OfflineBatchMessage, into buf: inout [UInt8]) {
-        FfiConverterString.write(value.id, into: &buf)
-        FfiConverterString.write(value.contactId, into: &buf)
-        FfiConverterSequenceUInt8.write(value.ephemeralPublicKey, into: &buf)
-        FfiConverterUInt32.write(value.messageNumber, into: &buf)
-        FfiConverterSequenceUInt8.write(value.content, into: &buf)
-        FfiConverterUInt16.write(value.suiteId, into: &buf)
-        FfiConverterUInt32.write(value.pqMessageEpoch, into: &buf)
-        FfiConverterSequenceUInt8.write(value.pqRatchetField, into: &buf)
-    }
-}
-
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypeOfflineBatchMessage_lift(_ buf: RustBuffer) throws -> OfflineBatchMessage {
-    return try FfiConverterTypeOfflineBatchMessage.lift(buf)
-}
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypeOfflineBatchMessage_lower(_ value: OfflineBatchMessage) -> RustBuffer {
-    return FfiConverterTypeOfflineBatchMessage.lower(value)
-}
-
-
-/**
- * Per-message result from decrypt_offline_batch.
- * Exactly one of plaintext / error is populated.
- */
-public struct OfflineBatchResult: Equatable, Hashable {
-    public var id: String
-    public var plaintext: [UInt8]?
-    public var error: String?
-    public var storageKey: [UInt8]
-
-    // Default memberwise initializers are never public by default, so we
-    // declare one manually.
-    public init(id: String, plaintext: [UInt8]?, error: String?, storageKey: [UInt8]) {
-        self.id = id
-        self.plaintext = plaintext
-        self.error = error
-        self.storageKey = storageKey
-    }
-
-    
-}
-
-#if compiler(>=6)
-extension OfflineBatchResult: Sendable {}
-#endif
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public struct FfiConverterTypeOfflineBatchResult: FfiConverterRustBuffer {
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> OfflineBatchResult {
-        return
-            try OfflineBatchResult(
-                id: FfiConverterString.read(from: &buf), 
-                plaintext: FfiConverterOptionSequenceUInt8.read(from: &buf), 
-                error: FfiConverterOptionString.read(from: &buf), 
-                storageKey: FfiConverterSequenceUInt8.read(from: &buf)
-        )
-    }
-
-    public static func write(_ value: OfflineBatchResult, into buf: inout [UInt8]) {
-        FfiConverterString.write(value.id, into: &buf)
-        FfiConverterOptionSequenceUInt8.write(value.plaintext, into: &buf)
-        FfiConverterOptionString.write(value.error, into: &buf)
-        FfiConverterSequenceUInt8.write(value.storageKey, into: &buf)
-    }
-}
-
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypeOfflineBatchResult_lift(_ buf: RustBuffer) throws -> OfflineBatchResult {
-    return try FfiConverterTypeOfflineBatchResult.lift(buf)
-}
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypeOfflineBatchResult_lower(_ value: OfflineBatchResult) -> RustBuffer {
-    return FfiConverterTypeOfflineBatchResult.lower(value)
-}
-
-
 public struct OtpkPair: Equatable, Hashable {
     public var keyId: UInt32
-    public var publicKey: [UInt8]
+    public var publicKey: Data
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(keyId: UInt32, publicKey: [UInt8]) {
+    public init(keyId: UInt32, publicKey: Data) {
         self.keyId = keyId
         self.publicKey = publicKey
     }
@@ -4360,13 +7711,13 @@ public struct FfiConverterTypeOtpkPair: FfiConverterRustBuffer {
         return
             try OtpkPair(
                 keyId: FfiConverterUInt32.read(from: &buf), 
-                publicKey: FfiConverterSequenceUInt8.read(from: &buf)
+                publicKey: FfiConverterData.read(from: &buf)
         )
     }
 
     public static func write(_ value: OtpkPair, into buf: inout [UInt8]) {
         FfiConverterUInt32.write(value.keyId, into: &buf)
-        FfiConverterSequenceUInt8.write(value.publicKey, into: &buf)
+        FfiConverterData.write(value.publicKey, into: &buf)
     }
 }
 
@@ -4388,12 +7739,12 @@ public func FfiConverterTypeOtpkPair_lower(_ value: OtpkPair) -> RustBuffer {
 
 public struct OtpkRecord: Equatable, Hashable {
     public var keyId: UInt32
-    public var privateKey: [UInt8]
-    public var publicKey: [UInt8]
+    public var privateKey: Data
+    public var publicKey: Data
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(keyId: UInt32, privateKey: [UInt8], publicKey: [UInt8]) {
+    public init(keyId: UInt32, privateKey: Data, publicKey: Data) {
         self.keyId = keyId
         self.privateKey = privateKey
         self.publicKey = publicKey
@@ -4414,15 +7765,15 @@ public struct FfiConverterTypeOtpkRecord: FfiConverterRustBuffer {
         return
             try OtpkRecord(
                 keyId: FfiConverterUInt32.read(from: &buf), 
-                privateKey: FfiConverterSequenceUInt8.read(from: &buf), 
-                publicKey: FfiConverterSequenceUInt8.read(from: &buf)
+                privateKey: FfiConverterData.read(from: &buf), 
+                publicKey: FfiConverterData.read(from: &buf)
         )
     }
 
     public static func write(_ value: OtpkRecord, into buf: inout [UInt8]) {
         FfiConverterUInt32.write(value.keyId, into: &buf)
-        FfiConverterSequenceUInt8.write(value.privateKey, into: &buf)
-        FfiConverterSequenceUInt8.write(value.publicKey, into: &buf)
+        FfiConverterData.write(value.privateKey, into: &buf)
+        FfiConverterData.write(value.publicKey, into: &buf)
     }
 }
 
@@ -4627,63 +7978,7 @@ public func FfiConverterTypePrivateKeysJson_lower(_ value: PrivateKeysJson) -> R
 
 
 /**
- * One attempt: open carrier `carrier_index` against bundle `bundle_index`.
- * Indices into the caller's own arrays.
- */
-public struct ReceivingInitAttempt: Equatable, Hashable {
-    public var carrierIndex: UInt32
-    public var bundleIndex: UInt32
-
-    // Default memberwise initializers are never public by default, so we
-    // declare one manually.
-    public init(carrierIndex: UInt32, bundleIndex: UInt32) {
-        self.carrierIndex = carrierIndex
-        self.bundleIndex = bundleIndex
-    }
-
-    
-}
-
-#if compiler(>=6)
-extension ReceivingInitAttempt: Sendable {}
-#endif
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public struct FfiConverterTypeReceivingInitAttempt: FfiConverterRustBuffer {
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ReceivingInitAttempt {
-        return
-            try ReceivingInitAttempt(
-                carrierIndex: FfiConverterUInt32.read(from: &buf), 
-                bundleIndex: FfiConverterUInt32.read(from: &buf)
-        )
-    }
-
-    public static func write(_ value: ReceivingInitAttempt, into buf: inout [UInt8]) {
-        FfiConverterUInt32.write(value.carrierIndex, into: &buf)
-        FfiConverterUInt32.write(value.bundleIndex, into: &buf)
-    }
-}
-
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypeReceivingInitAttempt_lift(_ buf: RustBuffer) throws -> ReceivingInitAttempt {
-    return try FfiConverterTypeReceivingInitAttempt.lift(buf)
-}
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypeReceivingInitAttempt_lower(_ value: ReceivingInitAttempt) -> RustBuffer {
-    return FfiConverterTypeReceivingInitAttempt.lower(value)
-}
-
-
-/**
- * The wire-visible shape of a queued message, for planning a receiving-session init.
+ * The wire-visible shape of a queued message, for `receiving_init_kind`.
  * No ciphertext: deciding whether a message *could* open a session must not require its body.
  */
 public struct ReceivingInitCarrier: Equatable, Hashable {
@@ -4691,16 +7986,14 @@ public struct ReceivingInitCarrier: Equatable, Hashable {
     public var oneTimePrekeyId: UInt32
     public var kemCiphertextBytes: UInt32
     public var pqMessageEpoch: UInt32
-    public var isSessionResetInit: Bool
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(messageNumber: UInt32, oneTimePrekeyId: UInt32, kemCiphertextBytes: UInt32, pqMessageEpoch: UInt32, isSessionResetInit: Bool) {
+    public init(messageNumber: UInt32, oneTimePrekeyId: UInt32, kemCiphertextBytes: UInt32, pqMessageEpoch: UInt32) {
         self.messageNumber = messageNumber
         self.oneTimePrekeyId = oneTimePrekeyId
         self.kemCiphertextBytes = kemCiphertextBytes
         self.pqMessageEpoch = pqMessageEpoch
-        self.isSessionResetInit = isSessionResetInit
     }
 
     
@@ -4720,8 +8013,7 @@ public struct FfiConverterTypeReceivingInitCarrier: FfiConverterRustBuffer {
                 messageNumber: FfiConverterUInt32.read(from: &buf), 
                 oneTimePrekeyId: FfiConverterUInt32.read(from: &buf), 
                 kemCiphertextBytes: FfiConverterUInt32.read(from: &buf), 
-                pqMessageEpoch: FfiConverterUInt32.read(from: &buf), 
-                isSessionResetInit: FfiConverterBool.read(from: &buf)
+                pqMessageEpoch: FfiConverterUInt32.read(from: &buf)
         )
     }
 
@@ -4730,7 +8022,6 @@ public struct FfiConverterTypeReceivingInitCarrier: FfiConverterRustBuffer {
         FfiConverterUInt32.write(value.oneTimePrekeyId, into: &buf)
         FfiConverterUInt32.write(value.kemCiphertextBytes, into: &buf)
         FfiConverterUInt32.write(value.pqMessageEpoch, into: &buf)
-        FfiConverterBool.write(value.isSessionResetInit, into: &buf)
     }
 }
 
@@ -4750,13 +8041,89 @@ public func FfiConverterTypeReceivingInitCarrier_lower(_ value: ReceivingInitCar
 }
 
 
-public struct RecoveryKeypair: Equatable, Hashable {
-    public var privateKey: [UInt8]
-    public var publicKey: [UInt8]
+public struct ReceivingOpenResult: Equatable, Hashable {
+    public var openedDevice: String?
+    public var openerMessageId: String?
+    public var actions: [CfeAction]
+    public var triedMessageIds: [String]
+    public var droppedMessageIds: [String]
+    public var lastError: String?
+    public var kyberPrekeys: Data?
+    public var awaitingServerKey: Bool
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(privateKey: [UInt8], publicKey: [UInt8]) {
+    public init(openedDevice: String?, openerMessageId: String?, actions: [CfeAction], triedMessageIds: [String], droppedMessageIds: [String], lastError: String?, kyberPrekeys: Data?, awaitingServerKey: Bool) {
+        self.openedDevice = openedDevice
+        self.openerMessageId = openerMessageId
+        self.actions = actions
+        self.triedMessageIds = triedMessageIds
+        self.droppedMessageIds = droppedMessageIds
+        self.lastError = lastError
+        self.kyberPrekeys = kyberPrekeys
+        self.awaitingServerKey = awaitingServerKey
+    }
+
+    
+}
+
+#if compiler(>=6)
+extension ReceivingOpenResult: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeReceivingOpenResult: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ReceivingOpenResult {
+        return
+            try ReceivingOpenResult(
+                openedDevice: FfiConverterOptionString.read(from: &buf), 
+                openerMessageId: FfiConverterOptionString.read(from: &buf), 
+                actions: FfiConverterSequenceTypeCfeAction.read(from: &buf), 
+                triedMessageIds: FfiConverterSequenceString.read(from: &buf), 
+                droppedMessageIds: FfiConverterSequenceString.read(from: &buf), 
+                lastError: FfiConverterOptionString.read(from: &buf), 
+                kyberPrekeys: FfiConverterOptionData.read(from: &buf), 
+                awaitingServerKey: FfiConverterBool.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: ReceivingOpenResult, into buf: inout [UInt8]) {
+        FfiConverterOptionString.write(value.openedDevice, into: &buf)
+        FfiConverterOptionString.write(value.openerMessageId, into: &buf)
+        FfiConverterSequenceTypeCfeAction.write(value.actions, into: &buf)
+        FfiConverterSequenceString.write(value.triedMessageIds, into: &buf)
+        FfiConverterSequenceString.write(value.droppedMessageIds, into: &buf)
+        FfiConverterOptionString.write(value.lastError, into: &buf)
+        FfiConverterOptionData.write(value.kyberPrekeys, into: &buf)
+        FfiConverterBool.write(value.awaitingServerKey, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeReceivingOpenResult_lift(_ buf: RustBuffer) throws -> ReceivingOpenResult {
+    return try FfiConverterTypeReceivingOpenResult.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeReceivingOpenResult_lower(_ value: ReceivingOpenResult) -> RustBuffer {
+    return FfiConverterTypeReceivingOpenResult.lower(value)
+}
+
+
+public struct RecoveryKeypair: Equatable, Hashable {
+    public var privateKey: Data
+    public var publicKey: Data
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(privateKey: Data, publicKey: Data) {
         self.privateKey = privateKey
         self.publicKey = publicKey
     }
@@ -4775,14 +8142,14 @@ public struct FfiConverterTypeRecoveryKeypair: FfiConverterRustBuffer {
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> RecoveryKeypair {
         return
             try RecoveryKeypair(
-                privateKey: FfiConverterSequenceUInt8.read(from: &buf), 
-                publicKey: FfiConverterSequenceUInt8.read(from: &buf)
+                privateKey: FfiConverterData.read(from: &buf), 
+                publicKey: FfiConverterData.read(from: &buf)
         )
     }
 
     public static func write(_ value: RecoveryKeypair, into buf: inout [UInt8]) {
-        FfiConverterSequenceUInt8.write(value.privateKey, into: &buf)
-        FfiConverterSequenceUInt8.write(value.publicKey, into: &buf)
+        FfiConverterData.write(value.privateKey, into: &buf)
+        FfiConverterData.write(value.publicKey, into: &buf)
     }
 }
 
@@ -4803,15 +8170,15 @@ public func FfiConverterTypeRecoveryKeypair_lower(_ value: RecoveryKeypair) -> R
 
 
 public struct RegistrationBundleFields: Equatable, Hashable {
-    public var identityPublic: [UInt8]
-    public var signedPrekeyPublic: [UInt8]
-    public var signature: [UInt8]
-    public var verifyingKey: [UInt8]
+    public var identityPublic: Data
+    public var signedPrekeyPublic: Data
+    public var signature: Data
+    public var verifyingKey: Data
     public var suiteId: UInt16
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(identityPublic: [UInt8], signedPrekeyPublic: [UInt8], signature: [UInt8], verifyingKey: [UInt8], suiteId: UInt16) {
+    public init(identityPublic: Data, signedPrekeyPublic: Data, signature: Data, verifyingKey: Data, suiteId: UInt16) {
         self.identityPublic = identityPublic
         self.signedPrekeyPublic = signedPrekeyPublic
         self.signature = signature
@@ -4833,19 +8200,19 @@ public struct FfiConverterTypeRegistrationBundleFields: FfiConverterRustBuffer {
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> RegistrationBundleFields {
         return
             try RegistrationBundleFields(
-                identityPublic: FfiConverterSequenceUInt8.read(from: &buf), 
-                signedPrekeyPublic: FfiConverterSequenceUInt8.read(from: &buf), 
-                signature: FfiConverterSequenceUInt8.read(from: &buf), 
-                verifyingKey: FfiConverterSequenceUInt8.read(from: &buf), 
+                identityPublic: FfiConverterData.read(from: &buf), 
+                signedPrekeyPublic: FfiConverterData.read(from: &buf), 
+                signature: FfiConverterData.read(from: &buf), 
+                verifyingKey: FfiConverterData.read(from: &buf), 
                 suiteId: FfiConverterUInt16.read(from: &buf)
         )
     }
 
     public static func write(_ value: RegistrationBundleFields, into buf: inout [UInt8]) {
-        FfiConverterSequenceUInt8.write(value.identityPublic, into: &buf)
-        FfiConverterSequenceUInt8.write(value.signedPrekeyPublic, into: &buf)
-        FfiConverterSequenceUInt8.write(value.signature, into: &buf)
-        FfiConverterSequenceUInt8.write(value.verifyingKey, into: &buf)
+        FfiConverterData.write(value.identityPublic, into: &buf)
+        FfiConverterData.write(value.signedPrekeyPublic, into: &buf)
+        FfiConverterData.write(value.signature, into: &buf)
+        FfiConverterData.write(value.verifyingKey, into: &buf)
         FfiConverterUInt16.write(value.suiteId, into: &buf)
     }
 }
@@ -4867,16 +8234,88 @@ public func FfiConverterTypeRegistrationBundleFields_lower(_ value: Registration
 
 
 /**
+ * How late messages arrive, for this process (PQR-4, construct-docs TODO 64.3). Local
+ * diagnostics for the platform's log: never sent anywhere.
+ */
+public struct ReorderStats: Equatable, Hashable {
+    public var decrypted: UInt64
+    public var previousEpoch: UInt64
+    public var olderEpoch: UInt64
+    public var maxEpochLag: UInt32
+    public var maxSkipDepth: UInt32
+    public var evictedEpochFailures: UInt64
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(decrypted: UInt64, previousEpoch: UInt64, olderEpoch: UInt64, maxEpochLag: UInt32, maxSkipDepth: UInt32, evictedEpochFailures: UInt64) {
+        self.decrypted = decrypted
+        self.previousEpoch = previousEpoch
+        self.olderEpoch = olderEpoch
+        self.maxEpochLag = maxEpochLag
+        self.maxSkipDepth = maxSkipDepth
+        self.evictedEpochFailures = evictedEpochFailures
+    }
+
+    
+}
+
+#if compiler(>=6)
+extension ReorderStats: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeReorderStats: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ReorderStats {
+        return
+            try ReorderStats(
+                decrypted: FfiConverterUInt64.read(from: &buf), 
+                previousEpoch: FfiConverterUInt64.read(from: &buf), 
+                olderEpoch: FfiConverterUInt64.read(from: &buf), 
+                maxEpochLag: FfiConverterUInt32.read(from: &buf), 
+                maxSkipDepth: FfiConverterUInt32.read(from: &buf), 
+                evictedEpochFailures: FfiConverterUInt64.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: ReorderStats, into buf: inout [UInt8]) {
+        FfiConverterUInt64.write(value.decrypted, into: &buf)
+        FfiConverterUInt64.write(value.previousEpoch, into: &buf)
+        FfiConverterUInt64.write(value.olderEpoch, into: &buf)
+        FfiConverterUInt32.write(value.maxEpochLag, into: &buf)
+        FfiConverterUInt32.write(value.maxSkipDepth, into: &buf)
+        FfiConverterUInt64.write(value.evictedEpochFailures, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeReorderStats_lift(_ buf: RustBuffer) throws -> ReorderStats {
+    return try FfiConverterTypeReorderStats.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeReorderStats_lower(_ value: ReorderStats) -> RustBuffer {
+    return FfiConverterTypeReorderStats.lower(value)
+}
+
+
+/**
  * Result of a signed pre-key rotation.
  */
 public struct RotatedSpkBundle: Equatable, Hashable {
     public var keyId: UInt32
-    public var publicKey: [UInt8]
-    public var signature: [UInt8]
+    public var publicKey: Data
+    public var signature: Data
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(keyId: UInt32, publicKey: [UInt8], signature: [UInt8]) {
+    public init(keyId: UInt32, publicKey: Data, signature: Data) {
         self.keyId = keyId
         self.publicKey = publicKey
         self.signature = signature
@@ -4897,15 +8336,15 @@ public struct FfiConverterTypeRotatedSpkBundle: FfiConverterRustBuffer {
         return
             try RotatedSpkBundle(
                 keyId: FfiConverterUInt32.read(from: &buf), 
-                publicKey: FfiConverterSequenceUInt8.read(from: &buf), 
-                signature: FfiConverterSequenceUInt8.read(from: &buf)
+                publicKey: FfiConverterData.read(from: &buf), 
+                signature: FfiConverterData.read(from: &buf)
         )
     }
 
     public static func write(_ value: RotatedSpkBundle, into buf: inout [UInt8]) {
         FfiConverterUInt32.write(value.keyId, into: &buf)
-        FfiConverterSequenceUInt8.write(value.publicKey, into: &buf)
-        FfiConverterSequenceUInt8.write(value.signature, into: &buf)
+        FfiConverterData.write(value.publicKey, into: &buf)
+        FfiConverterData.write(value.signature, into: &buf)
     }
 }
 
@@ -4926,7 +8365,148 @@ public func FfiConverterTypeRotatedSpkBundle_lower(_ value: RotatedSpkBundle) ->
 
 
 /**
- * Read-only health snapshot of a Double Ratchet session.
+ * A parsed KNST frame. `message_id` is the dashed lowercase UUID; `payload` is everything after
+ * the header — for a control frame (`total_chunks == 1`) the body is its first
+ * `plaintext_length` bytes.
+ * See `seal_media`.
+ */
+public struct SealedMedia: Equatable, Hashable {
+    public var key: Data
+    public var blob: Data
+    public var sha256: Data
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(key: Data, blob: Data, sha256: Data) {
+        self.key = key
+        self.blob = blob
+        self.sha256 = sha256
+    }
+
+    
+}
+
+#if compiler(>=6)
+extension SealedMedia: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeSealedMedia: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SealedMedia {
+        return
+            try SealedMedia(
+                key: FfiConverterData.read(from: &buf), 
+                blob: FfiConverterData.read(from: &buf), 
+                sha256: FfiConverterData.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: SealedMedia, into buf: inout [UInt8]) {
+        FfiConverterData.write(value.key, into: &buf)
+        FfiConverterData.write(value.blob, into: &buf)
+        FfiConverterData.write(value.sha256, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeSealedMedia_lift(_ buf: RustBuffer) throws -> SealedMedia {
+    return try FfiConverterTypeSealedMedia.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeSealedMedia_lower(_ value: SealedMedia) -> RustBuffer {
+    return FfiConverterTypeSealedMedia.lower(value)
+}
+
+
+public struct SenderCertificate: Equatable, Hashable {
+    public var userId: String
+    public var domain: String
+    public var identityKey: Data
+    public var deviceId: String
+    public var issuedAt: Int64
+    public var expiresAt: Int64
+    public var signature: Data
+    public var serverKid: Data
+    public var serverSignatureHybrid: Data
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(userId: String, domain: String, identityKey: Data, deviceId: String, issuedAt: Int64, expiresAt: Int64, signature: Data, serverKid: Data, serverSignatureHybrid: Data) {
+        self.userId = userId
+        self.domain = domain
+        self.identityKey = identityKey
+        self.deviceId = deviceId
+        self.issuedAt = issuedAt
+        self.expiresAt = expiresAt
+        self.signature = signature
+        self.serverKid = serverKid
+        self.serverSignatureHybrid = serverSignatureHybrid
+    }
+
+    
+}
+
+#if compiler(>=6)
+extension SenderCertificate: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeSenderCertificate: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SenderCertificate {
+        return
+            try SenderCertificate(
+                userId: FfiConverterString.read(from: &buf), 
+                domain: FfiConverterString.read(from: &buf), 
+                identityKey: FfiConverterData.read(from: &buf), 
+                deviceId: FfiConverterString.read(from: &buf), 
+                issuedAt: FfiConverterInt64.read(from: &buf), 
+                expiresAt: FfiConverterInt64.read(from: &buf), 
+                signature: FfiConverterData.read(from: &buf), 
+                serverKid: FfiConverterData.read(from: &buf), 
+                serverSignatureHybrid: FfiConverterData.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: SenderCertificate, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.userId, into: &buf)
+        FfiConverterString.write(value.domain, into: &buf)
+        FfiConverterData.write(value.identityKey, into: &buf)
+        FfiConverterString.write(value.deviceId, into: &buf)
+        FfiConverterInt64.write(value.issuedAt, into: &buf)
+        FfiConverterInt64.write(value.expiresAt, into: &buf)
+        FfiConverterData.write(value.signature, into: &buf)
+        FfiConverterData.write(value.serverKid, into: &buf)
+        FfiConverterData.write(value.serverSignatureHybrid, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeSenderCertificate_lift(_ buf: RustBuffer) throws -> SenderCertificate {
+    return try FfiConverterTypeSenderCertificate.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeSenderCertificate_lower(_ value: SenderCertificate) -> RustBuffer {
+    return FfiConverterTypeSenderCertificate.lower(value)
+}
+
+
+/**
  * Returned by get_session_health(). Does not mutate session state.
  */
 public struct SessionHealthReport: Equatable, Hashable {
@@ -4936,16 +8516,20 @@ public struct SessionHealthReport: Equatable, Hashable {
     public var isPqStrengthened: Bool
     public var lastRatchetAt: UInt64
     public var sessionId: String
+    public var pqAuthentication: PqAuthentication
+    public var pqHandshake: PqHandshake
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(messagesSent: UInt32, messagesReceived: UInt32, skippedKeysCount: UInt32, isPqStrengthened: Bool, lastRatchetAt: UInt64, sessionId: String) {
+    public init(messagesSent: UInt32, messagesReceived: UInt32, skippedKeysCount: UInt32, isPqStrengthened: Bool, lastRatchetAt: UInt64, sessionId: String, pqAuthentication: PqAuthentication, pqHandshake: PqHandshake) {
         self.messagesSent = messagesSent
         self.messagesReceived = messagesReceived
         self.skippedKeysCount = skippedKeysCount
         self.isPqStrengthened = isPqStrengthened
         self.lastRatchetAt = lastRatchetAt
         self.sessionId = sessionId
+        self.pqAuthentication = pqAuthentication
+        self.pqHandshake = pqHandshake
     }
 
     
@@ -4967,7 +8551,9 @@ public struct FfiConverterTypeSessionHealthReport: FfiConverterRustBuffer {
                 skippedKeysCount: FfiConverterUInt32.read(from: &buf), 
                 isPqStrengthened: FfiConverterBool.read(from: &buf), 
                 lastRatchetAt: FfiConverterUInt64.read(from: &buf), 
-                sessionId: FfiConverterString.read(from: &buf)
+                sessionId: FfiConverterString.read(from: &buf), 
+                pqAuthentication: FfiConverterTypePqAuthentication.read(from: &buf), 
+                pqHandshake: FfiConverterTypePqHandshake.read(from: &buf)
         )
     }
 
@@ -4978,6 +8564,8 @@ public struct FfiConverterTypeSessionHealthReport: FfiConverterRustBuffer {
         FfiConverterBool.write(value.isPqStrengthened, into: &buf)
         FfiConverterUInt64.write(value.lastRatchetAt, into: &buf)
         FfiConverterString.write(value.sessionId, into: &buf)
+        FfiConverterTypePqAuthentication.write(value.pqAuthentication, into: &buf)
+        FfiConverterTypePqHandshake.write(value.pqHandshake, into: &buf)
     }
 }
 
@@ -4999,15 +8587,17 @@ public func FfiConverterTypeSessionHealthReport_lower(_ value: SessionHealthRepo
 
 public struct SessionInitResult: Equatable, Hashable {
     public var sessionId: String
-    public var decryptedMessage: [UInt8]
-    public var storageKey: [UInt8]
+    public var decryptedMessage: Data
+    public var storageKey: Data
+    public var kyberPrekeys: Data?
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(sessionId: String, decryptedMessage: [UInt8], storageKey: [UInt8]) {
+    public init(sessionId: String, decryptedMessage: Data, storageKey: Data, kyberPrekeys: Data?) {
         self.sessionId = sessionId
         self.decryptedMessage = decryptedMessage
         self.storageKey = storageKey
+        self.kyberPrekeys = kyberPrekeys
     }
 
     
@@ -5025,15 +8615,17 @@ public struct FfiConverterTypeSessionInitResult: FfiConverterRustBuffer {
         return
             try SessionInitResult(
                 sessionId: FfiConverterString.read(from: &buf), 
-                decryptedMessage: FfiConverterSequenceUInt8.read(from: &buf), 
-                storageKey: FfiConverterSequenceUInt8.read(from: &buf)
+                decryptedMessage: FfiConverterData.read(from: &buf), 
+                storageKey: FfiConverterData.read(from: &buf), 
+                kyberPrekeys: FfiConverterOptionData.read(from: &buf)
         )
     }
 
     public static func write(_ value: SessionInitResult, into buf: inout [UInt8]) {
         FfiConverterString.write(value.sessionId, into: &buf)
-        FfiConverterSequenceUInt8.write(value.decryptedMessage, into: &buf)
-        FfiConverterSequenceUInt8.write(value.storageKey, into: &buf)
+        FfiConverterData.write(value.decryptedMessage, into: &buf)
+        FfiConverterData.write(value.storageKey, into: &buf)
+        FfiConverterOptionData.write(value.kyberPrekeys, into: &buf)
     }
 }
 
@@ -5050,121 +8642,6 @@ public func FfiConverterTypeSessionInitResult_lift(_ buf: RustBuffer) throws -> 
 #endif
 public func FfiConverterTypeSessionInitResult_lower(_ value: SessionInitResult) -> RustBuffer {
     return FfiConverterTypeSessionInitResult.lower(value)
-}
-
-
-/**
- * Keys and metadata packed into the encrypted recovery bundle.
- */
-public struct SrRecoveryBundle: Equatable, Hashable {
-    public var deviceSigningKey: Data
-    public var deviceIdentityKey: Data
-    public var deviceId: String
-    public var createdAt: Int64
-
-    // Default memberwise initializers are never public by default, so we
-    // declare one manually.
-    public init(deviceSigningKey: Data, deviceIdentityKey: Data, deviceId: String, createdAt: Int64) {
-        self.deviceSigningKey = deviceSigningKey
-        self.deviceIdentityKey = deviceIdentityKey
-        self.deviceId = deviceId
-        self.createdAt = createdAt
-    }
-
-    
-}
-
-#if compiler(>=6)
-extension SrRecoveryBundle: Sendable {}
-#endif
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public struct FfiConverterTypeSrRecoveryBundle: FfiConverterRustBuffer {
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SrRecoveryBundle {
-        return
-            try SrRecoveryBundle(
-                deviceSigningKey: FfiConverterData.read(from: &buf), 
-                deviceIdentityKey: FfiConverterData.read(from: &buf), 
-                deviceId: FfiConverterString.read(from: &buf), 
-                createdAt: FfiConverterInt64.read(from: &buf)
-        )
-    }
-
-    public static func write(_ value: SrRecoveryBundle, into buf: inout [UInt8]) {
-        FfiConverterData.write(value.deviceSigningKey, into: &buf)
-        FfiConverterData.write(value.deviceIdentityKey, into: &buf)
-        FfiConverterString.write(value.deviceId, into: &buf)
-        FfiConverterInt64.write(value.createdAt, into: &buf)
-    }
-}
-
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypeSrRecoveryBundle_lift(_ buf: RustBuffer) throws -> SrRecoveryBundle {
-    return try FfiConverterTypeSrRecoveryBundle.lift(buf)
-}
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypeSrRecoveryBundle_lower(_ value: SrRecoveryBundle) -> RustBuffer {
-    return FfiConverterTypeSrRecoveryBundle.lower(value)
-}
-
-
-public struct TeardownDecision: Equatable, Hashable {
-    public var deviceId: String
-    public var action: TeardownAction
-
-    // Default memberwise initializers are never public by default, so we
-    // declare one manually.
-    public init(deviceId: String, action: TeardownAction) {
-        self.deviceId = deviceId
-        self.action = action
-    }
-
-    
-}
-
-#if compiler(>=6)
-extension TeardownDecision: Sendable {}
-#endif
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public struct FfiConverterTypeTeardownDecision: FfiConverterRustBuffer {
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> TeardownDecision {
-        return
-            try TeardownDecision(
-                deviceId: FfiConverterString.read(from: &buf), 
-                action: FfiConverterTypeTeardownAction.read(from: &buf)
-        )
-    }
-
-    public static func write(_ value: TeardownDecision, into buf: inout [UInt8]) {
-        FfiConverterString.write(value.deviceId, into: &buf)
-        FfiConverterTypeTeardownAction.write(value.action, into: &buf)
-    }
-}
-
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypeTeardownDecision_lift(_ buf: RustBuffer) throws -> TeardownDecision {
-    return try FfiConverterTypeTeardownDecision.lift(buf)
-}
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypeTeardownDecision_lower(_ value: TeardownDecision) -> RustBuffer {
-    return FfiConverterTypeTeardownDecision.lower(value)
 }
 
 
@@ -5233,20 +8710,24 @@ public func FfiConverterTypeTimingConfig_lower(_ value: TimingConfig) -> RustBuf
 
 
 public struct WirePayload: Equatable, Hashable {
-    public var dhPublicKey: [UInt8]
+    public var dhPublicKey: Data
     public var messageNumber: UInt32
     public var oneTimePrekeyId: UInt32
     public var kyberOtpkId: UInt32
     public var previousChainLength: UInt32
     public var suiteId: UInt16
-    public var kemCiphertext: [UInt8]?
-    public var sealedBox: [UInt8]
+    public var kemCiphertext: Data?
+    public var sealedBox: Data
     public var pqMessageEpoch: UInt32
-    public var pqRatchetField: [UInt8]
+    public var pqRatchetField: Data
+    public var pqxdhV2: Bool
+    public var kemIdentity: Data?
+    public var identityProofCiphertext: Data?
+    public var pqKeyIndex: UInt32
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(dhPublicKey: [UInt8], messageNumber: UInt32, oneTimePrekeyId: UInt32, kyberOtpkId: UInt32, previousChainLength: UInt32, suiteId: UInt16, kemCiphertext: [UInt8]?, sealedBox: [UInt8], pqMessageEpoch: UInt32, pqRatchetField: [UInt8]) {
+    public init(dhPublicKey: Data, messageNumber: UInt32, oneTimePrekeyId: UInt32, kyberOtpkId: UInt32, previousChainLength: UInt32, suiteId: UInt16, kemCiphertext: Data?, sealedBox: Data, pqMessageEpoch: UInt32, pqRatchetField: Data, pqxdhV2: Bool = false, kemIdentity: Data? = nil, identityProofCiphertext: Data? = nil, pqKeyIndex: UInt32 = UInt32(0)) {
         self.dhPublicKey = dhPublicKey
         self.messageNumber = messageNumber
         self.oneTimePrekeyId = oneTimePrekeyId
@@ -5257,6 +8738,10 @@ public struct WirePayload: Equatable, Hashable {
         self.sealedBox = sealedBox
         self.pqMessageEpoch = pqMessageEpoch
         self.pqRatchetField = pqRatchetField
+        self.pqxdhV2 = pqxdhV2
+        self.kemIdentity = kemIdentity
+        self.identityProofCiphertext = identityProofCiphertext
+        self.pqKeyIndex = pqKeyIndex
     }
 
     
@@ -5273,30 +8758,38 @@ public struct FfiConverterTypeWirePayload: FfiConverterRustBuffer {
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> WirePayload {
         return
             try WirePayload(
-                dhPublicKey: FfiConverterSequenceUInt8.read(from: &buf), 
+                dhPublicKey: FfiConverterData.read(from: &buf), 
                 messageNumber: FfiConverterUInt32.read(from: &buf), 
                 oneTimePrekeyId: FfiConverterUInt32.read(from: &buf), 
                 kyberOtpkId: FfiConverterUInt32.read(from: &buf), 
                 previousChainLength: FfiConverterUInt32.read(from: &buf), 
                 suiteId: FfiConverterUInt16.read(from: &buf), 
-                kemCiphertext: FfiConverterOptionSequenceUInt8.read(from: &buf), 
-                sealedBox: FfiConverterSequenceUInt8.read(from: &buf), 
+                kemCiphertext: FfiConverterOptionData.read(from: &buf), 
+                sealedBox: FfiConverterData.read(from: &buf), 
                 pqMessageEpoch: FfiConverterUInt32.read(from: &buf), 
-                pqRatchetField: FfiConverterSequenceUInt8.read(from: &buf)
+                pqRatchetField: FfiConverterData.read(from: &buf), 
+                pqxdhV2: FfiConverterBool.read(from: &buf), 
+                kemIdentity: FfiConverterOptionData.read(from: &buf), 
+                identityProofCiphertext: FfiConverterOptionData.read(from: &buf), 
+                pqKeyIndex: FfiConverterUInt32.read(from: &buf)
         )
     }
 
     public static func write(_ value: WirePayload, into buf: inout [UInt8]) {
-        FfiConverterSequenceUInt8.write(value.dhPublicKey, into: &buf)
+        FfiConverterData.write(value.dhPublicKey, into: &buf)
         FfiConverterUInt32.write(value.messageNumber, into: &buf)
         FfiConverterUInt32.write(value.oneTimePrekeyId, into: &buf)
         FfiConverterUInt32.write(value.kyberOtpkId, into: &buf)
         FfiConverterUInt32.write(value.previousChainLength, into: &buf)
         FfiConverterUInt16.write(value.suiteId, into: &buf)
-        FfiConverterOptionSequenceUInt8.write(value.kemCiphertext, into: &buf)
-        FfiConverterSequenceUInt8.write(value.sealedBox, into: &buf)
+        FfiConverterOptionData.write(value.kemCiphertext, into: &buf)
+        FfiConverterData.write(value.sealedBox, into: &buf)
         FfiConverterUInt32.write(value.pqMessageEpoch, into: &buf)
-        FfiConverterSequenceUInt8.write(value.pqRatchetField, into: &buf)
+        FfiConverterData.write(value.pqRatchetField, into: &buf)
+        FfiConverterBool.write(value.pqxdhV2, into: &buf)
+        FfiConverterOptionData.write(value.kemIdentity, into: &buf)
+        FfiConverterOptionData.write(value.identityProofCiphertext, into: &buf)
+        FfiConverterUInt32.write(value.pqKeyIndex, into: &buf)
     }
 }
 
@@ -5313,6 +8806,61 @@ public func FfiConverterTypeWirePayload_lift(_ buf: RustBuffer) throws -> WirePa
 #endif
 public func FfiConverterTypeWirePayload_lower(_ value: WirePayload) -> RustBuffer {
     return FfiConverterTypeWirePayload.lower(value)
+}
+
+
+/**
+ * See `wire_summary`.
+ */
+public struct WireSummary: Equatable, Hashable {
+    public var messageNumber: UInt32
+    public var initKind: ReceivingInitKind
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(messageNumber: UInt32, initKind: ReceivingInitKind) {
+        self.messageNumber = messageNumber
+        self.initKind = initKind
+    }
+
+    
+}
+
+#if compiler(>=6)
+extension WireSummary: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeWireSummary: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> WireSummary {
+        return
+            try WireSummary(
+                messageNumber: FfiConverterUInt32.read(from: &buf), 
+                initKind: FfiConverterTypeReceivingInitKind.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: WireSummary, into buf: inout [UInt8]) {
+        FfiConverterUInt32.write(value.messageNumber, into: &buf)
+        FfiConverterTypeReceivingInitKind.write(value.initKind, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeWireSummary_lift(_ buf: RustBuffer) throws -> WireSummary {
+    return try FfiConverterTypeWireSummary.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeWireSummary_lower(_ value: WireSummary) -> RustBuffer {
+    return FfiConverterTypeWireSummary.lower(value)
 }
 
 // Note that we don't yet support `indirect` for enums.
@@ -5398,6 +8946,85 @@ public func FfiConverterTypeAckCheckResult_lower(_ value: AckCheckResult) -> Rus
 
 // Note that we don't yet support `indirect` for enums.
 // See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+
+public enum CertificateVerdict: Equatable, Hashable {
+    
+    case vouched
+    case noKey
+    case badSignature
+    case expired
+
+
+
+}
+
+#if compiler(>=6)
+extension CertificateVerdict: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeCertificateVerdict: FfiConverterRustBuffer {
+    typealias SwiftType = CertificateVerdict
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> CertificateVerdict {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .vouched
+        
+        case 2: return .noKey
+        
+        case 3: return .badSignature
+        
+        case 4: return .expired
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: CertificateVerdict, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case .vouched:
+            writeInt(&buf, Int32(1))
+        
+        
+        case .noKey:
+            writeInt(&buf, Int32(2))
+        
+        
+        case .badSignature:
+            writeInt(&buf, Int32(3))
+        
+        
+        case .expired:
+            writeInt(&buf, Int32(4))
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeCertificateVerdict_lift(_ buf: RustBuffer) throws -> CertificateVerdict {
+    return try FfiConverterTypeCertificateVerdict.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeCertificateVerdict_lower(_ value: CertificateVerdict) -> RustBuffer {
+    return FfiConverterTypeCertificateVerdict.lower(value)
+}
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
 /**
  * Typed replacement for `Action` JSON strings.
  * Platform receives these from `handle_event()` and executes each one.
@@ -5409,26 +9036,18 @@ public enum CfeAction: Equatable, Hashable {
     )
     case encryptMessage(contactId: String, plaintext: Data
     )
-    case initSession(contactId: String, bundleJson: String
-    )
-    case applyPqContribution(contactId: String, kemSs: Data
-    )
     case archiveSession(contactId: String
     )
     case messageDecrypted(contactId: String, messageId: String, plaintext: Data
     )
-    case sessionHealNeeded(contactId: String, role: String
-    )
     /**
-     * Heal suppressed by cooldown — platform must NOT ACK; server will re-deliver.
+     * Open a new session with `contact_id` — a device — as INITIATOR over the one held: fetch
+     * that device's bundle and answer with `SessionBundleFetched` (or `SessionBundleUnavailable`).
+     * Do not call `reopen_session` for it: the event's answer carries the save and the drained
+     * queue that the call cannot. Nothing is sent — the handshake header rides on the next
+     * message. Raised by the PQXDH v2 upgrade sweep.
      */
-    case healSuppressed(contactId: String, retryAfterMs: UInt64
-    )
-    /**
-     * END_SESSION suppressed by cooldown — the core owes it and sends it in retry_after_ms.
-     * Platform must NOT ACK.
-     */
-    case endSessionSuppressed(contactId: String, retryAfterMs: UInt64
+    case openSession(contactId: String
     )
     /**
      * Message queued inside the core behind an in-flight session init. Nothing lost.
@@ -5440,21 +9059,49 @@ public enum CfeAction: Equatable, Hashable {
      */
     case saveToSecureStore(slot: CfeSecureStoreSlot, data: Data
     )
-    case persistMessage(messageJson: String
-    )
     case persistAck(messageId: String, timestamp: UInt64
     )
     case pruneAckStore(cutoffTs: UInt64
     )
     case markMessageDelivered(messageId: String
     )
-    case fetchPublicKeyBundle(userId: String
+    /**
+     * A message already handled (ACK cache, platform DB, or its ratchet key already used).
+     * Terminal: record it as processed and advance the stream cursor past it.
+     */
+    case duplicateDropped(messageId: String
+    )
+    /**
+     * A message whose payload does not parse (garbage, or a retired suite): it can never open.
+     * Terminal: record it as processed and advance the stream cursor past it. Nothing is sent.
+     */
+    case malformedDropped(messageId: String
+    )
+    case openReceiving(contactId: String
     )
     case sendEncryptedMessage(to: String, payload: Data, messageId: String, contentType: UInt8
     )
     case sendReceipt(messageId: String, status: String
     )
-    case sendEndSession(contactId: String
+    /**
+     * We could not read `message_id` from `contact_id`: send `payload` to that device as a
+     * DECRYPTION_ERROR (content type 28) envelope, sealed-sender, and acknowledge the message.
+     * The core built and sealed `payload`; one per unread message.
+     * `enveloped`: `payload` is a session envelope — send it as the sealed inner's envelope with
+     * no certificate; otherwise it is the X25519 box, sent as before.
+     */
+    case sendDecryptionError(contactId: String, messageId: String, payload: Data, enveloped: Bool
+    )
+    /**
+     * The peer could not read our current state with `contact_id`; it is retired and the next
+     * send opens a new one — without a one-time prekey when `without_one_time_prekey`.
+     */
+    case sessionRetired(contactId: String, withoutOneTimePrekey: Bool
+    )
+    /**
+     * The peer could not read `message_id`: send it again to `contact_id` as a new message.
+     */
+    case resendMessage(contactId: String, messageId: String
     )
     case notifyNewMessage(chatId: String, preview: String
     )
@@ -5469,27 +9116,16 @@ public enum CfeAction: Equatable, Hashable {
     case callSignalDecrypted(contactId: String, messageId: String, protoBytes: Data
     )
     /**
+     * A silent control frame other than a call signal (13, 14, 25, 26, 27, 29), named by byte 5
+     * of its KNST frame; `body` is without the header. Never a chat message: handle by
+     * `content_type` and record the message processed.
+     */
+    case controlFrameDecrypted(contactId: String, messageId: String, contentType: UInt8, body: Data
+    )
+    /**
      * Platform must query its persistent ACK store for `message_id` and reply with `AckDbResult`.
      */
     case checkAckInDb(messageId: String
-    )
-    /**
-     * Encrypt and send a heartbeat to `contact_id` using the current DR session.
-     * If no session exists, treat as a desync signal and trigger heal.
-     */
-    case sendHeartbeat(contactId: String
-    )
-    /**
-     * Broadcast to all linked devices that the session with `contact_id` was reset.
-     */
-    case notifyLinkedDevicesOfSessionReset(contactId: String
-    )
-    /**
-     * Rust archived and removed the session for `contact_id`.
-     * Platform MUST: (1) store `archive_bytes` in the archive store, (2) delete the
-     * hot session Keychain/Keystore entry for `contact_id`.
-     */
-    case sessionTerminated(contactId: String, archiveBytes: Data
     )
 
 
@@ -5516,85 +9152,76 @@ public struct FfiConverterTypeCfeAction: FfiConverterRustBuffer {
         case 2: return .encryptMessage(contactId: try FfiConverterString.read(from: &buf), plaintext: try FfiConverterData.read(from: &buf)
         )
         
-        case 3: return .initSession(contactId: try FfiConverterString.read(from: &buf), bundleJson: try FfiConverterString.read(from: &buf)
+        case 3: return .archiveSession(contactId: try FfiConverterString.read(from: &buf)
         )
         
-        case 4: return .applyPqContribution(contactId: try FfiConverterString.read(from: &buf), kemSs: try FfiConverterData.read(from: &buf)
+        case 4: return .messageDecrypted(contactId: try FfiConverterString.read(from: &buf), messageId: try FfiConverterString.read(from: &buf), plaintext: try FfiConverterData.read(from: &buf)
         )
         
-        case 5: return .archiveSession(contactId: try FfiConverterString.read(from: &buf)
+        case 5: return .openSession(contactId: try FfiConverterString.read(from: &buf)
         )
         
-        case 6: return .messageDecrypted(contactId: try FfiConverterString.read(from: &buf), messageId: try FfiConverterString.read(from: &buf), plaintext: try FfiConverterData.read(from: &buf)
+        case 6: return .messageQueuedPendingInit(contactId: try FfiConverterString.read(from: &buf), queuedCount: try FfiConverterUInt32.read(from: &buf)
         )
         
-        case 7: return .sessionHealNeeded(contactId: try FfiConverterString.read(from: &buf), role: try FfiConverterString.read(from: &buf)
+        case 7: return .saveToSecureStore(slot: try FfiConverterTypeCfeSecureStoreSlot.read(from: &buf), data: try FfiConverterData.read(from: &buf)
         )
         
-        case 8: return .healSuppressed(contactId: try FfiConverterString.read(from: &buf), retryAfterMs: try FfiConverterUInt64.read(from: &buf)
+        case 8: return .persistAck(messageId: try FfiConverterString.read(from: &buf), timestamp: try FfiConverterUInt64.read(from: &buf)
         )
         
-        case 9: return .endSessionSuppressed(contactId: try FfiConverterString.read(from: &buf), retryAfterMs: try FfiConverterUInt64.read(from: &buf)
+        case 9: return .pruneAckStore(cutoffTs: try FfiConverterUInt64.read(from: &buf)
         )
         
-        case 10: return .messageQueuedPendingInit(contactId: try FfiConverterString.read(from: &buf), queuedCount: try FfiConverterUInt32.read(from: &buf)
+        case 10: return .markMessageDelivered(messageId: try FfiConverterString.read(from: &buf)
         )
         
-        case 11: return .saveToSecureStore(slot: try FfiConverterTypeCfeSecureStoreSlot.read(from: &buf), data: try FfiConverterData.read(from: &buf)
+        case 11: return .duplicateDropped(messageId: try FfiConverterString.read(from: &buf)
         )
         
-        case 12: return .persistMessage(messageJson: try FfiConverterString.read(from: &buf)
+        case 12: return .malformedDropped(messageId: try FfiConverterString.read(from: &buf)
         )
         
-        case 13: return .persistAck(messageId: try FfiConverterString.read(from: &buf), timestamp: try FfiConverterUInt64.read(from: &buf)
+        case 13: return .openReceiving(contactId: try FfiConverterString.read(from: &buf)
         )
         
-        case 14: return .pruneAckStore(cutoffTs: try FfiConverterUInt64.read(from: &buf)
+        case 14: return .sendEncryptedMessage(to: try FfiConverterString.read(from: &buf), payload: try FfiConverterData.read(from: &buf), messageId: try FfiConverterString.read(from: &buf), contentType: try FfiConverterUInt8.read(from: &buf)
         )
         
-        case 15: return .markMessageDelivered(messageId: try FfiConverterString.read(from: &buf)
+        case 15: return .sendReceipt(messageId: try FfiConverterString.read(from: &buf), status: try FfiConverterString.read(from: &buf)
         )
         
-        case 16: return .fetchPublicKeyBundle(userId: try FfiConverterString.read(from: &buf)
+        case 16: return .sendDecryptionError(contactId: try FfiConverterString.read(from: &buf), messageId: try FfiConverterString.read(from: &buf), payload: try FfiConverterData.read(from: &buf), enveloped: try FfiConverterBool.read(from: &buf)
         )
         
-        case 17: return .sendEncryptedMessage(to: try FfiConverterString.read(from: &buf), payload: try FfiConverterData.read(from: &buf), messageId: try FfiConverterString.read(from: &buf), contentType: try FfiConverterUInt8.read(from: &buf)
+        case 17: return .sessionRetired(contactId: try FfiConverterString.read(from: &buf), withoutOneTimePrekey: try FfiConverterBool.read(from: &buf)
         )
         
-        case 18: return .sendReceipt(messageId: try FfiConverterString.read(from: &buf), status: try FfiConverterString.read(from: &buf)
+        case 18: return .resendMessage(contactId: try FfiConverterString.read(from: &buf), messageId: try FfiConverterString.read(from: &buf)
         )
         
-        case 19: return .sendEndSession(contactId: try FfiConverterString.read(from: &buf)
+        case 19: return .notifyNewMessage(chatId: try FfiConverterString.read(from: &buf), preview: try FfiConverterString.read(from: &buf)
         )
         
-        case 20: return .notifyNewMessage(chatId: try FfiConverterString.read(from: &buf), preview: try FfiConverterString.read(from: &buf)
+        case 20: return .notifySessionCreated(contactId: try FfiConverterString.read(from: &buf)
         )
         
-        case 21: return .notifySessionCreated(contactId: try FfiConverterString.read(from: &buf)
+        case 21: return .notifyError(code: try FfiConverterString.read(from: &buf), message: try FfiConverterString.read(from: &buf)
         )
         
-        case 22: return .notifyError(code: try FfiConverterString.read(from: &buf), message: try FfiConverterString.read(from: &buf)
+        case 22: return .scheduleTimer(timerId: try FfiConverterString.read(from: &buf), delayMs: try FfiConverterUInt64.read(from: &buf)
         )
         
-        case 23: return .scheduleTimer(timerId: try FfiConverterString.read(from: &buf), delayMs: try FfiConverterUInt64.read(from: &buf)
+        case 23: return .cancelTimer(timerId: try FfiConverterString.read(from: &buf)
         )
         
-        case 24: return .cancelTimer(timerId: try FfiConverterString.read(from: &buf)
+        case 24: return .callSignalDecrypted(contactId: try FfiConverterString.read(from: &buf), messageId: try FfiConverterString.read(from: &buf), protoBytes: try FfiConverterData.read(from: &buf)
         )
         
-        case 25: return .callSignalDecrypted(contactId: try FfiConverterString.read(from: &buf), messageId: try FfiConverterString.read(from: &buf), protoBytes: try FfiConverterData.read(from: &buf)
+        case 25: return .controlFrameDecrypted(contactId: try FfiConverterString.read(from: &buf), messageId: try FfiConverterString.read(from: &buf), contentType: try FfiConverterUInt8.read(from: &buf), body: try FfiConverterData.read(from: &buf)
         )
         
         case 26: return .checkAckInDb(messageId: try FfiConverterString.read(from: &buf)
-        )
-        
-        case 27: return .sendHeartbeat(contactId: try FfiConverterString.read(from: &buf)
-        )
-        
-        case 28: return .notifyLinkedDevicesOfSessionReset(contactId: try FfiConverterString.read(from: &buf)
-        )
-        
-        case 29: return .sessionTerminated(contactId: try FfiConverterString.read(from: &buf), archiveBytes: try FfiConverterData.read(from: &buf)
         )
         
         default: throw UniffiInternalError.unexpectedEnumCase
@@ -5617,88 +9244,68 @@ public struct FfiConverterTypeCfeAction: FfiConverterRustBuffer {
             FfiConverterData.write(plaintext, into: &buf)
             
         
-        case let .initSession(contactId,bundleJson):
-            writeInt(&buf, Int32(3))
-            FfiConverterString.write(contactId, into: &buf)
-            FfiConverterString.write(bundleJson, into: &buf)
-            
-        
-        case let .applyPqContribution(contactId,kemSs):
-            writeInt(&buf, Int32(4))
-            FfiConverterString.write(contactId, into: &buf)
-            FfiConverterData.write(kemSs, into: &buf)
-            
-        
         case let .archiveSession(contactId):
-            writeInt(&buf, Int32(5))
+            writeInt(&buf, Int32(3))
             FfiConverterString.write(contactId, into: &buf)
             
         
         case let .messageDecrypted(contactId,messageId,plaintext):
-            writeInt(&buf, Int32(6))
+            writeInt(&buf, Int32(4))
             FfiConverterString.write(contactId, into: &buf)
             FfiConverterString.write(messageId, into: &buf)
             FfiConverterData.write(plaintext, into: &buf)
             
         
-        case let .sessionHealNeeded(contactId,role):
-            writeInt(&buf, Int32(7))
+        case let .openSession(contactId):
+            writeInt(&buf, Int32(5))
             FfiConverterString.write(contactId, into: &buf)
-            FfiConverterString.write(role, into: &buf)
-            
-        
-        case let .healSuppressed(contactId,retryAfterMs):
-            writeInt(&buf, Int32(8))
-            FfiConverterString.write(contactId, into: &buf)
-            FfiConverterUInt64.write(retryAfterMs, into: &buf)
-            
-        
-        case let .endSessionSuppressed(contactId,retryAfterMs):
-            writeInt(&buf, Int32(9))
-            FfiConverterString.write(contactId, into: &buf)
-            FfiConverterUInt64.write(retryAfterMs, into: &buf)
             
         
         case let .messageQueuedPendingInit(contactId,queuedCount):
-            writeInt(&buf, Int32(10))
+            writeInt(&buf, Int32(6))
             FfiConverterString.write(contactId, into: &buf)
             FfiConverterUInt32.write(queuedCount, into: &buf)
             
         
         case let .saveToSecureStore(slot,data):
-            writeInt(&buf, Int32(11))
+            writeInt(&buf, Int32(7))
             FfiConverterTypeCfeSecureStoreSlot.write(slot, into: &buf)
             FfiConverterData.write(data, into: &buf)
             
         
-        case let .persistMessage(messageJson):
-            writeInt(&buf, Int32(12))
-            FfiConverterString.write(messageJson, into: &buf)
-            
-        
         case let .persistAck(messageId,timestamp):
-            writeInt(&buf, Int32(13))
+            writeInt(&buf, Int32(8))
             FfiConverterString.write(messageId, into: &buf)
             FfiConverterUInt64.write(timestamp, into: &buf)
             
         
         case let .pruneAckStore(cutoffTs):
-            writeInt(&buf, Int32(14))
+            writeInt(&buf, Int32(9))
             FfiConverterUInt64.write(cutoffTs, into: &buf)
             
         
         case let .markMessageDelivered(messageId):
-            writeInt(&buf, Int32(15))
+            writeInt(&buf, Int32(10))
             FfiConverterString.write(messageId, into: &buf)
             
         
-        case let .fetchPublicKeyBundle(userId):
-            writeInt(&buf, Int32(16))
-            FfiConverterString.write(userId, into: &buf)
+        case let .duplicateDropped(messageId):
+            writeInt(&buf, Int32(11))
+            FfiConverterString.write(messageId, into: &buf)
+            
+        
+        case let .malformedDropped(messageId):
+            writeInt(&buf, Int32(12))
+            FfiConverterString.write(messageId, into: &buf)
+            
+        
+        case let .openReceiving(contactId):
+            writeInt(&buf, Int32(13))
+            FfiConverterString.write(contactId, into: &buf)
             
         
         case let .sendEncryptedMessage(to,payload,messageId,contentType):
-            writeInt(&buf, Int32(17))
+            writeInt(&buf, Int32(14))
             FfiConverterString.write(to, into: &buf)
             FfiConverterData.write(payload, into: &buf)
             FfiConverterString.write(messageId, into: &buf)
@@ -5706,70 +9313,77 @@ public struct FfiConverterTypeCfeAction: FfiConverterRustBuffer {
             
         
         case let .sendReceipt(messageId,status):
-            writeInt(&buf, Int32(18))
+            writeInt(&buf, Int32(15))
             FfiConverterString.write(messageId, into: &buf)
             FfiConverterString.write(status, into: &buf)
             
         
-        case let .sendEndSession(contactId):
-            writeInt(&buf, Int32(19))
+        case let .sendDecryptionError(contactId,messageId,payload,enveloped):
+            writeInt(&buf, Int32(16))
             FfiConverterString.write(contactId, into: &buf)
+            FfiConverterString.write(messageId, into: &buf)
+            FfiConverterData.write(payload, into: &buf)
+            FfiConverterBool.write(enveloped, into: &buf)
+            
+        
+        case let .sessionRetired(contactId,withoutOneTimePrekey):
+            writeInt(&buf, Int32(17))
+            FfiConverterString.write(contactId, into: &buf)
+            FfiConverterBool.write(withoutOneTimePrekey, into: &buf)
+            
+        
+        case let .resendMessage(contactId,messageId):
+            writeInt(&buf, Int32(18))
+            FfiConverterString.write(contactId, into: &buf)
+            FfiConverterString.write(messageId, into: &buf)
             
         
         case let .notifyNewMessage(chatId,preview):
-            writeInt(&buf, Int32(20))
+            writeInt(&buf, Int32(19))
             FfiConverterString.write(chatId, into: &buf)
             FfiConverterString.write(preview, into: &buf)
             
         
         case let .notifySessionCreated(contactId):
-            writeInt(&buf, Int32(21))
+            writeInt(&buf, Int32(20))
             FfiConverterString.write(contactId, into: &buf)
             
         
         case let .notifyError(code,message):
-            writeInt(&buf, Int32(22))
+            writeInt(&buf, Int32(21))
             FfiConverterString.write(code, into: &buf)
             FfiConverterString.write(message, into: &buf)
             
         
         case let .scheduleTimer(timerId,delayMs):
-            writeInt(&buf, Int32(23))
+            writeInt(&buf, Int32(22))
             FfiConverterString.write(timerId, into: &buf)
             FfiConverterUInt64.write(delayMs, into: &buf)
             
         
         case let .cancelTimer(timerId):
-            writeInt(&buf, Int32(24))
+            writeInt(&buf, Int32(23))
             FfiConverterString.write(timerId, into: &buf)
             
         
         case let .callSignalDecrypted(contactId,messageId,protoBytes):
-            writeInt(&buf, Int32(25))
+            writeInt(&buf, Int32(24))
             FfiConverterString.write(contactId, into: &buf)
             FfiConverterString.write(messageId, into: &buf)
             FfiConverterData.write(protoBytes, into: &buf)
             
         
+        case let .controlFrameDecrypted(contactId,messageId,contentType,body):
+            writeInt(&buf, Int32(25))
+            FfiConverterString.write(contactId, into: &buf)
+            FfiConverterString.write(messageId, into: &buf)
+            FfiConverterUInt8.write(contentType, into: &buf)
+            FfiConverterData.write(body, into: &buf)
+            
+        
         case let .checkAckInDb(messageId):
             writeInt(&buf, Int32(26))
             FfiConverterString.write(messageId, into: &buf)
-            
-        
-        case let .sendHeartbeat(contactId):
-            writeInt(&buf, Int32(27))
-            FfiConverterString.write(contactId, into: &buf)
-            
-        
-        case let .notifyLinkedDevicesOfSessionReset(contactId):
-            writeInt(&buf, Int32(28))
-            FfiConverterString.write(contactId, into: &buf)
-            
-        
-        case let .sessionTerminated(contactId,archiveBytes):
-            writeInt(&buf, Int32(29))
-            FfiConverterString.write(contactId, into: &buf)
-            FfiConverterData.write(archiveBytes, into: &buf)
             
         }
     }
@@ -5800,7 +9414,11 @@ public func FfiConverterTypeCfeAction_lower(_ value: CfeAction) -> RustBuffer {
 
 public enum CfeIncomingEvent: Equatable, Hashable {
     
-    case messageReceived(messageId: String, from: String, data: Data, msgNum: UInt32, kemCt: Data, otpkId: UInt32, isControl: Bool, contentType: UInt8
+    /**
+     * `envelope_session`: the session whose envelope the message came in (`open_envelope`),
+     * set instead of `sender_certificate`.
+     */
+    case messageReceived(messageId: String, from: String, data: Data, contentType: UInt8, senderCertificate: SenderCertificate?, envelopeSession: String?
     )
     case outgoingMessage(contactId: String, messageId: String, plaintext: Data, contentType: UInt8
     )
@@ -5810,7 +9428,17 @@ public enum CfeIncomingEvent: Equatable, Hashable {
     )
     case ackReceived(messageId: String
     )
-    case keyBundleFetched(userId: String, bundleJson: String
+    /**
+     * The answer to `CfeAction::OpenSession`: the bundle of that one device. The core reopens
+     * from it and answers with the save, the messages that waited, or `OPEN_SESSION_REFUSED`.
+     */
+    case sessionBundleFetched(contactId: String, bundle: BinaryKeyBundle
+    )
+    /**
+     * The answer to `CfeAction::OpenSession` when no bundle could be fetched. The held session
+     * stays; the core stops waiting for the open now instead of at its time-out.
+     */
+    case sessionBundleUnavailable(contactId: String
     )
     case networkReconnected
     case appLaunched
@@ -5822,14 +9450,17 @@ public enum CfeIncomingEvent: Equatable, Hashable {
     case ackDbResult(messageId: String, isProcessed: Bool
     )
     /**
-     * Signal that the user opened or closed a chat — controls heartbeat scheduling.
-     */
-    case activeChatChanged(contactId: String, isActive: Bool
-    )
-    /**
      * A heartbeat message was received from the peer.
      */
-    case heartbeatReceived(contactId: String, messageId: String, data: Data, msgNum: UInt32
+    case heartbeatReceived(contactId: String, messageId: String, data: Data
+    )
+    /**
+     * A DECRYPTION_ERROR (content type 28) arrived from `contact_id` — the device its sender
+     * certificate names; `payload` is the envelope's sealed box. Answered with `SessionRetired` +
+     * `ResendMessage`, `ResendMessage` alone, or nothing when the error is stale.
+     * `opened`: `payload` came out of a session envelope and is the error itself.
+     */
+    case decryptionErrorReceived(contactId: String, payload: Data, opened: Bool
     )
 
 
@@ -5850,7 +9481,7 @@ public struct FfiConverterTypeCfeIncomingEvent: FfiConverterRustBuffer {
         let variant: Int32 = try readInt(&buf)
         switch variant {
         
-        case 1: return .messageReceived(messageId: try FfiConverterString.read(from: &buf), from: try FfiConverterString.read(from: &buf), data: try FfiConverterData.read(from: &buf), msgNum: try FfiConverterUInt32.read(from: &buf), kemCt: try FfiConverterData.read(from: &buf), otpkId: try FfiConverterUInt32.read(from: &buf), isControl: try FfiConverterBool.read(from: &buf), contentType: try FfiConverterUInt8.read(from: &buf)
+        case 1: return .messageReceived(messageId: try FfiConverterString.read(from: &buf), from: try FfiConverterString.read(from: &buf), data: try FfiConverterData.read(from: &buf), contentType: try FfiConverterUInt8.read(from: &buf), senderCertificate: try FfiConverterOptionTypeSenderCertificate.read(from: &buf), envelopeSession: try FfiConverterOptionString.read(from: &buf)
         )
         
         case 2: return .outgoingMessage(contactId: try FfiConverterString.read(from: &buf), messageId: try FfiConverterString.read(from: &buf), plaintext: try FfiConverterData.read(from: &buf), contentType: try FfiConverterUInt8.read(from: &buf)
@@ -5865,23 +9496,26 @@ public struct FfiConverterTypeCfeIncomingEvent: FfiConverterRustBuffer {
         case 5: return .ackReceived(messageId: try FfiConverterString.read(from: &buf)
         )
         
-        case 6: return .keyBundleFetched(userId: try FfiConverterString.read(from: &buf), bundleJson: try FfiConverterString.read(from: &buf)
+        case 6: return .sessionBundleFetched(contactId: try FfiConverterString.read(from: &buf), bundle: try FfiConverterTypeBinaryKeyBundle.read(from: &buf)
         )
         
-        case 7: return .networkReconnected
-        
-        case 8: return .appLaunched
-        
-        case 9: return .timerFired(timerId: try FfiConverterString.read(from: &buf)
+        case 7: return .sessionBundleUnavailable(contactId: try FfiConverterString.read(from: &buf)
         )
         
-        case 10: return .ackDbResult(messageId: try FfiConverterString.read(from: &buf), isProcessed: try FfiConverterBool.read(from: &buf)
+        case 8: return .networkReconnected
+        
+        case 9: return .appLaunched
+        
+        case 10: return .timerFired(timerId: try FfiConverterString.read(from: &buf)
         )
         
-        case 11: return .activeChatChanged(contactId: try FfiConverterString.read(from: &buf), isActive: try FfiConverterBool.read(from: &buf)
+        case 11: return .ackDbResult(messageId: try FfiConverterString.read(from: &buf), isProcessed: try FfiConverterBool.read(from: &buf)
         )
         
-        case 12: return .heartbeatReceived(contactId: try FfiConverterString.read(from: &buf), messageId: try FfiConverterString.read(from: &buf), data: try FfiConverterData.read(from: &buf), msgNum: try FfiConverterUInt32.read(from: &buf)
+        case 12: return .heartbeatReceived(contactId: try FfiConverterString.read(from: &buf), messageId: try FfiConverterString.read(from: &buf), data: try FfiConverterData.read(from: &buf)
+        )
+        
+        case 13: return .decryptionErrorReceived(contactId: try FfiConverterString.read(from: &buf), payload: try FfiConverterData.read(from: &buf), opened: try FfiConverterBool.read(from: &buf)
         )
         
         default: throw UniffiInternalError.unexpectedEnumCase
@@ -5892,16 +9526,14 @@ public struct FfiConverterTypeCfeIncomingEvent: FfiConverterRustBuffer {
         switch value {
         
         
-        case let .messageReceived(messageId,from,data,msgNum,kemCt,otpkId,isControl,contentType):
+        case let .messageReceived(messageId,from,data,contentType,senderCertificate,envelopeSession):
             writeInt(&buf, Int32(1))
             FfiConverterString.write(messageId, into: &buf)
             FfiConverterString.write(from, into: &buf)
             FfiConverterData.write(data, into: &buf)
-            FfiConverterUInt32.write(msgNum, into: &buf)
-            FfiConverterData.write(kemCt, into: &buf)
-            FfiConverterUInt32.write(otpkId, into: &buf)
-            FfiConverterBool.write(isControl, into: &buf)
             FfiConverterUInt8.write(contentType, into: &buf)
+            FfiConverterOptionTypeSenderCertificate.write(senderCertificate, into: &buf)
+            FfiConverterOptionString.write(envelopeSession, into: &buf)
             
         
         case let .outgoingMessage(contactId,messageId,plaintext,contentType):
@@ -5930,43 +9562,48 @@ public struct FfiConverterTypeCfeIncomingEvent: FfiConverterRustBuffer {
             FfiConverterString.write(messageId, into: &buf)
             
         
-        case let .keyBundleFetched(userId,bundleJson):
+        case let .sessionBundleFetched(contactId,bundle):
             writeInt(&buf, Int32(6))
-            FfiConverterString.write(userId, into: &buf)
-            FfiConverterString.write(bundleJson, into: &buf)
+            FfiConverterString.write(contactId, into: &buf)
+            FfiConverterTypeBinaryKeyBundle.write(bundle, into: &buf)
+            
+        
+        case let .sessionBundleUnavailable(contactId):
+            writeInt(&buf, Int32(7))
+            FfiConverterString.write(contactId, into: &buf)
             
         
         case .networkReconnected:
-            writeInt(&buf, Int32(7))
-        
-        
-        case .appLaunched:
             writeInt(&buf, Int32(8))
         
         
-        case let .timerFired(timerId):
+        case .appLaunched:
             writeInt(&buf, Int32(9))
+        
+        
+        case let .timerFired(timerId):
+            writeInt(&buf, Int32(10))
             FfiConverterString.write(timerId, into: &buf)
             
         
         case let .ackDbResult(messageId,isProcessed):
-            writeInt(&buf, Int32(10))
+            writeInt(&buf, Int32(11))
             FfiConverterString.write(messageId, into: &buf)
             FfiConverterBool.write(isProcessed, into: &buf)
             
         
-        case let .activeChatChanged(contactId,isActive):
-            writeInt(&buf, Int32(11))
-            FfiConverterString.write(contactId, into: &buf)
-            FfiConverterBool.write(isActive, into: &buf)
-            
-        
-        case let .heartbeatReceived(contactId,messageId,data,msgNum):
+        case let .heartbeatReceived(contactId,messageId,data):
             writeInt(&buf, Int32(12))
             FfiConverterString.write(contactId, into: &buf)
             FfiConverterString.write(messageId, into: &buf)
             FfiConverterData.write(data, into: &buf)
-            FfiConverterUInt32.write(msgNum, into: &buf)
+            
+        
+        case let .decryptionErrorReceived(contactId,payload,opened):
+            writeInt(&buf, Int32(13))
+            FfiConverterString.write(contactId, into: &buf)
+            FfiConverterData.write(payload, into: &buf)
+            FfiConverterBool.write(opened, into: &buf)
             
         }
     }
@@ -6006,25 +9643,6 @@ public enum CfeSecureStoreSlot: Equatable, Hashable {
     case session(contactId: String
     )
     /**
-     * A terminated session, kept for late-arriving messages. Empty payload means delete.
-     */
-    case sessionArchive(contactId: String
-    )
-    /**
-     * Deferred ML-KEM contribution for one contact. Empty payload means delete.
-     */
-    case pqDeferred(contactId: String
-    )
-    /**
-     * Whole PQContributionManager snapshot.
-     */
-    case kyberSessionState
-    /**
-     * Secret half of a committed ML-KEM signed prekey. No reachable emitter today.
-     */
-    case kyberSignedPrekey(keyId: UInt32
-    )
-    /**
      * Orchestrator coordination state.
      */
     case orchestratorState
@@ -6050,18 +9668,7 @@ public struct FfiConverterTypeCfeSecureStoreSlot: FfiConverterRustBuffer {
         case 1: return .session(contactId: try FfiConverterString.read(from: &buf)
         )
         
-        case 2: return .sessionArchive(contactId: try FfiConverterString.read(from: &buf)
-        )
-        
-        case 3: return .pqDeferred(contactId: try FfiConverterString.read(from: &buf)
-        )
-        
-        case 4: return .kyberSessionState
-        
-        case 5: return .kyberSignedPrekey(keyId: try FfiConverterUInt32.read(from: &buf)
-        )
-        
-        case 6: return .orchestratorState
+        case 2: return .orchestratorState
         
         default: throw UniffiInternalError.unexpectedEnumCase
         }
@@ -6076,27 +9683,8 @@ public struct FfiConverterTypeCfeSecureStoreSlot: FfiConverterRustBuffer {
             FfiConverterString.write(contactId, into: &buf)
             
         
-        case let .sessionArchive(contactId):
-            writeInt(&buf, Int32(2))
-            FfiConverterString.write(contactId, into: &buf)
-            
-        
-        case let .pqDeferred(contactId):
-            writeInt(&buf, Int32(3))
-            FfiConverterString.write(contactId, into: &buf)
-            
-        
-        case .kyberSessionState:
-            writeInt(&buf, Int32(4))
-        
-        
-        case let .kyberSignedPrekey(keyId):
-            writeInt(&buf, Int32(5))
-            FfiConverterUInt32.write(keyId, into: &buf)
-            
-        
         case .orchestratorState:
-            writeInt(&buf, Int32(6))
+            writeInt(&buf, Int32(2))
         
         }
     }
@@ -6332,12 +9920,663 @@ public func FfiConverterTypeDeliveryAudience_lower(_ value: DeliveryAudience) ->
 }
 
 
+
+/**
+ * Why a transfer was refused. Each case's message is the spec's name for it (`record_order`,
+ * `qr_pin_mismatch`, …) — log that, map the case to what a person reads.
+ */
+public enum HistoryError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError {
+
+    
+    
+    case Malformed(message: String)
+    
+    case Truncated(message: String)
+    
+    case UnknownVersion(message: String)
+    
+    case UserMismatch(message: String)
+    
+    case RecordOrder(message: String)
+    
+    case EnvelopeManifestMismatch(message: String)
+    
+    case V1RefusedForHistory(message: String)
+    
+    case IdentityMismatch(message: String)
+    
+    case KemKeyIdMismatch(message: String)
+    
+    case QrPinMismatch(message: String)
+    
+    case QrPinAbsent(message: String)
+    
+    case NoHybridKey(message: String)
+    
+    case SignatureInvalid(message: String)
+    
+    case ChunkOpenFailed(message: String)
+    
+    case LocalKeysUnavailable(message: String)
+    
+
+    
+
+    
+    public var errorDescription: String? {
+        String(reflecting: self)
+    }
+    
+}
+
+#if compiler(>=6)
+extension HistoryError: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeHistoryError: FfiConverterRustBuffer {
+    typealias SwiftType = HistoryError
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> HistoryError {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+
+        
+
+        
+        case 1: return .Malformed(
+            message: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 2: return .Truncated(
+            message: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 3: return .UnknownVersion(
+            message: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 4: return .UserMismatch(
+            message: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 5: return .RecordOrder(
+            message: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 6: return .EnvelopeManifestMismatch(
+            message: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 7: return .V1RefusedForHistory(
+            message: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 8: return .IdentityMismatch(
+            message: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 9: return .KemKeyIdMismatch(
+            message: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 10: return .QrPinMismatch(
+            message: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 11: return .QrPinAbsent(
+            message: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 12: return .NoHybridKey(
+            message: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 13: return .SignatureInvalid(
+            message: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 14: return .ChunkOpenFailed(
+            message: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 15: return .LocalKeysUnavailable(
+            message: try FfiConverterString.read(from: &buf)
+        )
+        
+
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: HistoryError, into buf: inout [UInt8]) {
+        switch value {
+
+        
+
+        
+        case .Malformed(_ /* message is ignored*/):
+            writeInt(&buf, Int32(1))
+        case .Truncated(_ /* message is ignored*/):
+            writeInt(&buf, Int32(2))
+        case .UnknownVersion(_ /* message is ignored*/):
+            writeInt(&buf, Int32(3))
+        case .UserMismatch(_ /* message is ignored*/):
+            writeInt(&buf, Int32(4))
+        case .RecordOrder(_ /* message is ignored*/):
+            writeInt(&buf, Int32(5))
+        case .EnvelopeManifestMismatch(_ /* message is ignored*/):
+            writeInt(&buf, Int32(6))
+        case .V1RefusedForHistory(_ /* message is ignored*/):
+            writeInt(&buf, Int32(7))
+        case .IdentityMismatch(_ /* message is ignored*/):
+            writeInt(&buf, Int32(8))
+        case .KemKeyIdMismatch(_ /* message is ignored*/):
+            writeInt(&buf, Int32(9))
+        case .QrPinMismatch(_ /* message is ignored*/):
+            writeInt(&buf, Int32(10))
+        case .QrPinAbsent(_ /* message is ignored*/):
+            writeInt(&buf, Int32(11))
+        case .NoHybridKey(_ /* message is ignored*/):
+            writeInt(&buf, Int32(12))
+        case .SignatureInvalid(_ /* message is ignored*/):
+            writeInt(&buf, Int32(13))
+        case .ChunkOpenFailed(_ /* message is ignored*/):
+            writeInt(&buf, Int32(14))
+        case .LocalKeysUnavailable(_ /* message is ignored*/):
+            writeInt(&buf, Int32(15))
+
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeHistoryError_lift(_ buf: RustBuffer) throws -> HistoryError {
+    return try FfiConverterTypeHistoryError.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeHistoryError_lower(_ value: HistoryError) -> RustBuffer {
+    return FfiConverterTypeHistoryError.lower(value)
+}
+
 // Note that we don't yet support `indirect` for enums.
 // See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
 /**
- * Whether to open a session with a device right now, and as which side.
- * See orchestration::initiation_plan. `tie_break_role` settles a collision that has happened;
- * this settles whether to walk into one, and both peers must answer it compatibly.
+ * What the receiver hands back, in stream order. A transcript record is its protobuf bytes,
+ * already checked against the protocol rules: decode it straight into the store. Media arrives
+ * in pieces — append each to the file.
+ */
+
+public enum HistoryEvent: Equatable, Hashable {
+    
+    case record(recordType: UInt8, proto: Data
+    )
+    case skipped(recordType: UInt8
+    )
+    case mediaStart(mediaId: String, mimeType: String, byteLen: UInt64
+    )
+    case mediaBytes(data: Data
+    )
+    case mediaEnd
+    case end
+
+
+
+}
+
+#if compiler(>=6)
+extension HistoryEvent: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeHistoryEvent: FfiConverterRustBuffer {
+    typealias SwiftType = HistoryEvent
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> HistoryEvent {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .record(recordType: try FfiConverterUInt8.read(from: &buf), proto: try FfiConverterData.read(from: &buf)
+        )
+        
+        case 2: return .skipped(recordType: try FfiConverterUInt8.read(from: &buf)
+        )
+        
+        case 3: return .mediaStart(mediaId: try FfiConverterString.read(from: &buf), mimeType: try FfiConverterString.read(from: &buf), byteLen: try FfiConverterUInt64.read(from: &buf)
+        )
+        
+        case 4: return .mediaBytes(data: try FfiConverterData.read(from: &buf)
+        )
+        
+        case 5: return .mediaEnd
+        
+        case 6: return .end
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: HistoryEvent, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case let .record(recordType,proto):
+            writeInt(&buf, Int32(1))
+            FfiConverterUInt8.write(recordType, into: &buf)
+            FfiConverterData.write(proto, into: &buf)
+            
+        
+        case let .skipped(recordType):
+            writeInt(&buf, Int32(2))
+            FfiConverterUInt8.write(recordType, into: &buf)
+            
+        
+        case let .mediaStart(mediaId,mimeType,byteLen):
+            writeInt(&buf, Int32(3))
+            FfiConverterString.write(mediaId, into: &buf)
+            FfiConverterString.write(mimeType, into: &buf)
+            FfiConverterUInt64.write(byteLen, into: &buf)
+            
+        
+        case let .mediaBytes(data):
+            writeInt(&buf, Int32(4))
+            FfiConverterData.write(data, into: &buf)
+            
+        
+        case .mediaEnd:
+            writeInt(&buf, Int32(5))
+        
+        
+        case .end:
+            writeInt(&buf, Int32(6))
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeHistoryEvent_lift(_ buf: RustBuffer) throws -> HistoryEvent {
+    return try FfiConverterTypeHistoryEvent.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeHistoryEvent_lower(_ value: HistoryEvent) -> RustBuffer {
+    return FfiConverterTypeHistoryEvent.lower(value)
+}
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+
+public enum HistoryMessageExport: Equatable, Hashable {
+    
+    /**
+     * The record, and the media files its body refers to.
+     */
+    case record(record: Data, media: [HistoryMediaRef]
+    )
+    /**
+     * A control row: not transcript.
+     */
+    case control
+    /**
+     * No body: a message this device never read.
+     */
+    case empty
+    /**
+     * A body from before CTM1: the client that wrote it converts it.
+     */
+    case legacy
+
+
+
+}
+
+#if compiler(>=6)
+extension HistoryMessageExport: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeHistoryMessageExport: FfiConverterRustBuffer {
+    typealias SwiftType = HistoryMessageExport
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> HistoryMessageExport {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .record(record: try FfiConverterData.read(from: &buf), media: try FfiConverterSequenceTypeHistoryMediaRef.read(from: &buf)
+        )
+        
+        case 2: return .control
+        
+        case 3: return .empty
+        
+        case 4: return .legacy
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: HistoryMessageExport, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case let .record(record,media):
+            writeInt(&buf, Int32(1))
+            FfiConverterData.write(record, into: &buf)
+            FfiConverterSequenceTypeHistoryMediaRef.write(media, into: &buf)
+            
+        
+        case .control:
+            writeInt(&buf, Int32(2))
+        
+        
+        case .empty:
+            writeInt(&buf, Int32(3))
+        
+        
+        case .legacy:
+            writeInt(&buf, Int32(4))
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeHistoryMessageExport_lift(_ buf: RustBuffer) throws -> HistoryMessageExport {
+    return try FfiConverterTypeHistoryMessageExport.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeHistoryMessageExport_lower(_ value: HistoryMessageExport) -> RustBuffer {
+    return FfiConverterTypeHistoryMessageExport.lower(value)
+}
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+
+public enum HistoryMessageImport: Equatable, Hashable {
+    
+    /**
+     * The row to insert into the chat with `peer_id`; its `chat_id` is empty — open that chat
+     * and set it. A message already held is kept: the insert does not overwrite.
+     */
+    case row(peerId: String, message: LocalMessage
+    )
+    /**
+     * A body this version does not know: skip the record.
+     */
+    case unknownBody
+
+
+
+}
+
+#if compiler(>=6)
+extension HistoryMessageImport: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeHistoryMessageImport: FfiConverterRustBuffer {
+    typealias SwiftType = HistoryMessageImport
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> HistoryMessageImport {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .row(peerId: try FfiConverterString.read(from: &buf), message: try FfiConverterTypeLocalMessage.read(from: &buf)
+        )
+        
+        case 2: return .unknownBody
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: HistoryMessageImport, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case let .row(peerId,message):
+            writeInt(&buf, Int32(1))
+            FfiConverterString.write(peerId, into: &buf)
+            FfiConverterTypeLocalMessage.write(message, into: &buf)
+            
+        
+        case .unknownBody:
+            writeInt(&buf, Int32(2))
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeHistoryMessageImport_lift(_ buf: RustBuffer) throws -> HistoryMessageImport {
+    return try FfiConverterTypeHistoryMessageImport.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeHistoryMessageImport_lower(_ value: HistoryMessageImport) -> RustBuffer {
+    return FfiConverterTypeHistoryMessageImport.lower(value)
+}
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+/**
+ * What the link QR pinned for the other device.
+ */
+
+public enum HistoryPin: Equatable, Hashable {
+    
+    /**
+     * Flow A: SHA256(identity ‖ hybrid) of the offering device (`history_qr_fingerprint`).
+     */
+    case fingerprint(fingerprint: Data
+    )
+    /**
+     * Flow B, or a file outside the link session: the directory is the only pin.
+     */
+    case bundleOnly
+    /**
+     * Nothing pins the other device: refused.
+     */
+    case absent
+
+
+
+}
+
+#if compiler(>=6)
+extension HistoryPin: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeHistoryPin: FfiConverterRustBuffer {
+    typealias SwiftType = HistoryPin
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> HistoryPin {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .fingerprint(fingerprint: try FfiConverterData.read(from: &buf)
+        )
+        
+        case 2: return .bundleOnly
+        
+        case 3: return .absent
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: HistoryPin, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case let .fingerprint(fingerprint):
+            writeInt(&buf, Int32(1))
+            FfiConverterData.write(fingerprint, into: &buf)
+            
+        
+        case .bundleOnly:
+            writeInt(&buf, Int32(2))
+        
+        
+        case .absent:
+            writeInt(&buf, Int32(3))
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeHistoryPin_lift(_ buf: RustBuffer) throws -> HistoryPin {
+    return try FfiConverterTypeHistoryPin.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeHistoryPin_lower(_ value: HistoryPin) -> RustBuffer {
+    return FfiConverterTypeHistoryPin.lower(value)
+}
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+
+public enum HistoryStatus: Equatable, Hashable {
+    
+    /**
+     * Read `need()` more bytes and feed them.
+     */
+    case needMore
+    /**
+     * Fetch the keys of `sender_device_id` from our own account's directory, then `accept`.
+     */
+    case awaitKeys(senderDeviceId: String
+    )
+    /**
+     * A verified skip: nothing follows.
+     */
+    case skipped
+    /**
+     * Ended with End and EOF. Commit.
+     */
+    case done
+
+
+
+}
+
+#if compiler(>=6)
+extension HistoryStatus: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeHistoryStatus: FfiConverterRustBuffer {
+    typealias SwiftType = HistoryStatus
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> HistoryStatus {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .needMore
+        
+        case 2: return .awaitKeys(senderDeviceId: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 3: return .skipped
+        
+        case 4: return .done
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: HistoryStatus, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case .needMore:
+            writeInt(&buf, Int32(1))
+        
+        
+        case let .awaitKeys(senderDeviceId):
+            writeInt(&buf, Int32(2))
+            FfiConverterString.write(senderDeviceId, into: &buf)
+            
+        
+        case .skipped:
+            writeInt(&buf, Int32(3))
+        
+        
+        case .done:
+            writeInt(&buf, Int32(4))
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeHistoryStatus_lift(_ buf: RustBuffer) throws -> HistoryStatus {
+    return try FfiConverterTypeHistoryStatus.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeHistoryStatus_lower(_ value: HistoryStatus) -> RustBuffer {
+    return FfiConverterTypeHistoryStatus.lower(value)
+}
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+/**
+ * Whether to open a session with a device right now. See orchestration::initiation_plan.
  */
 
 public enum InitiationDecision: Equatable, Hashable {
@@ -6347,12 +10586,12 @@ public enum InitiationDecision: Equatable, Hashable {
      */
     case initiate
     /**
-     * One of ours is already in flight — join it. A second init derives a new root key, spends
-     * another one-time prekey, and orphans the first SESSION_RESET_INIT.
+     * One of ours is already in flight — join it. A second init spends another one-time prekey
+     * for a state that will not be used.
      */
     case joinInFlight
     /**
-     * The peer's init is arriving and outranks ours. Take the responder side.
+     * The peer's handshake is in hand: open from it rather than build a second state.
      */
     case yieldToPeer
     /**
@@ -6427,6 +10666,452 @@ public func FfiConverterTypeInitiationDecision_lift(_ buf: RustBuffer) throws ->
 #endif
 public func FfiConverterTypeInitiationDecision_lower(_ value: InitiationDecision) -> RustBuffer {
     return FfiConverterTypeInitiationDecision.lower(value)
+}
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+
+public enum KtVerdict: Equatable, Hashable {
+    
+    case verified
+    case unavailable
+    case malformedProof
+    case inclusionProofInvalid
+    case signatureInvalid
+
+
+
+}
+
+#if compiler(>=6)
+extension KtVerdict: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeKtVerdict: FfiConverterRustBuffer {
+    typealias SwiftType = KtVerdict
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> KtVerdict {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .verified
+        
+        case 2: return .unavailable
+        
+        case 3: return .malformedProof
+        
+        case 4: return .inclusionProofInvalid
+        
+        case 5: return .signatureInvalid
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: KtVerdict, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case .verified:
+            writeInt(&buf, Int32(1))
+        
+        
+        case .unavailable:
+            writeInt(&buf, Int32(2))
+        
+        
+        case .malformedProof:
+            writeInt(&buf, Int32(3))
+        
+        
+        case .inclusionProofInvalid:
+            writeInt(&buf, Int32(4))
+        
+        
+        case .signatureInvalid:
+            writeInt(&buf, Int32(5))
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeKtVerdict_lift(_ buf: RustBuffer) throws -> KtVerdict {
+    return try FfiConverterTypeKtVerdict.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeKtVerdict_lower(_ value: KtVerdict) -> RustBuffer {
+    return FfiConverterTypeKtVerdict.lower(value)
+}
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+/**
+ * What a session archive did to an outgoing message encrypted under it.
+ */
+
+public enum LocalArchiveOutcome: Equatable, Hashable {
+    
+    /**
+     * The peer confirmed it; it stays delivered.
+     */
+    case keep
+    /**
+     * Queued to be sent again.
+     */
+    case resend
+    /**
+     * Attempts spent; failed.
+     */
+    case giveUp
+
+
+
+}
+
+#if compiler(>=6)
+extension LocalArchiveOutcome: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeLocalArchiveOutcome: FfiConverterRustBuffer {
+    typealias SwiftType = LocalArchiveOutcome
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> LocalArchiveOutcome {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .keep
+        
+        case 2: return .resend
+        
+        case 3: return .giveUp
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: LocalArchiveOutcome, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case .keep:
+            writeInt(&buf, Int32(1))
+        
+        
+        case .resend:
+            writeInt(&buf, Int32(2))
+        
+        
+        case .giveUp:
+            writeInt(&buf, Int32(3))
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLocalArchiveOutcome_lift(_ buf: RustBuffer) throws -> LocalArchiveOutcome {
+    return try FfiConverterTypeLocalArchiveOutcome.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLocalArchiveOutcome_lower(_ value: LocalArchiveOutcome) -> RustBuffer {
+    return FfiConverterTypeLocalArchiveOutcome.lower(value)
+}
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+
+public enum LocalInsert: Equatable, Hashable {
+    
+    case inserted
+    case alreadyPresent
+
+
+
+}
+
+#if compiler(>=6)
+extension LocalInsert: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeLocalInsert: FfiConverterRustBuffer {
+    typealias SwiftType = LocalInsert
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> LocalInsert {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .inserted
+        
+        case 2: return .alreadyPresent
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: LocalInsert, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case .inserted:
+            writeInt(&buf, Int32(1))
+        
+        
+        case .alreadyPresent:
+            writeInt(&buf, Int32(2))
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLocalInsert_lift(_ buf: RustBuffer) throws -> LocalInsert {
+    return try FfiConverterTypeLocalInsert.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLocalInsert_lower(_ value: LocalInsert) -> RustBuffer {
+    return FfiConverterTypeLocalInsert.lower(value)
+}
+
+
+
+public enum LocalStoreError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError {
+
+    
+    
+    case WrongKey(message: String)
+    
+    case KeyLength(message: String)
+    
+    case SchemaTooNew(message: String)
+    
+    case Closed(message: String)
+    
+    case Storage(message: String)
+    
+
+    
+
+    
+    public var errorDescription: String? {
+        String(reflecting: self)
+    }
+    
+}
+
+#if compiler(>=6)
+extension LocalStoreError: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeLocalStoreError: FfiConverterRustBuffer {
+    typealias SwiftType = LocalStoreError
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> LocalStoreError {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+
+        
+
+        
+        case 1: return .WrongKey(
+            message: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 2: return .KeyLength(
+            message: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 3: return .SchemaTooNew(
+            message: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 4: return .Closed(
+            message: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 5: return .Storage(
+            message: try FfiConverterString.read(from: &buf)
+        )
+        
+
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: LocalStoreError, into buf: inout [UInt8]) {
+        switch value {
+
+        
+
+        
+        case .WrongKey(_ /* message is ignored*/):
+            writeInt(&buf, Int32(1))
+        case .KeyLength(_ /* message is ignored*/):
+            writeInt(&buf, Int32(2))
+        case .SchemaTooNew(_ /* message is ignored*/):
+            writeInt(&buf, Int32(3))
+        case .Closed(_ /* message is ignored*/):
+            writeInt(&buf, Int32(4))
+        case .Storage(_ /* message is ignored*/):
+            writeInt(&buf, Int32(5))
+
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLocalStoreError_lift(_ buf: RustBuffer) throws -> LocalStoreError {
+    return try FfiConverterTypeLocalStoreError.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLocalStoreError_lower(_ value: LocalStoreError) -> RustBuffer {
+    return FfiConverterTypeLocalStoreError.lower(value)
+}
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+
+public enum LocalStoreTable: Equatable, Hashable {
+    
+    case contacts
+    case chats
+    case messages
+    case reactions
+    case calls
+    case peerDevices
+    case ownProfile
+    case issuedInvites
+
+
+
+}
+
+#if compiler(>=6)
+extension LocalStoreTable: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeLocalStoreTable: FfiConverterRustBuffer {
+    typealias SwiftType = LocalStoreTable
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> LocalStoreTable {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .contacts
+        
+        case 2: return .chats
+        
+        case 3: return .messages
+        
+        case 4: return .reactions
+        
+        case 5: return .calls
+        
+        case 6: return .peerDevices
+        
+        case 7: return .ownProfile
+        
+        case 8: return .issuedInvites
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: LocalStoreTable, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case .contacts:
+            writeInt(&buf, Int32(1))
+        
+        
+        case .chats:
+            writeInt(&buf, Int32(2))
+        
+        
+        case .messages:
+            writeInt(&buf, Int32(3))
+        
+        
+        case .reactions:
+            writeInt(&buf, Int32(4))
+        
+        
+        case .calls:
+            writeInt(&buf, Int32(5))
+        
+        
+        case .peerDevices:
+            writeInt(&buf, Int32(6))
+        
+        
+        case .ownProfile:
+            writeInt(&buf, Int32(7))
+        
+        
+        case .issuedInvites:
+            writeInt(&buf, Int32(8))
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLocalStoreTable_lift(_ buf: RustBuffer) throws -> LocalStoreTable {
+    return try FfiConverterTypeLocalStoreTable.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLocalStoreTable_lower(_ value: LocalStoreTable) -> RustBuffer {
+    return FfiConverterTypeLocalStoreTable.lower(value)
 }
 
 
@@ -6556,23 +11241,286 @@ public func FfiConverterTypeMlsError_lower(_ value: MlsError) -> RustBuffer {
 // Note that we don't yet support `indirect` for enums.
 // See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
 /**
- * What a queued message is, for the purpose of opening a receiving session.
+ * What a sealed delivery is, decided without acting on it.
+ */
+
+public enum PeekVerdict: Equatable, Hashable {
+    
+    /**
+     * Already processed by the app: its message key is spent in the stored session.
+     */
+    case alreadyHandled
+    /**
+     * A message the app would announce.
+     */
+    case visible
+    /**
+     * A silent control frame, a call signal or a DECRYPTION_ERROR: nothing to announce.
+     */
+    case control
+    /**
+     * Not read here, for any reason. The alert shows.
+     */
+    case unreadable
+
+
+
+}
+
+#if compiler(>=6)
+extension PeekVerdict: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypePeekVerdict: FfiConverterRustBuffer {
+    typealias SwiftType = PeekVerdict
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> PeekVerdict {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .alreadyHandled
+        
+        case 2: return .visible
+        
+        case 3: return .control
+        
+        case 4: return .unreadable
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: PeekVerdict, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case .alreadyHandled:
+            writeInt(&buf, Int32(1))
+        
+        
+        case .visible:
+            writeInt(&buf, Int32(2))
+        
+        
+        case .control:
+            writeInt(&buf, Int32(3))
+        
+        
+        case .unreadable:
+            writeInt(&buf, Int32(4))
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypePeekVerdict_lift(_ buf: RustBuffer) throws -> PeekVerdict {
+    return try FfiConverterTypePeekVerdict.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypePeekVerdict_lower(_ value: PeekVerdict) -> RustBuffer {
+    return FfiConverterTypePeekVerdict.lower(value)
+}
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+/**
+ * Read-only health snapshot of a Double Ratchet session.
+ * Whose Kyber key a session's post-quantum layer came from. Anything a person sees about
+ * "PQ" reads this — `is_pq_strengthened` only says a KEM secret was mixed in.
+ */
+
+public enum PqAuthentication: Equatable, Hashable {
+    
+    case unknown
+    case classic
+    case authenticated
+    case unauthenticated
+    case received
+    case receivedProven
+
+
+
+}
+
+#if compiler(>=6)
+extension PqAuthentication: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypePqAuthentication: FfiConverterRustBuffer {
+    typealias SwiftType = PqAuthentication
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> PqAuthentication {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .unknown
+        
+        case 2: return .classic
+        
+        case 3: return .authenticated
+        
+        case 4: return .unauthenticated
+        
+        case 5: return .received
+        
+        case 6: return .receivedProven
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: PqAuthentication, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case .unknown:
+            writeInt(&buf, Int32(1))
+        
+        
+        case .classic:
+            writeInt(&buf, Int32(2))
+        
+        
+        case .authenticated:
+            writeInt(&buf, Int32(3))
+        
+        
+        case .unauthenticated:
+            writeInt(&buf, Int32(4))
+        
+        
+        case .received:
+            writeInt(&buf, Int32(5))
+        
+        
+        case .receivedProven:
+            writeInt(&buf, Int32(6))
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypePqAuthentication_lift(_ buf: RustBuffer) throws -> PqAuthentication {
+    return try FfiConverterTypePqAuthentication.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypePqAuthentication_lower(_ value: PqAuthentication) -> RustBuffer {
+    return FfiConverterTypePqAuthentication.lower(value)
+}
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+/**
+ * How a session's post-quantum layer started.
+ */
+
+public enum PqHandshake: Equatable, Hashable {
+    
+    case none
+    case deferredV1
+    case initialV2
+
+
+
+}
+
+#if compiler(>=6)
+extension PqHandshake: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypePqHandshake: FfiConverterRustBuffer {
+    typealias SwiftType = PqHandshake
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> PqHandshake {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .none
+        
+        case 2: return .deferredV1
+        
+        case 3: return .initialV2
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: PqHandshake, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case .none:
+            writeInt(&buf, Int32(1))
+        
+        
+        case .deferredV1:
+            writeInt(&buf, Int32(2))
+        
+        
+        case .initialV2:
+            writeInt(&buf, Int32(3))
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypePqHandshake_lift(_ buf: RustBuffer) throws -> PqHandshake {
+    return try FfiConverterTypePqHandshake.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypePqHandshake_lower(_ value: PqHandshake) -> RustBuffer {
+    return FfiConverterTypePqHandshake.lower(value)
+}
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+/**
+ * What a message is, for the purpose of opening a receiving session.
  */
 
 public enum ReceivingInitKind: Equatable, Hashable {
     
     /**
-     * Carries an X3DH init: this message can open a session.
+     * Carries the initiator's handshake header: this message can open a session.
      */
     case handshake
     /**
-     * Already inside a ratchet. Initialising from it fails and destroys the queue behind it.
+     * Carries none: it decrypts on a state already held or not at all.
      */
     case midRatchet
-    /**
-     * `message_number == 0` but a PQ epoch has advanced — a re-keyed continuation, not an opener.
-     */
-    case midSessionLeftover
 
 
 
@@ -6596,8 +11544,6 @@ public struct FfiConverterTypeReceivingInitKind: FfiConverterRustBuffer {
         
         case 2: return .midRatchet
         
-        case 3: return .midSessionLeftover
-        
         default: throw UniffiInternalError.unexpectedEnumCase
         }
     }
@@ -6612,10 +11558,6 @@ public struct FfiConverterTypeReceivingInitKind: FfiConverterRustBuffer {
         
         case .midRatchet:
             writeInt(&buf, Int32(2))
-        
-        
-        case .midSessionLeftover:
-            writeInt(&buf, Int32(3))
         
         }
     }
@@ -6637,73 +11579,115 @@ public func FfiConverterTypeReceivingInitKind_lower(_ value: ReceivingInitKind) 
 }
 
 
-// Note that we don't yet support `indirect` for enums.
-// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+
+
+
 /**
- * What to do about one device when tearing down a session with a peer.
- * See orchestration::teardown_plan — the decision lives in the core because it is a plan,
- * and a plan is protocol.
+ * Told after every committed write, on the writing thread, never under the store's lock.
  */
-
-public enum TeardownAction: Equatable, Hashable {
+public protocol LocalStoreObserver: AnyObject, Sendable {
     
-    /**
-     * We hold a session with this device: send, then archive ours.
-     */
-    case sendAndArchive
-    /**
-     * No session of ours, but the peer is demonstrably still on one — send, archive nothing.
-     */
-    case sendOnly
-    /**
-     * Nothing to condemn, no evidence anyone is on a dead session — say nothing.
-     */
-    case skip
-
-
-
+    func onChange(change: LocalStoreChange) 
+    
 }
 
-#if compiler(>=6)
-extension TeardownAction: Sendable {}
+
+// Put the implementation in a struct so we don't pollute the top-level namespace
+fileprivate struct UniffiCallbackInterfaceLocalStoreObserver {
+
+    // Create the VTable using a series of closures.
+    // Swift automatically converts these into C callback functions.
+    //
+    // This creates 1-element array, since this seems to be the only way to construct a const
+    // pointer that we can pass to the Rust code.
+    static let vtable: [UniffiVTableCallbackInterfaceLocalStoreObserver] = [UniffiVTableCallbackInterfaceLocalStoreObserver(
+        uniffiFree: { (uniffiHandle: UInt64) -> () in
+            do {
+                try FfiConverterCallbackInterfaceLocalStoreObserver.handleMap.remove(handle: uniffiHandle)
+            } catch {
+                print("Uniffi callback interface LocalStoreObserver: handle missing in uniffiFree")
+            }
+        },
+        uniffiClone: { (uniffiHandle: UInt64) -> UInt64 in
+            do {
+                return try FfiConverterCallbackInterfaceLocalStoreObserver.handleMap.clone(handle: uniffiHandle)
+            } catch {
+                fatalError("Uniffi callback interface LocalStoreObserver: handle missing in uniffiClone")
+            }
+        },
+        onChange: { (
+            uniffiHandle: UInt64,
+            change: RustBuffer,
+            uniffiOutReturn: UnsafeMutableRawPointer,
+            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
+        ) in
+            let makeCall = {
+                () throws -> () in
+                guard let uniffiObj = try? FfiConverterCallbackInterfaceLocalStoreObserver.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return uniffiObj.onChange(
+                     change: try FfiConverterTypeLocalStoreChange_lift(change)
+                )
+            }
+
+            
+            let writeReturn = { () }
+            uniffiTraitInterfaceCall(
+                callStatus: uniffiCallStatus,
+                makeCall: makeCall,
+                writeReturn: writeReturn
+            )
+        }
+    )]
+}
+
+private func uniffiCallbackInitLocalStoreObserver() {
+    uniffi_construct_core_fn_init_callback_vtable_localstoreobserver(UniffiCallbackInterfaceLocalStoreObserver.vtable)
+}
+
+// FfiConverter protocol for callback interfaces
+#if swift(>=5.8)
+@_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterCallbackInterfaceLocalStoreObserver {
+    fileprivate static let handleMap = UniffiHandleMap<LocalStoreObserver>()
+}
 
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-public struct FfiConverterTypeTeardownAction: FfiConverterRustBuffer {
-    typealias SwiftType = TeardownAction
+extension FfiConverterCallbackInterfaceLocalStoreObserver : FfiConverter {
+    typealias SwiftType = LocalStoreObserver
+    typealias FfiType = UInt64
 
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> TeardownAction {
-        let variant: Int32 = try readInt(&buf)
-        switch variant {
-        
-        case 1: return .sendAndArchive
-        
-        case 2: return .sendOnly
-        
-        case 3: return .skip
-        
-        default: throw UniffiInternalError.unexpectedEnumCase
-        }
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public static func lift(_ handle: UInt64) throws -> SwiftType {
+        try handleMap.get(handle: handle)
     }
 
-    public static func write(_ value: TeardownAction, into buf: inout [UInt8]) {
-        switch value {
-        
-        
-        case .sendAndArchive:
-            writeInt(&buf, Int32(1))
-        
-        
-        case .sendOnly:
-            writeInt(&buf, Int32(2))
-        
-        
-        case .skip:
-            writeInt(&buf, Int32(3))
-        
-        }
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public static func lower(_ v: SwiftType) -> UInt64 {
+        return handleMap.insert(obj: v)
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public static func write(_ v: SwiftType, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(v))
     }
 }
 
@@ -6711,17 +11695,143 @@ public struct FfiConverterTypeTeardownAction: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-public func FfiConverterTypeTeardownAction_lift(_ buf: RustBuffer) throws -> TeardownAction {
-    return try FfiConverterTypeTeardownAction.lift(buf)
+public func FfiConverterCallbackInterfaceLocalStoreObserver_lift(_ handle: UInt64) throws -> LocalStoreObserver {
+    return try FfiConverterCallbackInterfaceLocalStoreObserver.lift(handle)
 }
 
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-public func FfiConverterTypeTeardownAction_lower(_ value: TeardownAction) -> RustBuffer {
-    return FfiConverterTypeTeardownAction.lower(value)
+public func FfiConverterCallbackInterfaceLocalStoreObserver_lower(_ v: LocalStoreObserver) -> UInt64 {
+    return FfiConverterCallbackInterfaceLocalStoreObserver.lower(v)
 }
 
+
+
+
+/**
+ * The stored session state of a peer device, as the platform's secure store holds it.
+ */
+public protocol PeekSessionSource: AnyObject, Sendable {
+    
+    func session(deviceId: String)  -> Data?
+    
+}
+
+
+// Put the implementation in a struct so we don't pollute the top-level namespace
+fileprivate struct UniffiCallbackInterfacePeekSessionSource {
+
+    // Create the VTable using a series of closures.
+    // Swift automatically converts these into C callback functions.
+    //
+    // This creates 1-element array, since this seems to be the only way to construct a const
+    // pointer that we can pass to the Rust code.
+    static let vtable: [UniffiVTableCallbackInterfacePeekSessionSource] = [UniffiVTableCallbackInterfacePeekSessionSource(
+        uniffiFree: { (uniffiHandle: UInt64) -> () in
+            do {
+                try FfiConverterCallbackInterfacePeekSessionSource.handleMap.remove(handle: uniffiHandle)
+            } catch {
+                print("Uniffi callback interface PeekSessionSource: handle missing in uniffiFree")
+            }
+        },
+        uniffiClone: { (uniffiHandle: UInt64) -> UInt64 in
+            do {
+                return try FfiConverterCallbackInterfacePeekSessionSource.handleMap.clone(handle: uniffiHandle)
+            } catch {
+                fatalError("Uniffi callback interface PeekSessionSource: handle missing in uniffiClone")
+            }
+        },
+        session: { (
+            uniffiHandle: UInt64,
+            deviceId: RustBuffer,
+            uniffiOutReturn: UnsafeMutablePointer<RustBuffer>,
+            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
+        ) in
+            let makeCall = {
+                () throws -> Data? in
+                guard let uniffiObj = try? FfiConverterCallbackInterfacePeekSessionSource.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return uniffiObj.session(
+                     deviceId: try FfiConverterString.lift(deviceId)
+                )
+            }
+
+            
+            let writeReturn = { uniffiOutReturn.pointee = FfiConverterOptionData.lower($0) }
+            uniffiTraitInterfaceCall(
+                callStatus: uniffiCallStatus,
+                makeCall: makeCall,
+                writeReturn: writeReturn
+            )
+        }
+    )]
+}
+
+private func uniffiCallbackInitPeekSessionSource() {
+    uniffi_construct_core_fn_init_callback_vtable_peeksessionsource(UniffiCallbackInterfacePeekSessionSource.vtable)
+}
+
+// FfiConverter protocol for callback interfaces
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterCallbackInterfacePeekSessionSource {
+    fileprivate static let handleMap = UniffiHandleMap<PeekSessionSource>()
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+extension FfiConverterCallbackInterfacePeekSessionSource : FfiConverter {
+    typealias SwiftType = PeekSessionSource
+    typealias FfiType = UInt64
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public static func lift(_ handle: UInt64) throws -> SwiftType {
+        try handleMap.get(handle: handle)
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public static func lower(_ v: SwiftType) -> UInt64 {
+        return handleMap.insert(obj: v)
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public static func write(_ v: SwiftType, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(v))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterCallbackInterfacePeekSessionSource_lift(_ handle: UInt64) throws -> PeekSessionSource {
+    return try FfiConverterCallbackInterfacePeekSessionSource.lift(handle)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterCallbackInterfacePeekSessionSource_lower(_ v: PeekSessionSource) -> UInt64 {
+    return FfiConverterCallbackInterfacePeekSessionSource.lower(v)
+}
 
 
 
@@ -7116,6 +12226,30 @@ public func FfiConverterCallbackInterfacePowProgressCallback_lower(_ v: PowProgr
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterOptionInt16: FfiConverterRustBuffer {
+    typealias SwiftType = Int16?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterInt16.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterInt16.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterOptionUInt32: FfiConverterRustBuffer {
     typealias SwiftType = UInt32?
 
@@ -7132,6 +12266,54 @@ fileprivate struct FfiConverterOptionUInt32: FfiConverterRustBuffer {
         switch try readInt(&buf) as Int8 {
         case 0: return nil
         case 1: return try FfiConverterUInt32.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterOptionUInt64: FfiConverterRustBuffer {
+    typealias SwiftType = UInt64?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterUInt64.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterUInt64.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterOptionInt64: FfiConverterRustBuffer {
+    typealias SwiftType = Int64?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterInt64.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterInt64.read(from: &buf)
         default: throw UniffiInternalError.unexpectedOptionalTag
         }
     }
@@ -7188,8 +12370,8 @@ fileprivate struct FfiConverterOptionData: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-fileprivate struct FfiConverterOptionTypeKyberSpkRecord: FfiConverterRustBuffer {
-    typealias SwiftType = KyberSpkRecord?
+fileprivate struct FfiConverterOptionTypeEnvelopeOpened: FfiConverterRustBuffer {
+    typealias SwiftType = EnvelopeOpened?
 
     public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
         guard let value = value else {
@@ -7197,13 +12379,253 @@ fileprivate struct FfiConverterOptionTypeKyberSpkRecord: FfiConverterRustBuffer 
             return
         }
         writeInt(&buf, Int8(1))
-        FfiConverterTypeKyberSpkRecord.write(value, into: &buf)
+        FfiConverterTypeEnvelopeOpened.write(value, into: &buf)
     }
 
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
         switch try readInt(&buf) as Int8 {
         case 0: return nil
-        case 1: return try FfiConverterTypeKyberSpkRecord.read(from: &buf)
+        case 1: return try FfiConverterTypeEnvelopeOpened.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterOptionTypeKnstFrame: FfiConverterRustBuffer {
+    typealias SwiftType = KnstFrame?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeKnstFrame.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeKnstFrame.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterOptionTypeKtInclusionProof: FfiConverterRustBuffer {
+    typealias SwiftType = KtInclusionProof?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeKtInclusionProof.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeKtInclusionProof.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterOptionTypeKtSignedTreeHead: FfiConverterRustBuffer {
+    typealias SwiftType = KtSignedTreeHead?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeKtSignedTreeHead.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeKtSignedTreeHead.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterOptionTypeKyberPrekeyUpload: FfiConverterRustBuffer {
+    typealias SwiftType = KyberPrekeyUpload?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeKyberPrekeyUpload.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeKyberPrekeyUpload.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterOptionTypeLocalChat: FfiConverterRustBuffer {
+    typealias SwiftType = LocalChat?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeLocalChat.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeLocalChat.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterOptionTypeLocalContact: FfiConverterRustBuffer {
+    typealias SwiftType = LocalContact?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeLocalContact.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeLocalContact.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterOptionTypeLocalMessage: FfiConverterRustBuffer {
+    typealias SwiftType = LocalMessage?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeLocalMessage.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeLocalMessage.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterOptionTypeLocalOwnProfile: FfiConverterRustBuffer {
+    typealias SwiftType = LocalOwnProfile?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeLocalOwnProfile.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeLocalOwnProfile.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterOptionTypeLocalPeerDevice: FfiConverterRustBuffer {
+    typealias SwiftType = LocalPeerDevice?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeLocalPeerDevice.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeLocalPeerDevice.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterOptionTypeSenderCertificate: FfiConverterRustBuffer {
+    typealias SwiftType = SenderCertificate?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeSenderCertificate.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeSenderCertificate.read(from: &buf)
         default: throw UniffiInternalError.unexpectedOptionalTag
         }
     }
@@ -7236,6 +12658,78 @@ fileprivate struct FfiConverterOptionTypeSessionHealthReport: FfiConverterRustBu
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterOptionTypeKtVerdict: FfiConverterRustBuffer {
+    typealias SwiftType = KtVerdict?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeKtVerdict.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeKtVerdict.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterOptionTypeLocalArchiveOutcome: FfiConverterRustBuffer {
+    typealias SwiftType = LocalArchiveOutcome?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeLocalArchiveOutcome.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeLocalArchiveOutcome.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterOptionCallbackInterfaceLocalStoreObserver: FfiConverterRustBuffer {
+    typealias SwiftType = LocalStoreObserver?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterCallbackInterfaceLocalStoreObserver.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterCallbackInterfaceLocalStoreObserver.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterOptionCallbackInterfacePowProgressCallback: FfiConverterRustBuffer {
     typealias SwiftType = PowProgressCallback?
 
@@ -7260,8 +12754,8 @@ fileprivate struct FfiConverterOptionCallbackInterfacePowProgressCallback: FfiCo
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-fileprivate struct FfiConverterOptionSequenceUInt8: FfiConverterRustBuffer {
-    typealias SwiftType = [UInt8]?
+fileprivate struct FfiConverterOptionSequenceData: FfiConverterRustBuffer {
+    typealias SwiftType = [Data]?
 
     public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
         guard let value = value else {
@@ -7269,40 +12763,15 @@ fileprivate struct FfiConverterOptionSequenceUInt8: FfiConverterRustBuffer {
             return
         }
         writeInt(&buf, Int8(1))
-        FfiConverterSequenceUInt8.write(value, into: &buf)
+        FfiConverterSequenceData.write(value, into: &buf)
     }
 
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
         switch try readInt(&buf) as Int8 {
         case 0: return nil
-        case 1: return try FfiConverterSequenceUInt8.read(from: &buf)
+        case 1: return try FfiConverterSequenceData.read(from: &buf)
         default: throw UniffiInternalError.unexpectedOptionalTag
         }
-    }
-}
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-fileprivate struct FfiConverterSequenceUInt8: FfiConverterRustBuffer {
-    typealias SwiftType = [UInt8]
-
-    public static func write(_ value: [UInt8], into buf: inout [UInt8]) {
-        let len = Int32(value.count)
-        writeInt(&buf, len)
-        for item in value {
-            FfiConverterUInt8.write(item, into: &buf)
-        }
-    }
-
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [UInt8] {
-        let len: Int32 = try readInt(&buf)
-        var seq = [UInt8]()
-        seq.reserveCapacity(Int(len))
-        for _ in 0 ..< len {
-            seq.append(try FfiConverterUInt8.read(from: &buf))
-        }
-        return seq
     }
 }
 
@@ -7326,6 +12795,31 @@ fileprivate struct FfiConverterSequenceString: FfiConverterRustBuffer {
         seq.reserveCapacity(Int(len))
         for _ in 0 ..< len {
             seq.append(try FfiConverterString.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceData: FfiConverterRustBuffer {
+    typealias SwiftType = [Data]
+
+    public static func write(_ value: [Data], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterData.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [Data] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [Data]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterData.read(from: &buf))
         }
         return seq
     }
@@ -7359,23 +12853,23 @@ fileprivate struct FfiConverterSequenceTypeDeliveryTarget: FfiConverterRustBuffe
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-fileprivate struct FfiConverterSequenceTypeOfflineBatchMessage: FfiConverterRustBuffer {
-    typealias SwiftType = [OfflineBatchMessage]
+fileprivate struct FfiConverterSequenceTypeHistoryMediaRef: FfiConverterRustBuffer {
+    typealias SwiftType = [HistoryMediaRef]
 
-    public static func write(_ value: [OfflineBatchMessage], into buf: inout [UInt8]) {
+    public static func write(_ value: [HistoryMediaRef], into buf: inout [UInt8]) {
         let len = Int32(value.count)
         writeInt(&buf, len)
         for item in value {
-            FfiConverterTypeOfflineBatchMessage.write(item, into: &buf)
+            FfiConverterTypeHistoryMediaRef.write(item, into: &buf)
         }
     }
 
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [OfflineBatchMessage] {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [HistoryMediaRef] {
         let len: Int32 = try readInt(&buf)
-        var seq = [OfflineBatchMessage]()
+        var seq = [HistoryMediaRef]()
         seq.reserveCapacity(Int(len))
         for _ in 0 ..< len {
-            seq.append(try FfiConverterTypeOfflineBatchMessage.read(from: &buf))
+            seq.append(try FfiConverterTypeHistoryMediaRef.read(from: &buf))
         }
         return seq
     }
@@ -7384,23 +12878,398 @@ fileprivate struct FfiConverterSequenceTypeOfflineBatchMessage: FfiConverterRust
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-fileprivate struct FfiConverterSequenceTypeOfflineBatchResult: FfiConverterRustBuffer {
-    typealias SwiftType = [OfflineBatchResult]
+fileprivate struct FfiConverterSequenceTypeHistoryRecordOut: FfiConverterRustBuffer {
+    typealias SwiftType = [HistoryRecordOut]
 
-    public static func write(_ value: [OfflineBatchResult], into buf: inout [UInt8]) {
+    public static func write(_ value: [HistoryRecordOut], into buf: inout [UInt8]) {
         let len = Int32(value.count)
         writeInt(&buf, len)
         for item in value {
-            FfiConverterTypeOfflineBatchResult.write(item, into: &buf)
+            FfiConverterTypeHistoryRecordOut.write(item, into: &buf)
         }
     }
 
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [OfflineBatchResult] {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [HistoryRecordOut] {
         let len: Int32 = try readInt(&buf)
-        var seq = [OfflineBatchResult]()
+        var seq = [HistoryRecordOut]()
         seq.reserveCapacity(Int(len))
         for _ in 0 ..< len {
-            seq.append(try FfiConverterTypeOfflineBatchResult.read(from: &buf))
+            seq.append(try FfiConverterTypeHistoryRecordOut.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeKyberPrekeyUpload: FfiConverterRustBuffer {
+    typealias SwiftType = [KyberPrekeyUpload]
+
+    public static func write(_ value: [KyberPrekeyUpload], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeKyberPrekeyUpload.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [KyberPrekeyUpload] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [KyberPrekeyUpload]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeKyberPrekeyUpload.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeLocalCall: FfiConverterRustBuffer {
+    typealias SwiftType = [LocalCall]
+
+    public static func write(_ value: [LocalCall], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeLocalCall.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [LocalCall] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [LocalCall]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeLocalCall.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeLocalChat: FfiConverterRustBuffer {
+    typealias SwiftType = [LocalChat]
+
+    public static func write(_ value: [LocalChat], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeLocalChat.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [LocalChat] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [LocalChat]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeLocalChat.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeLocalContact: FfiConverterRustBuffer {
+    typealias SwiftType = [LocalContact]
+
+    public static func write(_ value: [LocalContact], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeLocalContact.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [LocalContact] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [LocalContact]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeLocalContact.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeLocalIdentityKeyPin: FfiConverterRustBuffer {
+    typealias SwiftType = [LocalIdentityKeyPin]
+
+    public static func write(_ value: [LocalIdentityKeyPin], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeLocalIdentityKeyPin.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [LocalIdentityKeyPin] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [LocalIdentityKeyPin]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeLocalIdentityKeyPin.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeLocalIssuedInvite: FfiConverterRustBuffer {
+    typealias SwiftType = [LocalIssuedInvite]
+
+    public static func write(_ value: [LocalIssuedInvite], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeLocalIssuedInvite.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [LocalIssuedInvite] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [LocalIssuedInvite]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeLocalIssuedInvite.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeLocalKvEntry: FfiConverterRustBuffer {
+    typealias SwiftType = [LocalKvEntry]
+
+    public static func write(_ value: [LocalKvEntry], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeLocalKvEntry.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [LocalKvEntry] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [LocalKvEntry]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeLocalKvEntry.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeLocalMessage: FfiConverterRustBuffer {
+    typealias SwiftType = [LocalMessage]
+
+    public static func write(_ value: [LocalMessage], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeLocalMessage.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [LocalMessage] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [LocalMessage]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeLocalMessage.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeLocalMessageInsert: FfiConverterRustBuffer {
+    typealias SwiftType = [LocalMessageInsert]
+
+    public static func write(_ value: [LocalMessageInsert], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeLocalMessageInsert.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [LocalMessageInsert] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [LocalMessageInsert]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeLocalMessageInsert.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeLocalPeerDevice: FfiConverterRustBuffer {
+    typealias SwiftType = [LocalPeerDevice]
+
+    public static func write(_ value: [LocalPeerDevice], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeLocalPeerDevice.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [LocalPeerDevice] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [LocalPeerDevice]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeLocalPeerDevice.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeLocalPendingChunk: FfiConverterRustBuffer {
+    typealias SwiftType = [LocalPendingChunk]
+
+    public static func write(_ value: [LocalPendingChunk], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeLocalPendingChunk.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [LocalPendingChunk] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [LocalPendingChunk]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeLocalPendingChunk.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeLocalPendingChunkMessage: FfiConverterRustBuffer {
+    typealias SwiftType = [LocalPendingChunkMessage]
+
+    public static func write(_ value: [LocalPendingChunkMessage], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeLocalPendingChunkMessage.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [LocalPendingChunkMessage] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [LocalPendingChunkMessage]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeLocalPendingChunkMessage.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeLocalPendingResend: FfiConverterRustBuffer {
+    typealias SwiftType = [LocalPendingResend]
+
+    public static func write(_ value: [LocalPendingResend], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeLocalPendingResend.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [LocalPendingResend] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [LocalPendingResend]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeLocalPendingResend.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeLocalReaction: FfiConverterRustBuffer {
+    typealias SwiftType = [LocalReaction]
+
+    public static func write(_ value: [LocalReaction], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeLocalReaction.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [LocalReaction] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [LocalReaction]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeLocalReaction.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeLocalSearchHit: FfiConverterRustBuffer {
+    typealias SwiftType = [LocalSearchHit]
+
+    public static func write(_ value: [LocalSearchHit], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeLocalSearchHit.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [LocalSearchHit] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [LocalSearchHit]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeLocalSearchHit.read(from: &buf))
         }
         return seq
     }
@@ -7434,81 +13303,6 @@ fileprivate struct FfiConverterSequenceTypeOtpkPair: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-fileprivate struct FfiConverterSequenceTypeReceivingInitAttempt: FfiConverterRustBuffer {
-    typealias SwiftType = [ReceivingInitAttempt]
-
-    public static func write(_ value: [ReceivingInitAttempt], into buf: inout [UInt8]) {
-        let len = Int32(value.count)
-        writeInt(&buf, len)
-        for item in value {
-            FfiConverterTypeReceivingInitAttempt.write(item, into: &buf)
-        }
-    }
-
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [ReceivingInitAttempt] {
-        let len: Int32 = try readInt(&buf)
-        var seq = [ReceivingInitAttempt]()
-        seq.reserveCapacity(Int(len))
-        for _ in 0 ..< len {
-            seq.append(try FfiConverterTypeReceivingInitAttempt.read(from: &buf))
-        }
-        return seq
-    }
-}
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-fileprivate struct FfiConverterSequenceTypeReceivingInitCarrier: FfiConverterRustBuffer {
-    typealias SwiftType = [ReceivingInitCarrier]
-
-    public static func write(_ value: [ReceivingInitCarrier], into buf: inout [UInt8]) {
-        let len = Int32(value.count)
-        writeInt(&buf, len)
-        for item in value {
-            FfiConverterTypeReceivingInitCarrier.write(item, into: &buf)
-        }
-    }
-
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [ReceivingInitCarrier] {
-        let len: Int32 = try readInt(&buf)
-        var seq = [ReceivingInitCarrier]()
-        seq.reserveCapacity(Int(len))
-        for _ in 0 ..< len {
-            seq.append(try FfiConverterTypeReceivingInitCarrier.read(from: &buf))
-        }
-        return seq
-    }
-}
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-fileprivate struct FfiConverterSequenceTypeTeardownDecision: FfiConverterRustBuffer {
-    typealias SwiftType = [TeardownDecision]
-
-    public static func write(_ value: [TeardownDecision], into buf: inout [UInt8]) {
-        let len = Int32(value.count)
-        writeInt(&buf, len)
-        for item in value {
-            FfiConverterTypeTeardownDecision.write(item, into: &buf)
-        }
-    }
-
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [TeardownDecision] {
-        let len: Int32 = try readInt(&buf)
-        var seq = [TeardownDecision]()
-        seq.reserveCapacity(Int(len))
-        for _ in 0 ..< len {
-            seq.append(try FfiConverterTypeTeardownDecision.read(from: &buf))
-        }
-        return seq
-    }
-}
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
 fileprivate struct FfiConverterSequenceTypeCfeAction: FfiConverterRustBuffer {
     typealias SwiftType = [CfeAction]
 
@@ -7534,23 +13328,23 @@ fileprivate struct FfiConverterSequenceTypeCfeAction: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-fileprivate struct FfiConverterSequenceSequenceUInt8: FfiConverterRustBuffer {
-    typealias SwiftType = [[UInt8]]
+fileprivate struct FfiConverterSequenceTypeHistoryEvent: FfiConverterRustBuffer {
+    typealias SwiftType = [HistoryEvent]
 
-    public static func write(_ value: [[UInt8]], into buf: inout [UInt8]) {
+    public static func write(_ value: [HistoryEvent], into buf: inout [UInt8]) {
         let len = Int32(value.count)
         writeInt(&buf, len)
         for item in value {
-            FfiConverterSequenceUInt8.write(item, into: &buf)
+            FfiConverterTypeHistoryEvent.write(item, into: &buf)
         }
     }
 
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [[UInt8]] {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [HistoryEvent] {
         let len: Int32 = try readInt(&buf)
-        var seq = [[UInt8]]()
+        var seq = [HistoryEvent]()
         seq.reserveCapacity(Int(len))
         for _ in 0 ..< len {
-            seq.append(try FfiConverterSequenceUInt8.read(from: &buf))
+            seq.append(try FfiConverterTypeHistoryEvent.read(from: &buf))
         }
         return seq
     }
@@ -7595,10 +13389,10 @@ public func createCryptoCore()throws  -> ClassicCryptoCore  {
     )
 })
 }
-public func createCryptoCoreFromKeys(keys: [UInt8])throws  -> ClassicCryptoCore  {
+public func createCryptoCoreFromKeys(keys: Data)throws  -> ClassicCryptoCore  {
     return try  FfiConverterTypeClassicCryptoCore_lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
     uniffi_construct_core_fn_func_create_crypto_core_from_keys(
-        FfiConverterSequenceUInt8.lower(keys),$0
+        FfiConverterData.lower(keys),$0
     )
 })
 }
@@ -7606,65 +13400,25 @@ public func createCryptoCoreFromKeys(keys: [UInt8])throws  -> ClassicCryptoCore 
  * Create an OrchestratorCore from CFE binary or legacy JSON key bytes.
  * Accepts both formats — Rust handles detection and migration internally.
  */
-public func createOrchestratorCoreFromKeys(keysData: [UInt8], myUserId: String)throws  -> OrchestratorCore  {
+public func createOrchestratorCoreFromKeys(keysData: Data, myUserId: String)throws  -> OrchestratorCore  {
     return try  FfiConverterTypeOrchestratorCore_lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
     uniffi_construct_core_fn_func_create_orchestrator_core_from_keys(
-        FfiConverterSequenceUInt8.lower(keysData),
+        FfiConverterData.lower(keysData),
         FfiConverterString.lower(myUserId),$0
     )
 })
 }
-public func deriveDeviceId(identityPublicKey: [UInt8]) -> String  {
+public func deriveDeviceId(identityPublicKey: Data) -> String  {
     return try!  FfiConverterString.lift(try! rustCall() {
     uniffi_construct_core_fn_func_derive_device_id(
-        FfiConverterSequenceUInt8.lower(identityPublicKey),$0
+        FfiConverterData.lower(identityPublicKey),$0
     )
 })
 }
-public func deriveRecoveryKeypair(seed: [UInt8])throws  -> RecoveryKeypair  {
+public func deriveRecoveryKeypair(seed: Data)throws  -> RecoveryKeypair  {
     return try  FfiConverterTypeRecoveryKeypair_lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
     uniffi_construct_core_fn_func_derive_recovery_keypair(
-        FfiConverterSequenceUInt8.lower(seed),$0
-    )
-})
-}
-public func deriveVerifyingKeyFromSecret(identitySecretKey: [UInt8])throws  -> [UInt8]  {
-    return try  FfiConverterSequenceUInt8.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
-    uniffi_construct_core_fn_func_derive_verifying_key_from_secret(
-        FfiConverterSequenceUInt8.lower(identitySecretKey),$0
-    )
-})
-}
-/**
- * The tag a copy addressed to target_device_id travels under.
- * base_message_id carries no per-device or per-chunk suffix, so every chunk
- * of one message shares a tag.
- */
-public func deviceCopyTag(baseMessageId: String, targetDeviceId: String, ourIdentityPrivate: [UInt8], peerIdentityPublic: [UInt8])throws  -> String  {
-    return try  FfiConverterString.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
-    uniffi_construct_core_fn_func_device_copy_tag(
-        FfiConverterString.lower(baseMessageId),
-        FfiConverterString.lower(targetDeviceId),
-        FfiConverterSequenceUInt8.lower(ourIdentityPrivate),
-        FfiConverterSequenceUInt8.lower(peerIdentityPublic),$0
-    )
-})
-}
-/**
- * Whether tag was written for our_device_id by the device behind
- * peer_identity_public. False for any unusable input: callers ask "is this
- * copy foreign?", and an undecidable answer there must be "not foreign" —
- * wrongly opening a copy costs failed decrypts, wrongly discarding one
- * loses a message from the transcript, silently.
- */
-public func deviceCopyTagMatches(tag: String, baseMessageId: String, ourDeviceId: String, ourIdentityPrivate: [UInt8], peerIdentityPublic: [UInt8]) -> Bool  {
-    return try!  FfiConverterBool.lift(try! rustCall() {
-    uniffi_construct_core_fn_func_device_copy_tag_matches(
-        FfiConverterString.lower(tag),
-        FfiConverterString.lower(baseMessageId),
-        FfiConverterString.lower(ourDeviceId),
-        FfiConverterSequenceUInt8.lower(ourIdentityPrivate),
-        FfiConverterSequenceUInt8.lower(peerIdentityPublic),$0
+        FfiConverterData.lower(seed),$0
     )
 })
 }
@@ -7676,8 +13430,8 @@ public func formatFederatedId(deviceId: String, serverHostname: String) -> Strin
     )
 })
 }
-public func generateDummyMessage(size: UInt64) -> [UInt8]  {
-    return try!  FfiConverterSequenceUInt8.lift(try! rustCall() {
+public func generateDummyMessage(size: UInt64) -> Data  {
+    return try!  FfiConverterData.lift(try! rustCall() {
     uniffi_construct_core_fn_func_generate_dummy_message(
         FfiConverterUInt64.lower(size),$0
     )
@@ -7689,8 +13443,8 @@ public func generateEphemeralKeypair()throws  -> EphemeralKeyPair  {
     )
 })
 }
-public func generateIntakeKey() -> [UInt8]  {
-    return try!  FfiConverterSequenceUInt8.lift(try! rustCall() {
+public func generateIntakeKey() -> Data  {
+    return try!  FfiConverterData.lift(try! rustCall() {
     uniffi_construct_core_fn_func_generate_intake_key($0
     )
 })
@@ -7702,6 +13456,15 @@ public func generateMnemonic(wordCount: UInt8)throws  -> String  {
     )
 })
 }
+/**
+ * Fresh device keys (identity, signing, signed prekey) as a key record.
+ */
+public func generatePrivateKeys()throws  -> Data  {
+    return try  FfiConverterData.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_func_generate_private_keys($0
+    )
+})
+}
 public func heartbeatIntervalMs(baseIntervalSec: UInt64) -> UInt64  {
     return try!  FfiConverterUInt64.lift(try! rustCall() {
     uniffi_construct_core_fn_func_heartbeat_interval_ms(
@@ -7709,13 +13472,164 @@ public func heartbeatIntervalMs(baseIntervalSec: UInt64) -> UInt64  {
     )
 })
 }
+public func historyDiscoveryInstanceName(tag: String) -> String  {
+    return try!  FfiConverterString.lift(try! rustCall() {
+    uniffi_construct_core_fn_func_history_discovery_instance_name(
+        FfiConverterString.lower(tag),$0
+    )
+})
+}
+public func historyDiscoveryTag(userIdDashed: String, deviceIdHex: String) -> String  {
+    return try!  FfiConverterString.lift(try! rustCall() {
+    uniffi_construct_core_fn_func_history_discovery_tag(
+        FfiConverterString.lower(userIdDashed),
+        FfiConverterString.lower(deviceIdHex),$0
+    )
+})
+}
+public func historyExportCall(call: LocalCall) -> Data  {
+    return try!  FfiConverterData.lift(try! rustCall() {
+    uniffi_construct_core_fn_func_history_export_call(
+        FfiConverterTypeLocalCall_lower(call),$0
+    )
+})
+}
+public func historyExportChat(peerId: String, isPinned: Bool) -> Data  {
+    return try!  FfiConverterData.lift(try! rustCall() {
+    uniffi_construct_core_fn_func_history_export_chat(
+        FfiConverterString.lower(peerId),
+        FfiConverterBool.lower(isPinned),$0
+    )
+})
+}
+public func historyExportContact(contact: LocalContact) -> Data  {
+    return try!  FfiConverterData.lift(try! rustCall() {
+    uniffi_construct_core_fn_func_history_export_contact(
+        FfiConverterTypeLocalContact_lower(contact),$0
+    )
+})
+}
+/**
+ * `chat_peer_id` names the received side of an older row whose stored id is not an account.
+ */
+public func historyExportMessage(message: LocalMessage, ownAccountId: String, chatPeerId: String?) -> HistoryMessageExport  {
+    return try!  FfiConverterTypeHistoryMessageExport_lift(try! rustCall() {
+    uniffi_construct_core_fn_func_history_export_message(
+        FfiConverterTypeLocalMessage_lower(message),
+        FfiConverterString.lower(ownAccountId),
+        FfiConverterOptionString.lower(chatPeerId),$0
+    )
+})
+}
+public func historyExportPeerDevice(device: LocalPeerDevice) -> Data  {
+    return try!  FfiConverterData.lift(try! rustCall() {
+    uniffi_construct_core_fn_func_history_export_peer_device(
+        FfiConverterTypeLocalPeerDevice_lower(device),$0
+    )
+})
+}
+public func historyExportReaction(reaction: LocalReaction) -> Data  {
+    return try!  FfiConverterData.lift(try! rustCall() {
+    uniffi_construct_core_fn_func_history_export_reaction(
+        FfiConverterTypeLocalReaction_lower(reaction),$0
+    )
+})
+}
+/**
+ * `peer_name`: the receiver's name for the peer; the record carries none.
+ */
+public func historyImportCall(record: Data, peerName: String, nowMs: Int64)throws  -> LocalCall  {
+    return try  FfiConverterTypeLocalCall_lift(try rustCallWithError(FfiConverterTypeHistoryError_lift) {
+    uniffi_construct_core_fn_func_history_import_call(
+        FfiConverterData.lower(record),
+        FfiConverterString.lower(peerName),
+        FfiConverterInt64.lower(nowMs),$0
+    )
+})
+}
+public func historyImportChat(record: Data)throws  -> HistoryChatImport  {
+    return try  FfiConverterTypeHistoryChatImport_lift(try rustCallWithError(FfiConverterTypeHistoryError_lift) {
+    uniffi_construct_core_fn_func_history_import_chat(
+        FfiConverterData.lower(record),$0
+    )
+})
+}
+/**
+ * Pass a display name the client generated itself as empty.
+ */
+public func historyImportContact(record: Data, existing: LocalContact?, nowMs: Int64)throws  -> LocalContact  {
+    return try  FfiConverterTypeLocalContact_lift(try rustCallWithError(FfiConverterTypeHistoryError_lift) {
+    uniffi_construct_core_fn_func_history_import_contact(
+        FfiConverterData.lower(record),
+        FfiConverterOptionTypeLocalContact.lower(existing),
+        FfiConverterInt64.lower(nowMs),$0
+    )
+})
+}
+public func historyImportMessage(record: Data, ownAccountId: String)throws  -> HistoryMessageImport  {
+    return try  FfiConverterTypeHistoryMessageImport_lift(try rustCallWithError(FfiConverterTypeHistoryError_lift) {
+    uniffi_construct_core_fn_func_history_import_message(
+        FfiConverterData.lower(record),
+        FfiConverterString.lower(ownAccountId),$0
+    )
+})
+}
+/**
+ * Null when the device id is not the one its key derives.
+ */
+public func historyImportPeerDevice(record: Data, nowMs: Int64)throws  -> LocalPeerDevice?  {
+    return try  FfiConverterOptionTypeLocalPeerDevice.lift(try rustCallWithError(FfiConverterTypeHistoryError_lift) {
+    uniffi_construct_core_fn_func_history_import_peer_device(
+        FfiConverterData.lower(record),
+        FfiConverterInt64.lower(nowMs),$0
+    )
+})
+}
+/**
+ * Keep out one whose message is not held, and one the reactor already has on it.
+ */
+public func historyImportReaction(record: Data, receivedAtMs: Int64)throws  -> LocalReaction  {
+    return try  FfiConverterTypeLocalReaction_lift(try rustCallWithError(FfiConverterTypeHistoryError_lift) {
+    uniffi_construct_core_fn_func_history_import_reaction(
+        FfiConverterData.lower(record),
+        FfiConverterInt64.lower(receivedAtMs),$0
+    )
+})
+}
+/**
+ * The largest media file a snapshot carries. An encoder leaves a file of this size or more
+ * out (and counts it) rather than fail the stream: the core refuses the record.
+ */
+public func historyMaxBlobBytes() -> UInt64  {
+    return try!  FfiConverterUInt64.lift(try! rustCall() {
+    uniffi_construct_core_fn_func_history_max_blob_bytes($0
+    )
+})
+}
+public func historyQrFingerprint(identityPublic: Data, hybridPublic: Data) -> Data  {
+    return try!  FfiConverterData.lift(try! rustCall() {
+    uniffi_construct_core_fn_func_history_qr_fingerprint(
+        FfiConverterData.lower(identityPublic),
+        FfiConverterData.lower(hybridPublic),$0
+    )
+})
+}
+/**
+ * Bytes the receiver's reply takes on the local network.
+ */
+public func historyReplyLen() -> UInt32  {
+    return try!  FfiConverterUInt32.lift(try! rustCall() {
+    uniffi_construct_core_fn_func_history_reply_len($0
+    )
+})
+}
 /**
  * Derive the hybrid public key from a hybrid private key.
  */
-public func hybridPublicKeyFromPrivate(privateKey: [UInt8])throws  -> [UInt8]  {
-    return try  FfiConverterSequenceUInt8.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+public func hybridPublicKeyFromPrivate(privateKey: Data)throws  -> Data  {
+    return try  FfiConverterData.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
     uniffi_construct_core_fn_func_hybrid_public_key_from_private(
-        FfiConverterSequenceUInt8.lower(privateKey),$0
+        FfiConverterData.lower(privateKey),$0
     )
 })
 }
@@ -7723,11 +13637,11 @@ public func hybridPublicKeyFromPrivate(privateKey: [UInt8])throws  -> [UInt8]  {
  * Sign a message with a hybrid private key (Ed25519 + ML-DSA-65).
  * Returns a hybrid signature: [ed25519_sig (64)] [mldsa65_sig (3309)] = 3373 bytes.
  */
-public func hybridSign(privateKey: [UInt8], message: [UInt8])throws  -> [UInt8]  {
-    return try  FfiConverterSequenceUInt8.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+public func hybridSign(privateKey: Data, message: Data)throws  -> Data  {
+    return try  FfiConverterData.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
     uniffi_construct_core_fn_func_hybrid_sign(
-        FfiConverterSequenceUInt8.lower(privateKey),
-        FfiConverterSequenceUInt8.lower(message),$0
+        FfiConverterData.lower(privateKey),
+        FfiConverterData.lower(message),$0
     )
 })
 }
@@ -7744,26 +13658,12 @@ public func hybridSignatureKeygen()throws  -> HybridSignatureKeyPair  {
 /**
  * Verify a hybrid signature. Both Ed25519 and ML-DSA-65 signatures must be valid.
  */
-public func hybridVerify(publicKey: [UInt8], message: [UInt8], signature: [UInt8])throws  -> Bool  {
+public func hybridVerify(publicKey: Data, message: Data, signature: Data)throws  -> Bool  {
     return try  FfiConverterBool.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
     uniffi_construct_core_fn_func_hybrid_verify(
-        FfiConverterSequenceUInt8.lower(publicKey),
-        FfiConverterSequenceUInt8.lower(message),
-        FfiConverterSequenceUInt8.lower(signature),$0
-    )
-})
-}
-/**
- * Restore an MlsStore from a CFE blob previously produced by
- * `export_cfe()`. The device Ed25519 signer keys are passed separately —
- * they are never part of the blob.
- */
-public func importMlsStoreCfe(data: [UInt8], signerPrivateKey: [UInt8], signerPublicKey: [UInt8])throws  -> MlsStore  {
-    return try  FfiConverterTypeMlsStore_lift(try rustCallWithError(FfiConverterTypeMlsError_lift) {
-    uniffi_construct_core_fn_func_import_mls_store_cfe(
-        FfiConverterSequenceUInt8.lower(data),
-        FfiConverterSequenceUInt8.lower(signerPrivateKey),
-        FfiConverterSequenceUInt8.lower(signerPublicKey),$0
+        FfiConverterData.lower(publicKey),
+        FfiConverterData.lower(message),
+        FfiConverterData.lower(signature),$0
     )
 })
 }
@@ -7774,19 +13674,19 @@ public func intakeEpoch(unixSeconds: UInt64) -> UInt64  {
     )
 })
 }
-public func intakeTag(intakeKey: [UInt8], recipientAccountId: String, epoch: UInt64)throws  -> [UInt8]  {
-    return try  FfiConverterSequenceUInt8.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+public func intakeTag(intakeKey: Data, recipientAccountId: String, epoch: UInt64)throws  -> Data  {
+    return try  FfiConverterData.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
     uniffi_construct_core_fn_func_intake_tag(
-        FfiConverterSequenceUInt8.lower(intakeKey),
+        FfiConverterData.lower(intakeKey),
         FfiConverterString.lower(recipientAccountId),
         FfiConverterUInt64.lower(epoch),$0
     )
 })
 }
-public func isDummyMessage(data: [UInt8]) -> Bool  {
+public func isDummyMessage(data: Data) -> Bool  {
     return try!  FfiConverterBool.lift(try! rustCall() {
     uniffi_construct_core_fn_func_is_dummy_message(
-        FfiConverterSequenceUInt8.lower(data),$0
+        FfiConverterData.lower(data),$0
     )
 })
 }
@@ -7795,6 +13695,52 @@ public func jitteredIntervalMs(baseMs: UInt64, jitterMs: UInt64) -> UInt64  {
     uniffi_construct_core_fn_func_jittered_interval_ms(
         FfiConverterUInt64.lower(baseMs),
         FfiConverterUInt64.lower(jitterMs),$0
+    )
+})
+}
+/**
+ * `payload` split into frames of at most 3770 bytes, each carrying the whole body's length;
+ * an empty body is one frame. Null when it needs more than 256 frames, or `message_id` is not
+ * a UUID.
+ */
+public func knstEncodeChunks(payload: Data, contentType: UInt8, messageId: String) -> [Data]?  {
+    return try!  FfiConverterOptionSequenceData.lift(try! rustCall() {
+    uniffi_construct_core_fn_func_knst_encode_chunks(
+        FfiConverterData.lower(payload),
+        FfiConverterUInt8.lower(contentType),
+        FfiConverterString.lower(messageId),$0
+    )
+})
+}
+/**
+ * One frame holding the whole payload — a control carrier, never split. Null when
+ * `message_id` is not a UUID.
+ */
+public func knstFrameWhole(payload: Data, contentType: UInt8, messageId: String) -> Data?  {
+    return try!  FfiConverterOptionData.lift(try! rustCall() {
+    uniffi_construct_core_fn_func_knst_frame_whole(
+        FfiConverterData.lower(payload),
+        FfiConverterUInt8.lower(contentType),
+        FfiConverterString.lower(messageId),$0
+    )
+})
+}
+/**
+ * The header and payload of a frame; null when `frame` is not one (magic, version, length).
+ */
+public func knstParse(frame: Data) -> KnstFrame?  {
+    return try!  FfiConverterOptionTypeKnstFrame.lift(try! rustCall() {
+    uniffi_construct_core_fn_func_knst_parse(
+        FfiConverterData.lower(frame),$0
+    )
+})
+}
+/**
+ * The largest file `seal_media` takes — check before encoding or uploading anything.
+ */
+public func mediaMaxPlaintextLen() -> UInt64  {
+    return try!  FfiConverterUInt64.lift(try! rustCall() {
+    uniffi_construct_core_fn_func_media_max_plaintext_len($0
     )
 })
 }
@@ -7810,81 +13756,58 @@ public func mldsa65Keygen()throws  -> MldsaKeyPair  {
 /**
  * Sign a message with an ML-DSA-65 secret key. Returns a detached signature (3309 bytes).
  */
-public func mldsa65Sign(secretKey: [UInt8], message: [UInt8])throws  -> [UInt8]  {
-    return try  FfiConverterSequenceUInt8.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+public func mldsa65Sign(secretKey: Data, message: Data)throws  -> Data  {
+    return try  FfiConverterData.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
     uniffi_construct_core_fn_func_mldsa65_sign(
-        FfiConverterSequenceUInt8.lower(secretKey),
-        FfiConverterSequenceUInt8.lower(message),$0
+        FfiConverterData.lower(secretKey),
+        FfiConverterData.lower(message),$0
     )
 })
 }
 /**
  * Verify an ML-DSA-65 detached signature. Returns true if valid.
  */
-public func mldsa65Verify(publicKey: [UInt8], message: [UInt8], signature: [UInt8])throws  -> Bool  {
+public func mldsa65Verify(publicKey: Data, message: Data, signature: Data)throws  -> Bool  {
     return try  FfiConverterBool.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
     uniffi_construct_core_fn_func_mldsa65_verify(
-        FfiConverterSequenceUInt8.lower(publicKey),
-        FfiConverterSequenceUInt8.lower(message),
-        FfiConverterSequenceUInt8.lower(signature),$0
+        FfiConverterData.lower(publicKey),
+        FfiConverterData.lower(message),
+        FfiConverterData.lower(signature),$0
     )
 })
 }
 /**
- * Decapsulate a received ML-KEM-768 ciphertext (receiver side PQXDH).
- * Returns shared_secret to pass to ClassicCryptoCore.apply_pq_contribution.
+ * Encapsulate to an ML-KEM-1024 public key (1568 bytes).
  */
-public func mlkem768Decapsulate(secretKey: [UInt8], ciphertext: [UInt8])throws  -> [UInt8]  {
-    return try  FfiConverterSequenceUInt8.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
-    uniffi_construct_core_fn_func_mlkem768_decapsulate(
-        FfiConverterSequenceUInt8.lower(secretKey),
-        FfiConverterSequenceUInt8.lower(ciphertext),$0
-    )
-})
-}
-/**
- * Encapsulate to a recipient's ML-KEM-768 public key (sender side PQXDH).
- * Returns ciphertext (to include in proto PreKeySignalMessage.kem_ciphertext)
- * and shared_secret (to pass to ClassicCryptoCore.apply_pq_contribution).
- */
-public func mlkem768Encapsulate(publicKey: [UInt8])throws  -> MlkemEncapsulation  {
+public func mlkem1024Encapsulate(publicKey: Data)throws  -> MlkemEncapsulation  {
     return try  FfiConverterTypeMLKEMEncapsulation_lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
-    uniffi_construct_core_fn_func_mlkem768_encapsulate(
-        FfiConverterSequenceUInt8.lower(publicKey),$0
+    uniffi_construct_core_fn_func_mlkem1024_encapsulate(
+        FfiConverterData.lower(publicKey),$0
     )
 })
 }
-/**
- * Generate an ML-KEM-768 keypair for PQC key registration.
- */
-public func mlkem768Keygen()throws  -> MlkemKeyPair  {
-    return try  FfiConverterTypeMLKEMKeyPair_lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
-    uniffi_construct_core_fn_func_mlkem768_keygen($0
-    )
-})
-}
-public func mnemonicToSeed(mnemonic: String)throws  -> [UInt8]  {
-    return try  FfiConverterSequenceUInt8.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+public func mnemonicToSeed(mnemonic: String)throws  -> Data  {
+    return try  FfiConverterData.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
     uniffi_construct_core_fn_func_mnemonic_to_seed(
         FfiConverterString.lower(mnemonic),$0
     )
 })
 }
 /**
- * Open one of those copies with this device's X25519 identity private key.
- * A copy sealed to a sibling fails the AEAD tag, so a caller finds its own by trying
- * each — the intended use, because the stored blob carries no recipient labels.
+ * The file in `blob`. Throws `InvalidKeyData` for a key that is not 32 bytes,
+ * `DecryptionFailed` when the blob does not open with it, `InvalidCiphertext` when it opens
+ * but is not well formed.
  */
-public func openWithDeviceKey(sealedBox: [UInt8], ourIdentityPriv: [UInt8])throws  -> [UInt8]  {
-    return try  FfiConverterSequenceUInt8.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
-    uniffi_construct_core_fn_func_open_with_device_key(
-        FfiConverterSequenceUInt8.lower(sealedBox),
-        FfiConverterSequenceUInt8.lower(ourIdentityPriv),$0
+public func openMedia(key: Data, blob: Data)throws  -> Data  {
+    return try  FfiConverterData.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_func_open_media(
+        FfiConverterData.lower(key),
+        FfiConverterData.lower(blob),$0
     )
 })
 }
 /**
- * Whether to open a session with a device now, and as which side.
+ * Whether to open a session with a device now.
  *
  * Called at the moment a client wants a session and has none it can use. Answering this
  * locally is what produced 2026-09-04: both sides opened an INITIATOR session thirty-three
@@ -7898,28 +13821,19 @@ public func planInitiation(context: InitiationContext) -> InitiationDecision  {
     )
 })
 }
-public func planReceivingDecrypt(sessionDeviceIds: [String], preferredDeviceId: String) -> [String]  {
-    return try!  FfiConverterSequenceString.lift(try! rustCall() {
-    uniffi_construct_core_fn_func_plan_receiving_decrypt(
-        FfiConverterSequenceString.lower(sessionDeviceIds),
-        FfiConverterString.lower(preferredDeviceId),$0
-    )
-})
-}
 /**
  * Every device that must receive its own ciphertext of an outgoing message.
  * The caller owns the account-space facts — whose devices these are, and whether the
  * recipient is itself — and passes them in; the decision over the sets is made here.
- * Empty strings mean "unknown"/"none" for `our_device_id` and `primary_send_covered`.
+ * An empty `our_device_id` means "unknown", and then no own-replica copy is planned.
  */
-public func planSend(recipientDeviceIds: [String], ownDeviceIds: [String], ourDeviceId: String, recipientIsSelf: Bool, primarySendCovered: String) -> [DeliveryTarget]  {
+public func planSend(recipientDeviceIds: [String], ownDeviceIds: [String], ourDeviceId: String, recipientIsSelf: Bool) -> [DeliveryTarget]  {
     return try!  FfiConverterSequenceTypeDeliveryTarget.lift(try! rustCall() {
     uniffi_construct_core_fn_func_plan_send(
         FfiConverterSequenceString.lower(recipientDeviceIds),
         FfiConverterSequenceString.lower(ownDeviceIds),
         FfiConverterString.lower(ourDeviceId),
-        FfiConverterBool.lower(recipientIsSelf),
-        FfiConverterString.lower(primarySendCovered),$0
+        FfiConverterBool.lower(recipientIsSelf),$0
     )
 })
 }
@@ -7928,10 +13842,10 @@ public func planSend(recipientDeviceIds: [String], ownDeviceIds: [String], ourDe
  * Returns packed 64 bytes: blinded_point[0..32] || blind_factor[32..64].
  * blinded_point is sent to server; blind_factor is kept secret until finalize().
  */
-public func ppBlindToken(nonce: [UInt8])throws  -> [UInt8]  {
-    return try  FfiConverterSequenceUInt8.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+public func ppBlindToken(nonce: Data)throws  -> Data  {
+    return try  FfiConverterData.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
     uniffi_construct_core_fn_func_pp_blind_token(
-        FfiConverterSequenceUInt8.lower(nonce),$0
+        FfiConverterData.lower(nonce),$0
     )
 })
 }
@@ -7942,12 +13856,12 @@ public func ppBlindToken(nonce: [UInt8])throws  -> [UInt8]  {
  * nonce            — original 32-byte nonce passed to pp_blind_token
  * Returns 32-byte token to store in the wallet.
  */
-public func ppFinalizeToken(evaluatedBytes: [UInt8], blindFactorBytes: [UInt8], nonce: [UInt8])throws  -> [UInt8]  {
-    return try  FfiConverterSequenceUInt8.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+public func ppFinalizeToken(evaluatedBytes: Data, blindFactorBytes: Data, nonce: Data)throws  -> Data  {
+    return try  FfiConverterData.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
     uniffi_construct_core_fn_func_pp_finalize_token(
-        FfiConverterSequenceUInt8.lower(evaluatedBytes),
-        FfiConverterSequenceUInt8.lower(blindFactorBytes),
-        FfiConverterSequenceUInt8.lower(nonce),$0
+        FfiConverterData.lower(evaluatedBytes),
+        FfiConverterData.lower(blindFactorBytes),
+        FfiConverterData.lower(nonce),$0
     )
 })
 }
@@ -7957,11 +13871,11 @@ public func ppFinalizeToken(evaluatedBytes: [UInt8], blindFactorBytes: [UInt8], 
  * operators cannot read spent tokens. Returns
  * ephemeral_pub(32) || nonce(12) || ciphertext || tag(16).
  */
-public func ppSealTokenBytes(token: [UInt8], serverEncryptionKey: [UInt8])throws  -> [UInt8]  {
-    return try  FfiConverterSequenceUInt8.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+public func ppSealTokenBytes(token: Data, serverEncryptionKey: Data)throws  -> Data  {
+    return try  FfiConverterData.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
     uniffi_construct_core_fn_func_pp_seal_token_bytes(
-        FfiConverterSequenceUInt8.lower(token),
-        FfiConverterSequenceUInt8.lower(serverEncryptionKey),$0
+        FfiConverterData.lower(token),
+        FfiConverterData.lower(serverEncryptionKey),$0
     )
 })
 }
@@ -7970,12 +13884,12 @@ public func ppSealTokenBytes(token: [UInt8], serverEncryptionKey: [UInt8])throws
  * server_pubkey_bytes is reserved for future DLEQ batch proof verification.
  * Returns false if evaluated_bytes cannot be decompressed.
  */
-public func ppVerifyClient(evaluatedBytes: [UInt8], nonce: [UInt8], serverPubkeyBytes: [UInt8]) -> Bool  {
+public func ppVerifyClient(evaluatedBytes: Data, nonce: Data, serverPubkeyBytes: Data) -> Bool  {
     return try!  FfiConverterBool.lift(try! rustCall() {
     uniffi_construct_core_fn_func_pp_verify_client(
-        FfiConverterSequenceUInt8.lower(evaluatedBytes),
-        FfiConverterSequenceUInt8.lower(nonce),
-        FfiConverterSequenceUInt8.lower(serverPubkeyBytes),$0
+        FfiConverterData.lower(evaluatedBytes),
+        FfiConverterData.lower(nonce),
+        FfiConverterData.lower(serverPubkeyBytes),$0
     )
 })
 }
@@ -7987,13 +13901,13 @@ public func ppVerifyClient(evaluatedBytes: [UInt8], nonce: [UInt8], serverPubkey
  * (blinded as sent to IssueTokens, evaluated as returned); proof is 64 bytes;
  * issuer_public is the pinned 32-byte K. False on any malformed input.
  */
-public func ppVerifyDleq(blinded: [[UInt8]], evaluated: [[UInt8]], proof: [UInt8], issuerPublic: [UInt8]) -> Bool  {
+public func ppVerifyDleq(blinded: [Data], evaluated: [Data], proof: Data, issuerPublic: Data) -> Bool  {
     return try!  FfiConverterBool.lift(try! rustCall() {
     uniffi_construct_core_fn_func_pp_verify_dleq(
-        FfiConverterSequenceSequenceUInt8.lower(blinded),
-        FfiConverterSequenceSequenceUInt8.lower(evaluated),
-        FfiConverterSequenceUInt8.lower(proof),
-        FfiConverterSequenceUInt8.lower(issuerPublic),$0
+        FfiConverterSequenceData.lower(blinded),
+        FfiConverterSequenceData.lower(evaluated),
+        FfiConverterData.lower(proof),
+        FfiConverterData.lower(issuerPublic),$0
     )
 })
 }
@@ -8005,10 +13919,9 @@ public func randomSendDelayMs(maxDelayMs: UInt64) -> UInt64  {
 })
 }
 /**
- * Classify a queued message: can it open a receiving session?
- * One rule, one implementation — every client asks rather than reimplements. A
- * `message_number == 0` with an advanced PQ epoch is shaped like an opener and is not one,
- * which is why this is a named function and not an inline check.
+ * Classify a message: can it open a receiving session? One rule, one implementation —
+ * every client asks rather than reimplements. A handshake header (the KEM ciphertext) opens
+ * at any message number.
  */
 public func receivingInitKind(carrier: ReceivingInitCarrier) -> ReceivingInitKind  {
     return try!  FfiConverterTypeReceivingInitKind_lift(try! rustCall() {
@@ -8026,6 +13939,27 @@ public func recommendedSendDelayMs(isHighPriority: Bool, batteryLevel: Float) ->
 })
 }
 /**
+ * The public registration bundle of a key record.
+ */
+public func registrationBundleFieldsFromKeys(keys: Data)throws  -> RegistrationBundleFields  {
+    return try  FfiConverterTypeRegistrationBundleFields_lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_func_registration_bundle_fields_from_keys(
+        FfiConverterData.lower(keys),$0
+    )
+})
+}
+/**
+ * A fresh key, the blob to upload, and the blob's SHA-256 for the message.
+ * Throws `EncryptionFailed` when `plaintext` is longer than `media_max_plaintext_len()`.
+ */
+public func sealMedia(plaintext: Data)throws  -> SealedMedia  {
+    return try  FfiConverterTypeSealedMedia_lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_func_seal_media(
+        FfiConverterData.lower(plaintext),$0
+    )
+})
+}
+/**
  * Seal a device's own metadata to one of its account's devices.
  *
  * Same box as `sealed_seal_sender_cert` and the same implementation — two names because
@@ -8037,11 +13971,11 @@ public func recommendedSendDelayMs(isHighPriority: Bool, batteryLevel: Float) ->
  * revoked device stops being sealed to on the next re-seal instead of keeping the
  * ability to read until a key is rotated.
  */
-public func sealToDeviceKey(plaintext: [UInt8], deviceIdentityKey: [UInt8])throws  -> [UInt8]  {
-    return try  FfiConverterSequenceUInt8.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+public func sealToDeviceKey(plaintext: Data, deviceIdentityPublic: Data)throws  -> Data  {
+    return try  FfiConverterData.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
     uniffi_construct_core_fn_func_seal_to_device_key(
-        FfiConverterSequenceUInt8.lower(plaintext),
-        FfiConverterSequenceUInt8.lower(deviceIdentityKey),$0
+        FfiConverterData.lower(plaintext),
+        FfiConverterData.lower(deviceIdentityPublic),$0
     )
 })
 }
@@ -8051,24 +13985,11 @@ public func sealToDeviceKey(plaintext: [UInt8], deviceIdentityKey: [UInt8])throw
  * ephemeral_pub(32) || nonce(12) || ciphertext || tag(16).
  * Bit-compatible with the iOS CryptoKit implementation.
  */
-public func sealedSealSenderCert(certBytes: [UInt8], recipientIdentityKey: [UInt8])throws  -> [UInt8]  {
-    return try  FfiConverterSequenceUInt8.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+public func sealedSealSenderCert(certBytes: Data, recipientIdentityKey: Data)throws  -> Data  {
+    return try  FfiConverterData.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
     uniffi_construct_core_fn_func_sealed_seal_sender_cert(
-        FfiConverterSequenceUInt8.lower(certBytes),
-        FfiConverterSequenceUInt8.lower(recipientIdentityKey),$0
-    )
-})
-}
-/**
- * Open a sealed sender box with our X25519 identity private key
- * (32 bytes). Returns the serialized SenderCertificate bytes — the caller
- * parses the proto and then calls sealed_verify_sender_cert.
- */
-public func sealedUnsealSenderCert(sealedBox: [UInt8], ourIdentityPriv: [UInt8])throws  -> [UInt8]  {
-    return try  FfiConverterSequenceUInt8.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
-    uniffi_construct_core_fn_func_sealed_unseal_sender_cert(
-        FfiConverterSequenceUInt8.lower(sealedBox),
-        FfiConverterSequenceUInt8.lower(ourIdentityPriv),$0
+        FfiConverterData.lower(certBytes),
+        FfiConverterData.lower(recipientIdentityKey),$0
     )
 })
 }
@@ -8079,32 +14000,35 @@ public func sealedUnsealSenderCert(sealedBox: [UInt8], ourIdentityPriv: [UInt8])
  * server_verifying_key is the 32-byte bundle verification key from
  * /.well-known/construct-server. Returns false on any malformed input.
  */
-public func sealedVerifySenderCert(userId: String, domain: String, identityKey: [UInt8], deviceId: String, issuedAt: Int64, expiresAt: Int64, signature: [UInt8], serverVerifyingKey: [UInt8]) -> Bool  {
+public func sealedVerifySenderCert(userId: String, domain: String, identityKey: Data, deviceId: String, issuedAt: Int64, expiresAt: Int64, signature: Data, serverVerifyingKey: Data) -> Bool  {
     return try!  FfiConverterBool.lift(try! rustCall() {
     uniffi_construct_core_fn_func_sealed_verify_sender_cert(
         FfiConverterString.lower(userId),
         FfiConverterString.lower(domain),
-        FfiConverterSequenceUInt8.lower(identityKey),
+        FfiConverterData.lower(identityKey),
         FfiConverterString.lower(deviceId),
         FfiConverterInt64.lower(issuedAt),
         FfiConverterInt64.lower(expiresAt),
-        FfiConverterSequenceUInt8.lower(signature),
-        FfiConverterSequenceUInt8.lower(serverVerifyingKey),$0
+        FfiConverterData.lower(signature),
+        FfiConverterData.lower(serverVerifyingKey),$0
     )
 })
 }
-public func signInviteData(data: String, identitySecretKey: [UInt8])throws  -> InviteSignature  {
-    return try  FfiConverterTypeInviteSignature_lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
-    uniffi_construct_core_fn_func_sign_invite_data(
-        FfiConverterString.lower(data),
-        FfiConverterSequenceUInt8.lower(identitySecretKey),$0
+/**
+ * Ed25519 signature over bundle_data_json with the key record's signing key.
+ */
+public func signBundleDataWithKeys(keys: Data, bundleDataJson: Data)throws  -> Data  {
+    return try  FfiConverterData.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_func_sign_bundle_data_with_keys(
+        FfiConverterData.lower(keys),
+        FfiConverterData.lower(bundleDataJson),$0
     )
 })
 }
-public func signRecoveryChallenge(privateKey: [UInt8], message: String)throws  -> [UInt8]  {
-    return try  FfiConverterSequenceUInt8.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+public func signRecoveryChallenge(privateKey: Data, message: String)throws  -> Data  {
+    return try  FfiConverterData.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
     uniffi_construct_core_fn_func_sign_recovery_challenge(
-        FfiConverterSequenceUInt8.lower(privateKey),
+        FfiConverterData.lower(privateKey),
         FfiConverterString.lower(message),$0
     )
 })
@@ -8114,10 +14038,10 @@ public func signRecoveryChallenge(privateKey: [UInt8], message: String)throws  -
  * threshold must be <= share_count, both must be 2-10.
  * Returns one 28-word mnemonic string per share.
  */
-public func srCreateRecoveryShares(vaultKey: [UInt8], threshold: UInt8, shareCount: UInt8)throws  -> [String]  {
+public func srCreateRecoveryShares(vaultKey: Data, threshold: UInt8, shareCount: UInt8)throws  -> [String]  {
     return try  FfiConverterSequenceString.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
     uniffi_construct_core_fn_func_sr_create_recovery_shares(
-        FfiConverterSequenceUInt8.lower(vaultKey),
+        FfiConverterData.lower(vaultKey),
         FfiConverterUInt8.lower(threshold),
         FfiConverterUInt8.lower(shareCount),$0
     )
@@ -8126,47 +14050,19 @@ public func srCreateRecoveryShares(vaultKey: [UInt8], threshold: UInt8, shareCou
 /**
  * Generate a 32-byte random vault key.
  */
-public func srGenerateVaultKey()throws  -> [UInt8]  {
-    return try  FfiConverterSequenceUInt8.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+public func srGenerateVaultKey()throws  -> Data  {
+    return try  FfiConverterData.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
     uniffi_construct_core_fn_func_sr_generate_vault_key($0
-    )
-})
-}
-/**
- * Decrypt bytes to RecoveryBundle using vault_key.
- */
-public func srOpenRecoveryBundle(vaultKey: [UInt8], ciphertext: [UInt8])throws  -> SrRecoveryBundle  {
-    return try  FfiConverterTypeSrRecoveryBundle_lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
-    uniffi_construct_core_fn_func_sr_open_recovery_bundle(
-        FfiConverterSequenceUInt8.lower(vaultKey),
-        FfiConverterSequenceUInt8.lower(ciphertext),$0
     )
 })
 }
 /**
  * Reconstruct vault_key from at least threshold share mnemonics.
  */
-public func srReconstructVaultKey(mnemonics: [String])throws  -> [UInt8]  {
-    return try  FfiConverterSequenceUInt8.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+public func srReconstructVaultKey(mnemonics: [String])throws  -> Data  {
+    return try  FfiConverterData.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
     uniffi_construct_core_fn_func_sr_reconstruct_vault_key(
         FfiConverterSequenceString.lower(mnemonics),$0
-    )
-})
-}
-/**
- * Encrypt a RecoveryBundle to bytes using vault_key.
- */
-public func srSealRecoveryBundle(vaultKey: [UInt8], bundle: SrRecoveryBundle)throws  -> [UInt8]  {
-    return try  FfiConverterSequenceUInt8.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
-    uniffi_construct_core_fn_func_sr_seal_recovery_bundle(
-        FfiConverterSequenceUInt8.lower(vaultKey),
-        FfiConverterTypeSrRecoveryBundle_lower(bundle),$0
-    )
-})
-}
-public func supportsPqRatchet() -> Bool  {
-    return try!  FfiConverterBool.lift(try! rustCall() {
-    uniffi_construct_core_fn_func_supports_pq_ratchet($0
     )
 })
 }
@@ -8184,22 +14080,6 @@ public func testPlatformBridgeRoundtrip(bridge: PlatformBridge, key: String, dat
     )
 })
 }
-/**
- * Which side opens the session when both try at once: "Initiator" or "Responder".
- *
- * Higher id wins, by plain byte comparison — no normalisation, no parsing. Both peers
- * compute it over the same pair, so a disagreement is a permanent deadlock rather than a
- * retryable error. Pass the ids the session is addressed by; anything else ranks a
- * different pair.
- */
-public func tieBreakRole(myId: String, peerId: String) -> String  {
-    return try!  FfiConverterString.lift(try! rustCall() {
-    uniffi_construct_core_fn_func_tie_break_role(
-        FfiConverterString.lower(myId),
-        FfiConverterString.lower(peerId),$0
-    )
-})
-}
 public func validateMnemonic(mnemonic: String) -> Bool  {
     return try!  FfiConverterBool.lift(try! rustCall() {
     uniffi_construct_core_fn_func_validate_mnemonic(
@@ -8207,12 +14087,12 @@ public func validateMnemonic(mnemonic: String) -> Bool  {
     )
 })
 }
-public func verifyInviteSignature(data: String, signature: [UInt8], verifyingKey: [UInt8])throws  -> Bool  {
+public func verifyInviteSignature(data: String, signature: Data, verifyingKey: Data)throws  -> Bool  {
     return try  FfiConverterBool.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
     uniffi_construct_core_fn_func_verify_invite_signature(
         FfiConverterString.lower(data),
-        FfiConverterSequenceUInt8.lower(signature),
-        FfiConverterSequenceUInt8.lower(verifyingKey),$0
+        FfiConverterData.lower(signature),
+        FfiConverterData.lower(verifyingKey),$0
     )
 })
 }
@@ -8225,26 +14105,32 @@ public func verifyPow(challenge: String, solution: PowSolution, requiredDifficul
     )
 })
 }
-public func verifyRecoverySignature(publicKey: [UInt8], message: String, signature: [UInt8]) -> Bool  {
+public func verifyRecoverySignature(publicKey: Data, message: String, signature: Data) -> Bool  {
     return try!  FfiConverterBool.lift(try! rustCall() {
     uniffi_construct_core_fn_func_verify_recovery_signature(
-        FfiConverterSequenceUInt8.lower(publicKey),
+        FfiConverterData.lower(publicKey),
         FfiConverterString.lower(message),
-        FfiConverterSequenceUInt8.lower(signature),$0
+        FfiConverterData.lower(signature),$0
     )
 })
 }
-public func wirePayloadPack(payload: WirePayload)throws  -> [UInt8]  {
-    return try  FfiConverterSequenceUInt8.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
-    uniffi_construct_core_fn_func_wire_payload_pack(
-        FfiConverterTypeWirePayload_lower(payload),$0
-    )
-})
-}
-public func wirePayloadUnpack(data: [UInt8])throws  -> WirePayload  {
+public func wirePayloadUnpack(data: Data)throws  -> WirePayload  {
     return try  FfiConverterTypeWirePayload_lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
     uniffi_construct_core_fn_func_wire_payload_unpack(
-        FfiConverterSequenceUInt8.lower(data),$0
+        FfiConverterData.lower(data),$0
+    )
+})
+}
+/**
+ * What a received payload is, for routing: its message number and whether it can open a
+ * receiving session. One parse, in the core, from the bytes as they arrived — a platform
+ * keeps the payload and this, not a copy of the parse (`ChatMessage` carried nine parsed
+ * fields beside the payload until 2026-09-29 and sent three of them back in with it).
+ */
+public func wireSummary(wirePayload: Data)throws  -> WireSummary  {
+    return try  FfiConverterTypeWireSummary_lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_func_wire_summary(
+        FfiConverterData.lower(wirePayload),$0
     )
 })
 }
@@ -8279,118 +14165,163 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_func_create_crypto_core() != 59945) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_func_create_crypto_core_from_keys() != 41063) {
+    if (uniffi_construct_core_checksum_func_create_crypto_core_from_keys() != 53404) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_func_create_orchestrator_core_from_keys() != 63491) {
+    if (uniffi_construct_core_checksum_func_create_orchestrator_core_from_keys() != 16700) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_func_derive_device_id() != 1055) {
+    if (uniffi_construct_core_checksum_func_derive_device_id() != 24562) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_func_derive_recovery_keypair() != 19396) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_construct_core_checksum_func_derive_verifying_key_from_secret() != 31516) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_construct_core_checksum_func_device_copy_tag() != 42913) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_construct_core_checksum_func_device_copy_tag_matches() != 64839) {
+    if (uniffi_construct_core_checksum_func_derive_recovery_keypair() != 51363) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_func_format_federated_id() != 19004) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_func_generate_dummy_message() != 52724) {
+    if (uniffi_construct_core_checksum_func_generate_dummy_message() != 19539) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_func_generate_ephemeral_keypair() != 59553) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_func_generate_intake_key() != 3346) {
+    if (uniffi_construct_core_checksum_func_generate_intake_key() != 16021) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_func_generate_mnemonic() != 45721) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_construct_core_checksum_func_generate_private_keys() != 4994) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_construct_core_checksum_func_heartbeat_interval_ms() != 51594) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_func_hybrid_public_key_from_private() != 18985) {
+    if (uniffi_construct_core_checksum_func_history_discovery_instance_name() != 37477) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_func_hybrid_sign() != 61982) {
+    if (uniffi_construct_core_checksum_func_history_discovery_tag() != 23862) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_func_history_export_call() != 65400) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_func_history_export_chat() != 2620) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_func_history_export_contact() != 2852) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_func_history_export_message() != 38436) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_func_history_export_peer_device() != 36469) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_func_history_export_reaction() != 58276) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_func_history_import_call() != 43811) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_func_history_import_chat() != 39910) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_func_history_import_contact() != 39002) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_func_history_import_message() != 43846) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_func_history_import_peer_device() != 43819) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_func_history_import_reaction() != 55772) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_func_history_max_blob_bytes() != 49495) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_func_history_qr_fingerprint() != 57416) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_func_history_reply_len() != 56152) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_func_hybrid_public_key_from_private() != 12004) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_func_hybrid_sign() != 19647) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_func_hybrid_signature_keygen() != 46423) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_func_hybrid_verify() != 56378) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_construct_core_checksum_func_import_mls_store_cfe() != 54998) {
+    if (uniffi_construct_core_checksum_func_hybrid_verify() != 15987) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_func_intake_epoch() != 2449) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_func_intake_tag() != 7949) {
+    if (uniffi_construct_core_checksum_func_intake_tag() != 36931) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_func_is_dummy_message() != 41979) {
+    if (uniffi_construct_core_checksum_func_is_dummy_message() != 57872) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_func_jittered_interval_ms() != 6840) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_construct_core_checksum_func_knst_encode_chunks() != 7537) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_func_knst_frame_whole() != 59193) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_func_knst_parse() != 40094) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_func_media_max_plaintext_len() != 42441) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_construct_core_checksum_func_mldsa65_keygen() != 58411) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_func_mldsa65_sign() != 44353) {
+    if (uniffi_construct_core_checksum_func_mldsa65_sign() != 44541) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_func_mldsa65_verify() != 57408) {
+    if (uniffi_construct_core_checksum_func_mldsa65_verify() != 30528) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_func_mlkem768_decapsulate() != 25978) {
+    if (uniffi_construct_core_checksum_func_mlkem1024_encapsulate() != 15734) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_func_mlkem768_encapsulate() != 20667) {
+    if (uniffi_construct_core_checksum_func_mnemonic_to_seed() != 49697) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_func_mlkem768_keygen() != 2851) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_construct_core_checksum_func_mnemonic_to_seed() != 53142) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_construct_core_checksum_func_open_with_device_key() != 7865) {
+    if (uniffi_construct_core_checksum_func_open_media() != 63953) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_func_plan_initiation() != 61324) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_func_plan_receiving_decrypt() != 26416) {
+    if (uniffi_construct_core_checksum_func_plan_send() != 48521) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_func_plan_send() != 10892) {
+    if (uniffi_construct_core_checksum_func_pp_blind_token() != 33863) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_func_pp_blind_token() != 34290) {
+    if (uniffi_construct_core_checksum_func_pp_finalize_token() != 3098) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_func_pp_finalize_token() != 38839) {
+    if (uniffi_construct_core_checksum_func_pp_seal_token_bytes() != 21400) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_func_pp_seal_token_bytes() != 51612) {
+    if (uniffi_construct_core_checksum_func_pp_verify_client() != 52098) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_func_pp_verify_client() != 14654) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_construct_core_checksum_func_pp_verify_dleq() != 9036) {
+    if (uniffi_construct_core_checksum_func_pp_verify_dleq() != 53114) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_func_random_send_delay_ms() != 9943) {
@@ -8402,82 +14333,64 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_func_recommended_send_delay_ms() != 24315) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_func_seal_to_device_key() != 11700) {
+    if (uniffi_construct_core_checksum_func_registration_bundle_fields_from_keys() != 32194) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_func_sealed_seal_sender_cert() != 11670) {
+    if (uniffi_construct_core_checksum_func_seal_media() != 21220) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_func_sealed_unseal_sender_cert() != 57873) {
+    if (uniffi_construct_core_checksum_func_seal_to_device_key() != 27604) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_func_sealed_verify_sender_cert() != 7421) {
+    if (uniffi_construct_core_checksum_func_sealed_seal_sender_cert() != 23474) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_func_sign_invite_data() != 47259) {
+    if (uniffi_construct_core_checksum_func_sealed_verify_sender_cert() != 64198) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_func_sign_recovery_challenge() != 2630) {
+    if (uniffi_construct_core_checksum_func_sign_bundle_data_with_keys() != 42671) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_func_sr_create_recovery_shares() != 33586) {
+    if (uniffi_construct_core_checksum_func_sign_recovery_challenge() != 4321) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_func_sr_generate_vault_key() != 65018) {
+    if (uniffi_construct_core_checksum_func_sr_create_recovery_shares() != 18198) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_func_sr_open_recovery_bundle() != 30257) {
+    if (uniffi_construct_core_checksum_func_sr_generate_vault_key() != 30491) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_func_sr_reconstruct_vault_key() != 19594) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_construct_core_checksum_func_sr_seal_recovery_bundle() != 62781) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_construct_core_checksum_func_supports_pq_ratchet() != 5109) {
+    if (uniffi_construct_core_checksum_func_sr_reconstruct_vault_key() != 55657) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_func_test_platform_bridge_roundtrip() != 58358) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_func_tie_break_role() != 31131) {
-        return InitializationResult.apiChecksumMismatch
-    }
     if (uniffi_construct_core_checksum_func_validate_mnemonic() != 51524) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_func_verify_invite_signature() != 39140) {
+    if (uniffi_construct_core_checksum_func_verify_invite_signature() != 50101) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_func_verify_pow() != 44600) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_func_verify_recovery_signature() != 1269) {
+    if (uniffi_construct_core_checksum_func_verify_recovery_signature() != 45298) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_func_wire_payload_pack() != 2511) {
+    if (uniffi_construct_core_checksum_func_wire_payload_unpack() != 23560) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_func_wire_payload_unpack() != 35590) {
+    if (uniffi_construct_core_checksum_func_wire_summary() != 13986) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_method_classiccryptocore_apply_pq_contribution() != 13706) {
+    if (uniffi_construct_core_checksum_method_classiccryptocore_export_one_time_prekeys() != 37697) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_method_classiccryptocore_decrypt_message() != 12341) {
+    if (uniffi_construct_core_checksum_method_classiccryptocore_export_private_keys() != 13521) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_method_classiccryptocore_encrypt_message() != 45977) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_construct_core_checksum_method_classiccryptocore_export_one_time_prekeys() != 45190) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_construct_core_checksum_method_classiccryptocore_export_private_keys() != 61671) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_construct_core_checksum_method_classiccryptocore_export_session() != 12774) {
+    if (uniffi_construct_core_checksum_method_classiccryptocore_export_session() != 58420) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_classiccryptocore_generate_one_time_prekeys() != 24636) {
@@ -8486,28 +14399,19 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_method_classiccryptocore_get_all_session_contact_ids() != 3313) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_method_classiccryptocore_get_identity_key_bytes() != 8726) {
-        return InitializationResult.apiChecksumMismatch
-    }
     if (uniffi_construct_core_checksum_method_classiccryptocore_get_registration_bundle_fields() != 798) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_classiccryptocore_get_session_health() != 64984) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_method_classiccryptocore_get_signing_key_bytes() != 55710) {
+    if (uniffi_construct_core_checksum_method_classiccryptocore_import_one_time_prekeys() != 14595) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_method_classiccryptocore_import_one_time_prekeys() != 47991) {
+    if (uniffi_construct_core_checksum_method_classiccryptocore_import_private_keys() != 38606) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_method_classiccryptocore_import_private_keys() != 9774) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_construct_core_checksum_method_classiccryptocore_import_session() != 41224) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_construct_core_checksum_method_classiccryptocore_init_receiving_session() != 3042) {
+    if (uniffi_construct_core_checksum_method_classiccryptocore_import_session() != 26161) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_classiccryptocore_init_session() != 23651) {
@@ -8531,43 +14435,379 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_method_classiccryptocore_set_local_user_id() != 65330) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_method_classiccryptocore_sign_bundle_data() != 22123) {
+    if (uniffi_construct_core_checksum_method_classiccryptocore_sign_bundle_data() != 43516) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_method_mlsstore_add_member() != 62203) {
+    if (uniffi_construct_core_checksum_method_historyreceiver_accept() != 5082) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_method_mlsstore_create_group() != 12298) {
+    if (uniffi_construct_core_checksum_method_historyreceiver_end_of_input() != 37985) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_method_mlsstore_decrypt() != 59573) {
+    if (uniffi_construct_core_checksum_method_historyreceiver_feed() != 49701) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_method_mlsstore_encrypt() != 53931) {
+    if (uniffi_construct_core_checksum_method_historyreceiver_need() != 47648) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_method_mlsstore_epoch() != 33449) {
+    if (uniffi_construct_core_checksum_method_historysender_accept_reply() != 31752) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_method_mlsstore_export_cfe() != 18462) {
+    if (uniffi_construct_core_checksum_method_historysender_begin_media() != 36878) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_method_mlsstore_generate_key_package() != 24070) {
+    if (uniffi_construct_core_checksum_method_historysender_finish() != 17872) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_method_mlsstore_join_from_welcome() != 24122) {
+    if (uniffi_construct_core_checksum_method_historysender_first_frame() != 36364) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_method_mlsstore_leave_group() != 16325) {
+    if (uniffi_construct_core_checksum_method_historysender_push_media() != 59892) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_method_mlsstore_member_count() != 32053) {
+    if (uniffi_construct_core_checksum_method_historysender_push_records() != 60933) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_method_mlsstore_process_commit() != 27846) {
+    if (uniffi_construct_core_checksum_method_historysender_snapshot_id() != 18376) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_method_mlsstore_remove_member() != 14016) {
+    if (uniffi_construct_core_checksum_method_localstore_add_pending_chunk() != 42119) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_advance_chat_preview() != 18597) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_all_messages_after() != 48577) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_all_peer_devices() != 59848) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_all_reactions() != 47486) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_apply_session_archive() != 5672) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_apply_shared_profile() != 40422) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_calls() != 50631) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_chat() != 45451) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_chat_for_peer() != 26460) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_chat_message_count() != 28786) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_chats() != 2703) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_complete_pending_avatar() != 13444) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_contact() != 43265) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_contacts() != 43939) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_contacts_with_pending_avatar() != 30938) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_count_resend_attempt() != 33415) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_delete_all_calls() != 55495) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_delete_call() != 58601) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_delete_chat() != 62753) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_delete_contact() != 42745) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_delete_issued_invites() != 54416) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_delete_message() != 53751) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_delete_pending_chunks() != 19253) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_delete_reaction() != 1671) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_delete_resend() != 36433) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_drop_pending_avatar() != 33118) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_edit_message() != 48649) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_entries_with_prefix() != 686) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_every_contact() != 10711) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_expire_reactions() != 1251) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_forget_pending_chunks_before() != 26227) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_forget_processed_before() != 4143) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_forget_resends_before() != 16607) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_forget_server_message_ids_before() != 29537) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_get() != 50579) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_identity_key_pins() != 6243) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_increment_retry_count() != 1246) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_increment_unread() != 19638) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_insert_chat() != 53415) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_insert_contact() != 61515) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_insert_message() != 2107) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_insert_messages() != 25547) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_is_processed() != 48882) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_issued_invites() != 39927) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_local_message_id() != 42048) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_mark_contact() != 13229) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_mark_processed() != 32160) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_message() != 63926) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_message_count() != 25863) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_messages_before() != 61408) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_messages_from() != 53099) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_own_messages_in_status() != 26389) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_own_profile() != 283) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_peer_device() != 48056) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_peer_devices() != 14816) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_pending_chunk_count() != 56798) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_pending_chunk_messages() != 17861) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_pending_chunks() != 22010) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_pending_resends() != 27270) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_pending_sends() != 61956) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_processed_message_ids() != 40709) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_put() != 58855) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_queue_resend() != 37524) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_reactions() != 33658) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_reactions_in_chat() != 41794) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_record_issued_invite() != 58843) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_record_peer_device() != 19683) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_record_server_message_id() != 7632) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_remove() != 30144) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_replace_contact() != 29124) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_retain_peer_devices() != 39765) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_search() != 46550) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_set_account_address() != 23284) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_set_chat_pinned() != 63084) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_set_chat_preview() != 13808) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_set_contact_alias() != 31575) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_set_contact_avatar() != 42614) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_set_contact_avatar_keeping_pending() != 50769) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_set_contact_blocked() != 21924) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_set_contact_names() != 43680) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_set_delivery_status() != 61504) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_set_identity_key() != 39466) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_set_kt_status() != 19632) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_set_message_body() != 28116) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_set_observer() != 60987) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_set_order_key() != 30671) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_set_own_profile() != 60092) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_set_pending_avatar() != 12015) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_set_retry_count() != 31877) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_set_security_notice() != 29437) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_set_sharing_with() != 40928) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_set_transcript() != 2133) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_set_unread() != 48624) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_sharing_with() != 44917) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_upsert_call() != 6097) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_upsert_chat() != 50948) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_upsert_contact() != 27336) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_upsert_reaction() != 33013) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstore_wipe() != 12838) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_mlsstore_add_member() != 60309) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_mlsstore_create_group() != 43416) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_mlsstore_decrypt() != 56358) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_mlsstore_encrypt() != 50553) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_mlsstore_epoch() != 36436) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_mlsstore_export_cfe() != 58130) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_mlsstore_generate_key_package() != 26940) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_mlsstore_join_from_welcome() != 58231) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_mlsstore_leave_group() != 27203) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_mlsstore_member_count() != 50972) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_mlsstore_process_commit() != 55288) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_mlsstore_remove_member() != 48469) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_notificationpeek_peek() != 41718) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_orchestratorcore_ack_is_processed() != 63134) {
@@ -8576,52 +14816,67 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_method_orchestratorcore_ack_mark_processed() != 13454) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_method_orchestratorcore_apply_pq_contribution() != 43446) {
+    if (uniffi_construct_core_checksum_method_orchestratorcore_admit_server_delegations() != 9633) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_method_orchestratorcore_build_hybrid_identity_bind_message() != 61991) {
+    if (uniffi_construct_core_checksum_method_orchestratorcore_begin_kyber_spk_rotation() != 57721) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_method_orchestratorcore_build_x3dh_sign_message() != 50237) {
+    if (uniffi_construct_core_checksum_method_orchestratorcore_build_hybrid_identity_bind_message() != 2339) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_method_orchestratorcore_decrypt_message() != 9863) {
+    if (uniffi_construct_core_checksum_method_orchestratorcore_build_x3dh_sign_message() != 28178) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_method_orchestratorcore_decrypt_offline_batch() != 51852) {
+    if (uniffi_construct_core_checksum_method_orchestratorcore_certificate_verdict() != 10591) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_method_orchestratorcore_encrypt_message() != 55888) {
+    if (uniffi_construct_core_checksum_method_orchestratorcore_commit_kyber_spk_rotation() != 27935) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_method_orchestratorcore_ensure_hybrid_signature_key() != 6511) {
+    if (uniffi_construct_core_checksum_method_orchestratorcore_current_kyber_spk_upload() != 38528) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_method_orchestratorcore_export_kyber_session_state() != 39459) {
+    if (uniffi_construct_core_checksum_method_orchestratorcore_decrypt_wire_payload() != 22393) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_method_orchestratorcore_export_one_time_prekeys() != 58452) {
+    if (uniffi_construct_core_checksum_method_orchestratorcore_device_copy_tag() != 16396) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_method_orchestratorcore_export_orchestrator_state() != 49630) {
+    if (uniffi_construct_core_checksum_method_orchestratorcore_device_copy_tag_matches() != 16613) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_method_orchestratorcore_export_private_keys() != 53846) {
+    if (uniffi_construct_core_checksum_method_orchestratorcore_encrypt_to_wire() != 5089) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_method_orchestratorcore_export_session() != 59847) {
+    if (uniffi_construct_core_checksum_method_orchestratorcore_ensure_hybrid_signature_key() != 52743) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_orchestratorcore_export_kyber_prekeys() != 49363) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_orchestratorcore_export_one_time_prekeys() != 56347) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_orchestratorcore_export_orchestrator_state() != 52527) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_orchestratorcore_export_private_keys() != 31989) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_orchestratorcore_export_session() != 27333) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_orchestratorcore_forget_contact_state() != 50563) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_orchestratorcore_generate_kyber_one_time_prekeys() != 27977) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_orchestratorcore_generate_one_time_prekeys() != 33822) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_orchestratorcore_get_all_session_contact_ids() != 44779) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_construct_core_checksum_method_orchestratorcore_get_identity_key_bytes() != 23135) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_orchestratorcore_get_registration_bundle_fields() != 16675) {
@@ -8633,37 +14888,46 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_method_orchestratorcore_get_session_suite_id() != 15328) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_method_orchestratorcore_get_signing_key_bytes() != 12435) {
-        return InitializationResult.apiChecksumMismatch
-    }
     if (uniffi_construct_core_checksum_method_orchestratorcore_handle_event() != 2823) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_orchestratorcore_has_session() != 45817) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_method_orchestratorcore_healing_can_heal() != 20996) {
+    if (uniffi_construct_core_checksum_method_orchestratorcore_history_file_channel_key() != 35330) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_method_orchestratorcore_hybrid_signature_public_key() != 51840) {
+    if (uniffi_construct_core_checksum_method_orchestratorcore_history_offer_file() != 50870) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_method_orchestratorcore_import_hybrid_signature_private_key() != 32195) {
+    if (uniffi_construct_core_checksum_method_orchestratorcore_history_offer_nearby() != 33978) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_method_orchestratorcore_import_kyber_session_state() != 41061) {
+    if (uniffi_construct_core_checksum_method_orchestratorcore_history_receive() != 10000) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_method_orchestratorcore_import_one_time_prekeys() != 21471) {
+    if (uniffi_construct_core_checksum_method_orchestratorcore_hybrid_signature_public_key() != 3228) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_method_orchestratorcore_import_orchestrator_state() != 51713) {
+    if (uniffi_construct_core_checksum_method_orchestratorcore_import_hybrid_signature_private_key() != 18250) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_method_orchestratorcore_import_session() != 64657) {
+    if (uniffi_construct_core_checksum_method_orchestratorcore_import_kyber_prekeys() != 16146) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_method_orchestratorcore_init_receiving_session() != 36112) {
+    if (uniffi_construct_core_checksum_method_orchestratorcore_import_mls_store() != 61532) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_orchestratorcore_import_one_time_prekeys() != 20260) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_orchestratorcore_import_orchestrator_state() != 39172) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_orchestratorcore_import_session() != 51332) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_orchestratorcore_init_receiving_session_from_wire_payload() != 33168) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_orchestratorcore_init_session() != 15049) {
@@ -8672,46 +14936,91 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_method_orchestratorcore_init_session_allowing_stale() != 35577) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_method_orchestratorcore_kyber_spk() != 239) {
+    if (uniffi_construct_core_checksum_method_orchestratorcore_kyber_one_time_prekey_count() != 51317) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_orchestratorcore_kyber_prekey_decapsulate() != 28414) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_orchestratorcore_new_mls_store() != 46483) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_orchestratorcore_one_time_prekey_count() != 21478) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_method_orchestratorcore_plan_receiving_init() != 11391) {
+    if (uniffi_construct_core_checksum_method_orchestratorcore_open_envelope() != 45343) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_method_orchestratorcore_plan_teardown() != 62343) {
+    if (uniffi_construct_core_checksum_method_orchestratorcore_open_first_flight() != 23369) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_orchestratorcore_open_receiving() != 32397) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_orchestratorcore_open_sealed_to_device() != 63797) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_orchestratorcore_peer_handshake_held() != 14228) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_orchestratorcore_pending_message_count() != 2235) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_orchestratorcore_prekeys_available_count() != 33104) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_method_orchestratorcore_prune_one_time_prekeys_below() != 26303) {
+    if (uniffi_construct_core_checksum_method_orchestratorcore_prune_kyber_one_time_prekeys_below() != 38459) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_method_orchestratorcore_register_pq_deferred() != 43713) {
+    if (uniffi_construct_core_checksum_method_orchestratorcore_prune_one_time_prekeys_below() != 26303) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_orchestratorcore_remove_session() != 15351) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_construct_core_checksum_method_orchestratorcore_reopen_session() != 45402) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_orchestratorcore_reorder_stats() != 53206) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_orchestratorcore_retire_session() != 42727) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_orchestratorcore_rollback_kyber_spk_rotation() != 39610) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_construct_core_checksum_method_orchestratorcore_rotate_signed_prekey() != 11331) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_method_orchestratorcore_set_kyber_spk() != 35729) {
+    if (uniffi_construct_core_checksum_method_orchestratorcore_seal_envelope() != 59409) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_orchestratorcore_seal_first_flight() != 54924) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_orchestratorcore_seal_own_recovery_bundle() != 42137) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_orchestratorcore_set_local_user_id() != 22865) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_method_orchestratorcore_sign_bundle_data() != 20046) {
+    if (uniffi_construct_core_checksum_method_orchestratorcore_set_trusted_server_keys() != 25656) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_method_orchestratorcore_sign_hybrid() != 37336) {
+    if (uniffi_construct_core_checksum_method_orchestratorcore_sign_bundle_data() != 54061) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_method_orchestratorcore_sign_hybrid_prekey() != 15369) {
+    if (uniffi_construct_core_checksum_method_orchestratorcore_sign_hybrid() != 47624) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_orchestratorcore_sign_hybrid_prekey() != 60717) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_orchestratorcore_sign_with_device_key() != 47610) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_orchestratorcore_verify_kt_proofs() != 62141) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_rustackstore_cache_len() != 41894) {
@@ -8726,46 +15035,10 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_method_rustackstore_prune_expired() != 19780) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_method_rusthealingqueue_can_heal() != 46759) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_construct_core_checksum_method_rusthealingqueue_enqueue() != 5619) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_construct_core_checksum_method_rusthealingqueue_export_state() != 8133) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_construct_core_checksum_method_rusthealingqueue_import_state() != 52469) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_construct_core_checksum_method_rusthealingqueue_len() != 8116) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_construct_core_checksum_method_rusthealingqueue_prune_expired() != 54495) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_construct_core_checksum_method_rusthealingqueue_record_attempt() != 50030) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_construct_core_checksum_method_rusthealingqueue_remove_record() != 39701) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_construct_core_checksum_method_rustpqcontributions_clear() != 36635) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_construct_core_checksum_method_rustpqcontributions_has_pending() != 44477) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_construct_core_checksum_method_rustpqcontributions_store_deferred() != 22265) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_construct_core_checksum_method_rustpqcontributions_take_deferred() != 5516) {
-        return InitializationResult.apiChecksumMismatch
-    }
     if (uniffi_construct_core_checksum_method_trafficprotectionmanager_current_interval_ms() != 34869) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_method_trafficprotectionmanager_generate_dummy() != 59992) {
+    if (uniffi_construct_core_checksum_method_trafficprotectionmanager_generate_dummy() != 32319) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_trafficprotectionmanager_get_metrics() != 5234) {
@@ -8786,19 +15059,25 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_method_trafficprotectionmanager_update_battery_level() != 31087) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_constructor_mlsstore_new() != 26119) {
+    if (uniffi_construct_core_checksum_constructor_localstore_in_memory() != 10006) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_constructor_localstore_new() != 34198) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_constructor_notificationpeek_new() != 3700) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_constructor_rustackstore_new() != 64675) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_constructor_rusthealingqueue_new() != 42495) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_construct_core_checksum_constructor_rustpqcontributions_new() != 4456) {
-        return InitializationResult.apiChecksumMismatch
-    }
     if (uniffi_construct_core_checksum_constructor_trafficprotectionmanager_new() != 21642) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_localstoreobserver_on_change() != 28445) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_peeksessionsource_session() != 52815) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_platformbridge_save_to_secure_store() != 64407) {
@@ -8820,6 +15099,8 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
 
+    uniffiCallbackInitLocalStoreObserver()
+    uniffiCallbackInitPeekSessionSource()
     uniffiCallbackInitPlatformBridge()
     uniffiCallbackInitPowProgressCallback()
     return InitializationResult.ok

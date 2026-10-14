@@ -15,13 +15,13 @@ import SwiftProtobuf
 // incompatible with the version of SwiftProtobuf to which you are linking.
 // Please ensure that you are building against the same version of the API
 // that was used to generate this file.
-fileprivate struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobuf.ProtobufAPIVersionCheck {
+fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobuf.ProtobufAPIVersionCheck {
   struct _2: SwiftProtobuf.ProtobufAPIVersion_2 {}
   typealias Version = _2
 }
 
 /// NotificationFilter - controls which events trigger a visible notification
-public enum Shared_Proto_Services_V1_NotificationFilter: SwiftProtobuf.Enum, Swift.CaseIterable {
+public nonisolated enum Shared_Proto_Services_V1_NotificationFilter: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
 
   /// Unspecified (defaults to silent)
@@ -84,7 +84,7 @@ public enum Shared_Proto_Services_V1_NotificationFilter: SwiftProtobuf.Enum, Swi
 }
 
 /// Request to send a blind (privacy-preserving) notification
-public struct Shared_Proto_Services_V1_SendBlindNotificationRequest: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_SendBlindNotificationRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -136,7 +136,7 @@ public struct Shared_Proto_Services_V1_SendBlindNotificationRequest: Sendable {
 }
 
 /// Response after enqueueing the notification
-public struct Shared_Proto_Services_V1_SendBlindNotificationResponse: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_SendBlindNotificationResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -150,7 +150,7 @@ public struct Shared_Proto_Services_V1_SendBlindNotificationResponse: Sendable {
 }
 
 /// Request to register a device push token
-public struct Shared_Proto_Services_V1_RegisterDeviceTokenRequest: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_RegisterDeviceTokenRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -189,7 +189,7 @@ public struct Shared_Proto_Services_V1_RegisterDeviceTokenRequest: Sendable {
 }
 
 /// Response to device token registration
-public struct Shared_Proto_Services_V1_RegisterDeviceTokenResponse: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_RegisterDeviceTokenResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -215,7 +215,7 @@ public struct Shared_Proto_Services_V1_RegisterDeviceTokenResponse: Sendable {
 }
 
 /// Request to remove a device push token
-public struct Shared_Proto_Services_V1_UnregisterDeviceTokenRequest: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_UnregisterDeviceTokenRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -229,7 +229,7 @@ public struct Shared_Proto_Services_V1_UnregisterDeviceTokenRequest: Sendable {
 }
 
 /// Response to device token removal
-public struct Shared_Proto_Services_V1_UnregisterDeviceTokenResponse: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_UnregisterDeviceTokenResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -243,7 +243,7 @@ public struct Shared_Proto_Services_V1_UnregisterDeviceTokenResponse: Sendable {
 }
 
 /// Request to update notification preferences
-public struct Shared_Proto_Services_V1_UpdateNotificationPreferencesRequest: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_UpdateNotificationPreferencesRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -263,7 +263,7 @@ public struct Shared_Proto_Services_V1_UpdateNotificationPreferencesRequest: Sen
 }
 
 /// Response to preference update
-public struct Shared_Proto_Services_V1_UpdateNotificationPreferencesResponse: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_UpdateNotificationPreferencesResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -276,7 +276,7 @@ public struct Shared_Proto_Services_V1_UpdateNotificationPreferencesResponse: Se
   public init() {}
 }
 
-public struct Shared_Proto_Services_V1_RegisterVoipTokenRequest: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_RegisterVoipTokenRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -298,7 +298,7 @@ public struct Shared_Proto_Services_V1_RegisterVoipTokenRequest: Sendable {
   public init() {}
 }
 
-public struct Shared_Proto_Services_V1_RegisterVoipTokenResponse: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_RegisterVoipTokenResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -310,7 +310,7 @@ public struct Shared_Proto_Services_V1_RegisterVoipTokenResponse: Sendable {
   public init() {}
 }
 
-public struct Shared_Proto_Services_V1_UnregisterVoipTokenRequest: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_UnregisterVoipTokenRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -323,7 +323,7 @@ public struct Shared_Proto_Services_V1_UnregisterVoipTokenRequest: Sendable {
   public init() {}
 }
 
-public struct Shared_Proto_Services_V1_UnregisterVoipTokenResponse: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_UnregisterVoipTokenResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -335,7 +335,7 @@ public struct Shared_Proto_Services_V1_UnregisterVoipTokenResponse: Sendable {
   public init() {}
 }
 
-public struct Shared_Proto_Services_V1_SendVoipIncomingCallRequest: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_SendVoipIncomingCallRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -360,7 +360,7 @@ public struct Shared_Proto_Services_V1_SendVoipIncomingCallRequest: Sendable {
   public init() {}
 }
 
-public struct Shared_Proto_Services_V1_SendVoipIncomingCallResponse: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_SendVoipIncomingCallResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -374,7 +374,7 @@ public struct Shared_Proto_Services_V1_SendVoipIncomingCallResponse: Sendable {
   public init() {}
 }
 
-public struct Shared_Proto_Services_V1_SendKeyRotationWakeRequest: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_SendKeyRotationWakeRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -387,7 +387,7 @@ public struct Shared_Proto_Services_V1_SendKeyRotationWakeRequest: Sendable {
   public init() {}
 }
 
-public struct Shared_Proto_Services_V1_SendKeyRotationWakeResponse: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_SendKeyRotationWakeResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -402,13 +402,13 @@ public struct Shared_Proto_Services_V1_SendKeyRotationWakeResponse: Sendable {
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
 
-fileprivate let _protobuf_package = "shared.proto.services.v1"
+fileprivate nonisolated let _protobuf_package = "shared.proto.services.v1"
 
-extension Shared_Proto_Services_V1_NotificationFilter: SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_NotificationFilter: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0NOTIFICATION_FILTER_UNSPECIFIED\0\u{1}NOTIFICATION_FILTER_SILENT\0\u{1}NOTIFICATION_FILTER_VISIBLE_ALL\0\u{1}NOTIFICATION_FILTER_VISIBLE_DM\0\u{1}NOTIFICATION_FILTER_VISIBLE_MENTIONS\0\u{1}NOTIFICATION_FILTER_VISIBLE_CONTACTS\0")
 }
 
-extension Shared_Proto_Services_V1_SendBlindNotificationRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_SendBlindNotificationRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".SendBlindNotificationRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}user_id\0\u{3}badge_count\0\u{3}activity_type\0\u{3}conversation_id\0")
 
@@ -457,7 +457,7 @@ extension Shared_Proto_Services_V1_SendBlindNotificationRequest: SwiftProtobuf.M
   }
 }
 
-extension Shared_Proto_Services_V1_SendBlindNotificationResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_SendBlindNotificationResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".SendBlindNotificationResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}success\0")
 
@@ -487,7 +487,7 @@ extension Shared_Proto_Services_V1_SendBlindNotificationResponse: SwiftProtobuf.
   }
 }
 
-extension Shared_Proto_Services_V1_RegisterDeviceTokenRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_RegisterDeviceTokenRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".RegisterDeviceTokenRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}device_token\0\u{3}device_name\0\u{3}notification_filter\0\u{3}device_id\0\u{1}provider\0\u{1}environment\0")
 
@@ -546,7 +546,7 @@ extension Shared_Proto_Services_V1_RegisterDeviceTokenRequest: SwiftProtobuf.Mes
   }
 }
 
-extension Shared_Proto_Services_V1_RegisterDeviceTokenResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_RegisterDeviceTokenResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".RegisterDeviceTokenResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}success\0\u{3}token_id\0")
 
@@ -585,7 +585,7 @@ extension Shared_Proto_Services_V1_RegisterDeviceTokenResponse: SwiftProtobuf.Me
   }
 }
 
-extension Shared_Proto_Services_V1_UnregisterDeviceTokenRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_UnregisterDeviceTokenRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".UnregisterDeviceTokenRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}device_token\0")
 
@@ -615,7 +615,7 @@ extension Shared_Proto_Services_V1_UnregisterDeviceTokenRequest: SwiftProtobuf.M
   }
 }
 
-extension Shared_Proto_Services_V1_UnregisterDeviceTokenResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_UnregisterDeviceTokenResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".UnregisterDeviceTokenResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}success\0")
 
@@ -645,7 +645,7 @@ extension Shared_Proto_Services_V1_UnregisterDeviceTokenResponse: SwiftProtobuf.
   }
 }
 
-extension Shared_Proto_Services_V1_UpdateNotificationPreferencesRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_UpdateNotificationPreferencesRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".UpdateNotificationPreferencesRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}device_token\0\u{3}notification_filter\0\u{1}enabled\0")
 
@@ -685,7 +685,7 @@ extension Shared_Proto_Services_V1_UpdateNotificationPreferencesRequest: SwiftPr
   }
 }
 
-extension Shared_Proto_Services_V1_UpdateNotificationPreferencesResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_UpdateNotificationPreferencesResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".UpdateNotificationPreferencesResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}success\0")
 
@@ -715,7 +715,7 @@ extension Shared_Proto_Services_V1_UpdateNotificationPreferencesResponse: SwiftP
   }
 }
 
-extension Shared_Proto_Services_V1_RegisterVoipTokenRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_RegisterVoipTokenRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".RegisterVoipTokenRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}voip_token\0\u{3}device_id\0\u{1}platform\0\u{1}environment\0")
 
@@ -760,7 +760,7 @@ extension Shared_Proto_Services_V1_RegisterVoipTokenRequest: SwiftProtobuf.Messa
   }
 }
 
-extension Shared_Proto_Services_V1_RegisterVoipTokenResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_RegisterVoipTokenResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".RegisterVoipTokenResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}success\0")
 
@@ -790,7 +790,7 @@ extension Shared_Proto_Services_V1_RegisterVoipTokenResponse: SwiftProtobuf.Mess
   }
 }
 
-extension Shared_Proto_Services_V1_UnregisterVoipTokenRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_UnregisterVoipTokenRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".UnregisterVoipTokenRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}device_id\0")
 
@@ -820,7 +820,7 @@ extension Shared_Proto_Services_V1_UnregisterVoipTokenRequest: SwiftProtobuf.Mes
   }
 }
 
-extension Shared_Proto_Services_V1_UnregisterVoipTokenResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_UnregisterVoipTokenResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".UnregisterVoipTokenResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}success\0")
 
@@ -850,7 +850,7 @@ extension Shared_Proto_Services_V1_UnregisterVoipTokenResponse: SwiftProtobuf.Me
   }
 }
 
-extension Shared_Proto_Services_V1_SendVoipIncomingCallRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_SendVoipIncomingCallRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".SendVoipIncomingCallRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}user_id\0\u{3}call_id\0\u{3}caller_id\0\u{3}caller_name\0\u{3}call_type\0\u{3}offered_at\0")
 
@@ -905,7 +905,7 @@ extension Shared_Proto_Services_V1_SendVoipIncomingCallRequest: SwiftProtobuf.Me
   }
 }
 
-extension Shared_Proto_Services_V1_SendVoipIncomingCallResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_SendVoipIncomingCallResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".SendVoipIncomingCallResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}success\0\u{3}sent_count\0")
 
@@ -940,7 +940,7 @@ extension Shared_Proto_Services_V1_SendVoipIncomingCallResponse: SwiftProtobuf.M
   }
 }
 
-extension Shared_Proto_Services_V1_SendKeyRotationWakeRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_SendKeyRotationWakeRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".SendKeyRotationWakeRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}user_id\0")
 
@@ -970,7 +970,7 @@ extension Shared_Proto_Services_V1_SendKeyRotationWakeRequest: SwiftProtobuf.Mes
   }
 }
 
-extension Shared_Proto_Services_V1_SendKeyRotationWakeResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_SendKeyRotationWakeResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".SendKeyRotationWakeResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}success\0")
 

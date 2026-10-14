@@ -4,12 +4,19 @@
 //
 //  New-device nearby receive. Additive import; no backup restore / restart alert.
 //
+//  Starts listening as soon as it appears: whether history moves is decided on the device
+//  that has it (2026-09-30). This one waits, and offers only a way out — a file, or skipping.
+//
 
 import SwiftUI
 
 struct HistoryTransferReceiveView: View {
     var userId: String
     var localDeviceId: String
+    /// Called once the offer has ended — imported, skipped, or left with Back.
+    var onDone: () -> Void = {}
+    /// Post-link only: the phone chose to save a file, or never answers.
+    var onImportFile: (() -> Void)?
 
     @Environment(\.dismiss) private var dismiss
     @State private var coordinator = HistoryTransferCoordinator()
@@ -17,27 +24,37 @@ struct HistoryTransferReceiveView: View {
     @State private var errorMessage: String?
 
     var body: some View {
-        ZStack {
-            Color.CT.bg.ignoresSafeArea()
-            VStack(spacing: 0) {
-                CTNavBar(
-                    title: NSLocalizedString("history_sync_receive_title", comment: ""),
-                    showBack: true,
-                    backAction: { dismiss() }
-                ) {
-                    EmptyView()
-                } trailing: {
-                    EmptyView()
-                }
-                ScrollView {
-                    LazyVStack(spacing: 24) {
-                        Text(NSLocalizedString(statusKey, comment: ""))
-                            .font(CTFont.regular(14))
-                            .foregroundStyle(Color.CT.text)
-                            .multilineTextAlignment(.center)
+        ScrollView {
+            VStack(spacing: CTLayout.sectionGap) {
+                HistoryTransferProgress(phase: coordinator.phase, side: .receiving)
+                if let onImportFile, isWaiting || coordinator.phase == .saveFileInstead {
+                    CTSectionGroup {
+                        ConstructButtonRow(
+                            systemImage: "folder",
+                            title: LocalizedStringKey("history_sync_import_file"),
+                            action: onImportFile
+                        )
+                        ConstructRowDivider(indent: CTLayout.edgePad)
+                        ConstructButtonRow(
+                            systemImage: "forward",
+                            title: LocalizedStringKey("history_sync_offer_skip")
+                        ) { onDone(); dismiss() }
                     }
-                    .padding(CTLayout.edgePad)
+                    Text(NSLocalizedString("history_sync_empty_explanation", comment: ""))
+                        .font(CTFont.secondary)
+                        .foregroundStyle(Color.CT.textDim)
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: .infinity)
                 }
+            }
+            .padding(CTLayout.edgePad)
+        }
+        .background(Color.CT.bg.ignoresSafeArea())
+        .screenTitle(NSLocalizedString("history_sync_receive_title", comment: ""))
+        // Its own close, not `sheetNavigation`'s: leaving also tells the caller (`onDone`).
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                CloseButton { onDone(); dismiss() }
             }
         }
         .task { await run() }
@@ -51,17 +68,7 @@ struct HistoryTransferReceiveView: View {
         }
     }
 
-    private var statusKey: String {
-        switch coordinator.phase {
-        case .idle, .transcript: return "history_sync_auto_connecting"
-        case .chatsTransferred: return "history_sync_chats_transferred"
-        case .media: return "history_sync_auto_connecting"
-        case .complete: return "transfer_complete"
-        case .mediaIncomplete: return "history_sync_media_incomplete"
-        case .skipped: return "history_sync_skip_sending"
-        case .saveFileInstead: return "history_sync_save_file_instead"
-        }
-    }
+    private var isWaiting: Bool { coordinator.phase == .idle }
 
     /// Phase 1 on the first connection; a phase-1 manifest means media follows on a second
     /// one (K18). A skip opening ends the offer. A drop in phase 2 keeps phase-1 rows and
@@ -71,10 +78,9 @@ struct HistoryTransferReceiveView: View {
         do {
             let local = try HistoryChannel.localKeys()
             let pin = DeviceLinkPendingPin.trust(forUserId: userId)
-            let background = PersistenceController.shared.container.newBackgroundContext()
             var expectMedia = true
             while expectMedia {
-                let outcome = try await channel.receive(local: local, pin: pin, coordinator: coordinator, context: background)
+                let outcome = try await channel.receive(local: local, pin: pin, coordinator: coordinator)
                 switch outcome {
                 case .skipped:
                     expectMedia = false
@@ -90,6 +96,9 @@ struct HistoryTransferReceiveView: View {
                 }
             }
             DeviceLinkPendingPin.clear(forUserId: userId)
+            try await Task.sleep(for: HistoryTransferCoordinator.resultHold)
+            onDone()
+            dismiss()
         } catch is CancellationError {
             // Sheet dismissed.
         } catch {

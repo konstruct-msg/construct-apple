@@ -50,7 +50,7 @@ struct STTSettingsSection: View {
                 // Auto-transcribe toggle
                 HStack {
                     Text(NSLocalizedString("stt_auto_transcribe", comment: ""))
-                        .font(CTFont.regular(13))
+                        .font(CTFont.body)
                         .foregroundColor(Color.CT.textDim)
                     Spacer()
                     Toggle("", isOn: $autoTranscribe)
@@ -60,12 +60,12 @@ struct STTSettingsSection: View {
                 .padding(.horizontal, 12)
                 .padding(.vertical, 9)
 
-                CTSep(style: .thin)
+                ConstructRowDivider(indent: CTLayout.edgePad)
 
                 // Engine selection
                 HStack {
                     Text(NSLocalizedString("stt_engine_label", comment: ""))
-                        .font(CTFont.regular(13))
+                        .font(CTFont.body)
                         .foregroundColor(Color.CT.textDim)
                     Spacer()
                     Menu(selectedEngine.displayName) {
@@ -75,21 +75,21 @@ struct STTSettingsSection: View {
                             }
                         }
                     }
-                    .font(CTFont.regular(13))
+                    .font(CTFont.body)
                     .foregroundColor(Color.CT.accent)
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 9)
 
-                CTSep(style: .thin)
+                ConstructRowDivider(indent: CTLayout.edgePad)
                 
                 HStack {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(NSLocalizedString("stt_translate_toggle", comment: ""))
-                            .font(CTFont.regular(13))
+                            .font(CTFont.body)
                             .foregroundColor(Color.CT.textDim)
                         Text(NSLocalizedString("stt_translate_footer", comment: ""))
-                            .font(CTFont.regular(11))
+                            .font(CTFont.caption)
                             .foregroundColor(Color.CT.textDim.opacity(0.6))
                     }
                     Spacer()
@@ -100,12 +100,12 @@ struct STTSettingsSection: View {
                 .padding(.horizontal, 12)
                 .padding(.vertical, 9)
 
-                CTSep(style: .thin)
+                ConstructRowDivider(indent: CTLayout.edgePad)
 
                 // Language picker row
                 languageRow
 
-                CTSep(style: .thick)
+                ConstructRowDivider(indent: CTLayout.edgePad)
 
                 if selectedEngine != .apple {
                     // Whisper-specific model management (hidden for pure Apple engine)
@@ -118,14 +118,14 @@ struct STTSettingsSection: View {
 
                     // Per-model rows
                     ForEach(WhisperModel.allCases) { model in
-                        CTSep(style: .thin)
+                        ConstructRowDivider(indent: CTLayout.edgePad)
                         modelRow(model)
                     }
                 }
             }
 
             Text(NSLocalizedString("stt_footer", comment: ""))
-                .font(CTFont.regular(11))
+                .font(CTFont.caption)
                 .foregroundStyle(Color.CT.textDim)
                 .padding(.horizontal, 20)
                 .padding(.top, 6)
@@ -156,7 +156,7 @@ struct STTSettingsSection: View {
         #else
         HStack {
             Text(NSLocalizedString("stt_language_label", comment: ""))
-                .font(CTFont.regular(13))
+                .font(CTFont.body)
                 .foregroundColor(Color.CT.textDim)
             Spacer()
             Menu(currentName) {
@@ -168,7 +168,7 @@ struct STTSettingsSection: View {
                     Button(lang.name) { transcriptionLanguage = lang.code }
                 }
             }
-            .font(CTFont.regular(13))
+            .font(CTFont.body)
             .foregroundColor(Color.CT.accent)
         }
         .padding(.horizontal, 12)
@@ -217,7 +217,7 @@ struct STTSettingsSection: View {
         let state = modelManager.modelStates[model] ?? .notDownloaded
         HStack(spacing: 0) {
             Text(model.displayName)
-                .font(CTFont.regular(13))
+                .font(CTFont.body)
                 .foregroundColor(preferredModel == model ? Color.CT.accent : Color.CT.text)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 13)
@@ -259,9 +259,9 @@ struct STTSettingsSection: View {
             } label: {
                 HStack(spacing: 4) {
                     Image(systemName: "arrow.down.circle.fill")
-                        .font(.system(size: 13))
+                        .font(CTIcon.font(CTIcon.caption, weight: .regular))
                     Text(NSLocalizedString("stt_download", comment: ""))
-                        .font(CTFont.regular(12))
+                        .font(CTFont.secondary)
                 }
                 .foregroundColor(Color.CT.accent)
             }
@@ -274,7 +274,7 @@ struct STTSettingsSection: View {
                     .scaleEffect(0.65)
                     .tint(Color.CT.accent)
                 Text(String(format: "%.0f%%", progress * 100))
-                    .font(CTFont.regular(11))
+                    .font(CTFont.caption)
                     .foregroundColor(Color.CT.textDim)
             }
 
@@ -283,13 +283,13 @@ struct STTSettingsSection: View {
                 if preferredModel == model {
                     Image(systemName: "checkmark.circle.fill")
                         .foregroundColor(Color.CT.accent)
-                        .font(.system(size: 14))
+                        .font(CTIcon.font(CTIcon.row, weight: .regular))
                 }
                 Button {
                     showDeleteConfirm = model
                 } label: {
                     Image(systemName: "trash")
-                        .font(.system(size: 13))
+                        .font(CTIcon.font(CTIcon.caption, weight: .regular))
                         .foregroundColor(Color.CT.textDim)
                 }
                 .buttonStyle(.plain)
@@ -309,9 +309,9 @@ struct STTSettingsSection: View {
             } label: {
                 HStack(spacing: 4) {
                     Image(systemName: "exclamationmark.arrow.circlepath")
-                        .font(.system(size: 13))
+                        .font(CTIcon.font(CTIcon.caption, weight: .regular))
                     Text(NSLocalizedString("stt_retry_download", comment: ""))
-                        .font(CTFont.regular(12))
+                        .font(CTFont.secondary)
                 }
                 .foregroundColor(Color.CT.danger)
             }

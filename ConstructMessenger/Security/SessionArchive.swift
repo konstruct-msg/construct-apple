@@ -8,7 +8,6 @@ import Foundation
 /// Reason for archiving a session
 enum ArchiveReason: String, Codable {
     case decryptionFailed    = "decryption_failed"
-    case endSessionReceived  = "end_session_received"
     case manualReset         = "manual_reset"
     case preKeyChanged       = "prekey_changed"
     /// Remote peer re-keyed: messageNumber=0 arrived for an existing session.

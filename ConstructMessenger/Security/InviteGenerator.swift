@@ -24,28 +24,39 @@ class InviteGenerator {
     /// Default server FQDN
     /// Can be overridden per invite
     private let defaultServer: String
-    
-    init(defaultServer: String = "konstruct.cc") {
+
+    /// This account's address, read at mint time. Injected so a test can mint without a Keychain.
+    private let accountAddress: () -> Data?
+
+    init(
+        defaultServer: String = "konstruct.cc",
+        accountAddress: @escaping () -> Data? = AccountAddress.own
+    ) {
         self.defaultServer = defaultServer
+        self.accountAddress = accountAddress
     }
     
     // MARK: - Generation
     
-    /// Generate a new invite object (protocol v4: signed capability, no dead ephKey).
+    /// Generate a new invite object (v5).
     ///
     /// Process:
     /// 1. Create JTI (UUIDv4)
-    /// 2. Build invite data structure (no ephemeral keypair)
-    /// 3. Sign with user's Ed25519 identity key
+    /// 2. Build the invite, naming this account's address
+    /// 3. Sign with this device's Ed25519 key
+    ///
+    /// Refuses without an address (`noAccountAddress`): an invite that named none would leave the
+    /// redeemer writing to a server-assigned id, and one that named a wrong one would lose every
+    /// message sent to it. The UI gates on `RecoveryGate` before it gets here.
     ///
     /// - Parameters:
     ///   - userId: Sender's user UUID (for chat creation)
     ///   - deviceId: Sender's device ID (for fetching keys)
-    ///   - username: Optional plaintext @alias in the signed payload. **Default nil**
-    ///     (metadata minimization). Never pass for HTTPS deep links.
+    ///   - username: Optional plaintext @alias in the signed payload, so the new contact sees who
+    ///     it added (as Android shows it). Carried by the QR and the `konstruct://` link; an
+    ///     HTTPS link drops it (`generateDeepLink`).
     ///   - serverFQDN: Server FQDN (optional, uses default if nil)
-    ///   - ttlSeconds: how long this invite should stay redeemable. Ignored below v5, which
-    ///     has no wire field for it and takes the server maximum. Pass the artifact's own
+    ///   - ttlSeconds: how long this invite should stay redeemable. Pass the artifact's own
     ///     life — a QR is scanned in seconds, a link waits in an inbox for hours.
     /// - Returns: Signed InviteObject
     /// - Throws: InviteGenerationError
@@ -64,69 +75,49 @@ class InviteGenerator {
             throw InviteGenerationError.invalidDeviceId
         }
 
+        guard let addr = accountAddress() else {
+            throw InviteGenerationError.noAccountAddress
+        }
+
         let server = normalizeServer(serverFQDN ?? defaultServer)
         let jti = UUID().uuidString.lowercased()
         let timestamp = Int(Date().timeIntervalSince1970)
-        let version = InviteConfig.currentVersion
-        // Below v5 the field does not exist on the wire, and validate() refuses an invite
-        // that carries one. Dropping it here is what keeps `currentVersion` the single
-        // switch for the rollout instead of something callers have to know about.
-        let statedTTL: UInt32? = InviteConfig.carriesTTL(version: version) ? ttlSeconds : nil
-
-        guard let signingSecretKey = try? getSigningSecretKey() else {
-            throw InviteGenerationError.missingIdentityKey
-        }
+        let version = InviteConfig.version
 
         let normalizedUsername = username
             .flatMap { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .flatMap { $0.isEmpty ? nil : $0 }
 
-        // v4: empty ephKey — pure signed capability (F2).
         let unsignedInvite = InviteObject(
             v: version,
             jti: jti,
             uuid: userId.lowercased(),
             deviceId: deviceId,
             server: server,
-            ephKey: "",
             ts: timestamp,
             sig: "",
             un: normalizedUsername,
-            ttl: statedTTL
+            ttl: ttlSeconds,
+            addr: addr
         )
 
         let dataToSign = try unsignedInvite.canonicalString()
         Log.debug("Canonical string for signing: \(dataToSign)", category: "InviteGenerator")
 
-        let expectedVerifyingKey = try deriveVerifyingKeyFromSecret(identitySecretKey: signingSecretKey)
-        let signature = try signInviteData(
-            data: dataToSign,
-            identitySecretKey: signingSecretKey
-        )
+        let (signature, verifyingKey) = try signWithDeviceKey(Data(dataToSign.utf8))
 
+        // Against the verifying key we publish, which is what a recipient checks it with.
         let isSelfValid = try verifyInviteSignature(
             data: dataToSign,
-            signature: [UInt8](signature.signature),
-            verifyingKey: [UInt8](expectedVerifyingKey)
+            signature: signature,
+            verifyingKey: verifyingKey
         )
         if !isSelfValid {
             Log.error("Invite self-verify failed (signing key mismatch)", category: "InviteGenerator")
             throw InviteGenerationError.signingFailed
         }
 
-        let signatureBase64 = Data(signature.signature).base64EncodedString()
-        let signedInvite = InviteObject(
-            v: version,
-            jti: jti,
-            uuid: userId.lowercased(),
-            deviceId: deviceId,
-            server: server,
-            ephKey: "",
-            ts: timestamp,
-            sig: signatureBase64,
-            un: normalizedUsername,
-            ttl: statedTTL
-        )
+        let signedInvite = unsignedInvite.signed(signature.base64EncodedString())
 
         try signedInvite.validate()
 
@@ -150,10 +141,10 @@ class InviteGenerator {
     struct MintedInvite<Artifact> {
         let jti: String
         let issuedAt: Date
-        /// The stated life, or nil below v5. Travels with the jti for the same reason the
-        /// jti travels at all: the journal has to know when what it recorded stops working,
-        /// and asking the global constant would be wrong the moment two artifacts differ.
-        let ttl: UInt32?
+        /// The stated life. Travels with the jti for the same reason the jti travels at all:
+        /// the journal has to know when what it recorded stops working, and asking the global
+        /// constant would be wrong the moment two artifacts differ.
+        let ttl: UInt32
         let artifact: Artifact
     }
 
@@ -218,6 +209,16 @@ class InviteGenerator {
     /// A link keeps the full `InviteConfig.ttlSeconds`. It is the artifact that travels
     /// through another messenger and waits in an inbox, which is the reason that number is
     /// twelve hours in the first place.
+    /// The username a link may carry. An HTTPS link travels through other messengers: their link
+    /// previews and scanners fetch it and keep it in their logs. Without the username it names an
+    /// opaque account id; with it, anyone holding those logs could tie the invite to the name the
+    /// person goes by. A `konstruct://` link and the QR carry it, so the new contact sees who it
+    /// added. Decided with the owner 2026-10-02 (construct-docs TODO 95). The rule lives here, not
+    /// at each caller.
+    static func linkUsername(_ username: String?, useHTTPS: Bool) -> String? {
+        useHTTPS ? nil : username
+    }
+
     func generateDeepLink(
         userId: String,
         deviceId: String,
@@ -230,7 +231,7 @@ class InviteGenerator {
         let payload = try generateQRPayload(
             userId: userId,
             deviceId: deviceId,
-            username: username,
+            username: Self.linkUsername(username, useHTTPS: useHTTPS),
             server: normalizedServer,
             ttlSeconds: ttlSeconds
         )
@@ -243,26 +244,16 @@ class InviteGenerator {
     
     // MARK: - Helper Methods
     
-    /// Get Ed25519 signing secret key from CryptoManager
-    /// - Returns: 32-byte signing secret key
-    /// - Throws: InviteGenerationError if key not available
-    private func getSigningSecretKey() throws -> [UInt8] {
-        guard let core = CryptoManager.shared.orchestratorCore else {
+    /// The core's Ed25519 signature over `data` and the verifying key it checks against. The
+    /// signing key stays in the core.
+    private func signWithDeviceKey(_ data: Data) throws -> (signature: Data, verifyingKey: Data) {
+        let crypto = CryptoManager.shared
+        crypto.coreLock.lock()
+        defer { crypto.coreLock.unlock() }
+        guard let core = crypto.orchestratorCore else {
             throw InviteGenerationError.missingIdentityKey
         }
-        let keyBytes = try core.getSigningKeyBytes()
-        guard !keyBytes.isEmpty else {
-            throw InviteGenerationError.keyDecodingFailed
-        }
-        Log.debug("Using signing secret key for invite signing (\(keyBytes.count) bytes)", category: "InviteGenerator")
-        return [UInt8](keyBytes)
-    }
-
-    /// Derive the expected verifying key (Base64) from local signing secret.
-    func expectedVerifyingKeyBase64() throws -> String {
-        let signingSecretKey = try getSigningSecretKey()
-        let verifyingKey = try deriveVerifyingKeyFromSecret(identitySecretKey: signingSecretKey)
-        return Data(verifyingKey).base64EncodedString()
+        return (try core.signWithDeviceKey(message: data), try core.getRegistrationBundleFields().verifyingKey)
     }
 
     // MARK: - Server Normalization
@@ -291,10 +282,9 @@ enum InviteGenerationError: LocalizedError {
     case invalidUserId
     case invalidDeviceId
     case missingIdentityKey
-    case keyDecodingFailed
-    case ephemeralKeyGenerationFailed
     case signingFailed
-    
+    case noAccountAddress
+
     var errorDescription: String? {
         switch self {
         case .invalidUserId:
@@ -303,12 +293,10 @@ enum InviteGenerationError: LocalizedError {
             return "Invalid device ID (must be 32-char hex)"
         case .missingIdentityKey:
             return "Identity key not available. User may not be logged in."
-        case .keyDecodingFailed:
-            return "Failed to decode cryptographic keys"
-        case .ephemeralKeyGenerationFailed:
-            return "Failed to generate ephemeral keypair"
         case .signingFailed:
             return "Failed to sign invite data"
+        case .noAccountAddress:
+            return "This device does not know the account's address — confirm the recovery phrase"
         }
     }
 }

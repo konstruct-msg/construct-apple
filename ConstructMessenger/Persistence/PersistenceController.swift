@@ -16,7 +16,16 @@ import CoreData
 /// Cross-platform wrapper for the shared NSPersistentContainer.
 /// Self-contained: does not depend on any App struct.
 struct PersistenceController {
-    static let shared = PersistenceController()
+    #if os(macOS)
+    /// macOS keeps the account in construct-store (`LocalRepositories`). Core Data there is in
+    /// memory, for the code that still names a context, and the file older builds left is never
+    /// opened again — neither read nor written in the clear.
+    static let shared = PersistenceController(inMemory: true)
+    #else
+    /// iOS: the file until the install has moved to construct-store (`LocalStoreImport`), then in
+    /// memory as on macOS — the file is removed at that launch (`removeCoreDataLeftovers`).
+    static let shared = LocalStoreImport.hasMoved ? PersistenceController(inMemory: true) : PersistenceController()
+    #endif
 
     /// In-memory store for SwiftUI previews and unit tests.
     static let preview: PersistenceController = {
@@ -26,14 +35,20 @@ struct PersistenceController {
 
     let container: NSPersistentContainer
 
+    /// The one model every store in the process is built from. iOS 26: `NSPersistentContainer(name:)`
+    /// searches ALL bundles for the momd and may find it twice (main bundle + xcframework),
+    /// registering NSEntityDescriptions twice — "Expected X but found X" casts on CallRecord /
+    /// CTCallRecord. So it is loaded from Bundle.main, and loaded once: until 2026-10-06 each
+    /// `init` loaded its own copy, and with several stores alive (tests make many in-memory ones)
+    /// `User(context:)`, which finds its entity by class across every loaded model, could take
+    /// another store's — a save then failed with Cocoa 133010 or raised on a temporary object id
+    /// (TODO 120).
+    private static let model: NSManagedObjectModel? = Bundle.main
+        .url(forResource: "ConstructMessenger", withExtension: "momd")
+        .flatMap(NSManagedObjectModel.init(contentsOf:))
+
     init(inMemory: Bool = false) {
-        // iOS 26 bug: NSPersistentContainer(name:) searches ALL bundles for the momd
-        // file and may find it in multiple locations (e.g. main bundle + xcframework),
-        // registering NSEntityDescriptions twice. This causes "Expected X but found X"
-        // type-cast crashes when fetching entities like CallRecord/CTCallRecord.
-        // Fix: explicitly load the model from Bundle.main so only one copy is registered.
-        guard let modelURL = Bundle.main.url(forResource: "ConstructMessenger", withExtension: "momd"),
-              let model = NSManagedObjectModel(contentsOf: modelURL) else {
+        guard let model = Self.model else {
             // Bundle is corrupted — fall back to letting CoreData find the model itself.
             // Better to start with a potentially broken container than to crash outright.
             Log.error("Core Data: ConstructMessenger.momd not found in Bundle.main — falling back to default init")
@@ -53,6 +68,10 @@ struct PersistenceController {
         } else if let description = c.persistentStoreDescriptions.first {
             description.shouldInferMappingModelAutomatically = true
             description.shouldMigrateStoreAutomatically = true
+            // Deleted and overwritten rows are zeroed rather than left in free pages: a message
+            // deleted, or a clear body the storage migration replaced, must not be readable
+            // from the file afterwards. SQLite applies it to pages freed from now on.
+            description.setOption(["secure_delete": "ON"] as NSDictionary, forKey: NSSQLitePragmasOption)
             // .completeUntilFirstUserAuthentication (not .complete) allows the store to be
             // created and opened on first launch and from background wakes. .complete would
             // block file I/O until the device is unlocked AND can race with store creation
@@ -101,6 +120,29 @@ struct PersistenceController {
         migrateExistingContactsToSynaps()
         repairFutureTimestamps()
         backfillMissingServerOrderKeys()
+        Self.settleDeliveredPendingRows(in: c.viewContext)
+        DuplicateChats.merge(in: c.viewContext)
+    }
+
+    /// Rows of ours the peer confirmed that still carry the `pending` key — written before a
+    /// receipt settled the order (`MessageStore.settleOrder(of:)`), the last ones on 2026-10-12.
+    /// Normally empty.
+    static func settleDeliveredPendingRows(in context: NSManagedObjectContext) {
+        let request = Message.fetchRequest()
+        request.predicate = NSPredicate(
+            format: "isSentByMe == YES AND deliveryStatusRaw == %d AND serverOrderKey BEGINSWITH %@",
+            DeliveryStatus.delivered.rawValue, ServerMessageOrder.pendingPrefix
+        )
+        guard let messages = try? context.fetch(request), !messages.isEmpty else { return }
+        for message in messages {
+            message.serverOrderKey = ServerMessageOrder.local(timestamp: message.safeTimestamp, messageId: message.id)
+        }
+        do {
+            try context.save()
+            Log.info("Settled the order of \(messages.count) delivered message(s) left pending", category: "Persistence")
+        } catch {
+            Log.error("Failed to settle pending order: \(error)", category: "Persistence")
+        }
     }
 
     /// Pull any stored timestamp that lies in the future back to now, and repair the chat
@@ -140,7 +182,7 @@ struct PersistenceController {
                 ServerMessageOrder.effectiveKey(for: $0) < ServerMessageOrder.effectiveKey(for: $1)
             }
             if let newest {
-                chat.applyPreview(text: newest.displayText, timestamp: newest.timestamp, force: true)
+                chat.applyPreview(text: newest.previewText, timestamp: newest.timestamp, force: true)
             } else {
                 chat.lastMessageTime = now
             }
@@ -157,9 +199,11 @@ struct PersistenceController {
         }
     }
 
-    /// Assign a deterministic migration key to rows written before transcript ordering became
-    /// server-authoritative. New rows are written with a real server key or an explicit pending
-    /// sentinel, so this fetch is normally empty after the first launch on the new model.
+    /// Assign a deterministic key to rows written before transcript ordering became
+    /// server-authoritative. Every path that creates a row now writes a server key, the pending
+    /// sentinel or a local key, so this fetch is normally empty after the first launch on the new
+    /// model — `TranscriptOrderIsTotalTests` is what holds that, not this comment: it used to say
+    /// the same thing while the system-notice path left the column nil.
     private func backfillMissingServerOrderKeys() {
         let context = container.viewContext
         let request = Message.fetchRequest()
@@ -167,7 +211,7 @@ struct PersistenceController {
         guard let messages = try? context.fetch(request), !messages.isEmpty else { return }
 
         for message in messages {
-            message.serverOrderKey = ServerMessageOrder.legacy(
+            message.serverOrderKey = ServerMessageOrder.local(
                 timestamp: message.safeTimestamp,
                 messageId: message.id
             )
@@ -213,6 +257,33 @@ struct PersistenceController {
         }
     }
 
+    /// Empty the store by replacing its file rather than deleting its rows: a batch delete leaves
+    /// the deleted rows' bytes in the SQLite free pages and the WAL. `sweep` runs while no store is
+    /// attached, so it may remove the store files and the external-blob directory with the rest.
+    /// `LocalDataWipe` only.
+    func replaceStoreWithEmpty(sweep: () -> Void) {
+        let coordinator = container.persistentStoreCoordinator
+        container.viewContext.reset()
+        for store in coordinator.persistentStores {
+            let url = store.url
+            do {
+                try coordinator.remove(store)
+                if let url, url.path != "/dev/null" {
+                    try coordinator.destroyPersistentStore(at: url, type: .sqlite)
+                }
+            } catch {
+                Log.error("Core Data: could not detach the store for the wipe: \(error)", category: "Persistence")
+            }
+        }
+        sweep()
+        container.loadPersistentStores { _, error in
+            if let error {
+                Log.error("Core Data: empty store did not load after the wipe: \(error)", category: "Persistence")
+            }
+            NotificationCenter.default.post(name: .localStoreReplaced, object: nil)
+        }
+    }
+
     /// Creates a fresh background context for off-main-thread writes.
     func newBackgroundContext() -> NSManagedObjectContext {
         container.newBackgroundContext()
@@ -234,13 +305,47 @@ struct PersistenceController {
             .appendingPathComponent("ConstructMessenger.sqlite")
     }
 
+    /// The files a Core Data build kept the account in, below `dir` (Application Support): the
+    /// store with its WAL, shared memory and external blobs, and the per-row key database
+    /// (`MessageKeyStore`) that opens its bodies. macOS stopped using them at TODO 137 step 4 and
+    /// the owner chose to remove what older Desktop builds left, in the clear, rather than keep
+    /// it unopened. Returns how many were there.
+    @discardableResult
+    static func removeLegacyStore(in dir: URL) -> Int {
+        let names = [
+            "ConstructMessenger.sqlite", "ConstructMessenger.sqlite-wal", "ConstructMessenger.sqlite-shm",
+            ".ConstructMessenger_SUPPORT",
+            "ct_secure/message_keys.sqlite", "ct_secure/message_keys.sqlite-journal",
+        ]
+        var removed = 0
+        for name in names {
+            let url = dir.appendingPathComponent(name)
+            guard FileManager.default.fileExists(atPath: url.path) else { continue }
+            do {
+                try FileManager.default.removeItem(at: url)
+                removed += 1
+            } catch {
+                Log.error("Legacy store: could not remove \(name): \(error)", category: "Persistence")
+            }
+        }
+        if removed > 0 { Log.info("Legacy store: removed \(removed) file(s)", category: "Persistence") }
+        return removed
+    }
+
     /// Removes SQLite main file + WAL + SHM so a fresh empty store can be created.
-    private static func nukeSQLiteFiles(at storeURL: URL) {
+    static func nukeSQLiteFiles(at storeURL: URL) {
         let fm = FileManager.default
-        let walURL = storeURL.appendingPathExtension("wal")
-        let shmURL = storeURL.appendingPathExtension("shm")
-        for url in [storeURL, walURL, shmURL] {
+        for url in sqliteFiles(of: storeURL) {
             try? fm.removeItem(at: url)
         }
+    }
+
+    /// The store and its two sidecars. SQLite names them by appending `-wal` and `-shm` to the
+    /// file name, not as an extension: until 2026-10-12 this removed `….sqlite.wal`, a file that
+    /// never exists, and left the WAL behind — the recovery's new store then opened onto it.
+    static func sqliteFiles(of storeURL: URL) -> [URL] {
+        let dir = storeURL.deletingLastPathComponent()
+        let name = storeURL.lastPathComponent
+        return [storeURL, dir.appendingPathComponent(name + "-wal"), dir.appendingPathComponent(name + "-shm")]
     }
 }

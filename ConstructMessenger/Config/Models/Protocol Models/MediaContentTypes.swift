@@ -40,6 +40,24 @@ func parseMediaContent(from content: String?) -> MediaMessageContent? {
     )
 }
 
+// MARK: - Presentation
+
+/// How a media item is shown beyond what its MIME type implies — `MediaMessage.presentation` on
+/// the wire, `"presentation"` in an item's local JSON. A value this build does not know is read as
+/// nil, the ordinary bubble, which is what the wire field promises an older client does.
+enum MediaPresentation: String, Codable, Sendable {
+    /// A short video recorded in the chat: 3:4, uncropped, muted loop in the transcript, full
+    /// screen with sound on tap (`decisions/video-notes-are-uncropped-and-expand.md`).
+    case videoNote = "video_note"
+
+    static let jsonKey = "presentation"
+
+    /// The presentation of one local media item dict.
+    static func of(_ item: [String: Any]) -> MediaPresentation? {
+        (item[jsonKey] as? String).flatMap(MediaPresentation.init(rawValue:))
+    }
+}
+
 // MARK: - File message
 
 struct FileMessageContent: Codable {
@@ -55,7 +73,6 @@ struct FileMessageContent: Codable {
         let size: Int
         let hash: String
         let filename: String
-        let compressed: Bool
     }
 }
 
@@ -83,4 +100,31 @@ func parseVoiceContent(from content: String?) -> VoiceMessageContent? {
           type == "voice"
     else { return nil }
     return try? JSONDecoder().decode(VoiceMessageContent.self, from: data)
+}
+
+/// The body stored while an upload has not finished.
+///
+/// `savePlaceholderMessage` and `saveVoicePlaceholderMessage` write JSON that parses as
+/// media or voice, so the bubble can render a thumbnail. The row's content type stays
+/// `.regular` and it has decrypted content and no wire payload. Those are exactly the
+/// inputs the retry path uses to re-encrypt a text message, so this body has to be named
+/// — otherwise the sentinel (`{"_placeholder":true}` or `"_uploading":true`) is what the
+/// peer receives.
+enum UploadPlaceholderBody {
+    static func isSentinel(_ text: String) -> Bool {
+        guard text.hasPrefix("{"),
+              let data = text.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let type = json["type"] as? String
+        else { return false }
+        switch type {
+        case "media":
+            guard let items = json["media"] as? [[String: Any]], !items.isEmpty else { return false }
+            return items.allSatisfy { ($0["_placeholder"] as? Bool) == true }
+        case "voice":
+            return (json["_uploading"] as? Bool) == true
+        default:
+            return false
+        }
+    }
 }

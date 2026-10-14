@@ -9,6 +9,9 @@
 //
 
 import SwiftUI
+#if canImport(UIKit)
+import UIKit
+#endif
 
 // MARK: - Color Palette
 
@@ -25,17 +28,38 @@ extension Color {
         /// Outgoing message background. Dark: #111111 / Light: #CECECE
         static let outMsgBg   = Color(dark: 0x111111, light: 0xE9E9E9)
 
-        // MARK: Accent (brand blue — unchanged across themes)
-        /// Primary accent: #1A3FFF
-        static let accent     = Color(hex: 0x0062FF)
-        /// Secondary accent: #4A6AFF
-        static let accentDim  = Color(hex: 0x1E68DF)
+        // MARK: Accent
+        /// Primary accent. Dark: #008CFF / Light: #0057E0.
+        ///
+        /// Adaptive, and it has to be: a single hex cannot clear 4.5:1 as text in both themes.
+        /// #008CFF reads 5.87 on the dark background and 4.81 on a `bgMsg` card, but only 3.03 on
+        /// the light background; #0057E0 is 5.45 / 4.71 on the light pair. The old #0062FF was
+        /// 3.97 on dark — below the bar for text, and accent *is* text on action rows inside
+        /// `CTSectionGroup`. It was also below the bar under `CTButton`'s own label, which draws
+        /// in `Color.CT.bg` on this fill: 3.97 before, 5.87 now.
+        ///
+        /// Hue moved 294° → 280° and perceptual chroma 91.8 → 66.6. That trade is not avoidable:
+        /// blue contributes 7% of luminance, so any brighter blue takes its brightness from green
+        /// and red. #008CFF is the last step that still passes on a card without reading cyan.
+        /// Measurements and the candidates considered: construct-docs
+        /// `client/ios/NATIVE_AFFORDANCE_MIGRATION.md` §Stage 1.
+        static let accent     = Color(dark: 0x008CFF, light: 0x0057E0)
+        /// Pressed / hover partner of `accent`. Dark: #0077DB / Light: #0047B3.
+        ///
+        /// **Fill and hover only — never text.** No dim partner of this accent reaches 4.5:1 on
+        /// the dark background (#0077DB peaks at 4.42), so text that used to be `accentDim` is
+        /// `accent` instead.
+        static let accentDim  = Color(dark: 0x0077DB, light: 0x0047B3)
 
         // MARK: Text
         /// Primary text. Dark: #E8E8E8 / Light: #111111
         static let text       = Color(dark: 0xE8E8E8, light: 0x111111)
-        /// Timestamps, metadata, inactive.
-        static let textDim    = Color(dark: 0x818181, light: 0x333333)
+        /// Timestamps, metadata, inactive. Dark: #8A8A8A / Light: #333333.
+        ///
+        /// The dark value was #818181, which is 5.11 on the background but **4.18 on a `bgMsg`
+        /// card** — below the bar, on the surface most secondary text actually sits on. JetBrains
+        /// Mono's heavier stems hid it; the system face in the chrome does not.
+        static let textDim    = Color(dark: 0x8A8A8A, light: 0x333333)
         /// Text/icons inside outgoing bubbles. Dark: #FFFFFF (on #111111) /
         /// Light: #111111 (on #E9E9E9). Adaptive — never hardcode `.white` here,
         /// or it becomes unreadable on the light outgoing background.
@@ -46,6 +70,30 @@ extension Color {
         static let noise      = Color(dark: 0x1E1E1E, light: 0xC8C8C8)
         /// Destructive actions: #DC3C3C (unchanged)
         static let danger     = Color(hex: 0xDC3C3C)
+
+        // MARK: Status
+        /// Connected and holding: the connection dot and the network status. Dark: #30D158 /
+        /// Light: #248A3D — the platform's green and its high-contrast variant, since a status is
+        /// the platform's to colour. The light value is the accessible one because a dot on #F2F2F2
+        /// needs 3:1 and #34C759 gives about 2.0 (#248A3D: 3.9). **Status only — never a control or text.**
+        static let online     = Color(dark: 0x30D158, light: 0x248A3D)
+
+        // MARK: Over media
+        /// On a camera picture or a photo the theme's ground is not underneath, so these do not
+        /// follow dark/light: they are for whatever the picture is. Call screens, the media
+        /// viewer, play and download overlays (TODO 122).
+        /// Text and symbols over a picture.
+        static let onMedia        = Color.white
+        /// Secondary text over a picture (a status under a name).
+        static let onMediaDim     = Color.white.opacity(0.8)
+        /// The gradient or veil that keeps text over a picture readable.
+        static let mediaScrim     = Color.black.opacity(0.45)
+        /// A round control's fill over a picture, off state.
+        static let mediaControl   = Color.white.opacity(0.14)
+        /// The same control on — inverted, as in FaceTime: the unusual state stands out.
+        static let mediaControlOn = Color.white
+        /// The answer button of an incoming call: the platform's green, a control by convention.
+        static let answer         = Color(hex: 0x30D158)
     }
 }
 
@@ -111,19 +159,96 @@ private extension NSColor {
 
 /// Thin wrapper around ConstructFont so CT* views need no direct dependency on UIConstants.
 enum CTFont {
-    static func regular(_ size: CGFloat) -> Font { ConstructFont.mono(size, weight: .regular) }
-    static func medium(_ size: CGFloat)  -> Font { ConstructFont.mono(size, weight: .medium)  }
-    static func bold(_ size: CGFloat)    -> Font { ConstructFont.mono(size, weight: .bold)    }
+    // The pre-split names `regular` / `medium` / `bold` (fixed size, no Dynamic Type) are gone
+    // since 2026-10-06, when the last call site moved to a role (TODO 122). Chrome is `ui` or a
+    // role, machine output is `mono`.
+
+    // MARK: - The chrome / technical split
+
+    /// Chrome: nav bars, labels, section headers, buttons — anything a person reads to operate
+    /// the app rather than to read machine output.
+    ///
+    /// Monospace, and it scales: `relativeTo` carries Apple's Dynamic Type curve while the size
+    /// stays ours. Our scale sits below Apple's defaults on purpose — density is the identity —
+    /// so the pair is "our size, their curve", not "their size".
+    ///
+    /// The chrome was the system face for one day (2026-09-20 → 21). Seen on a device the
+    /// monospace chrome was the identity worth keeping, and the reader's text is where the
+    /// system face belongs — `message` below. `ui` and `mono` resolve to the same family today;
+    /// the split stays because it says *why* a site is monospace, and because it is what lets
+    /// the chrome move again without the fingerprints moving with it.
+    ///
+    /// Do not hand-roll `.system(…)` at a call site — use this, or a role below.
+    static func ui(
+        _ size: CGFloat,
+        weight: Font.Weight = .regular,
+        relativeTo: Font.TextStyle? = nil
+    ) -> Font {
+        ConstructFont.mono(size, weight: weight, relativeTo: relativeTo ?? inferredStyle(for: size))
+    }
+
+    /// The Dynamic Type curve a bare size should follow when the call site names none.
+    /// Bands, not a table: what matters is that 13pt scales like a footnote and 48pt like a
+    /// large title, not that every size has its own entry.
+    private static func inferredStyle(for size: CGFloat) -> Font.TextStyle {
+        switch size {
+        case ..<12:  return .caption2
+        case ..<13:  return .caption
+        case ..<15:  return .footnote
+        case ..<18:  return .headline
+        case ..<28:  return .title3
+        default:     return .largeTitle
+        }
+    }
+
+    // MARK: - Roles
+
+    // The chrome's type scale as names. 685 call sites used 38 (weight, size) pairs and eleven
+    // of them covered 90%; these are those pairs, so that a change to "what body text is"
+    // happens here once. A role keeps the size it replaced — the migration onto it is a
+    // rename, not a redesign. Sizes not in this list are `ui(size, weight:)` directly.
+    //
+    // `.mono` is deliberately absent: monospace is `CTFont.mono(size)` at the site, because it
+    // is a decision about the content (this is a fingerprint) rather than a slot in the scale.
+
+    /// Screen and sheet titles. Was `bold(18)`.
+    static var title: Font        { ui(18, weight: .bold, relativeTo: .title3) }
+    /// Section titles and emphasised labels. Was `bold(14)`.
+    static var headline: Font     { ui(14, weight: .bold, relativeTo: .headline) }
+    /// Row labels and the ordinary text of the chrome. Was `regular(13)` — 208 sites.
+    static var body: Font         { ui(13, relativeTo: .footnote) }
+    /// Body with emphasis. Was `bold(13)`.
+    static var bodyEmphasis: Font { ui(13, weight: .bold, relativeTo: .footnote) }
+    /// Row values, secondary lines. Was `regular(12)`.
+    static var secondary: Font    { ui(12, relativeTo: .caption) }
+    /// Captions, timestamps, footers. Was `regular(11)` — 135 sites.
+    static var caption: Font      { ui(11, relativeTo: .caption2) }
+    /// The smallest text the chrome sets. Was `regular(10)`.
+    static var micro: Font        { ui(10, relativeTo: .caption2) }
+    /// Chips and tiny tags. Was `bold(11)`.
+    static var badge: Font        { ui(11, weight: .bold, relativeTo: .caption2) }
+
+    /// Technical content: hex ids, fingerprints, safety numbers, device ids, counters, logs,
+    /// diagnostics. Monospace here is a decision about what the content *is*, not a house style —
+    /// it is what makes a fingerprint stay a fingerprint whatever the chrome around it is set in.
+    static func mono(
+        _ size: CGFloat,
+        weight: Font.Weight = .regular,
+        relativeTo: Font.TextStyle? = nil
+    ) -> Font {
+        ConstructFont.mono(size, weight: weight, relativeTo: relativeTo)
+    }
 
     // MARK: - Message body
 
     /// The text of a message — in a bubble, and in the composer that produces it.
     ///
-    /// The only font in the app the reader chooses, and the scope is the point. `regular` sets
+    /// The only font in the app the reader chooses, and the scope is the point. `ui` sets
     /// everything: nav bars, `> TITLE` headers, badges, separators. A preference read there would
     /// turn the whole product into a different product, and that is not what anyone asked for.
     /// Monospace is the language of the **chrome**; what a person writes and reads is content, and
-    /// its typeface belongs to them.
+    /// its typeface belongs to them — which is why the default here is the system face, the one
+    /// the OS's own reading and accessibility settings are tuned for.
     ///
     /// The composer follows the bubble deliberately: typing in one face and watching it land in
     /// another is a mismatch on every single send.
@@ -131,11 +256,14 @@ enum CTFont {
     /// Note that "always JetBrains Mono" was never quite true where it mattered most — the family
     /// ships no CJK glyphs, so Japanese has always been rendered in a substituted face inside
     /// bubbles. This makes a choice out of what was already a fallback.
+    ///
+    /// Both faces scale with the `.body` curve: a person who enlarged text at the OS level gets
+    /// it here whichever face they picked.
     static func message(_ size: CGFloat) -> Font {
-        let scaled = size * ChatTextPreference.sizeMultiplier
+        let base = size * ChatTextPreference.sizeMultiplier
         switch ChatTextPreference.face {
-        case .mono:   return ConstructFont.mono(scaled, weight: .regular, relativeTo: .body)
-        case .system: return .system(size: scaled, weight: .regular)
+        case .system: return .system(size: ConstructFont.scaled(base, relativeTo: .body), weight: .regular)
+        case .mono:   return ConstructFont.mono(base, weight: .regular, relativeTo: .body)
         }
     }
 }
@@ -149,17 +277,22 @@ enum CTFont {
 enum ChatTextPreference {
 
     enum Face: String, CaseIterable {
-        /// JetBrains Mono — the terminal language, and the default.
-        case mono
-        /// The platform's own text face, which is what the OS's accessibility settings are tuned for.
+        /// The platform's own text face — the default. It is what the OS's reading and
+        /// accessibility settings are tuned for, and message text is the reader's, not ours.
         case system
+        /// The chrome's monospace, for a person who wants the whole screen in one voice.
+        case mono
     }
 
     static let faceKey = "chatTextFace"
     static let sizeKey = "textSize"
 
+    /// `.system` unless the reader said otherwise. Was `.mono` until 2026-09-21; a stored value
+    /// wins either way, so a person who had already chosen keeps their choice.
+    static let defaultFace: Face = .system
+
     static var face: Face {
-        Face(rawValue: UserDefaults.standard.string(forKey: faceKey) ?? "") ?? .mono
+        Face(rawValue: UserDefaults.standard.string(forKey: faceKey) ?? "") ?? defaultFace
     }
 
     /// Multiplier for the base message size.
@@ -218,11 +351,11 @@ enum CTShape {
 
 /// Canonical sizing tokens for nav bars, action icons, content rows, and composer chrome.
 ///
-/// All icon sizes are derived from `CTFont.bold(13)` line height (~16 pt) so that
+/// All icon sizes are derived from the line height of 13 pt bold chrome text (~16 pt) so that
 /// a nav bar containing only an SF Symbol is the same height as one containing text.
 enum CTLayout {
     /// Horizontal edge inset shared by nav bars, section headers, and content rows.
-    static let edgePad: CGFloat = 12
+    static let edgePad: CGFloat = CTSpace.m
 
     /// Vertical padding for navigation bar rows.
     static let navVPad: CGFloat = 11
@@ -232,14 +365,9 @@ enum CTLayout {
     /// regardless of whether the bar has a back button, trailing icon, or text only.
     static let navBarHeight: CGFloat = 44
 
-    /// SF Symbol size for standard nav-bar action buttons (QR scan, search, dismiss).
-    static let navIconSize: CGFloat = 20
-
-    /// Slightly larger icon for elevated primary-action buttons (e.g., phone call in chat).
-    static let navIconSizeLg: CGFloat = 22
-
-    /// Large icon for full-screen call UI (accept / decline / mute buttons).
-    static let callIconSize: CGFloat = 24
+    /// The pre-`CTIcon` names of three icon sizes; `CTIcon` is the authority (TODO 122).
+    static let navIconSize: CGFloat = CTIcon.nav
+    static let callIconSize: CGFloat = CTIcon.control
 
     /// Circular call control (mute / speaker / secondary).
     static let callControlSize: CGFloat = 56
@@ -263,10 +391,46 @@ enum CTLayout {
     static let chromeGap: CGFloat = 10
 
     /// Vertical gap before a settings section header / between major blocks.
-    static let sectionGap: CGFloat = 16
+    static let sectionGap: CGFloat = CTSpace.l
 
     /// Tight inset inside cards / preview chips.
-    static let inlinePad: CGFloat = 8
+    static let inlinePad: CGFloat = CTSpace.s
+}
+
+/// SF Symbol sizes (TODO 122). Before this scale existed, 157 call sites wrote
+/// `.font(.system(size: n))` beside an `Image(systemName:)`, with twenty different values from
+/// 9 to 64. A symbol takes its size from here, through `CTIcon.font(_:weight:)`; a size between two
+/// steps rounds to the nearer one.
+enum CTIcon {
+    /// Beside caption text: badges, inline status, a lock on a row (was 9–13).
+    static let caption: CGFloat = 12
+    /// In a list row or beside body text (was 14–17).
+    static let row: CGFloat = 16
+    /// Nav-bar actions: QR, search, dismiss (was 18–20).
+    static let nav: CGFloat = 20
+    /// An elevated nav action, the chat header's button (22).
+    static let navLg: CGFloat = 22
+    /// Inside a round control: call buttons, the media viewer's bar (24–26).
+    static let control: CGFloat = 24
+    /// Over media: play, download, retry on a bubble (28–34).
+    static let overlay: CGFloat = 32
+    /// An empty state or a screen's one symbol (48–64).
+    static let hero: CGFloat = 48
+
+    static func font(_ size: CGFloat, weight: Font.Weight = .medium) -> Font {
+        .system(size: size, weight: weight)
+    }
+}
+
+/// Spacing (TODO 122): padding and stack spacing take a step, not a number. Six steps cover what
+/// the layout uses; the `CTLayout` insets are named members of this scale.
+enum CTSpace {
+    static let xs: CGFloat = 4
+    static let s: CGFloat = 8
+    static let m: CGFloat = 12
+    static let l: CGFloat = 16
+    static let xl: CGFloat = 24
+    static let xxl: CGFloat = 32
 }
 
 // MARK: - Cross-platform helpers
@@ -330,7 +494,7 @@ struct CTRowIcon: View {
             switch content {
             case .ascii(let symbol):
                 Text(symbol)
-                    .font(CTFont.bold(size))
+                    .font(CTFont.mono(size, weight: .bold))
                     .foregroundStyle(color)
                     .lineLimit(1)
                     .fixedSize()
@@ -345,21 +509,29 @@ struct CTRowIcon: View {
 }
 
 
+// MARK: - Avatar sizes
+
+/// Every avatar is one of these (TODO 130). Each screen used to pick its own number — 28, 36, 40,
+/// 44, 52, 56, 72, 80, 96, 100 — so the same person changed size from screen to screen.
+enum CTAvatarSize {
+    /// A secondary row (the Desktop mini call bar).
+    static let compact: CGFloat = 32
+    /// A list row: chats, recents, people, requests.
+    static let row: CGFloat = 40
+    /// The person at the top of a card: the settings profile row, a shared profile.
+    static let header: CGFloat = 56
+    /// The one person a screen is about: a contact profile, the account, a call.
+    static let hero: CGFloat = 96
+}
+
 // MARK: - CTHexAvatar
 
 struct CTHexAvatar: View {
     var initials: String
     var image: Image? = nil
-    var size: AvatarSize = .medium
+    var size: CGFloat = CTAvatarSize.row
     /// Seed for deterministic color (pass userId or username). Defaults to initials.
     var colorSeed: String? = nil
-
-    enum AvatarSize: CGFloat {
-        case small  = 32
-        case medium = 40
-        case large  = 56
-        case xlarge = 80
-    }
 
     private var accentColor: Color {
         Color.hexagonAccent(for: colorSeed ?? initials)
@@ -371,7 +543,7 @@ struct CTHexAvatar: View {
                 image
                     .resizable()
                     .scaledToFill()
-                    .frame(width: size.rawValue, height: size.rawValue)
+                    .frame(width: size, height: size)
                     .clipShape(Circle())
                 Circle()
                     .stroke(accentColor, lineWidth: 1)
@@ -384,7 +556,7 @@ struct CTHexAvatar: View {
                     .stroke(accentColor, lineWidth: 1)
             }
         }
-        .frame(width: size.rawValue, height: size.rawValue)
+        .frame(width: size, height: size)
     }
 }
 
@@ -430,7 +602,7 @@ struct CTNoise: View {
                     for c in 0..<cols {
                         ctx.draw(
                             Text(String(grid[r][c]))
-                                .font(CTFont.regular(10))
+                                .font(CTFont.mono(10))
                                 .foregroundColor(Color.CT.noise),
                             at: CGPoint(x: CGFloat(c) * cw, y: CGFloat(r) * ch),
                             anchor: .topLeading
@@ -445,47 +617,6 @@ struct CTNoise: View {
 
 // MARK: - Separators
 
-// MARK: - Mode Selector (tri-state segmented control)
-
-/// A CT-styled segmented control for selecting between modes (e.g. VEIL OFF|AUTO|ON).
-/// Accent fill on the selected segment; equal-width options.
-struct CTModeSelector<T: Hashable>: View {
-    @Binding var selection: T
-    let options: [T]
-    let labels: [T: String]
-    /// Fixed total width. Pass `nil` to expand to the parent’s max width (media picker tray).
-    var width: CGFloat? = 180
-
-    var body: some View {
-        let control = HStack(spacing: 0) {
-            ForEach(options, id: \.self) { option in
-                let isSelected = selection == option
-                Button {
-                    selection = option
-                } label: {
-                    Text(labels[option] ?? "")
-                        .font(CTFont.regular(12))
-                        .foregroundColor(isSelected ? Color.CT.bg : Color.CT.textDim)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 6)
-                        .background(isSelected ? Color.CT.accent : Color.clear)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.8)
-                }
-                .buttonStyle(.plain)
-            }
-        }
-        .overlay(CTShape.card().stroke(Color.CT.accent.opacity(0.4), lineWidth: 0.5))
-        .clipShape(CTShape.card())
-
-        if let width {
-            control.frame(width: width)
-        } else {
-            control.frame(maxWidth: .infinity)
-        }
-    }
-}
-
 // MARK: - Separator
 
 struct CTSep: View {
@@ -494,7 +625,7 @@ struct CTSep: View {
 
     var body: some View {
         Text(style == .thin ? CTSymbol.thin() : CTSymbol.thick())
-            .font(CTFont.regular(10))
+            .font(CTFont.mono(10))
             .foregroundColor(Color.CT.noise)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 12)
@@ -521,6 +652,29 @@ struct CTSectionGroup<Content: View>: View {
     }
 }
 
+/// The note under a card: what the rows above it do, in the dim caption face. One component so
+/// every screen sets it the same way (TODO 130) — each used to carry its own copy with its own
+/// padding.
+struct CTSectionFooter: View {
+    let key: String
+    /// Dim by default; the danger colour where the note is a warning about the rows above.
+    var color: Color = Color.CT.textDim
+
+    init(_ key: String, color: Color = Color.CT.textDim) {
+        self.key = key
+        self.color = color
+    }
+
+    var body: some View {
+        Text(LocalizedStringKey(key))
+            .font(CTFont.caption)
+            .foregroundStyle(color)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, CTLayout.edgePad + CTLayout.inlinePad)
+            .padding(.top, CTLayout.inlinePad / 2)
+    }
+}
+
 // MARK: - System Message  (> text)
 
 // MARK: - Search Bar
@@ -544,9 +698,9 @@ struct CTSearchBar: View {
 
             TextField("", text: $text,
                       prompt: Text(placeholder)
-                        .font(CTFont.regular(13))
+                        .font(CTFont.body)
                         .foregroundColor(Color.CT.textDim))
-                .font(CTFont.regular(13))
+                .font(CTFont.body)
                 .foregroundColor(Color.CT.text)
                 .autocorrectionDisabled()
                 #if os(iOS)
@@ -591,162 +745,14 @@ struct CTSystemMessage: View {
     var body: some View {
         HStack(spacing: 6) {
             Text(">")
-                .font(CTFont.bold(12))
-                .foregroundColor(Color.CT.accentDim)
+                .font(CTFont.mono(12, weight: .bold))
+                .foregroundColor(Color.CT.accent)
             Text(text)
-                .font(CTFont.regular(12))
-                .foregroundColor(Color.CT.accentDim)
+                .font(CTFont.secondary)
+                .foregroundColor(Color.CT.accent)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 2)
-    }
-}
-
-// MARK: - Navigation Bar
-
-/// Lightweight navigation header designed for floating glass capsules.
-///
-/// Strongly recommended pattern now:
-///
-/// ```swift
-/// CTNavBar(title: "SECTION TITLE") {
-///     // leading (usually back button)
-/// } trailing: {
-///     // trailing actions
-/// }
-/// .glassCapsule()
-/// ```
-///
-/// For classic screens you can still rely on `.ctBorderBottom()`.
-/// The old 15-parameter monster API has been removed.
-struct CTNavBar<Leading: View, Trailing: View>: View {
-    let title: String
-    var showBack: Bool = false
-    /// Affects only the icon on macOS sheets (xmark vs chevron).
-    var isModal: Bool = false
-    var backAction: (() -> Void)? = nil
-
-    private let leadingView: Leading
-    private let trailingView: Trailing
-
-    init(
-        title: String,
-        showBack: Bool = false,
-        isModal: Bool = false,
-        backAction: (() -> Void)? = nil,
-        @ViewBuilder leading: () -> Leading,
-        @ViewBuilder trailing: () -> Trailing
-    ) {
-        self.title = title
-        self.showBack = showBack
-        self.isModal = isModal
-        self.backAction = backAction
-        self.leadingView = leading()
-        self.trailingView = trailing()
-    }
-
-    var body: some View {
-        HStack(alignment: .center, spacing: 0) {
-            // Leading zone
-            Group {
-                if showBack {
-                    Button(action: { backAction?() }) {
-                        #if os(macOS)
-                        Image(systemName: isModal ? "xmark.circle" : "chevron.backward.circle")
-                            .font(.system(size: 18))
-                            .foregroundColor(Color.CT.accent)
-                        #else
-                        Image(systemName: "chevron.backward.circle.fill")
-                            .font(.system(size: 22))
-                            .foregroundColor(Color.CT.accent)
-                        #endif
-                    }
-                    .buttonStyle(.plain)
-                } else if let _ = leadingView as? EmptyView.Type {  // no leading content
-                    EmptyView()
-                } else {
-                    leadingView
-                }
-            }
-            .frame(minWidth: showBack ? 44 : 0, alignment: .leading)
-
-            // Title left-aligned
-            Text(title.uppercased())
-                .font(CTFont.bold(14))
-                .foregroundColor(Color.CT.text)
-                .tracking(4)
-                .lineLimit(1)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.leading, showBack ? 4 : 0)
-
-            Spacer(minLength: 8)
-
-            // Trailing zone
-            trailingView
-                .frame(minWidth: 44, alignment: .trailing)
-        }
-        .padding(.horizontal, CTLayout.edgePad)
-        .frame(height: CTLayout.navBarHeight)
-        .ctBorderBottom()
-    }
-}
-
-// Convenience for the common "title + back" case (no custom leading/trailing)
-extension CTNavBar where Leading == EmptyView, Trailing == EmptyView {
-    init(
-        title: String,
-        showBack: Bool = false,
-        isModal: Bool = false,
-        backAction: (() -> Void)? = nil
-    ) {
-        self.init(
-            title: title,
-            showBack: showBack,
-            isModal: isModal,
-            backAction: backAction,
-            leading: { EmptyView() },
-            trailing: { EmptyView() }
-        )
-    }
-}
-
-// Convenience when providing only trailing (leading is empty)
-extension CTNavBar where Leading == EmptyView {
-    init(
-        title: String,
-        showBack: Bool = false,
-        isModal: Bool = false,
-        backAction: (() -> Void)? = nil,
-        @ViewBuilder trailing: () -> Trailing
-    ) {
-        self.init(
-            title: title,
-            showBack: showBack,
-            isModal: isModal,
-            backAction: backAction,
-            leading: { EmptyView() },
-            trailing: trailing
-        )
-    }
-}
-
-// Convenience when providing only leading (trailing is empty)
-extension CTNavBar where Trailing == EmptyView {
-    init(
-        title: String,
-        showBack: Bool = false,
-        isModal: Bool = false,
-        backAction: (() -> Void)? = nil,
-        @ViewBuilder leading: () -> Leading
-    ) {
-        self.init(
-            title: title,
-            showBack: showBack,
-            isModal: isModal,
-            backAction: backAction,
-            leading: leading,
-            trailing: { EmptyView() }
-        )
     }
 }
 
@@ -810,7 +816,7 @@ struct CTBetaBadge: View {
     var body: some View {
         if AppConstants.isNonProductionBuild {
             Text(NSLocalizedString("build_channel_beta", comment: "").uppercased())
-                .font(CTFont.bold(compact ? 9 : 10))
+                .font(CTFont.ui(compact ? 9 : 10, weight: .bold))
                 .tracking(compact ? 1.5 : 2)
                 .foregroundStyle(.orange)
                 .padding(.horizontal, compact ? 5 : 7)
@@ -833,10 +839,10 @@ struct CTSettingsSectionHeader: View {
     var body: some View {
         HStack(spacing: 6) {
             Text(">")
-                .font(CTFont.bold(11))
+                .font(CTFont.mono(11, weight: .bold))
                 .foregroundColor(color)
             Text(title.uppercased())
-                .font(CTFont.bold(11))
+                .font(CTFont.badge)
                 .foregroundColor(color)
             Spacer()
         }
@@ -848,6 +854,10 @@ struct CTSettingsSectionHeader: View {
 }
 
 struct CTSettingsRow: View {
+    /// Where the hairline between two rows starts: past the row's leading pad (12) and its icon
+    /// column (28 + 4), so it lines up under the label, as a system list's separator does.
+    static let dividerIndent: CGFloat = 44
+
     let label: String
     /// Optional trailing value text (detail). Empty = no value shown.
     var value: String       = ""
@@ -873,14 +883,14 @@ struct CTSettingsRow: View {
             }
             // Label may shrink; trailing value keeps one line (fingerprints, status).
             Text(label)
-                .font(CTFont.regular(13))
+                .font(CTFont.body)
                 .foregroundColor(isDestructive ? Color.CT.danger : labelColor)
                 .lineLimit(1)
                 .layoutPriority(0)
             Spacer(minLength: 8)
             if !value.isEmpty {
                 Text(value)
-                    .font(isAction ? CTFont.bold(13) : CTFont.regular(13))
+                    .font(isAction ? CTFont.bodyEmphasis : CTFont.body)
                     .foregroundColor(
                         isDestructive ? Color.CT.danger :
                         isAction      ? Color.CT.accent : valueColor
@@ -902,8 +912,10 @@ struct CTSettingsRow: View {
             }
         }
         .padding(.horizontal, 12)
-        .padding(.vertical, 9)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        // A system list row's height: at 9 the rows of the settings root sat ~36pt apart, tighter
+        // than every toggle row beside them (edgePad around the switch).
+        .padding(.vertical, CTLayout.edgePad)
+        .frame(maxWidth: .infinity, minHeight: CTLayout.hitTarget, alignment: .leading)
         .contentShape(Rectangle())
     }
 }
@@ -924,7 +936,7 @@ struct CTTextField: View {
                 TextField(placeholder, text: $text)
             }
         }
-        .font(CTFont.regular(14))
+        .font(CTFont.ui(14))
         .foregroundColor(Color.CT.text)
         .multilineTextAlignment(alignment)
         .ctInputChrome(.standard)
@@ -936,38 +948,97 @@ struct CTTextField: View {
 
 // MARK: - Button
 
-struct CTButton: View {
-    let label: String
-    var isEnabled: Bool    = true
-    var isDestructive: Bool = false
-    let action: () -> Void
+/// The three roles a full-width action button can have — the one set every screen draws from
+/// (TODO 130, owner 2026-10-08), instead of each wizard drawing its own.
+enum CTButtonRole {
+    /// The step forward: accent fill.
+    case primary
+    /// An action beside the step — copy, try again: accent outline, no fill.
+    case secondary
+    /// Something that destroys or replaces data: danger fill.
+    case destructive
+}
 
-    var fgColor: Color {
-        guard isEnabled else { return Color.CT.textDim }
-        return isDestructive ? .white : Color.CT.bg
+/// The look of a `CTButtonRole`, as a `ButtonStyle` so a `ShareLink` or a `Menu` can wear it too.
+struct CTButtonStyle: ButtonStyle {
+    var role: CTButtonRole = .primary
+    @Environment(\.isEnabled) private var isEnabled
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(CTFont.bodyEmphasis)
+            .foregroundColor(foreground)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 14)
+            .background(background)
+            .clipShape(CTShape.control())
+            .overlay(CTShape.control().stroke(stroke, lineWidth: role == .secondary ? 1 : 0.5))
+            .opacity(configuration.isPressed ? 0.7 : 1)
     }
 
-    var bgColor: Color {
-        guard isEnabled else { return Color(dark: 0x1C1C1C, light: 0xD8D8D8) }
-        return isDestructive ? Color.CT.danger : Color.CT.accent
+    private var foreground: Color {
+        guard isEnabled else { return Color.CT.textDim }
+        switch role {
+        case .primary: return Color.CT.bg
+        case .secondary: return Color.CT.accent
+        case .destructive: return .white
+        }
+    }
+
+    private var background: Color {
+        switch (role, isEnabled) {
+        case (.secondary, _): return .clear
+        case (_, false): return Color(dark: 0x1C1C1C, light: 0xD8D8D8)
+        case (.primary, true): return Color.CT.accent
+        case (.destructive, true): return Color.CT.danger
+        }
+    }
+
+    private var stroke: Color {
+        switch (role, isEnabled) {
+        case (.secondary, true): return Color.CT.accent.opacity(0.6)
+        case (_, false): return Color.CT.noise
+        default: return .clear
+        }
+    }
+}
+
+struct CTButton: View {
+    let label: String
+    var role: CTButtonRole = .primary
+    var isEnabled: Bool = true
+    /// Work under way: a spinner beside the label, and the button holds still.
+    var isLoading: Bool = false
+    let action: () -> Void
+
+    init(
+        label: String,
+        role: CTButtonRole = .primary,
+        isEnabled: Bool = true,
+        isLoading: Bool = false,
+        action: @escaping () -> Void
+    ) {
+        self.label = label
+        self.role = role
+        self.isEnabled = isEnabled
+        self.isLoading = isLoading
+        self.action = action
+    }
+
+    /// The pre-role spelling, kept for its call sites.
+    init(label: String, isEnabled: Bool = true, isDestructive: Bool, action: @escaping () -> Void) {
+        self.init(label: label, role: isDestructive ? .destructive : .primary, isEnabled: isEnabled, action: action)
     }
 
     var body: some View {
         Button(action: action) {
-            Text(label)
-                .font(CTFont.bold(13))
-                .foregroundColor(fgColor)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 14)
-                .background(bgColor)
-                .clipShape(CTShape.control())
-                .overlay(
-                    CTShape.control()
-                        .stroke(isEnabled ? Color.clear : Color.CT.noise, lineWidth: 0.5)
-                )
+            HStack(spacing: CTLayout.inlinePad) {
+                if isLoading { ProgressView().tint(Color.CT.textDim) }
+                Text(label)
+            }
         }
-        .buttonStyle(.plain)
-        .disabled(!isEnabled)
+        .buttonStyle(CTButtonStyle(role: role))
+        .disabled(!isEnabled || isLoading)
     }
 }
 

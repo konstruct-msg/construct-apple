@@ -8,7 +8,11 @@
 // For information on using the generated types, please see the documentation:
 //   https://github.com/apple/swift-protobuf/
 
+#if canImport(FoundationEssentials)
+import FoundationEssentials
+#else
 import Foundation
+#endif
 import SwiftProtobuf
 
 // If the compiler emits an error on this type, it is because this file
@@ -16,13 +20,13 @@ import SwiftProtobuf
 // incompatible with the version of SwiftProtobuf to which you are linking.
 // Please ensure that you are building against the same version of the API
 // that was used to generate this file.
-fileprivate struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobuf.ProtobufAPIVersionCheck {
+fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobuf.ProtobufAPIVersionCheck {
   struct _2: SwiftProtobuf.ProtobufAPIVersion_2 {}
   typealias Version = _2
 }
 
 /// ErrorCode - Message error codes
-public enum Shared_Proto_Services_V1_ErrorCode: SwiftProtobuf.Enum, Swift.CaseIterable {
+public nonisolated enum Shared_Proto_Services_V1_ErrorCode: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
 
   /// Unspecified error (must be 0)
@@ -97,7 +101,7 @@ public enum Shared_Proto_Services_V1_ErrorCode: SwiftProtobuf.Enum, Swift.CaseIt
 }
 
 /// ReactionEventType - Type of reaction event
-public enum Shared_Proto_Services_V1_ReactionEventType: SwiftProtobuf.Enum, Swift.CaseIterable {
+public nonisolated enum Shared_Proto_Services_V1_ReactionEventType: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
 
   /// Unspecified (must be 0)
@@ -142,7 +146,7 @@ public enum Shared_Proto_Services_V1_ReactionEventType: SwiftProtobuf.Enum, Swif
 }
 
 /// MessageStreamRequest - Client -> Server in bidirectional stream
-public struct Shared_Proto_Services_V1_MessageStreamRequest: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_MessageStreamRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -243,7 +247,7 @@ public struct Shared_Proto_Services_V1_MessageStreamRequest: Sendable {
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   /// Request type (determines which field is populated)
-  public enum OneOf_Request: Equatable, Sendable {
+  public nonisolated enum OneOf_Request: Equatable, Sendable {
     /// Send message
     case send(Shared_Proto_Core_V1_Envelope)
     /// Send receipt
@@ -272,7 +276,7 @@ public struct Shared_Proto_Services_V1_MessageStreamRequest: Sendable {
 }
 
 /// MessageStreamResponse - Server -> Client in bidirectional stream
-public struct Shared_Proto_Services_V1_MessageStreamResponse: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_MessageStreamResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -401,7 +405,7 @@ public struct Shared_Proto_Services_V1_MessageStreamResponse: Sendable {
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   /// Response type (determines which field is populated)
-  public enum OneOf_Response: Equatable, Sendable {
+  public nonisolated enum OneOf_Response: Equatable, Sendable {
     /// Incoming message
     case message(Shared_Proto_Core_V1_Envelope)
     /// Incoming receipt
@@ -432,7 +436,7 @@ public struct Shared_Proto_Services_V1_MessageStreamResponse: Sendable {
 }
 
 /// SubscribeRequest - Subscribe to conversation updates
-public struct Shared_Proto_Services_V1_SubscribeRequest: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_SubscribeRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -465,7 +469,7 @@ public struct Shared_Proto_Services_V1_SubscribeRequest: Sendable {
 }
 
 /// UnsubscribeRequest - Unsubscribe from conversation updates
-public struct Shared_Proto_Services_V1_UnsubscribeRequest: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_UnsubscribeRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -479,7 +483,7 @@ public struct Shared_Proto_Services_V1_UnsubscribeRequest: Sendable {
 }
 
 /// Heartbeat - Keepalive ping
-public struct Shared_Proto_Services_V1_Heartbeat: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_Heartbeat: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -493,7 +497,7 @@ public struct Shared_Proto_Services_V1_Heartbeat: Sendable {
 }
 
 /// HeartbeatAck - Keepalive pong
-public struct Shared_Proto_Services_V1_HeartbeatAck: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_HeartbeatAck: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -510,7 +514,7 @@ public struct Shared_Proto_Services_V1_HeartbeatAck: Sendable {
 }
 
 /// MessageAck - Message successfully sent
-public struct Shared_Proto_Services_V1_MessageAck: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_MessageAck: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -533,7 +537,7 @@ public struct Shared_Proto_Services_V1_MessageAck: Sendable {
 }
 
 /// MessageError - Message send failed
-public struct Shared_Proto_Services_V1_MessageError: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_MessageError: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -570,7 +574,7 @@ public struct Shared_Proto_Services_V1_MessageError: Sendable {
 }
 
 /// SendMessageRequest - Send single message (unary RPC)
-public struct Shared_Proto_Services_V1_SendMessageRequest: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_SendMessageRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -619,7 +623,7 @@ public struct Shared_Proto_Services_V1_SendMessageRequest: Sendable {
 /// SendSealedMessageRequest - stealth-sealed-sender-v2 Phase 2.
 /// Deliberately carries nothing but the sealed envelope + attempt correlation ID —
 /// no sender, no conversation_id, no content_type on the wire.
-public struct Shared_Proto_Services_V1_SendSealedMessageRequest: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_SendSealedMessageRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -655,7 +659,7 @@ public struct Shared_Proto_Services_V1_SendSealedMessageRequest: Sendable {
 /// RateLimitChallenge - Proof-of-Work challenge issued on soft rate-limit breach.
 /// Client must solve this challenge before retrying the send.
 /// difficulty: 4 = x1.5 limit, 6 = x3 limit, 8 = x5+ limit
-public struct Shared_Proto_Services_V1_RateLimitChallenge: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_RateLimitChallenge: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -675,7 +679,7 @@ public struct Shared_Proto_Services_V1_RateLimitChallenge: Sendable {
 }
 
 /// SendMessageResponse - Send message response
-public struct Shared_Proto_Services_V1_SendMessageResponse: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_SendMessageResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -738,7 +742,7 @@ public struct Shared_Proto_Services_V1_SendMessageResponse: Sendable {
 /// Clients should send edits as regular E2EE messages with MessageContent.edit.
 ///
 /// NOTE: This message was marked as deprecated in the .proto file.
-public struct Shared_Proto_Services_V1_EditMessageRequest: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_EditMessageRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -774,7 +778,7 @@ public struct Shared_Proto_Services_V1_EditMessageRequest: Sendable {
 /// DEPRECATED: EditMessage is no longer implemented.
 ///
 /// NOTE: This message was marked as deprecated in the .proto file.
-public struct Shared_Proto_Services_V1_EditMessageResponse: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_EditMessageResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -804,7 +808,7 @@ public struct Shared_Proto_Services_V1_EditMessageResponse: Sendable {
 /// DEPRECATED: reactions are sent as encrypted MessageContent.reaction messages.
 ///
 /// NOTE: This message was marked as deprecated in the .proto file.
-public struct Shared_Proto_Services_V1_AddReactionRequest: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_AddReactionRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -841,7 +845,7 @@ public struct Shared_Proto_Services_V1_AddReactionRequest: Sendable {
 /// DEPRECATED: AddReaction is no longer implemented.
 ///
 /// NOTE: This message was marked as deprecated in the .proto file.
-public struct Shared_Proto_Services_V1_AddReactionResponse: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_AddReactionResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -886,7 +890,7 @@ public struct Shared_Proto_Services_V1_AddReactionResponse: Sendable {
 /// ReactionAction.REMOVE.
 ///
 /// NOTE: This message was marked as deprecated in the .proto file.
-public struct Shared_Proto_Services_V1_RemoveReactionRequest: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_RemoveReactionRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -916,7 +920,7 @@ public struct Shared_Proto_Services_V1_RemoveReactionRequest: Sendable {
 /// DEPRECATED: RemoveReaction is no longer implemented.
 ///
 /// NOTE: This message was marked as deprecated in the .proto file.
-public struct Shared_Proto_Services_V1_RemoveReactionResponse: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_RemoveReactionResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -943,7 +947,7 @@ public struct Shared_Proto_Services_V1_RemoveReactionResponse: Sendable {
 /// the server does not distribute reaction events.
 ///
 /// NOTE: This message was marked as deprecated in the .proto file.
-public struct Shared_Proto_Services_V1_ReactionEvent: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_ReactionEvent: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -998,7 +1002,7 @@ public struct Shared_Proto_Services_V1_ReactionEvent: Sendable {
 }
 
 /// Request to fetch pending messages (unary)
-public struct Shared_Proto_Services_V1_GetPendingMessagesRequest: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_GetPendingMessagesRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -1038,7 +1042,7 @@ public struct Shared_Proto_Services_V1_GetPendingMessagesRequest: Sendable {
 /// E2EE design note: encrypted_payload is opaque bytes that the server never reads.
 /// All Signal Protocol parameters (ephemeral key, message number, ratchet state)
 /// are encoded inside encrypted_payload by the sender and decoded only by the recipient.
-public struct Shared_Proto_Services_V1_PendingMessage: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_PendingMessage: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -1080,7 +1084,7 @@ public struct Shared_Proto_Services_V1_PendingMessage: Sendable {
 }
 
 /// Response with pending messages
-public struct Shared_Proto_Services_V1_GetPendingMessagesResponse: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_GetPendingMessagesResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -1101,7 +1105,7 @@ public struct Shared_Proto_Services_V1_GetPendingMessagesResponse: Sendable {
 
 /// Request KEY_SYNC to trigger a full X3DH re-init on the recipient's side
 /// without the disruptive visible END_SESSION flow.
-public struct Shared_Proto_Services_V1_RequestKeySyncRequest: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_RequestKeySyncRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -1115,7 +1119,7 @@ public struct Shared_Proto_Services_V1_RequestKeySyncRequest: Sendable {
 }
 
 /// Always empty; delivery is fire-and-forget (offline queue if needed)
-public struct Shared_Proto_Services_V1_RequestKeySyncResponse: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_RequestKeySyncResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -1125,7 +1129,7 @@ public struct Shared_Proto_Services_V1_RequestKeySyncResponse: Sendable {
   public init() {}
 }
 
-public struct Shared_Proto_Services_V1_IntakeTagEntry: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_IntakeTagEntry: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -1142,7 +1146,7 @@ public struct Shared_Proto_Services_V1_IntakeTagEntry: Sendable {
   public init() {}
 }
 
-public struct Shared_Proto_Services_V1_PublishIntakeTagsRequest: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_PublishIntakeTagsRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -1156,7 +1160,7 @@ public struct Shared_Proto_Services_V1_PublishIntakeTagsRequest: Sendable {
   public init() {}
 }
 
-public struct Shared_Proto_Services_V1_PublishIntakeTagsResponse: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_PublishIntakeTagsResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -1173,17 +1177,17 @@ public struct Shared_Proto_Services_V1_PublishIntakeTagsResponse: Sendable {
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
 
-fileprivate let _protobuf_package = "shared.proto.services.v1"
+fileprivate nonisolated let _protobuf_package = "shared.proto.services.v1"
 
-extension Shared_Proto_Services_V1_ErrorCode: SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_ErrorCode: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0ERROR_CODE_UNSPECIFIED\0\u{1}ERROR_CODE_RECIPIENT_NOT_FOUND\0\u{1}ERROR_CODE_BLOCKED\0\u{1}ERROR_CODE_RATE_LIMIT\0\u{1}ERROR_CODE_TOO_LARGE\0\u{1}ERROR_CODE_ENCRYPTION_FAILED\0\u{1}ERROR_CODE_OFFLINE\0\u{2}\u{f}ERROR_CODE_INTERNAL\0")
 }
 
-extension Shared_Proto_Services_V1_ReactionEventType: SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_ReactionEventType: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0REACTION_EVENT_TYPE_UNSPECIFIED\0\u{1}REACTION_EVENT_TYPE_ADDED\0\u{1}REACTION_EVENT_TYPE_REMOVED\0")
 }
 
-extension Shared_Proto_Services_V1_MessageStreamRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_MessageStreamRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".MessageStreamRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}send\0\u{1}receipt\0\u{1}typing\0\u{1}subscribe\0\u{1}unsubscribe\0\u{1}heartbeat\0\u{3}p2p_handoff_ack\0\u{3}p2p_disconnect\0\u{4}\u{2}request_id\0\u{4}\u{b}attempt_id\0\u{c}\u{9}\u{1}\u{c}\u{b}\u{a}")
 
@@ -1362,7 +1366,7 @@ extension Shared_Proto_Services_V1_MessageStreamRequest: SwiftProtobuf.Message, 
   }
 }
 
-extension Shared_Proto_Services_V1_MessageStreamResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_MessageStreamResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".MessageStreamResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}message\0\u{1}receipt\0\u{1}typing\0\u{1}ack\0\u{1}error\0\u{1}presence\0\u{3}heartbeat_ack\0\u{3}p2p_handoff\0\u{4}\u{2}response_id\0\u{3}stream_cursor\0\u{4}\u{a}rate_limit_challenge\0\u{3}attempt_id\0\u{c}\u{9}\u{1}\u{c}\u{c}\u{9}")
 
@@ -1551,7 +1555,7 @@ extension Shared_Proto_Services_V1_MessageStreamResponse: SwiftProtobuf.Message,
   }
 }
 
-extension Shared_Proto_Services_V1_SubscribeRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_SubscribeRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".SubscribeRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}conversation_ids\0\u{3}include_presence\0\u{3}since_cursor\0")
 
@@ -1595,7 +1599,7 @@ extension Shared_Proto_Services_V1_SubscribeRequest: SwiftProtobuf.Message, Swif
   }
 }
 
-extension Shared_Proto_Services_V1_UnsubscribeRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_UnsubscribeRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".UnsubscribeRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}conversation_ids\0")
 
@@ -1625,7 +1629,7 @@ extension Shared_Proto_Services_V1_UnsubscribeRequest: SwiftProtobuf.Message, Sw
   }
 }
 
-extension Shared_Proto_Services_V1_Heartbeat: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_Heartbeat: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".Heartbeat"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}timestamp\0")
 
@@ -1655,7 +1659,7 @@ extension Shared_Proto_Services_V1_Heartbeat: SwiftProtobuf.Message, SwiftProtob
   }
 }
 
-extension Shared_Proto_Services_V1_HeartbeatAck: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_HeartbeatAck: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".HeartbeatAck"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}timestamp\0\u{3}server_timestamp\0")
 
@@ -1690,7 +1694,7 @@ extension Shared_Proto_Services_V1_HeartbeatAck: SwiftProtobuf.Message, SwiftPro
   }
 }
 
-extension Shared_Proto_Services_V1_MessageAck: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_MessageAck: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".MessageAck"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}message_id\0\u{3}message_number\0\u{3}server_timestamp\0\u{3}delivery_count\0")
 
@@ -1735,7 +1739,7 @@ extension Shared_Proto_Services_V1_MessageAck: SwiftProtobuf.Message, SwiftProto
   }
 }
 
-extension Shared_Proto_Services_V1_MessageError: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_MessageError: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".MessageError"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}message_id\0\u{3}error_code\0\u{3}error_message\0\u{1}retryable\0\u{3}retry_after_ms\0")
 
@@ -1789,7 +1793,7 @@ extension Shared_Proto_Services_V1_MessageError: SwiftProtobuf.Message, SwiftPro
   }
 }
 
-extension Shared_Proto_Services_V1_SendMessageRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_SendMessageRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".SendMessageRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}message\0\u{3}idempotency_key\0\u{4}\u{9}attempt_id\0\u{c}\u{3}\u{8}")
 
@@ -1833,7 +1837,7 @@ extension Shared_Proto_Services_V1_SendMessageRequest: SwiftProtobuf.Message, Sw
   }
 }
 
-extension Shared_Proto_Services_V1_SendSealedMessageRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_SendSealedMessageRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".SendSealedMessageRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}sealed_sender\0\u{3}attempt_id\0")
 
@@ -1872,7 +1876,7 @@ extension Shared_Proto_Services_V1_SendSealedMessageRequest: SwiftProtobuf.Messa
   }
 }
 
-extension Shared_Proto_Services_V1_RateLimitChallenge: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_RateLimitChallenge: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".RateLimitChallenge"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}challenge\0\u{1}difficulty\0\u{3}expires_at\0")
 
@@ -1912,7 +1916,7 @@ extension Shared_Proto_Services_V1_RateLimitChallenge: SwiftProtobuf.Message, Sw
   }
 }
 
-extension Shared_Proto_Services_V1_SendMessageResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_SendMessageResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".SendMessageResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}message_id\0\u{3}message_number\0\u{3}server_timestamp\0\u{1}success\0\u{1}error\0\u{3}rate_limit_challenge\0\u{3}attempt_id\0")
 
@@ -1976,7 +1980,7 @@ extension Shared_Proto_Services_V1_SendMessageResponse: SwiftProtobuf.Message, S
   }
 }
 
-extension Shared_Proto_Services_V1_EditMessageRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_EditMessageRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".EditMessageRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}message_id\0\u{3}conversation_id\0\u{3}new_encrypted_content\0\u{4}\u{8}recipient_user_id\0\u{c}\u{4}\u{7}")
 
@@ -2021,7 +2025,7 @@ extension Shared_Proto_Services_V1_EditMessageRequest: SwiftProtobuf.Message, Sw
   }
 }
 
-extension Shared_Proto_Services_V1_EditMessageResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_EditMessageResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".EditMessageResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}success\0\u{3}edited_at\0\u{3}edit_count\0")
 
@@ -2061,7 +2065,7 @@ extension Shared_Proto_Services_V1_EditMessageResponse: SwiftProtobuf.Message, S
   }
 }
 
-extension Shared_Proto_Services_V1_AddReactionRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_AddReactionRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".AddReactionRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}message_id\0\u{3}conversation_id\0\u{3}encrypted_reaction\0\u{3}reaction_id\0\u{c}\u{5}\u{6}")
 
@@ -2106,7 +2110,7 @@ extension Shared_Proto_Services_V1_AddReactionRequest: SwiftProtobuf.Message, Sw
   }
 }
 
-extension Shared_Proto_Services_V1_AddReactionResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_AddReactionResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".AddReactionResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}success\0\u{3}reacted_at\0\u{3}reaction_id\0\u{1}error\0")
 
@@ -2155,7 +2159,7 @@ extension Shared_Proto_Services_V1_AddReactionResponse: SwiftProtobuf.Message, S
   }
 }
 
-extension Shared_Proto_Services_V1_RemoveReactionRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_RemoveReactionRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".RemoveReactionRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}message_id\0\u{3}conversation_id\0\u{3}reaction_id\0\u{c}\u{4}\u{7}")
 
@@ -2195,7 +2199,7 @@ extension Shared_Proto_Services_V1_RemoveReactionRequest: SwiftProtobuf.Message,
   }
 }
 
-extension Shared_Proto_Services_V1_RemoveReactionResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_RemoveReactionResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".RemoveReactionResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}success\0\u{3}removed_at\0")
 
@@ -2230,7 +2234,7 @@ extension Shared_Proto_Services_V1_RemoveReactionResponse: SwiftProtobuf.Message
   }
 }
 
-extension Shared_Proto_Services_V1_ReactionEvent: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_ReactionEvent: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ReactionEvent"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}event_type\0\u{3}message_id\0\u{3}conversation_id\0\u{3}encrypted_reaction\0\u{3}reaction_id\0\u{1}timestamp\0\u{3}sender_device_id\0")
 
@@ -2294,7 +2298,7 @@ extension Shared_Proto_Services_V1_ReactionEvent: SwiftProtobuf.Message, SwiftPr
   }
 }
 
-extension Shared_Proto_Services_V1_GetPendingMessagesRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_GetPendingMessagesRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".GetPendingMessagesRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}since_cursor\0\u{1}limit\0")
 
@@ -2333,7 +2337,7 @@ extension Shared_Proto_Services_V1_GetPendingMessagesRequest: SwiftProtobuf.Mess
   }
 }
 
-extension Shared_Proto_Services_V1_PendingMessage: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_PendingMessage: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".PendingMessage"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}message_id\0\u{3}sender_id\0\u{4}\u{5}encrypted_payload\0\u{1}timestamp\0\u{3}content_type\0\u{3}sealed_inner_data\0\u{c}\u{3}\u{1}\u{c}\u{4}\u{1}\u{c}\u{5}\u{1}\u{c}\u{6}\u{1}")
 
@@ -2388,7 +2392,7 @@ extension Shared_Proto_Services_V1_PendingMessage: SwiftProtobuf.Message, SwiftP
   }
 }
 
-extension Shared_Proto_Services_V1_GetPendingMessagesResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_GetPendingMessagesResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".GetPendingMessagesResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}messages\0\u{3}next_cursor\0\u{3}has_more\0")
 
@@ -2428,7 +2432,7 @@ extension Shared_Proto_Services_V1_GetPendingMessagesResponse: SwiftProtobuf.Mes
   }
 }
 
-extension Shared_Proto_Services_V1_RequestKeySyncRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_RequestKeySyncRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".RequestKeySyncRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}recipient_user_id\0")
 
@@ -2458,7 +2462,7 @@ extension Shared_Proto_Services_V1_RequestKeySyncRequest: SwiftProtobuf.Message,
   }
 }
 
-extension Shared_Proto_Services_V1_RequestKeySyncResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_RequestKeySyncResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".RequestKeySyncResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap()
 
@@ -2477,7 +2481,7 @@ extension Shared_Proto_Services_V1_RequestKeySyncResponse: SwiftProtobuf.Message
   }
 }
 
-extension Shared_Proto_Services_V1_IntakeTagEntry: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_IntakeTagEntry: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".IntakeTagEntry"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}epoch\0\u{1}tag\0")
 
@@ -2512,7 +2516,7 @@ extension Shared_Proto_Services_V1_IntakeTagEntry: SwiftProtobuf.Message, SwiftP
   }
 }
 
-extension Shared_Proto_Services_V1_PublishIntakeTagsRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_PublishIntakeTagsRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".PublishIntakeTagsRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}tags\0")
 
@@ -2542,7 +2546,7 @@ extension Shared_Proto_Services_V1_PublishIntakeTagsRequest: SwiftProtobuf.Messa
   }
 }
 
-extension Shared_Proto_Services_V1_PublishIntakeTagsResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_PublishIntakeTagsResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".PublishIntakeTagsResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}accepted\0")
 

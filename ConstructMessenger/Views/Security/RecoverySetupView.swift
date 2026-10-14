@@ -2,7 +2,11 @@
 //  RecoverySetupView.swift
 //  ConstructMessenger
 //
-//  Flow: Show 12 words → Word quiz (3 random words) → Upload to server
+//  Two flows on one screen (`AccountRecoveryViewModel.SetupMode`):
+//  - create: show 12 new words → pick 3 of them → set the key on the server. Runs where the key
+//    could not be made silently (no passcode on the device).
+//  - backupHeld: the key was made silently at registration; unlock the phrase → show it → pick 3
+//    → the phrase leaves the device. Nothing is sent.
 //
 
 import SwiftUI
@@ -14,22 +18,6 @@ struct RecoverySetupView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            CTNavBar(
-                title: NSLocalizedString("account_recovery_seed", comment: ""),
-                showBack: false
-            ) {
-                EmptyView()
-            } trailing: {
-                if showsCancelButton {
-                    Button(NSLocalizedString("cancel", comment: "")) {
-                        vm.resetSetup()
-                        dismiss()
-                    }
-                    .font(CTFont.bold(13))
-                    .foregroundColor(Color.CT.textDim)
-                    .buttonStyle(.plain)
-                }
-            }
             Group {
                 switch vm.setupStep {
                 case .idle:
@@ -48,6 +36,23 @@ struct RecoverySetupView: View {
             }
         }
         .background(Color.CT.bg)
+        .screenTitle(NSLocalizedString("recovery_gate_nav_title", comment: ""))
+        // Its own cancel, not `sheetNavigation`'s close: cancelling resets the setup, and there
+        // is none while the key uploads or once it is done.
+        .toolbar {
+            if showsCancelButton {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(NSLocalizedString("cancel", comment: "")) {
+                        vm.resetSetup()
+                        dismiss()
+                    }
+                    .barItem()
+                }
+            }
+        }
+        .onAppear {
+            if case .idle = vm.setupStep { vm.prepareSetup() }
+        }
     }
 
     private var showsCancelButton: Bool {
@@ -62,25 +67,37 @@ struct RecoverySetupView: View {
     private var introView: some View {
         VStack(spacing: 24) {
             Spacer()
-            Text("[key]")
-                .font(CTFont.bold(48))
-                .foregroundColor(Color.CT.accent)
-                .lineLimit(1).fixedSize()
-            Text(NSLocalizedString("recovery_intro_title", comment: ""))
-                .font(CTFont.bold(18))
+            Image(systemName: "key.fill")
+                .font(CTIcon.font(CTIcon.hero, weight: .regular))
+                .foregroundStyle(Color.CT.accent)
+                .accessibilityHidden(true)
+            Text(NSLocalizedString(
+                vm.setupMode == .backupHeld ? "recovery_backup_intro_title" : "recovery_intro_title",
+                comment: ""
+            ))
+                .font(CTFont.title)
                 .foregroundColor(Color.CT.text)
                 .multilineTextAlignment(.center)
-            Text(NSLocalizedString("recovery_intro_body", comment: ""))
-                .font(CTFont.regular(13))
+            Text(NSLocalizedString(
+                vm.setupMode == .backupHeld ? "recovery_backup_intro_body" : "recovery_intro_body",
+                comment: ""
+            ))
+                .font(CTFont.body)
                 .foregroundColor(Color.CT.textDim)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal)
             Spacer()
             Button {
-                vm.startSetup()
+                switch vm.setupMode {
+                case .create: vm.startSetup()
+                case .backupHeld: Task { await vm.startBackup() }
+                }
             } label: {
-                Text(NSLocalizedString("recovery_generate", comment: ""))
-                    .font(CTFont.regular(13))
+                Text(NSLocalizedString(
+                    vm.setupMode == .backupHeld ? "recovery_backup_show" : "recovery_generate",
+                    comment: ""
+                ))
+                    .font(CTFont.body)
                     .foregroundColor(Color.CT.text)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 12)
@@ -97,7 +114,7 @@ struct RecoverySetupView: View {
     private var wordDisplayView: some View {
         VStack(spacing: 16) {
             Text(NSLocalizedString("recovery_write_down", comment: ""))
-                .font(CTFont.bold(14))
+                .font(CTFont.headline)
                 .foregroundColor(Color.CT.text)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal)
@@ -110,7 +127,7 @@ struct RecoverySetupView: View {
             .padding(.horizontal)
 
             Text(NSLocalizedString("recovery_never_share", comment: ""))
-                .font(CTFont.regular(11))
+                .font(CTFont.caption)
                 .foregroundColor(.orange)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal)
@@ -121,7 +138,7 @@ struct RecoverySetupView: View {
                 vm.proceedToQuiz()
             } label: {
                 Text(NSLocalizedString("recovery_wrote_it_down", comment: ""))
-                    .font(CTFont.regular(13))
+                    .font(CTFont.body)
                     .foregroundColor(Color.CT.text)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 12)
@@ -137,11 +154,11 @@ struct RecoverySetupView: View {
     private func wordCell(index: Int, word: String) -> some View {
         HStack(spacing: 4) {
             Text("\(index + 1).")
-                .font(CTFont.regular(11))
+                .font(CTFont.caption)
                 .foregroundColor(Color.CT.textDim)
                 .frame(width: 22, alignment: .trailing)
             Text(word)
-                .font(CTFont.regular(13))
+                .font(CTFont.body)
                 .minimumScaleFactor(0.7)
                 .foregroundColor(Color.CT.text)
         }
@@ -170,7 +187,7 @@ struct RecoverySetupView: View {
         ScrollView {
             VStack(spacing: 24) {
                 Text(NSLocalizedString("recovery_quiz_title", comment: ""))
-                    .font(CTFont.bold(14))
+                    .font(CTFont.headline)
                     .foregroundColor(Color.CT.text)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal)
@@ -186,7 +203,7 @@ struct RecoverySetupView: View {
                     Task { await vm.submitSetup(userId: authVM.currentUserId ?? "") }
                 } label: {
                     Text(NSLocalizedString("recovery_confirm", comment: ""))
-                        .font(CTFont.regular(13))
+                        .font(CTFont.body)
                         .foregroundColor(vm.quizPassed ? Color.CT.text : Color.CT.textDim)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
@@ -223,25 +240,25 @@ struct RecoverySetupView: View {
     private func doneView(fingerprint: String) -> some View {
         VStack(spacing: 24) {
             Spacer()
-            Text("[✓]")
-                .font(CTFont.bold(48))
-                .foregroundColor(Color.CT.accent)
-                .lineLimit(1).fixedSize()
+            Image(systemName: "checkmark.circle.fill")
+                .font(CTIcon.font(CTIcon.hero, weight: .regular))
+                .foregroundStyle(Color.CT.accent)
+                .accessibilityHidden(true)
             Text(NSLocalizedString("recovery_done_title", comment: ""))
-                .font(CTFont.bold(18))
+                .font(CTFont.title)
                 .foregroundColor(Color.CT.text)
             Text(NSLocalizedString("recovery_done_body", comment: ""))
-                .font(CTFont.regular(13))
+                .font(CTFont.body)
                 .foregroundColor(Color.CT.textDim)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal)
             if !fingerprint.isEmpty {
                 VStack(spacing: 4) {
                     Text(NSLocalizedString("recovery_fingerprint", comment: ""))
-                        .font(CTFont.regular(11))
+                        .font(CTFont.caption)
                         .foregroundColor(Color.CT.textDim)
                     Text(fingerprint)
-                        .font(CTFont.regular(12))
+                        .font(CTFont.mono(12))
                         .foregroundColor(Color.CT.text)
                         .padding(8)
                         .background(Color.CT.bgMsg)
@@ -254,7 +271,7 @@ struct RecoverySetupView: View {
                 dismiss()
             } label: {
                 Text(NSLocalizedString("done", comment: ""))
-                    .font(CTFont.regular(13))
+                    .font(CTFont.body)
                     .foregroundColor(Color.CT.text)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 12)
@@ -270,14 +287,14 @@ struct RecoverySetupView: View {
         VStack(spacing: 20) {
             Spacer()
             Image(systemName: "exclamationmark.triangle.fill")
-                .font(CTFont.regular(48))
+                .font(CTFont.ui(48))
                 .foregroundColor(.orange)
                 .lineLimit(1).fixedSize()
             Text(NSLocalizedString("recovery_error_title", comment: ""))
-                .font(CTFont.bold(16))
+                .font(CTFont.ui(16, weight: .bold))
                 .foregroundColor(Color.CT.text)
             Text(message)
-                .font(CTFont.regular(13))
+                .font(CTFont.body)
                 .foregroundColor(Color.CT.textDim)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal)
@@ -286,7 +303,7 @@ struct RecoverySetupView: View {
                 vm.resetSetup()
             } label: {
                 Text(NSLocalizedString("try_again", comment: ""))
-                    .font(CTFont.regular(13))
+                    .font(CTFont.body)
                     .foregroundColor(Color.CT.text)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 12)
@@ -299,8 +316,10 @@ struct RecoverySetupView: View {
     }
 }
 
-// MARK: - Quiz Word Field
+// MARK: - Quiz Word Choice
 
+/// One of the three checks: which of these is word N. A native button per option, the picked
+/// one marked — choosing, not typing (`decisions/recovery-key-backup-is-deferred-not-skipped.md`).
 private struct QuizWordField: View {
     @Bindable var vm: AccountRecoveryViewModel
     let index: Int
@@ -308,24 +327,32 @@ private struct QuizWordField: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(String(format: NSLocalizedString("recovery_quiz_word_n", comment: ""), index + 1))
-                .font(CTFont.regular(11))
+                .font(CTFont.caption)
                 .foregroundColor(Color.CT.textDim)
-            TextField(
-                NSLocalizedString("recovery_quiz_placeholder", comment: ""),
-                text: Binding(
-                    get: { vm.quizAnswers[index] ?? "" },
-                    set: { vm.quizAnswers[index] = $0 }
-                )
-            )
-            .autocorrectionDisabled()
-            #if os(iOS)
-            .textInputAutocapitalization(.never)
-            #endif
-            .font(CTFont.regular(13))
-            .foregroundColor(Color.CT.text)
-            .padding(10)
-            .background(Color.CT.bgMsg)
-            .overlay(Rectangle().stroke(Color.CT.noise, lineWidth: 1))
+            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
+                ForEach(vm.quizOptions[index] ?? [], id: \.self) { word in
+                    let picked = vm.quizAnswers[index] == word
+                    Button {
+                        vm.quizAnswers[index] = word
+                    } label: {
+                        HStack {
+                            Text(word)
+                                .font(CTFont.body)
+                                .foregroundColor(Color.CT.text)
+                            Spacer(minLength: 0)
+                            if picked {
+                                Image(systemName: "checkmark")
+                                    .foregroundStyle(Color.CT.accent)
+                            }
+                        }
+                        .padding(10)
+                        .background(Color.CT.bgMsg)
+                        .overlay(CTShape.card().stroke(picked ? Color.CT.accent : Color.CT.noise, lineWidth: 1))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityAddTraits(picked ? .isSelected : [])
+                }
+            }
         }
         .padding(.horizontal)
     }

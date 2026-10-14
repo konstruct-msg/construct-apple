@@ -195,6 +195,71 @@ final class TokenWalletBurstTests: XCTestCase {
         )
     }
 
+    /// Cold start is the fill, not a sample. One batch left the bank at 20 for
+    /// the rest of the session, which is the buffer the 2026-08-19 burst emptied
+    /// before the issuer had been asked for the budget it was willing to give.
+    func testColdStartBudgetsEnoughBatchesToReachTheBank() {
+        XCTAssertEqual(
+            BlindTokenService.coldStartBatchCount(
+                balance: 0,
+                bankTarget: BlindTokenService.bankTarget,
+                batchSize: BlindTokenService.batchSize
+            ),
+            6,
+            "120 banked at 20 per batch is six asks, not one"
+        )
+    }
+
+    /// The last step of a nearly-full bank is one batch, not another six.
+    func testColdStartOfANearlyFullWalletIsOneBatch() {
+        XCTAssertEqual(
+            BlindTokenService.coldStartBatchCount(
+                balance: BlindTokenService.bankTarget - 1,
+                bankTarget: BlindTokenService.bankTarget,
+                batchSize: BlindTokenService.batchSize
+            ),
+            1
+        )
+    }
+
+    func testColdStartStopsAtTheBank() {
+        XCTAssertEqual(
+            BlindTokenService.coldStartBatchCount(
+                balance: BlindTokenService.bankTarget,
+                bankTarget: BlindTokenService.bankTarget,
+                batchSize: BlindTokenService.batchSize
+            ),
+            0
+        )
+    }
+
+    /// 14:55 in the 2026-08-04 log. A flat hour from the refusal stays dark until
+    /// 15:55 and skips the window the server has already opened. The counter
+    /// resets on the UTC hour, so the back-off ends there.
+    func testHourlyCapBackoffEndsWhenTheServerWindowResets() {
+        let now = Date(timeIntervalSince1970: 1_800_000_000 + 55 * 60)
+        let deadline = BlindTokenService.replenishBackoffDeadline(outcome: .rateLimited, now: now)
+        XCTAssertEqual(deadline.timeIntervalSince(now), 5 * 60, accuracy: 0.001)
+    }
+
+    /// A refusal that lands on the boundary was counted in the window that just
+    /// opened. Waiting zero would ask again inside the same full hour.
+    func testHourlyCapBackoffOnTheBoundaryWaitsOutTheNewWindow() {
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let deadline = BlindTokenService.replenishBackoffDeadline(outcome: .rateLimited, now: now)
+        XCTAssertEqual(deadline.timeIntervalSince(now), 3600, accuracy: 0.001)
+    }
+
+    /// A disabled issuer does not recover because the clock struck, and a
+    /// transport blip must not sit out the rest of the hour.
+    func testOnlyTheHourlyCapWaitsForTheWindow() {
+        let now = Date(timeIntervalSince1970: 1_800_000_000 + 55 * 60)
+        let disabled = BlindTokenService.replenishBackoffDeadline(outcome: .serverDisabled, now: now)
+        XCTAssertEqual(disabled.timeIntervalSince(now), 3600, accuracy: 0.001)
+        let blip = BlindTokenService.replenishBackoffDeadline(outcome: .transportError, now: now)
+        XCTAssertEqual(blip.timeIntervalSince(now), 120, accuracy: 0.001)
+    }
+
     /// A batch already in flight is never joined by a second one, at any depth.
     func testBatchInFlightNeverStartsASecond() {
         for balance in [0, BlindTokenService.coldStartMark, 20, BlindTokenService.bankTarget - 1] {

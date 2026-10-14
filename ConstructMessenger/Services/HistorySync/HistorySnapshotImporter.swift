@@ -2,8 +2,15 @@
 //  HistorySnapshotImporter.swift
 //  Construct Messenger
 //
-//  Additive Core Data projection of a CTH1 stream. Never replaces store
-//  files, never writes the stream cursor, never imports a ratchet.
+//  Additive projection of a CTH1 stream into the store. Never replaces store files, never writes
+//  the stream cursor, never imports a ratchet. Records arrive already judged by the core (order,
+//  phase, manifest ↔ envelope); media arrives through `HistoryMediaSink`, not here.
+//
+//  How a record meets the rows already held — names only fill in, flags only rise, a block is
+//  never lifted, our own message lands sent — is the core's (`history_import_*`,
+//  decisions/history-projection-in-the-core.md). This file reads what the store holds, asks the
+//  core, and writes the answer through the repositories. Calls still go to Core Data directly
+//  until the calls domain is behind the seam.
 //
 
 import CoreData
@@ -36,364 +43,256 @@ struct HistoryImportSummary: Equatable {
         case .ignored: break
         }
     }
+
+    mutating func merge(_ other: HistoryImportSummary) {
+        applied += other.applied
+        conflictKeepExisting += other.conflictKeepExisting
+        for (reason, count) in other.skipped {
+            skipped[reason, default: 0] += count
+        }
+    }
 }
 
-struct HistorySnapshotImporter {
+/// One stream's import. Messages are written in batches of `saveBatchSize` — one write each, not
+/// one per message — and a batch is written before anything that reads it (a reaction asks
+/// whether its message is held). Call `flush()` at the end. Every write goes through a repository;
+/// until 2026-10-12 the call rows went into a context the caller passed, which was its only use.
+final class HistorySnapshotImporter {
     static let saveBatchSize = 200
 
-    /// Apply one already-decoded record. Does not save. Caller owns the queue.
-    @discardableResult
-    func apply(
-        _ record: HistoryRecord,
+    private let expectedUserId: String
+    private let contacts: any ContactStore
+    private let chats: any ChatStore
+    private let messages: any MessageStore
+    private let reactions: any ReactionStore
+    private let peerDevices: any PeerDeviceStore
+    private let calls: any CallStore
+    /// The calls already logged here, read at the first call record of the stream.
+    private var knownCallIds: Set<String>?
+    private(set) var summary = HistoryImportSummary()
+    private var pending: [(message: MessageRecord, searchText: String?)] = []
+    /// Chat ids by peer, opened this stream.
+    private var chatIds: [String: String] = [:]
+
+    init(
         expectedUserId: String,
-        in context: NSManagedObjectContext
-    ) throws -> HistoryApplyResult {
-        switch record {
-        case .manifest(let manifest):
-            guard let expectedRaw = HistoryAccountID.raw(expectedUserId) else {
-                throw HistorySnapshotError.malformed
-            }
-            switch HistorySnapshotDisposition.accept(manifest: manifest, expectedUserId: expectedRaw) {
-            case .failure(let err):
-                throw err
-            case .success:
-                return .ignored
-            }
-        case .contact(let contact):
-            return try applyContact(contact, in: context)
-        case .chat(let chat):
-            return try applyChat(chat, in: context)
-        case .message(let message):
-            return try applyMessage(message, expectedUserId: expectedUserId, in: context)
-        case .reaction(let reaction):
-            return try applyReaction(reaction, in: context)
-        case .peerDevice(let hint):
-            return try applyPeerHint(hint, in: context)
-        case .call(let call):
-            return try applyCall(call, in: context)
-        case .mediaBlob(let blob):
-            return applyMedia(blob)
-        case .skipped(let type, _):
-            if type == HistoryRecordType.message {
-                return .skipped(.bodyUnknown)
-            }
-            return .ignored
-        case .end:
-            return .ignored
+        contacts: any ContactStore = LocalRepositories.contacts,
+        chats: any ChatStore = LocalRepositories.chats,
+        messages: any MessageStore = LocalRepositories.messages,
+        reactions: any ReactionStore = LocalRepositories.reactions,
+        peerDevices: any PeerDeviceStore = LocalRepositories.peerDevices,
+        calls: any CallStore = LocalRepositories.calls
+    ) {
+        self.expectedUserId = expectedUserId
+        self.contacts = contacts
+        self.chats = chats
+        self.messages = messages
+        self.reactions = reactions
+        self.peerDevices = peerDevices
+        self.calls = calls
+    }
+
+    /// Apply one record. A refused record aborts the whole phase, and the error alone
+    /// ("malformed") does not say which one, so its shape is logged here: kind and size, never
+    /// content or ids.
+    func apply(_ record: HistoryRecord) throws {
+        do {
+            try applyUnlogged(record)
+        } catch {
+            Log.error("history_record_rejected \(record.shape) error=\(error)", category: "HistorySync")
+            throw error
         }
     }
 
-    /// Apply a whole decoded stream. One save per `saveBatchSize` records.
-    func importRecords(
-        _ records: [HistoryRecord],
-        expectedUserId: String,
-        in context: NSManagedObjectContext
-    ) throws -> HistoryImportSummary {
-        var summary = HistoryImportSummary()
-        var sinceSave = 0
-        for record in records {
-            let result = try apply(record, expectedUserId: expectedUserId, in: context)
-            summary.add(result)
-            sinceSave += 1
-            if sinceSave >= Self.saveBatchSize {
-                try context.saveOrThrow(category: "HistorySync")
-                sinceSave = 0
-            }
-        }
-        if sinceSave > 0 {
-            try context.saveOrThrow(category: "HistorySync")
-        }
+    /// Write the messages waiting.
+    func flush() throws {
+        try writePending()
+    }
+
+    /// Apply a whole decoded stream and flush; this stream's summary.
+    func importRecords(_ records: [HistoryRecord]) throws -> HistoryImportSummary {
+        for record in records { try apply(record) }
+        try flush()
         return summary
     }
 
-    // MARK: - Contact
-
-    private func applyContact(
-        _ contact: Construct_Client_History_V1_HistoryContact,
-        in context: NSManagedObjectContext
-    ) throws -> HistoryApplyResult {
-        guard let id = HistoryAccountID.dashed(contact.userID) else {
-            throw HistorySnapshotError.malformed
-        }
-        let user: User
-        if let existing = try fetchUser(id: id, in: context) {
-            user = existing
-        } else {
-            user = User(context: context)
-            user.id = id
-            user.username = ""
-            user.displayName = ""
-            user.isSharingWithMe = false
-            user.isBlocked = false
-            user.amISharingWith = false
-            user.isContact = false
-        }
-
-        if user.username.isEmpty, !contact.username.isEmpty {
-            user.username = contact.username
-        }
-        if isBlankDisplayName(user.displayName, userId: id), !contact.displayName.isEmpty {
-            user.displayName = contact.displayName
-        }
-        if (user.localAlias ?? "").isEmpty, !contact.localAlias.isEmpty {
-            user.localAlias = contact.localAlias
-        }
-        if (user.avatarData == nil || user.avatarData?.isEmpty == true), !contact.avatar.isEmpty {
-            user.avatarData = contact.avatar
-        }
-
-        user.isContact = HistorySnapshotDisposition.contactShareFlag(
-            snapshot: contact.isContact, alreadyTrueOnReceiver: user.isContact
-        )
-        user.amISharingWith = HistorySnapshotDisposition.contactShareFlag(
-            snapshot: contact.amISharingWith, alreadyTrueOnReceiver: user.amISharingWith
-        )
-        user.isSharingWithMe = HistorySnapshotDisposition.contactShareFlag(
-            snapshot: contact.isSharingWithMe, alreadyTrueOnReceiver: user.isSharingWithMe
-        )
-        // Block is a local decision: only false→true, never unblock.
-        if contact.isBlocked { user.isBlocked = true }
-
-        if user.addedAt == nil {
-            if contact.addedAtUnix > 0 {
-                user.addedAt = Date(timeIntervalSince1970: TimeInterval(contact.addedAtUnix))
-            } else {
-                user.addedAt = Date()
+    private func applyUnlogged(_ record: HistoryRecord) throws {
+        switch record {
+        case .manifest:
+            // Version, phase, and that it names this snapshot and this account: the core's checks,
+            // made before it released the record.
+            return
+        case .skipped(let type):
+            if type == HistoryRecordType.message { summary.add(.skipped(.bodyUnknown)) }
+        case .transcript(let type, let proto):
+            switch type {
+            case HistoryRecordType.contact: summary.add(try applyContact(proto))
+            case HistoryRecordType.chat: summary.add(try applyChat(proto))
+            case HistoryRecordType.message: try applyMessage(proto)
+            case HistoryRecordType.reaction:
+                try writePending()
+                summary.add(try applyReaction(proto))
+            case HistoryRecordType.peer: summary.add(try applyPeerHint(proto))
+            case HistoryRecordType.call: summary.add(try applyCall(proto))
+            default: break
             }
         }
-        if user.sharedWithMeAt == nil, contact.sharedWithMeAtUnix > 0 {
-            user.sharedWithMeAt = Date(timeIntervalSince1970: TimeInterval(contact.sharedWithMeAtUnix))
+    }
+
+    private var nowMs: Int64 { Date().unixMs }
+
+    // MARK: - Contact
+
+    private func applyContact(_ proto: Data) throws -> HistoryApplyResult {
+        let id = try historyImportContact(record: proto, existing: nil, nowMs: nowMs).id
+        let held = try contacts.contact(id)
+        // A name this app generated is no name: the record's may fill it.
+        let generated = held.map { $0.displayName == DisplayNameGenerator.generate(from: id) } ?? false
+        let existing = held.map { row -> LocalContact in
+            var row = row
+            if generated { row.displayName = "" }
+            return row.local
         }
-        // Deliberately not copied: knownIdentityKey, ktStatus, hybridCapable, publicKey.
+        var merged = ContactRecord(try historyImportContact(record: proto, existing: existing, nowMs: nowMs))
+        if generated, merged.displayName.isEmpty, let held { merged.displayName = held.displayName }
+        if held == nil {
+            try contacts.insert(merged)
+        } else {
+            try contacts.replace(merged)
+        }
         return .applied
     }
 
     // MARK: - Chat
 
-    private func applyChat(
-        _ chat: Construct_Client_History_V1_HistoryChat,
-        in context: NSManagedObjectContext
-    ) throws -> HistoryApplyResult {
-        let key = HistorySnapshotDisposition.chatUpsertKey(otherUserId: chat.otherUserID)
-        guard let peerId = HistoryAccountID.dashed(key) else {
-            throw HistorySnapshotError.malformed
-        }
-        guard let result = try Chat.findOrCreate(forUserId: peerId, in: context) else {
-            throw HistorySnapshotError.malformed
-        }
-        let row = result.chat
-        // Additive: do not unpin / unmute something this device already set.
-        if chat.isPinned { row.isPinned = true }
-        if chat.isMuted { row.isMuted = true }
-        row.unreadCount = 0
-        // Chat.sessionId left nil — a ratchet on the offering device is not this device's.
+    private func applyChat(_ proto: Data) throws -> HistoryApplyResult {
+        let asked = try historyImportChat(record: proto)
+        let chatId = try openChat(withPeer: asked.peerId)
+        if asked.pin { try chats.setPinned(chatId, true) }
+        try chats.setUnread(chatId, 0)
         return .applied
+    }
+
+    /// The receiver's chat with `peer` — its own id, never the sender's — made if missing, with
+    /// a contact row for it to point at. Made with no time, not `openChat`'s "now": the preview
+    /// only moves forward, and an imported message is older than now.
+    private func openChat(withPeer peer: String) throws -> String {
+        if let id = chatIds[peer] { return id }
+        if try contacts.contact(peer) == nil {
+            try contacts.insert(.new(id: peer, isContact: false, addedAt: nil))
+        }
+        let id: String
+        if let held = try chats.chat(withPeer: peer) {
+            id = held.id
+        } else {
+            let new = ChatRecord(
+                id: UUID().uuidString, peerId: peer, lastMessageText: nil, lastMessageTime: nil,
+                isPinned: false, unreadCount: 0
+            )
+            if try chats.insert(new) {
+                id = new.id
+            } else if let winner = try chats.chat(withPeer: peer) {
+                id = winner.id
+            } else {
+                throw ChatStoreError.notInserted(peerId: peer)
+            }
+        }
+        chatIds[peer] = id
+        return id
     }
 
     // MARK: - Message
 
-    private func applyMessage(
-        _ message: Construct_Client_History_V1_HistoryMessage,
-        expectedUserId: String,
-        in context: NSManagedObjectContext
-    ) throws -> HistoryApplyResult {
-        let id = HistorySnapshotDisposition.lowercaseMessageId(message.id)
-        guard !id.isEmpty else { throw HistorySnapshotError.malformed }
-        if try fetchMessage(id: id, in: context) != nil {
-            return .conflictKeepExisting
+    private func applyMessage(_ proto: Data) throws {
+        switch try historyImportMessage(record: proto, ownAccountId: expectedUserId) {
+        case .unknownBody:
+            summary.add(.skipped(.bodyUnknown))
+        case .row(let peerId, let row):
+            let message = MessageRecord(row, chatId: try openChat(withPeer: peerId))
+            let readable = LocalMessagePayload.decode(message.body).readableText
+            pending.append((message, readable.isEmpty ? nil : readable))
+            if pending.count >= Self.saveBatchSize { try writePending() }
         }
-        guard let body = message.body else {
-            throw HistorySnapshotError.unsetBody
-        }
-        let stored = try HistoryBodyCodec.store(body)
-        guard let from = HistoryAccountID.dashed(message.fromUserID),
-              let to = HistoryAccountID.dashed(message.toUserID) else {
-            throw HistorySnapshotError.malformed
-        }
-        let expected = expectedUserId.lowercased()
-        let peer: String
-        if from == expected { peer = to }
-        else if to == expected { peer = from }
-        else { peer = message.isSentByMe ? to : from }
-        guard !peer.isEmpty else { throw HistorySnapshotError.malformed }
+    }
 
-        guard let chatResult = try Chat.findOrCreate(forUserId: peer, in: context) else {
-            throw HistorySnapshotError.malformed
+    /// The batch, one write; then each chat's preview moves to the newest message it gained.
+    private func writePending() throws {
+        guard !pending.isEmpty else { return }
+        let batch = pending
+        pending.removeAll(keepingCapacity: true)
+        let added = try messages.insert(batch)
+        summary.applied += added.count
+        summary.conflictKeepExisting += batch.count - added.count
+
+        var newest: [String: MessageRecord] = [:]
+        for (message, _) in batch where added.contains(message.id) {
+            if let held = newest[message.chatId], held.timestamp >= message.timestamp { continue }
+            newest[message.chatId] = message
         }
-        let row = Message(context: context)
-        row.id = id
-        row.fromUserId = from
-        row.toUserId = to
-        row.timestamp = Date(timeIntervalSince1970: TimeInterval(message.timestampUnixMs) / 1000)
-        // Deliberately omitted at this boundary: CTH1 v1 has no server-order field. The normal
-        // persistence backfill assigns the legacy key from this display timestamp.
-        row.isSentByMe = message.isSentByMe
-        row.retryCount = 0
-        row.chat = chatResult.chat
-        row.suiteId = UInt16(truncatingIfNeeded: message.suiteID)
-        if !message.replyToMessageID.isEmpty {
-            row.replyToMessageId = HistorySnapshotDisposition.lowercaseMessageId(message.replyToMessageID)
+        for (chatId, message) in newest {
+            try chats.advancePreview(
+                chatId, text: LocalMessagePayload.decode(message.body).previewHint, time: message.timestamp
+            )
+            try chats.setUnread(chatId, 0)
         }
-        if !message.replyToContent.isEmpty {
-            row.replyToContent = message.replyToContent
-        }
-        row.isEdited = message.isEdited
-        if message.editedAtUnixMs > 0 {
-            row.editedAt = Date(timeIntervalSince1970: TimeInterval(message.editedAtUnixMs) / 1000)
-        }
-        if !message.transcriptText.isEmpty {
-            row.transcriptText = message.transcriptText
-        }
-        if !message.transcriptLanguage.isEmpty {
-            row.transcriptLanguage = message.transcriptLanguage
-        }
-        if message.transcriptGeneratedAtUnix > 0 {
-            row.transcriptGeneratedAt = Date(timeIntervalSince1970: TimeInterval(message.transcriptGeneratedAtUnix))
-        }
-        row.applyStoredEncryption(plaintextData: stored, contactId: peer)
-        // Own → .sent (never .delivered: this device did not see that receipt).
-        // Incoming is not .sending — the bubble already exists.
-        // Raw write: the guarded setter is for live writers racing receipts.
-        row.deliveryStatusRaw = (message.isSentByMe ? DeliveryStatus.sent : DeliveryStatus.delivered).rawValue
-        chatResult.chat.unreadCount = 0
-        chatResult.chat.applyPreview(text: row.displayText, timestamp: row.timestamp)
-        return .applied
     }
 
     // MARK: - Reaction
 
-    private func applyReaction(
-        _ reaction: Construct_Client_History_V1_HistoryReaction,
-        in context: NSManagedObjectContext
-    ) throws -> HistoryApplyResult {
-        let target = HistorySnapshotDisposition.lowercaseMessageId(reaction.targetMessageID)
-        guard !target.isEmpty else { throw HistorySnapshotError.malformed }
-        guard try fetchMessage(id: target, in: context) != nil else {
+    private func applyReaction(_ proto: Data) throws -> HistoryApplyResult {
+        let row = ReactionRecord(try historyImportReaction(record: proto, receivedAtMs: nowMs))
+        guard try messages.message(row.targetMessageId) != nil else {
             return .skipped(.reactionTargetMissing)
         }
-        guard let reactor = HistoryAccountID.dashed(reaction.reactorUserID) else {
-            throw HistorySnapshotError.malformed
-        }
-        if ReactionStore.row(targetMessageId: target, reactorUserId: reactor, in: context) != nil {
+        if try reactions.reaction(on: row.targetMessageId, by: row.reactorUserId) != nil {
             return .conflictKeepExisting
         }
-        let row = Reaction(context: context)
-        row.targetMessageId = target
-        row.reactorUserId = reactor.lowercased()
-        row.emoji = reaction.emoji
-        row.timestampMs = reaction.timestampMs
-        row.receivedAt = Date()
+        try reactions.upsert(row)
         return .applied
     }
 
     // MARK: - Peer hint
 
-    private func applyPeerHint(
-        _ hint: Construct_Client_History_V1_HistoryPeerDevice,
-        in context: NSManagedObjectContext
-    ) throws -> HistoryApplyResult {
-        guard HistorySnapshotDisposition.peerDeviceHintAcceptable(
-            deviceId: hint.deviceID, identityKey: hint.identityKey
-        ) else {
+    private func applyPeerHint(_ proto: Data) throws -> HistoryApplyResult {
+        guard let device = try historyImportPeerDevice(record: proto, nowMs: nowMs) else {
             return .skipped(.hintDroppedBadId)
         }
-        guard let accountId = HistoryAccountID.dashed(hint.accountID) else {
-            throw HistorySnapshotError.malformed
-        }
-        let deviceId = hint.deviceID.lowercased()
-        if try fetchPeerDevice(deviceId: deviceId, in: context) != nil {
-            return .conflictKeepExisting
-        }
-        let row = PeerDevice(context: context)
-        row.deviceId = deviceId
-        row.accountId = accountId
-        row.identityKey = hint.identityKey
-        row.firstSeenAt = hint.firstSeenAtUnix > 0
-            ? Date(timeIntervalSince1970: TimeInterval(hint.firstSeenAtUnix))
-            : Date()
-        return .applied
+        // A hint is a pin of what the sending device knew, true whether or not the rest of this
+        // stream lands — the same standing as a pin from a bundle answer
+        // (`SessionAddressing.recordDevices`).
+        let recorded = try peerDevices.record([PeerDeviceRecord(device)])
+        return recorded.isEmpty ? .conflictKeepExisting : .applied
     }
 
     // MARK: - Call
 
-    private func applyCall(
-        _ call: Construct_Client_History_V1_HistoryCall,
-        in context: NSManagedObjectContext
-    ) throws -> HistoryApplyResult {
-        guard !call.id.isEmpty else { throw HistorySnapshotError.malformed }
-        if try fetchCall(id: call.id, in: context) != nil {
-            return .conflictKeepExisting
-        }
-        guard let peerId = HistoryAccountID.dashed(call.peerUserID) else {
-            throw HistorySnapshotError.malformed
-        }
-        let status = CTCallRecord.Status(rawValue: Int16(truncatingIfNeeded: call.status)) ?? .completed
-        let started = call.startedAtUnix > 0
-            ? Date(timeIntervalSince1970: TimeInterval(call.startedAtUnix))
-            : Date()
-        let ended: Date?
-        if status == .completed, call.durationSeconds > 0 {
-            ended = started.addingTimeInterval(TimeInterval(call.durationSeconds))
-        } else {
-            ended = nil
-        }
-        let peerName = try fetchUser(id: peerId, in: context)?.displayName ?? ""
-        _ = CTCallRecord.create(
-            id: call.id,
-            peerUserId: peerId,
-            peerName: peerName,
-            direction: call.isOutgoing ? .outgoing : .incoming,
-            status: status,
-            startedAt: started,
-            endedAt: ended,
-            durationSeconds: Int32(clamping: call.durationSeconds),
-            in: context
-        )
+    private func applyCall(_ proto: Data) throws -> HistoryApplyResult {
+        let unnamed = try historyImportCall(record: proto, peerName: "", nowMs: nowMs)
+        var known = try knownCallIds ?? Set(calls.calls(limit: Int(Int32.max)).map(\.id))
+        defer { knownCallIds = known }
+        if known.contains(unnamed.id) { return .conflictKeepExisting }
+        try calls.upsert(CallRecord(
+            id: unnamed.id,
+            peerUserId: unnamed.peerUserId,
+            peerName: try contacts.contact(unnamed.peerUserId)?.displayName ?? "",
+            direction: CallRecord.Direction(rawValue: unnamed.direction) ?? .incoming,
+            status: CallRecord.Status(rawValue: unnamed.status) ?? .completed,
+            startedAt: unnamed.startedAt.map(Date.init(unixMs:)) ?? Date(),
+            endedAt: unnamed.endedAt.map(Date.init(unixMs:)),
+            durationSeconds: unnamed.durationSeconds
+        ))
+        known.insert(unnamed.id)
         return .applied
     }
+}
 
-    // MARK: - Media
-
-    private func applyMedia(_ blob: Construct_Client_History_V1_HistoryMediaBlob) -> HistoryApplyResult {
-        guard !blob.mediaID.isEmpty else { return .ignored }
-        if MediaManager.hasOnDiskFile(mediaId: blob.mediaID) {
-            return .skipped(.mediaAlreadyPresent)
+private extension HistoryRecord {
+    /// What a rejected record looked like, for the log: its type and size.
+    var shape: String {
+        switch self {
+        case .manifest: return "kind=manifest"
+        case .transcript(let type, let proto): return "kind=\(type) bytes=\(proto.count)"
+        case .skipped(let type): return "kind=skipped type=\(type)"
         }
-        _ = MediaManager.importHistoryBlob(blob.blob, mediaId: blob.mediaID)
-        return .applied
-    }
-
-    // MARK: - Fetch
-
-    private func fetchUser(id: String, in context: NSManagedObjectContext) throws -> User? {
-        let req = User.fetchRequest()
-        req.fetchLimit = 1
-        req.predicate = NSPredicate(format: "id == %@", id)
-        return try context.fetch(req).first
-    }
-
-    private func fetchMessage(id: String, in context: NSManagedObjectContext) throws -> Message? {
-        let req = Message.fetchRequest()
-        req.fetchLimit = 1
-        req.predicate = NSPredicate(format: "id ==[c] %@", id)
-        return try context.fetch(req).first
-    }
-
-    private func fetchPeerDevice(deviceId: String, in context: NSManagedObjectContext) throws -> PeerDevice? {
-        let req = PeerDevice.fetchRequest()
-        req.fetchLimit = 1
-        req.predicate = NSPredicate(format: "deviceId == %@", deviceId)
-        return try context.fetch(req).first
-    }
-
-    private func fetchCall(id: String, in context: NSManagedObjectContext) throws -> CTCallRecord? {
-        let req = CTCallRecord.fetchRequest()
-        req.fetchLimit = 1
-        req.predicate = NSPredicate(format: "id == %@", id)
-        return try context.fetch(req).first
-    }
-
-    private func isBlankDisplayName(_ name: String, userId: String) -> Bool {
-        name.isEmpty || name == DisplayNameGenerator.generate(from: userId)
     }
 }

@@ -6,28 +6,11 @@
 //
 
 import Foundation
-import CoreData
 
 /// Manages chat lifecycle: creation from invites and deletion with cleanup
 /// Extracted from ChatsViewModel Phase 1.6
 @MainActor
 class ChatManagementService {
-    
-    // MARK: - Core Data
-    
-    private var viewContext: NSManagedObjectContext?
-    
-    func setContext(_ context: NSManagedObjectContext) {
-        self.viewContext = context
-    }
-    
-    // MARK: - Callbacks
-    
-    /// Called when a new chat is created
-    var onChatCreated: ((Chat) -> Void)?
-    
-    /// Called when a chat is deleted
-    var onChatDeleted: ((String) -> Void)?
     
     // MARK: - Chat Creation
     
@@ -35,13 +18,12 @@ class ChatManagementService {
     /// - Parameters:
     ///   - user: Public user information from invite
     ///   - identityPublicKey: Optional TOFU pin from a verified invite (thread 5.1)
-    /// - Returns: Created or existing chat, nil if context is unavailable
-    func startChat(with user: PublicUserInfo, identityPublicKey: Data? = nil) -> Chat? {
-        guard let context = viewContext else { 
-            Log.error("ChatManagementService: No viewContext available", category: "ChatManagementService")
-            return nil 
-        }
-
+    /// - Returns: Created or existing chat, nil if it could not be written
+    func startChat(
+        with user: PublicUserInfo,
+        identityPublicKey: Data? = nil,
+        accountAddress: Data? = nil
+    ) -> ChatRecord? {
         if user.id == AuthSessionManager.shared.currentUserId {
             Log.info("Self-chat detected — use Drafts instead", category: "ChatManagementService")
             return nil
@@ -51,60 +33,50 @@ class ChatManagementService {
         // from them are no longer silently discarded.
         DeletedContactsStore.shared.remove(user.id)
 
-        // Check if User already exists before creating a new one
-        let userFetchRequest = User.fetchRequest()
-        let idPredicate = NSPredicate(format: "id == %@", user.id)
-        var userPredicates: [NSPredicate] = [idPredicate]
-        if let userOwnerPredicate = userFetchRequest.predicate {
-            userPredicates.insert(userOwnerPredicate, at: 0)
-        }
-        userFetchRequest.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: userPredicates)
-
-        let dbUser: User
-        if let existingUser = try? context.fetch(userFetchRequest).first {
-            existingUser.applyServerUsername(user.username, userId: user.id)
-            if !existingUser.isContact {
-                existingUser.isContact = true
-                existingUser.addedAt = existingUser.addedAt ?? Date()
-            }
-            dbUser = existingUser
-            Log.debug("Using existing user: id=\(user.id), username=\(user.username), displayName=\(existingUser.displayName)", category: "ChatManagementService")
-        } else {
-            dbUser = User(context: context)
-            dbUser.id = user.id
-            dbUser.isSharingWithMe = false
-            dbUser.isBlocked = false
-            dbUser.amISharingWith = false
-            dbUser.isContact = true
-            dbUser.addedAt = Date()
-            dbUser.applyServerUsername(user.username, userId: user.id)
-            Log.debug("Created new user: id=\(user.id), username=\(user.username), displayName=\(dbUser.displayName)", category: "ChatManagementService")
-        }
-
-        if let key = identityPublicKey, !key.isEmpty {
-            ContactLinkService.shared.pinKnownIdentityKey(on: dbUser, identityKey: key)
-        }
-
-        // 1:1 Chat per User — shared finder (also collapses accidental duplicates).
-        let result = Chat.findOrCreate(
-            for: dbUser,
-            in: context,
-            touchLastMessageTimeOnCreate: true
-        )
-        // Re-scan / re-open should still surface the row at the top of the list.
-        if !result.created, result.chat.lastMessageTime == nil {
-            result.chat.lastMessageTime = Date()
-        }
-
+        // The contact row, through the repository: created as a contact, or marked one, with the
+        // names the server username leaves.
+        let contacts = LocalRepositories.contacts
         do {
-            try context.save()
+            let now = Date()
+            if let existing = try contacts.contact(user.id) {
+                let names = ContactName.applyingServerUsername(
+                    user.username, username: existing.username, displayName: existing.displayName,
+                    isSharingWithMe: existing.isSharingWithMe, id: user.id
+                )
+                try contacts.setNames(user.id, username: names.username, displayName: names.displayName)
+                if !existing.isContact { try contacts.markContact(user.id, addedAt: now) }
+                Log.debug("Using existing user: id=\(user.id), username=\(user.username), displayName=\(names.displayName)", category: "ChatManagementService")
+            } else {
+                var row = ContactRecord.new(id: user.id, isContact: true, addedAt: now)
+                let names = ContactName.applyingServerUsername(
+                    user.username, username: "", displayName: "", isSharingWithMe: false, id: user.id
+                )
+                row.username = names.username
+                row.displayName = names.displayName
+                try contacts.insert(row)
+                Log.debug("Created new user: id=\(user.id), username=\(user.username), displayName=\(names.displayName)", category: "ChatManagementService")
+            }
+
+            if let key = identityPublicKey, !key.isEmpty {
+                ContactLinkService.shared.pinKnownIdentityKey(contactId: user.id, identityKey: key)
+            }
+            // From the signed invite, already checked by the server against the account's recovery
+            // key — it outranks a card, and a different one is a security event either way.
+            if let address = accountAddress {
+                AccountAddress.pin(address, contactId: user.id, source: .invite)
+            }
+        } catch {
+            Log.error("ChatManagementService: contact \(user.id.prefix(8))… not written: \(error)", category: "ChatManagementService")
+            return nil
+        }
+
+        // One chat per person; a re-scan or re-open still surfaces it at the top of the list.
+        do {
+            let result = try LocalRepositories.chats.openChat(withPeer: user.id)
             Log.debug(
                 "Chat \(result.created ? "created" : "reused"): id=\(result.chat.id) user=\(user.username)",
                 category: "ChatManagementService"
             )
-            if result.created {
-                onChatCreated?(result.chat)
-            }
             return result.chat
         } catch {
             Log.error("Failed to save chat: \(error)", category: "ChatManagementService")
@@ -113,18 +85,6 @@ class ChatManagementService {
     }
 
     // MARK: - Chat Deletion
-
-    /// Delete a chat while keeping the contact in Synaps.
-    ///
-    /// Removes Chat + Messages and archives the crypto session.
-    /// The User entity is preserved with isContact=true so the contact
-    /// remains visible in the Synaps list and can be messaged again.
-    /// To fully remove a contact use pruneContact(userId:).
-    func deleteChat(_ chat: Chat) {
-        let peerId = chat.otherUser?.id
-        deleteChatLocally(chat)
-        if let peerId { archiveSessions(ofPeer: peerId) }
-    }
 
     /// Remove the conversation from this device, and nothing else.
     ///
@@ -137,21 +97,11 @@ class ChatManagementService {
     /// END_SESSION it was waiting on was still in flight, and the conversation was there again on
     /// the next launch. The row had already gone from the list, so for those two seconds the
     /// screen and the store disagreed about something the user had been told was done.
-    func deleteChatLocally(_ chat: Chat) {
-        guard let context = viewContext else {
-            Log.error("ChatManagementService: No viewContext available", category: "ChatManagementService")
-            return
-        }
-        let chatId = chat.id
-
-        // Delete only the Chat (cascade removes Messages).
-        // User entity is intentionally kept — contact lives in Synaps.
-        context.delete(chat)
-
+    func deleteChatLocally(_ chatId: String) {
         do {
-            try context.save()
+            // The chat and its messages; the contact stays — it lives in Synaps.
+            try LocalRepositories.chats.delete(chatId)
             Log.info("Chat deleted (contact retained): \(chatId)", category: "ChatManagementService")
-            onChatDeleted?(chatId)
         } catch {
             Log.error("Failed to delete chat: \(error)", category: "ChatManagementService")
         }
@@ -187,34 +137,15 @@ class ChatManagementService {
     /// Sessions are **not** archived here. The caller announces the teardown first, and an
     /// announcement needs the session this would destroy — see `ChatsViewModel.pruneContact`.
     func pruneContactLocally(userId: String) {
-        guard let context = viewContext else {
-            Log.error("ChatManagementService: No viewContext available", category: "ChatManagementService")
-            return
-        }
-
-        let userFetch = User.fetchRequest()
-        userFetch.predicate = NSPredicate(format: "id == %@", userId)
-        guard let user = (try? context.fetch(userFetch))?.first else {
-            Log.info("pruneContact: user \(userId.prefix(8)) not found", category: "ChatManagementService")
-            return
-        }
-
-        // Delete the associated chat (if any) — cascade removes Messages.
-        if let chats = user.chats as? Set<Chat> {
-            for chat in chats {
-                let chatId = chat.id
-                context.delete(chat)
-                onChatDeleted?(chatId)
-            }
-        }
-
-        // Not a block: a short-lived shield against the server replaying this contact's backlog
-        // straight back into a fresh row. See `DeletedContactsStore`.
-        DeletedContactsStore.shared.add(userId)
-        context.delete(user)
-
         do {
-            try context.save()
+            // The contact, its chat and the chat's messages.
+            guard try LocalRepositories.contacts.delete(userId) else {
+                Log.info("pruneContact: user \(userId.prefix(8)) not found", category: "ChatManagementService")
+                return
+            }
+            // Not a block: a short-lived shield against the server replaying this contact's
+            // backlog straight back into a fresh row. See `DeletedContactsStore`.
+            DeletedContactsStore.shared.add(userId)
             Log.info("Synapse pruned: \(userId.prefix(8))…", category: "ChatManagementService")
         } catch {
             Log.error("Failed to prune contact: \(error)", category: "ChatManagementService")

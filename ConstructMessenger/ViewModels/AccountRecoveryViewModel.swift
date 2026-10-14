@@ -6,9 +6,15 @@
 //    1. Setup  — generate mnemonic, quiz confirmation, call SetRecoveryKey
 //    2. Status — check if recovery is set up (banner / fingerprint display)
 //    3. Recover — enter mnemonic on new device, call RecoverAccount
+//    4. Confirm — enter mnemonic on a device that does not know the account's address
+//
+//  Every flow that has the phrase in hand leaves this device knowing the account's address
+//  (`AccountAddress.rememberOwn`): the address is the recovery public key, and the phrase is the
+//  only source of it this app trusts.
 //
 
 import Foundation
+import GRPCCore
 import Observation
 
 @MainActor
@@ -29,7 +35,40 @@ final class AccountRecoveryViewModel {
     var setupStep: SetupStep = .idle
     var mnemonic: [String] = []           // 12 words shown to user
     var quizIndices: [Int] = []           // 3 random indices for word quiz
-    var quizAnswers: [Int: String] = [:]  // index → user input
+    var quizAnswers: [Int: String] = [:]  // index → the word the user picked
+    /// Index → the words offered for it: the right one and others from the same phrase. Picking
+    /// is the check (owner's decision 2026-10-04); typing on a phone was the wall.
+    var quizOptions: [Int: [String]] = [:]
+
+    /// What the setup screen is doing: making a key and setting it (no passcode on this device,
+    /// or no key yet), or showing one that was made silently so the person can copy it.
+    enum SetupMode: Equatable {
+        case create
+        case backupHeld
+    }
+    var setupMode: SetupMode = .create
+
+    /// The silent key's phrase waits in the vault until it is copied
+    /// (`decisions/recovery-key-backup-is-deferred-not-skipped.md`).
+    private(set) var backupPending = false
+    private let phraseStore: RecoveryPhraseStore = RecoveryPhraseVault.shared
+    private let marks = RecoveryBackupMarks()
+
+    /// What the chat list should say about the copy (`RecoveryReminder.decide`). Recomputed with
+    /// the status, not per render — it asks the Keychain.
+    private(set) var reminder: RecoveryReminder = .none
+    /// The silent key's phrase left the device before it was copied — whatever the reminder's
+    /// snooze says. Settings show it permanently; it cannot be fixed, only known.
+    private(set) var phraseLost = false
+
+    /// The person closed the reminder: ask again after the same delay.
+    func snoozeReminder() {
+        marks.snooze()
+        refreshBackupPending()
+    }
+
+    /// Settings asks for a copy while there is no key or the silent one is not copied yet.
+    var needsBackup: Bool { statusLoaded && (!isSetup || backupPending) }
 
     // MARK: - Recovery status state
 
@@ -55,18 +94,99 @@ final class AccountRecoveryViewModel {
     var enteredWords: [String] = Array(repeating: "", count: 12)
     var recoverIdentifier: String = ""    // username or UUID to identify account
 
+    // MARK: - Confirm flow state
+
+    enum ConfirmStep: Equatable {
+        case idle
+        case checking
+        case done
+        case failed(String)
+    }
+
+    var confirmStep: ConfirmStep = .idle
+    /// The phrase as typed or pasted: twelve words, any whitespace between them.
+    var confirmPhrase: String = ""
+
     // MARK: - Setup Flow
+
+    /// Which flow the screen opens on. Called when it appears.
+    func prepareSetup() {
+        refreshBackupPending()
+        setupMode = backupPending ? .backupHeld : .create
+    }
+
+    func refreshBackupPending() {
+        guard let userId = AuthSessionManager.shared.currentUserId else {
+            backupPending = false
+            reminder = .none
+            phraseLost = false
+            return
+        }
+        backupPending = phraseStore.hasHeld(account: userId)
+        phraseLost = RecoveryReminder.decide(
+            now: Date(),
+            silentAt: marks.silentAt(account: userId),
+            copied: marks.copied,
+            phrase: phraseStore.phrasePresence(account: userId),
+            snoozedUntil: nil
+        ) == .phraseLost
+        reminder = RecoveryReminder.decide(
+            now: Date(),
+            silentAt: marks.silentAt(account: userId),
+            copied: marks.copied,
+            phrase: phraseStore.phrasePresence(account: userId),
+            snoozedUntil: marks.snoozedUntil
+        )
+    }
+
+    /// Shows the silently made phrase, after Face ID / Touch ID / the passcode.
+    func startBackup() async {
+        guard let userId = AuthSessionManager.shared.currentUserId,
+              let phrase = await phraseStore.readHeld(
+                account: userId,
+                reason: NSLocalizedString("recovery_backup_auth_reason", comment: "")
+              )
+        else { return }
+        beginQuiz(with: phrase)
+    }
 
     func startSetup() {
         do {
-            let phrase = try generateMnemonic(wordCount: 12)
-            mnemonic = phrase.split(separator: " ").map(String.init)
-            quizIndices = threeRandomIndices(count: mnemonic.count)
-            quizAnswers = [:]
-            setupStep = .displayWords
+            beginQuiz(with: try generateMnemonic(wordCount: 12))
         } catch {
+            Log.error("Recovery setup: phrase generation failed: \(error)", category: "Recovery")
             setupStep = .failed(error.userFacingMessage)
         }
+    }
+
+    private func beginQuiz(with phrase: String) {
+        mnemonic = phrase.split(separator: " ").map(String.init)
+        quizIndices = threeRandomIndices(count: mnemonic.count)
+        quizAnswers = [:]
+        var generator = SystemRandomNumberGenerator()
+        quizOptions = Dictionary(uniqueKeysWithValues: quizIndices.map {
+            ($0, Self.quizOptions(for: mnemonic, index: $0, using: &generator))
+        })
+        setupStep = .displayWords
+    }
+
+    /// The word at `index` and up to three others from the same phrase, shuffled. Decoys from the
+    /// phrase itself are the point: they are all words the person just saw, so the pick checks the
+    /// position they wrote down, not whether a word looks familiar.
+    static func quizOptions<R: RandomNumberGenerator>(
+        for mnemonic: [String],
+        index: Int,
+        count: Int = 4,
+        using generator: inout R
+    ) -> [String] {
+        guard mnemonic.indices.contains(index) else { return [] }
+        let answer = mnemonic[index]
+        var decoys: [String] = []
+        for word in mnemonic.shuffled(using: &generator)
+        where word != answer && !decoys.contains(word) && decoys.count < count - 1 {
+            decoys.append(word)
+        }
+        return ([answer] + decoys).shuffled(using: &generator)
     }
 
     func proceedToQuiz() {
@@ -87,6 +207,16 @@ final class AccountRecoveryViewModel {
             setupStep = .failed(NSLocalizedString("recovery_quiz_failed", comment: ""))
             return
         }
+        if setupMode == .backupHeld {
+            // The key is on the server already; copying it is all that was left. The phrase
+            // leaves the device now, and the rule "never stored" applies again.
+            phraseStore.forgetHeld()
+            marks.markCopied()
+            refreshBackupPending()
+            setupStep = .done(fingerprint: fingerprint ?? "")
+            mnemonic = []
+            return
+        }
         setupStep = .uploading
         do {
             let seed = try mnemonicToSeed(mnemonic: mnemonic.joined(separator: " "))
@@ -100,18 +230,20 @@ final class AccountRecoveryViewModel {
             )
 
             let result = try await AuthServiceClient.shared.setRecoveryKey(
-                publicKey: Data(keypair.publicKey),
+                publicKey: keypair.publicKey,
                 signature: Data(sigBytes),
                 timestamp: timestamp
             )
 
             isSetup = true
             fingerprint = result.fingerprint
+            AccountAddress.rememberOwn(keypair.publicKey)
             UserDefaults.standard.set(true, forKey: Self.udKeyIsSetup)
             setupStep = .done(fingerprint: result.fingerprint)
             mnemonic = []   // clear sensitive data after switching away from display view
         } catch {
-            setupStep = .failed(errorMessage(from: error))
+            logFailure("setup", error)
+            setupStep = .failed(Self.errorMessage(from: error))
         }
     }
 
@@ -120,6 +252,7 @@ final class AccountRecoveryViewModel {
         mnemonic = []
         quizIndices = []
         quizAnswers = [:]
+        quizOptions = [:]
     }
 
     // MARK: - Status check
@@ -144,6 +277,7 @@ final class AccountRecoveryViewModel {
                 if status.isSetup {
                     UserDefaults.standard.set(true, forKey: Self.udKeyIsSetup)
                 }
+                refreshBackupPending()
                 statusLoaded = true
             } catch {
                 // Non-fatal — silently skip banner on network error
@@ -205,14 +339,13 @@ final class AccountRecoveryViewModel {
             )
 
             // 3. Generate fresh device keys
-            let (deviceId, bundle, signingKeyData, identityKeyData) =
-                try CryptoManager.shared.generateRegistrationBundle()
+            let (deviceId, bundle) = try CryptoManager.shared.generateRegistrationBundle()
 
             var publicKeys = Shared_Proto_Services_V1_DevicePublicKeys()
-            publicKeys.verifyingKey = Data(bundle.verifyingKey)
-            publicKeys.identityPublic = Data(bundle.identityPublic)
-            publicKeys.signedPrekeyPublic = Data(bundle.signedPrekeyPublic)
-            publicKeys.signedPrekeySignature = Data(bundle.signature)
+            publicKeys.verifyingKey = bundle.verifyingKey
+            publicKeys.identityPublic = bundle.identityPublic
+            publicKeys.signedPrekeyPublic = bundle.signedPrekeyPublic
+            publicKeys.signedPrekeySignature = bundle.signature
             publicKeys.cryptoSuite = "Curve25519+Ed25519"
 
             // 4. Call RecoverAccount (no auth header).
@@ -230,10 +363,8 @@ final class AccountRecoveryViewModel {
                 publicKeys: publicKeys
             )
 
-            // 5. Persist new keys and tokens
+            // 5. Persist the device id and tokens (the keys are in the record the bundle saved)
             KeychainManager.shared.saveDeviceID(deviceId)
-            KeychainManager.shared.saveDeviceSigningKey(signingKeyData)
-            KeychainManager.shared.saveDeviceIdentityKey(identityKeyData)
             AuthSessionManager.shared.saveTokens(
                 accessToken: response.accessToken,
                 refreshToken: response.refreshToken,
@@ -241,6 +372,9 @@ final class AccountRecoveryViewModel {
                 userId: response.userId
             )
             VeilProxyManager.shared.configureFromServer(cert: response.veilBridgeCert ?? "")
+            // The server just accepted a signature by this key as the account's, so it is the
+            // account's recovery key — and therefore its address.
+            AccountAddress.rememberOwn(keypair.publicKey)
 
             Task {
                 _ = try? await OtpkReplenishmentService.generateAndUpload(
@@ -263,8 +397,52 @@ final class AccountRecoveryViewModel {
             recoverStep = .done
             enteredWords = Array(repeating: "", count: 12)  // clear sensitive data after step change
         } catch {
-            recoverStep = .failed(errorMessage(from: error))
+            logFailure("recover", error)
+            recoverStep = .failed(Self.errorMessage(from: error))
         }
+    }
+
+    // MARK: - Confirm Flow
+
+    /// Teach this device the account's address from the phrase.
+    ///
+    /// The key is derived here and compared with the fingerprint the server reports for the
+    /// account. The phrase never leaves the device, and the server can only make the comparison
+    /// fail — it cannot make this device adopt a key the phrase did not produce.
+    func submitConfirm() async {
+        let phrase = confirmPhrase
+            .split(whereSeparator: { $0.isWhitespace })
+            .map { $0.lowercased() }
+            .joined(separator: " ")
+        guard validateMnemonic(mnemonic: phrase) else {
+            confirmStep = .failed(NSLocalizedString("recovery_confirm_invalid_phrase", comment: ""))
+            return
+        }
+        confirmStep = .checking
+        do {
+            let keypair = try deriveRecoveryKeypair(seed: try mnemonicToSeed(mnemonic: phrase))
+            let status = try await AuthServiceClient.shared.getRecoveryStatus()
+            guard status.isSetup, let fingerprint = status.fingerprint else {
+                confirmStep = .failed(NSLocalizedString("recovery_error_not_configured", comment: ""))
+                return
+            }
+            let key = keypair.publicKey
+            guard AccountAddress.matchesServerFingerprint(key, fingerprint: fingerprint) else {
+                confirmStep = .failed(NSLocalizedString("recovery_confirm_other_account", comment: ""))
+                return
+            }
+            AccountAddress.rememberOwn(key)
+            confirmPhrase = ""
+            confirmStep = .done
+        } catch {
+            logFailure("confirm", error)
+            confirmStep = .failed(Self.errorMessage(from: error))
+        }
+    }
+
+    func resetConfirm() {
+        confirmStep = .idle
+        confirmPhrase = ""
     }
 
     func resetRecover() {
@@ -279,21 +457,31 @@ final class AccountRecoveryViewModel {
         Array((0..<count).shuffled().prefix(3)).sorted()
     }
 
-    private func errorMessage(from error: Error) -> String {
-        // Map gRPC status codes to user-friendly messages
-        let desc = error.localizedDescription
-        if desc.contains("NOT_FOUND") || desc.contains("not_found") {
-            return NSLocalizedString("recovery_error_not_found", comment: "")
-        } else if desc.contains("FAILED_PRECONDITION") {
-            return NSLocalizedString("recovery_error_not_configured", comment: "")
-        } else if desc.contains("PERMISSION_DENIED") {
-            return NSLocalizedString("recovery_error_wrong_phrase", comment: "")
-        } else if desc.contains("RESOURCE_EXHAUSTED") {
-            return NSLocalizedString("recovery_error_cooldown", comment: "")
-        } else if desc.contains("ALREADY_EXISTS") {
-            return NSLocalizedString("recovery_error_already_set", comment: "")
+    /// What the user reads when a recovery RPC fails, decided by the status code.
+    ///
+    /// Until 2026-09-30 this searched `localizedDescription` for "ALREADY_EXISTS" and the like. A
+    /// grpc-swift 2 `RPCError` describes itself as "The operation couldn't be completed
+    /// (GRPCCore.RPCError error 1)", so no branch ever matched: every refusal — a key already set,
+    /// an expired signature, a server fault — showed that sentence, and nothing was logged.
+    static func errorMessage(from error: Error) -> String {
+        guard let rpc = error as? RPCError else { return error.userFacingMessage }
+        switch rpc.code {
+        case .notFound: return NSLocalizedString("recovery_error_not_found", comment: "")
+        case .failedPrecondition: return NSLocalizedString("recovery_error_not_configured", comment: "")
+        case .permissionDenied: return NSLocalizedString("recovery_error_wrong_phrase", comment: "")
+        case .resourceExhausted: return NSLocalizedString("recovery_error_cooldown", comment: "")
+        case .alreadyExists: return NSLocalizedString("recovery_error_already_set", comment: "")
+        default: return error.userFacingMessage
         }
-        return desc
+    }
+
+    /// The code and the server's own words, never the phrase or a key.
+    private func logFailure(_ flow: String, _ error: Error) {
+        if let rpc = error as? RPCError {
+            Log.error("Recovery \(flow) refused: \(rpc.code) — \(rpc.message)", category: "Recovery")
+        } else {
+            Log.error("Recovery \(flow) failed: \(error.localizedDescription)", category: "Recovery")
+        }
     }
 
     enum RecoveryError: LocalizedError {

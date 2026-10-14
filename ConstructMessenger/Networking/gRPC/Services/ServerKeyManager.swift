@@ -23,6 +23,23 @@ actor ServerKeyManager {
     private static let cacheKey    = "construct.server.token_enc_pub"
     private static let cacheAgeKey = "construct.server.token_enc_pub.fetched_at"
     private static let cacheTTL: TimeInterval = 24 * 3600
+    private static let delegationsKey = "construct.server.trust_delegations"
+
+    /// Delegations of the server's hybrid signing keys (`server_trust.delegations`), as last
+    /// served. Public data: each is signed by the offline root, and the core keeps only those a
+    /// root pinned in this build signed (`decisions/server-keys-rooted-offline-and-hybrid.md`).
+    nonisolated static func cachedServerDelegations() -> [Data] {
+        UserDefaults.standard.array(forKey: delegationsKey) as? [Data] ?? []
+    }
+
+    /// Replaced whole when served: the server serves every delegation a client may still need.
+    /// Kept when nothing is served — a server that does not serve them yet says nothing. The same
+    /// rule for both carriers, `/.well-known` and `ServerTrustService`.
+    nonisolated static func storeServerDelegations(_ delegations: [Data]) {
+        guard !delegations.isEmpty else { return }
+        UserDefaults.standard.set(delegations, forKey: delegationsKey)
+        Log.info("ServerKeyManager: \(delegations.count) server key delegation(s) cached", category: "Stealth")
+    }
 
     // MARK: - Public API
 
@@ -56,8 +73,8 @@ actor ServerKeyManager {
             // `privacy_pass::open_sealed_token_bytes`" — one comment naming three implementations
             // of one format, none of which was ever checked against another.
             return Data(try ppSealTokenBytes(
-                token: [UInt8](plaintext),
-                serverEncryptionKey: [UInt8](serverKey.rawRepresentation)
+                token: plaintext,
+                serverEncryptionKey: serverKey.rawRepresentation
             ))
         } catch {
             Log.error("ServerKeyManager: token seal failed — sending token-less: \(error)", category: "Stealth")
@@ -78,22 +95,33 @@ actor ServerKeyManager {
     }
 
     /// Fetch the token encryption key from the server if the cache is stale or missing.
+    ///
+    /// Under VEIL `on` the well-known is not fetched: it is a plain HTTPS request to the API host,
+    /// outside the tunnel (`decisions/veil-on-never-goes-direct.md`). The delegations are asked of
+    /// `ServerTrustService` instead; the token key arrives over gRPC anyway (`cacheFromGRPC`).
     func prefetch() async {
+        guard let url = Self.wellKnownURL(host: GRPCChannelManager.shared.currentHost,
+                                          mode: VeilProxyStore.loadMode()) else {
+            await ServerTrustClient.refresh()
+            return
+        }
         let fetchedAt = UserDefaults.standard.double(forKey: Self.cacheAgeKey)
         let age = Date().timeIntervalSince1970 - fetchedAt
         guard age > Self.cacheTTL || UserDefaults.standard.data(forKey: Self.cacheKey) == nil else {
             return
         }
-        await fetchAndCache()
+        await fetchAndCache(url)
+    }
+
+    /// Where the well-known may be fetched from in `mode`; nil under `on`.
+    nonisolated static func wellKnownURL(host: String, mode: VeilMode) -> URL? {
+        guard mode.allowsDirectPath else { return nil }
+        return URL(string: "https://\(host)/.well-known/construct-server")
     }
 
     // MARK: - Fetch
 
-    private func fetchAndCache() async {
-        let host = GRPCChannelManager.shared.currentHost
-        let urlString = "https://\(host)/.well-known/construct-server"
-        guard let url = URL(string: urlString) else { return }
-
+    private func fetchAndCache(_ url: URL) async {
         do {
             var request = URLRequest(url: url, timeoutInterval: 10)
             request.cachePolicy = .reloadIgnoringLocalCacheData
@@ -103,6 +131,9 @@ actor ServerKeyManager {
             guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
                 Log.debug("ServerKeyManager: token_encryption_key missing or invalid in well-known", category: "Stealth")
                 return
+            }
+            if let list = (json["server_trust"] as? [String: Any])?["delegations"] as? [String] {
+                Self.storeServerDelegations(list.compactMap { Data(base64Encoded: $0) })
             }
             let rootKey = json["token_encryption_key"] as? String
             let serverSection = json["server"] as? [String: Any]

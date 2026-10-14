@@ -19,6 +19,9 @@ protocol ProxyEffector: Sendable {
     /// Implementations MUST return one of: `.proxyStarted(...)` or `.proxyStartFailed(...)`.
     func start() async -> TransportEvent
 
+    /// Whether the local listener is accepting. False after iOS reclaimed the socket.
+    func listenerIsAlive() async -> Bool
+
     /// Tear down the proxy unconditionally. No-op if already stopped.
     func stop() async
 

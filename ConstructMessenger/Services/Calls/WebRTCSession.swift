@@ -2,7 +2,8 @@
 //  WebRTCSession.swift
 //  Construct Messenger
 //
-//  WebRTC PeerConnection wrapper for audio calls.
+//  WebRTC PeerConnection wrapper for calls: audio always, and a video transceiver when video
+//  calls are on (`CallVideo.swift`).
 //
 
 import Foundation
@@ -21,6 +22,8 @@ enum WebRTCSessionRole: Sendable {
 enum WebRTCSessionError: Error {
     case webRTCLibraryMissing
     case invalidState(String)
+    /// VEIL is `on` and there is no TURN to relay through (`CallIcePlan`).
+    case noRelayWhileVeilOn
 }
 
 @MainActor
@@ -37,6 +40,11 @@ protocol WebRTCSessionProtocol: AnyObject {
     func setRemoteAnswer(sdp: String) async throws
     func addRemoteIceCandidate(_ candidate: WebRTCIceCandidate) async throws
     func setMuted(_ muted: Bool)
+    /// This side has a video sender the camera can feed.
+    var canSendVideo: Bool { get }
+    /// Feed the camera into the video sender, or take it away. A swap on the sender the call
+    /// already negotiated — never an offer.
+    func setCameraOn(_ on: Bool, facing: CameraFacing)
     func close()
 }
 
@@ -58,10 +66,28 @@ private final class WebRTCFactory {
         // wasn't init'd yet, so `useManualAudio` was still false. Then when this
         // factory finally init'd mid-call, it flipped `isAudioEnabled` back to false
         // and silenced the audio unit for the rest of the call.
+        // Read once, into the environment the factory is built with — so it must precede it.
+        RTCPeerConnectionFactory.configureFieldTrials(WebRTCFieldTrials.configured)
         let encoderFactory = RTCDefaultVideoEncoderFactory()
         let decoderFactory = RTCDefaultVideoDecoderFactory()
         self.factory = RTCPeerConnectionFactory(encoderFactory: encoderFactory, decoderFactory: decoderFactory)
     }
+}
+
+/// Field trials this app runs WebRTC with.
+///
+/// `WebRTC-EnableDtlsPqc` puts X25519MLKEM768 first among the DTLS key-exchange groups
+/// (`rtc_base/ssl_stream_adapter.cc`, `GetDefaultEphemeralKeyExchangeCipherGroups`); DTLS 1.3 is
+/// already the default from M150. The media keys of a call then come from a hybrid exchange, and
+/// a recording of the call does not open once X25519 does (`PQC-4`,
+/// `decisions/calls-post-quantum-dtls.md`). The DTLS fingerprint that authenticates the exchange
+/// travels in the SDP, inside the session.
+///
+/// Upstream keeps it behind a trial (bug 404763475), so a WebRTC update can rename or drop it
+/// without a compile error; `WebRTCFieldTrialsTests` reads the linked binary for the key.
+enum WebRTCFieldTrials {
+    static let dtlsPqcKey = "WebRTC-EnableDtlsPqc"
+    static let configured = "\(dtlsPqcKey)/Enabled/"
 }
 
 /// One-time WebRTC runtime setup. Call `bootstrap()` exactly once at app launch,
@@ -109,6 +135,40 @@ final class WebRTCSession: NSObject, WebRTCSessionProtocol {
 
     private var localAudioTrack: RTCAudioTrack?
 
+    /// Video calls on: the caller offers a `sendrecv` video section in every call and the callee
+    /// takes up one it is offered. Off, this session is the audio-only one it always was.
+    private let videoEnabled: Bool
+    private var videoTransceiver: RTCRtpTransceiver?
+    private var videoSource: RTCVideoSource?
+    /// One capturer — one `AVCaptureSession` — per run of the camera, never restarted.
+    ///
+    /// WebRTC's capturer swaps the camera of a session it already configured by removing the input
+    /// and adding the new one with a hand-made connection (`addInputWithNoConnections:` +
+    /// `addConnection:`), and `-[AVCaptureSession addConnection:]` raises on the second time
+    /// round — an Objective-C exception on WebRTC's capture queue, which nothing catches. Build 716
+    /// died that way on every flip to the back camera (2026-10-05; read from the disassembly at
+    /// the crashing frame). The first run of a session has no connection yet, which is why the
+    /// camera came on and the call worked. So a new run gets a new capturer, after the old one
+    /// has stopped.
+    private var capturer: RTCCameraVideoCapturer?
+    /// The camera running now, so asking for it again is not a restart.
+    private var capturingFacing: CameraFacing?
+    /// Whether frames flow, both ways (`VideoFrameCounter`). The capture counter is the
+    /// capturer's delegate — which WebRTC holds weakly, so it lives here — and forwards to the
+    /// source.
+    private var captureCounter: VideoFrameCounter?
+    private var captureWatcher: CaptureSessionWatcher?
+    private let receiveCounter = VideoFrameCounter(label: "received")
+    /// The track the counter is attached through. `receiver.track` makes a new wrapper on every
+    /// read, and a wrapper takes its renderers off the track when it goes away — attached through
+    /// a temporary, the counter saw nothing while the screen, holding its own, showed the video
+    /// ("0 frames — none arrived" over a working picture, 2026-10-05).
+    private var countedTrack: RTCVideoTrack?
+    /// The camera's track, kept across off/on so the preview and the sender reuse one source.
+    private(set) var localVideoTrack: RTCVideoTrack?
+    var remoteVideoTrack: RTCVideoTrack? { videoTransceiver?.receiver.track as? RTCVideoTrack }
+    var canSendVideo: Bool { videoTransceiver != nil }
+
     /// WebRTC rejects `addIceCandidate` before the remote description is set, and a
     /// rejected candidate is lost permanently (no retry) — a frequent cause of a call
     /// stuck at `iceConnectionState=checking` when the peer's candidates arrive before
@@ -118,14 +178,25 @@ final class WebRTCSession: NSObject, WebRTCSessionProtocol {
     private var remoteDescriptionSet = false
     private var pendingRemoteCandidates: [WebRTCIceCandidate] = []
 
-    init(role: WebRTCSessionRole, turn: Shared_Proto_Signaling_V1_TurnCredentials?) throws {
+    init(role: WebRTCSessionRole, turn: Shared_Proto_Signaling_V1_TurnCredentials?, video: Bool,
+         veilOn: Bool) throws {
         self.role = role
+        self.videoEnabled = video
 
         self.factory = WebRTCFactory.shared.factory
 
+        guard let plan = CallIcePlan.make(
+            turnURLs: turn?.urls, username: turn?.username ?? "", credential: turn?.credential ?? "", veilOn: veilOn
+        ) else {
+            Log.error("ICE config → none: VEIL is on and no TURN credentials — not placing a direct call", category: "Calls")
+            throw WebRTCSessionError.noRelayWhileVeilOn
+        }
+        Log.info("ICE config → \(plan.servers.flatMap(\.urls)) policy=\(plan.policy)", category: "Calls")
         let config = RTCConfiguration()
-        config.iceServers = Self.buildIceServers(turn: turn)
-        config.iceTransportPolicy = .all
+        config.iceServers = plan.servers.map {
+            RTCIceServer(urlStrings: $0.urls, username: $0.username, credential: $0.credential)
+        }
+        config.iceTransportPolicy = plan.policy == .relay ? .relay : .all
         config.sdpSemantics = .unifiedPlan
         config.bundlePolicy = .maxBundle
         config.rtcpMuxPolicy = .require
@@ -155,10 +226,23 @@ final class WebRTCSession: NSObject, WebRTCSessionProtocol {
         } else {
             Log.error("WebRTC local audio track is nil — call will be one-way at best", category: "Calls")
         }
+        // The callee's transceiver comes from the offer instead (`adoptOfferedVideo`): one added
+        // here would not be matched to the offered section — JSEP reuses only transceivers made
+        // by addTrack — and the answer would carry two video sections.
+        if video, role == .caller {
+            let initValue = RTCRtpTransceiverInit()
+            initValue.direction = .sendRecv
+            initValue.streamIds = ["video"]
+            videoTransceiver = peerConnection.addTransceiver(of: .video, init: initValue)
+            countReceivedFrames()
+            Log.info("WebRTC video transceiver added (sendrecv, no track)", category: "Calls")
+        }
         Self.dumpAudioState(label: "session-init role=\(role)")
     }
 
     func close() {
+        stopCapture()
+        if videoTransceiver != nil { Log.info(receiveCounter.summary(), category: "Calls") }
         peerConnection.close()
         // Do NOT deactivate the audio session here. A raw
         // `AVAudioSession.setActive(false)` bypasses RTCAudioSession and desyncs its
@@ -173,6 +257,116 @@ final class WebRTCSession: NSObject, WebRTCSessionProtocol {
         localAudioTrack?.isEnabled = !muted
     }
 
+    func setCameraOn(_ on: Bool, facing: CameraFacing) {
+        guard let sender = videoTransceiver?.sender else {
+            Log.info("Camera \(on ? "on" : "off") ignored — this call has no video sender", category: "Calls")
+            return
+        }
+        guard on else {
+            // No track, no frames; the direction stays sendrecv, so turning it back on is the
+            // same swap.
+            sender.track = nil
+            stopCapture()
+            return
+        }
+        let track = localVideoTrack ?? makeLocalVideoTrack()
+        if sender.track !== track { sender.track = track }
+        guard capturingFacing != facing else { return }
+        startCapture(facing: facing)
+    }
+
+    private func makeLocalVideoTrack() -> RTCVideoTrack {
+        let source = factory.videoSource()
+        let track = factory.videoTrack(with: source, trackId: "video0")
+        videoSource = source
+        localVideoTrack = track
+        return track
+    }
+
+    private func countReceivedFrames() {
+        countedTrack = remoteVideoTrack
+        countedTrack?.add(receiveCounter)
+    }
+
+    private func stopCapture() {
+        capturer?.stopCapture()
+        if let captureCounter { Log.info(captureCounter.summary(), category: "Calls") }
+        capturer = nil
+        capturingFacing = nil
+        captureCounter = nil
+        captureWatcher = nil
+    }
+
+    private func startCapture(facing: CameraFacing) {
+        guard let videoSource else { return }
+        // A new capturer for this run (see `capturer`). It replaces the old one only once a camera
+        // and a format are found; the old one stops first, and only then does this one start.
+        let counter = VideoFrameCounter(label: "camera \(facing)", forwardingTo: videoSource)
+        let capturer = RTCCameraVideoCapturer(delegate: counter)
+        // By position, for now. The design asks for the camera by the direction it faces, which
+        // is what keeps "front" the front on a folded iPhone Duo (TODO 104).
+        let position: AVCaptureDevice.Position = facing == .front ? .front : .back
+        guard let device = RTCCameraVideoCapturer.captureDevices().first(where: { $0.position == position }) else {
+            Log.error("No \(facing) camera to capture from", category: "Calls")
+            return
+        }
+        let formats = RTCCameraVideoCapturer.supportedFormats(for: device)
+        let preferred = capturer.preferredOutputPixelFormat()
+        let candidates = formats.map { format -> CallVideoCapture.Candidate in
+            let d = CMVideoFormatDescriptionGetDimensions(format.formatDescription)
+            return CallVideoCapture.Candidate(
+                width: d.width,
+                height: d.height,
+                rateRanges: format.videoSupportedFrameRateRanges.map { $0.minFrameRate...$0.maxFrameRate },
+                isPreferredPixelFormat: CMFormatDescriptionGetMediaSubType(format.formatDescription) == preferred
+            )
+        }
+        guard let (index, fps) = CallVideoCapture.choose(candidates) else {
+            Log.error("Camera \(facing): no format can run at \(CallVideoCapture.maxFps) fps or below", category: "Calls")
+            return
+        }
+        let format = formats[index]
+        let c = candidates[index]
+        let previous = self.capturer
+        if let captureCounter { Log.info(captureCounter.summary(), category: "Calls") }
+        self.capturer = capturer
+        capturingFacing = facing
+        captureCounter = counter
+        captureWatcher = CaptureSessionWatcher(session: capturer.captureSession, label: "camera \(facing)")
+        let start: @MainActor () -> Void = { [weak self] in
+            // A later flip or a hang-up replaced this run while the old one was stopping.
+            guard let self, self.capturer === capturer else { return }
+            capturer.startCapture(with: device, format: format, fps: fps)
+            Log.info("Camera \(facing) capturing \(c.width)x\(c.height)@\(fps) (ranges \(c.rateRanges))", category: "Calls")
+        }
+        guard let previous else {
+            start()
+            return
+        }
+        previous.stopCapture {
+            Task { @MainActor in start() }
+        }
+    }
+
+    /// Take up the video section of an offer as `sendrecv`, so the camera can be turned on later
+    /// without renegotiating. Without it the transceiver the offer created stays `recvonly` and
+    /// this side could watch but never send. An offer with no video section (an audio-only
+    /// client) leaves `canSendVideo` false.
+    private func adoptOfferedVideo() {
+        guard videoEnabled, videoTransceiver == nil,
+              let offered = peerConnection.transceivers.first(where: { $0.mediaType == .video })
+        else { return }
+        var error: NSError?
+        offered.setDirection(.sendRecv, error: &error)
+        if let error {
+            Log.error("Offered video section not taken up: \(error)", category: "Calls")
+            return
+        }
+        videoTransceiver = offered
+        countReceivedFrames()
+        Log.info("WebRTC offered video section taken up (sendrecv)", category: "Calls")
+    }
+
     func createOffer() async throws -> String {
         try await createOffer(iceRestart: false)
     }
@@ -183,9 +377,10 @@ final class WebRTCSession: NSObject, WebRTCSessionProtocol {
 
     private func createOffer(iceRestart: Bool) async throws -> String {
         let offerConstraints = RTCMediaConstraints(
+            // No `OfferToReceiveVideo`: under Unified Plan a "false" there takes the receive
+            // direction off the video transceiver, and the peer's camera would never arrive.
             mandatoryConstraints: [
                 "OfferToReceiveAudio": "true",
-                "OfferToReceiveVideo": "false",
                 "IceRestart": iceRestart ? "true" : "false"
             ],
             optionalConstraints: nil
@@ -202,7 +397,7 @@ final class WebRTCSession: NSObject, WebRTCSessionProtocol {
 
     func createAnswer() async throws -> String {
         let answerConstraints = RTCMediaConstraints(
-            mandatoryConstraints: ["OfferToReceiveAudio": "true", "OfferToReceiveVideo": "false"],
+            mandatoryConstraints: ["OfferToReceiveAudio": "true"],
             optionalConstraints: nil
         )
         let answer = try await createSessionDescription { completion in
@@ -215,6 +410,7 @@ final class WebRTCSession: NSObject, WebRTCSessionProtocol {
     func setRemoteOffer(sdp: String) async throws {
         let desc = RTCSessionDescription(type: .offer, sdp: sdp)
         try await setRemoteDescription(desc)
+        adoptOfferedVideo()
         await onRemoteDescriptionSet()
     }
 
@@ -305,25 +501,6 @@ final class WebRTCSession: NSObject, WebRTCSessionProtocol {
                 cont.resume()
             }
         }
-    }
-
-    private static func buildIceServers(turn: Shared_Proto_Signaling_V1_TurnCredentials?) -> [RTCIceServer] {
-        var servers: [RTCIceServer] = []
-        if let turn, !turn.urls.isEmpty {
-            // Server-provided TURN credentials (AMS coturn).
-            // TURN servers also handle STUN binding requests, so no separate STUN needed.
-            Log.info(
-                "ICE config → TURN urls=\(turn.urls) username='\(turn.username)' credential.len=\(turn.credential.count)",
-                category: "Calls"
-            )
-            servers.append(RTCIceServer(urlStrings: turn.urls, username: turn.username, credential: turn.credential))
-        } else {
-            // TURN unavailable (credentials fetch failed). Fall back to own STUN server (AMS).
-            // Never use public STUN servers — call metadata must not leak to Google/Cloudflare.
-            Log.info("ICE config → STUN-only fallback (turn=nil)", category: "Calls")
-            servers.append(RTCIceServer(urlStrings: ["stun:ams.konstruct.cc:3478"]))
-        }
-        return servers
     }
 
     private static func makeLocalAudioTrack(factory: RTCPeerConnectionFactory) -> RTCAudioTrack {
@@ -508,9 +685,13 @@ final class WebRTCSession: WebRTCSessionProtocol {
     var onConnected: (@Sendable () -> Void)?
     var onQualityChanged: (@Sendable (CallQuality) -> Void)?
 
-    init(role: WebRTCSessionRole, turn: Shared_Proto_Signaling_V1_TurnCredentials?) throws {
+    init(role: WebRTCSessionRole, turn: Shared_Proto_Signaling_V1_TurnCredentials?, video: Bool,
+         veilOn: Bool) throws {
         throw WebRTCSessionError.webRTCLibraryMissing
     }
+
+    var canSendVideo: Bool { false }
+    func setCameraOn(_ on: Bool, facing: CameraFacing) {}
 
     func createOffer() async throws -> String { throw WebRTCSessionError.webRTCLibraryMissing }
     func restartIce() async throws -> String { throw WebRTCSessionError.webRTCLibraryMissing }

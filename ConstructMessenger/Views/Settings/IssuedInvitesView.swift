@@ -16,8 +16,6 @@ import SwiftUI
 import Combine
 
 struct IssuedInvitesView: View {
-    @Environment(\.dismiss) private var dismiss
-
     private var journal = InviteJournal.shared
 
     /// Recomputed on a slow tick so a row does not sit there claiming time it no longer
@@ -40,17 +38,6 @@ struct IssuedInvitesView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            CTNavBar(
-                title: NSLocalizedString("issued_invites", comment: ""),
-                showBack: true,
-                backAction: { dismiss() }
-            ) {
-                EmptyView()
-            } trailing: {
-                EmptyView()
-            }
-            Rectangle().fill(Color.CT.noise).frame(height: 1)
-
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: CTLayout.edgePad) {
                     // The scope is in the copy on purpose. This list is per-device by
@@ -63,7 +50,7 @@ struct IssuedInvitesView: View {
                             InviteConfig.ttlDescription
                         )
                     )
-                    .font(CTFont.regular(11))
+                    .font(CTFont.caption)
                     .foregroundStyle(Color.CT.textDim)
                     .padding(.horizontal, CTLayout.edgePad)
                     .padding(.top, CTLayout.edgePad)
@@ -71,13 +58,13 @@ struct IssuedInvitesView: View {
                     // Why only some rows offer revocation. An asymmetry nobody can account
                     // for reads as a bug in the rows that lack the button.
                     Text("> " + NSLocalizedString("issued_invites_revoke_scope", comment: ""))
-                        .font(CTFont.regular(11))
+                        .font(CTFont.caption)
                         .foregroundStyle(Color.CT.textDim)
                         .padding(.horizontal, CTLayout.edgePad)
 
                     if let notice {
                         Text("> \(notice.text)")
-                            .font(CTFont.regular(11))
+                            .font(CTFont.caption)
                             .foregroundStyle(notice.isError ? Color.CT.danger : Color.CT.accent)
                             .padding(.horizontal, CTLayout.edgePad)
                             .accessibilityIdentifier(A11y.IssuedInvites.notice)
@@ -88,7 +75,7 @@ struct IssuedInvitesView: View {
                     } else {
                         CTSectionGroup {
                             ForEach(Array(acts.enumerated()), id: \.element.id) { index, act in
-                                if index > 0 { CTSep(style: .thin) }
+                                if index > 0 { ConstructRowDivider(indent: CTLayout.edgePad) }
                                 row(for: act)
                             }
                         }
@@ -99,9 +86,7 @@ struct IssuedInvitesView: View {
             }
         }
         .ctBackground()
-        // Every pushed settings screen hides the system bar and draws its own CTNavBar;
-        // without this the two stack up and the screen shows two back buttons.
-        .hideSystemNavBar()
+        .screenTitle(NSLocalizedString("issued_invites", comment: ""))
         .onReceive(tick) { _ in now = Date() }
         .onAppear { now = Date() }
         .confirmationDialog(
@@ -131,7 +116,7 @@ struct IssuedInvitesView: View {
                 InviteConfig.ttlDescription
             )
         )
-        .font(CTFont.regular(12))
+        .font(CTFont.secondary)
         .foregroundStyle(Color.CT.textDim)
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, CTLayout.edgePad)
@@ -142,16 +127,16 @@ struct IssuedInvitesView: View {
     private func row(for act: InviteIssuance) -> some View {
         HStack(spacing: SecuritySettingsLayout.rowContentSpacing) {
             Image(systemName: act.kind == .link ? "link" : "qrcode")
-                .font(.system(size: SettingsShareLayout.actionIconSize, weight: .regular))
+                .font(CTIcon.font(CTIcon.row, weight: .regular))
                 .foregroundStyle(Color.CT.text)
                 .frame(width: IssuedInvitesLayout.iconColumnWidth)
 
             VStack(alignment: .leading, spacing: IssuedInvitesLayout.rowMetaSpacing) {
                 Text(label(for: act))
-                    .font(CTFont.regular(13))
+                    .font(CTFont.body)
                     .foregroundStyle(Color.CT.text)
                 Text(remainingText(for: act))
-                    .font(CTFont.regular(11))
+                    .font(CTFont.caption)
                     .foregroundStyle(Color.CT.textDim)
             }
             // Scoped to the label, not to the row. An identifier on a container overwrites
@@ -179,8 +164,8 @@ struct IssuedInvitesView: View {
                 .padding(.horizontal, ContactQRCodeLayout.refreshButtonHorizontalPadding)
         } else {
             Button { pendingRevoke = act } label: {
-                Text(NSLocalizedString("revoke", comment: "").lowercased())
-                    .font(CTFont.regular(13))
+                Text(NSLocalizedString("revoke", comment: ""))
+                    .font(CTFont.body)
                     .foregroundStyle(Color.CT.danger)
                     .padding(.horizontal, ContactQRCodeLayout.refreshButtonHorizontalPadding)
                     .padding(.vertical, ContactQRCodeLayout.refreshButtonVerticalPadding)
@@ -236,13 +221,13 @@ struct IssuedInvitesView: View {
         let time = act.startedAt.formatted(date: .omitted, time: .shortened)
         switch act.kind {
         case .link:
-            return "\(NSLocalizedString("issued_invite_link", comment: "").uppercased()) · \(time)"
+            return "\(NSLocalizedString("issued_invite_link", comment: "")) · \(time)"
         case .qrSession:
             let count = act.liveMints(at: now).count
             let kind = String(
                 format: NSLocalizedString("issued_invite_qr_fmt", comment: ""), count
             )
-            return "\(kind.uppercased()) · \(time)"
+            return "\(kind) · \(time)"
         }
     }
 

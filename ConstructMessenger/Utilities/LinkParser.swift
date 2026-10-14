@@ -9,46 +9,43 @@
 
 import Foundation
 
-enum ContactLinkError: Error, LocalizedError {
+enum ContactLinkError: Error, LocalizedError, UserFacingError {
     case invalidURL
     case invalidPrefix
     case inviteExpired
     case inviteInvalid(String)
     case inviteAlreadyUsed
     case verificationFailed(Error)
+    /// This device does not know the account's address yet (`RecoveryGateView`).
+    case recoveryKeyRequired
 
-    var errorDescription: String? {
+    /// The reason in `inviteInvalid` and the error in `verificationFailed` are for the log: one
+    /// is sometimes the server's wording, the other a system error's.
+    var userText: UserText {
         switch self {
-        case .invalidURL:
-            return NSLocalizedString("invite_error_invalid_url", comment: "")
-        case .invalidPrefix:
-            return NSLocalizedString("invite_error_unsupported_link", comment: "")
-        case .inviteExpired:
-            return NSLocalizedString("invite_error_expired", comment: "")
-        case .inviteInvalid(let reason):
-            return String(
-                format: NSLocalizedString("invite_error_invalid_fmt", comment: ""),
-                reason
-            )
-        case .inviteAlreadyUsed:
-            return NSLocalizedString("invite_error_already_used", comment: "")
-        case .verificationFailed(let error):
-            return String(
-                format: NSLocalizedString("invite_error_verification_failed_fmt", comment: ""),
-                error.localizedDescription
-            )
+        case .invalidURL:          return UserText("invite_error_invalid_url")
+        case .invalidPrefix:       return UserText("invite_error_unsupported_link")
+        case .inviteExpired:       return UserText("invite_error_expired")
+        case .inviteInvalid:       return UserText("invite_error_invalid")
+        case .inviteAlreadyUsed:   return UserText("invite_error_already_used")
+        case .verificationFailed:  return UserText("invite_error_verification_failed")
+        case .recoveryKeyRequired: return UserText("invite_error_recovery_key_required")
         }
     }
+
+    var errorDescription: String? { userText.resolved }
 }
 
 struct ContactInfo: Equatable {
     let userId: String
     let deviceId: String?      // Device ID for fetching keys
     let username: String
-    let ephemeralKey: String?  // Present only on legacy v1–v3 invites (unused)
     let isDynamic: Bool        // True if from signed Dynamic Invite
     /// Inviter identity public key from the verified key bundle (TOFU pin material).
     let identityPublicKey: Data?
+    /// The inviter's account address, from the signed invite. Kept on the contact and used to
+    /// name them on every sealed send (`AccountAddress`).
+    let accountAddress: Data?
 }
 
 struct LinkParser {
@@ -66,6 +63,12 @@ struct LinkParser {
 
         // Signed dynamic invite only — no legacy `/c/{uuid}?username=` downgrade path (F4).
         if isDynamicInviteURL(url) {
+            // The backstop for the surfaces `RecoveryGated` does not wrap — a link opened from
+            // another app lands here directly. Contacts are made only by an account whose address
+            // this device knows (decisions/invite-carries-the-account-address.md).
+            guard AccountAddress.own() != nil else {
+                throw ContactLinkError.recoveryKeyRequired
+            }
             return try await parseDynamicInvite(url)
         }
 
@@ -148,15 +151,13 @@ struct LinkParser {
         let trimmedUsername = invite.un?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         let resolvedUsername = trimmedUsername.isEmpty ? userId : trimmedUsername
 
-        let eph: String? = invite.ephKey.isEmpty ? nil : invite.ephKey
-
         return ContactInfo(
             userId: userId,
             deviceId: deviceId,
             username: resolvedUsername,
-            ephemeralKey: eph,
             isDynamic: true,
-            identityPublicKey: verified.identityPublic
+            identityPublicKey: verified.identityPublic,
+            accountAddress: invite.addr
         )
     }
 
@@ -175,19 +176,16 @@ struct LinkParser {
         token.uuid = invite.uuid
         token.server = invite.server
         token.ts = Int64(invite.ts)
-        // v4+: empty; v1–v3: still sent for server dual-read of old invites
-        token.ephPub = invite.ephKey
+        // `ephPub` (v1–v3) stays empty: the server refuses a v5 that carries one.
         token.sig = invite.sig
-        if !invite.deviceId.isEmpty {
-            token.deviceID = invite.deviceId
-        }
+        token.deviceID = invite.deviceId
         if let un = invite.un, !un.isEmpty {
             token.un = un
         }
-        // v5 only, and mandatory there: the canonical string ends with it.
-        if let ttl = invite.ttl {
-            token.ttl = ttl
-        }
+        token.ttl = invite.ttl
+        // The last field of the canonical string, and the one the server checks against the
+        // account's recovery key.
+        token.addr = invite.addr
         return token
     }
 

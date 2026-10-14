@@ -2,7 +2,7 @@
 //  KeyChangeUXTests.swift
 //  ConstructMessengerTests
 //
-//  Thread 5.4: key-change acknowledge clears warning status.
+//  Thread 5.4: acknowledging clears the warning.
 //
 
 import XCTest
@@ -17,10 +17,12 @@ final class KeyChangeUXTests: XCTestCase {
     override func setUp() {
         super.setUp()
         container = PersistenceController(inMemory: true).container
+        LocalRepositories.useContactsForTesting(container)
     }
 
     override func tearDown() {
         KeyChangeUX.setActiveChatContact(nil)
+        LocalRepositories.useContactsForTesting(nil)
         container = nil
         super.tearDown()
     }
@@ -41,16 +43,17 @@ final class KeyChangeUXTests: XCTestCase {
         try! ctx.save()
     }
 
-    func testAcknowledgeClearsKeyChanged() {
+    func testAcknowledgeClearsFailed() {
         let id = "14f28d31-1234-4abc-8def-aaaaaaaaaaaa"
         let key = Data(repeating: 0xAB, count: 32)
-        makeUser(id: id, kt: .keyChanged, key: key)
+        makeUser(id: id, kt: .failed, key: key)
 
-        let ok = KeyChangeUX.acknowledgeKeyChange(userId: id, context: container.viewContext)
+        let ok = KeyChangeUX.acknowledgeKeyChange(userId: id)
         XCTAssertTrue(ok)
 
         let fetch = User.fetchRequest()
         fetch.predicate = NSPredicate(format: "id == %@", id)
+        container.viewContext.refreshAllObjects()
         let user = try! container.viewContext.fetch(fetch).first!
         XCTAssertEqual(user.ktStatus, .verified)
         XCTAssertEqual(user.knownIdentityKey, key)
@@ -59,28 +62,15 @@ final class KeyChangeUXTests: XCTestCase {
     func testAcknowledgeNoOpWhenUnverified() {
         let id = "14f28d31-1234-4abc-8def-bbbbbbbbbbbb"
         makeUser(id: id, kt: .unverified, key: nil)
-        XCTAssertFalse(KeyChangeUX.acknowledgeKeyChange(userId: id, context: container.viewContext))
-    }
-
-    func testSafetyDeviceIdFromKnownKey() {
-        let id = "14f28d31-1234-4abc-8def-cccccccccccc"
-        // 32-byte identity key — deriveDeviceId is deterministic SHA256 prefix.
-        let key = Data(repeating: 0x11, count: 32)
-        makeUser(id: id, kt: .verified, key: key)
-        let fetch = User.fetchRequest()
-        fetch.predicate = NSPredicate(format: "id == %@", id)
-        let user = try! container.viewContext.fetch(fetch).first!
-        let deviceId = KeyChangeUX.safetyDeviceId(for: user)
-        XCTAssertNotNil(deviceId)
-        XCTAssertEqual(deviceId?.count, 32)
-        XCTAssertEqual(deviceId, deriveDeviceId(identityPublicKey: [UInt8](key)))
+        XCTAssertFalse(KeyChangeUX.acknowledgeKeyChange(userId: id))
     }
 
     func testGlobalNoticeSuppressedWhenChatActive() {
         let id = "14f28d31-1234-4abc-8def-dddddddddddd"
         KeyChangeUX.setActiveChatContact(id)
         // Should not crash / not clear active contact
-        KeyChangeUX.notifyKeyChange(userId: id, displayName: "Alice")
+        makeUser(id: id, kt: .verified, key: nil)
+        XCTAssertTrue(KeyChangeUX.raise(.addressChanged, userId: id))
         XCTAssertEqual(KeyChangeUX.activeChatContactId, id)
     }
 }

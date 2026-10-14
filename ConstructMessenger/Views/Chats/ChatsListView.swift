@@ -9,80 +9,100 @@ import Combine
 import CoreData
 
 struct ChatsListView: View {
-    private enum Layout {
-        static let topScrimUnderSafeArea: CGFloat = CTLayout.navBarHeight + 24
-    }
-
     @Environment(\.managedObjectContext) private var viewContext
     @Environment(AuthViewModel.self) private var authViewModel
+    /// Compact pushes a chat over the list; regular (the iPad) shows the list and the chat side
+    /// by side — the system's split view, not a shell of our own (wave 5.5c, owner 2026-10-08).
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
-    @FetchRequest
-    private var chats: FetchedResults<Chat>
+    /// The list's rows — values from `ChatStore`, in place of `@FetchRequest<Chat>` (chats C).
+    private var chats: [ChatRecord] { ChatsLive.shared.chats() }
 
     @Environment(ChatsViewModel.self) private var chatsViewModel
+    @Environment(AccountRecoveryViewModel.self) private var recoveryViewModel
+    @State private var showingRecoveryBackup = false
     @State private var showingQRScanner = false
     @State private var showingMyQR = false
     @State private var navigationPath = NavigationPath()
+    /// The chat in the split view's detail, at regular width.
+    @State private var selectedChatId: String?
     @State private var showingDrafts = false
     @State private var searchQuery = ""
 
-    init() {
-        let fetchRequest: NSFetchRequest<Chat> = Chat.fetchRequest()
-        fetchRequest.sortDescriptors = [
-            NSSortDescriptor(keyPath: \Chat.isPinned, ascending: false),
-            NSSortDescriptor(keyPath: \Chat.lastMessageTime, ascending: false)
-        ]
-        _chats = FetchRequest<Chat>(fetchRequest: fetchRequest, animation: .default)
-    }
-
     var body: some View {
-        let renderedChats = filteredChats
-        NavigationStack(path: $navigationPath) {
-            ZStack {
-                // Main list content - full height so it can scroll under floating capsules
-                chatList(chats: renderedChats)
-
-                GeometryReader { geo in
-                    Rectangle()
-                        .fill(
-                            LinearGradient(
-                                stops: [
-                                    .init(color: Color.CT.bg, location: 0),
-                                    .init(color: Color.CT.bg.opacity(0.65), location: 0.55),
-                                    .init(color: Color.CT.bg.opacity(0), location: 1)
-                                ],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            )
-                        )
-                        .frame(height: geo.safeAreaInsets.top + Layout.topScrimUnderSafeArea)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                        .ignoresSafeArea(edges: .top)
-                }
-                .allowsHitTesting(false)
-
-                // Top floating area: nav + independent search capsule
-                VStack(spacing: 0) {
-                    navBar
-                    searchBar
-                        .padding(.horizontal, CTLayout.edgePad)
-                        .padding(.top, 4)
-                    Spacer(minLength: 0)
-                }
-                .frame(maxHeight: .infinity, alignment: .top)
+        if horizontalSizeClass == .regular {
+            NavigationSplitView {
+                listColumn
+            } detail: {
+                chatDetail
             }
-            .ctBackground()
-            .hideSystemNavBar()
-            .navigationDestination(for: String.self) { chatId in
-                    if let chat = chats.first(where: { $0.id == chatId }) {
-                        ChatView(chat: chat, context: viewContext)
-                            // Messenger convention: the bottom tab bar yields to the
-                            // message input bar while inside a conversation.
-                            .toolbar(.hidden, for: .tabBar)
+            .navigationSplitViewStyle(.balanced)
+        } else {
+            NavigationStack(path: $navigationPath) {
+                listColumn
+                    .navigationDestination(for: String.self) { chatId in
+                        if let conversation = ChatsLive.shared.conversation(chatId) {
+                            // Messenger convention: the bottom tab bar yields to the message
+                            // input bar while inside a conversation — `ChatView` hides it.
+                            ChatView(conversation: conversation, context: viewContext)
+                        }
                     }
             }
+        }
+    }
+
+    /// The open chat beside the list. A stack of its own so the chat's bar has somewhere to be,
+    /// one per chat so switching chats starts fresh.
+    @ViewBuilder
+    private var chatDetail: some View {
+        if let chatId = selectedChatId, let conversation = ChatsLive.shared.conversation(chatId) {
+            NavigationStack {
+                ChatView(conversation: conversation, context: viewContext)
+            }
+            .id(conversation.chatId)
+        } else {
+            ContentUnavailableView(
+                String(localized: "select_chat"),
+                systemImage: "message",
+                description: Text("select_chat_description")
+            )
+            .ctBackground()
+        }
+    }
+
+    /// Opens a chat: pushed over the list on the phone, beside it on the iPad.
+    private func open(_ chatId: String) {
+        if horizontalSizeClass == .regular {
+            selectedChatId = chatId
+        } else {
+            navigationPath.append(chatId)
+        }
+    }
+
+    private var listColumn: some View {
+        let renderedChats = filteredChats
+        return chatList(chats: renderedChats)
+            .ctBackground()
+            .navigationTitle(NSLocalizedString("chats", comment: ""))
+            .inlineNavTitle()
+            .connectionSubtitle()
+            .searchable(text: $searchQuery, prompt: Text(LocalizedStringKey("search_prompt")))
+            .toolbar {
+                ToolbarItem(placement: .primaryAction) {
+                    Button { showingQRScanner = true } label: {
+                        Label(NSLocalizedString("scan_qr_code", comment: ""), systemImage: "qrcode.viewfinder")
+                    }
+                    .barItem()
+                    .accessibilityIdentifier(A11y.Chats.scanQR)
+                }
+            }
             .sheet(isPresented: $showingQRScanner) {
-                    QRScannerView { contactURL in handleScannedContact(contactURL) }
+                    RecoveryGated { QRScannerView { contactURL in handleScannedContact(contactURL) } }
+            }
+            .sheet(isPresented: $showingRecoveryBackup, onDismiss: {
+                recoveryViewModel.refreshBackupPending()
+            }) {
+                RecoverySetupView().sheetNavigation(closes: false)
             }
             .sheet(isPresented: $showingMyQR) {
                 ContactQRCodeView(
@@ -93,6 +113,7 @@ struct ChatsListView: View {
                 )
             }
             .onAppear {
+                    recoveryViewModel.refreshBackupPending()
                     chatsViewModel.setContext(viewContext)
                     LocalNotificationManager.shared.clearBadge()
                     reconcileStalePreviews(from: nil)
@@ -103,93 +124,55 @@ struct ChatsListView: View {
                         chatsViewModel.chatToOpen = nil
                         Task { @MainActor in
                             try? await Task.sleep(nanoseconds: 100_000_000)
-                            navigationPath.append(chatId)
+                            open(chatId)
                         }
                     }
             }
             .onReceive(NotificationCenter.default.publisher(for: .deleteChat)) { note in
-                    guard let chatId = note.object as? String,
-                          let chat = chats.first(where: { $0.id == chatId }) else { return }
-                    Task { await chatsViewModel.deleteChatWithEndSession(chat: chat) }
+                    guard let chatId = note.object as? String else { return }
+                    if selectedChatId == chatId { selectedChatId = nil }
+                    Task { await chatsViewModel.deleteChatForgettingSessions(chatId: chatId) }
             }
-            // Total-unread badge only. Do NOT force-invalidate the List here (no
-            // `.id(revision)`): the `@FetchRequest(animation: .default)` already drives
-            // row inserts/deletes/reordering, and each `ChatRowView` observes its own
-            // `chat`/`user`. Swapping the List's identity mid-animation raced the
-            // coalesced UICollectionView batch update → "invalid number of items"
-            // crash (device log 2026-07-19, during END_SESSION re-init + openOrCreateChat).
-            .onReceive(NotificationCenter.default.publisher(for: .NSManagedObjectContextDidSave)) { note in
+            // Do NOT force-invalidate the List (no `.id(revision)`): the rows' ids drive inserts,
+            // deletes and reordering. Swapping the List's identity mid-animation raced the
+            // coalesced UICollectionView batch update → "invalid number of items" crash (device
+            // log 2026-07-19, during END_SESSION re-init + openOrCreateChat).
+            .onChange(of: ChatsLive.shared.revision) { _, _ in updateTotalUnreadCount() }
+            // On the main queue: repositories save on their own background contexts, and this
+            // touches the view context.
+            .onReceive(NotificationCenter.default.publisher(for: .NSManagedObjectContextDidSave).receive(on: DispatchQueue.main)) { note in
                     guard notificationContainsChatChanges(note) else { return }
-                    // After a message write, denormalized previews can lag (missed applyPreview
-                    // or observation gap). Touch only chats present in the save.
+                    // After a message write, denormalized previews can lag (missed writer or a
+                    // frozen stamp). Touch only chats present in the save.
                     reconcileStalePreviews(from: note)
-                    updateTotalUnreadCount()
             }
-            .onReceive(NotificationCenter.default.publisher(for: .NSManagedObjectContextObjectsDidChange)) { note in
-                    guard notificationContainsChatChanges(note) else { return }
-                    updateTotalUnreadCount()
-            }
-        }
-    }
-
-    // MARK: - Search Bar
-
-    private var searchBar: some View {
-        CTSearchBar(text: $searchQuery)
-            .accessibilityIdentifier(A11y.Chats.search)
-    }
-
-    // MARK: - Nav Bar
-
-    private var navBar: some View {
-        HStack(spacing: CTLayout.chromeGap) {
-            // Center the 8pt status dot on the same vertical axis as medium
-            // chat-row avatars (40pt), so the header chrome lines up with the list.
-            ConnectionStatusIndicator()
-                .frame(width: CTHexAvatar.AvatarSize.medium.rawValue, alignment: .center)
-            Spacer()
-            Button { showingQRScanner = true } label: {
-                Image(systemName: "qrcode.viewfinder")
-                    .font(.system(size: CTLayout.navIconSize, weight: .medium))
-                    .foregroundColor(Color.CT.accent)
-                    .frame(width: CTLayout.hitTarget, height: CTLayout.hitTarget)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier(A11y.Chats.scanQR)
-            .accessibilityLabel(NSLocalizedString("scan_qr_code", comment: ""))
-        }
-        .padding(.horizontal, CTLayout.edgePad)
-        .frame(height: CTLayout.navBarHeight)
     }
 
     // MARK: - Chat List
 
-    private var filteredChats: [Chat] {
-        // Dedupe by `id` before the `ForEach`: `@FetchRequest(animation:)` can transiently
-        // surface the same Chat twice while a background-context merge (push-driven chat
-        // insert) races the animated list update. A `ForEach` over a duplicate Identifiable
-        // id trips UICollectionView's "invalid number of items" diff assertion → hard crash.
-        let all = Self.dedupedByID(Array(chats))
+    /// Ids are unique in the store, so the `ForEach` needs no dedupe: the `@FetchRequest` this
+    /// replaced could surface one chat twice while a merge raced the animated update.
+    private var filteredChats: [ChatRecord] {
         let query = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !query.isEmpty else { return all }
-        return all.filter { chatMatchesQuery($0, query: query) }
+        guard !query.isEmpty else { return chats }
+        return chats.filter { ChatsLive.matches($0, query: query) }
     }
 
-    /// Order-preserving dedupe of chats by `id` — the crash guard for the List diff assertion.
-    private static func dedupedByID(_ items: [Chat]) -> [Chat] {
-        var seen = Set<String>()
-        return items.filter { seen.insert($0.id).inserted }
+    private func isOpenBeside(_ chat: ChatRecord) -> Bool {
+        horizontalSizeClass == .regular && selectedChatId == chat.id
     }
 
-    private func chatList(chats renderedChats: [Chat]) -> some View {
+    private func chatList(chats renderedChats: [ChatRecord]) -> some View {
         List {
-            // Spacer row at top so first chats are visible below the floating search capsule,
-            // and content can scroll under the glass.
-            Color.clear
-                .frame(height: CTLayout.navBarHeight + CTLayout.controlHeight + 12)
+            if recoveryViewModel.reminder != .none {
+                RecoveryReminderRow(
+                    reminder: recoveryViewModel.reminder,
+                    onOpen: { showingRecoveryBackup = true },
+                    onDismiss: { recoveryViewModel.snoozeReminder() }
+                )
                 .listRowBackground(Color.clear)
                 .listRowSeparator(.hidden)
+            }
 
             if renderedChats.isEmpty {
                 streamsEmptyState
@@ -198,18 +181,24 @@ struct ChatsListView: View {
             } else {
                 ForEach(renderedChats) { chat in
                     Button {
-                        navigationPath.append(chat.id)
+                        open(chat.id)
                     } label: {
                         ChatRowView(chat: chat)
                     }
                     .buttonStyle(.plain)
                     .accessibilityIdentifier(A11y.Chats.row(chat.id))
-                    // Clear so the CTMatrixBackground watermark shows through the rows.
-                    .listRowBackground(Color.clear)
+                    .accessibilityAddTraits(isOpenBeside(chat) ? .isSelected : [])
+                    // Clear so the CTMatrixBackground watermark shows through the rows; the chat
+                    // open beside the list (iPad) is marked as the selection.
+                    .listRowBackground(isOpenBeside(chat) ? Color.CT.bgMsg : Color.clear)
                     .listRowSeparatorTint(Color.CT.noise)
+                    // The first row's top hairline sat under a spacer row while the list scrolled
+                    // under a floating header; with the system bar it would be the bar's edge.
+                    .listRowSeparator(chat.id == renderedChats.first?.id ? .hidden : .automatic, edges: .top)
                     .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                         Button(role: .destructive) {
-                            Task { await chatsViewModel.deleteChatWithEndSession(chat: chat) }
+                            if selectedChatId == chat.id { selectedChatId = nil }
+                            Task { await chatsViewModel.deleteChatForgettingSessions(chatId: chat.id) }
                         } label: {
                             Label(LocalizedStringKey("delete"), systemImage: "trash")
                         }
@@ -266,100 +255,57 @@ struct ChatsListView: View {
 
     /// Empty streams list — points users to invite paths (QR / Synaps).
     private var streamsEmptyState: some View {
-        VStack(spacing: CTLayout.sectionGap) {
-            Image(systemName: "bubble.left.and.bubble.right")
-                .font(.system(size: 32, weight: .light))
-                .foregroundStyle(Color.CT.textDim)
-                .padding(.bottom, 4)
-
-            Text(LocalizedStringKey("chats_empty_title"))
-                .font(CTFont.bold(16))
-                .foregroundStyle(Color.CT.text)
-                .multilineTextAlignment(.center)
-
+        ContentUnavailableView {
+            Label {
+                Text(LocalizedStringKey("chats_empty_title"))
+                    .font(CTFont.headline)
+            } icon: {
+                Image(systemName: "bubble.left.and.bubble.right")
+            }
+        } description: {
             Text(LocalizedStringKey("chats_empty_subtitle"))
-                .font(CTFont.regular(13))
-                .foregroundStyle(Color.CT.textDim)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, CTLayout.sectionGap)
-
-            VStack(spacing: CTLayout.chromeGap) {
-                emptyActionButton(
-                    titleKey: "chats_empty_scan_qr",
-                    systemImage: "qrcode.viewfinder"
-                ) {
-                    showingQRScanner = true
-                }
-                .accessibilityIdentifier(A11y.Chats.emptyScanQR)
-                emptyActionButton(
-                    titleKey: "chats_empty_show_qr",
-                    systemImage: "qrcode"
-                ) {
-                    showingMyQR = true
-                }
-                .accessibilityIdentifier(A11y.Chats.emptyShowQR)
-                emptyActionButton(
-                    titleKey: "chats_empty_open_synaps",
-                    systemImage: "circle.grid.cross"
-                ) {
-                    NotificationCenter.default.post(name: .openSynapsTab, object: nil)
-                }
-                .accessibilityIdentifier(A11y.Chats.emptyOpenSynaps)
+                .font(CTFont.body)
+        } actions: {
+            Button {
+                showingQRScanner = true
+            } label: {
+                Label(LocalizedStringKey("chats_empty_scan_qr"), systemImage: "qrcode.viewfinder")
             }
-            .padding(.top, CTLayout.inlinePad)
-            .frame(maxWidth: 320)
+            .buttonStyle(.borderedProminent)
+            .accessibilityIdentifier(A11y.Chats.emptyScanQR)
+            Button {
+                showingMyQR = true
+            } label: {
+                Label(LocalizedStringKey("chats_empty_show_qr"), systemImage: "qrcode")
+            }
+            .accessibilityIdentifier(A11y.Chats.emptyShowQR)
+            Button {
+                NotificationCenter.default.post(name: .openSynapsTab, object: nil)
+            } label: {
+                Label(LocalizedStringKey("chats_empty_open_synaps"), systemImage: "circle.grid.cross")
+            }
+            .accessibilityIdentifier(A11y.Chats.emptyOpenSynaps)
         }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 48)
-        .padding(.horizontal, CTLayout.edgePad)
+        .font(CTFont.body)
         .accessibilityIdentifier(A11y.Chats.empty)
-    }
-
-    private func emptyActionButton(
-        titleKey: String,
-        systemImage: String,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            HStack(spacing: CTLayout.chromeGap) {
-                Image(systemName: systemImage)
-                    .font(.system(size: CTLayout.navIconSize, weight: .medium))
-                Text(NSLocalizedString(titleKey, comment: "").uppercased())
-                    .font(CTFont.bold(12))
-                    .tracking(1)
-                Spacer(minLength: 0)
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(Color.CT.textDim)
-            }
-            .foregroundStyle(Color.CT.accent)
-            .padding(.horizontal, CTLayout.edgePad)
-            .frame(minHeight: CTLayout.controlHeight)
-            .background(Color.CT.bgMsg)
-            .clipShape(CTShape.card())
-            .overlay(CTShape.card().stroke(Color.CT.noise, lineWidth: 0.5))
-        }
-        .buttonStyle(.plain)
     }
 
     // MARK: - Actions
 
-    private func togglePin(_ chat: Chat) {
-        chat.isPinned.toggle()
-        try? viewContext.save()
+    private func togglePin(_ chat: ChatRecord) {
+        _ = try? LocalRepositories.chats.setPinned(chat.id, !chat.isPinned)
     }
 
-    private func toggleMarkUnread(_ chat: Chat) {
-        chat.unreadCount = chat.unreadCount > 0 ? 0 : 1
-        try? viewContext.save()
+    private func toggleMarkUnread(_ chat: ChatRecord) {
+        _ = try? LocalRepositories.chats.setUnread(chat.id, chat.unreadCount > 0 ? 0 : 1)
     }
 
     private func updateTotalUnreadCount() {
-        chatsViewModel.totalUnreadCount = chats.reduce(0) { $0 + Int($1.unreadCount) }
+        chatsViewModel.totalUnreadCount = ChatsLive.shared.totalUnread
     }
 
     /// Re-align denormalized list previews with each chat's newest transcript message.
-    /// No-op when already in sync; saves once if any row was repaired.
+    /// No-op when already in sync; a repair is written through `ChatStore`.
     /// - Parameter note: when non-nil, only chats touched by that save are scanned.
     private func reconcileStalePreviews(from note: Notification?) {
         let targets: [Chat]
@@ -367,32 +313,36 @@ struct ChatsListView: View {
             targets = chatsTouchedBySave(note)
             guard !targets.isEmpty else { return }
         } else {
-            targets = Array(chats)
+            let request = Chat.fetchRequest()
+            request.predicate = NSPredicate(format: "id IN %@", chats.map(\.id))
+            targets = (try? viewContext.fetch(request)) ?? []
         }
-        var changed = false
         for chat in targets {
-            if chat.reconcilePreviewFromTranscript(in: viewContext) {
-                changed = true
-            }
-        }
-        if changed {
-            viewContext.saveAndLog()
+            chat.reconcilePreviewFromTranscript()
         }
     }
 
+    /// The saving context may be another queue's, so only object ids are read from the note —
+    /// they cross threads — and each is resolved in the view context.
     private func chatsTouchedBySave(_ note: Notification) -> [Chat] {
-        var ids = Set<NSManagedObjectID>()
-        for key in [NSInsertedObjectsKey, NSUpdatedObjectsKey, NSDeletedObjectsKey] {
+        var chatIds = Set<NSManagedObjectID>()
+        var messageIds = Set<NSManagedObjectID>()
+        for key in [NSInsertedObjectsKey, NSUpdatedObjectsKey] {
             guard let objects = note.userInfo?[key] as? Set<NSManagedObject> else { continue }
             for obj in objects {
-                if let msg = obj as? Message, let chat = msg.chat {
-                    ids.insert(chat.objectID)
-                } else if obj is Chat {
-                    ids.insert(obj.objectID)
+                switch obj.objectID.entity.name {
+                case "Message": messageIds.insert(obj.objectID)
+                case "Chat":    chatIds.insert(obj.objectID)
+                default:        break
                 }
             }
         }
-        return ids.compactMap { try? viewContext.existingObject(with: $0) as? Chat }
+        for id in messageIds {
+            if let chat = (try? viewContext.existingObject(with: id) as? Message)?.chat {
+                chatIds.insert(chat.objectID)
+            }
+        }
+        return chatIds.compactMap { try? viewContext.existingObject(with: $0) as? Chat }
     }
 
     private func notificationContainsChatChanges(_ note: Notification) -> Bool {
@@ -400,7 +350,7 @@ struct ChatsListView: View {
         for key in keys {
             guard let objects = note.userInfo?[key] as? Set<NSManagedObject> else { continue }
             if objects.contains(where: { entity in
-                let name = entity.entity.name
+                let name = entity.objectID.entity.name
                 return name == "Chat" || name == "Message"
             }) {
                 return true
@@ -409,27 +359,18 @@ struct ChatsListView: View {
         return false
     }
 
-    private func chatMatchesQuery(_ chat: Chat, query: String) -> Bool {
-        let name = chat.otherUser?.resolvedDisplayName ?? ""
-        let username = chat.otherUser?.username ?? ""
-        let preview = chat.lastMessageText ?? ""
-        return name.localizedCaseInsensitiveContains(query)
-            || username.localizedCaseInsensitiveContains(query)
-            || preview.localizedCaseInsensitiveContains(query)
-    }
-
     // MARK: - QR Code Handling
 
     private func handleScannedContact(_ urlString: String) {
         Log.info("ChatsListView: Handling scanned URL: \(urlString)", category: "ChatsListView")
         // A voucher scanned here is a voucher, not a malformed contact code.
-        if let message = VeilVoucherRedemption.messageIfVoucher(urlString) {
+        if let outcome = VeilVoucherRedemption.messageIfVoucher(urlString) {
             showingQRScanner = false
-            showErrorAfterDismiss(message)
+            showErrorAfterDismiss(outcome)
             return
         }
         guard let url = URL(string: urlString) else {
-            showErrorAfterDismiss(NSLocalizedString("invalid_qr_code_construct", comment: ""))
+            showErrorAfterDismiss(.said(UserText("invalid_qr_code_construct")))
             return
         }
         Task {
@@ -441,7 +382,7 @@ struct ChatsListView: View {
                 }
             } catch {
                 await MainActor.run {
-                    showErrorAfterDismiss(error.localizedDescription)
+                    showErrorAfterDismiss(AppError.from(error))
                     showingQRScanner = false
                 }
             }
@@ -450,21 +391,12 @@ struct ChatsListView: View {
 
     private func addContact(contactInfo: ContactInfo) {
         let userId = contactInfo.userId
-        let username = contactInfo.username
         if userId == AuthSessionManager.shared.currentUserId {
             showingDrafts = true
             return
         }
-        let publicUserInfo = PublicUserInfo(
-            id: userId,
-            username: username,
-            avatarUrl: nil,
-            bio: nil,
-            deviceId: contactInfo.deviceId
-        )
         if let chat = chatsViewModel.startChat(
-            with: publicUserInfo,
-            identityPublicKey: contactInfo.identityPublicKey
+            redeeming: contactInfo
         ) {
             // Open the new/existing chat so scan feels like a completed action.
             chatsViewModel.chatToOpen = chat.id
@@ -472,14 +404,16 @@ struct ChatsListView: View {
         }
     }
 
-    private func showErrorAfterDismiss(_ message: String) {
+    private func showErrorAfterDismiss(_ error: AppError) {
         showingQRScanner = false
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
-            ErrorRouter.shared.report(.unknown(message))
+            ErrorRouter.shared.report(error)
         }
     }
 }
 
+// DEBUG only: the preview seeds `ChatsLive.useForPreview`, which a release build does not have.
+#if DEBUG
 #Preview {
     let container = PreviewHelpers.createPreviewContainer()
     let context = container.viewContext
@@ -490,11 +424,14 @@ struct ChatsListView: View {
     _ = PreviewHelpers.createSampleChat(context: context, with: user2, unread: 33)
     _ = PreviewHelpers.createSampleChat(context: context, with: user3, unread: 1)
     try? context.save()
+    ChatsLive.useForPreview(container)
+    ContactsLive.useForPreview(container)
     let chatsViewModel = ChatsViewModel()
     chatsViewModel.setContext(context)
     return ChatsListView()
         .environment(\.managedObjectContext, context)
         .environment(chatsViewModel)
 }
+#endif
 
 #endif

@@ -26,20 +26,38 @@ enum StreamEvent: Sendable {
 
 // MARK: - Stream Cursor Persistence
 
-/// Persists the last Redis stream cursor so reconnects resume from the correct position.
+/// The last Redis stream cursor the app committed. Reconnects resume from it, and so does the
+/// notification extension's one fetch (construct-docs todo 124).
+///
+/// It lives in the Keychain since 2026-10-11, because the extension has to read it and
+/// `UserDefaults` is the app's alone. An App Group would share them, and was declined
+/// (`decisions/notification-extension-reads-only.md`). Only the app writes it.
+/// `AfterFirstUnlock`, like the crypto state: a push-woken fetch on a locked phone resumes from it.
 enum StreamCursorStore {
-    private static let key = "construct.stream.cursor"
+    /// The Keychain account, spelled where the extension reads it too.
+    static let keychainAccount = KeychainSessionAccounts.streamCursor
+    /// Where it lived until 2026-10-11, moved on first read.
+    static let legacyDefaultsKey = "construct.stream.cursor"
 
     static func save(_ cursor: String) {
-        UserDefaults.standard.set(cursor, forKey: key)
+        _ = KeychainManager.shared.saveData(
+            Data(cursor.utf8), forKey: keychainAccount, accessible: KeychainManager.cryptoKeyAccessible
+        )
     }
 
     static func load() -> String? {
-        UserDefaults.standard.string(forKey: key)
+        if let data = KeychainManager.shared.loadData(forKey: keychainAccount) {
+            return String(decoding: data, as: UTF8.self)
+        }
+        guard let legacy = UserDefaults.standard.string(forKey: legacyDefaultsKey) else { return nil }
+        save(legacy)
+        UserDefaults.standard.removeObject(forKey: legacyDefaultsKey)
+        return legacy
     }
 
     static func clear() {
-        UserDefaults.standard.removeObject(forKey: key)
+        KeychainManager.shared.deleteData(forKey: keychainAccount)
+        UserDefaults.standard.removeObject(forKey: legacyDefaultsKey)
     }
 }
 @MainActor
@@ -178,6 +196,9 @@ final class MessageStreamManager {
     var onDeliveryReceipt: (([String]) -> Void)?
     /// Called when server sends KEY_SYNC (contentType=22) — triggers X3DH re-init for userId.
     var onKeySyncReceived: ((String) -> Void)?
+    /// Called on the main actor each time a stream is accepted (first connect and every
+    /// reconnect) — the moment the core is told `NetworkReconnected`.
+    var onStreamConnected: (() -> Void)?
 
     // MARK: - Private State
 

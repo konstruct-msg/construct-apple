@@ -86,18 +86,18 @@ struct PinLockView: View {
     private var biometricContent: some View {
         VStack(spacing: 20) {
             Image(systemName: securityViewModel.biometricIconName)
-                .font(.system(size: 64))
+                .font(CTIcon.font(CTIcon.hero, weight: .regular))
                 .foregroundStyle(Color.CT.accent)
 
             Text(String(format: NSLocalizedString("use_biometric", comment: ""),
                         securityViewModel.biometricDisplayName))
-                .font(CTFont.medium(16))
+                .font(CTFont.ui(16, weight: .medium))
                 .foregroundStyle(Color.CT.textDim)
 
             if let errorMessage {
                 Text(errorMessage)
                     .foregroundStyle(Color.CT.danger)
-                    .font(CTFont.regular(13))
+                    .font(CTFont.body)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 32)
             }
@@ -105,7 +105,7 @@ struct PinLockView: View {
             Button(NSLocalizedString("use_pin_code", comment: "")) {
                 withAnimation { showPinEntry = true; errorMessage = nil }
             }
-            .font(CTFont.regular(14))
+            .font(CTFont.ui(14))
             .foregroundStyle(Color.CT.accent)
             .padding(.top, 8)
         }
@@ -121,7 +121,7 @@ struct PinLockView: View {
 
             Text(errorMessage ?? " ")
                 .foregroundStyle(Color.CT.danger)
-                .font(CTFont.regular(13))
+                .font(CTFont.body)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 32)
                 .frame(height: 18)
@@ -136,18 +136,18 @@ struct PinLockView: View {
         if let secs = resetCountdown {
             VStack(spacing: 10) {
                 Text(String(format: NSLocalizedString("pin_reset_countdown", comment: ""), secs))
-                    .font(CTFont.medium(14))
+                    .font(CTFont.ui(14, weight: .medium))
                     .foregroundStyle(Color.CT.danger)
                     .contentTransition(.numericText())
                 Button(NSLocalizedString("cancel", comment: "")) { cancelResetTimer() }
-                    .font(CTFont.regular(13))
+                    .font(CTFont.body)
                     .foregroundStyle(Color.CT.accent)
             }
             .transition(.opacity)
         } else {
             Button { showResetConfirm = true } label: {
                 Text(NSLocalizedString("cant_unlock", comment: ""))
-                    .font(CTFont.regular(13))
+                    .font(CTFont.body)
                     .foregroundStyle(Color.CT.textDim)
                     .underline()
             }
@@ -211,7 +211,7 @@ struct PinLockView: View {
                     authenticateWithBiometrics()
                 } label: {
                     Image(systemName: securityViewModel.biometricIconName)
-                        .font(.system(size: 26))
+                        .font(CTIcon.font(CTIcon.control, weight: .regular))
                         .foregroundStyle(Color.CT.accent)
                         .frame(width: keySize, height: keySize)
                 }
@@ -225,7 +225,7 @@ struct PinLockView: View {
                 if !pin.isEmpty { pin.removeLast() }
             } label: {
                 Image(systemName: "delete.left")
-                    .font(.system(size: 24))
+                    .font(CTIcon.font(CTIcon.control, weight: .regular))
                     .foregroundStyle(pin.isEmpty ? Color.CT.textDim.opacity(0.4) : Color.CT.text)
                     .frame(width: keySize, height: keySize)
             }
@@ -234,7 +234,7 @@ struct PinLockView: View {
         default:
             Button { numpadTap(key) } label: {
                 Text(key)
-                    .font(CTFont.regular(30))
+                    .font(CTFont.ui(30))
                     .foregroundStyle(Color.CT.text)
                     .frame(width: keySize, height: keySize)
             }

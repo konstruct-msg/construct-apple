@@ -62,21 +62,21 @@ struct DesktopAddContactView: View {
             // ── Toolbar ──
             HStack {
                 Text(NSLocalizedString("add_contact_menu", comment: ""))
-                    .font(.system(.headline, design: .monospaced))
-                    .foregroundStyle(DesktopTheme.textPrimary)
+                    .font(CTFont.headline)
+                    .foregroundStyle(Color.CT.text)
                 Spacer()
                 Button { dismiss() } label: {
                     Image(systemName: "xmark.circle")
                         .font(.title3)
-                        .foregroundStyle(DesktopTheme.textSecondary)
+                        .foregroundStyle(Color.CT.textDim)
                 }
                 .buttonStyle(.plain)
             }
             .padding(.horizontal, 20)
             .padding(.vertical, 14)
-            .background(DesktopTheme.backgroundPanel)
+            .background(Color.CT.bg)
 
-            Divider().overlay(DesktopTheme.separator)
+            Divider().overlay(Color.CT.noise)
 
             // ── Mode Picker ──
             HStack(spacing: 0) {
@@ -85,9 +85,9 @@ struct DesktopAddContactView: View {
                 }
             }
             .padding(10)
-            .background(DesktopTheme.backgroundPanel)
+            .background(Color.CT.bg)
 
-            Divider().overlay(DesktopTheme.separator)
+            Divider().overlay(Color.CT.noise)
 
             // ── Content ──
             Group {
@@ -103,16 +103,16 @@ struct DesktopAddContactView: View {
             // ── Result banner ──
             if let msg = resultMessage {
                 Text(msg)
-                    .font(.system(.caption, design: .monospaced))
+                    .font(CTFont.caption)
                     .foregroundStyle(resultFailed ? Color.CT.danger : Color.CT.accent)
                     .padding(.vertical, 8)
                     .frame(maxWidth: .infinity)
-                    .background(DesktopTheme.backgroundPanel)
+                    .background(Color.CT.bg)
             }
         }
         .frame(width: 460)
         .frame(minHeight: 500)
-        .background(DesktopTheme.backgroundPrimary.ignoresSafeArea())
+        .background(Color.CT.bg.ignoresSafeArea())
     }
 
     // MARK: - Mode Pill
@@ -123,22 +123,22 @@ struct DesktopAddContactView: View {
         } label: {
             VStack(spacing: 4) {
                 Image(systemName: m.icon)
-                    .font(.system(size: 16, weight: mode == m ? .semibold : .regular))
+                    .font(CTFont.ui(16, weight: mode == m ? .semibold : .regular))
                 Text(LocalizedStringKey(m.titleKey))
-                    .font(.system(size: 10, design: .monospaced))
+                    .font(CTFont.ui(10))
                     .lineLimit(1)
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 8)
             .background(
                 CTShape.card()
-                    .fill(mode == m ? DesktopTheme.accent.opacity(0.15) : Color.clear)
+                    .fill(mode == m ? Color.CT.accent.opacity(0.15) : Color.clear)
                     .overlay(
                         CTShape.card()
-                            .strokeBorder(mode == m ? DesktopTheme.accent.opacity(0.4) : Color.clear, lineWidth: 1)
+                            .strokeBorder(mode == m ? Color.CT.accent.opacity(0.4) : Color.clear, lineWidth: 1)
                     )
             )
-            .foregroundStyle(mode == m ? DesktopTheme.accent : DesktopTheme.textSecondary)
+            .foregroundStyle(mode == m ? Color.CT.accent : Color.CT.textDim)
         }
         .buttonStyle(.plain)
     }
@@ -207,10 +207,21 @@ private struct MyQRTab: View {
     @State private var timeRemaining: TimeInterval = InviteConfig.ttlSeconds
     @State private var generatedAt: Date? = nil
 
+    /// Links minted by the copy button in this sitting; tap two reads differently from tap one
+    /// only because this number moved (same rule as iOS `ContactQRCodeView`).
+    @State private var copiedCount = 0
+    @State private var lastCopyAt: Date? = nil
+    @State private var copyError: String? = nil
+
     private let generator = InviteGenerator()
     private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
+    /// Nothing is minted until this device knows the account's address — the gate says why.
     var body: some View {
+        RecoveryGated { page }
+    }
+
+    private var page: some View {
         VStack(spacing: 20) {
             if let img = qrImage {
                 Image(nsImage: img)
@@ -226,10 +237,10 @@ private struct MyQRTab: View {
                 VStack(spacing: 8) {
                     Image(systemName: "exclamationmark.triangle")
                         .font(.largeTitle)
-                        .foregroundStyle(DesktopTheme.destructive)
+                        .foregroundStyle(Color.CT.danger)
                     Text(err)
-                        .font(.system(.caption, design: .monospaced))
-                        .foregroundStyle(DesktopTheme.textSecondary)
+                        .font(CTFont.caption)
+                        .foregroundStyle(Color.CT.textDim)
                         .multilineTextAlignment(.center)
                 }
                 .frame(width: 220, height: 220)
@@ -244,21 +255,37 @@ private struct MyQRTab: View {
                     Image(systemName: "clock")
                     Text(String(format: NSLocalizedString("desktop_add_expires_fmt", comment: ""), formatTime(timeRemaining)))
                 }
-                .font(.system(.caption, design: .monospaced))
-                .foregroundStyle(timeRemaining < 60 ? DesktopTheme.destructive : DesktopTheme.textSecondary)
+                .font(CTFont.caption)
+                .foregroundStyle(timeRemaining < 60 ? Color.CT.danger : Color.CT.textDim)
             } else {
                 Button(NSLocalizedString("qr_new_code", comment: "")) { generate() }
                     .buttonStyle(.plain)
-                    .font(CTFont.regular(13))
+                    .font(CTFont.body)
                     .foregroundStyle(Color.CT.accent)
                     .padding(.horizontal, 16)
                     .padding(.vertical, 8)
                     .background(CTShape.card().stroke(Color.CT.accent.opacity(0.6), lineWidth: 1))
             }
 
+            copyLinkButton
+
             Text(NSLocalizedString("desktop_add_show_qr", comment: ""))
-                .font(.system(size: 11, design: .monospaced))
-                .foregroundStyle(DesktopTheme.textTertiary)
+                .font(CTFont.ui(11))
+                .foregroundStyle(Color.CT.textDim.opacity(0.55))
+
+            Text(String(
+                format: NSLocalizedString("invite_share_rule_fmt", comment: ""),
+                InviteConfig.ttlDescription
+            ))
+            .font(CTFont.ui(11))
+            .foregroundStyle(Color.CT.textDim)
+            .multilineTextAlignment(.center)
+
+            if let copyError {
+                Text(copyError)
+                    .font(CTFont.caption)
+                    .foregroundStyle(Color.CT.danger)
+            }
         }
         .padding(24)
         .onAppear { generate() }
@@ -271,6 +298,65 @@ private struct MyQRTab: View {
                Date().timeIntervalSince(at) >= InviteConfig.qrRotateIntervalSeconds {
                 generate()
             }
+        }
+    }
+
+    // MARK: Copy link
+
+    private var copyFeedback: InviteShareDecision.CopyFeedback {
+        InviteShareDecision.feedback(copiedCount: copiedCount)
+    }
+
+    private var copyLabel: String {
+        switch copyFeedback {
+        case .idle:
+            return NSLocalizedString("invite_copy_link", comment: "")
+        case .copied:
+            return NSLocalizedString("share_copied", comment: "")
+        case .copiedAgain(let n):
+            return String(format: NSLocalizedString("invite_copied_nth_fmt", comment: ""), n)
+        }
+    }
+
+    private var copyLinkButton: some View {
+        Button { copyLink() } label: {
+            Label(copyLabel, systemImage: copyFeedback == .idle ? "link" : "checkmark")
+        }
+        .buttonStyle(.bordered)
+        .controlSize(.large)
+    }
+
+    /// Mint a fresh one-time HTTPS invite and put it on the pasteboard. Failure is shown, never
+    /// swallowed: otherwise the button reports "copied" over whatever was there before.
+    /// Not journalled — same reason as the QR above: the journal has no reader on this device.
+    private func copyLink() {
+        guard InviteShareDecision.shouldMint(
+            now: Date(),
+            lastMintAt: lastCopyAt,
+            debounce: SettingsShareLayout.copyDebounce
+        ) else { return }
+
+        guard let userId = authViewModel.currentUserId,
+              let deviceId = KeychainManager.shared.loadDeviceID() else {
+            copyError = NSLocalizedString("invite_create_failed", comment: "")
+            return
+        }
+        do {
+            // HTTPS share: the generator leaves the username out.
+            let minted = try generator.generateDeepLink(
+                userId: userId,
+                deviceId: deviceId,
+                username: nil,
+                server: ServerConfig.inviteHost,
+                useHTTPS: true
+            )
+            PlatformClipboard.copy(minted.artifact)
+            lastCopyAt = Date()
+            copyError = nil
+            withAnimation { copiedCount += 1 }
+        } catch {
+            Log.error("DesktopAddContact: invite generation failed: \(error)", category: "Invite")
+            copyError = NSLocalizedString("invite_create_failed", comment: "")
         }
     }
 
@@ -307,6 +393,7 @@ private struct MyQRTab: View {
             generatedAt = Date()
             timeRemaining = InviteConfig.ttlSeconds
         } catch {
+            Log.error("DesktopAddContact: QR invite generation failed: \(error)", category: "Invite")
             errorMessage = NSLocalizedString("desktop_add_qr_failed", comment: "")
         }
     }
@@ -344,7 +431,6 @@ private struct CameraTab: View {
             } else {
                 ZStack {
                     DesktopCameraPreview(scanner: scanner)
-                        .cornerRadius(0)
 
                     // Corner brackets overlay
                     GeometryReader { geo in
@@ -355,14 +441,14 @@ private struct CameraTab: View {
                             width: side, height: side
                         )
                         ScannerBrackets(rect: rect)
-                            .stroke(DesktopTheme.accent, lineWidth: 2.5)
+                            .stroke(Color.CT.accent, lineWidth: 2.5)
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
                 Text(NSLocalizedString("desktop_add_point_camera", comment: ""))
-                    .font(.system(size: 11, design: .monospaced))
-                    .foregroundStyle(DesktopTheme.textSecondary)
+                    .font(CTFont.ui(11))
+                    .foregroundStyle(Color.CT.textDim)
                     .padding(.vertical, 12)
             }
         }
@@ -380,21 +466,21 @@ private struct CameraTab: View {
     private var permissionDeniedView: some View {
         VStack(spacing: 16) {
             Image(systemName: "camera.fill.badge.ellipsis")
-                .font(.system(size: 48, weight: .light))
-                .foregroundStyle(DesktopTheme.textSecondary)
+                .font(CTFont.ui(48, weight: .light))
+                .foregroundStyle(Color.CT.textDim)
             Text(NSLocalizedString("camera_access_required", comment: ""))
-                .font(.system(.headline, design: .monospaced))
-                .foregroundStyle(DesktopTheme.textPrimary)
+                .font(CTFont.headline)
+                .foregroundStyle(Color.CT.text)
             Text(NSLocalizedString("desktop_add_camera_privacy", comment: ""))
-                .font(.system(size: 11, design: .monospaced))
-                .foregroundStyle(DesktopTheme.textSecondary)
+                .font(CTFont.ui(11))
+                .foregroundStyle(Color.CT.textDim)
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: 280)
             Button(NSLocalizedString("open_settings", comment: "")) {
                 NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Camera")!)
             }
             .buttonStyle(.plain)
-            .font(CTFont.regular(13))
+            .font(CTFont.body)
             .foregroundStyle(Color.CT.bg)
             .padding(.horizontal, 16)
             .padding(.vertical, 8)
@@ -435,11 +521,11 @@ private struct FileTab: View {
             // Drop zone
             ZStack {
                 CTShape.control()
-                    .fill(dropTargeted ? DesktopTheme.accent.opacity(0.08) : DesktopTheme.backgroundPanel)
+                    .fill(dropTargeted ? Color.CT.accent.opacity(0.08) : Color.CT.bg)
                     .overlay(
                         CTShape.control()
                             .strokeBorder(
-                                dropTargeted ? DesktopTheme.accent : DesktopTheme.separator,
+                                dropTargeted ? Color.CT.accent : Color.CT.noise,
                                 style: StrokeStyle(lineWidth: 1.5, dash: [6, 4])
                             )
                     )
@@ -449,14 +535,14 @@ private struct FileTab: View {
                         ProgressView()
                     } else {
                         Image(systemName: "doc.viewfinder")
-                            .font(.system(size: 40, weight: .light))
-                            .foregroundStyle(dropTargeted ? DesktopTheme.accent : DesktopTheme.textSecondary)
+                            .font(CTFont.ui(40, weight: .light))
+                            .foregroundStyle(dropTargeted ? Color.CT.accent : Color.CT.textDim)
                         Text(NSLocalizedString("desktop_add_drop_image", comment: ""))
-                            .font(.system(.body, design: .monospaced))
-                            .foregroundStyle(DesktopTheme.textPrimary)
+                            .font(CTFont.body)
+                            .foregroundStyle(Color.CT.text)
                         Text(NSLocalizedString("desktop_add_drop_types", comment: ""))
-                            .font(.system(size: 11, design: .monospaced))
-                            .foregroundStyle(DesktopTheme.textTertiary)
+                            .font(CTFont.ui(11))
+                            .foregroundStyle(Color.CT.textDim.opacity(0.55))
                     }
                 }
             }
@@ -467,15 +553,15 @@ private struct FileTab: View {
 
             if let err = errorMessage {
                 Text(err)
-                    .font(.system(.caption, design: .monospaced))
-                    .foregroundStyle(DesktopTheme.destructive)
+                    .font(CTFont.caption)
+                    .foregroundStyle(Color.CT.danger)
             }
 
             Button {
                 openFilePicker()
             } label: {
                 Label(NSLocalizedString("desktop_add_choose_file", comment: ""), systemImage: "folder")
-                    .font(CTFont.regular(13))
+                    .font(CTFont.body)
                     .foregroundStyle(Color.CT.accent)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 10)
@@ -572,14 +658,14 @@ private struct PasteTab: View {
         VStack(alignment: .leading, spacing: 16) {
             VStack(alignment: .leading, spacing: 6) {
                 Text(NSLocalizedString("desktop_add_invite_link", comment: ""))
-                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                    .foregroundStyle(DesktopTheme.textTertiary)
+                    .font(CTFont.ui(10, weight: .semibold))
+                    .foregroundStyle(Color.CT.textDim.opacity(0.55))
                     .tracking(1.5)
 
                 TextField(NSLocalizedString("desktop_add_invite_placeholder", comment: ""), text: $text)
                     .textFieldStyle(.plain)
-                    .font(.system(.body, design: .monospaced))
-                    .foregroundStyle(DesktopTheme.textPrimary)
+                    .font(CTFont.body)
+                    .foregroundStyle(Color.CT.text)
                     .focused($focused)
                     .ctInputChrome(
                         .standard,
@@ -593,7 +679,7 @@ private struct PasteTab: View {
                     if let str = NSPasteboard.general.string(forType: .string) { text = str }
                 } label: {
                     Label(NSLocalizedString("desktop_add_paste_clipboard", comment: ""), systemImage: "doc.on.clipboard")
-                        .font(CTFont.regular(13))
+                        .font(CTFont.body)
                         .foregroundStyle(Color.CT.textDim)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 8)
@@ -605,7 +691,7 @@ private struct PasteTab: View {
 
                 Button(NSLocalizedString("add_contact_menu", comment: "")) { submit() }
                     .buttonStyle(.plain)
-                    .font(CTFont.regular(13))
+                    .font(CTFont.body)
                     .foregroundStyle(Color.CT.bg)
                     .padding(.horizontal, 16)
                     .padding(.vertical, 8)
@@ -616,8 +702,8 @@ private struct PasteTab: View {
             }
 
             Text(NSLocalizedString("desktop_add_supported", comment: ""))
-                .font(.system(size: 10, design: .monospaced))
-                .foregroundStyle(DesktopTheme.textTertiary)
+                .font(CTFont.ui(10))
+                .foregroundStyle(Color.CT.textDim.opacity(0.55))
 
             Spacer()
         }
@@ -779,13 +865,13 @@ private struct ScannerBrackets: Shape {
     PasteTab(onSubmit: { _ in })
         .frame(width: 460)
         .frame(minHeight: 300)
-        .background(DesktopTheme.backgroundPrimary)
+        .background(Color.CT.bg)
 }
 
 #Preview("File Drop") {
     FileTab(onScanned: { _ in })
         .frame(width: 460, height: 400)
-        .background(DesktopTheme.backgroundPrimary)
+        .background(Color.CT.bg)
 }
 
 #Preview("Scanner Brackets") {
@@ -798,7 +884,7 @@ private struct ScannerBrackets: Shape {
             width: side, height: side
         )
         ScannerBrackets(rect: rect)
-            .stroke(DesktopTheme.accent, lineWidth: 2.5)
+            .stroke(Color.CT.accent, lineWidth: 2.5)
     }
     .frame(width: 300, height: 300)
     .background(Color.black)

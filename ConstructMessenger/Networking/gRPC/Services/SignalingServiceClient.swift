@@ -54,13 +54,16 @@ final class SignalingServiceClient: Sendable {
     ///
     /// - Returns: `calleeOnline` flag (true = callee has active Signal stream).
     @discardableResult
-    func initiateCall(callId: String, calleeUserId: String, callerName: String, hasVideo: Bool) async throws -> Shared_Proto_Signaling_V1_InitiateCallResponse {
+    /// `caller_name` is left empty on purpose. The server stores it with the call and puts it in
+    /// the VoIP push, so a name sent here is read by the server and by Apple, and the callee never
+    /// shows it — it names the caller from its own contacts. Until 2026-10-01 this sent the local
+    /// display name; Android never did.
+    func initiateCall(callId: String, calleeUserId: String, hasVideo: Bool) async throws -> Shared_Proto_Signaling_V1_InitiateCallResponse {
         return try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.initiateCall) { grpcClient in
             let client = Shared_Proto_Signaling_V1_SignalingService.Client(wrapping: grpcClient)
             var req = Shared_Proto_Signaling_V1_InitiateCallRequest()
             req.callID = callId
             req.calleeUserID = calleeUserId
-            req.callerName = callerName
             req.callType = hasVideo ? .video : .audio
             let resp = try await client.initiateCall(request: .init(message: req))
             return resp

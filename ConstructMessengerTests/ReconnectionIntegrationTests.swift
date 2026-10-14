@@ -21,54 +21,48 @@ private final class ReconnPeer {
     let core: OrchestratorCore
     let userId: String
 
-    init(userId: String) throws {
-        self.userId = userId
-        let bootstrap = try createCryptoCore()
-        let keys = try bootstrap.exportPrivateKeys()
-        self.core = try createOrchestratorCoreFromKeys(keysData: keys, myUserId: userId)
+    /// Named by the id its identity key derives to, as a real device is.
+    init() throws {
+        let device = try makeTestDevice()
+        self.core = device.core
+        self.userId = device.deviceId
     }
 
-    typealias Bundle = (identityPublic: [UInt8], signedPrekeyPublic: [UInt8],
-                        signature: [UInt8], verifyingKey: [UInt8], suiteId: UInt16)
+    /// The bundle as the server serves it after PQXDH v2 — see `PQXDHTestBundles`.
+    typealias Bundle = BinaryKeyBundle
 
     func exportBundle() throws -> Bundle {
-        let fields = try core.getRegistrationBundleFields()
-        return (fields.identityPublic, fields.signedPrekeyPublic, fields.signature, fields.verifyingKey, fields.suiteId)
+        try core.pqxdhTestBundle()
     }
 
     private func bundleBytes(from b: Bundle) throws -> BinaryKeyBundle {
-        return BinaryKeyBundle(
-            identityPublic: b.identityPublic, signedPrekeyPublic: b.signedPrekeyPublic,
-            signature: b.signature, verifyingKey: b.verifyingKey,
-            suiteId: b.suiteId, oneTimePrekeyPublic: nil, oneTimePrekeyId: nil,
-            spkUploadedAt: 0, spkRotationEpoch: 0,
-            kyberSpkUploadedAt: 0, kyberSpkRotationEpoch: 0,
-            kyberPreKeyPublic: nil, kyberOneTimePrekeyPublic: nil, kyberOneTimePrekeyId: nil, supportsPqRatchet: false
-        )
+        b
     }
 
     func initSender(to contactId: String, bundle: Bundle) throws {
         _ = try core.initSession(contactId: contactId, recipientBundle: bundleBytes(from: bundle))
     }
 
-    func initReceiving(contactId: String, senderBundle: Bundle, firstMsg: ReconnEncMsg) throws -> String {
-        let bytes = try core.initReceivingSession(
-            contactId: contactId,
-            recipientBundle: bundleBytes(from: senderBundle),
-            firstMessage: firstMsg.toBytes()
-        ).decryptedMessage
+    /// The responder init from `firstMsg` as the wire carries it, with `sender`'s certificate.
+    func initReceiving(from sender: ReconnPeer, firstMsg: ReconnEncMsg) throws -> String {
+        let bytes = try core.pqxdhTestReceive(from: sender.core, wirePayload: firstMsg.wirePayload)
+            .decryptedMessage
         return String(bytes: bytes, encoding: .utf8) ?? "__binary_init__"
     }
 
     func encrypt(_ data: Data, to contactId: String) throws -> ReconnEncMsg {
-        let r = try core.encryptMessage(contactId: contactId, plaintext: data)
-        return ReconnEncMsg(ephemeralPublicKey: r.ephemeralPublicKey,
+        let wire = try core.encryptToWire(contactId: contactId, plaintext: data)
+        let r = try wirePayloadUnpack(data: wire)
+        return ReconnEncMsg(wirePayload: wire,
+                            ephemeralPublicKey: r.dhPublicKey,
                             messageNumber: r.messageNumber,
-                            content: r.content,
+                            content: r.sealedBox,
                             oneTimePrekeyId: r.oneTimePrekeyId,
                             suiteId: r.suiteId,
                             pqMessageEpoch: r.pqMessageEpoch,
-                            pqRatchetField: r.pqRatchetField)
+                            pqRatchetField: r.pqRatchetField,
+                            kemCiphertext: r.kemCiphertext ?? Data(),
+                            kyberPrekeyId: r.kyberOtpkId)
     }
 
     func encryptString(_ s: String, to contactId: String) throws -> ReconnEncMsg {
@@ -76,13 +70,7 @@ private final class ReconnPeer {
     }
 
     func decrypt(_ msg: ReconnEncMsg, from contactId: String) throws -> String {
-        let r = try core.decryptMessage(contactId: contactId,
-                                        ephemeralPublicKey: msg.ephemeralPublicKey,
-                                        messageNumber: msg.messageNumber,
-                                        content: msg.content,
-                                        suiteId: msg.suiteId,
-                                        pqMessageEpoch: msg.pqMessageEpoch,
-                                        pqRatchetField: msg.pqRatchetField)
+        let r = try core.decryptWirePayload(contactId: contactId, wirePayload: msg.wirePayload)
         return String(bytes: r.plaintext, encoding: .utf8) ?? "<binary>"
     }
 
@@ -96,25 +84,18 @@ private final class ReconnPeer {
 }
 
 private struct ReconnEncMsg {
-    let ephemeralPublicKey: [UInt8]
+    /// The same message packed as the envelope carries it — what a first message opens from.
+    let wirePayload: Data
+    let ephemeralPublicKey: Data
     let messageNumber: UInt32
-    let content: [UInt8]
+    let content: Data
     let oneTimePrekeyId: UInt32
     let suiteId: UInt16
     let pqMessageEpoch: UInt32
-    let pqRatchetField: [UInt8]
-
-    func toBytes() -> BinaryFirstMessage {
-        return BinaryFirstMessage(
-            ephemeralPublicKey: ephemeralPublicKey,
-            messageNumber: messageNumber,
-            content: content,
-            oneTimePrekeyId: oneTimePrekeyId,
-            suiteId: suiteId,
-            pqMessageEpoch: pqMessageEpoch,
-            pqRatchetField: pqRatchetField
-        )
-    }
+    let pqRatchetField: Data
+    /// The PQXDH v2 header the initiator's first flight carries (empty / 0 otherwise).
+    var kemCiphertext = Data()
+    var kyberPrekeyId: UInt32 = 0
 }
 
 private enum ReconnTestError: Error {
@@ -130,7 +111,6 @@ private enum ReconnTestError: Error {
 @discardableResult
 private func establishSession(initiator: ReconnPeer, responder: ReconnPeer) throws -> String {
     let responderBundle  = try responder.exportBundle()
-    let initiatorBundle  = try initiator.exportBundle()
 
     try initiator.initSender(to: responder.userId, bundle: responderBundle)
 
@@ -138,11 +118,7 @@ private func establishSession(initiator: ReconnPeer, responder: ReconnPeer) thro
     let msg0 = try initiator.encryptString(ping, to: responder.userId)
     XCTAssertEqual(msg0.messageNumber, 0)
 
-    let decrypted = try responder.initReceiving(
-        contactId: initiator.userId,
-        senderBundle: initiatorBundle,
-        firstMsg: msg0
-    )
+    let decrypted = try responder.initReceiving(from: initiator, firstMsg: msg0)
     return decrypted
 }
 
@@ -156,8 +132,8 @@ final class ReconnectionIntegrationTests: XCTestCase {
     /// After each cycle, both sides must encrypt and decrypt successfully.
     /// This guards against DR state corruption after repeated wipes.
     func testMultipleEndSessionCycles_SessionUsableAfterEach() throws {
-        let alice = try ReconnPeer(userId: "alice-\(UUID().uuidString)")
-        let bob   = try ReconnPeer(userId: "bob-\(UUID().uuidString)")
+        let alice = try ReconnPeer()
+        let bob   = try ReconnPeer()
 
         for cycle in 1...3 {
             // Establish fresh session
@@ -187,10 +163,9 @@ final class ReconnectionIntegrationTests: XCTestCase {
     /// Previously, String::from_utf8(plaintext_bytes) threw DecryptionFailed and
     /// triggered an unnecessary END_SESSION cascade.
     func testBinaryMsg0_MeasureA_SessionEstablished_FullExchangeWorks() throws {
-        let alice = try ReconnPeer(userId: "alice-\(UUID().uuidString)")
-        let bob   = try ReconnPeer(userId: "bob-\(UUID().uuidString)")
+        let alice = try ReconnPeer()
+        let bob   = try ReconnPeer()
 
-        let aliceBundle = try alice.exportBundle()
         let bobBundle   = try bob.exportBundle()
 
         try alice.initSender(to: bob.userId, bundle: bobBundle)
@@ -203,11 +178,7 @@ final class ReconnectionIntegrationTests: XCTestCase {
         XCTAssertEqual(msg0.messageNumber, 0)
 
         // Must NOT throw — session must be established regardless of content encoding
-        let decrypted = try bob.initReceiving(
-            contactId: alice.userId,
-            senderBundle: aliceBundle,
-            firstMsg: msg0
-        )
+        let decrypted = try bob.initReceiving(from: alice, firstMsg: msg0)
         XCTAssertTrue(decrypted.hasPrefix("__binary_init_") || decrypted == "__binary_init__",
                       "Non-UTF-8 msg0 must yield binary sentinel, got: \(decrypted.prefix(60))")
 
@@ -225,8 +196,8 @@ final class ReconnectionIntegrationTests: XCTestCase {
     /// After END_SESSION and a fresh session init, DR message numbers reset to 0.
     /// Messages in the new session must be numbered independently of the old session.
     func testEndSessionAndReinit_MessageNumberResetsToZero() throws {
-        let alice = try ReconnPeer(userId: "alice-\(UUID().uuidString)")
-        let bob   = try ReconnPeer(userId: "bob-\(UUID().uuidString)")
+        let alice = try ReconnPeer()
+        let bob   = try ReconnPeer()
 
         // Session 1: exchange 3 messages
         try establishSession(initiator: alice, responder: bob)
@@ -255,8 +226,8 @@ final class ReconnectionIntegrationTests: XCTestCase {
 
     /// After END_SESSION + re-init, both sides can send messages in any order.
     func testEndSessionAndReinit_BidirectionalExchangeWorks() throws {
-        let alice = try ReconnPeer(userId: "alice-\(UUID().uuidString)")
-        let bob   = try ReconnPeer(userId: "bob-\(UUID().uuidString)")
+        let alice = try ReconnPeer()
+        let bob   = try ReconnPeer()
 
         try establishSession(initiator: alice, responder: bob)
         alice.wipeSession(to: bob.userId)
@@ -286,8 +257,8 @@ final class ReconnectionIntegrationTests: XCTestCase {
     /// the losing side wipes its session and waits for the winner's ping.
     /// Simulates: Alice wins (higher deviceId), Bob wipes and accepts Alice's ping.
     func testTieBreak_LoserWipesAndAcceptsWinnerInit() throws {
-        let alice = try ReconnPeer(userId: "alice-high-\(UUID().uuidString)")
-        let bob   = try ReconnPeer(userId: "bob-low-\(UUID().uuidString)")
+        let alice = try ReconnPeer()
+        let bob   = try ReconnPeer()
 
         let aliceBundle = try alice.exportBundle()
         let bobBundle   = try bob.exportBundle()
@@ -306,11 +277,7 @@ final class ReconnectionIntegrationTests: XCTestCase {
         XCTAssertEqual(msg0.messageNumber, 0)
 
         // Bob accepts Alice's init as RESPONDER
-        let decrypted = try bob.initReceiving(
-            contactId: alice.userId,
-            senderBundle: aliceBundle,
-            firstMsg: msg0
-        )
+        let decrypted = try bob.initReceiving(from: alice, firstMsg: msg0)
         XCTAssertTrue(decrypted.hasPrefix("__session_ping_"),
                       "Bob must receive Alice's ping: \(decrypted.prefix(60))")
 
@@ -327,8 +294,8 @@ final class ReconnectionIntegrationTests: XCTestCase {
     // MARK: 6. Rapid consecutive END_SESSION cycles with message exchange each time
 
     func testRapidEndSessionCycles_TenRounds_NoStateCorruption() throws {
-        let alice = try ReconnPeer(userId: "alice-\(UUID().uuidString)")
-        let bob   = try ReconnPeer(userId: "bob-\(UUID().uuidString)")
+        let alice = try ReconnPeer()
+        let bob   = try ReconnPeer()
 
         for round in 1...10 {
             try establishSession(initiator: alice, responder: bob)

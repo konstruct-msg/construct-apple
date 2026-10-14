@@ -8,171 +8,135 @@
 import XCTest
 @testable import Construct_Messenger
 
-/// v5: a signed, per-invite TTL, so a QR stops inheriting the link's twelve hours.
+/// v5, the only invite version: a signed per-invite TTL and a signed account address.
 ///
-/// Two failures are being guarded against, and they fail in opposite directions.
+/// Two failures are guarded against, and they fail in opposite directions.
 ///
-/// The loud one: the canonical string. It used to end in a `default:` carrying the v4
-/// shape, so a v5 token would have been signed over a string with no `ttl` — and the
-/// resulting error, once the server built the string *with* `ttl`, reads `InvalidSignature`
-/// and points at keys.
+/// The loud one: the canonical string. A field missing from it on one side reads as
+/// `InvalidSignature` on the server and points at keys.
 ///
-/// The quiet one: a `ttl` dropped somewhere between decode and the server. Everything looks
-/// right on this device — the invite verifies locally, because both sides of the local
-/// comparison lost the same field.
+/// The quiet one: a field dropped between decode and the server, or between decode and the
+/// contact. `addr` is the worst case — dropped, nothing fails at all: the contact is simply
+/// written to by the server-assigned id forever.
 final class InviteV5TTLTests: XCTestCase {
 
     private let jti  = "550e8400-e29b-41d4-a716-446655440000"
     private let user = "14f28d31-1234-4abc-8def-0123456789ab"
     private let dev  = "4e1f9dbe209c1bedb33ee32dda5a28f0"
     private let ts   = 1_738_156_800
+    private let addr = Data(repeating: 0xAB, count: 32)
 
-    private func invite(v: Int, ttl: UInt32?, un: String? = "alice") -> InviteObject {
+    private func invite(v: Int = 5, ttl: UInt32 = 300, un: String? = "alice", addr: Data? = nil) -> InviteObject {
         InviteObject(
             v: v,
             jti: jti,
             uuid: user,
             deviceId: dev,
             server: "konstruct.cc",
-            ephKey: v <= 3 ? Data(repeating: 0xAB, count: 32).base64EncodedString() : "",
             ts: ts,
             sig: Data(repeating: 0xCD, count: 64).base64EncodedString(),
             un: un,
-            ttl: ttl
+            ttl: ttl,
+            addr: addr ?? self.addr
         )
     }
 
     // MARK: - The canonical string
 
-    /// Must match `InviteToken::canonical_string` in crypto-agility, which appends `ttl`
-    /// after `username`. Spelled out literally rather than derived, because a test that
-    /// builds the string the same way the code does cannot catch the code building it wrong.
-    func testV5CanonicalEndsWithTTL() throws {
-        let c = try invite(v: 5, ttl: 300).canonicalString()
+    /// Must match `InviteToken::canonical_string` in crypto-agility. Spelled out literally
+    /// rather than derived, because a test that builds the string the same way the code does
+    /// cannot catch the code building it wrong.
+    func testCanonicalEndsWithTTLThenAddress() throws {
+        let c = try invite().canonicalString()
         XCTAssertEqual(
             c,
-            "5|\(jti)|\(user)|\(dev)|konstruct.cc|\(ts)|alice|300"
+            "5|\(jti)|\(user)|\(dev)|konstruct.cc|\(ts)|alice|300|" + String(repeating: "ab", count: 32)
         )
     }
 
-    func testV5CanonicalKeepsTheEmptyUsernameSlot() throws {
-        let c = try invite(v: 5, ttl: 300, un: nil).canonicalString()
-        XCTAssertEqual(c, "5|\(jti)|\(user)|\(dev)|konstruct.cc|\(ts)||300")
+    func testCanonicalKeepsTheEmptyUsernameSlot() throws {
+        let c = try invite(un: nil).canonicalString()
+        XCTAssertTrue(c.hasPrefix("5|\(jti)|\(user)|\(dev)|konstruct.cc|\(ts)||300|"))
     }
 
-    /// v4 bytes must not move. Anything in flight was signed over this exact shape.
-    func testV4CanonicalIsUntouchedByV5() throws {
-        let c = try invite(v: 4, ttl: nil).canonicalString()
-        XCTAssertEqual(c, "4|\(jti)|\(user)|\(dev)|konstruct.cc|\(ts)|alice")
-        XCTAssertFalse(c.hasSuffix("|300"))
+    /// The address is signed: two invites that differ only in it sign different bytes.
+    ///
+    /// Mutation: drop `addr` from `canonicalString` — this reddens, and so does the vector.
+    func testTheAddressIsSigned() throws {
+        XCTAssertNotEqual(
+            try invite().canonicalString(),
+            try invite(addr: Data(repeating: 0xCD, count: 32)).canonicalString()
+        )
     }
 
-    /// The regression this file is named for. `default:` used to return the v4 shape for
-    /// every version above 4 — silently, and only on this side.
-    func testAnUnknownVersionRefusesToProduceACanonicalString() {
-        XCTAssertThrowsError(try invite(v: 6, ttl: 300).canonicalString()) { error in
-            guard case InviteValidationError.unsupportedVersion(let v) = error else {
-                return XCTFail("expected unsupportedVersion, got \(error)")
+    /// Every other version is refused, older and newer alike.
+    func testOnlyV5ProducesACanonicalString() {
+        for v in [1, 2, 3, 4, 6] {
+            XCTAssertThrowsError(try invite(v: v).canonicalString()) { error in
+                guard case InviteValidationError.unsupportedVersion(let got) = error else {
+                    return XCTFail("expected unsupportedVersion, got \(error)")
+                }
+                XCTAssertEqual(got, v)
             }
-            XCTAssertEqual(v, 6)
-        }
-    }
-
-    /// A v5 that lost its `ttl` must not fall back to the v4 string, which would verify
-    /// locally and fail on the server.
-    func testAV5WithoutTTLCannotBeSigned() {
-        XCTAssertThrowsError(try invite(v: 5, ttl: nil).canonicalString()) { error in
-            guard case InviteValidationError.missingTTL = error else {
-                return XCTFail("expected missingTTL, got \(error)")
-            }
+            XCTAssertThrowsError(try invite(v: v).validate())
         }
     }
 
     // MARK: - Validation, mirroring the server
 
-    func testV5RequiresATTL() {
-        XCTAssertThrowsError(try invite(v: 5, ttl: nil).validate())
-    }
-
     /// Rule 6: below one minute is refused before it is signed, rather than after the
     /// server refuses it.
     func testTTLBelowTheFloorIsRefused() {
-        XCTAssertThrowsError(try invite(v: 5, ttl: InviteConfig.minTTLSeconds - 1).validate())
-        XCTAssertNoThrow(try invite(v: 5, ttl: InviteConfig.minTTLSeconds).validate())
+        XCTAssertThrowsError(try invite(ttl: InviteConfig.minTTLSeconds - 1).validate())
+        XCTAssertNoThrow(try invite(ttl: InviteConfig.minTTLSeconds).validate())
     }
 
     /// Rule 7: an overshoot is clamped, not rejected. Refusing it here while the server
     /// accepts-and-clamps would make the two disagree about the same token.
     func testATTLAboveTheServerMaximumIsAcceptedAndClamped() throws {
         let overshoot = UInt32(InviteConfig.ttlSeconds) + 10_000
-        XCTAssertNoThrow(try invite(v: 5, ttl: overshoot).validate())
+        XCTAssertNoThrow(try invite(ttl: overshoot).validate())
         XCTAssertEqual(
-            invite(v: 5, ttl: overshoot).effectiveTTLSeconds,
+            invite(ttl: overshoot).effectiveTTLSeconds,
             InviteConfig.ttlSeconds,
             "the server takes min(max, ttl); showing anything longer would outlive the truth"
         )
     }
 
-    func testAPreV5InviteMustNotCarryATTL() {
-        XCTAssertThrowsError(try invite(v: 4, ttl: 300).validate())
+    func testAnInviteLivesForItsStatedTTL() {
+        XCTAssertEqual(invite(ttl: 300).effectiveTTLSeconds, 300)
     }
 
-    func testAPreV5InviteGetsTheGlobalTTL() {
-        XCTAssertEqual(invite(v: 4, ttl: nil).effectiveTTLSeconds, InviteConfig.ttlSeconds)
-    }
-
-    func testAV5InviteLivesForItsStatedTTL() {
-        XCTAssertEqual(invite(v: 5, ttl: 300).effectiveTTLSeconds, 300)
+    /// Mutation: drop the length check in `validate` — this reddens.
+    func testAnAddressThatIsNotAKeyIsRefused() {
+        for count in [0, 31, 33] {
+            XCTAssertThrowsError(try invite(addr: Data(repeating: 1, count: count)).validate()) { error in
+                guard case InviteValidationError.invalidAddress = error else {
+                    return XCTFail("expected invalidAddress, got \(error)")
+                }
+            }
+        }
     }
 
     // MARK: - The binary container
 
-    func testV5BinaryRoundTripCarriesTheTTL() throws {
-        let original = invite(v: 5, ttl: 300)
+    func testBinaryRoundTripCarriesTTLAndAddress() throws {
+        let original = invite()
         let decoded = try InviteObject.decodeBinary(try original.encodeBinary())
-        XCTAssertEqual(decoded.ttl, 300)
-        XCTAssertEqual(try decoded.canonicalString(), try original.canonicalString())
+        XCTAssertEqual(decoded, original)
     }
 
-    /// Presence is decided by the version, so a v5 blob is exactly four bytes longer than
-    /// the same invite at v4 — no flag byte, nothing else moved.
-    func testV5CostsFourBytesOverV4() throws {
-        let v4 = try invite(v: 4, ttl: nil).encodeBinary()
-        let v5 = try invite(v: 5, ttl: 300).encodeBinary()
-        XCTAssertEqual(v5.count - v4.count, 4)
+    func testBinarySurvivesTheTextBoundary() throws {
+        let original = invite()
+        XCTAssertEqual(try InviteObject.fromBase64(try original.toBase64URL()), original)
     }
 
-    func testV5BinarySurvivesTheTextBoundary() throws {
-        let original = invite(v: 5, ttl: 300)
-        let decoded = try InviteObject.fromBase64(try original.toBase64URL())
-        XCTAssertEqual(decoded.ttl, 300)
-    }
+    // MARK: - QR sitting
 
-    // MARK: - Rollout
-
-    /// Reading a version ships before writing it. If this ever reads `false` while
-    /// `inviteV5Minting` is off, this build mints something its own peers refuse.
-    func testThisBuildReadsV5() {
-        XCTAssertTrue(InviteConfig.supportedVersions.contains(5))
-    }
-
-    /// The flag is the only thing that decides which version is minted — so that turning it
-    /// on is one edit, and leaving it off cannot half-apply.
-    func testMintedVersionFollowsTheFlag() {
-        XCTAssertEqual(
-            InviteConfig.currentVersion,
-            FeatureFlags.inviteV5Minting ? 5 : 4
-        )
-        XCTAssertEqual(
-            InviteConfig.carriesTTL(version: InviteConfig.currentVersion),
-            FeatureFlags.inviteV5Minting
-        )
-    }
-
-    /// The number that makes the QR change worth doing: live codes in a sitting are
+    /// The number that makes the QR's own TTL worth having: live codes in a sitting are
     /// TTL/rotation. At twelve hours that is 1440 and bulk revocation is unusable; at five
     /// minutes it is ten.
-    func testAQRSittingStaysSmallOnceItHasItsOwnTTL() {
+    func testAQRSittingStaysSmall() {
         let codes = Double(InviteConfig.qrTTLSeconds) / InviteConfig.qrRotateIntervalSeconds
         XCTAssertLessThanOrEqual(codes, 20)
         XCTAssertGreaterThanOrEqual(
@@ -188,15 +152,14 @@ final class InviteV5TTLTests: XCTestCase {
 
     // MARK: - The redeem boundary
 
-    /// The quiet failure named at the top of this file. `ttl` was droppable from the
-    /// AcceptInvite mapping with the entire suite still green, because the mapping lived as
-    /// twelve assignments inside a 90-line networking method that no test could reach.
+    /// Every field the server rebuilds its canonical string from, checked across the
+    /// AcceptInvite mapping — whichever goes missing produces a signature the server rejects
+    /// and this device accepts. `addr` is also the field the server checks against the
+    /// account's recovery key.
     ///
-    /// Every field the server rebuilds its canonical string from is checked here, not just
-    /// the new one: whichever of them goes missing next produces the same symptom — a
-    /// signature the server rejects and this device accepts.
+    /// Mutation: drop `token.addr = invite.addr` from `protoToken` — this reddens.
     func testEveryCanonicalFieldSurvivesTheAcceptInviteMapping() {
-        let source = invite(v: 5, ttl: 300)
+        let source = invite()
         let token = LinkParser.protoToken(from: source)
 
         XCTAssertEqual(token.v, 5)
@@ -208,14 +171,8 @@ final class InviteV5TTLTests: XCTestCase {
         XCTAssertEqual(token.un, source.un)
         XCTAssertEqual(token.sig, source.sig)
         XCTAssertEqual(token.ttl, 300)
-        XCTAssertTrue(token.hasTtl)
-    }
-
-    /// A v4 invite must arrive with no `ttl` at all. Sending 0 or 43200 "to be safe" would
-    /// make the server build a v5-shaped string for a v4 token.
-    func testAV4InviteCarriesNoTTLAcrossTheBoundary() {
-        let token = LinkParser.protoToken(from: invite(v: 4, ttl: nil))
-        XCTAssertFalse(token.hasTtl)
+        XCTAssertEqual(token.addr, source.addr)
+        XCTAssertTrue(token.ephPub.isEmpty, "the server refuses a v5 that carries one")
     }
 
     // MARK: - The journal
@@ -228,8 +185,8 @@ final class InviteV5TTLTests: XCTestCase {
         XCTAssertTrue(link.isLive(at: now), "and nowhere near a twelve-hour one")
     }
 
-    /// Entries written before v5 decode with no `ttl` and keep the life they had, so the
-    /// stored journal needs no migration.
+    /// Entries written before every invite stated a TTL decode with none and keep the life
+    /// they had, so the stored journal needs no migration.
     func testAJournalWrittenBeforeV5StillDecodes() throws {
         let legacy = Data(#"[{"id":"\#(UUID().uuidString)","kind":"link","mints":[{"jti":"old","at":0}]}]"#.utf8)
         let acts = try JSONDecoder().decode([InviteIssuance].self, from: legacy)

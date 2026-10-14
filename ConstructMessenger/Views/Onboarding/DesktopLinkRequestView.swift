@@ -40,7 +40,13 @@ struct DesktopLinkRequestView: View {
         }
         .frame(minWidth: 420, idealWidth: 460, minHeight: 540)
         .task { await vm.generateJoinRequestQR() }
-        .onDisappear { vm.cancelPolling() }
+        // The join request saves keys the server does not know until the phone approves; a
+        // restore in that window reads "Device not found" and replaces this screen with recovery.
+        .onAppear { authViewModel.isRegistrationInProgress = true }
+        .onDisappear {
+            vm.cancelPolling()
+            authViewModel.isRegistrationInProgress = false
+        }
         .alert(vm.errorMessage ?? "", isPresented: $showError) {
             Button(LocalizedStringKey("ok"), role: .cancel) { vm.errorMessage = nil }
             Button(LocalizedStringKey("device_link_refresh")) {
@@ -79,7 +85,7 @@ struct DesktopLinkRequestView: View {
             // Error shown via alert — show a retry button as fallback
             VStack(spacing: 16) {
                 Image(systemName: "exclamationmark.triangle.fill")
-                    .font(CTFont.regular(48))
+                    .font(CTFont.ui(48))
                     .foregroundStyle(.orange)
                     .lineLimit(1).fixedSize()
                 Button {
@@ -87,7 +93,7 @@ struct DesktopLinkRequestView: View {
                     Task { await vm.generateJoinRequestQR() }
                 } label: {
                     Text(LocalizedStringKey("device_link_refresh"))
-                        .font(CTFont.regular(13))
+                        .font(CTFont.body)
                         .foregroundColor(Color.CT.text)
                         .padding(.horizontal, CTLayout.sectionGap).padding(.vertical, 10)
                         .background(Color.CT.bgMsg)
@@ -106,19 +112,19 @@ struct DesktopLinkRequestView: View {
             // Header
             VStack(spacing: 10) {
                 Image(systemName: "iphone")
-                    .font(.system(size: 48, weight: .light))
+                    .font(CTIcon.font(CTIcon.hero, weight: .light))
                     .foregroundStyle(Color.CT.textDim)
                 Text("SCAN ON YOUR PHONE")
-                    .font(CTFont.bold(14))
+                    .font(CTFont.headline)
                     .foregroundStyle(Color.CT.textDim)
                     .tracking(1)
 
                 Text(LocalizedStringKey("device_link_request_instruction"))
-                    .font(.title3.weight(.semibold))
+                    .font(CTFont.ui(20, weight: .semibold))
                     .multilineTextAlignment(.center)
 
                 Text(LocalizedStringKey("device_link_request_steps"))
-                    .font(.subheadline)
+                    .font(CTFont.ui(15))
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
@@ -147,7 +153,7 @@ struct DesktopLinkRequestView: View {
                         ? "device_link_waiting_approval"
                         : "device_link_scan_on_phone"
                 ))
-                .font(.caption)
+                .font(CTFont.secondary)
                 .foregroundStyle(.secondary)
             }
         }

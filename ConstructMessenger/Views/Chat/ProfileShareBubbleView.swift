@@ -28,25 +28,25 @@ struct ProfileShareBubbleView: View {
                 CTHexAvatar(
                     initials: initials,
                     image: Image(platformImage: uiImage),
-                    size: .large
+                    size: CTAvatarSize.header
                 )
             } else {
                 CTHexAvatar(
                     initials: initials,
                     image: nil,
-                    size: .large,
+                    size: CTAvatarSize.header,
                     colorSeed: profileData.displayName
                 )
             }
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(profileData.displayName)
-                    .font(CTFont.bold(13))
+                    .font(CTFont.bodyEmphasis)
                     .foregroundColor(Color.CT.text)
                     .lineLimit(1)
 
                 Text(LocalizedStringKey("shared_profile"))
-                    .font(CTFont.regular(ChatUIConstants.Typography.systemSize))
+                    .font(CTFont.ui(ChatUIConstants.Typography.systemSize))
                     .foregroundColor(Color.CT.textDim)
             }
 

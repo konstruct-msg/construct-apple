@@ -1,0 +1,269 @@
+//
+//  AccountAddressTests.swift
+//  ConstructMessengerTests
+//
+//  The account address from both ends: how a sealed envelope names its recipient, and what this
+//  device accepts as its own address. decisions/invite-carries-the-account-address.md
+//
+
+import XCTest
+import CryptoKit
+import SwiftProtobuf
+import CoreData
+@testable import Construct_Messenger
+
+final class AccountAddressTests: XCTestCase {
+
+    private let key = Data((0..<32).map { UInt8($0) })
+
+    // MARK: - Own address against the server's fingerprint
+
+    private var keyFingerprint: String {
+        InviteBinaryCodec.hex(key)
+    }
+
+    func testAStoredAddressTheServerConfirmsIsOurs() {
+        XCTAssertEqual(AccountAddress.verdict(stored: key, serverFingerprint: keyFingerprint), .confirmed)
+    }
+
+    /// The Mac that had been its own account: its Keychain held that account's key, the server
+    /// named the account it had since joined. The card carried the old key.
+    func testAStoredAddressOfAnotherAccountIsForeign() {
+        let other = Data((0..<32).map { UInt8(255 - $0) })
+        XCTAssertEqual(
+            AccountAddress.verdict(stored: other, serverFingerprint: keyFingerprint),
+            .foreign
+        )
+    }
+
+    func testNothingToCompareWithIsNeitherConfirmedNorForeign() {
+        XCTAssertEqual(AccountAddress.verdict(stored: key, serverFingerprint: nil), .unconfirmed)
+        XCTAssertEqual(AccountAddress.verdict(stored: nil, serverFingerprint: keyFingerprint), .absent)
+        XCTAssertEqual(AccountAddress.verdict(stored: Data([1, 2]), serverFingerprint: keyFingerprint), .absent)
+    }
+
+    /// The form the server's `UserId::parse` reads. A different prefix or case is a recipient the
+    /// server rejects as malformed.
+    func testTheWireFormIsEd25519ColonLowercaseHex() {
+        XCTAssertEqual(
+            AccountAddress.wire(key),
+            "ed25519:000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"
+        )
+    }
+
+    func testARecipientIsNamedByAddressWhenOneIsKnown() {
+        XCTAssertEqual(
+            AccountAddress.recipientField(accountId: "14f28d31-0000-0000-0000-000000000001", address: key),
+            AccountAddress.wire(key)
+        )
+    }
+
+    /// No address, or something that is not a key, falls back to the account id: a truncated key
+    /// would be an address no account has, and the server drops those without a word.
+    func testWithoutAUsableAddressTheAccountIdIsKept() {
+        let id = "14f28d31-0000-0000-0000-000000000001"
+        XCTAssertEqual(AccountAddress.recipientField(accountId: id, address: nil), id)
+        XCTAssertEqual(AccountAddress.recipientField(accountId: id, address: Data(repeating: 1, count: 31)), id)
+    }
+
+    // MARK: - Confirming our own address
+
+    /// The server's `key_fingerprint`: leading hex, uppercase, spaced groups of four.
+    private func serverFingerprint(_ key: Data) -> String {
+        let hex = key.map { String(format: "%02X", $0) }.joined().prefix(32)
+        return stride(from: 0, to: hex.count, by: 4).map { i in
+            let start = hex.index(hex.startIndex, offsetBy: i)
+            return String(hex[start..<hex.index(start, offsetBy: 4)])
+        }.joined(separator: " ")
+    }
+
+    func testTheServersFingerprintOfOurKeyMatches() {
+        XCTAssertTrue(AccountAddress.matchesServerFingerprint(key, fingerprint: serverFingerprint(key)))
+    }
+
+    /// Mutation: return true unconditionally — a phrase from another account would then teach
+    /// this device a foreign address, and every invite it mints would lose the replies.
+    func testAnotherKeysFingerprintDoesNotMatch() {
+        let other = Data(repeating: 0xEE, count: 32)
+        XCTAssertFalse(AccountAddress.matchesServerFingerprint(key, fingerprint: serverFingerprint(other)))
+    }
+
+    /// A short fingerprint would let a handful of matching digits stand for the whole key.
+    func testATruncatedFingerprintIsNotEnough() {
+        XCTAssertFalse(AccountAddress.matchesServerFingerprint(key, fingerprint: "0001 0203"))
+        XCTAssertFalse(AccountAddress.matchesServerFingerprint(key, fingerprint: ""))
+    }
+
+    // MARK: - Minting
+
+    /// Without an address nothing is minted: an invite naming none would leave the redeemer
+    /// writing to the server-assigned id, which is what the address exists to replace.
+    ///
+    /// Mutation: drop the guard in `InviteGenerator.generate` — this reddens.
+    func testNoInviteIsMintedWithoutAnAddress() {
+        let generator = InviteGenerator(accountAddress: { nil })
+        XCTAssertThrowsError(
+            try generator.generate(
+                userId: "14f28d31-0000-0000-0000-000000000001",
+                deviceId: "4e1f9dbe209c1bedb33ee32dda5a28f0",
+                ttlSeconds: InviteConfig.qrTTLSeconds
+            )
+        ) { error in
+            guard case InviteGenerationError.noAccountAddress = error else {
+                return XCTFail("expected noAccountAddress, got \(error)")
+            }
+        }
+    }
+}
+
+/// The sealed envelope names its recipient by address — and only that field moves.
+@MainActor
+final class SealedInnerRecipientAddressTests: XCTestCase {
+
+    private let accountId = "14f28d31-0000-0000-0000-000000000002"
+    private var savedLookup: ((String) -> Data?)!
+
+    override func setUp() {
+        super.setUp()
+        savedLookup = StealthSenderService.shared.accountAddressLookup
+    }
+
+    override func tearDown() {
+        StealthSenderService.shared.accountAddressLookup = savedLookup
+        super.tearDown()
+    }
+
+    private func inner(address: Data?) async throws -> Shared_Proto_Core_V1_SealedInner {
+        StealthSenderService.shared.accountAddressLookup = { _ in address }
+        let bytes = try await StealthSenderService.shared.buildSealedInner(
+            recipientUserId: accountId,
+            certBytes: Data([0x01, 0x02, 0x03]),
+            recipientIdentityKey: Curve25519.KeyAgreement.PrivateKey().publicKey.rawRepresentation,
+            encryptedPayload: Data([0xAA]),
+            contentType: .generic
+        )
+        return try Shared_Proto_Core_V1_SealedInner(serializedBytes: bytes)
+    }
+
+    /// Mutation: write `recipientUserId` straight into the field again — this reddens.
+    func testAKnownAddressNamesTheRecipient() async throws {
+        let address = Data(repeating: 0x5A, count: 32)
+        let named = try await inner(address: address).recipientUserID
+        XCTAssertEqual(named, AccountAddress.wire(address))
+    }
+
+    func testAnUnknownAddressKeepsTheAccountId() async throws {
+        let named = try await inner(address: nil).recipientUserID
+        XCTAssertEqual(named, accountId)
+    }
+}
+
+/// Type 27 against `knst_contact_card.json`, the file Android reads the same way.
+final class ContactCardPayloadTests: XCTestCase {
+
+    private struct Vectors: Decodable {
+        struct Case: Decodable {
+            let name: String
+            let payload: String
+            let reads_as: String
+            let intake_key: String?
+            let account_address: String?
+        }
+        let cases: [Case]
+    }
+
+    private func vectors() throws -> [Vectors.Case] {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("ConstructMessenger/Networking/gRPC/Generated/conformance/knst_contact_card.json")
+        return try JSONDecoder().decode(Vectors.self, from: Data(contentsOf: url)).cases
+    }
+
+    private func hex(_ s: String?) -> Data? { s.flatMap { InviteBinaryCodec.data(hex: $0) } }
+
+    /// Mutation: drop the 32-byte legacy branch in `read` — `legacy_bare_key` reddens.
+    func testEveryPayloadReadsAsTheVectorSays() throws {
+        for c in try vectors() {
+            let card = try XCTUnwrap(ContactCardPayload.read(try XCTUnwrap(hex(c.payload))), c.name)
+            XCTAssertEqual(card.intakeKey, hex(c.intake_key), c.name)
+            XCTAssertEqual(card.accountAddress, hex(c.account_address), c.name)
+        }
+    }
+
+    /// What we send is what the vector says a card with both fields is.
+    func testACardWithBothFieldsEncodesAsTheVector() throws {
+        let both = try XCTUnwrap(try vectors().first { $0.name == "key_and_address" })
+        let card = ContactCardPayload(intakeKey: hex(both.intake_key), accountAddress: hex(both.account_address))
+        XCTAssertEqual(try card.encoded(), hex(both.payload))
+    }
+}
+
+/// The pin rule: an address never changes, so a different one is never an update.
+final class AccountAddressPinTests: XCTestCase {
+
+    private let a = Data(repeating: 0xA1, count: 32)
+    private let b = Data(repeating: 0xB2, count: 32)
+
+    func testTheFirstAddressIsPinnedFromEitherSource() {
+        XCTAssertEqual(AccountAddressPin.decide(existing: nil, incoming: a, source: .card), .pinned)
+        XCTAssertEqual(AccountAddressPin.decide(existing: nil, incoming: a, source: .invite), .pinned)
+    }
+
+    func testTheSameAddressChangesNothing() {
+        XCTAssertEqual(AccountAddressPin.decide(existing: a, incoming: a, source: .card), .unchanged)
+    }
+
+    /// Mutation: let a card replace the pinned address — this reddens.
+    func testACardNeverReplacesAPinnedAddress() {
+        let outcome = AccountAddressPin.decide(existing: a, incoming: b, source: .card)
+        XCTAssertEqual(outcome, .conflictKept)
+        XCTAssertTrue(outcome.isSecurityEvent)
+    }
+
+    /// The invite outranks: the server checked it against the account's recovery key.
+    func testAnInviteReplacesButStillRaisesTheEvent() {
+        let outcome = AccountAddressPin.decide(existing: a, incoming: b, source: .invite)
+        XCTAssertEqual(outcome, .conflictReplaced)
+        XCTAssertTrue(outcome.isSecurityEvent)
+    }
+}
+
+/// The rule applied to a contact row.
+@MainActor
+final class AccountAddressPinRowTests: XCTestCase {
+
+    /// Held for the test's life: a managed object outliving its context reads as nil.
+    private let container = PersistenceController(inMemory: true).container
+    private let id = "14f28d31-0000-0000-0000-000000000009"
+
+    override func setUp() {
+        super.setUp()
+        LocalRepositories.useContactsForTesting(container)
+        let ctx = container.viewContext
+        let user = User(context: ctx)
+        user.id = id
+        user.username = ""
+        user.displayName = "T"
+        try! ctx.save()
+    }
+
+    override func tearDown() {
+        LocalRepositories.useContactsForTesting(nil)
+        super.tearDown()
+    }
+
+    private var address: Data? { try! LocalRepositories.contacts.contact(id)?.accountAddress }
+
+    func testACardConflictLeavesTheRowAlone() {
+        let pinned = Data(repeating: 0xA1, count: 32)
+        AccountAddress.pin(pinned, contactId: id, source: .invite)
+        AccountAddress.pin(Data(repeating: 0xB2, count: 32), contactId: id, source: .card)
+        XCTAssertEqual(address, pinned)
+    }
+
+    func testAnAddressThatIsNotAKeyIsIgnored() {
+        AccountAddress.pin(Data(repeating: 1, count: 31), contactId: id, source: .card)
+        XCTAssertNil(address)
+    }
+}

@@ -13,43 +13,38 @@ import CoreData
 struct DesktopChatsListView: View {
     @Environment(\.managedObjectContext) private var viewContext
 
-    @FetchRequest
-    private var chats: FetchedResults<Chat>
+    /// The list's rows — values from `ChatStore`, in place of `@FetchRequest<Chat>` (chats C).
+    private var chats: [ChatRecord] { ChatsLive.shared.chats() }
 
     @Environment(ChatsViewModel.self) private var chatsViewModel
     @State private var showingQRScanner = false
     @State private var searchQuery = ""
     @FocusState private var searchFocused: Bool
 
-    init() {
-        let fetchRequest: NSFetchRequest<Chat> = Chat.fetchRequest()
-        fetchRequest.sortDescriptors = [
-            NSSortDescriptor(keyPath: \Chat.isPinned, ascending: false),
-            NSSortDescriptor(keyPath: \Chat.lastMessageTime, ascending: false)
-        ]
-        _chats = FetchRequest<Chat>(fetchRequest: fetchRequest, animation: .default)
-    }
-
     var body: some View {
         @Bindable var chatsViewModel = chatsViewModel
-        VStack(spacing: 0) {
-            searchBar
-            chatList(selection: $chatsViewModel.chatToOpen)
-        }
+        chatList(selection: $chatsViewModel.chatToOpen)
+        // The sidebar's own search field — the system draws it, as it draws the selection (D3).
+        // Until 2026-10-13 this was `CTSearchBar`, the iOS glass capsule, inside the pane.
+        .searchable(
+            text: $searchQuery,
+            placement: .sidebar,
+            prompt: LocalizedStringKey("search_prompt")
+        )
+        .searchFocused($searchFocused)
         .ctBackground()
         .sheet(isPresented: $showingQRScanner) {
-            QRScannerView { contactURL in handleScannedContact(contactURL) }
+            RecoveryGated { QRScannerView { contactURL in handleScannedContact(contactURL) } }
         }
         .onAppear {
             chatsViewModel.setContext(viewContext)
             consumeSidebarSearchFocus()
         }
         .onReceive(NotificationCenter.default.publisher(for: .deleteChat)) { note in
-            guard let chatId = note.object as? String,
-                  let chat = chats.first(where: { $0.id == chatId }) else { return }
-            Task { await chatsViewModel.deleteChatWithEndSession(chat: chat) }
+            guard let chatId = note.object as? String else { return }
+            Task { await chatsViewModel.deleteChatForgettingSessions(chatId: chatId) }
         }
-        .onChange(of: chats.reduce(0, { $0 + Int($1.unreadCount) })) { _, total in
+        .onChange(of: ChatsLive.shared.totalUnread, initial: true) { _, total in
             chatsViewModel.totalUnreadCount = total
         }
         .onChange(of: chatsViewModel.sidebarSearchFocused) { _, shouldFocus in
@@ -103,15 +98,7 @@ struct DesktopChatsListView: View {
         .ctBorderBottom()
     }
 
-    // MARK: - Search Bar
-
-    private var searchBar: some View {
-        CTSearchBar(text: $searchQuery, focused: $searchFocused)
-            .padding(.horizontal, CTLayout.edgePad)
-            .padding(.vertical, 7)
-            .background(Color.CT.bg)
-            .ctBorderBottom()
-    }
+    // MARK: - Search
 
     private func consumeSidebarSearchFocus() {
         guard chatsViewModel.sidebarSearchFocused else { return }
@@ -121,27 +108,20 @@ struct DesktopChatsListView: View {
 
     // MARK: - Chat List
 
-    private var filteredChats: [Chat] {
-        guard !searchQuery.isEmpty else { return Array(chats) }
-        let q = searchQuery.lowercased()
-        return chats.filter { chat in
-            let name = (chat.otherUser?.resolvedDisplayName ?? "").lowercased()
-            let username = (chat.otherUser?.username ?? "").lowercased()
-            let preview = (chat.lastMessageText ?? "").lowercased()
-            return name.contains(q) || username.contains(q) || preview.contains(q)
-        }
+    private var filteredChats: [ChatRecord] {
+        guard !searchQuery.isEmpty else { return chats }
+        return chats.filter { ChatsLive.matches($0, query: searchQuery) }
     }
 
     private func chatList(selection: Binding<String?>) -> some View {
         List(selection: selection) {
             ForEach(filteredChats, id: \.id) { chat in
-                ChatRowView(chat: chat)
+                ChatRowView(chat: chat, isSelected: chat.id == selection.wrappedValue)
                     .tag(chat.id)
-                    .desktopActiveRow(chatsViewModel.chatToOpen == chat.id)
                     .listRowSeparatorTint(Color.CT.noise)
                     .contextMenu {
                         Button(role: .destructive) {
-                            Task { await chatsViewModel.deleteChatWithEndSession(chat: chat) }
+                            Task { await chatsViewModel.deleteChatForgettingSessions(chatId: chat.id) }
                         } label: {
                             Label(LocalizedStringKey("delete"), systemImage: "trash")
                         }
@@ -164,22 +144,22 @@ struct DesktopChatsListView: View {
                     }
             }
         }
-        .listStyle(.plain)
+        // Selection is the platform's (affordance-is-native-identity-is-ours): the sidebar style
+        // draws the Mac's own highlight. Until 2026-10-13 the system highlight was switched off
+        // on the NSTableView and replaced by an accent fill with a 1 pt outline.
+        .listStyle(.sidebar)
         .scrollContentBackground(.hidden)
         .background(Color.CT.bg)
-        .desktopSuppressSystemListSelection()
     }
 
     // MARK: - Actions
 
-    private func togglePin(_ chat: Chat) {
-        chat.isPinned.toggle()
-        try? viewContext.save()
+    private func togglePin(_ chat: ChatRecord) {
+        try? LocalRepositories.chats.setPinned(chat.id, !chat.isPinned)
     }
 
-    private func toggleMarkUnread(_ chat: Chat) {
-        chat.unreadCount = chat.unreadCount > 0 ? 0 : 1
-        try? viewContext.save()
+    private func toggleMarkUnread(_ chat: ChatRecord) {
+        try? LocalRepositories.chats.setUnread(chat.id, chat.unreadCount > 0 ? 0 : 1)
     }
 
     // MARK: - QR Code Handling
@@ -187,7 +167,7 @@ struct DesktopChatsListView: View {
     private func handleScannedContact(_ urlString: String) {
         Log.info("🔍 DesktopChatsListView: Handling scanned URL: \(urlString)", category: "DesktopChatsListView")
         guard let url = URL(string: urlString) else {
-            showErrorAfterDismiss(NSLocalizedString("invalid_qr_code_construct", comment: ""))
+            showErrorAfterDismiss(.said(UserText("invalid_qr_code_construct")))
             return
         }
         Task {
@@ -199,7 +179,7 @@ struct DesktopChatsListView: View {
                 }
             } catch {
                 await MainActor.run {
-                    showErrorAfterDismiss(error.localizedDescription)
+                    showErrorAfterDismiss(AppError.from(error))
                     showingQRScanner = false
                 }
             }
@@ -212,29 +192,23 @@ struct DesktopChatsListView: View {
         if userId == AuthSessionManager.shared.currentUserId {
             return
         }
-        let publicUserInfo = PublicUserInfo(
-            id: userId,
-            username: username,
-            avatarUrl: nil,
-            bio: nil,
-            deviceId: contactInfo.deviceId
-        )
         if chatsViewModel.startChat(
-            with: publicUserInfo,
-            identityPublicKey: contactInfo.identityPublicKey
+            redeeming: contactInfo
         ) != nil {
             InviteRedeemUX.presentPostRedeemSafety(for: contactInfo)
         }
     }
 
-    private func showErrorAfterDismiss(_ message: String) {
+    private func showErrorAfterDismiss(_ error: AppError) {
         showingQRScanner = false
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
-            ErrorRouter.shared.report(.unknown(message))
+            ErrorRouter.shared.report(error)
         }
     }
 }
 
+// DEBUG only: the preview seeds `ChatsLive.useForPreview`, which a release build does not have.
+#if DEBUG
 #Preview {
     let container = PreviewHelpers.createPreviewContainer()
     let context = container.viewContext
@@ -243,6 +217,8 @@ struct DesktopChatsListView: View {
     _ = PreviewHelpers.createSampleChat(context: context, with: user1)
     _ = PreviewHelpers.createSampleChat(context: context, with: user2)
     try? context.save()
+    ChatsLive.useForPreview(container)
+    ContactsLive.useForPreview(container)
     let chatsViewModel = ChatsViewModel()
     chatsViewModel.setContext(context)
     return DesktopChatsListView()
@@ -250,3 +226,4 @@ struct DesktopChatsListView: View {
         .environment(chatsViewModel)
         .frame(width: 280, height: 600)
 }
+#endif

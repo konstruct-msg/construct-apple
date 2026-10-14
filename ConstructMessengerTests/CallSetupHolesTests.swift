@@ -38,6 +38,51 @@ final class CallSetupHolesTests: XCTestCase {
         XCTAssertTrue(shouldIgnoreSilentPush(foregroundLiveStream: true, callNeedsOffer: false))
     }
 
+    /// A closed stream is reopened first, whatever the call is doing.
+    ///
+    /// Mutation: drop the `canReconnect` line — this reddens.
+    func testAClosedSignalingStreamIsReopenedWhileRetriesRemain() {
+        for media in [false, true] {
+            XCTAssertEqual(
+                signalingStreamClosedDisposition(mediaConnected: media, awaitingOfferAfterAnswer: false, canReconnect: true),
+                .reconnect
+            )
+        }
+    }
+
+    /// 3C86C064, 2026-09-24. The callee answered, the VEIL listener refused the stream, and the
+    /// receive loop ended the call while the 45s offer wait had just started.
+    ///
+    /// Mutation: drop `awaitingOfferAfterAnswer` from the keep condition — this reddens.
+    func testAnAnsweredCallWaitingForItsOfferOutlivesTheStream() {
+        XCTAssertEqual(
+            signalingStreamClosedDisposition(mediaConnected: false, awaitingOfferAfterAnswer: true, canReconnect: false),
+            .keepOnMessagePath
+        )
+    }
+
+    /// The older hole stays closed: a stream drop after media is up is still not a hangup.
+    ///
+    /// Mutation: drop `mediaConnected` from the keep condition — this reddens.
+    func testALiveCallOutlivesTheStream() {
+        XCTAssertEqual(
+            signalingStreamClosedDisposition(mediaConnected: true, awaitingOfferAfterAnswer: false, canReconnect: false),
+            .keepOnMessagePath
+        )
+    }
+
+    /// The server's unanswered-call hangup rides the stream. With the stream gone, no media and
+    /// no offer wait, nothing would end the call — the caller rings on after the server has hung
+    /// up the callee.
+    ///
+    /// Mutation: `return .keepOnMessagePath` in place of `.endCall` — this reddens.
+    func testAnUnboundedCallEndsWithItsLastStream() {
+        XCTAssertEqual(
+            signalingStreamClosedDisposition(mediaConnected: false, awaitingOfferAfterAnswer: false, canReconnect: false),
+            .endCall
+        )
+    }
+
     /// A down stream never skips, with or without a call — that is the original wake path.
     func testADownStreamAlwaysFetches() {
         XCTAssertFalse(shouldIgnoreSilentPush(foregroundLiveStream: false, callNeedsOffer: false))

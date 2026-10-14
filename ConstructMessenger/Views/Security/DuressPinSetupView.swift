@@ -31,7 +31,7 @@ struct DuressPinSetupView: View {
                 if let errorKey {
                     Text(LocalizedStringKey(errorKey))
                         .foregroundColor(.red)
-                        .font(.subheadline)
+                        .font(CTFont.ui(15))
                         .multilineTextAlignment(.center)
                         .padding(.top, 12)
                         .padding(.horizontal, 32)
@@ -43,7 +43,7 @@ struct DuressPinSetupView: View {
                     handlePrimary()
                 } label: {
                     Text("continue")
-                        .font(.headline)
+                        .font(CTFont.ui(17, weight: .semibold))
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity)
                         .padding()
@@ -87,12 +87,12 @@ struct DuressPinSetupView: View {
         case .enter:
             VStack(spacing: 20) {
                 Image(systemName: "exclamationmark.triangle.fill")
-                    .font(CTFont.regular(44))
+                    .font(CTFont.ui(44))
                     .foregroundColor(Color.CT.danger)
                     .lineLimit(1).fixedSize()
 
                 Text("duress_pin_setup_warning")
-                    .font(CTFont.regular(13))
+                    .font(CTFont.body)
                     .foregroundColor(Color.CT.textDim)
                     .multilineTextAlignment(.center)
 
@@ -104,7 +104,7 @@ struct DuressPinSetupView: View {
         case .confirm:
             VStack(spacing: 20) {
                 Text("confirm_duress_pin")
-                    .font(.headline)
+                    .font(CTFont.ui(17, weight: .semibold))
 
                 PinDotsField(
                     length: newPin.count,

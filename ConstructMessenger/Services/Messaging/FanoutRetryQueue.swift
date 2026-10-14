@@ -26,8 +26,10 @@ import Foundation
 /// ## What it stores, and what it deliberately does not
 ///
 /// Identifiers only — never a payload. Storing the plaintext chunks would make retry trivial and
-/// would put message bodies in `UserDefaults` in a messenger whose reason to exist is that they
-/// are not readable at rest. The retry rebuilds the payload from the persisted `Message` row the
+/// would put message bodies at rest in a messenger whose reason to exist is that they are not
+/// readable there. Kept in `LocalRepositories.keyValue` since 2026-10-11 — `UserDefaults` on iOS as
+/// before, the crate's encrypted `kv` on macOS, where `UserDefaults` is a plain file and these ids
+/// say who one writes to. The retry rebuilds the payload from the persisted `Message` row the
 /// same way `mirrorStoredResend` does, and inherits that path's one limitation: a media message's
 /// wire plaintext is an album proto the model cannot reconstruct, so it cannot be retried. That is
 /// pre-existing and is reported, not hidden — `reason=not_reconstructable` on the way out.
@@ -56,8 +58,8 @@ final class FanoutRetryQueue {
 
     static let shared = FanoutRetryQueue()
 
-    private let defaults: UserDefaults
-    private let storageKey = "construct.fanoutRetryQueue.v1"
+    private let store: () -> any KeyValueStore
+    static let storageKey = "construct.fanoutRetryQueue.v1"
     private let queue = DispatchQueue(label: "construct.FanoutRetryQueue")
 
     /// Matches `OutgoingWirePayloadStore.entryTtl`. A copy owed for longer than a day is not worth
@@ -74,8 +76,18 @@ final class FanoutRetryQueue {
     private let baseBackoff: TimeInterval = 30
     private let maxBackoff: TimeInterval = 3600
 
-    init(defaults: UserDefaults = .standard) {
-        self.defaults = defaults
+    /// The app's store, resolved on each use so a test or the macOS switch can replace it.
+    init() {
+        self.store = { LocalRepositories.keyValue }
+    }
+
+    /// A queue over `defaults` — a test's own suite.
+    convenience init(defaults: UserDefaults) {
+        self.init(store: DefaultsKeyValueStore(defaults: defaults))
+    }
+
+    init(store: any KeyValueStore) {
+        self.store = { store }
     }
 
     // MARK: - Writing
@@ -168,6 +180,12 @@ final class FanoutRetryQueue {
         }
     }
 
+    /// Every owed copy dropped — the queue was the last account's (`AuthViewModel`'s ownership
+    /// gate). Nothing is retried for an identity that no longer signs in here.
+    func removeAll() {
+        queue.sync { save([]) }
+    }
+
     // MARK: - Reading
 
     /// Entries whose backoff has elapsed, oldest first. Expired ones are dropped on the way past —
@@ -188,18 +206,21 @@ final class FanoutRetryQueue {
     // MARK: - Storage
 
     private func load() -> [FanoutRetryEntry] {
-        guard let data = defaults.data(forKey: storageKey),
+        guard let data = try? store().get(Self.storageKey),
               let decoded = try? JSONDecoder().decode([FanoutRetryEntry].self, from: data)
         else { return [] }
         return decoded
     }
 
     private func save(_ entries: [FanoutRetryEntry]) {
-        guard !entries.isEmpty else {
-            defaults.removeObject(forKey: storageKey)
-            return
+        do {
+            guard !entries.isEmpty else {
+                try store().remove(Self.storageKey)
+                return
+            }
+            try store().put(Self.storageKey, JSONEncoder().encode(entries))
+        } catch {
+            Log.error("FanoutRetryQueue: not saved — owed copies will not survive a restart: \(error)", category: "MultiDevice")
         }
-        guard let data = try? JSONEncoder().encode(entries) else { return }
-        defaults.set(data, forKey: storageKey)
     }
 }

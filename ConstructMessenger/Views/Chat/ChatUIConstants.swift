@@ -16,9 +16,9 @@ enum ChatUIConstants {
     // MARK: - Typography
 
     enum Typography {
+        /// Message text in a bubble and in the composer that fills it, on every platform. The
+        /// macOS composer had its own 13 until 2026-10-14 and typed smaller than it sent.
         static let messageTextSize: CGFloat = 15
-        static let iOSmessageTextSize: CGFloat = 15
-        static let macOSmessageTextSize: CGFloat = 13
         /// Timestamp, edited label, delivery icons under a bubble group.
         static let metaSize: CGFloat = 10
         /// Media captions, load-more, secondary labels.
@@ -45,13 +45,10 @@ enum ChatUIConstants {
         /// Horizontal inset around the floating composer.
         static let composerHorizontalPadding: CGFloat = CTLayout.inlinePad
         static let composerBottomPadding: CGFloat = CTLayout.inlinePad
-        /// Top padding so messages clear the floating nav capsule.
-        static let scrollContentTopPad: CGFloat = 70
-        /// Extra band under the status bar covered by the top scrim.
-        static let topScrimUnderSafeArea: CGFloat = CTLayout.navBarHeight + 24
-        /// Floating nav / banner stack outer chrome.
+        /// Room between the system bar and the first message. The bar itself is the safe area's.
+        static let scrollContentTopPad: CGFloat = CTLayout.inlinePad
+        /// Search and banner stack outer chrome.
         static let floatingChromeHorizontal: CGFloat = CTLayout.inlinePad
-        static let floatingChromeTop: CGFloat = 4
         static let floatingChromeSpacing: CGFloat = CTLayout.inlinePad
         /// Lift scroll-to-bottom FAB above variable-height composer glass.
         static let scrollToBottomLift: CGFloat = 100
@@ -93,7 +90,16 @@ enum ChatUIConstants {
         static let metaHorizontalPadding: CGFloat = 4
     }
 
-    /// Reaction badge on a bubble, and the quick-set capsule.
+    /// A sticker in the transcript: a floating image, no bubble chrome.
+    enum Sticker {
+        /// Display edge. The asset is 512 and shown at a third of it; Dynamic Type scaling of
+        /// the image is a later decision, the emoji fallback scales now.
+        static let size: CGFloat = 160
+        /// The emoji rendered in the sticker's place when the pack is absent.
+        static let fallbackEmojiSize: CGFloat = 96
+    }
+
+    /// Reaction badge on a bubble, and the full emoji picker.
     enum Reaction {
         static let badgeFontSize: CGFloat = 14
         static let badgePadH: CGFloat = 6
@@ -103,13 +109,6 @@ enum ChatUIConstants {
         /// the last-line glyph height: a value of 8 left the heart sitting on
         /// "прикольный".
         static let badgeOverlap: CGFloat = 18
-
-        static let capsuleEmojiSize: CGFloat = 22
-        static let capsuleItem: CGFloat = 36
-        static let capsuleItemSpacing: CGFloat = 4
-        static let capsuleDot: CGFloat = 4
-        static let capsuleHeight: CGFloat = 44
-        static let capsuleGap: CGFloat = CTLayout.inlinePad
 
         /// Full-picker grid cell. At or above `CTLayout.hitTarget` so a cell is tappable — the
         /// grid is the whole screen's content, and a cell you have to aim at is worse than the
@@ -158,11 +157,11 @@ enum ChatUIConstants {
         static let waveformHeight: CGFloat = 28
         static let durationWidth: CGFloat = 34
         static let toggleSize: CGFloat = 20
+        /// Sideways travel before a drag on the waveform scrubs, so a tap stays a tap.
+        static let scrubMinimumDistance: CGFloat = 6
         static let playerSpacing: CGFloat = CTLayout.inlinePad
         static let horizontalPadding: CGFloat = CTLayout.chromeGap
         static let verticalPadding: CGFloat = CTLayout.inlinePad
-        static let playIconSize: CGFloat = 14
-        static let toggleIconSize: CGFloat = 13
         static let strokeWidth: CGFloat = 0.5
 
         static var shape: RoundedRectangle {
@@ -175,11 +174,68 @@ enum ChatUIConstants {
     enum Media {
         static let cornerRadius: CGFloat = CTRadius.control
         static let badgeCornerRadius: CGFloat = CTRadius.badge
+        static let captionTopPadding: CGFloat = 2
+        static let failureStackSpacing: CGFloat = CTLayout.edgePad
         /// Progress chip over a video poster while downloading.
         static let overlayChipRadius: CGFloat = CTLayout.edgePad
         static let playButtonSize: CGFloat = 54
         static let albumTileGap: CGFloat = 2
         static let selectionStrokeWidth: CGFloat = 2
+    }
+
+    /// A video note in the transcript (`VideoNoteBubbleView`).
+    enum VideoNote {
+        /// Narrower than a photo (`MediaPreviewLayout.maxWidth` 260): it is a message, not a
+        /// picture to look at, and at 3:4 it already stands taller than a photo row.
+        static let width: CGFloat = 200
+        /// Expanded in place while it plays with sound: the row less the opposite side's gutter
+        /// and the edge padding, so the chat stays visible beside and around it.
+        static func expandedWidth(in containerWidth: CGFloat) -> CGFloat {
+            let container = containerWidth.isFinite && containerWidth > 0
+                ? containerWidth : Bubble.defaultContainerWidth
+            return min(maxExpandedWidth, max(width, container - Bubble.sideGutter - 2 * CTLayout.edgePad))
+        }
+        /// An iPad row is wide; past this the note is a poster, not a message.
+        static let maxExpandedWidth: CGFloat = 480
+        static let expandDuration: TimeInterval = 0.35
+        /// The recorded shape. A note from a client that did not record 3:4 keeps its own.
+        static let aspectRatio: CGFloat = 3.0 / 4.0
+        static let chipSpacing: CGFloat = 4
+        static let chipHorizontalPadding: CGFloat = 6
+        static let chipVerticalPadding: CGFloat = 3
+        static let blurDecodeSize = CGSize(width: 24, height: 32)
+
+        // Recording (`VideoNoteRecordingView`)
+        /// The chat stays readable behind the viewfinder — you see whom you are recording for.
+        static let recordingDim: Double = 0.6
+        static let viewfinderMaxWidth: CGFloat = 320
+        static let recordDotSize: CGFloat = 8
+
+        // Review and trim while paused (`VideoNoteReviewView`)
+        static let trimBarHeight: CGFloat = 44
+        static let trimHandleWidth: CGFloat = 14
+        static let trimFrameCount = 8
+        static let trimFrameSize = CGSize(width: 96, height: 96)
+        /// A note shorter than this is not worth sending; the handles stop here.
+        static let trimMinimumDuration: Double = 1
+        static let trimCutDim: Double = 0.6
+        static let trimGripInset: CGFloat = 10
+
+        // The mic ↔ camera switch on a long press (`MicModeButton`) — the one gesture, shared
+        // with the call button (`HoldSwitch`).
+        static let switchPressDelay = HoldSwitch.pressDelay
+        static let switchSegmentLength = HoldSwitch.segmentLength
+        static let switchCancelMargin = HoldSwitch.cancelMargin
+    }
+
+    /// Hold a button, slide to a choice, let go: the composer's mic ↔ camera (`MicModeButton`)
+    /// and the header's action palette (`ChatActionButton`). One gesture, so one hold delay.
+    enum HoldSwitch {
+        static let pressDelay: Duration = .milliseconds(350)
+        /// Length of each segment along the direction the switch opens; it is two of them.
+        static let segmentLength: CGFloat = 52
+        /// How far past the switch a finger may drift and still choose; beyond it, release cancels.
+        static let cancelMargin: CGFloat = 44
     }
 
     // MARK: - Reply focus (soft dim, not Apple-style isolation)
@@ -217,7 +273,6 @@ enum ChatUIConstants {
         /// Leading inset inside the text field capsule.
         static let textLeadingPad: CGFloat = CTLayout.sectionGap
         static let textVerticalPad: CGFloat = 11
-        static let trailingIconSize: CGFloat = 28
         /// Spacing between attach circle and text capsule.
         static let attachFieldGap: CGFloat = CTLayout.chromeGap
         /// Outer horizontal pad of the attach+field row.
@@ -226,6 +281,5 @@ enum ChatUIConstants {
         static let auxBarGap: CGFloat = CTLayout.inlinePad
         /// Voice bar height is `height` — see the note there. No separate constant: the two are
         /// the same measurement, and while they were two values one of them was free to drift.
-        static let voiceChromeIconSize: CGFloat = 22
     }
 }

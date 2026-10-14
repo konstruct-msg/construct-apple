@@ -58,14 +58,14 @@ struct RecoveryEntryView: View {
         return ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 Text(NSLocalizedString("recovery_entry_instructions", comment: ""))
-                    .font(.subheadline)
+                    .font(CTFont.ui(15))
                     .foregroundColor(.secondary)
                     .padding(.horizontal)
 
                 // Identifier
                 VStack(alignment: .leading, spacing: 6) {
                     Text(NSLocalizedString("recovery_identifier_label", comment: ""))
-                        .font(.caption)
+                        .font(CTFont.secondary)
                         .foregroundColor(.secondary)
                     TextField(NSLocalizedString("recovery_identifier_placeholder", comment: ""),
                               text: $vm.recoverIdentifier)
@@ -79,7 +79,7 @@ struct RecoveryEntryView: View {
 
                 // 12-word grid
                 Text(NSLocalizedString("recovery_enter_phrase", comment: ""))
-                    .font(.caption)
+                    .font(CTFont.secondary)
                     .foregroundColor(.secondary)
                     .padding(.horizontal)
 
@@ -95,7 +95,7 @@ struct RecoveryEntryView: View {
 
                 if !vm.enteredMnemonic.isEmpty && !vm.enteredMnemonicValid {
                     Text(NSLocalizedString("recovery_invalid_phrase", comment: ""))
-                        .font(.caption)
+                        .font(CTFont.secondary)
                         .foregroundColor(.red)
                         .padding(.horizontal)
                 }
@@ -104,7 +104,7 @@ struct RecoveryEntryView: View {
                     Task { await vm.submitRecover() }
                 } label: {
                     Text(NSLocalizedString("recovery_restore_account", comment: ""))
-                        .font(CTFont.regular(13))
+                        .font(CTFont.body)
                         .foregroundColor(Color.CT.text)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
@@ -123,7 +123,7 @@ struct RecoveryEntryView: View {
         @Bindable var vm = vm
         return HStack(spacing: 4) {
             Text("\(index + 1).")
-                .font(.caption)
+                .font(CTFont.mono(12))
                 .foregroundColor(.secondary)
                 .frame(width: 20, alignment: .trailing)
             TextField("", text: $vm.enteredWords[index])
@@ -173,14 +173,14 @@ struct RecoveryEntryView: View {
         VStack(spacing: 24) {
             Spacer()
             Image(systemName: "checkmark.circle.fill")
-                .font(CTFont.regular(48))
+                .font(CTFont.ui(48))
                 .foregroundColor(Color.CT.accent)
                 .lineLimit(1).fixedSize()
             Text(NSLocalizedString("recovery_restored_title", comment: ""))
-                .font(CTFont.bold(18))
+                .font(CTFont.title)
                 .foregroundColor(Color.CT.text)
             Text(NSLocalizedString("recovery_restored_body", comment: ""))
-                .font(CTFont.regular(13))
+                .font(CTFont.body)
                 .foregroundColor(Color.CT.textDim)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal)
@@ -190,7 +190,7 @@ struct RecoveryEntryView: View {
                 dismiss()
             } label: {
                 Text(NSLocalizedString("done", comment: ""))
-                    .font(CTFont.regular(13))
+                    .font(CTFont.body)
                     .foregroundColor(Color.CT.text)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 12)
@@ -207,14 +207,14 @@ struct RecoveryEntryView: View {
         VStack(spacing: 20) {
             Spacer()
             Image(systemName: "exclamationmark.triangle.fill")
-                .font(CTFont.regular(48))
+                .font(CTFont.ui(48))
                 .foregroundColor(.orange)
                 .lineLimit(1).fixedSize()
             Text(NSLocalizedString("recovery_error_title", comment: ""))
-                .font(CTFont.bold(16))
+                .font(CTFont.ui(16, weight: .bold))
                 .foregroundColor(Color.CT.text)
             Text(message)
-                .font(CTFont.regular(13))
+                .font(CTFont.body)
                 .foregroundColor(Color.CT.textDim)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal)
@@ -223,7 +223,7 @@ struct RecoveryEntryView: View {
                 vm.recoverStep = .enterPhrase
             } label: {
                 Text(NSLocalizedString("try_again", comment: ""))
-                    .font(CTFont.regular(13))
+                    .font(CTFont.body)
                     .foregroundColor(Color.CT.text)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 12)
@@ -243,7 +243,7 @@ struct RecoveryEntryView: View {
             } label: {
                 Label(NSLocalizedString("diagnostics_share_logs", comment: ""),
                       systemImage: "square.and.arrow.up")
-                    .font(CTFont.regular(12))
+                    .font(CTFont.secondary)
                     .foregroundColor(Color.CT.textDim)
             }
             .padding(.bottom)

@@ -22,8 +22,9 @@
 //  • The tag is per *recipient*, identical for every sender holding the key. A pair-wise value
 //    would be a stable pseudonymous handle for the sender inside each epoch, which is precisely
 //    what sealed sender exists to destroy.
-//  • Our own key is per *account*, not per device. A device that minted its own would leave half
-//    our contacts presenting a credential the server does not recognise.
+//  • Our own key is per *device*: each device of the account mints its own and publishes its own
+//    tags, and the server keeps every device's tags as a set per epoch (construct-server
+//    `7fd850b`). Until then it kept one value and the last device to publish revoked the others.
 //
 
 import Foundation
@@ -126,10 +127,22 @@ final class IntakeCredentialService {
     private let keychain = KeychainManager.shared
     private let defaults = UserDefaults.standard
 
-    /// Accounts we have already handed our key to. Not secret — it is a list of who we talk to,
-    /// which Core Data holds anyway — and deliberately not in the Keychain, where a per-contact
+    /// **Devices** we have already handed our key to. Not secret — it is a list of who we talk
+    /// to, which Core Data holds anyway — and deliberately not in the Keychain, where a per-contact
     /// item would be a second copy of the contact graph in a store that has no reason to carry one.
-    private static let sentToKey = "construct.intake.sentTo.v1"
+    ///
+    /// Keyed by device since 2026-09-22; `v1` held accounts. The key is the account's, but each
+    /// device of theirs seals to us on its own and needs it in hand, and an account-level mark set
+    /// by the first device meant the second never got it: measured on the stand, the sibling's
+    /// every envelope to us "pays a token" (`no_key_for_peer`) while the account read as served.
+    /// The v1 set is dropped rather than migrated — its entries could only ever have meant the
+    /// pinned device, and re-sending once per contact, lazily, is one envelope each.
+    ///
+    /// `v3` since 2026-09-28: what goes out is the contact card (key + account address), and a
+    /// device that got only the bare key under v2 has not got our address. Every contact gets the
+    /// card once, lazily, the next time the two devices talk.
+    private static let sentToKey = "construct.intake.sentTo.v3"
+    private static let legacySentToKeys = ["construct.intake.sentTo.v2", "construct.intake.sentTo.v1"]
     private static let lastPublishedEpochKey = "construct.intake.lastPublishedEpoch.v1"
     /// Peers whose credential the server refused, keyed by account, valued by the epoch it was
     /// refused in. Not persisted beyond UserDefaults and not secret — same reasoning as `sentToKey`.
@@ -139,7 +152,7 @@ final class IntakeCredentialService {
 
     // MARK: - Our own key
 
-    /// This account's intake key, minted on first use.
+    /// This device's intake key for our account, minted on first use.
     ///
     /// Minting here rather than at registration is deliberate: an account created before this
     /// shipped has no key either, so the two cases are one, and there is no migration that has to
@@ -148,7 +161,7 @@ final class IntakeCredentialService {
         if let existing = keychain.loadOwnIntakeKey(), existing.count == intakeKeyLength {
             return existing
         }
-        let fresh = Data(generateIntakeKey())
+        let fresh = generateIntakeKey()
         keychain.saveOwnIntakeKey(fresh)
         Log.info("Intake: minted this account's intake key", category: "Intake")
         return fresh
@@ -173,7 +186,7 @@ final class IntakeCredentialService {
         var entries: [(epoch: UInt64, tag: Data)] = []
         for epoch in IntakePublishing.epochsToPublish(currentEpoch: currentEpoch) {
             guard let tag = try? intakeTag(
-                intakeKey: [UInt8](key), recipientAccountId: accountId, epoch: epoch
+                intakeKey: key, recipientAccountId: accountId, epoch: epoch
             ) else { continue }
             entries.append((epoch, Data(tag)))
         }
@@ -230,7 +243,7 @@ final class IntakeCredentialService {
         guard let key = stored else { return nil }
 
         guard let tag = try? intakeTag(
-            intakeKey: [UInt8](key), recipientAccountId: accountId, epoch: epoch
+            intakeKey: key, recipientAccountId: accountId, epoch: epoch
         ) else {
             IntakeTagAbsence.derivationFailed.log(peer: accountId)
             return nil
@@ -282,19 +295,21 @@ final class IntakeCredentialService {
 
     // MARK: - Lazy distribution
 
-    /// Does this peer still need our key?
+    /// Which of `devices` still need our key.
     ///
     /// Grandfathering is lazy by decision: sweeping the contact graph on upgrade would mean a
     /// hundred sealed control envelopes at once, each of which must itself be paid for, and would
     /// pay that for contacts the user may never write to again. The graph migrates in the order it
-    /// is actually used.
-    func peerNeedsOurKey(_ accountId: String) -> Bool {
-        !sentTo().contains(normalise(accountId))
+    /// is actually used. The caller names the devices — the ones it holds a session with — because
+    /// this service does not know a peer's device set and must not grow a copy of it.
+    func devicesNeedingOurKey(among devices: [String]) -> [String] {
+        let sent = sentTo()
+        return devices.filter { !sent.contains(normalise($0)) }
     }
 
-    func markOurKeySent(to accountId: String) {
+    func markOurKeySent(to devices: [String]) {
         var set = sentTo()
-        set.insert(normalise(accountId))
+        for device in devices { set.insert(normalise(device)) }
         defaults.set(Array(set), forKey: Self.sentToKey)
     }
 
@@ -303,10 +318,12 @@ final class IntakeCredentialService {
     /// Rotation *is* revocation — there is no server-side deny entry for one contact, by design.
     func forgetWhoHasOurKey() {
         defaults.removeObject(forKey: Self.sentToKey)
+        Self.legacySentToKeys.forEach(defaults.removeObject(forKey:))
     }
 
     private func sentTo() -> Set<String> {
-        Set(defaults.stringArray(forKey: Self.sentToKey) ?? [])
+        Self.legacySentToKeys.forEach(defaults.removeObject(forKey:))
+        return Set(defaults.stringArray(forKey: Self.sentToKey) ?? [])
     }
 
     private func normalise(_ accountId: String) -> String {

@@ -204,3 +204,52 @@ final class IntakeCredentialRejectionTests: XCTestCase {
         XCTAssertNotNil(stored[peer])
     }
 }
+
+/// Who holds our intake key — devices, not accounts.
+///
+/// An account-level mark set by the first device meant the second never got the key: on the
+/// stand the sibling's every envelope to us paid a token (`no_key_for_peer`) while the account
+/// read as served. The service does not know a peer's device set; the caller names the devices
+/// it holds sessions with, and the answer is which of *those* still lack the key.
+@MainActor
+final class IntakeKeyDistributionTests: XCTestCase {
+
+    private let service = IntakeCredentialService.shared
+    private let a = "c6bfaaefcdd4e6ca0000000000000001"
+    private let b = "b814c8ab96bc44960000000000000002"
+
+    override func setUp() {
+        super.setUp()
+        service.forgetWhoHasOurKey()
+    }
+
+    override func tearDown() {
+        service.forgetWhoHasOurKey()
+        super.tearDown()
+    }
+
+    /// Mutation: mark by account again — `b` would read as served the moment `a` is, and this
+    /// reddens.
+    func testMarkingOneDeviceLeavesTheSiblingOwed() {
+        XCTAssertEqual(service.devicesNeedingOurKey(among: [a, b]), [a, b])
+        service.markOurKeySent(to: [a])
+        XCTAssertEqual(service.devicesNeedingOurKey(among: [a, b]), [b])
+        service.markOurKeySent(to: [b])
+        XCTAssertEqual(service.devicesNeedingOurKey(among: [a, b]), [])
+    }
+
+    /// Rotation is revocation: every device is owed the new key.
+    func testForgettingOwesEveryDeviceAgain() {
+        service.markOurKeySent(to: [a, b])
+        service.forgetWhoHasOurKey()
+        XCTAssertEqual(service.devicesNeedingOurKey(among: [a, b]), [a, b])
+    }
+
+    /// The v1 set held accounts and is dropped, not read: an entry there could only have meant
+    /// the pinned device, and reading it as "every device" is the defect this replaces.
+    func testTheAccountKeyedSetIsNotConsulted() {
+        UserDefaults.standard.set([a], forKey: "construct.intake.sentTo.v1")
+        XCTAssertEqual(service.devicesNeedingOurKey(among: [a]), [a])
+        XCTAssertNil(UserDefaults.standard.stringArray(forKey: "construct.intake.sentTo.v1"), "dropped on first read")
+    }
+}

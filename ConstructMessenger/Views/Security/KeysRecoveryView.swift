@@ -10,17 +10,23 @@
 import SwiftUI
 
 struct KeysRecoveryView: View {
-    /// Why the recovery screen is shown. Only the warning copy and the Retry action differ;
-    /// seed-phrase recovery and "new account" are identical for both.
+    /// Why the recovery screen is shown. The warning copy and the Retry action differ; seed-phrase
+    /// recovery is offered where it can help, and "new account" is the same for every reason.
     enum Reason {
         /// Authenticated but device crypto keys couldn't be read from Keychain.
         case keysUnavailable
         /// Server rejected this device as unregistered (UNAUTHENTICATED / "device not found");
         /// keys are still present locally, so nothing is wiped until the user chooses.
         case deviceDeregistered
+        /// This device's store would not open (macOS, `LocalRepositories.storeFailure`). Nothing
+        /// is created over it; the seed phrase restores the account, not the store, so it is
+        /// not offered.
+        case storeUnreadable
     }
 
     var reason: Reason = .keysUnavailable
+    /// Retry for `.storeUnreadable`: the owner reopens the store and reads the outcome.
+    var retryStore: () -> Void = {}
 
     @Environment(AuthViewModel.self) private var auth
     @State private var recoveryVM = AccountRecoveryViewModel()
@@ -32,23 +38,17 @@ struct KeysRecoveryView: View {
         ZStack {
             Color.CT.bg.ignoresSafeArea()
             VStack(alignment: .leading, spacing: 0) {
-                CTNavBar(title: NSLocalizedString("keys_recovery_title", comment: "")) {
-                    EmptyView()
-                } trailing: {
-                    EmptyView()
-                }
-
                 ScrollView {
                     VStack(alignment: .leading, spacing: 20) {
                         // Warning block
                         VStack(alignment: .leading, spacing: 8) {
                             Text(NSLocalizedString(warningTitleKey, comment: ""))
-                                .font(CTFont.bold(13))
+                                .font(CTFont.bodyEmphasis)
                                 .foregroundColor(Color.CT.danger)
                                 .tracking(2)
 
                             Text(NSLocalizedString(warningBodyKey, comment: ""))
-                                .font(CTFont.regular(13))
+                                .font(CTFont.body)
                                 .foregroundColor(Color.CT.text)
                                 .lineSpacing(4)
                         }
@@ -63,7 +63,7 @@ struct KeysRecoveryView: View {
                         // Option 1: Retry
                         CTSettingsSectionHeader(title: NSLocalizedString("keys_recovery_section_retry", comment: ""))
                         Text(NSLocalizedString(retryHintKey, comment: ""))
-                            .font(CTFont.regular(12))
+                            .font(CTFont.secondary)
                             .foregroundColor(Color.CT.textDim)
                             .padding(.horizontal, 20)
                         Button {
@@ -71,6 +71,7 @@ struct KeysRecoveryView: View {
                             switch reason {
                             case .keysUnavailable:    auth.retryLoadingDeviceKeys()
                             case .deviceDeregistered: auth.retryDeviceAuthentication()
+                            case .storeUnreadable:    retryStore()
                             }
                         } label: {
                             CTSettingsRow(
@@ -84,23 +85,25 @@ struct KeysRecoveryView: View {
                         }
                         .buttonStyle(.plain)
 
-                        Rectangle().fill(Color.CT.noise).frame(height: 1)
+                        if reason != .storeUnreadable {
+                            Rectangle().fill(Color.CT.noise).frame(height: 1)
 
-                        // Option 2: Recover with seed
-                        CTSettingsSectionHeader(title: NSLocalizedString("keys_recovery_section_seed", comment: ""))
-                        Text(NSLocalizedString("keys_recovery_seed_hint", comment: ""))
-                            .font(CTFont.regular(12))
-                            .foregroundColor(Color.CT.textDim)
-                            .padding(.horizontal, 20)
-                        Button {
-                            showRecovery = true
-                        } label: {
-                            CTSettingsRow(
-                                label: NSLocalizedString("keys_recovery_seed_action", comment: ""),
-                                disclosure: true
-                            )
+                            // Option 2: Recover with seed
+                            CTSettingsSectionHeader(title: NSLocalizedString("keys_recovery_section_seed", comment: ""))
+                            Text(NSLocalizedString("keys_recovery_seed_hint", comment: ""))
+                                .font(CTFont.secondary)
+                                .foregroundColor(Color.CT.textDim)
+                                .padding(.horizontal, 20)
+                            Button {
+                                showRecovery = true
+                            } label: {
+                                CTSettingsRow(
+                                    label: NSLocalizedString("keys_recovery_seed_action", comment: ""),
+                                    disclosure: true
+                                )
+                            }
+                            .buttonStyle(.plain)
                         }
-                        .buttonStyle(.plain)
 
                         Rectangle().fill(Color.CT.noise).frame(height: 1)
 
@@ -110,7 +113,7 @@ struct KeysRecoveryView: View {
                             color: Color.CT.danger
                         )
                         Text(NSLocalizedString("keys_recovery_new_hint", comment: ""))
-                            .font(CTFont.regular(12))
+                            .font(CTFont.secondary)
                             .foregroundColor(Color.CT.textDim)
                             .padding(.horizontal, 20)
                         Button {
@@ -130,6 +133,7 @@ struct KeysRecoveryView: View {
                 }
             }
         }
+        .screenTitle(NSLocalizedString("keys_recovery_title", comment: ""))
         .sheet(isPresented: $showRecovery) {
             RecoveryEntryView()
                 .environment(recoveryVM)
@@ -140,6 +144,9 @@ struct KeysRecoveryView: View {
         ) {
             Button(NSLocalizedString("keys_recovery_wipe_confirm_action", comment: ""), role: .destructive) {
                 auth.wipeAndReregister()
+                // The store that would not open goes with the account, and an empty one under a
+                // new key takes its place: the hint promises the messages are lost, not kept.
+                if reason == .storeUnreadable { LocalDataWipe.run(reason: "store_unreadable_new_account") }
             }
             Button(NSLocalizedString("cancel", comment: ""), role: .cancel) {}
         } message: {
@@ -153,6 +160,7 @@ struct KeysRecoveryView: View {
         switch reason {
         case .keysUnavailable:    return "keys_recovery_warning_title"
         case .deviceDeregistered: return "device_deregistered_warning_title"
+        case .storeUnreadable:    return "local_store_unreadable_title"
         }
     }
 
@@ -160,6 +168,7 @@ struct KeysRecoveryView: View {
         switch reason {
         case .keysUnavailable:    return "keys_recovery_warning_body"
         case .deviceDeregistered: return "device_deregistered_warning_body"
+        case .storeUnreadable:    return "local_store_unreadable_body"
         }
     }
 
@@ -167,6 +176,7 @@ struct KeysRecoveryView: View {
         switch reason {
         case .keysUnavailable:    return "keys_recovery_retry_hint"
         case .deviceDeregistered: return "device_deregistered_retry_hint"
+        case .storeUnreadable:    return "local_store_unreadable_retry_hint"
         }
     }
 }

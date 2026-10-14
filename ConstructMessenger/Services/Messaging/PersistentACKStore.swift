@@ -9,7 +9,8 @@
 //
 //  Architecture — one cache, one durable store:
 //  - Hot path: the orchestrator's ACK cache, reached via `CryptoManager`. Process-lifetime only.
-//  - Durable path: Core Data `ProcessedMessage` — the **owner** of dedup state, survives restart.
+//  - Durable path: `LocalRepositories.processedMessages` (`ProcessedMessageStore`) — the **owner**
+//    of dedup state, survives restart.
 //  - TTL: entries older than `retentionDays` are pruned on app launch.
 //
 //  This type used to hold its own `RustAckStore`, a second in-memory cache independent of the
@@ -20,7 +21,6 @@
 //  Removed 2026-08-02, see decisions/one-ack-cache-one-durable-store.md.
 
 import Foundation
-import CoreData
 
 final class PersistentACKStore {
 
@@ -86,12 +86,12 @@ final class PersistentACKStore {
     /// still does not have it. Callers use that to decide whether the pass ended in a real gap:
     /// the cursor moves on, the core's in-memory cache dies with the process, and the message comes
     /// back after a restart with nothing left that remembers handling it.
-    func settleDurableWrite(_ messageId: String, in context: NSManagedObjectContext) -> Bool {
+    func settleDurableWrite(_ messageId: String) -> Bool {
         expectationLock.lock()
         let wasExpected = awaitingDurableWrite.remove(messageId) != nil
         expectationLock.unlock()
         guard wasExpected else { return false }
-        return !isProcessedInCoreData(messageId, in: context)
+        return !isProcessedDurably(messageId)
     }
 
     #if DEBUG
@@ -111,45 +111,27 @@ final class PersistentACKStore {
     // MARK: - Check
 
     /// Returns `true` if the message was already processed (cache or durable store).
-    func isProcessed(_ messageId: String, in context: NSManagedObjectContext) -> Bool {
+    func isProcessed(_ messageId: String) -> Bool {
         if isInCache(messageId) { return true }
-        return isProcessedInCoreData(messageId, in: context)
+        return isProcessedDurably(messageId)
     }
 
-    /// Async variant for Rust orchestrator `CheckAckInDb` callbacks.
-    /// Queries Core Data on a background context without requiring the caller to supply one.
-    func isProcessed(messageId: String) async -> Bool {
-        if isInCache(messageId) { return true }
-        return await isProcessedInCoreData(messageId: messageId)
-    }
-
-    /// Query ONLY Core Data — bypass the in-memory ACK cache.
+    /// Query ONLY the durable store — bypass the in-memory ACK cache.
     ///
     /// Use this exclusively in the `CheckAckInDb` handler. That question is "was this processed
     /// in a *prior* session?", and the cache cannot answer it: a mark made earlier in this same
     /// launch — by the Rust decrypt path or by `markProcessedInCache` ahead of the durable
     /// write — would answer `true` and turn a live message into a phantom duplicate.
-    func isProcessedInCoreData(_ messageId: String, in context: NSManagedObjectContext) -> Bool {
-        var found = false
-        context.performAndWait {
-            let fetch = ProcessedMessage.fetchRequest()
-            fetch.predicate = NSPredicate(format: "messageId == %@", messageId)
-            fetch.fetchLimit = 1
-            found = (try? context.fetch(fetch))?.isEmpty == false
-        }
-        if found { warmCache(messageId) }
-        return found
-    }
-
-    /// Async Core-Data-only variant for the `CheckAckInDb` async callback path.
-    /// Same rationale as `isProcessedInCoreData(_:in:)` — bypasses the cache.
-    func isProcessedInCoreData(messageId: String) async -> Bool {
-        let context = PersistenceController.shared.container.newBackgroundContext()
-        let found = await context.perform {
-            let fetch = ProcessedMessage.fetchRequest()
-            fetch.predicate = NSPredicate(format: "messageId == %@", messageId)
-            fetch.fetchLimit = 1
-            return (try? context.fetch(fetch))?.isEmpty == false
+    ///
+    /// A store that does not answer reads as "not processed": a duplicate is then caught by the
+    /// ratchet (its key is spent), where a false "processed" would drop a live message.
+    func isProcessedDurably(_ messageId: String) -> Bool {
+        let found: Bool
+        do {
+            found = try LocalRepositories.processedMessages.isProcessed(messageId)
+        } catch {
+            Log.error("PersistentACKStore: durable check failed for \(messageId.prefix(8))…: \(error)", category: "PersistentACK")
+            found = false
         }
         if found { warmCache(messageId) }
         return found
@@ -185,50 +167,23 @@ final class PersistentACKStore {
     }
 
     /// Marks `messageId` as processed. Idempotent — safe to call multiple times.
-    func markProcessed(_ messageId: String, senderId: String, in context: NSManagedObjectContext) {
+    func markProcessed(_ messageId: String, senderId: String) {
         do {
-            try markProcessedOrThrow(messageId, senderId: senderId, in: context)
+            try markProcessedOrThrow(messageId, senderId: senderId)
         } catch {
             // Already logged in markProcessedOrThrow.
         }
     }
 
-    func markProcessedOrThrow(_ messageId: String, senderId: String, in context: NSManagedObjectContext) throws {
-        var saveError: Error?
-        var shouldWarmCache = false
-
-        context.performAndWait {
-            let fetch = ProcessedMessage.fetchRequest()
-            fetch.predicate = NSPredicate(format: "messageId == %@", messageId)
-            fetch.fetchLimit = 1
-
-            if (try? context.fetch(fetch))?.isEmpty == false {
-                shouldWarmCache = true
-                return
-            }
-
-            let record = ProcessedMessage(context: context)
-            record.messageId = messageId
-            record.senderId = senderId
-            record.processedAt = Date()
-
-            do {
-                try context.saveOrThrow(category: "PersistentACK")
-                shouldWarmCache = true
-            } catch {
-                context.rollback()
-                saveError = error
-            }
+    func markProcessedOrThrow(_ messageId: String, senderId: String) throws {
+        do {
+            try LocalRepositories.processedMessages.markProcessed(messageId, senderId: senderId, at: Date())
+        } catch {
+            Log.error("PersistentACKStore: failed to save ACK for \(messageId.prefix(8))…: \(error)", category: "PersistentACK")
+            throw error
         }
-
-        if shouldWarmCache {
-            warmCache(messageId)
-        }
-
-        if let saveError {
-            Log.error("PersistentACKStore: failed to save ACK for \(messageId.prefix(8))…: \(saveError)", category: "PersistentACK")
-            throw saveError
-        }
+        // Warmed whether the mark was new or already held: either way it is durable now.
+        warmCache(messageId)
     }
 
     // MARK: - Cleanup
@@ -239,17 +194,12 @@ final class PersistentACKStore {
     /// timestamp, so there is nothing to age them by — it is bounded by process lifetime
     /// instead (`AckStore::prune_expired` in construct-core says the same). The old
     /// `rustAck.pruneExpired()` call here built a `PruneAckStore` action and dropped it.
-    func pruneExpired(in context: NSManagedObjectContext) {
+    func pruneExpired() {
         let cutoff = Calendar.current.date(byAdding: .day, value: -Self.retentionDays, to: Date()) ?? Date.distantPast
-        let fetch = ProcessedMessage.fetchRequest()
-        fetch.predicate = NSPredicate(format: "processedAt < %@", cutoff as NSDate)
-
         do {
-            let expired = try context.fetch(fetch)
-            if !expired.isEmpty {
-                Log.info("PersistentACKStore: pruning \(expired.count) expired ACK(s)", category: "PersistentACK")
-                expired.forEach { context.delete($0) }
-                try context.save()
+            let pruned = try LocalRepositories.processedMessages.forget(processedBefore: cutoff)
+            if pruned > 0 {
+                Log.info("PersistentACKStore: pruned \(pruned) expired ACK(s)", category: "PersistentACK")
             }
         } catch {
             Log.error("PersistentACKStore: prune failed: \(error)", category: "PersistentACK")

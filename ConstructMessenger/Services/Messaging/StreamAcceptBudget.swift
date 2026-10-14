@@ -9,7 +9,7 @@
 //  on device 2026-08-11, promotion is *already* cheap:
 //
 //      10:43:07  Transport: proxy start gen=1 (async)
-//      10:43:07  VEIL: relay=api.divany-kresla.uk:443 method=veil-front port=49549 latency=468ms
+//      10:43:07  VEIL: relay=<front>:443 method=veil-front port=49549 latency=468ms
 //      10:43:51  VEIL: … latency=173ms
 //
 //  173–468 ms, inside the same second. Pre-warming would save a third of a second. That is not

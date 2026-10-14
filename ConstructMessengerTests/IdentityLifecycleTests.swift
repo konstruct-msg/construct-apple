@@ -35,7 +35,7 @@ final class DeviceKeyAvailabilityTests: XCTestCase {
         XCTAssertEqual(
             DeviceKeyAvailability.resolve(
                 deviceId: .unreadable(errSecInteractionNotAllowed),
-                signingKey: .unreadable(errSecInteractionNotAllowed)
+                keyRecord: .unreadable(errSecInteractionNotAllowed)
             ),
             .unreadable,
             "reporting this as absent is what sent the user to onboarding and cost them their account"
@@ -44,11 +44,11 @@ final class DeviceKeyAvailabilityTests: XCTestCase {
 
     func testOneUnreadableReadIsEnoughToRefuseToClaimAbsence() {
         XCTAssertEqual(
-            DeviceKeyAvailability.resolve(deviceId: .found(idBytes), signingKey: .unreadable(-25308)),
+            DeviceKeyAvailability.resolve(deviceId: .found(idBytes), keyRecord: .unreadable(-25308)),
             .unreadable
         )
         XCTAssertEqual(
-            DeviceKeyAvailability.resolve(deviceId: .unreadable(-25308), signingKey: .found(keyBytes)),
+            DeviceKeyAvailability.resolve(deviceId: .unreadable(-25308), keyRecord: .found(keyBytes)),
             .unreadable
         )
     }
@@ -57,7 +57,7 @@ final class DeviceKeyAvailabilityTests: XCTestCase {
         // One key present, the other genuinely gone. Not a clean device; re-registering over a
         // half-present identity is the worse of the two mistakes.
         XCTAssertEqual(
-            DeviceKeyAvailability.resolve(deviceId: .found(idBytes), signingKey: .absent),
+            DeviceKeyAvailability.resolve(deviceId: .found(idBytes), keyRecord: .absent),
             .unreadable
         )
     }
@@ -67,14 +67,14 @@ final class DeviceKeyAvailabilityTests: XCTestCase {
     func testATrulyFreshDeviceStillGoesToRegistration() {
         // The fix must not trap first-time users on a recovery screen.
         XCTAssertEqual(
-            DeviceKeyAvailability.resolve(deviceId: .absent, signingKey: .absent),
+            DeviceKeyAvailability.resolve(deviceId: .absent, keyRecord: .absent),
             .absent
         )
     }
 
     func testBothKeysPresentIsPresent() {
         XCTAssertEqual(
-            DeviceKeyAvailability.resolve(deviceId: .found(idBytes), signingKey: .found(keyBytes)),
+            DeviceKeyAvailability.resolve(deviceId: .found(idBytes), keyRecord: .found(keyBytes)),
             .present
         )
     }

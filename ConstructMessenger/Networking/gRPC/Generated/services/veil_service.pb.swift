@@ -8,7 +8,11 @@
 // For information on using the generated types, please see the documentation:
 //   https://github.com/apple/swift-protobuf/
 
+#if canImport(FoundationEssentials)
+import FoundationEssentials
+#else
 import Foundation
+#endif
 import SwiftProtobuf
 
 // If the compiler emits an error on this type, it is because this file
@@ -16,12 +20,12 @@ import SwiftProtobuf
 // incompatible with the version of SwiftProtobuf to which you are linking.
 // Please ensure that you are building against the same version of the API
 // that was used to generate this file.
-fileprivate struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobuf.ProtobufAPIVersionCheck {
+fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobuf.ProtobufAPIVersionCheck {
   struct _2: SwiftProtobuf.ProtobufAPIVersion_2 {}
   typealias Version = _2
 }
 
-public struct Shared_Proto_Services_V1_IssueVeilCapabilityRequest: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_IssueVeilCapabilityRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -49,7 +53,7 @@ public struct Shared_Proto_Services_V1_IssueVeilCapabilityRequest: Sendable {
   public init() {}
 }
 
-public struct Shared_Proto_Services_V1_IssueVeilCapabilityResponse: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_IssueVeilCapabilityResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -106,7 +110,7 @@ public struct Shared_Proto_Services_V1_IssueVeilCapabilityResponse: Sendable {
 
 /// Один альтернативный вход: те же поля, что и в основном ответе, но для другого
 /// релея. Клиент кеширует их (VeilTicketStore) и ранжирует своим RelaySelector.
-public struct Shared_Proto_Services_V1_EntryPoint: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_EntryPoint: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -137,7 +141,7 @@ public struct Shared_Proto_Services_V1_EntryPoint: Sendable {
 }
 
 /// Empty. Server picks the front via select_voucher_front over VEIL_RELAYS.
-public struct Shared_Proto_Services_V1_IssueBootstrapVoucherRequest: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_IssueBootstrapVoucherRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -147,7 +151,7 @@ public struct Shared_Proto_Services_V1_IssueBootstrapVoucherRequest: Sendable {
   public init() {}
 }
 
-public struct Shared_Proto_Services_V1_IssueBootstrapVoucherResponse: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_IssueBootstrapVoucherResponse: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -166,9 +170,9 @@ public struct Shared_Proto_Services_V1_IssueBootstrapVoucherResponse: Sendable {
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
 
-fileprivate let _protobuf_package = "shared.proto.services.v1"
+fileprivate nonisolated let _protobuf_package = "shared.proto.services.v1"
 
-extension Shared_Proto_Services_V1_IssueVeilCapabilityRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_IssueVeilCapabilityRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".IssueVeilCapabilityRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}relay_address\0\u{3}current_ticket_id\0\u{3}veil_pk\0\u{1}role\0")
 
@@ -213,7 +217,7 @@ extension Shared_Proto_Services_V1_IssueVeilCapabilityRequest: SwiftProtobuf.Mes
   }
 }
 
-extension Shared_Proto_Services_V1_IssueVeilCapabilityResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_IssueVeilCapabilityResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".IssueVeilCapabilityResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}capability\0\u{3}relay_address\0\u{1}spki\0\u{1}sni\0\u{3}not_after\0\u{3}capability_version\0\u{1}alternates\0\u{1}signature\0")
 
@@ -278,7 +282,7 @@ extension Shared_Proto_Services_V1_IssueVeilCapabilityResponse: SwiftProtobuf.Me
   }
 }
 
-extension Shared_Proto_Services_V1_EntryPoint: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_EntryPoint: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".EntryPoint"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}capability\0\u{3}relay_address\0\u{1}spki\0\u{1}sni\0\u{3}not_after\0\u{3}capability_version\0\u{1}signature\0")
 
@@ -338,7 +342,7 @@ extension Shared_Proto_Services_V1_EntryPoint: SwiftProtobuf.Message, SwiftProto
   }
 }
 
-extension Shared_Proto_Services_V1_IssueBootstrapVoucherRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_IssueBootstrapVoucherRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".IssueBootstrapVoucherRequest"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap()
 
@@ -357,7 +361,7 @@ extension Shared_Proto_Services_V1_IssueBootstrapVoucherRequest: SwiftProtobuf.M
   }
 }
 
-extension Shared_Proto_Services_V1_IssueBootstrapVoucherResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Services_V1_IssueBootstrapVoucherResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".IssueBootstrapVoucherResponse"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}config_uri\0\u{1}exp\0")
 

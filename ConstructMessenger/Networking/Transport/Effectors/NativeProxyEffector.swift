@@ -22,6 +22,16 @@ actor NativeProxyEffector: ProxyEffector {
         self.pool = RelayPool(relays: initialRelays, blockedPenalty: blockedPenalty)
     }
 
+    /// Whether the port the proxy gave us is still held. Not `veil_is_alive`: it misses a port
+    /// iOS reclaimed during a suspend, and on the native-TLS path — where Swift, not the Rust
+    /// coordinator, owns the listener — it says "no" while the port works, which restarted a
+    /// healthy proxy on every return to the foreground (2026-10-02). Not a connect either: that
+    /// opens a tunnel. `LocalListenerProbe` binds the port instead.
+    func listenerIsAlive() async -> Bool {
+        guard let port = await proxy.port else { return false }
+        return LocalListenerProbe.isHeld(port: port)
+    }
+
     func start() async -> TransportEvent {
         guard !pool.isEmpty else {
             return .proxyStartFailed(relay: nil, reason: "relay pool empty")
@@ -37,6 +47,7 @@ actor NativeProxyEffector: ProxyEffector {
         if let learnedPin = VeilLearnedFrontStore.shared.pin(for: relay.address),
            (relay.pinnedSpki ?? "").lowercased() != learnedPin {
             pool.recordFailure(relay)
+            await VeilProxyManager.shared.handleRelayUnavailable(relay.address)
             return .proxyStartFailed(relay: relay.address, reason: "learned front offered without its pin")
         }
         do {
@@ -45,6 +56,7 @@ actor NativeProxyEffector: ProxyEffector {
             return .proxyStarted(relay: relay.address, port: result.port, restarted: result.restarted)
         } catch {
             pool.recordFailure(relay)
+            await VeilProxyManager.shared.handleRelayUnavailable(relay.address)
             // Prefer the clean, real reason (veil_last_error → VeilProxyRuntimeError)
             // over the raw nested enum description.
             let reason = (error as? VeilProxyError)?.localizedDescription ?? "\(error)"

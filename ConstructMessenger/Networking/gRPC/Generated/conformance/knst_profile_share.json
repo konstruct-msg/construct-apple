@@ -1,0 +1,90 @@
+{
+  "_doc": "CONTENT_TYPE_PROFILE (29). decode: a ProfileShare payload and how it reads; avatar is {set: ...}, \"removed\" or \"unchanged\" (absent, or a key that is not 32 bytes). apply: a profile is applied only if edited_at_ms is strictly greater than the one held for that sender (none held = apply); then set → download and replace, removed → clear, unchanged → keep. Checked by check_profile_share.py. Decision: construct-docs decisions/profile-share-is-a-typed-versioned-state.md.",
+  "decode": [
+    {
+      "name": "name_and_avatar",
+      "display_name": "Alice",
+      "edited_at_ms": 1759400000000,
+      "avatar": {
+        "set": {
+          "media_id": "m-1",
+          "media_url": "https://media.example/m-1",
+          "media_key": "202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f",
+          "mime_type": "image/jpeg"
+        }
+      },
+      "payload": "0a05416c6963651080f4a5a39a331a4e0a036d2d31121968747470733a2f2f6d656469612e6578616d706c652f6d2d311a20202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f220a696d6167652f6a706567"
+    },
+    {
+      "name": "avatar_removed",
+      "display_name": "Alice",
+      "edited_at_ms": 1759400000001,
+      "avatar": "removed",
+      "payload": "0a05416c6963651081f4a5a39a332001"
+    },
+    {
+      "name": "avatar_unchanged",
+      "display_name": "Алиса",
+      "edited_at_ms": 1759400000002,
+      "avatar": "unchanged",
+      "payload": "0a0ad090d0bbd0b8d181d0b01082f4a5a39a33"
+    },
+    {
+      "name": "short_key_is_unchanged",
+      "display_name": "Alice",
+      "edited_at_ms": 1759400000003,
+      "avatar": "unchanged",
+      "payload": "0a05416c6963651083f4a5a39a331a3e0a036d2d31121968747470733a2f2f6d656469612e6578616d706c652f6d2d311a10202122232425262728292a2b2c2d2e2f220a696d6167652f6a706567"
+    }
+  ],
+  "apply": [
+    {
+      "name": "first_profile",
+      "held_edited_at_ms": null,
+      "edited_at_ms": 10,
+      "avatar": "unchanged",
+      "result": "apply",
+      "avatar_action": "keep"
+    },
+    {
+      "name": "newer",
+      "held_edited_at_ms": 10,
+      "edited_at_ms": 11,
+      "avatar": "set",
+      "result": "apply",
+      "avatar_action": "download"
+    },
+    {
+      "name": "same_is_not_newer",
+      "held_edited_at_ms": 11,
+      "edited_at_ms": 11,
+      "avatar": "set",
+      "result": "ignore",
+      "avatar_action": null
+    },
+    {
+      "name": "older_is_ignored",
+      "held_edited_at_ms": 11,
+      "edited_at_ms": 9,
+      "avatar": "removed",
+      "result": "ignore",
+      "avatar_action": null
+    },
+    {
+      "name": "removed_clears",
+      "held_edited_at_ms": 11,
+      "edited_at_ms": 12,
+      "avatar": "removed",
+      "result": "apply",
+      "avatar_action": "clear"
+    },
+    {
+      "name": "unchanged_keeps",
+      "held_edited_at_ms": 12,
+      "edited_at_ms": 13,
+      "avatar": "unchanged",
+      "result": "apply",
+      "avatar_action": "keep"
+    }
+  ]
+}

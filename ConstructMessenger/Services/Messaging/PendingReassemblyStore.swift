@@ -13,14 +13,12 @@
 //
 //  This store is the single source of truth for partial reassembly — there is no separate
 //  in-memory pending map. Two stores of one fact is the defect this codebase has spent a week
-//  removing; `entries` below is a cache of this file tree, never a second opinion about it.
+//  removing.
 //
-//  At rest: one directory per pending message, one file per chunk, each encrypted with
-//  `MessageStorageCrypto` under a store-wide key held in the Keychain as
-//  `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly` — reassembly resumes during a background
-//  push decrypt, so `WhenUnlocked*` would silently break exactly the case this exists for.
-//  One file per chunk rather than one growing blob: rewriting the whole message on every chunk
-//  is quadratic, and a 256-chunk file send would write ~128 MB to disk to deliver 1 MB.
+//  At rest: `LocalRepositories.pendingChunks` (`PendingChunkStore`) since 2026-10-11 — the file
+//  layout this type used to write itself (`FilePendingChunkStore`), and `pending_chunks` in the
+//  crate on macOS. A message is one sender's, keyed by sender and message id. This type keeps the
+//  rules: when a message is complete, how it is assembled, and when a partial one is given up.
 //
 //  See decisions/durable-chunk-reassembly.md.
 //
@@ -28,16 +26,13 @@
 import Foundation
 
 struct PendingReassembly {
+    let senderId: String
     let messageId: UUID
     let totalChunks: UInt16
     let plaintextLength: Int
     let contentType: UInt8
     var receivedChunks: [UInt16: Data]
     let startedAt: Date
-    /// Envelope ids that carried the chunks. Held so every one of them can be marked processed
-    /// once the bytes are durable — an intermediate envelope that is never marked is what made
-    /// the same ids loop through redelivery.
-    var envelopeIds: [String]
 
     var isComplete: Bool { receivedChunks.count == Int(totalChunks) }
 
@@ -68,97 +63,109 @@ final class PendingReassemblyStore {
     /// away the partial before the relaunch it was written for.
     static let retention: TimeInterval = 24 * 60 * 60
 
-    private let queue = DispatchQueue(label: "construct.PendingReassemblyStore")
-    private var entries: [UUID: PendingReassembly] = [:]
-    private var loadedFromDisk = false
+    /// The sweep runs on every decrypted message and now reads the store, not a map in memory;
+    /// against a retention of a day, once a minute loses nothing.
+    static let sweepInterval: TimeInterval = 60
 
-    private static let keychainAccount = "construct.reassembly_store_key"
+    private let queue = DispatchQueue(label: "construct.PendingReassemblyStore")
+    private var lastSweep: Date?
+
+    private var store: any PendingChunkStore { LocalRepositories.pendingChunks }
 
     private init() {}
 
     // MARK: - API
 
-    /// Record one chunk. Returns the entry once every chunk is present, nil while it is still
-    /// incomplete. The bytes are on disk before this returns, so the caller may safely treat the
-    /// envelope as handled.
+    /// Record one chunk. Returns the message once every chunk is present, nil while it is still
+    /// incomplete. The bytes are in the store before this returns, so the caller may safely treat
+    /// the envelope as handled.
     func put(
+        senderId: String,
         messageId: UUID,
         chunkIndex: UInt16,
         totalChunks: UInt16,
         plaintextLength: Int,
         contentType: UInt8,
         payload: Data,
-        envelopeId: String,
         now: Date = Date()
     ) -> PendingReassembly? {
         queue.sync {
-            loadIfNeeded()
-            sweep(now: now)
-
-            var entry = entries[messageId] ?? PendingReassembly(
-                messageId: messageId,
-                totalChunks: totalChunks,
-                plaintextLength: plaintextLength,
-                contentType: contentType,
-                receivedChunks: [:],
-                startedAt: now,
-                envelopeIds: []
-            )
-            entry.receivedChunks[chunkIndex] = payload
-            if !entry.envelopeIds.contains(envelopeId) { entry.envelopeIds.append(envelopeId) }
-            entries[messageId] = entry
-
-            persist(entry, chunkIndex: chunkIndex, payload: payload)
-
-            guard entry.isComplete else { return nil }
-            return entry
+            let id = messageId.uuidString.lowercased()
+            do {
+                try store.add(PendingChunkRecord(
+                    senderId: senderId, messageId: id, chunkIndex: chunkIndex, totalChunks: totalChunks,
+                    plaintextLength: plaintextLength, contentType: contentType, payload: payload,
+                    receivedAt: now
+                ))
+                // The count first: reading every chunk on every arrival is quadratic in the size.
+                guard try store.count(senderId: senderId, messageId: id) == Int(totalChunks) else { return nil }
+                let entry = try reassembly(senderId: senderId, messageId: messageId)
+                return entry?.isComplete == true ? entry : nil
+            } catch {
+                Log.error(
+                    "Reassembly store: chunk \(chunkIndex) of \(id.prefix(8))… not kept — the partial message will not survive a restart: \(error)",
+                    category: "ChunkedDelivery"
+                )
+                return nil
+            }
         }
     }
 
-    /// Drop a completed (or abandoned) reassembly and its files.
-    func remove(messageId: UUID) {
+    /// Drop a completed (or abandoned) reassembly.
+    func remove(senderId: String, messageId: UUID) {
         queue.sync {
-            entries.removeValue(forKey: messageId)
-            try? FileManager.default.removeItem(at: directory(for: messageId))
+            try? store.delete(senderId: senderId, messageId: messageId.uuidString.lowercased())
         }
     }
 
     /// Expire anything past `retention`, reporting each as a real loss. Call on any decrypted
-    /// message so a stalled reassembly surfaces while ordinary traffic keeps flowing.
+    /// message so a stalled reassembly surfaces while ordinary traffic keeps flowing; it looks at
+    /// the store at most once per `sweepInterval`.
     @discardableResult
     func sweepExpired(now: Date = Date()) -> [PendingReassembly] {
         queue.sync {
-            loadIfNeeded()
+            if let lastSweep, now.timeIntervalSince(lastSweep) < Self.sweepInterval, now >= lastSweep { return [] }
+            lastSweep = now
             return sweep(now: now)
+        }
+    }
+
+    /// Every partial message dropped, without reporting it as a loss — it was the last account's
+    /// (`AuthViewModel`'s ownership gate), and the next one never received it.
+    func removeAll() {
+        queue.sync {
+            do {
+                for message in try store.messages() {
+                    try store.delete(senderId: message.senderId, messageId: message.messageId)
+                }
+            } catch {
+                Log.error("Reassembly store: partial messages not dropped: \(error)", category: "ChunkedDelivery")
+            }
         }
     }
 
     /// Test/diagnostic view of what is currently held.
     func pendingCount() -> Int {
-        queue.sync {
-            loadIfNeeded()
-            return entries.count
-        }
+        queue.sync { (try? store.messages().count) ?? 0 }
     }
 
-    /// Drop the in-memory cache so the next access reads the file tree again — what a relaunch
-    /// does. The seam exists because the property that matters (a partial message survives the
-    /// process) cannot be observed any other way from a test.
-    func forgetInMemoryStateForTesting() {
-        queue.sync {
-            entries.removeAll()
-            loadedFromDisk = false
-        }
+    #if DEBUG
+    /// The next sweep looks at the store whatever the time since the last one.
+    func resetSweepThrottleForTesting() {
+        queue.sync { lastSweep = nil }
     }
+    #endif
 
     // MARK: - Expiry
 
-    @discardableResult
     private func sweep(now: Date) -> [PendingReassembly] {
-        let expired = entries.values.filter { now.timeIntervalSince($0.startedAt) > Self.retention }
-        guard !expired.isEmpty else { return [] }
-
-        for entry in expired {
+        guard let held = try? store.messages() else { return [] }
+        var expired: [PendingReassembly] = []
+        for message in held {
+            guard let uuid = UUID(uuidString: message.messageId),
+                  let entry = try? reassembly(senderId: message.senderId, messageId: uuid),
+                  now.timeIntervalSince(entry.startedAt) > Self.retention
+            else { continue }
             Log.error(
                 "Chunked message LOST for \(entry.messageId.uuidString.prefix(8))… — \(entry.receivedChunks.count)/\(entry.totalChunks) chunks after \(Int(now.timeIntervalSince(entry.startedAt)))s, missing indices \(entry.missingIndices.prefix(16).map(String.init).joined(separator: ",")) — not recoverable (ratchet keys for the missing chunks are consumed)",
                 category: "ChunkedDelivery"
@@ -167,110 +174,23 @@ final class PendingReassemblyStore {
                 .chunkReassemblyExpired,
                 label: String(entry.messageId.uuidString.prefix(8))
             )
-            entries.removeValue(forKey: entry.messageId)
-            try? FileManager.default.removeItem(at: directory(for: entry.messageId))
+            try? store.delete(senderId: message.senderId, messageId: message.messageId)
+            expired.append(entry)
         }
         return expired
     }
 
-    // MARK: - Disk
-
-    private var root: URL {
-        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        return base.appendingPathComponent("PendingReassembly", isDirectory: true)
-    }
-
-    private func directory(for messageId: UUID) -> URL {
-        root.appendingPathComponent(messageId.uuidString, isDirectory: true)
-    }
-
-    /// One `meta` file plus one file per chunk. `meta` is rewritten on every chunk (it is tens of
-    /// bytes and carries the growing envelope-id list); chunk files are written once.
-    private func persist(_ entry: PendingReassembly, chunkIndex: UInt16, payload: Data) {
-        guard let key = storeKey() else {
-            Log.error("Reassembly store: no key — partial message will not survive a restart", category: "ChunkedDelivery")
-            return
-        }
-        let dir = directory(for: entry.messageId)
-        do {
-            try FileManager.default.createDirectory(
-                at: dir,
-                withIntermediateDirectories: true,
-                attributes: [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication]
-            )
-            let meta = Meta(
-                totalChunks: entry.totalChunks,
-                plaintextLength: entry.plaintextLength,
-                contentType: entry.contentType,
-                startedAt: entry.startedAt.timeIntervalSince1970,
-                envelopeIds: entry.envelopeIds
-            )
-            let metaPlain = try JSONEncoder().encode(meta)
-            try MessageStorageCrypto.encrypt(plaintext: metaPlain, key: key)
-                .write(to: dir.appendingPathComponent("meta"), options: .atomic)
-            try MessageStorageCrypto.encrypt(plaintext: payload, key: key)
-                .write(to: dir.appendingPathComponent("\(chunkIndex)"), options: .atomic)
-        } catch {
-            Log.error("Reassembly store: failed to persist chunk \(chunkIndex) of \(entry.messageId.uuidString.prefix(8))…: \(error)", category: "ChunkedDelivery")
-        }
-    }
-
-    private func loadIfNeeded() {
-        guard !loadedFromDisk else { return }
-        loadedFromDisk = true
-        guard let key = storeKey(),
-              let dirs = try? FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: nil)
-        else { return }
-
-        for dir in dirs {
-            guard let messageId = UUID(uuidString: dir.lastPathComponent) else { continue }
-            guard let metaCipher = try? Data(contentsOf: dir.appendingPathComponent("meta")),
-                  let metaPlain = try? MessageStorageCrypto.decrypt(ciphertext: metaCipher, key: key),
-                  let meta = try? JSONDecoder().decode(Meta.self, from: metaPlain)
-            else {
-                try? FileManager.default.removeItem(at: dir)
-                continue
-            }
-            var chunks: [UInt16: Data] = [:]
-            for index in 0..<meta.totalChunks {
-                guard let cipher = try? Data(contentsOf: dir.appendingPathComponent("\(index)")),
-                      let plain = try? MessageStorageCrypto.decrypt(ciphertext: cipher, key: key)
-                else { continue }
-                chunks[index] = plain
-            }
-            entries[messageId] = PendingReassembly(
-                messageId: messageId,
-                totalChunks: meta.totalChunks,
-                plaintextLength: meta.plaintextLength,
-                contentType: meta.contentType,
-                receivedChunks: chunks,
-                startedAt: Date(timeIntervalSince1970: meta.startedAt),
-                envelopeIds: meta.envelopeIds
-            )
-        }
-        if !entries.isEmpty {
-            Log.info("Reassembly store: restored \(entries.count) partial message(s) from disk", category: "ChunkedDelivery")
-        }
-    }
-
-    private struct Meta: Codable {
-        let totalChunks: UInt16
-        let plaintextLength: Int
-        let contentType: UInt8
-        let startedAt: TimeInterval
-        let envelopeIds: [String]
-    }
-
-    // MARK: - Key
-
-    private func storeKey() -> Data? {
-        if let existing = KeychainManager.shared.loadReassemblyStoreKey() { return existing }
-        var key = Data(count: 32)
-        let status = key.withUnsafeMutableBytes {
-            SecRandomCopyBytes(kSecRandomDefault, 32, $0.baseAddress!)
-        }
-        guard status == errSecSuccess else { return nil }
-        KeychainManager.shared.saveReassemblyStoreKey(key)
-        return KeychainManager.shared.loadReassemblyStoreKey()
+    private func reassembly(senderId: String, messageId: UUID) throws -> PendingReassembly? {
+        let chunks = try store.chunks(senderId: senderId, messageId: messageId.uuidString.lowercased())
+        guard let first = chunks.first else { return nil }
+        return PendingReassembly(
+            senderId: senderId,
+            messageId: messageId,
+            totalChunks: first.totalChunks,
+            plaintextLength: first.plaintextLength,
+            contentType: first.contentType,
+            receivedChunks: Dictionary(chunks.map { ($0.chunkIndex, $0.payload) }, uniquingKeysWith: { held, _ in held }),
+            startedAt: chunks.map(\.receivedAt).min() ?? first.receivedAt
+        )
     }
 }

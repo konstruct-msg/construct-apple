@@ -8,7 +8,11 @@
 // For information on using the generated types, please see the documentation:
 //   https://github.com/apple/swift-protobuf/
 
+#if canImport(FoundationEssentials)
+import FoundationEssentials
+#else
 import Foundation
+#endif
 import SwiftProtobuf
 
 // If the compiler emits an error on this type, it is because this file
@@ -16,13 +20,13 @@ import SwiftProtobuf
 // incompatible with the version of SwiftProtobuf to which you are linking.
 // Please ensure that you are building against the same version of the API
 // that was used to generate this file.
-fileprivate struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobuf.ProtobufAPIVersionCheck {
+fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobuf.ProtobufAPIVersionCheck {
   struct _2: SwiftProtobuf.ProtobufAPIVersion_2 {}
   typealias Version = _2
 }
 
 /// MLSContentType - Type of application content
-public enum Shared_Proto_Messaging_V1_MLSContentType: SwiftProtobuf.Enum, Swift.CaseIterable {
+public nonisolated enum Shared_Proto_Messaging_V1_MLSContentType: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
 
   /// Unspecified content (must be 0)
@@ -79,7 +83,7 @@ public enum Shared_Proto_Messaging_V1_MLSContentType: SwiftProtobuf.Enum, Swift.
 }
 
 /// MLSProposalType - Type of group change proposal
-public enum Shared_Proto_Messaging_V1_MLSProposalType: SwiftProtobuf.Enum, Swift.CaseIterable {
+public nonisolated enum Shared_Proto_Messaging_V1_MLSProposalType: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
 
   /// Unspecified proposal (must be 0)
@@ -154,7 +158,7 @@ public enum Shared_Proto_Messaging_V1_MLSProposalType: SwiftProtobuf.Enum, Swift
 }
 
 /// MLSCipherSuite - Supported MLS cipher suites
-public enum Shared_Proto_Messaging_V1_MLSCipherSuite: SwiftProtobuf.Enum, Swift.CaseIterable {
+public nonisolated enum Shared_Proto_Messaging_V1_MLSCipherSuite: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
 
   /// Unspecified cipher suite (must be 0)
@@ -206,7 +210,7 @@ public enum Shared_Proto_Messaging_V1_MLSCipherSuite: SwiftProtobuf.Enum, Swift.
 }
 
 /// MLSMessage - Top-level MLS message wrapper
-public struct Shared_Proto_Messaging_V1_MLSMessage: Sendable {
+public nonisolated struct Shared_Proto_Messaging_V1_MLSMessage: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -271,7 +275,7 @@ public struct Shared_Proto_Messaging_V1_MLSMessage: Sendable {
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   /// Message type (determines which field is populated)
-  public enum OneOf_Message: Equatable, Sendable {
+  public nonisolated enum OneOf_Message: Equatable, Sendable {
     /// Application message (encrypted group message)
     case application(Shared_Proto_Messaging_V1_MLSApplicationMessage)
     /// Proposal message (suggest group change)
@@ -291,7 +295,7 @@ public struct Shared_Proto_Messaging_V1_MLSMessage: Sendable {
 }
 
 /// MLSApplicationMessage - Encrypted group message
-public struct Shared_Proto_Messaging_V1_MLSApplicationMessage: Sendable {
+public nonisolated struct Shared_Proto_Messaging_V1_MLSApplicationMessage: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -331,7 +335,7 @@ public struct Shared_Proto_Messaging_V1_MLSApplicationMessage: Sendable {
 }
 
 /// MLSProposal - Propose group membership change
-public struct Shared_Proto_Messaging_V1_MLSProposal: Sendable {
+public nonisolated struct Shared_Proto_Messaging_V1_MLSProposal: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -408,7 +412,7 @@ public struct Shared_Proto_Messaging_V1_MLSProposal: Sendable {
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   /// Specific proposal data
-  public enum OneOf_Proposal: Equatable, Sendable {
+  public nonisolated enum OneOf_Proposal: Equatable, Sendable {
     /// Add new member to group
     case add(Shared_Proto_Messaging_V1_MLSAddProposal)
     /// Remove member from group
@@ -430,7 +434,7 @@ public struct Shared_Proto_Messaging_V1_MLSProposal: Sendable {
 }
 
 /// MLSAddProposal - Add new member to group
-public struct Shared_Proto_Messaging_V1_MLSAddProposal: Sendable {
+public nonisolated struct Shared_Proto_Messaging_V1_MLSAddProposal: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -444,7 +448,7 @@ public struct Shared_Proto_Messaging_V1_MLSAddProposal: Sendable {
 }
 
 /// MLSRemoveProposal - Remove member from group
-public struct Shared_Proto_Messaging_V1_MLSRemoveProposal: Sendable {
+public nonisolated struct Shared_Proto_Messaging_V1_MLSRemoveProposal: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -470,7 +474,7 @@ public struct Shared_Proto_Messaging_V1_MLSRemoveProposal: Sendable {
 }
 
 /// MLSUpdateProposal - Update own key package
-public struct Shared_Proto_Messaging_V1_MLSUpdateProposal: Sendable {
+public nonisolated struct Shared_Proto_Messaging_V1_MLSUpdateProposal: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -484,7 +488,7 @@ public struct Shared_Proto_Messaging_V1_MLSUpdateProposal: Sendable {
 }
 
 /// MLSPSKProposal - Pre-shared key proposal
-public struct Shared_Proto_Messaging_V1_MLSPSKProposal: Sendable {
+public nonisolated struct Shared_Proto_Messaging_V1_MLSPSKProposal: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -498,7 +502,7 @@ public struct Shared_Proto_Messaging_V1_MLSPSKProposal: Sendable {
 }
 
 /// MLSReinitProposal - Re-initialize group with new parameters
-public struct Shared_Proto_Messaging_V1_MLSReinitProposal: Sendable {
+public nonisolated struct Shared_Proto_Messaging_V1_MLSReinitProposal: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -518,7 +522,7 @@ public struct Shared_Proto_Messaging_V1_MLSReinitProposal: Sendable {
 }
 
 /// MLSExternalInitProposal - External join proposal
-public struct Shared_Proto_Messaging_V1_MLSExternalInitProposal: Sendable {
+public nonisolated struct Shared_Proto_Messaging_V1_MLSExternalInitProposal: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -532,7 +536,7 @@ public struct Shared_Proto_Messaging_V1_MLSExternalInitProposal: Sendable {
 }
 
 /// MLSGroupContextExtensionsProposal - Update group extensions
-public struct Shared_Proto_Messaging_V1_MLSGroupContextExtensionsProposal: Sendable {
+public nonisolated struct Shared_Proto_Messaging_V1_MLSGroupContextExtensionsProposal: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -546,7 +550,7 @@ public struct Shared_Proto_Messaging_V1_MLSGroupContextExtensionsProposal: Senda
 }
 
 /// MLSCommit - Apply proposals to group state
-public struct Shared_Proto_Messaging_V1_MLSCommit: Sendable {
+public nonisolated struct Shared_Proto_Messaging_V1_MLSCommit: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -596,7 +600,7 @@ public struct Shared_Proto_Messaging_V1_MLSCommit: Sendable {
 }
 
 /// MLSWelcome - Invite new member to group
-public struct Shared_Proto_Messaging_V1_MLSWelcome: Sendable {
+public nonisolated struct Shared_Proto_Messaging_V1_MLSWelcome: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -621,7 +625,7 @@ public struct Shared_Proto_Messaging_V1_MLSWelcome: Sendable {
 }
 
 /// MLSKeyPackage - Member's public key package
-public struct Shared_Proto_Messaging_V1_MLSKeyPackage: Sendable {
+public nonisolated struct Shared_Proto_Messaging_V1_MLSKeyPackage: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -651,7 +655,7 @@ public struct Shared_Proto_Messaging_V1_MLSKeyPackage: Sendable {
 }
 
 /// MLSGroupInfo - Public group metadata
-public struct Shared_Proto_Messaging_V1_MLSGroupInfo: Sendable {
+public nonisolated struct Shared_Proto_Messaging_V1_MLSGroupInfo: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -679,7 +683,7 @@ public struct Shared_Proto_Messaging_V1_MLSGroupInfo: Sendable {
 
 /// GroupMessageId - Unique message ID for group messages
 /// Prevents ID conflicts in multi-sender groups
-public struct Shared_Proto_Messaging_V1_GroupMessageId: Sendable {
+public nonisolated struct Shared_Proto_Messaging_V1_GroupMessageId: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -704,21 +708,21 @@ public struct Shared_Proto_Messaging_V1_GroupMessageId: Sendable {
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
 
-fileprivate let _protobuf_package = "shared.proto.messaging.v1"
+fileprivate nonisolated let _protobuf_package = "shared.proto.messaging.v1"
 
-extension Shared_Proto_Messaging_V1_MLSContentType: SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Messaging_V1_MLSContentType: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0MLS_CONTENT_TYPE_UNSPECIFIED\0\u{1}MLS_CONTENT_TYPE_MESSAGE\0\u{1}MLS_CONTENT_TYPE_RECEIPT\0\u{1}MLS_CONTENT_TYPE_REACTION\0\u{2}\u{7}MLS_CONTENT_TYPE_CUSTOM\0")
 }
 
-extension Shared_Proto_Messaging_V1_MLSProposalType: SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Messaging_V1_MLSProposalType: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0MLS_PROPOSAL_TYPE_UNSPECIFIED\0\u{1}MLS_PROPOSAL_TYPE_ADD\0\u{1}MLS_PROPOSAL_TYPE_REMOVE\0\u{1}MLS_PROPOSAL_TYPE_UPDATE\0\u{1}MLS_PROPOSAL_TYPE_PSK\0\u{1}MLS_PROPOSAL_TYPE_REINIT\0\u{1}MLS_PROPOSAL_TYPE_EXTERNAL_INIT\0\u{1}MLS_PROPOSAL_TYPE_EXTENSIONS\0")
 }
 
-extension Shared_Proto_Messaging_V1_MLSCipherSuite: SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Messaging_V1_MLSCipherSuite: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0MLS_CIPHER_SUITE_UNSPECIFIED\0\u{1}MLS_CIPHER_SUITE_128_X25519_AES128\0\u{1}MLS_CIPHER_SUITE_128_X25519_CHACHA20\0\u{2}\u{8}MLS_CIPHER_SUITE_256_X448_AES256\0")
 }
 
-extension Shared_Proto_Messaging_V1_MLSMessage: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Messaging_V1_MLSMessage: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".MLSMessage"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}application\0\u{1}proposal\0\u{1}commit\0\u{1}welcome\0\u{3}key_package\0\u{3}group_info\0\u{c}\u{7}\u{e}")
 
@@ -853,7 +857,7 @@ extension Shared_Proto_Messaging_V1_MLSMessage: SwiftProtobuf.Message, SwiftProt
   }
 }
 
-extension Shared_Proto_Messaging_V1_MLSApplicationMessage: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Messaging_V1_MLSApplicationMessage: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".MLSApplicationMessage"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}group_id\0\u{1}epoch\0\u{3}content_type\0\u{3}encrypted_content\0\u{3}authenticated_data\0\u{1}sender\0\u{c}\u{7}\u{9}")
 
@@ -912,7 +916,7 @@ extension Shared_Proto_Messaging_V1_MLSApplicationMessage: SwiftProtobuf.Message
   }
 }
 
-extension Shared_Proto_Messaging_V1_MLSProposal: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Messaging_V1_MLSProposal: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".MLSProposal"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}type\0\u{1}add\0\u{1}remove\0\u{1}update\0\u{1}psk\0\u{1}reinit\0\u{3}external_init\0\u{1}extensions\0\u{c}\u{9}\u{c}")
 
@@ -1069,7 +1073,7 @@ extension Shared_Proto_Messaging_V1_MLSProposal: SwiftProtobuf.Message, SwiftPro
   }
 }
 
-extension Shared_Proto_Messaging_V1_MLSAddProposal: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Messaging_V1_MLSAddProposal: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".MLSAddProposal"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}key_package\0\u{c}\u{2}\u{9}")
 
@@ -1099,7 +1103,7 @@ extension Shared_Proto_Messaging_V1_MLSAddProposal: SwiftProtobuf.Message, Swift
   }
 }
 
-extension Shared_Proto_Messaging_V1_MLSRemoveProposal: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Messaging_V1_MLSRemoveProposal: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".MLSRemoveProposal"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}removed\0\u{1}reason\0\u{c}\u{3}\u{8}")
 
@@ -1138,7 +1142,7 @@ extension Shared_Proto_Messaging_V1_MLSRemoveProposal: SwiftProtobuf.Message, Sw
   }
 }
 
-extension Shared_Proto_Messaging_V1_MLSUpdateProposal: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Messaging_V1_MLSUpdateProposal: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".MLSUpdateProposal"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}key_package\0\u{c}\u{2}\u{9}")
 
@@ -1168,7 +1172,7 @@ extension Shared_Proto_Messaging_V1_MLSUpdateProposal: SwiftProtobuf.Message, Sw
   }
 }
 
-extension Shared_Proto_Messaging_V1_MLSPSKProposal: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Messaging_V1_MLSPSKProposal: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".MLSPSKProposal"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}psk_id\0\u{c}\u{2}\u{9}")
 
@@ -1198,7 +1202,7 @@ extension Shared_Proto_Messaging_V1_MLSPSKProposal: SwiftProtobuf.Message, Swift
   }
 }
 
-extension Shared_Proto_Messaging_V1_MLSReinitProposal: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Messaging_V1_MLSReinitProposal: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".MLSReinitProposal"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}group_id\0\u{1}version\0\u{3}cipher_suite\0\u{c}\u{4}\u{7}")
 
@@ -1238,7 +1242,7 @@ extension Shared_Proto_Messaging_V1_MLSReinitProposal: SwiftProtobuf.Message, Sw
   }
 }
 
-extension Shared_Proto_Messaging_V1_MLSExternalInitProposal: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Messaging_V1_MLSExternalInitProposal: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".MLSExternalInitProposal"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}kem_output\0\u{c}\u{2}\u{9}")
 
@@ -1268,7 +1272,7 @@ extension Shared_Proto_Messaging_V1_MLSExternalInitProposal: SwiftProtobuf.Messa
   }
 }
 
-extension Shared_Proto_Messaging_V1_MLSGroupContextExtensionsProposal: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Messaging_V1_MLSGroupContextExtensionsProposal: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".MLSGroupContextExtensionsProposal"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}extensions\0\u{c}\u{2}\u{9}")
 
@@ -1298,7 +1302,7 @@ extension Shared_Proto_Messaging_V1_MLSGroupContextExtensionsProposal: SwiftProt
   }
 }
 
-extension Shared_Proto_Messaging_V1_MLSCommit: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Messaging_V1_MLSCommit: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".MLSCommit"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}commit\0\u{3}group_id\0\u{3}old_epoch\0\u{3}new_epoch\0\u{1}proposals\0\u{3}requires_immediate_processing\0\u{3}critical_reason\0\u{3}confirmation_tag\0\u{c}\u{9}\u{c}")
 
@@ -1367,7 +1371,7 @@ extension Shared_Proto_Messaging_V1_MLSCommit: SwiftProtobuf.Message, SwiftProto
   }
 }
 
-extension Shared_Proto_Messaging_V1_MLSWelcome: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Messaging_V1_MLSWelcome: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".MLSWelcome"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}welcome\0\u{3}group_id\0\u{1}epoch\0\u{3}encrypted_group_info\0\u{c}\u{5}\u{b}")
 
@@ -1412,7 +1416,7 @@ extension Shared_Proto_Messaging_V1_MLSWelcome: SwiftProtobuf.Message, SwiftProt
   }
 }
 
-extension Shared_Proto_Messaging_V1_MLSKeyPackage: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Messaging_V1_MLSKeyPackage: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".MLSKeyPackage"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}key_package\0\u{3}user_id\0\u{3}device_id\0\u{3}cipher_suite\0\u{3}created_at\0\u{3}expires_at\0\u{c}\u{7}\u{9}")
 
@@ -1467,7 +1471,7 @@ extension Shared_Proto_Messaging_V1_MLSKeyPackage: SwiftProtobuf.Message, SwiftP
   }
 }
 
-extension Shared_Proto_Messaging_V1_MLSGroupInfo: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Messaging_V1_MLSGroupInfo: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".MLSGroupInfo"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}group_info\0\u{3}group_id\0\u{1}epoch\0\u{1}size\0\u{3}cipher_suite\0\u{c}\u{6}\u{a}")
 
@@ -1517,7 +1521,7 @@ extension Shared_Proto_Messaging_V1_MLSGroupInfo: SwiftProtobuf.Message, SwiftPr
   }
 }
 
-extension Shared_Proto_Messaging_V1_GroupMessageId: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Messaging_V1_GroupMessageId: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".GroupMessageId"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}group_id\0\u{1}epoch\0\u{3}sender_index\0\u{1}generation\0\u{c}\u{5}\u{6}")
 

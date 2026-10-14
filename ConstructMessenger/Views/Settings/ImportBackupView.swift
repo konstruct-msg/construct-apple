@@ -27,15 +27,6 @@ struct ImportBackupView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            CTNavBar(
-                title: NSLocalizedString("backup_import_title", comment: ""),
-                showBack: true,
-                backAction: { dismiss() }
-            ) {
-                EmptyView()
-            } trailing: {
-                EmptyView()
-            }
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
@@ -45,14 +36,14 @@ struct ImportBackupView: View {
                     )
 
                     Text(NSLocalizedString("backup_import_words_subtitle", comment: ""))
-                        .font(CTFont.regular(13))
+                        .font(CTFont.body)
                         .foregroundStyle(Color.CT.textDim)
                         .padding(.horizontal, 20)
                         .padding(.top, 4)
                         .padding(.bottom, 12)
 
                     TextEditor(text: $mnemonicText)
-                        .font(CTFont.regular(14))
+                        .font(CTFont.mono(14))
                         .foregroundStyle(Color.CT.text)
                         .scrollContentBackground(.hidden)
                         .scrollIndicators(.hidden)
@@ -70,7 +61,7 @@ struct ImportBackupView: View {
 
                     HStack {
                         Text("\(wordCount)/12")
-                            .font(CTFont.regular(11))
+                            .font(CTFont.caption)
                             .foregroundStyle(wordCount == 12 ? Color.CT.accent : Color.CT.textDim)
                         Spacer()
                     }
@@ -88,19 +79,19 @@ struct ImportBackupView: View {
                         HStack {
                             if let url = selectedFileURL {
                                 Text(url.lastPathComponent)
-                                    .font(CTFont.regular(13))
+                                    .font(CTFont.body)
                                     .foregroundStyle(Color.CT.text)
                                     .lineLimit(1)
                                     .truncationMode(.middle)
                             } else {
                                 Text(NSLocalizedString("backup_import_select_file", comment: ""))
-                                    .font(CTFont.regular(13))
+                                    .font(CTFont.body)
                                     .foregroundStyle(Color.CT.accent)
                             }
                             Spacer()
                             Image(systemName: "chevron.right")
-                                .font(CTFont.regular(13))
-                                .foregroundStyle(Color.CT.accent)
+                                .font(CTIcon.font(CTIcon.caption, weight: .semibold))
+                                .foregroundStyle(Color.CT.textDim)
                         }
                         .padding(.horizontal, 20)
                         .padding(.vertical, 14)
@@ -111,7 +102,7 @@ struct ImportBackupView: View {
                         .padding(.bottom, 20)
 
                     Text(NSLocalizedString("backup_restore_warning", comment: ""))
-                        .font(CTFont.regular(13))
+                        .font(CTFont.body)
                         .foregroundStyle(Color.CT.danger)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.horizontal, 20)
@@ -122,33 +113,24 @@ struct ImportBackupView: View {
 
                     if let err = errorMessage {
                         Text(err)
-                            .font(CTFont.regular(12))
+                            .font(CTFont.secondary)
                             .foregroundStyle(Color.CT.danger)
                             .padding(.horizontal, 20)
                             .padding(.bottom, 16)
                     }
 
-                    Button { startRestore() } label: {
-                        HStack {
-                            if isImporting { ProgressView().tint(Color.CT.bg).padding(.trailing, 6) }
-                            Text(NSLocalizedString("backup_restore_button", comment: ""))
-                                .font(CTFont.bold(14))
-                                .foregroundStyle(Color.CT.bg)
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 14)
-                        .background(
-                            canRestore && !isImporting
-                                ? Color.CT.danger
-                                : Color.CT.danger.opacity(0.3)
-                        )
-                    }
-                    .disabled(!canRestore || isImporting)
+                    CTButton(
+                        label: NSLocalizedString("backup_restore_button", comment: ""),
+                        role: .destructive,
+                        isEnabled: canRestore,
+                        isLoading: isImporting
+                    ) { startRestore() }
                     .padding(.horizontal, 20)
                 }
                 .padding(.bottom, 32)
             }
         }
+        .screenTitle(NSLocalizedString("backup_import_title", comment: ""))
         .background(Color.CT.bg.ignoresSafeArea())
         .fileImporter(
             isPresented: $showingFilePicker,
@@ -169,7 +151,7 @@ struct ImportBackupView: View {
                 }
                 if accessed { url.stopAccessingSecurityScopedResource() }
             case .failure(let error):
-                errorMessage = error.localizedDescription
+                errorMessage = error.userFacingMessage
             }
         }
         .alert(LocalizedStringKey("backup_restore_success_title"), isPresented: $showingRestartAlert) {
@@ -191,7 +173,7 @@ struct ImportBackupView: View {
                 try await service.importBackup(from: fileURL, mnemonic: trimmed)
                 showingRestartAlert = true
             } catch {
-                errorMessage = error.localizedDescription
+                errorMessage = error.userFacingMessage
             }
             isImporting = false
         }

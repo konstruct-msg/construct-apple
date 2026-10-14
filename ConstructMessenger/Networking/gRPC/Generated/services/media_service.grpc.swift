@@ -29,7 +29,8 @@ public enum Shared_Proto_Services_V1_MediaService: Sendable {
             /// Descriptor for "GenerateUploadToken".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.MediaService"),
-                method: "GenerateUploadToken"
+                method: "GenerateUploadToken",
+                type: .unary
             )
         }
         /// Namespace for "UploadMedia" metadata.
@@ -41,7 +42,8 @@ public enum Shared_Proto_Services_V1_MediaService: Sendable {
             /// Descriptor for "UploadMedia".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.MediaService"),
-                method: "UploadMedia"
+                method: "UploadMedia",
+                type: .clientStreaming
             )
         }
         /// Namespace for "DownloadMedia" metadata.
@@ -53,7 +55,8 @@ public enum Shared_Proto_Services_V1_MediaService: Sendable {
             /// Descriptor for "DownloadMedia".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.MediaService"),
-                method: "DownloadMedia"
+                method: "DownloadMedia",
+                type: .serverStreaming
             )
         }
         /// Namespace for "DeleteMedia" metadata.
@@ -65,7 +68,8 @@ public enum Shared_Proto_Services_V1_MediaService: Sendable {
             /// Descriptor for "DeleteMedia".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.MediaService"),
-                method: "DeleteMedia"
+                method: "DeleteMedia",
+                type: .unary
             )
         }
         /// Namespace for "GetMediaMetadata" metadata.
@@ -77,7 +81,8 @@ public enum Shared_Proto_Services_V1_MediaService: Sendable {
             /// Descriptor for "GetMediaMetadata".
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.MediaService"),
-                method: "GetMediaMetadata"
+                method: "GetMediaMetadata",
+                type: .unary
             )
         }
         /// Descriptors for all methods in the "shared.proto.services.v1.MediaService" service.

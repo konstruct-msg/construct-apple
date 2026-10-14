@@ -22,11 +22,17 @@ struct DiagnosticsView: View {
     
     @State private var logText: String = ""
     @State private var logSize: String = ""
+    /// Bumped when a preview read is no longer the screen's. A read started on
+    /// appear finishes on a background queue; writing that result into a view
+    /// that is already being popped is the update that lands inside the
+    /// dismissal. Leaving the screen retires the generation.
+    @State private var logPreviewGeneration = 0
     @State private var push = PushNotificationManager.shared
     #if DEBUG
     /// The transcript path. Sampled once per chat push, so this lands on the *next* chat you open,
     /// not on the one behind this screen.
     @State private var ownedInsetStackEnabled = ChatViewportConfiguration.ownedInsetStackEnabled
+    @AppStorage(CallsFeature.videoSwitchKey) private var videoCallsEnabled = CallsFeature.videoDefault
 
     /// What is holding the stream cursor back right now, sampled when the screen appears.
     @State private var heldEntry: (messageId: String, state: String, age: TimeInterval)?
@@ -84,24 +90,19 @@ struct DiagnosticsView: View {
 
     var body: some View {
         ScrollView {
-            LazyVStack(spacing: SettingsLayout.sectionSpacing) {
+            // VStack, not LazyVStack. This screen is popped while its scroll view
+            // is still decelerating — that is what "crash on the way out" is, and
+            // a lazy stack recycles rows during that deceleration. The page is a
+            // handful of sections, not a long list. One scroll view: a second,
+            // nested one around the log preview was in the tree only once the
+            // preview had loaded, which is the "sometimes".
+            VStack(spacing: SettingsLayout.sectionSpacing) {
                 
-                if showNavBar {
-                    CTNavBar(
-                        title: NSLocalizedString("diagnostics", comment: ""),
-                        showBack: true,
-                        backAction: { dismiss() }
-                    ) {
-                        EmptyView()
-                    } trailing: {
-                        EmptyView()
-                    }
-                }
 
                 // MARK: - Push Notifications
                 VStack(alignment: .leading, spacing: DiagnosticsLayout.sectionHintSpacing) {
                     VStack(alignment: .leading, spacing: 0) {
-                        CTSettingsSectionHeader(title: NSLocalizedString("PUSH_NOTIFICATIONS", comment: ""), color: .orange)
+                        CTSettingsSectionHeader(title: NSLocalizedString("push_notifications", comment: ""), color: .orange)
                         CTSectionGroup {
                             diagRow(
                                 label: NSLocalizedString("diagnostics_permission", comment: ""),
@@ -124,7 +125,7 @@ struct DiagnosticsView: View {
                     }
                     if !push.isRegisteredWithServer {
                         Text(LocalizedStringKey("diagnostics_server_token_warning"))
-                            .font(CTFont.regular(11))
+                            .font(CTFont.mono(11))
                             .foregroundStyle(.orange)
                             .padding(.horizontal, SettingsLayout.footerHorizontalPadding)
                     }
@@ -134,7 +135,7 @@ struct DiagnosticsView: View {
                 // MARK: - Dev Tools (Debug only)
                 VStack(alignment: .leading, spacing: DiagnosticsLayout.sectionHintSpacing) {
                     VStack(alignment: .leading, spacing: 0) {
-                        CTSettingsSectionHeader(title: NSLocalizedString("DEVELOPER", comment: ""), color: .orange)
+                        CTSettingsSectionHeader(title: NSLocalizedString("developer", comment: ""), color: .orange)
                         CTSectionGroup {
                             // The stream cursor, and the way out when it stops moving.
                             //
@@ -149,7 +150,7 @@ struct DiagnosticsView: View {
                             } label: {
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(LocalizedStringKey("diagnostics_skip_backlog_title"))
-                                        .font(CTFont.regular(14))
+                                        .font(CTFont.mono(14))
                                         .foregroundStyle(.orange)
                                     Text(heldEntry.map {
                                         String(
@@ -157,14 +158,14 @@ struct DiagnosticsView: View {
                                             String($0.messageId.prefix(8)), $0.state, Int($0.age)
                                         )
                                     } ?? NSLocalizedString("diagnostics_skip_backlog_clear", comment: ""))
-                                        .font(CTFont.regular(11))
+                                        .font(CTFont.mono(11))
                                         .foregroundStyle(Color.CT.textDim)
                                     if let skipResult {
                                         Text(String(
                                             format: NSLocalizedString("diagnostics_skip_backlog_done", comment: ""),
                                             String(skipResult.prefix(20))
                                         ))
-                                        .font(CTFont.regular(11))
+                                        .font(CTFont.mono(11))
                                         .foregroundStyle(Color.CT.danger)
                                     }
                                 }
@@ -179,10 +180,10 @@ struct DiagnosticsView: View {
                             Toggle(isOn: $ownedInsetStackEnabled) {
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(LocalizedStringKey("diagnostics_owned_inset_title"))
-                                        .font(CTFont.regular(14))
+                                        .font(CTFont.mono(14))
                                         .foregroundStyle(.orange)
                                     Text(LocalizedStringKey("diagnostics_owned_inset_hint"))
-                                        .font(CTFont.regular(11))
+                                        .font(CTFont.mono(11))
                                         .foregroundStyle(Color.CT.textDim)
                                 }
                             }
@@ -192,13 +193,26 @@ struct DiagnosticsView: View {
                             .onChange(of: ownedInsetStackEnabled) { _, on in
                                 ChatViewportConfiguration.ownedInsetStackEnabled = on
                             }
+                            Toggle(isOn: $videoCallsEnabled) {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(LocalizedStringKey("diagnostics_video_calls_title"))
+                                        .font(CTFont.mono(14))
+                                        .foregroundStyle(.orange)
+                                    Text(LocalizedStringKey("diagnostics_video_calls_hint"))
+                                        .font(CTFont.mono(11))
+                                        .foregroundStyle(Color.CT.textDim)
+                                }
+                            }
+                            .tint(.orange)
+                            .padding(.horizontal, SettingsLayout.rowHorizontalPadding)
+                            .padding(.vertical, SettingsLayout.rowVerticalPadding)
                             Toggle(isOn: $stealthOverrideEnabled) {
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(LocalizedStringKey("diagnostics_stealth_override_title"))
-                                        .font(CTFont.regular(14))
+                                        .font(CTFont.mono(14))
                                         .foregroundStyle(.orange)
                                     Text(LocalizedStringKey("diagnostics_stealth_override_hint"))
-                                        .font(CTFont.regular(11))
+                                        .font(CTFont.mono(11))
                                         .foregroundStyle(Color.CT.textDim)
                                 }
                             }
@@ -242,11 +256,11 @@ struct DiagnosticsView: View {
                         }
                     }
                     Text(LocalizedStringKey("diagnostics_silent_reinit_footer"))
-                        .font(CTFont.regular(12))
+                        .font(CTFont.mono(12))
                         .foregroundStyle(Color.CT.textDim)
                         .padding(.horizontal, SettingsLayout.footerHorizontalPadding)
                     Text(LocalizedStringKey("diagnostics_dev_tools_footer"))
-                        .font(CTFont.regular(12))
+                        .font(CTFont.mono(12))
                         .foregroundStyle(Color.CT.textDim)
                         .padding(.horizontal, SettingsLayout.footerHorizontalPadding)
                 }
@@ -269,19 +283,19 @@ struct DiagnosticsView: View {
                 CTSectionGroup {
                     HStack(spacing: SettingsLayout.rowContentSpacing) {
                         Image(systemName: "doc.text")
-                            .font(.system(size: 14, weight: .semibold))
+                            .font(CTIcon.font(CTIcon.row, weight: .semibold))
                             .foregroundStyle(isLogCollectionEnabled ? Color.CT.accent : Color.CT.textDim)
                             .lineLimit(1)
                             .fixedSize()
                             .frame(minWidth: SettingsLayout.rowIconMinWidth, alignment: .center)
                         Text(LocalizedStringKey("diagnostics_log_collection"))
-                            .font(CTFont.bold(16))
+                            .font(CTFont.mono(16, weight: .bold))
                             .foregroundStyle(Color.CT.text)
                         Spacer()
                         Text(isLogCollectionEnabled
                              ? NSLocalizedString("diagnostics_status_active", comment: "")
                              : NSLocalizedString("diagnostics_status_off", comment: ""))
-                            .font(CTFont.regular(14))
+                            .font(CTFont.mono(14))
                             .foregroundStyle(isLogCollectionEnabled ? Color.CT.accent : Color.CT.textDim)
                     }
                     .padding(.horizontal, SettingsLayout.rowHorizontalPadding)
@@ -291,17 +305,17 @@ struct DiagnosticsView: View {
                         ConstructRowDivider(indent: SettingsLayout.rowDividerIndent)
                         HStack(spacing: SettingsLayout.rowContentSpacing) {
                             Image(systemName: "externaldrive")
-                                .font(.system(size: 14, weight: .semibold))
+                                .font(CTIcon.font(CTIcon.row, weight: .semibold))
                                 .foregroundStyle(Color.CT.textDim)
                                 .lineLimit(1)
                                 .fixedSize()
                                 .frame(minWidth: SettingsLayout.rowIconMinWidth, alignment: .center)
                             Text(LocalizedStringKey("diagnostics_size"))
-                                .font(CTFont.bold(16))
+                                .font(CTFont.mono(16, weight: .bold))
                                 .foregroundStyle(Color.CT.text)
                             Spacer()
                             Text(logSize)
-                                .font(CTFont.regular(14))
+                                .font(CTFont.mono(14))
                                 .foregroundStyle(Color.CT.textDim)
                         }
                         .padding(.horizontal, SettingsLayout.rowHorizontalPadding)
@@ -322,15 +336,12 @@ struct DiagnosticsView: View {
                     VStack(alignment: .leading, spacing: 0) {
                         CTSettingsSectionHeader(title: NSLocalizedString("diagnostics_recent_logs", comment: ""), color: .orange)
                         CTSectionGroup {
-                            ScrollView {
-                                Text(logText)
-                                    .font(CTFont.regular(DiagnosticsLayout.recentLogFontSize))
-                                    .foregroundStyle(Color.white)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                    .padding(DiagnosticsLayout.recentLogPadding)
-                                    .textSelection(.enabled)
-                            }
-                            .frame(height: DiagnosticsConfig.recentLogContainerHeight)
+                            Text(logText)
+                                .font(CTFont.mono(DiagnosticsLayout.recentLogFontSize))
+                                .foregroundStyle(Color.white)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(DiagnosticsLayout.recentLogPadding)
+                                .textSelection(.enabled)
                         }
                     }
                 }
@@ -348,15 +359,8 @@ struct DiagnosticsView: View {
             .padding(.vertical, SettingsLayout.screenVerticalPadding)
         }
         .background(Color.CT.bg.ignoresSafeArea())
-        .navigationTitle("")
         #if os(iOS)
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbarBackground(Color.CT.bgMsg, for: .navigationBar)
-        .toolbarBackground(.visible, for: .navigationBar)
-        .toolbarColorScheme(.dark, for: .navigationBar)
-        #endif
-        #if os(iOS)
-        .hideSystemNavBar()
+        .screenTitle(NSLocalizedString("diagnostics", comment: ""), shown: showNavBar)
         #endif
         .onAppear {
             // Pull MetricKit's retained window now. Its own delivery fires at most once every
@@ -364,6 +368,9 @@ struct DiagnosticsView: View {
             // and this screen is exactly where someone goes after a crash.
             CrashDiagnosticsCollector.shared.collectPastPayloads()
             refresh()
+        }
+        .onDisappear {
+            logPreviewGeneration += 1
         }
         #if DEBUG
         .confirmationDialog(
@@ -377,7 +384,7 @@ struct DiagnosticsView: View {
             Button(LocalizedStringKey("cancel"), role: .cancel) {}
         }
         .sheet(isPresented: $showScrollSpike) {
-            ScrollPositionSpikeView()
+            ScrollPositionSpikeView().sheetNavigation()
         }
         #endif
     }
@@ -401,9 +408,12 @@ struct DiagnosticsView: View {
             return
         }
 
+        logPreviewGeneration += 1
+        let generation = logPreviewGeneration
         DispatchQueue.global(qos: .utility).async {
             let preview = Self.readLogPreview(from: first, lineLimit: DiagnosticsConfig.recentLogLineLimit)
             DispatchQueue.main.async {
+                guard generation == logPreviewGeneration else { return }
                 logText = preview
             }
         }
@@ -427,11 +437,11 @@ struct DiagnosticsView: View {
                 .frame(width: DiagnosticsLayout.statusDotSize, height: DiagnosticsLayout.statusDotSize)
                 .frame(width: SettingsLayout.rowIconMinWidth, alignment: .center)
             Text(label)
-                .font(CTFont.bold(16))
+                .font(CTFont.mono(16, weight: .bold))
                 .foregroundStyle(Color.CT.text)
             Spacer()
             Text(value)
-                .font(CTFont.regular(13))
+                .font(CTFont.mono(13))
                 .foregroundStyle(ok ? Color.CT.textDim : Color.CT.danger)
         }
         .padding(.horizontal, SettingsLayout.rowHorizontalPadding)
@@ -496,12 +506,11 @@ struct DiagnosticsView: View {
     /// Contacts we currently hold a Double Ratchet session with — the only valid targets, since
     /// the point is to re-init *while the peer still holds the old session*.
     private func loadReinitTargets() {
-        let context = PersistenceController.shared.container.viewContext
-        let chats = (try? context.fetch(Chat.fetchRequest())) ?? []
+        let chats = (try? LocalRepositories.chats.chats()) ?? []
         reinitTargets = chats.compactMap { chat in
-            guard let user = chat.otherUser, !user.id.isEmpty else { return nil }
-            guard CryptoManager.shared.hasSession(for: user.id) else { return nil }
-            return ReinitTarget(id: user.id, name: user.resolvedDisplayName)
+            guard CryptoManager.shared.hasSessionWithAnyDevice(ofPeer: chat.peerId) else { return nil }
+            let name = (try? LocalRepositories.contacts.contact(chat.peerId))?.resolvedDisplayName ?? chat.peerId
+            return ReinitTarget(id: chat.peerId, name: name)
         }
         if reinitTargets.isEmpty {
             reinitStatus = "no contact has an active session"
@@ -514,19 +523,18 @@ struct DiagnosticsView: View {
     /// Re-establish our session with `target` as INITIATOR **without telling the peer**.
     ///
     /// This manufactures, on demand, the asymmetry that otherwise only appears by chance: we hold
-    /// a fresh ratchet, the peer still holds the old one, so our next message reaches them as an
-    /// X3DH carrier (msgNum=0, KEM ciphertext) on a session they already have. That is the input
-    /// the core answers with `[ApplyPQContribution, CheckAckInDb]` — two actions — which the host
-    /// used to mishandle (see decisions/host-dropped-action-returns).
+    /// a fresh ratchet, the peer still holds the old one, so our next message reaches them as a
+    /// PQXDH v2 carrier (msgNum=0, KEM ciphertext in the header) on a session they already have —
+    /// the input a host used to mishandle (see decisions/host-dropped-action-returns).
     ///
     /// `initializeSessionProactively` is exactly the right primitive: it fetches the bundle and
-    /// calls `initializeSession(deleteExisting: true)`, and it does NOT send END_SESSION or a
+    /// replaces the held session (`reopenSession`), and it does NOT send END_SESSION or a
     /// SESSION_RESET_INIT — announcing is the coordinator's job, and announcing is precisely what
     /// we must not do here.
     ///
-    /// Send **two** messages afterwards. The first proves the carrier was decrypted; only the
-    /// second proves the post-quantum contribution was mixed in symmetrically, because an
-    /// asymmetric mix still decrypts msg0 and fails on msg1.
+    /// Send **two** messages afterwards. The first proves the carrier was decrypted; the second,
+    /// which still carries the handshake header until the peer answers, proves the peer kept the
+    /// session it opened from the first.
     private func forceSilentReinit(_ target: ReinitTarget) {
         reinitStatus = "re-initialising…"
         reinitOk = true
@@ -608,10 +616,10 @@ struct DiagnosticsView: View {
         KeychainManager.shared.deleteSessionToken()
         KeychainManager.shared.deleteRefreshToken()
 
-        // Kyber SPK — keys are stored under these fixed names in PQCKeyManager
-        KeychainManager.shared.deleteData(forKey: "construct.kyber.spk.public")
-        KeychainManager.shared.deleteData(forKey: "construct.kyber.spk.secret")
-        KeychainManager.shared.deleteData(forKey: "construct.kyber.spk.id")
+        // Kyber prekeys (the core's store) and whatever an older build kept outside it
+        KeychainManager.shared.deleteKyberPrekeys()
+        KyberPrekeyService.deleteLegacyItems()
+        KyberPrekeyService.resetPublishState()
 
         // Orchestrator CFE state (session archive index, locks, etc.)
         CryptoManager.shared.clearOrchestratorStateCFE()

@@ -11,10 +11,28 @@ enum CallsFeature {
         #endif
     }
 
-    /// Video calls — wiring is in place across the call-entrypoint UI and
-    /// `startOutgoingCall(hasVideo:)`, but the media layer (camera capture,
-    /// remote-video rendering, in-call controls for flip-camera / toggle-video)
-    /// is not yet implemented. Flip to `true` when the media work lands; no
-    /// UI restructuring is needed.
-    static var isVideoEnabled: Bool { false }
+    /// Video calls (TODO 105, `client/specs/VIDEO_CALLS_DESIGN.md`). On in every iOS build since
+    /// 2026-10-08 (owner) — Debug and TestFlight had them since 2026-10-06, after an iOS↔iOS
+    /// video call worked on two devices.
+    ///
+    /// The switch in the developer section of Diagnostics exists in Debug builds only, so it is
+    /// read only there; a release build has nothing that could turn video off.
+    ///
+    /// Open when this was enabled: with video on, every call — audio ones too — puts a video
+    /// section into its offer, and an audio call to an Android build has not yet been seen to
+    /// stay untouched by it on real devices. The owner checks that before the release step.
+    static let videoSwitchKey = "ff.callsVideo"
+    static let videoDefault = true
+
+    static var isVideoEnabled: Bool {
+        #if os(iOS)
+        #if DEBUG
+        isEnabled && (UserDefaults.standard.object(forKey: videoSwitchKey) as? Bool ?? videoDefault)
+        #else
+        isEnabled
+        #endif
+        #else
+        false
+        #endif
+    }
 }

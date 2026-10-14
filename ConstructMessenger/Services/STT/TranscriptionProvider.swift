@@ -6,6 +6,40 @@ import AVFoundation
 import Translation
 #endif
 
+/// What one callback from `SFSpeechRecognizer` is allowed to do.
+///
+/// The handler fires more than once. On 2026-09-23 (build 687, iOS 26.6.2) a voice
+/// message was transcribed and the process died twice, a minute apart:
+/// `exceptionType=6 exceptionCode=1 signal=5`, stack
+/// `Speech → Construct Messenger → libswift_Concurrency → libswiftCore`.
+/// That is `SWIFT_TASK_CONTINUATION_MISUSE`: the final result resumed the
+/// continuation, and the error that follows a finished task resumed it again.
+/// A partial result is not terminal. A second terminal callback is ignored.
+struct SpeechRecognitionCallback: Equatable {
+    enum Outcome: Equatable {
+        case ignore
+        case success
+        case failure
+    }
+
+    private(set) var settled = false
+
+    mutating func accept(hasError: Bool, hasResult: Bool, isFinal: Bool) -> Outcome {
+        guard !settled else { return .ignore }
+        // A final result and an error on the same callback is a success. The
+        // error that matters is the one that arrives *instead of* a transcript.
+        if hasResult && isFinal {
+            settled = true
+            return .success
+        }
+        if hasError {
+            settled = true
+            return .failure
+        }
+        return .ignore
+    }
+}
+
 /// Common interface for on-device speech-to-text providers.
 /// Allows swapping WhisperKit with Apple's native SpeechAnalyzer (and others in future)
 /// while keeping the rest of the app unchanged.
@@ -45,11 +79,16 @@ struct AppleSpeechProvider: TranscriptionProvider {
         let locale: Locale = (storedLanguage.isEmpty || storedLanguage == "auto")
             ? Locale.current
             : Locale(identifier: storedLanguage)
-        if let recognizer = SFSpeechRecognizer(locale: locale) {
-            return recognizer.isAvailable
-        }
-        // Fallback to current locale
-        return SFSpeechRecognizer(locale: Locale.current)?.isAvailable ?? false
+        // Available means available ON THIS DEVICE. A recognizer that is available but not on
+        // device sends the audio to Apple — the decrypted voice message, off the phone.
+        let recognizer = SFSpeechRecognizer(locale: locale) ?? SFSpeechRecognizer(locale: Locale.current)
+        return Self.mayTranscribe(isAvailable: recognizer?.isAvailable ?? false,
+                                  supportsOnDevice: recognizer?.supportsOnDeviceRecognition ?? false)
+    }
+
+    /// The rule: only a recognizer that can run on the device, and is ready to.
+    nonisolated static func mayTranscribe(isAvailable: Bool, supportsOnDevice: Bool) -> Bool {
+        isAvailable && supportsOnDevice
     }
 
     func transcribe(audioData: Data) async throws -> STTResult {
@@ -78,24 +117,45 @@ struct AppleSpeechProvider: TranscriptionProvider {
         // This is the reliable native path available today; the SpeechAnalyzer / SpeechTranscriber
         // is the evolved name/API in iOS 26+. When building against a newer SDK you can replace
         // this body with the SpeechAnalyzer equivalent (attach module, analyze buffers, etc.).
-        guard let recognizer = SFSpeechRecognizer(locale: locale), recognizer.isAvailable else {
+        guard let recognizer = SFSpeechRecognizer(locale: locale),
+              Self.mayTranscribe(isAvailable: recognizer.isAvailable,
+                                 supportsOnDevice: recognizer.supportsOnDeviceRecognition) else {
             throw TranscriptionError.engineUnavailable
         }
 
         let request = SFSpeechURLRecognitionRequest(url: tempURL)
         request.shouldReportPartialResults = false
+        // Without this the recognizer may send the audio to Apple's servers. Until 2026-10-04 it
+        // was not set, and on iOS 26 "auto" chose this engine — every transcription of a voice
+        // message could have left the device, decrypted, while this file said it never would.
+        request.requiresOnDeviceRecognition = true
 
-        // Perform recognition using async continuation for simplicity.
+        // The handler is not single-shot. `SpeechRecognitionCallback` is the rule;
+        // the lock is only so the two callbacks cannot apply it at once.
+        let gate = SpeechRecognitionGate()
         let result = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<SFSpeechRecognitionResult, Error>) in
-            let task = recognizer.recognitionTask(with: request) { result, error in
-                if let error = error {
-                    continuation.resume(throwing: error)
-                } else if let result = result, result.isFinal {
-                    continuation.resume(returning: result)
+            var task: SFSpeechRecognitionTask?
+            task = recognizer.recognitionTask(with: request) { result, error in
+                let outcome = gate.accept(
+                    hasError: error != nil,
+                    hasResult: result != nil,
+                    isFinal: result?.isFinal ?? false
+                )
+                switch outcome {
+                case .ignore:
+                    break
+                case .failure:
+                    task?.cancel()
+                    continuation.resume(throwing: error ?? TranscriptionError.engineUnavailable)
+                case .success:
+                    task?.cancel()
+                    if let result {
+                        continuation.resume(returning: result)
+                    } else {
+                        continuation.resume(throwing: TranscriptionError.engineUnavailable)
+                    }
                 }
             }
-            // The task is retained by the recognizer until completion.
-            _ = task
         }
 
         var finalText = result.bestTranscription.formattedString.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
@@ -138,6 +198,18 @@ struct AppleSpeechProvider: TranscriptionProvider {
         // Fallback: return original if Translation not usable.
         return text
         #endif
+    }
+}
+
+/// Applies `SpeechRecognitionCallback` from the recognizer's queue.
+private final class SpeechRecognitionGate: @unchecked Sendable {
+    private let lock = NSLock()
+    private var state = SpeechRecognitionCallback()
+
+    func accept(hasError: Bool, hasResult: Bool, isFinal: Bool) -> SpeechRecognitionCallback.Outcome {
+        lock.lock()
+        defer { lock.unlock() }
+        return state.accept(hasError: hasError, hasResult: hasResult, isFinal: isFinal)
     }
 }
 #endif

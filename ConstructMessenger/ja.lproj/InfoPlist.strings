@@ -4,7 +4,7 @@
    seven prompts until 2026-08-16. */
 
 "CFBundleDisplayName" = "コンストラクト";
-"NSCameraUsageDescription" = "コンストラクトは、招待QRコードの読み取りと、メッセージ用の写真・動画の撮影にカメラを使用します。";
+"NSCameraUsageDescription" = "コンストラクトは、招待QRコードの読み取り、メッセージ用の写真・動画の撮影、ビデオ通話にカメラを使用します。";
 "NSPhotoLibraryUsageDescription" = "メッセージに写真や動画を添付できるよう、写真ライブラリへのアクセスが必要です。";
 "NSPhotoLibraryAddUsageDescription" = "チャットから保存を選んだときに、写真や動画をライブラリに保存します。";
 "NSMicrophoneUsageDescription" = "コンストラクトは、ボイスメッセージの録音と暗号化通話のためにマイクを使用します。";

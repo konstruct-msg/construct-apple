@@ -102,132 +102,69 @@ final class StealthSenderService: SealedSenderResolving {
         UserDefaults.standard.removeObject(forKey: Self.certOwnerKey)
     }
 
-    // MARK: - Anonymous box to an identity key
-
-    /// Header of a sealed box: `ephemeral_pub(32) || nonce(12) || ciphertext || tag(16)`.
-    nonisolated static let identityBoxOverhead = 32 + 12 + 16
-
-    /// Encrypts `plaintext` to a recipient's X25519 **identity** key, with a fresh ephemeral per
-    /// call — two boxes to the same recipient share no bytes, so the relay cannot link them.
-    ///
-    /// The ratchet is not involved, which is what makes this usable on messages that must survive
-    /// a session too broken to encrypt with: the recipient's long-term identity key is enough.
-    /// `domain` separates uses — a box sealed for one purpose must not open under another.
-    nonisolated static func sealToIdentity(_ plaintext: Data, recipientIdentityKey: Data, domain: String) throws -> Data {
-        let ephemeralPrivKey = Curve25519.KeyAgreement.PrivateKey()
-        let recipientPubKey = try Curve25519.KeyAgreement.PublicKey(rawRepresentation: recipientIdentityKey)
-        let sharedSecret = try ephemeralPrivKey.sharedSecretFromKeyAgreement(with: recipientPubKey)
-        let symmetricKey = sharedSecret.hkdfDerivedSymmetricKey(
-            using: SHA256.self,
-            salt: Data(domain.utf8),
-            sharedInfo: Data(),
-            outputByteCount: 32
-        )
-        let sealedBox = try ChaChaPoly.seal(plaintext, using: symmetricKey)
-        let nonce = sealedBox.nonce.withUnsafeBytes { Data($0) }
-        var box = Data(capacity: identityBoxOverhead + sealedBox.ciphertext.count)
-        box.append(ephemeralPrivKey.publicKey.rawRepresentation)
-        box.append(nonce)
-        box.append(sealedBox.ciphertext)
-        box.append(sealedBox.tag)
-        return box
-    }
-
-    /// Opens a box produced by `sealToIdentity` with our identity private key. Throws when the box
-    /// is malformed, was sealed for another recipient, or was sealed under a different `domain`.
-    nonisolated static func openFromIdentity(_ sealedBox: Data, ourIdentityPrivKeyBytes: Data, domain: String) throws -> Data {
-        guard sealedBox.count >= identityBoxOverhead else {
-            throw StealthError.invalidBoxLength
-        }
-        let base = sealedBox.startIndex
-        let epPubBytes = sealedBox[base ..< base + 32]
-        let nonceBytes = sealedBox[base + 32 ..< base + 44]
-        let ciphertextAndTag = sealedBox[(base + 44)...]
-        let ciphertext = ciphertextAndTag.dropLast(16)
-        let tag = ciphertextAndTag.suffix(16)
-
-        let ourPrivKey = try Curve25519.KeyAgreement.PrivateKey(rawRepresentation: ourIdentityPrivKeyBytes)
-        let epPubKey = try Curve25519.KeyAgreement.PublicKey(rawRepresentation: epPubBytes)
-        let sharedSecret = try ourPrivKey.sharedSecretFromKeyAgreement(with: epPubKey)
-        let symmetricKey = sharedSecret.hkdfDerivedSymmetricKey(
-            using: SHA256.self,
-            salt: Data(domain.utf8),
-            sharedInfo: Data(),
-            outputByteCount: 32
-        )
-        let nonce = try ChaChaPoly.Nonce(data: nonceBytes)
-        let box = try ChaChaPoly.SealedBox(nonce: nonce, ciphertext: ciphertext, tag: tag)
-        return try ChaChaPoly.open(box, using: symmetricKey)
-    }
-
-    // MARK: - Seal (send path)
-
-    nonisolated private static let senderCertDomain = "ConstructSEALED-v1"
+    // MARK: - Seal / unseal
+    //
+    // The box is the core's (`sealed_seal_sender_cert`, `OrchestratorCore.open_sealed_to_device`).
+    // Until 2026-09-29 this file carried its own CryptoKit copy of it, and opening needed our
+    // identity private key read from the Keychain on every sealed message.
 
     /// Encrypts `certBytes` (serialized SenderCertificate proto) to the recipient's
     /// X25519 identity key.
     func sealSenderCert(_ certBytes: Data, recipientIdentityKey: Data) throws -> Data {
-        try Self.sealToIdentity(certBytes, recipientIdentityKey: recipientIdentityKey,
-                                domain: Self.senderCertDomain)
+        try sealedSealSenderCert(certBytes: certBytes, recipientIdentityKey: recipientIdentityKey)
     }
 
-    // MARK: - Unseal (receive path)
-
-    /// Decrypts `sealedBox` using our X25519 identity private key.
-    /// Returns the decoded SenderCertificate proto.
-    func unsealSenderCert(
-        _ sealedBox: Data,
-        ourIdentityPrivKeyBytes: Data
-    ) throws -> Shared_Proto_Core_V1_SenderCertificate {
-        let certBytes = try Self.openFromIdentity(sealedBox,
-                                                  ourIdentityPrivKeyBytes: ourIdentityPrivKeyBytes,
-                                                  domain: Self.senderCertDomain)
+    /// Opens a sealed sender certificate with this device's identity key, inside the core.
+    func unsealSenderCert(_ sealedBox: Data) throws -> Shared_Proto_Core_V1_SenderCertificate {
+        let certBytes = try CryptoManager.shared.openSealedToDevice(sealedBox)
         return try Shared_Proto_Core_V1_SenderCertificate(serializedBytes: certBytes)
     }
 
     // MARK: - Verify / attest
 
-    /// The trusted bundle-signing keys, in preference order: the key fetched from
-    /// `/.well-known/construct-server` (if present), followed by the build-time pins
-    /// (`VEILConfig.pinnedBundleSigningKeys`). sealed-sender-resilience lever B — the
-    /// pins guarantee a sealed receive can be attested even when the fetched key was
-    /// never cached (e.g. VEIL inactive, the 2026-07-05 incident) or after a rotation.
-    private func trustedBundleKeys() -> [Curve25519.Signing.PublicKey] {
-        var raw: [Data] = []
-        if let fetched = UserDefaults.standard.data(forKey: VeilCertFetcher.cachedBundleSigningKeyKey) {
-            raw.append(fetched)
-        }
-        for b64 in VEILConfig.pinnedBundleSigningKeys {
-            if let d = Data(base64Encoded: b64) { raw.append(d) }
-        }
-        #if DEBUG
-        raw.append(contentsOf: extraTrustedBundleKeysForTesting)
-        #endif
-        return raw.compactMap { try? Curve25519.Signing.PublicKey(rawRepresentation: $0) }
-    }
-
     #if DEBUG
-    /// Test seam: additional trusted bundle keys (raw 32-byte) injected by unit tests to
-    /// exercise the pin/rotation path without shipping a private key for a real pin.
+    /// Test seam: additional trusted bundle keys (raw 32-byte) handed to the core beside the real
+    /// ones, to exercise the pin/rotation path without shipping a private key for a real pin.
     /// Empty in production paths.
     var extraTrustedBundleKeysForTesting: [Data] = []
     #endif
 
-    /// Checks the server Ed25519 signature on a SenderCertificate against every trusted
-    /// bundle key. Canonical (and only) payload format — stealth-sealed-sender-v2 Phase 3:
-    /// direct concatenation, no separators, issued_at/expires_at as big-endian i64 bytes.
-    /// Must match identity-service::get_sender_certificate's sign_payload exactly.
-    /// Returns a *reason* rather than a bare Bool so the caller can tell "no key to check
-    /// with" apart from "signature genuinely bad" (the old code conflated them, which is
-    /// why the 2026-07-05 nil-key failure was mislogged as `signature invalid`).
-    func attestSignature(_ cert: Shared_Proto_Core_V1_SenderCertificate) -> SenderTrust {
-        guard !cert.serverSignature.isEmpty else { return .unvouched(.badSignature) }
-        let keys = trustedBundleKeys()
-        guard !keys.isEmpty else { return .unvouched(.noKey) }
+    /// The core's verdict on the certificate, as this app's label. Until 2026-10-03 this was an
+    /// Ed25519 check written here, beside the one the core makes before opening a session from the
+    /// same certificate; the two disagreed on age (the core allows the relay's 7 days) and on the
+    /// device (the core checks the key derives to it). One check now, the core's, which also knows
+    /// the delegated hybrid keys (`decisions/server-keys-rooted-offline-and-hybrid.md`).
+    ///
+    /// Returns a *reason* rather than a bare Bool so the caller can tell "no key to check with"
+    /// apart from "signature genuinely bad" (the 2026-07-05 nil-key failure was mislogged as
+    /// `signature invalid` when they were conflated).
+    func coreVerdict(_ cert: Shared_Proto_Core_V1_SenderCertificate) -> CertificateVerdict {
+        #if DEBUG
+        let extra = extraTrustedBundleKeysForTesting
+        if let core = verdictCoreForTesting {
+            core.setTrustedServerKeys(keys: BundleSigningTrust.trustedKeyBytes() + extra)
+            return core.certificateVerdict(certificate: SenderCertificate(proto: cert))
+        }
+        #else
+        let extra: [Data] = []
+        #endif
+        return CryptoManager.shared.certificateVerdict(SenderCertificate(proto: cert), extraKeys: extra)
+            ?? .noKey
+    }
 
-        let payload = Self.buildCertPayload(userID: cert.senderUserID, domain: cert.senderDomain, ik: cert.senderIdentityKey, deviceID: cert.senderDeviceID, issued: cert.issuedAt, expires: cert.expiresAt)
-        let ok = keys.contains { $0.isValidSignature(cert.serverSignature, for: payload) }
-        return ok ? .vouched(.signature) : .unvouched(.badSignature)
+    #if DEBUG
+    /// Test seam: the core to ask instead of `CryptoManager.shared`'s, which unit tests do not
+    /// start. A real core either way — the verdict is never stubbed.
+    var verdictCoreForTesting: OrchestratorCore?
+    #endif
+
+    /// The signature half of the label: what the core says, expiry aside.
+    func attestSignature(_ cert: Shared_Proto_Core_V1_SenderCertificate) -> SenderTrust {
+        switch coreVerdict(cert) {
+        case .vouched, .expired: return .vouched(.signature)
+        case .noKey: return .unvouched(.noKey)
+        case .badSignature: return .unvouched(.badSignature)
+        }
     }
 
     #if DEBUG
@@ -236,19 +173,22 @@ final class StealthSenderService: SealedSenderResolving {
     var ktLookupOverrideForTesting: ((String) -> (key: Data, status: KTStatus)?)?
     #endif
 
+    /// The account address a sealed envelope names its recipient by. Injected so a test can build
+    /// an envelope without a store — but read on every send, so it exists in every build.
+    var accountAddressLookup: (String) -> Data? = { accountId in
+        AccountAddress.of(accountId: accountId)
+    }
+
     /// The recipient's locally stored, previously-KT-verified identity key for `userId`
-    /// (plus its status), read from the `User` Core Data record. `nil` for a first contact
+    /// (plus its status), read from their contact row. `nil` for a first contact
     /// (no bundle fetched / verified yet). sealed-sender-resilience lever C source.
     private func ktVerifiedIdentity(for userId: String) -> (key: Data, status: KTStatus)? {
         #if DEBUG
         if let override = ktLookupOverrideForTesting { return override(userId) }
         #endif
-        let ctx = PersistenceController.shared.container.viewContext
-        let req = User.fetchRequest()
-        req.predicate = NSPredicate(format: "id == %@", userId)
-        req.fetchLimit = 1
-        guard let user = try? ctx.fetch(req).first, let key = user.knownIdentityKey else { return nil }
-        return (key, user.ktStatus)
+        guard let contact = try? LocalRepositories.contacts.contact(userId),
+              let key = contact.knownIdentityKey else { return nil }
+        return (key, contact.ktStatus)
     }
 
     /// The full attestation verdict for an unsealed certificate. Never gates delivery —
@@ -261,8 +201,8 @@ final class StealthSenderService: SealedSenderResolving {
     ///     MITM-suspicion case KT exists to catch).
     ///  3. Signature (lever B): fall back to the bundle-key check for a first contact.
     func attest(_ cert: Shared_Proto_Core_V1_SenderCertificate) -> SenderTrust {
-        let now = Int64(Date().timeIntervalSince1970)
-        if cert.expiresAt <= now { return .unvouched(.expired) }
+        let verdict = coreVerdict(cert)
+        if verdict == .expired { return .unvouched(.expired) }
 
         if let kt = ktVerifiedIdentity(for: cert.senderUserID),
            kt.status == .verified,
@@ -270,23 +210,11 @@ final class StealthSenderService: SealedSenderResolving {
             return .vouched(.kt)
         }
 
-        return attestSignature(cert)
-    }
-
-    static func buildCertPayload(userID: String, domain: String, ik: Data, deviceID: String, issued: Int64, expires: Int64) -> Data {
-        var p = Data()
-        p.append(contentsOf: userID.utf8)
-        p.append(contentsOf: domain.utf8)
-        p.append(ik)
-        p.append(contentsOf: deviceID.utf8)
-        p.append(bigEndian64(issued))
-        p.append(bigEndian64(expires))
-        return p
-    }
-
-    private static func bigEndian64(_ value: Int64) -> Data {
-        var v = value.bigEndian
-        return Data(bytes: &v, count: 8)
+        switch verdict {
+        case .vouched, .expired: return .vouched(.signature)
+        case .noKey: return .unvouched(.noKey)
+        case .badSignature: return .unvouched(.badSignature)
+        }
     }
 
     // MARK: - Resolve sender (receive path, full pipeline)
@@ -371,16 +299,22 @@ final class StealthSenderService: SealedSenderResolving {
     }
 
     func resolveSender(sealedInnerBytes: Data) -> ResolvedSender? {
-        guard let ourPrivKeyBytes = KeychainManager.shared.loadDeviceIdentityKey() else {
-            Log.error("Stealth: no identity key in Keychain", category: "Stealth")
-            return nil
-        }
         let cert: Shared_Proto_Core_V1_SenderCertificate
         let contentType: UInt8
+        var firstFlightPayload: Data?
         do {
             let sealedInner = try Shared_Proto_Core_V1_SealedInner(serializedBytes: sealedInnerBytes)
-            guard !sealedInner.senderCertCiphertext.isEmpty else { return nil }
-            cert = try unsealSenderCert(sealedInner.senderCertCiphertext, ourIdentityPrivKeyBytes: ourPrivKeyBytes)
+            if !sealedInner.sessionEnvelope.isEmpty {
+                return resolveEnvelopeSender(sealedInner.sessionEnvelope)
+            }
+            if !sealedInner.firstFlight.isEmpty {
+                let opened = try CryptoManager.shared.openFirstFlight(sealedInner.firstFlight)
+                cert = try Shared_Proto_Core_V1_SenderCertificate(serializedBytes: opened.certificate)
+                firstFlightPayload = opened.wirePayload
+            } else {
+                guard !sealedInner.senderCertCiphertext.isEmpty else { return nil }
+                cert = try unsealSenderCert(sealedInner.senderCertCiphertext)
+            }
             contentType = UInt8(sealedInner.contentType.rawValue)
         } catch {
             // Unseal failed — genuinely unrecoverable (wrong key / corruption / not for us).
@@ -415,8 +349,59 @@ final class StealthSenderService: SealedSenderResolving {
             senderId: cert.senderUserID,
             senderDeviceId: cert.senderDeviceID,
             contentType: contentType,
-            trust: trust
+            trust: trust,
+            senderCertificate: SenderCertificate(proto: cert),
+            firstFlightPayload: firstFlightPayload
         )
+    }
+
+    /// A session envelope names its writer by the session pair its tag matches, which the core
+    /// finds (`decisions/sealed-envelope-keyed-by-the-session.md`). The kind byte inside it says
+    /// whether the body is a wire payload or a DECRYPTION_ERROR (28); the outer content type is
+    /// generic for both, so the server cannot tell them apart.
+    private func resolveEnvelopeSender(_ envelope: Data) -> ResolvedSender? {
+        guard let opened = CryptoManager.shared.openEnvelope(envelope) else {
+            // No pair matches: not ours, or from a session this device never held — the same
+            // drop path as a box that does not open.
+            Log.error("Stealth: no session envelope pair matched", category: "Stealth")
+            return nil
+        }
+        guard let account = Self.account(ofEnvelopeWriter: opened.contactId) else {
+            Log.error(
+                "Stealth: envelope writer \(opened.contactId.prefix(8))… is in no known account",
+                category: "Stealth"
+            )
+            return nil
+        }
+        let decryptionErrorKind: UInt8 = 2
+        let contentType = opened.kind == decryptionErrorKind
+            ? UInt8(Shared_Proto_Core_V1_ContentType.decryptionError.rawValue)
+            : UInt8(Shared_Proto_Core_V1_ContentType.unspecified.rawValue)
+        if opened.retired {
+            Log.info(
+                "Stealth: envelope from \(opened.contactId.prefix(8))… on a session no longer held — the core answers it",
+                category: "Stealth"
+            )
+        }
+        return ResolvedSender(
+            senderId: account,
+            senderDeviceId: opened.contactId,
+            contentType: contentType,
+            trust: .vouched(.session),
+            senderCertificate: nil,
+            envelope: OpenedSessionEnvelope(sessionId: opened.sessionId, body: opened.body)
+        )
+    }
+
+    /// The account a session envelope's writer belongs to: a peer device from the device set or
+    /// the pinned key, or one of our own devices (SENDER_SYNC).
+    private static func account(ofEnvelopeWriter deviceId: String) -> String? {
+        if let peer = SessionAddressing.peer(ofDevice: deviceId) {
+            return peer.accountId
+        }
+        guard let me = AuthSessionManager.shared.currentUserId, !me.isEmpty else { return nil }
+        let ours = MultiDeviceSendCoordinator.shared.knownOwnDeviceIds(myUserId: me)
+        return ours.contains(deviceId) ? me : nil
     }
 
     /// Pin `cert.senderIdentityKey` when the signature vouches, ignoring expiry.
@@ -428,12 +413,9 @@ final class StealthSenderService: SealedSenderResolving {
     ///
     /// Verifies the signature itself. The one caller that has already verified it takes
     /// `pinIdentity` instead — see there for why that shortcut is not a parameter on this method.
-    func rememberIdentityFromCertificate(
-        _ cert: Shared_Proto_Core_V1_SenderCertificate,
-        context: NSManagedObjectContext = PersistenceController.shared.container.viewContext
-    ) {
+    func rememberIdentityFromCertificate(_ cert: Shared_Proto_Core_V1_SenderCertificate) {
         guard case .vouched = attestSignature(cert) else { return }
-        pinIdentity(cert, context: context)
+        pinIdentity(cert)
     }
 
     /// Pin without verifying. **Only reachable from a branch that has just verified.**
@@ -443,10 +425,7 @@ final class StealthSenderService: SealedSenderResolving {
     /// code establishes — in the one method whose entire job is deciding whether to trust a key.
     /// A private function whose proof is three lines above its only call site cannot be handed a
     /// lie by a future caller; a defaulted parameter can.
-    private func pinIdentity(
-        _ cert: Shared_Proto_Core_V1_SenderCertificate,
-        context: NSManagedObjectContext = PersistenceController.shared.container.viewContext
-    ) {
+    private func pinIdentity(_ cert: Shared_Proto_Core_V1_SenderCertificate) {
         guard !cert.senderUserID.isEmpty, !cert.senderIdentityKey.isEmpty else { return }
         ContactLinkService.shared.rememberIdentityKeyIfUnknown(
             userId: cert.senderUserID,
@@ -455,8 +434,7 @@ final class StealthSenderService: SealedSenderResolving {
             // Driven by an incoming envelope. A sender must not be able to put a row in our
             // store by sending to us — that is how a deleted contact kept coming back while
             // the server replayed their backlog (device logs 2026-08-19).
-            createIfMissing: false,
-            context: context
+            createIfMissing: false
         )
     }
 
@@ -480,11 +458,23 @@ final class StealthSenderService: SealedSenderResolving {
         /// envelope on Privacy Pass grounds. Such a refusal proves the intake credential was not
         /// honoured — had it been, the server would never have looked at tokens — so the rebuilt
         /// envelope must pay rather than present the same credential and be refused identically.
-        afterCredentialRejection: Bool = false
+        afterCredentialRejection: Bool = false,
+        /// A session envelope the core sealed (`CryptoManager.sealEnvelope`, or a DECRYPTION_ERROR
+        /// it built). When set, it replaces both the certificate and `encryptedPayload`: the
+        /// session names the writer, and the wire payload is inside it.
+        sessionEnvelope: Data? = nil,
+        /// A first flight the core sealed whole (`CryptoManager.sealFirstFlight`): the certificate
+        /// and the wire payload are inside it, so it replaces both as an envelope does.
+        firstFlight: Data? = nil
     ) async throws -> Data {
-        let sealedCert = try sealSenderCert(certBytes, recipientIdentityKey: recipientIdentityKey)
         var inner = Shared_Proto_Core_V1_SealedInner()
-        inner.recipientUserID = recipientUserId
+        // The recipient by their address when this device knows it, by the server's id otherwise.
+        // Only this field: the intake credential and the token below stay keyed by the account
+        // id, because the server resolves the address to that id before it checks either.
+        inner.recipientUserID = AccountAddress.recipientField(
+            accountId: recipientUserId,
+            address: accountAddressLookup(recipientUserId)
+        )
         // The one device this envelope is for. Derived from the very key the certificate was
         // just sealed to, and not passed in or looked up, because those are the two ways it
         // could disagree with the ciphertext: a parameter can be handed the wrong device by a
@@ -498,8 +488,14 @@ final class StealthSenderService: SealedSenderResolving {
         // cannot return nil here; `?? ""` rather than a force-unwrap so that the impossible case
         // degrades to that old delivery instead of trapping a send that is otherwise fine.
         inner.recipientDevice = SessionAddressing.cryptoIdentity(ofIdentityKey: recipientIdentityKey) ?? ""
-        inner.senderCertCiphertext = sealedCert
-        inner.encryptedPayload = encryptedPayload
+        if let sessionEnvelope {
+            inner.sessionEnvelope = sessionEnvelope
+        } else if let firstFlight {
+            inner.firstFlight = firstFlight
+        } else {
+            inner.senderCertCiphertext = try sealSenderCert(certBytes, recipientIdentityKey: recipientIdentityKey)
+            inner.encryptedPayload = encryptedPayload
+        }
         // `.generic` is UNSPECIFIED = 0, which proto3 omits — the field does not reach the wire.
         inner.contentType = contentType.proto
         inner.deliveryTag = Data((0..<32).map { _ in UInt8.random(in: 0...255) })
@@ -619,10 +615,38 @@ final class StealthSenderService: SealedSenderResolving {
         encryptedPayload: Data,
         contentType: SealedEnvelopeType,
         spendUnit: TokenSpendUnit? = nil,
-        afterCredentialRejection: Bool = false
+        afterCredentialRejection: Bool = false,
+        /// A session envelope the core already sealed — a DECRYPTION_ERROR answered along a pair.
+        envelope: Data? = nil
     ) async throws -> Data {
+        // A message on an established session goes as a session envelope: the core seals it, or
+        // says it must go with a certificate (a first flight, or a session older than the
+        // envelope). Only a wire payload is ever offered — a DECRYPTION_ERROR the core already
+        // sealed arrives as `envelope`.
+        var sessionEnvelope = envelope
+        if sessionEnvelope == nil, contentType == .generic,
+           let device = SessionAddressing.cryptoIdentity(ofIdentityKey: recipientIdentityKey) {
+            sessionEnvelope = CryptoManager.shared.sealEnvelope(forDevice: device, wirePayload: encryptedPayload)
+        }
+        // No certificate is fetched for an envelope: nothing in it would carry one.
         // getSenderCertificate is @MainActor async — call it directly (will hop automatically)
-        let certBytes = try await StealthSenderService.shared.getSenderCertificate()
+        let certBytes = sessionEnvelope == nil
+            ? try await StealthSenderService.shared.getSenderCertificate()
+            : Data()
+        // A first flight goes sealed whole: its PQXDH header names the initiator's KEM identity
+        // key, which must not travel beside the certificate box (FF-1,
+        // `decisions/first-flight-sealed-whole.md`). The core says whether this payload is one;
+        // a throw is a first flight it could not seal, and that one is not sent at all.
+        var firstFlight: Data?
+        if sessionEnvelope == nil,
+           let device = SessionAddressing.cryptoIdentity(ofIdentityKey: recipientIdentityKey) {
+            firstFlight = try CryptoManager.shared.sealFirstFlight(
+                forDevice: device,
+                recipientIdentityKey: recipientIdentityKey,
+                wirePayload: encryptedPayload,
+                certificate: certBytes
+            )
+        }
         return try await StealthSenderService.shared.buildSealedInner(
             recipientUserId: recipientUserId,
             certBytes: certBytes,
@@ -630,7 +654,9 @@ final class StealthSenderService: SealedSenderResolving {
             encryptedPayload: encryptedPayload,
             contentType: contentType,
             spendUnit: spendUnit,
-            afterCredentialRejection: afterCredentialRejection
+            afterCredentialRejection: afterCredentialRejection,
+            sessionEnvelope: sessionEnvelope,
+            firstFlight: firstFlight
         )
     }
 
@@ -638,12 +664,10 @@ final class StealthSenderService: SealedSenderResolving {
     /// row, or nil if not known yet. Keyed strictly by `recipientId` so it is unambiguous from any
     /// send path (the shared source used by both the live-send and retry paths). Callers gate on
     /// `StealthPolicy.shared.shouldUseSealedSender()` and, when this returns nil under stealth-on,
-    /// MUST queue rather than send identified (see `StealthDowngradeBlocked`). Call on `context`'s queue.
-    static func recipientIdentityKey(recipientId: String, context: NSManagedObjectContext) -> Data? {
-        let req = User.fetchRequest()
-        req.predicate = NSPredicate(format: "id == %@", recipientId)
-        req.fetchLimit = 1
-        let user = (try? context.fetch(req))?.first
+    /// MUST queue rather than send identified (see `StealthDowngradeBlocked`). Reads saved state,
+    /// from any thread.
+    static func recipientIdentityKey(recipientId: String) -> Data? {
+        let user = try? LocalRepositories.contacts.contact(recipientId)
         if let key = user?.knownIdentityKey { return key }
 
         // `recipientId` may be a **device id**: the core names contacts that way, and the paths
@@ -654,7 +678,7 @@ final class StealthSenderService: SealedSenderResolving {
         // This is not a fallback for a missing pin; it is the same pin, reached from the other
         // space. If it also finds nothing, the two misses below are the real diagnosis.
         if SessionAddressing.isCryptoIdentity(recipientId),
-           let key = SessionAddressing.identityKey(ofDevice: recipientId, in: context) {
+           let key = SessionAddressing.identityKey(ofDevice: recipientId) {
             return key
         }
         // A miss here fails every sealed send to this peer closed, permanently, and the thrown
@@ -701,6 +725,9 @@ enum StealthError: Error {
 enum SenderVouchBasis: Equatable {
     case kt
     case signature
+    /// A session envelope: the writer is the device whose session pair the tag matched. Vouched
+    /// by the session itself — post-quantum, and no server key involved.
+    case session
 }
 
 /// Why an attestation did not vouch. Delivery proceeds anyway (ratchet is the real
@@ -744,4 +771,40 @@ struct ResolvedSender: Equatable {
     let senderDeviceId: String
     let contentType: UInt8
     let trust: SenderTrust
+    /// The certificate as unsealed, for the core. It is what a first message opens a session
+    /// from: the key it names is the key the session opens with, once the core has checked the
+    /// server's signature (`decisions/first-message-opens-without-the-server.md`). `trust` above is
+    /// this app's label for the transcript; it does not decide whether a session opens.
+    /// `nil` for a session envelope, which names the writer by its session instead.
+    let senderCertificate: SenderCertificate?
+    /// Set when the message came in a session envelope: the session its tag matched and the
+    /// opened body (the wire payload, or a DECRYPTION_ERROR).
+    let envelope: OpenedSessionEnvelope?
+    /// Set when the message came as a first flight sealed whole: the wire payload that was inside
+    /// it beside the certificate (`SealedInner.first_flight`).
+    let firstFlightPayload: Data?
+
+    init(
+        senderId: String,
+        senderDeviceId: String,
+        contentType: UInt8,
+        trust: SenderTrust,
+        senderCertificate: SenderCertificate?,
+        envelope: OpenedSessionEnvelope? = nil,
+        firstFlightPayload: Data? = nil
+    ) {
+        self.senderId = senderId
+        self.senderDeviceId = senderDeviceId
+        self.contentType = contentType
+        self.trust = trust
+        self.senderCertificate = senderCertificate
+        self.envelope = envelope
+        self.firstFlightPayload = firstFlightPayload
+    }
+}
+
+/// What `CryptoManager.openEnvelope` gave back, as the receive path needs it.
+struct OpenedSessionEnvelope: Equatable {
+    let sessionId: String
+    let body: Data
 }

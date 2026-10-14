@@ -38,9 +38,6 @@ struct DeviceLinkScanView: View {
     @State private var showReceiveHistorySync = false
     @State private var showHistorySyncOffer = false
     @State private var activeHistorySyncSender: HistorySyncSenderSheet? = nil
-    @State private var historySyncPIN: String? = nil
-    /// Receiver-side auto PIN (derived from our own new device id) so history sync auto-connects.
-    @State private var receiveHistorySyncPIN: String? = nil
 
     var body: some View {
         NavigationStack {
@@ -62,7 +59,7 @@ struct DeviceLinkScanView: View {
                             .tint(.white)
                         Text(LocalizedStringKey("device_link_linking"))
                             .foregroundStyle(.white)
-                            .font(.headline)
+                            .font(CTFont.ui(17, weight: .semibold))
                     }
                 }
             }
@@ -112,7 +109,7 @@ struct DeviceLinkScanView: View {
             }
             Button(LocalizedStringKey("history_sync_send_offer_skip"), role: .cancel) {
                 showHistorySyncOffer = false
-                if historySyncPIN != nil {
+                if vm.approvedJoinPendingId != nil {
                     activeHistorySyncSender = .skip
                 } else {
                     authViewModel.clearDeviceLinkPhase()
@@ -139,17 +136,11 @@ struct DeviceLinkScanView: View {
 
                 switch outcome.role {
                 case .linkedNewDevice:
-                    receiveHistorySyncPIN = HistorySyncPairing.pin(
-                        pendingDeviceId: outcome.deviceId,
-                        userId: outcome.userId
-                    )
                     showReceiveHistorySync = true
                 case .approvedJoinRequest:
                     // Device linked. Offer to sync history to the new device — the user with
                     // the message history decides; no codes, no steps beyond a yes/no.
-                    if let pendingId = outcome.pendingDeviceId,
-                       let userId = KeychainManager.shared.loadUserID() {
-                        historySyncPIN = HistorySyncPairing.pin(pendingDeviceId: pendingId, userId: userId)
+                    if vm.approvedJoinPendingId != nil {
                         showHistorySyncOffer = true
                     } else {
                         dismiss()
@@ -166,6 +157,7 @@ struct DeviceLinkScanView: View {
                     dismiss()
                 }
             )
+            .sheetNavigation(closes: false)
             .environment(\.managedObjectContext, PersistenceController.shared.container.viewContext)
         }
         .sheet(item: $activeHistorySyncSender) { sheet in
@@ -174,6 +166,7 @@ struct DeviceLinkScanView: View {
                 userId: KeychainManager.shared.loadUserID() ?? "",
                 peerDeviceId: vm.approvedJoinPendingId ?? ""
             )
+                .sheetNavigation()
                 .environment(\.managedObjectContext, PersistenceController.shared.container.viewContext)
                 .onDisappear {
                     authViewModel.clearDeviceLinkPhase()

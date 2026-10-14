@@ -64,6 +64,16 @@ final class StreamLifecycleCoordinator {
 
     // MARK: - Polling state
 
+    /// A push launch is already `.background`. `didEnterBackground` does not
+    /// fire, so the grace timer — the thing that closes the stream — never starts.
+    private var applicationIsBackground: Bool {
+        #if os(iOS)
+        UIApplication.shared.applicationState == .background
+        #else
+        false
+        #endif
+    }
+
     private var pollingStateHadToken = false
     private var lastPolledStatus: ConnectionStatusManager.ConnectionStatus = .unknown
     private let connectionStatusManager = ConnectionStatusManager.shared
@@ -188,6 +198,7 @@ final class StreamLifecycleCoordinator {
                 // the call is a no-op on every launch after the first of the day.
                 await IntakeCredentialService.shared.publishTagWindowIfNeeded()
                 AvatarRetryService.shared.retryPendingAvatarsIfNeeded()
+                await ProfileShareViewModel.rebroadcastIfOwed()
             }
         }
     }
@@ -243,8 +254,6 @@ final class StreamLifecycleCoordinator {
                 }
             }
             self.lastReconnectSubscriptionSet = idSet
-            // Stamp establishedAt for CFE-restored sessions before any prewarm END_SESSION.
-            self.sessionCoordinator.hydrateEstablishedTimestampsForRestoredSessions()
             self.wireStreamCallbacks()
             self.streamManager.forceReconnect(contactUserIds: ids) { [weak self] message in
                 self?.handleIncomingMessage(message)
@@ -338,6 +347,15 @@ final class StreamLifecycleCoordinator {
         }
 
         if state.hasToken && state.status != ConnectionStatusManager.ConnectionStatus.disconnected {
+            // A push launch is already in the background, so didEnterBackground
+            // never fires and the 15s grace never closes the socket. Opening a
+            // stream here is what kept ffeeddc6 "online" for 86s on 2026-09-24
+            // while the next message waited for the heartbeat timeout.
+            guard shouldOpenMessageStream(applicationIsBackground: applicationIsBackground) else {
+                Log.info("Background — not opening a MessageStream. A stream opened on a push launch stays online after iOS suspends the process, and the server skips the next push until that socket dies.", category: "StreamLifecycle")
+                pollingStateHadToken = true
+                return
+            }
             if state.pushEnabled {
                 Log.info("Push active — stream connected", category: "StreamLifecycle")
             } else {
@@ -467,10 +485,21 @@ final class StreamLifecycleCoordinator {
                     // the residual churn driver (one full reconnect per incoming message; device
                     // logs showed "Silent push — reconnecting stream" → forceReconnect on every
                     // push). This mirrors the same guard on the BackgroundFetchManager path in
-                    // AppDelegate. When the stream is DOWN (or app backgrounded) we still
-                    // reconnect to fetch pending messages — that is the legitimate wake-up case.
-                    if UIApplication.shared.applicationState == .active, self.streamManager.isConnected {
-                        Log.info("Silent push — foreground stream live, skipping reconnect", category: "StreamLifecycle")
+                    // AppDelegate. Background does not reconnect: the unary fetch is the
+                    // wake, and a stream opened here is what the server treats as presence.
+                    // Foreground with the stream down still reconnects.
+                    let background = UIApplication.shared.applicationState == .background
+                    let foregroundLive = UIApplication.shared.applicationState == .active
+                        && self.streamManager.isConnected
+                    if !shouldReconnectStreamOnSilentPush(
+                        applicationIsBackground: background,
+                        foregroundLiveStream: foregroundLive
+                    ) {
+                        if background {
+                            Log.info("Silent push — background, fetching without opening a stream", category: "StreamLifecycle")
+                        } else {
+                            Log.info("Silent push — foreground stream live, skipping reconnect", category: "StreamLifecycle")
+                        }
                     } else {
                         Log.info("Silent push — reconnecting stream to fetch pending messages", category: "StreamLifecycle")
                         self.forceReconnect()
@@ -522,28 +551,30 @@ final class StreamLifecycleCoordinator {
             )
             return
         }
-        guard let context = viewContext else { return }
+        guard viewContext != nil else { return }
         // Identity for an E2E receipt: the peer names our message by the canonical id it was sent
         // under. Kept as a normalisation rather than dropped — `localId(for:)` returns its input
         // when unmapped, so it costs a dictionary lookup and covers the case where that stops being
         // true, which is not a case anything would notice failing.
         let localIds = messageIds.map { ServerMessageIdMap.shared.localId(for: $0) }
-        context.perform {
-            for messageId in localIds {
-                let fetchRequest = Message.fetchRequest()
-                fetchRequest.predicate = NSPredicate(format: "id ==[c] %@", messageId)
-                guard let message = try? context.fetch(fetchRequest).first,
-                      message.isSentByMe else { continue }
-                guard message.deliveryStatus != .delivered else { continue }
-                let prev = message.deliveryStatus
-                message.deliveryStatus = .delivered
-                if prev == .failed {
-                    Log.error("Receipt: corrected false-failed message \(messageId) → .delivered", category: "MessageStream")
-                } else {
-                    Log.info("Receipt: message \(messageId) marked delivered (was \(prev))", category: "MessageStream")
-                }
+        Self.markDelivered(localIds, in: LocalRepositories.messages)
+    }
+
+    /// The peer has these messages of ours. Through the repository (messages B2); the store's
+    /// rule lets `.delivered` over anything.
+    static func markDelivered(_ localIds: [String], in store: any MessageStore) {
+        for messageId in localIds {
+            guard let message = try? store.message(messageId), message.isSentByMe else { continue }
+            // Before the status check: a repeated receipt also settles a row left pending.
+            _ = try? store.settleOrder(of: message)
+            guard message.deliveryStatus != .delivered else { continue }
+            let prev = message.deliveryStatus
+            _ = try? store.setDeliveryStatus(message.id, .delivered)
+            if prev == .failed {
+                Log.error("Receipt: corrected false-failed message \(messageId) → .delivered", category: "MessageStream")
+            } else {
+                Log.info("Receipt: message \(messageId) marked delivered (was \(prev))", category: "MessageStream")
             }
-            context.saveAndLog()
         }
     }
 
@@ -569,22 +600,17 @@ final class StreamLifecycleCoordinator {
     // MARK: - Contact helpers
 
     private func currentContactIds() -> [String] {
-        guard let context = viewContext else { return Array(ephemeralSubscriptionUserIds) }
-        let fetchRequest = User.fetchRequest()
-        fetchRequest.predicate = NSPredicate(format: "id != %@", AuthSessionManager.shared.currentUserId ?? "")
-        let users = (try? context.fetch(fetchRequest)) ?? []
-        let coreDataIds = Set(users.compactMap { $0.id })
-        return Array(coreDataIds.union(ephemeralSubscriptionUserIds)).sorted()
+        guard viewContext != nil else { return Array(ephemeralSubscriptionUserIds) }
+        let rows = (try? LocalRepositories.contacts.everyContact(except: AuthSessionManager.shared.currentUserId)) ?? []
+        return Array(Set(rows.map(\.id)).union(ephemeralSubscriptionUserIds)).sorted()
     }
 
     private func prewarmEligibleContactIds() -> [String] {
-        guard let context = viewContext else { return [] }
+        guard viewContext != nil else { return [] }
         let myId = AuthSessionManager.shared.currentUserId ?? ""
         guard !myId.isEmpty else { return [] }
-        let fetchRequest = Chat.fetchRequest()
-        fetchRequest.predicate = NSPredicate(format: "lastMessageTime != nil AND otherUser.id != %@", myId)
-        let chats = (try? context.fetch(fetchRequest)) ?? []
-        return chats.compactMap { $0.otherUser?.id }
+        let chats = (try? LocalRepositories.chats.chats()) ?? []
+        return chats.filter { $0.lastMessageTime != nil && $0.peerId != myId }.map(\.peerId)
     }
 
     private func currentConversationIds() -> [String] {
@@ -601,8 +627,36 @@ final class StreamLifecycleCoordinator {
         streamManager.onKeySyncReceived = { [weak self] userId in
             self?.sessionCoordinator.handleKeySyncRequest(for: userId)
         }
+        streamManager.onStreamConnected = { [weak self] in
+            self?.sessionCoordinator.networkReconnected()
+        }
         sessionCoordinator.onE2EDeliveryReceiptDecrypted = { [weak self] messageIds in
             self?.handleDeliveryReceipts(messageIds, from: .peerE2E)
         }
     }
+}
+
+/// Whether a status change may open a MessageStream.
+///
+/// Opening one while the app is already in the background marks the account
+/// online (`track_user_online`). The server then skips the silent push. A push
+/// launch never passes through `didEnterBackground`, so the grace timer that
+/// would close the socket never starts, and the next message waits for the
+/// heartbeat timeout. 2026-09-24, ffeeddc6: "Но они у тебя хотя бы приходят"
+/// was sent at 10:41:23 and the banner arrived at 10:42:49.
+func shouldOpenMessageStream(applicationIsBackground: Bool) -> Bool {
+    !applicationIsBackground
+}
+
+/// Whether a silent push may reconnect the stream.
+///
+/// Background: no. The unary fetch is the wake; a reconnect is the stream the
+/// server treats as presence. Foreground with a live stream: no — that was the
+/// reconnect storm. Anything else (foreground, stream down): yes.
+func shouldReconnectStreamOnSilentPush(
+    applicationIsBackground: Bool,
+    foregroundLiveStream: Bool
+) -> Bool {
+    if applicationIsBackground { return false }
+    return !foregroundLiveStream
 }

@@ -208,9 +208,10 @@ extension MessageStreamManager {
         // (Receipt flushes on stream-open used to live here — removed with `sendReceipt`
         // on 2026-08-02. E2E receipts go through the normal queued send path instead.)
 
-        // Start heartbeat sender.
+        // One heartbeat, at once — see StreamHeartbeatSchedule. After it the server's own
+        // heartbeats keep the stream alive and feed the watchdog below.
         //
-        // The first one goes out immediately — see StreamHeartbeatSchedule. A gRPC
+        // Why at once: A gRPC
         // server-streaming handler flushes no response headers until it has something to send, so
         // a client that subscribes and then stays quiet for 25s is not accepted for 25s, and the
         // 2.0s direct accept timeout kills a perfectly healthy stream. Speaking first turns
@@ -219,8 +220,7 @@ extension MessageStreamManager {
         let hbInterval = self.heartbeatInterval
         let hbTask = Task { [weak self] () -> Void in
             var index = 0
-            while !Task.isCancelled {
-                let delay = StreamHeartbeatSchedule.delayBeforeHeartbeat(index: index, interval: hbInterval)
+            while !Task.isCancelled, let delay = StreamHeartbeatSchedule.delayBeforeHeartbeat(index: index) {
                 if delay > 0 { try? await Task.sleep(for: .seconds(delay)) }
                 guard !Task.isCancelled else { return }
                 await MainActor.run { self?.sendHeartbeat() }
@@ -370,6 +370,7 @@ extension MessageStreamManager {
                 }
                 // Data plane is up — router must see this (clears direct fail streak).
                 self.reportStreamOpenedToRouter(transportLabel: label, metricsLabel: metricsLabel)
+                self.onStreamConnected?()
             }
         }
 

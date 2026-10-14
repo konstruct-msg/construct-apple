@@ -22,34 +22,31 @@ import CoreData
 import SwiftProtobuf
 @testable import Construct_Messenger
 
+/// Stands in for an unsealed certificate: the boundary carries it, the core checks it.
+private func stubCertificate(account: String, device: String) -> SenderCertificate {
+    SenderCertificate(
+        userId: account, domain: "test.example", identityKey: Data(repeating: 0x07, count: 32),
+        deviceId: device, issuedAt: 1, expiresAt: 2, signature: Data(repeating: 0x09, count: 64),
+        serverKid: Data(), serverSignatureHybrid: Data()
+    )
+}
+
 @MainActor
 final class SealedRoutingBoundaryTests: XCTestCase {
 
     // MARK: - Recording delegate
 
-    /// Records the two delegate queries that are unique to the control branches and fire
-    /// *before* any crypto work, so classification can be observed without executing the
-    /// handlers. Both return `true` to short-circuit the heavy path deliberately.
+    /// Records the delegate call unique to the DECRYPTION_ERROR branch, which fires before any
+    /// crypto work, so classification can be observed without the core. The END_SESSION and
+    /// SESSION_RESET_INIT branches it once recorded beside it went on 2026-09-27
+    /// (`decisions/sessions-renew-by-sending.md`).
     private final class RecordingDelegate: MessageRouterDelegate {
-        var resetInitSupersededQueries: [String] = []
-        var endSessionStaleQueries: [String] = []
-        var endSessionRequests: [String] = []
+        var decryptionErrors: [(peer: PeerAddress, payload: Data, opened: Bool)] = []
 
-        func messageRouter(_ router: MessageRouter, needsPublicKeyBundle peer: PeerAddress, for message: ChatMessage) {}
-        func messageRouter(_ router: MessageRouter, needsEndSession peer: PeerAddress) {
-            endSessionRequests.append(peer.account)
+        func messageRouter(_ router: MessageRouter, canOpenReceiving peer: PeerAddress, for message: ChatMessage) {}
+        func messageRouter(_ router: MessageRouter, receivedDecryptionError peer: PeerAddress, payload: Data, opened: Bool) {
+            decryptionErrors.append((peer, payload, opened))
         }
-        func messageRouter(_ router: MessageRouter, receivedEndSession peer: PeerAddress, timestamp: UInt64) {}
-        func messageRouter(_ router: MessageRouter, isEndSessionStale peer: PeerAddress, timestamp: UInt64) -> Bool {
-            endSessionStaleQueries.append(peer.account)
-            return true   // short-circuit: classification is what we assert
-        }
-        func messageRouter(_ router: MessageRouter, isResetInitSuperseded peer: PeerAddress, timestamp: UInt64, initEphemeral: Data) -> Bool {
-            resetInitSupersededQueries.append(peer.account)
-            return true   // short-circuit
-        }
-        func messageRouter(_ router: MessageRouter, didWinTieBreak peer: PeerAddress) {}
-        func messageRouter(_ router: MessageRouter, needsSessionHeal peer: PeerAddress, failedMessage: ChatMessage) {}
         func messageRouter(_ router: MessageRouter, didDecryptDeliveryReceipt messageIds: [String]) {}
         func messageRouter(_ router: MessageRouter, needsUsernameUpdate peer: PeerAddress) {}
     }
@@ -69,7 +66,14 @@ final class SealedRoutingBoundaryTests: XCTestCase {
         AuthSessionManager.shared.updateUserId(me)
         try CryptoCoreTestBootstrap.ensureCore(localUserId: me)
 
-        context = CryptoCoreTestBootstrap.inMemoryContext()
+        let container = PersistenceController(inMemory: true).container
+        LocalRepositories.useProcessedMessagesForTesting(CoreDataProcessedMessageStore(container: container))
+        // The receive path writes the sender's contact, their chat and the message through the
+        // repositories; without these it writes into the test host's own store.
+        LocalRepositories.useContactsForTesting(container)
+        LocalRepositories.useChatsForTesting(container)
+        LocalRepositories.useMessagesForTesting(container)
+        context = container.viewContext
         router = MessageRouter()
         router.setContext(context)
         delegate = RecordingDelegate()
@@ -80,6 +84,10 @@ final class SealedRoutingBoundaryTests: XCTestCase {
         if let savedUserId, !savedUserId.isEmpty {
             AuthSessionManager.shared.updateUserId(savedUserId)
         }
+        LocalRepositories.useProcessedMessagesForTesting(nil)
+        LocalRepositories.useContactsForTesting(nil)
+        LocalRepositories.useChatsForTesting(nil)
+        LocalRepositories.useMessagesForTesting(nil)
         context = nil
         router = nil
         delegate = nil
@@ -88,62 +96,61 @@ final class SealedRoutingBoundaryTests: XCTestCase {
 
     // MARK: - A. Unseal boundary remaps the routing kind
 
-    /// A sealed SESSION_RESET_INIT must reach the SRI branch. Before the fix the outer
-    /// "DIRECT_MESSAGE" stamp survived the rebuild, `isSessionResetInit` stayed false, and the
-    /// message fell through to the generic decrypt path where the orchestrator returned no
-    /// routing decision — the peer's session was never re-established.
-    func testSealedResetInit_ReachesResetInitBranch() {
-        stubUnseal(contentType: 24)
+    /// A sealed DECRYPTION_ERROR must reach its branch. The real content type rides only in
+    /// `SealedInner`; read from the outer stamp it would be a regular message, fail to decrypt, and
+    /// be answered with a decryption error of our own — the f39e03b4 class of regression.
+    ///
+    /// Mutation: drop the `isDecryptionError` early exit — this reddens.
+    func testSealedDecryptionError_ReachesItsBranch() {
+        stubUnseal(contentType: 28)
+
+        let message = sealedMessage()
+        router.routeIncomingMessage(message, in: context)
+
+        XCTAssertEqual(delegate.decryptionErrors.map(\.peer.account), [peer],
+                       "sealed ct=28 must route as a DECRYPTION_ERROR under the resolved sender")
+        XCTAssertEqual(delegate.decryptionErrors.first?.payload, message.rawPayload,
+                       "the core opens the box the peer sealed; nothing here may change it")
+    }
+
+    /// The error is about one device's record, and only the certificate names the device.
+    func testSealedDecryptionError_NamesTheCertifiedDevice() {
+        stubUnseal(contentType: 28)
 
         router.routeIncomingMessage(sealedMessage(), in: context)
 
-        XCTAssertEqual(
-            delegate.resetInitSupersededQueries, [peer],
-            "sealed ct=24 must route as SESSION_RESET_INIT — this is the f39e03b4 regression"
-        )
+        XCTAssertEqual(delegate.decryptionErrors.map(\.peer.device), [senderDevice])
     }
 
-    /// A sealed END_SESSION must reach the END_SESSION branch. Before the fix it was classified
-    /// as a regular message, failed to build an incoming event, and was skipped outright.
-    func testSealedEndSession_ReachesEndSessionBranch() {
+    /// END_SESSION (21) from an older build is acknowledged and nothing else: it named no state,
+    /// so nothing could tell whether it was about the one we hold.
+    ///
+    /// Mutation: route 21 into the decryption-error branch — this reddens.
+    func testSealedEndSession_IsAcknowledgedAndIgnored() {
         stubUnseal(contentType: 21)
 
-        router.routeIncomingMessage(sealedMessage(), in: context)
+        let message = sealedMessage()
+        router.routeIncomingMessage(message, in: context)
 
-        XCTAssertEqual(
-            delegate.endSessionStaleQueries, [peer],
-            "sealed ct=21 must route as END_SESSION — this is the f39e03b4 regression"
-        )
+        XCTAssertTrue(delegate.decryptionErrors.isEmpty)
+        XCTAssertTrue(PersistentACKStore.shared.isProcessed(message.id))
     }
 
-    /// Control-branch classification must not swallow ordinary sealed traffic: a regular body
-    /// takes neither control branch.
-    func testSealedRegularMessage_TakesNeitherControlBranch() {
+    /// Control-branch classification must not swallow ordinary sealed traffic.
+    func testSealedRegularMessage_TakesNoControlBranch() {
         stubUnseal(contentType: 1)
 
         router.routeIncomingMessage(sealedMessage(), in: context)
 
-        XCTAssertTrue(delegate.resetInitSupersededQueries.isEmpty, "ct=1 is not a SESSION_RESET_INIT")
-        XCTAssertTrue(delegate.endSessionStaleQueries.isEmpty, "ct=1 is not an END_SESSION")
-    }
-
-    /// The resolved sender must become the routing identity — a sealed message carries an empty
-    /// `from`, and everything downstream keys off it.
-    func testSealedMessage_RoutesUnderResolvedSender() {
-        stubUnseal(contentType: 24)
-
-        router.routeIncomingMessage(sealedMessage(), in: context)
-
-        XCTAssertEqual(delegate.resetInitSupersededQueries.first, peer,
-                       "routing identity must be the unsealed sender, not the empty outer `from`")
+        XCTAssertTrue(delegate.decryptionErrors.isEmpty, "ct=1 is not a DECRYPTION_ERROR")
     }
 
     // MARK: - B. Parser preserves the sealed control payload
 
-    /// A sealed END_SESSION carries a 16-byte SessionControl sentinel inside SealedInner — far
-    /// shorter than a WirePayload, so `WirePayloadCoder.decode` fails and the parser takes its
-    /// sealed fallback. That fallback used to drop the payload, which is what made the typed
-    /// `SessionControl.reason` hint (e.g. `.otpkUnreproducible` → 3-DH re-init) unreadable.
+    /// A sealed DECRYPTION_ERROR carries the core's sealed box inside SealedInner, not a
+    /// WirePayload, so it has no `wire` summary and the parser keeps it only because it is sealed.
+    /// That fallback used to drop the payload (END_SESSION's reason hint went unreadable that way);
+    /// dropped now, the error would reach the core empty and be refused.
     func testParser_SealedShortControlInner_PreservesRawPayload() throws {
         let sentinel = Data(repeating: 0xAB, count: 16)
         let response = sealedStreamResponse(innerPayload: sentinel)
@@ -154,7 +161,7 @@ final class SealedRoutingBoundaryTests: XCTestCase {
             return XCTFail("sealed envelope must parse into a .message event, got \(String(describing: event))")
         }
         XCTAssertEqual(parsed.rawPayload, sentinel,
-                       "sealed fallback must carry the inner payload through — dropping it loses SessionControl.reason")
+                       "sealed fallback must carry the inner payload through — dropping it loses the decryption error")
         XCTAssertTrue(parsed.from.isEmpty, "sender stays unresolved until MessageRouter unseals")
         XCTAssertFalse(parsed.sealedInnerData.isEmpty, "sealed bytes must survive for resolveSender")
     }
@@ -180,9 +187,70 @@ final class SealedRoutingBoundaryTests: XCTestCase {
             senderId: peer,
             senderDeviceId: senderDevice,
             contentType: contentType,
-            trust: .vouched(.signature)
+            trust: .vouched(.signature),
+            senderCertificate: stubCertificate(account: peer, device: senderDevice)
         )
         )
+    }
+
+    /// A session envelope resolved: the writer named by its session, the body opened.
+    private func stubEnvelope(contentType: UInt8, body: Data) {
+        router.sealedSenderResolver = StubResolver(
+            resolved: ResolvedSender(
+                senderId: peer,
+                senderDeviceId: senderDevice,
+                contentType: contentType,
+                trust: .vouched(.session),
+                senderCertificate: nil,
+                envelope: OpenedSessionEnvelope(sessionId: "5e55", body: body)
+            )
+        )
+    }
+
+    // MARK: - Session envelope (decisions/sealed-envelope-keyed-by-the-session.md)
+
+    /// An enveloped DECRYPTION_ERROR reaches its branch with the error itself, marked opened —
+    /// there is no box for the core to open, and handing it one would fail as unreadable.
+    ///
+    /// Mutation: pass `opened: false` from the router — this reddens.
+    func testAnEnvelopedDecryptionError_ReachesItsBranchOpened() {
+        let error = Data([0x01, 0x00, 0xAB])
+        stubEnvelope(contentType: 28, body: error)
+
+        router.routeIncomingMessage(sealedMessage(), in: context)
+
+        XCTAssertEqual(delegate.decryptionErrors.map(\.peer.device), [senderDevice])
+        XCTAssertEqual(delegate.decryptionErrors.first?.payload, error)
+        XCTAssertEqual(delegate.decryptionErrors.first?.opened, true)
+    }
+
+    /// The certificate path still hands the box over unopened.
+    func testACertifiedDecryptionError_IsNotMarkedOpened() {
+        stubUnseal(contentType: 28)
+        router.routeIncomingMessage(sealedMessage(), in: context)
+        XCTAssertEqual(delegate.decryptionErrors.first?.opened, false)
+    }
+
+    // MARK: - First flight sealed whole (decisions/first-flight-sealed-whole.md)
+
+    /// The wire payload of a first flight comes out of the box beside the certificate, and the
+    /// message carries it from there on — the outer one is empty.
+    ///
+    /// Mutation: drop the `firstFlightPayload` branch in `resolvingSealedSender` — this reddens.
+    func testAFirstFlightsPayloadReplacesTheOuterOne() {
+        let wire = Data(repeating: 0x61, count: 80)
+        let resolved = ResolvedSender(
+            senderId: peer,
+            senderDeviceId: senderDevice,
+            contentType: 0,
+            trust: .vouched(.signature),
+            senderCertificate: stubCertificate(account: peer, device: senderDevice),
+            firstFlightPayload: wire
+        )
+        let message = sealedMessage().resolvingSealedSender(resolved, currentUserId: me)
+        XCTAssertEqual(message.rawPayload, wire)
+        XCTAssertNotNil(message.senderCertificate, "a first message opens from its certificate")
+        XCTAssertNil(message.envelopeSession)
     }
 
     /// Stands in for StealthSenderService: yields a known sender/content type without needing
@@ -199,10 +267,6 @@ final class SealedRoutingBoundaryTests: XCTestCase {
             id: id,
             from: "",
             to: me,
-            ephemeralPublicKey: Data(repeating: 1, count: 32),
-            messageNumber: 0,
-            content: Data(repeating: 2, count: 48),
-            suiteId: 1,
             timestamp: UInt64(Date().timeIntervalSince1970),
             contentType: 1,                                   // outer is forced generic
             rawPayload: Data(repeating: 3, count: 64),
@@ -214,7 +278,7 @@ final class SealedRoutingBoundaryTests: XCTestCase {
         var inner = Shared_Proto_Core_V1_SealedInner()
         inner.recipientUserID = me
         inner.encryptedPayload = innerPayload
-        inner.contentType = .sessionReset
+        inner.contentType = .decryptionError
 
         var sealedEnvelope = Shared_Proto_Core_V1_SealedSenderEnvelope()
         sealedEnvelope.sealedInner = (try? inner.serializedData()) ?? Data()
@@ -254,22 +318,20 @@ final class SealedRebuildFieldPreservationTests: XCTestCase {
             id: "6fcec8b4-c2ca-4e94-a8de-764b5623bcb6",
             from: "",
             to: "",
-            ephemeralPublicKey: Data(repeating: 0x11, count: 32),
-            messageNumber: 7,
-            content: Data(repeating: 0x22, count: 48),
-            suiteId: 3,
             timestamp: 1_785_665_817,
-            oneTimePreKeyId: 1_003_750,
-            kemCiphertext: Data(repeating: 0x33, count: 1088),
             contentType: 1,
-            kyberOtpkId: 42,
-            pqMessageEpoch: 9,
-            pqRatchetField: Data(repeating: 0x44, count: 24),
             // Deliberately not `senderDevice`: the boundary must overwrite this, not keep it.
             senderDeviceId: "00000000000000000000000000000000",
             conversationId: "direct:a:b",
             replyToMessageId: "reply-target",
-            rawPayload: Data(repeating: 0x55, count: 1428),
+            // A suite-3 handshake at message 7 with a PQ epoch: every header field the old
+            // parsed-field copies carried is in here, and is read from here.
+            rawPayload: handBuiltWirePayload(
+                messageNumber: 7,
+                suiteId: 4,
+                kemCiphertext: [UInt8](repeating: 0x33, count: 1568),
+                pqMessageEpoch: 9
+            ),
             sealedInnerData: Data(repeating: 0x66, count: 96)
         )
     }
@@ -279,23 +341,53 @@ final class SealedRebuildFieldPreservationTests: XCTestCase {
             senderId: peer,
             senderDeviceId: senderDevice,
             contentType: contentType,
-            trust: .vouched(.signature)
+            trust: .vouched(.signature),
+            senderCertificate: certificate
         )
     }
+
+    private var certificate: SenderCertificate { stubCertificate(account: peer, device: senderDevice) }
 
     // MARK: The regression
 
     /// Suite-3 PQ fields must survive. The sender encrypts with a `pq_message_epoch` tag in the
     /// associated data; a responder that rebuilds it from zeros produces different AD and cannot
-    /// decrypt. Suite 3 is negotiated in the field, so these are populated on real carriers.
-    func testPqRatchetFieldsSurviveTheUnsealBoundary() {
+    /// decrypt. Those fields now live only in `rawPayload`, and the boundary copies the message
+    /// rather than listing fields — so what this pins is that the payload and the core's reading
+    /// of it cross unchanged.
+    func testThePayloadAndItsSummarySurviveTheUnsealBoundary() {
         let carrier = sealedCarrier()
         let rebuilt = carrier.resolvingSealedSender(resolved(), currentUserId: me)
 
-        XCTAssertEqual(rebuilt.pqMessageEpoch, 9,
-                       "suite-3 epoch tag dropped — RESPONDER init rebuilds the wrong AEAD AD")
-        XCTAssertEqual(rebuilt.pqRatchetField, carrier.pqRatchetField,
-                       "suite-3 sparse PQ field dropped — same failure, silent")
+        XCTAssertEqual(rebuilt.rawPayload, carrier.rawPayload, "the orchestrator's decrypt input")
+        XCTAssertEqual(rebuilt.wire, carrier.wire)
+        XCTAssertEqual(rebuilt.messageNumber, 7)
+        XCTAssertEqual(rebuilt.initKind, .handshake, "a header at message 7 still opens")
+    }
+
+    /// An envelope carries the wire payload inside it: the boundary replaces the payload and the
+    /// core's reading of it together, names the session, and carries no certificate.
+    ///
+    /// Mutation: skip the payload replacement in `resolvingSealedSender` — this reddens.
+    func testAnEnvelopeReplacesThePayloadAndNamesItsSession() {
+        let carrier = sealedCarrier()
+        let body = handBuiltWirePayload(messageNumber: 3, suiteId: 4)
+        let resolved = ResolvedSender(
+            senderId: peer,
+            senderDeviceId: senderDevice,
+            contentType: 0,
+            trust: .vouched(.session),
+            senderCertificate: nil,
+            envelope: OpenedSessionEnvelope(sessionId: "5e55", body: body)
+        )
+        let rebuilt = carrier.resolvingSealedSender(resolved, currentUserId: me)
+
+        XCTAssertEqual(rebuilt.rawPayload, body)
+        XCTAssertEqual(rebuilt.messageNumber, 3, "the summary is of the opened payload")
+        XCTAssertEqual(rebuilt.envelopeSession, "5e55")
+        XCTAssertNil(rebuilt.senderCertificate)
+        XCTAssertEqual(rebuilt.id, carrier.id)
+        XCTAssertEqual(rebuilt.senderDeviceId, senderDevice)
     }
 
     // MARK: Everything else carried through
@@ -305,17 +397,9 @@ final class SealedRebuildFieldPreservationTests: XCTestCase {
         let rebuilt = carrier.resolvingSealedSender(resolved(), currentUserId: me)
 
         XCTAssertEqual(rebuilt.id, carrier.id)
-        XCTAssertEqual(rebuilt.ephemeralPublicKey, carrier.ephemeralPublicKey)
-        XCTAssertEqual(rebuilt.messageNumber, carrier.messageNumber)
-        XCTAssertEqual(rebuilt.content, carrier.content)
-        XCTAssertEqual(rebuilt.suiteId, carrier.suiteId, "suite drives the AD layout — must not shift")
         XCTAssertEqual(rebuilt.timestamp, carrier.timestamp)
-        XCTAssertEqual(rebuilt.oneTimePreKeyId, carrier.oneTimePreKeyId, "X3DH OTPK id — init fails without it")
-        XCTAssertEqual(rebuilt.kemCiphertext, carrier.kemCiphertext, "PQXDH decapsulation input")
-        XCTAssertEqual(rebuilt.kyberOtpkId, carrier.kyberOtpkId, "selects SPK vs one-time Kyber secret")
         XCTAssertEqual(rebuilt.conversationId, carrier.conversationId)
         XCTAssertEqual(rebuilt.replyToMessageId, carrier.replyToMessageId)
-        XCTAssertEqual(rebuilt.rawPayload, carrier.rawPayload, "the orchestrator's decrypt input")
     }
 
     // MARK: The four deliberate replacements
@@ -338,6 +422,13 @@ final class SealedRebuildFieldPreservationTests: XCTestCase {
                           "carrying the outer value through would name the wrong session")
     }
 
+    /// The certificate crosses the boundary: it is the only thing a first message can open a
+    /// session from. Dropped here, every first contact would be refused as unsealed.
+    func testTheCertificateCrossesTheBoundary() {
+        let rebuilt = sealedCarrier().resolvingSealedSender(resolved(), currentUserId: me)
+        XCTAssertEqual(rebuilt.senderCertificate, certificate)
+    }
+
     func testContentTypeAndKindComeFromTheSealedInner() {
         let rebuilt = sealedCarrier().resolvingSealedSender(resolved(contentType: 24), currentUserId: me)
         XCTAssertEqual(rebuilt.contentType, 24, "outer type is forced generic; the inner one is authoritative")
@@ -356,12 +447,7 @@ final class SealedRebuildFieldPreservationTests: XCTestCase {
         XCTAssertEqual(sealedCarrier().resolvingSealedSender(resolved(), currentUserId: me).to, me)
 
         var addressed = sealedCarrier()
-        addressed = ChatMessage(
-            id: addressed.id, from: addressed.from, to: "someone-else",
-            ephemeralPublicKey: addressed.ephemeralPublicKey,
-            messageNumber: addressed.messageNumber, content: addressed.content,
-            suiteId: addressed.suiteId, timestamp: addressed.timestamp
-        )
+        addressed.to = "someone-else"
         XCTAssertEqual(addressed.resolvingSealedSender(resolved(), currentUserId: me).to, "someone-else")
     }
 }

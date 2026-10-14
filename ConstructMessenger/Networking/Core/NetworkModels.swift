@@ -45,10 +45,11 @@ struct SendMessageResponse: Codable {
     }
 }
 
-struct EndSessionResponse: Codable {
+/// The server's answer to a control envelope this app sends outside `sendMessage` — today the
+/// DECRYPTION_ERROR.
+struct ControlSendResponse: Codable {
     let status: String
     let messageId: String
-    let type: String
 }
 
 // MARK: - Users

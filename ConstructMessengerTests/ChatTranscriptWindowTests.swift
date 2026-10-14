@@ -16,8 +16,9 @@
 //  `fetchLimit` is not re-applied on incremental updates, so `fetchedObjects` drifts (51/52/36
 //  inside one second in that same log).
 //
-//  The transcript is now a function of one window, re-read from Core Data. These tests pin the
-//  properties that makes true, against a store that is deliberately fed out of order.
+//  The transcript is now a function of one window, re-read from the store. These tests pin the
+//  properties that makes true, against a store that is deliberately fed out of order. Since
+//  2026-10-12 the window is `TranscriptWindow` over `MessageStore`; the properties are the same.
 //
 
 import XCTest
@@ -27,15 +28,18 @@ import CoreData
 @MainActor
 final class ChatTranscriptWindowTests: XCTestCase {
 
-    private var context: NSManagedObjectContext!
+    private var container: NSPersistentContainer!
+    private var context: NSManagedObjectContext { container.viewContext }
 
     override func setUp() {
         super.setUp()
-        context = PersistenceController(inMemory: true).container.viewContext
+        container = PersistenceController(inMemory: true).container
+        LocalRepositories.useMessagesForTesting(container)
     }
 
     override func tearDown() {
-        context = nil
+        LocalRepositories.useMessagesForTesting(nil)
+        container = nil
         super.tearDown()
     }
 
@@ -62,7 +66,8 @@ final class ChatTranscriptWindowTests: XCTestCase {
         msg.toUserId = "me"
         msg.contentType = .regular
         msg.timestamp = timestamp
-        msg.serverOrderKey = serverOrderKey
+        // Every writer stamps a key; a local one orders by time, then id.
+        msg.serverOrderKey = serverOrderKey ?? ServerMessageOrder.local(timestamp: timestamp, messageId: id)
         msg.isSentByMe = false
         msg.deliveryStatus = .delivered
         msg.retryCount = 0
@@ -71,11 +76,8 @@ final class ChatTranscriptWindowTests: XCTestCase {
         return msg
     }
 
-    private func makeStore(for chat: Chat) -> (ChatMessageStore, ChatViewModel) {
-        let store = ChatMessageStore(chat: chat, viewContext: context)
-        let vm = ChatViewModel(chat: chat, context: context)
-        store.setViewModel(vm)
-        return (store, vm)
+    private func makeWindow(for chat: Chat) -> TranscriptWindow {
+        TranscriptWindow(chatId: chat.id, store: CoreDataMessageStore(container: container), debounce: .zero)
     }
 
     // MARK: - The transcript must be ordered, whatever order Core Data was written in
@@ -99,10 +101,10 @@ final class ChatTranscriptWindowTests: XCTestCase {
         )
         try context.save()
 
-        let (store, vm) = makeStore(for: chat)
-        store.setup()
+        let window = makeWindow(for: chat)
+        window.start()
 
-        XCTAssertEqual(vm.messages.map(\.id), ["server-first", "server-second"])
+        XCTAssertEqual(window.rows.map(\.id), ["server-first", "server-second"])
     }
 
     /// Messages do not arrive in timestamp order — an offline-queued peer message is stored with
@@ -118,11 +120,11 @@ final class ChatTranscriptWindowTests: XCTestCase {
         makeMessage(in: chat, at: base.addingTimeInterval(100), text: "second")
         try context.save()
 
-        let (store, vm) = makeStore(for: chat)
-        store.setup()
+        let window = makeWindow(for: chat)
+        window.start()
 
         XCTAssertEqual(
-            vm.messages.map { $0.timestamp },
+            window.rows.map { $0.timestamp },
             [base, base.addingTimeInterval(100), base.addingTimeInterval(300), base.addingTimeInterval(600)],
             "the concatenation this replaces put whatever fell outside the FRC window at the front"
         )
@@ -139,13 +141,13 @@ final class ChatTranscriptWindowTests: XCTestCase {
         makeMessage(in: chat, at: at, text: "b", id: "id-b")
         try context.save()
 
-        let (store, vm) = makeStore(for: chat)
-        store.setup()
-        let firstRead = vm.messages.map { $0.id }
+        let window = makeWindow(for: chat)
+        window.start()
+        let firstRead = window.rows.map { $0.id }
 
         // A second derivation of the same window must agree with the first.
-        store.loadMoreMessages(trigger: .user)   // no older messages: window unchanged
-        let secondRead = vm.messages.map { $0.id }
+        window.loadMore()   // no older messages: window unchanged
+        let secondRead = window.rows.map { $0.id }
 
         XCTAssertEqual(firstRead, ["id-a", "id-b", "id-c"])
         XCTAssertEqual(secondRead, firstRead, "the same window must derive the same order twice")
@@ -163,16 +165,16 @@ final class ChatTranscriptWindowTests: XCTestCase {
         }
         try context.save()
 
-        let (store, vm) = makeStore(for: chat)
-        store.setup()
-        let initial = vm.messages.map { $0.id }
+        let window = makeWindow(for: chat)
+        window.start()
+        let initial = window.rows.map { $0.id }
         XCTAssertEqual(initial.count, 25)
 
         // Drive the snapshot path repeatedly — this is what a receipt storm does.
-        for _ in 0..<5 { store.loadMoreMessages(trigger: .indicatorAppeared) }
+        for _ in 0..<5 { window.loadMore() }
 
         XCTAssertEqual(
-            vm.messages.map { $0.id }, initial,
+            window.rows.map { $0.id }, initial,
             "nine messages went missing this way on device; the window must be idempotent"
         )
     }
@@ -187,17 +189,17 @@ final class ChatTranscriptWindowTests: XCTestCase {
         }
         try context.save()
 
-        let (store, vm) = makeStore(for: chat)
-        store.setup()
-        XCTAssertEqual(vm.messages.count, 30, "initial page")
-        let newestBefore = vm.messages.last?.id
+        let window = makeWindow(for: chat)
+        window.start()
+        XCTAssertEqual(window.rows.count, 30, "initial page")
+        let newestBefore = window.rows.last?.id
 
-        store.loadMoreMessages(trigger: .user)
+        window.loadMore()
 
-        XCTAssertEqual(vm.messages.count, 45, "the remaining 15 are admitted, none dropped")
-        XCTAssertEqual(vm.messages.last?.id, newestBefore, "paging older must not disturb the tail")
+        XCTAssertEqual(window.rows.count, 45, "the remaining 15 are admitted, none dropped")
+        XCTAssertEqual(window.rows.last?.id, newestBefore, "paging older must not disturb the tail")
         XCTAssertEqual(
-            vm.messages.map { $0.timestamp }, vm.messages.map { $0.timestamp }.sorted(),
+            window.rows.map { $0.timestamp }, window.rows.map { $0.timestamp }.sorted(),
             "still ordered after widening"
         )
     }
@@ -213,11 +215,11 @@ final class ChatTranscriptWindowTests: XCTestCase {
         }
         try context.save()
 
-        let (store, vm) = makeStore(for: chat)
-        store.setup()
-        store.loadMoreMessages(trigger: .user)
+        let window = makeWindow(for: chat)
+        window.start()
+        window.loadMore()
 
-        let ids = vm.messages.map { $0.id }
+        let ids = window.rows.map { $0.id }
         XCTAssertEqual(Set(ids).count, ids.count, "a duplicated id is a list SwiftUI cannot render")
     }
 
@@ -234,11 +236,11 @@ final class ChatTranscriptWindowTests: XCTestCase {
         for i in 0..<30 { makeMessage(in: chat, at: base.addingTimeInterval(Double(i + 1) * 60), text: "m\(i)") }
         try context.save()
 
-        let (store, vm) = makeStore(for: chat)
-        store.setup()
-        store.loadMoreMessages(trigger: .user)
+        let window = makeWindow(for: chat)
+        window.start()
+        window.loadMore()
 
-        let burstCount = vm.messages.filter { $0.timestamp == burstAt }.count
+        let burstCount = window.rows.filter { $0.timestamp == burstAt }.count
         XCTAssertEqual(burstCount, 5, "all five, or the boundary split a single instant across pages")
     }
 }

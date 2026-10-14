@@ -154,7 +154,7 @@ class AuthSessionManager {
         // session/identity change — a re-registered identity would otherwise inherit the old
         // display name and resume the old Redis stream cursor.
         UserDefaults.standard.removeObject(forKey: "local_display_name")
-        UserDefaults.standard.removeObject(forKey: "construct.stream.cursor")
+        StreamCursorStore.clear()
         // `construct.pendingCursor` has no writer since the offline fetch stopped paging
         // (`MessageStreamManager.fetchMissedMessages`) — kept here so upgraded installs still
         // shed the abandoned value rather than leaving a stale cursor for a future reader to

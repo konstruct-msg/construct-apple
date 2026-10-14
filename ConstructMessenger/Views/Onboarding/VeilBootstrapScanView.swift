@@ -25,17 +25,10 @@ struct VeilBootstrapScanView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            CTNavBar(
-                title: NSLocalizedString("veil_bootstrap_title", comment: ""),
-                showBack: true,
-                isModal: true,
-                backAction: { dismiss() }
-            )
-
             ScrollView {
                 VStack(spacing: CTLayout.sectionGap) {
                     Text(NSLocalizedString("veil_bootstrap_intro", comment: ""))
-                        .font(CTFont.regular(13))
+                        .font(CTFont.body)
                         .foregroundColor(Color.CT.textDim)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, CTLayout.sectionGap)
@@ -61,7 +54,7 @@ struct VeilBootstrapScanView: View {
 
                     if let message {
                         Text(message)
-                            .font(CTFont.regular(12))
+                            .font(CTFont.secondary)
                             .foregroundColor(isError ? Color.CT.danger : Color.CT.accentDim)
                             .multilineTextAlignment(.center)
                             .padding(.horizontal, CTLayout.sectionGap)
@@ -74,6 +67,7 @@ struct VeilBootstrapScanView: View {
             }
         }
         .background(Color.CT.bg.ignoresSafeArea())
+        .screenTitle(NSLocalizedString("veil_bootstrap_title", comment: ""))
         #if os(iOS)
         .sheet(isPresented: $showingScanner) {
             QRScannerView { code in
@@ -95,17 +89,17 @@ struct VeilBootstrapScanView: View {
     private var configuredCard: some View {
         VStack(spacing: CTLayout.chromeGap) {
             Image(systemName: "checkmark.shield")
-                .font(.system(size: 28, weight: .medium))
+                .font(CTIcon.font(CTIcon.overlay))
                 .foregroundStyle(Color.CT.accent)
             Text(NSLocalizedString("veil_bootstrap_ok", comment: ""))
-                .font(CTFont.bold(13))
+                .font(CTFont.bodyEmphasis)
                 .foregroundStyle(Color.CT.text)
                 .multilineTextAlignment(.center)
             Text(NSLocalizedString("veil_bootstrap_ok_hint", comment: ""))
-                .font(CTFont.regular(11))
+                .font(CTFont.caption)
                 .foregroundStyle(Color.CT.textDim)
                 .multilineTextAlignment(.center)
-            CTButton(label: NSLocalizedString("done", comment: "").uppercased()) { dismiss() }
+            CTButton(label: NSLocalizedString("done", comment: "")) { dismiss() }
                 .padding(.top, 4)
         }
         .padding(.horizontal, CTLayout.edgePad)
@@ -125,22 +119,22 @@ struct VeilBootstrapScanView: View {
         Button(action: action) {
             HStack(spacing: CTLayout.chromeGap) {
                 Image(systemName: icon)
-                    .font(.system(size: 22, weight: .medium))
+                    .font(CTIcon.font(CTIcon.navLg))
                     .foregroundStyle(Color.CT.accent)
                     .frame(width: 32)
                 VStack(alignment: .leading, spacing: 3) {
                     Text(NSLocalizedString(titleKey, comment: "").uppercased())
-                        .font(CTFont.bold(13))
+                        .font(CTFont.bodyEmphasis)
                         .foregroundStyle(Color.CT.text)
                         .tracking(1)
                     Text(NSLocalizedString(subtitleKey, comment: ""))
-                        .font(CTFont.regular(11))
+                        .font(CTFont.caption)
                         .foregroundStyle(Color.CT.textDim)
                         .multilineTextAlignment(.leading)
                 }
                 Spacer(minLength: 0)
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(CTIcon.font(CTIcon.caption, weight: .semibold))
                     .foregroundStyle(Color.CT.textDim)
             }
             .padding(.horizontal, CTLayout.edgePad)
@@ -162,7 +156,7 @@ struct VeilBootstrapScanView: View {
         case .failure(let error):
             isError = true
             isConfigured = false
-            message = error.localizedDescription
+            message = error.userFacingMessage
         }
     }
 }

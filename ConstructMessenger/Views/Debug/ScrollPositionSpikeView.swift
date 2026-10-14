@@ -23,7 +23,6 @@ import SwiftUI
 
 /// Reachable from Diagnostics ▸ SCROLL POSITION SPIKE. Orange on purpose (debug-only UI).
 struct ScrollPositionSpikeView: View {
-    @Environment(\.dismiss) private var dismiss
 
     private struct SpikeRow: Identifiable, Equatable {
         let id: Int
@@ -48,16 +47,12 @@ struct ScrollPositionSpikeView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            CTNavBar(
-                title: "SCROLL SPIKE",
-                showBack: true,
-                backAction: { dismiss() }
-            )
             readout
             scroll
             controls
         }
         .ctBackground()
+        .screenTitle("SCROLL SPIKE")
     }
 
     // MARK: - The stack under test
@@ -83,7 +78,7 @@ struct ScrollPositionSpikeView: View {
             RoundedRectangle(cornerRadius: CTRadius.card)
                 .fill(row.id == boundId ? Color.orange.opacity(0.35) : Color.CT.bgMsg)
             Text("\(row.id) · h\(Int(row.height))")
-                .font(CTFont.regular(12))
+                .font(CTFont.mono(12))
                 .foregroundStyle(Color.CT.text)
         }
         .frame(height: row.height)
@@ -115,7 +110,7 @@ struct ScrollPositionSpikeView: View {
             Spacer()
             Text(value).foregroundStyle(.orange)
         }
-        .font(CTFont.regular(12))
+        .font(CTFont.mono(12))
     }
 
     // MARK: - The three questions
@@ -150,7 +145,7 @@ struct ScrollPositionSpikeView: View {
     private func button(_ title: String, _ action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(title)
-                .font(CTFont.medium(12))
+                .font(CTFont.mono(12, weight: .medium))
                 .foregroundStyle(.orange)
                 .frame(maxWidth: .infinity)
                 .frame(height: CTLayout.controlHeight)

@@ -8,7 +8,8 @@
 //  server, decoupled from key rotation:
 //    - hybrid identity public key (1984 B), generated lazily on first launch (core-owned);
 //    - an Ed25519 cross-signature binding it to the device's existing identity (core signBundle);
-//    - hybrid signatures over the CURRENT classic SPK (suite 0x01) and Kyber SPK (0x10).
+//    - hybrid signatures over the CURRENT classic SPK (suite 0x01) and Kyber SPK (the core's,
+//      over `0x11 || created_at || key` — PQXDH v2).
 //
 //  Crypto primitives + key ownership (ensure/sign) live in construct-core (KeyManager + CFE).
 //  No hybrid signature algorithm lives outside core. The "when to publish / on rotation"
@@ -167,6 +168,9 @@ enum HybridIdentityService {
         // marking the bundle "done" while the signature is still missing (a transient signing failure
         // must not permanently strand the bundle in the missing-signature state).
         UserDefaults.standard.set(true, forKey: hybridIdentityPublishedFlagKey)
+        if kyberHybridSig != nil, let kyber = try? cm.currentKyberSpkUpload() {
+            KyberPrekeyService.recordPublished(deviceId: deviceId, keyId: kyber.keyId)
+        }
         if spkHybridSig != nil, let spkPublicForFp = try? cm.localBundlePublicKeys().signedPrekeyPublic {
             UserDefaults.standard.set(Self.fingerprint(spkPublicForFp), forKey: hybridIdentitySpkFingerprintKey)
         }

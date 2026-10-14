@@ -19,13 +19,9 @@ enum ContactPolicy {
     /// True when the peer is a local contact and not blocked.
     /// Call permission under sealed sender is **client-authoritative** —
     /// server reciprocity cannot survive when the server does not see the caller.
-    static func isCallableContact(_ userId: String, in context: NSManagedObjectContext) -> Bool {
-        guard !userId.isEmpty else { return false }
-        if BlockedContacts.isBlocked(userId, in: context) { return false }
-        let fetch = User.fetchRequest()
-        fetch.predicate = NSPredicate(format: "id == %@ AND isContact == YES", userId)
-        fetch.fetchLimit = 1
-        return ((try? context.count(for: fetch)) ?? 0) > 0
+    static func isCallableContact(_ userId: String) -> Bool {
+        guard !userId.isEmpty, let contact = try? LocalRepositories.contacts.contact(userId) else { return false }
+        return contact.isContact && !contact.isBlocked
     }
 }
 
@@ -51,58 +47,50 @@ final class ContactLinkService {
         userId: String,
         username: String?,
         displayName: String?,
-        identityPublicKey: Data? = nil,
-        context: NSManagedObjectContext
-    ) throws -> User {
+        identityPublicKey: Data? = nil
+    ) throws -> ContactRecord {
         guard !userId.isEmpty else { throw ContactLinkError.emptyUserId }
 
-        let fetchRequest = User.fetchRequest()
-        fetchRequest.predicate = NSPredicate(format: "id == %@", userId)
-        fetchRequest.fetchLimit = 1
+        // Making someone a contact is the user's own act (scan, accept, our invite redeemed), so
+        // an earlier prune stops shielding. The inviter side used to leave the flag set: it
+        // opened the session itself, the peer answered with mid-ratchet traffic only, and
+        // `MessageRouter` dropped all of it as "from deleted contact" — no handshake ever
+        // arrived to clear it (2026-10-05, one-way chat after delete and re-add).
+        DeletedContactsStore.shared.remove(userId)
 
-        let user: User
-        if let existing = try context.fetch(fetchRequest).first {
-            user = existing
-        } else {
-            user = User(context: context)
-            user.id = userId
-            user.addedAt = Date()
-            user.isBlocked = false
-            user.isSharingWithMe = false
-            user.amISharingWith = false
-        }
+        let contacts = LocalRepositories.contacts
+        let now = Date()
+        try contacts.insert(.new(id: userId, isContact: true, addedAt: now))
+        try contacts.markContact(userId, addedAt: now)
+        guard let row = try contacts.contact(userId) else { throw ContactLinkError.emptyUserId }
 
-        user.isContact = true
-
-        // applyServerUsername handles username priority and sets displayName to
-        // the username when no profile-shared name is present.
-        user.applyServerUsername(username, userId: userId)
-
-        // If the server provided an explicit displayName that is not a placeholder,
-        // prefer it over the username-derived name — unless isSharingWithMe is true
-        // (in that case the contact already shared their real name with us).
-        if let dn = displayName, !dn.isEmpty, !user.isSharingWithMe {
+        // The server username's rule (`ContactName.applyingServerUsername`), then an explicit
+        // display name that is not a placeholder — unless they shared their profile with us,
+        // whose name outranks both.
+        var names = ContactName.applyingServerUsername(
+            username, username: row.username, displayName: row.displayName,
+            isSharingWithMe: row.isSharingWithMe, id: userId
+        )
+        if let dn = displayName, !dn.isEmpty, !row.isSharingWithMe {
             let isPlaceholder = UUID(uuidString: dn) != nil || dn.lowercased() == "anonymous"
-            if !isPlaceholder {
-                user.displayName = dn
-            }
+            if !isPlaceholder { names.displayName = dn }
+        }
+        if names.username != row.username || names.displayName != row.displayName {
+            try contacts.setNames(userId, username: names.username, displayName: names.displayName)
         }
 
         if let key = identityPublicKey, !key.isEmpty {
-            pinKnownIdentityKey(on: user, identityKey: key)
+            pinKnownIdentityKey(contactId: userId, identityKey: key)
         }
 
-        try context.save()
-        return user
+        guard let saved = try contacts.contact(userId) else { throw ContactLinkError.emptyUserId }
+        return saved
     }
 
     /// Apply a verified invite redeem: ensure contact + optional TOFU identity pin.
     /// Prefer this over raw `startChat` when `ContactInfo.identityPublicKey` is present.
     @discardableResult
-    func applyInviteRedeem(
-        _ info: ContactInfo,
-        context: NSManagedObjectContext
-    ) throws -> User {
+    func applyInviteRedeem(_ info: ContactInfo) throws -> ContactRecord {
         let usernameForStore: String? = {
             let trimmed = info.username.trimmingCharacters(in: .whitespacesAndNewlines)
             if trimmed.isEmpty { return nil }
@@ -112,75 +100,66 @@ final class ContactLinkService {
             return trimmed
         }()
 
-        return try createOrUpdateContact(
+        let user = try createOrUpdateContact(
             userId: info.userId,
             username: usernameForStore,
             displayName: nil,
-            identityPublicKey: info.identityPublicKey,
-            context: context
+            identityPublicKey: info.identityPublicKey
         )
+        // Same rule as `ChatManagementService.startChat`: the signed invite outranks a card.
+        if let address = info.accountAddress,
+           AccountAddress.pin(address, contactId: info.userId, source: .invite) != .unchanged {
+            return try LocalRepositories.contacts.contact(info.userId) ?? user
+        }
+        return user
     }
 
     /// Pin inviter identity key from an OOB-verified invite (TOFU).
     /// Does **not** mark KT `.verified` — that remains for Merkle audit.
-    /// On mismatch with a previously pinned key → `.keyChanged` + notification.
-    func pinKnownIdentityKey(on user: User, identityKey: Data) {
-        guard !identityKey.isEmpty else { return }
-        if let known = user.knownIdentityKey, known != identityKey {
-            user.ktStatus = .keyChanged
-            user.knownIdentityKey = identityKey
+    ///
+    /// The invite names one device of the account, and that device joins the account's pinned
+    /// set. A different key from the one pinned before is not an event by itself: an invite from
+    /// the contact's other device carries exactly that. A device outside the set the server has
+    /// listed for the account is, and `SessionAddressing.recordDevices` raises it
+    /// (`decisions/a-new-device-is-the-security-event.md`). The account slot takes the invite's
+    /// key — it is the freshest one checked out of band.
+    func pinKnownIdentityKey(contactId: String, identityKey: Data) {
+        guard !identityKey.isEmpty, !contactId.isEmpty else { return }
+        let contacts = LocalRepositories.contacts
+        guard let row = try? contacts.contact(contactId) else {
             Log.error(
-                "TOFU: identity key changed for user \(user.id.prefix(8))…",
-                category: "ContactLink"
-            )
-            NotificationCenter.default.post(
-                name: .contactKeyChanged,
-                object: nil,
-                userInfo: ["userId": user.id]
-            )
-            KeyChangeUX.notifyKeyChange(
-                userId: user.id,
-                displayName: user.resolvedDisplayName
-            )
-        } else if user.knownIdentityKey == nil {
-            user.knownIdentityKey = identityKey
-            Log.info(
-                "TOFU: pinned knownIdentityKey for \(user.id.prefix(8))… from invite",
-                category: "ContactLink"
-            )
-        }
-    }
-
-    /// Pin identity key for an existing user id (e.g. after `startChat` created the User).
-    func pinKnownIdentityKey(userId: String, identityKey: Data, context: NSManagedObjectContext) {
-        guard !identityKey.isEmpty else { return }
-        let fetch = User.fetchRequest()
-        fetch.predicate = NSPredicate(format: "id == %@", userId)
-        fetch.fetchLimit = 1
-        guard let user = try? context.fetch(fetch).first else {
-            Log.error(
-                "IK_PIN[no_row]: dropping identity key for \(userId.prefix(8))… — no User row (source=pin_by_id)",
+                "IK_PIN[no_row]: dropping identity key for \(contactId.prefix(8))… — no User row (source=invite)",
                 category: "ContactLink"
             )
             return
         }
-        pinKnownIdentityKey(on: user, identityKey: identityKey)
-        saveOrReport(context, userId: userId, source: "pin_by_id")
+        if row.knownIdentityKey != identityKey {
+            do {
+                try contacts.setIdentityKey(contactId, identityKey)
+                Log.info("TOFU: pinned knownIdentityKey for \(contactId.prefix(8))… from invite", category: "ContactLink")
+            } catch {
+                Log.error("IK_PIN[save_failed]: \(contactId.prefix(8))… (source=invite): \(error)", category: "ContactLink")
+            }
+        }
+        SessionAddressing.recordDevices(
+            [(deviceId: deriveDeviceId(identityPublicKey: identityKey), identityKey: identityKey)],
+            ofPeer: contactId
+        )
     }
 
     /// Keep a peer's identity key when nothing else did — the backstop for the sealed-sender
     /// send paths, which cannot seal without it.
     ///
-    /// Four sites hold a peer's identity key and each independently decides whether to keep it:
-    /// `recordAndCheckHybrid` and `updateContactKTStatus` (both write only on the branches they
-    /// care about, and both bail silently when no `User` row exists), this file's invite TOFU, and
-    /// `startChat`. When none of them kept it, `knownIdentityKey` stays nil, `recipientIdentityKey`
+    /// Three sites hold a peer's identity key and each independently decides whether to keep it:
+    /// `updateContactKTStatus` (writes only on `.verified`, and bails silently when no `User` row
+    /// exists), this file's invite TOFU, and `startChat`. (A fourth, `recordAndCheckHybrid`, went
+    /// with the Swift hybrid-bundle check in PQXDH v2.) When none of them kept it, `knownIdentityKey` stays nil, `recipientIdentityKey`
     /// returns nil, and every sealed send to that peer fails closed with `StealthDowngradeBlocked`
     /// — a permanent, silent stall on session control (TODO #45).
     ///
-    /// This never *overrides* an existing pin: a changed key is a security event owned by the KT
-    /// path and the invite path, and two owners raising the same alarm would raise it twice. It
-    /// only fills an absence.
+    /// This never *overrides* an existing pin: which key the account slot holds is the KT path's
+    /// and the invite path's decision. It only fills an absence. (A substituted key is raised from
+    /// the device set, not from this slot — `decisions/a-new-device-is-the-security-event.md`.)
     ///
     /// Pinning here extends no trust we have not already extended: the same `identityPublic` is
     /// what X3DH is about to run against. `ktStatus` continues to carry the verification verdict
@@ -204,8 +183,7 @@ final class ContactLinkService {
         userId: String,
         identityKey: Data,
         source: String,
-        createIfMissing: Bool,
-        context: NSManagedObjectContext
+        createIfMissing: Bool
     ) {
         guard !userId.isEmpty, !identityKey.isEmpty else {
             Log.error(
@@ -214,55 +192,45 @@ final class ContactLinkService {
             )
             return
         }
-        let fetch = User.fetchRequest()
-        fetch.predicate = NSPredicate(format: "id == %@", userId)
-        fetch.fetchLimit = 1
-        let user: User
-        if let existing = try? context.fetch(fetch).first {
-            guard existing.knownIdentityKey == nil else { return }
-            user = existing
-        } else {
-            guard createIfMissing else {
+        let contacts = LocalRepositories.contacts
+        do {
+            if let existing = try contacts.contact(userId) {
+                guard existing.knownIdentityKey == nil else { return }
+                try contacts.setIdentityKey(userId, identityKey)
+            } else {
+                guard createIfMissing else {
+                    Log.info(
+                        "IK_PIN[no_row]: no User row for \(userId.prefix(8))… — not creating one (source=\(source))",
+                        category: "ContactLink"
+                    )
+                    return
+                }
+                var row = ContactRecord.new(id: userId, isContact: false, addedAt: Date())
+                let names = ContactName.applyingServerUsername(
+                    nil, username: "", displayName: "", isSharingWithMe: false, id: userId
+                )
+                row.username = names.username
+                row.displayName = names.displayName
+                row.knownIdentityKey = identityKey
+                try contacts.insert(row)
                 Log.info(
-                    "IK_PIN[no_row]: no User row for \(userId.prefix(8))… — not creating one (source=\(source))",
+                    "IK_PIN[row_created]: no User row for \(userId.prefix(8))… — created one to hold the identity key (source=\(source))",
                     category: "ContactLink"
                 )
-                return
             }
-            user = User(context: context)
-            user.id = userId
-            user.isBlocked = false
-            user.isSharingWithMe = false
-            user.amISharingWith = false
-            user.isContact = false
-            user.addedAt = Date()
-            user.applyServerUsername(nil, userId: userId)
-            Log.info(
-                "IK_PIN[row_created]: no User row for \(userId.prefix(8))… — created one to hold the identity key (source=\(source))",
+        } catch {
+            // A write that fails here loses the identity key: the sealed send paths stop for this
+            // peer. Said, never swallowed.
+            Log.error(
+                "IK_PIN[save_failed]: identity key for \(userId.prefix(8))… not kept (source=\(source)): \(error)",
                 category: "ContactLink"
             )
+            return
         }
-        user.knownIdentityKey = identityKey
         Log.info(
             "IK_PIN[pinned]: \(userId.prefix(8))… (source=\(source))",
             category: "ContactLink"
         )
-        saveOrReport(context, userId: userId, source: source)
-    }
-
-    /// A save that fails here loses the identity key for good — the in-memory object still answers,
-    /// so the send path keeps working until the next launch and then stops. `try?` made that
-    /// indistinguishable from success.
-    private func saveOrReport(_ context: NSManagedObjectContext, userId: String, source: String) {
-        guard context.hasChanges else { return }
-        do {
-            try context.save()
-        } catch {
-            Log.error(
-                "IK_PIN[save_failed]: identity key for \(userId.prefix(8))… is in memory only and will be lost on relaunch (source=\(source)): \(error)",
-                category: "ContactLink"
-            )
-        }
     }
 
     // MARK: - Invite-accepted (inviter side)
@@ -270,8 +238,7 @@ final class ContactLinkService {
     /// Creates local contact when someone redeems our invite (`invite_accepted` push).
     /// Needed so both sides have `isContact` for client call mutuality.
     @discardableResult
-    func handleInviteAccepted(peerUserId: String) async -> User? {
-        let context = PersistenceController.shared.container.viewContext
+    func handleInviteAccepted(peerUserId: String) async -> ContactRecord? {
         guard !peerUserId.isEmpty else { return nil }
         if peerUserId == AuthSessionManager.shared.currentUserId { return nil }
 
@@ -279,8 +246,7 @@ final class ContactLinkService {
             let user = try createOrUpdateContact(
                 userId: peerUserId,
                 username: nil,
-                displayName: nil,
-                context: context
+                displayName: nil
             )
             Log.info(
                 "Invite accepted: local contact created for \(peerUserId.prefix(8))…",

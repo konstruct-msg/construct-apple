@@ -44,7 +44,6 @@ enum DataStorageSettingsLayout {
     static let quotaTickFontSize: CGFloat = 9
     static let quotaTickMinimumScale: CGFloat = 0.7
     static let autoEvictionCheckIconSize: CGFloat = 17
-    static let footerTopPadding: CGFloat = 6
     static let screenBottomPadding: CGFloat = 32
     static let usageIconFontSize: CGFloat = 16
     static let sectionTitleTracking: CGFloat = 1
@@ -70,7 +69,9 @@ enum DiagnosticsConfig {
     /// Tail window for the recent-log preview. 256 KB holds ~200 lines at any realistic width;
     /// the point is that it is a constant, so the read cost no longer scales with the log file.
     static let recentLogTailBytes: Int = 256 * 1024
-    static let recentLogContainerHeight: CGFloat = 340
+    // recentLogContainerHeight removed 2026-09-23: it sized a nested scroll view,
+    // and a nested scroll view on this screen was the pop crash. The preview
+    // scrolls with the page now.
     // clearLogsRefreshDelay removed 2026-08-04: `clearLogs` now reports completion, so there is
     // nothing left to guess a duration for. A constant with no consumer is a defect (AGENTS.md).
 }
@@ -87,7 +88,6 @@ enum NotificationsSettingsLayout {
     static let rowHorizontalPadding: CGFloat = CTLayout.edgePad
     static let rowVerticalPadding: CGFloat = CTLayout.edgePad
     static let compactSectionSpacing: CGFloat = 0
-    static let footerBottomPadding: CGFloat = CTLayout.inlinePad
     static let sectionVerticalPadding: CGFloat = 20
     static let pushDetailSpacing: CGFloat = 4
 }
@@ -105,11 +105,9 @@ enum NetworkSettingsLayout {
     static let transportBadgeHorizontalPadding: CGFloat = 5
     static let transportBadgeVerticalPadding: CGFloat = 2
     /// Tiny transport chip — maps to badge scale (was ad-hoc 4).
-    static let transportBadgeCornerRadius: CGFloat = CTRadius.badge
     static let transportBadgeStrokeWidth: CGFloat = 0.5
     static let transportBadgeStrokeOpacity: Double = 0.4
     static let relayBadgeFontSize: CGFloat = 10
-    static let statusDisabledOpacity: Double = 0.5
     static let errorMonospacedFontSize: CGFloat = 11
     static let relayAddressFontSize: CGFloat = 13
 }
@@ -126,8 +124,6 @@ enum BackgroundFetchSettingsLayout {
     static let rowVerticalPadding: CGFloat = CTLayout.edgePad
     static let toggleRowSpacing: CGFloat = CTLayout.edgePad
     static let warningSpacing: CGFloat = 4
-    static let sectionVerticalPadding: CGFloat = 20
-    static let footerBottomPadding: CGFloat = CTLayout.inlinePad
     static let sliderSectionSpacing: CGFloat = CTLayout.edgePad
     static let tickLabelFontSize: CGFloat = 10
     static let tickLabelMinimumScale: CGFloat = 0.7
@@ -158,22 +154,9 @@ enum SecuritySettingsLayout {
     static let compactRowVerticalPadding: CGFloat = CTLayout.chromeGap
     static let rowContentSpacing: CGFloat = CTLayout.chromeGap
     static let sectionVerticalPadding: CGFloat = CTLayout.inlinePad
-    static let hintTopPadding: CGFloat = 6
-    static let hintBottomPadding: CGFloat = CTLayout.chromeGap
-    static let hintCompactTopPadding: CGFloat = 2
     static let hintDisabledOpacity: Double = 0.6
     static let lockStatusSpacing: CGFloat = 2
     static let recoveryStatusSpacing: CGFloat = 2
-    static let separatorOpacity: Double = 0.4
-}
-
-enum KeyTransparencySettingsLayout {
-    static let rowHorizontalPadding: CGFloat = CTLayout.sectionGap
-    static let rowVerticalPadding: CGFloat = CTLayout.chromeGap
-    static let hintHorizontalPadding: CGFloat = CTLayout.edgePad
-    static let hintTopPadding: CGFloat = 2
-    static let hintBottomPadding: CGFloat = CTLayout.chromeGap
-    static let statusTrailingPadding: CGFloat = 4
 }
 
 enum DevicesSettingsLayout {
@@ -210,15 +193,11 @@ enum SettingsRootLayout {
     static let recoveryBannerStrokeWidth: CGFloat = 0.5
     static let recoveryBannerHorizontalPadding: CGFloat = CTLayout.edgePad
     static let recoveryBannerVerticalPadding: CGFloat = CTLayout.inlinePad
-    static let recoveryBannerIconSize: CGFloat = 15
-    static let recoveryBannerChevronSize: CGFloat = 9
-    static let recoveryBannerDismissIconSize: CGFloat = 11
 }
 
 /// Compact invite card on Settings root (QR | Copy + several).
 enum SettingsShareLayout {
     static let actionMinHeight: CGFloat = CTLayout.hitTarget
-    static let actionIconSize: CGFloat = 16
     static let actionSpacing: CGFloat = CTLayout.inlinePad
     static let dividerWidth: CGFloat = 0.5
     static let dividerVerticalPadding: CGFloat = CTLayout.inlinePad
@@ -287,16 +266,12 @@ enum VeilVoucherLayout {
     static let contentBottomPadding: CGFloat = 32
     static let textHorizontalPadding: CGFloat = 24
     static let messageSpacing: CGFloat = CTLayout.sectionGap
-    static let statusIconSize: CGFloat = 36
     static let qrSize: CGFloat = 220
     static let qrPadding: CGFloat = CTLayout.sectionGap
 }
 
 enum AccountSettingsLayout {
     static let sectionDisabledOpacity: Double = 0.5
-    static let footerHorizontalPadding: CGFloat = 20
-    static let footerVerticalPadding: CGFloat = 12
-    static let footerTextOpacity: Double = 0.6
     static let postAvatarPickerDelay: TimeInterval = 0.35
 
     static let avatarSectionSpacing: CGFloat = 14
@@ -307,28 +282,14 @@ enum AccountSettingsLayout {
     static let sectionHintBottomPadding: CGFloat = 8
 
     static let discoverableRowSpacing: CGFloat = 8
-    static let discoverableRowHorizontalPadding: CGFloat = 16
     static let discoverableRowVerticalPadding: CGFloat = 8
-
-    static let dividerHeight: CGFloat = 1
-    static let dividerRegularOpacity: Double = 0.5
-    static let dividerRowOpacity: Double = 0.35
-    static let dividerHorizontalPadding: CGFloat = 20
-
-    static let sectionHeaderSpacing: CGFloat = 6
-    static let sectionHeaderHorizontalPadding: CGFloat = 20
-    static let sectionHeaderVerticalPadding: CGFloat = 10
-    static let sectionHeaderTracking: CGFloat = 2
 
     static let rowHorizontalPadding: CGFloat = 20
     static let rowVerticalPadding: CGFloat = 14
 
     static let inlineStatusSpacing: CGFloat = 8
-    static let inlineStatusAccentOpacity: Double = 0.6
     static let dangerPrimaryOpacity: Double = 0.85
     static let dangerSecondaryOpacity: Double = 0.7
-
-    static let editableFieldMaxWidth: CGFloat = 190
     static let editableSavingIndicatorScale: CGFloat = 0.8
     static let fingerprintCopiedFlashDuration: TimeInterval = 1.5
 }

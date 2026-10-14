@@ -8,7 +8,11 @@
 // For information on using the generated types, please see the documentation:
 //   https://github.com/apple/swift-protobuf/
 
+#if canImport(FoundationEssentials)
+import FoundationEssentials
+#else
 import Foundation
+#endif
 import SwiftProtobuf
 
 // If the compiler emits an error on this type, it is because this file
@@ -16,13 +20,13 @@ import SwiftProtobuf
 // incompatible with the version of SwiftProtobuf to which you are linking.
 // Please ensure that you are building against the same version of the API
 // that was used to generate this file.
-fileprivate struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobuf.ProtobufAPIVersionCheck {
+fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobuf.ProtobufAPIVersionCheck {
   struct _2: SwiftProtobuf.ProtobufAPIVersion_2 {}
   typealias Version = _2
 }
 
 /// ContentType - Type of message content
-public enum Shared_Proto_Core_V1_ContentType: SwiftProtobuf.Enum, Swift.CaseIterable {
+public nonisolated enum Shared_Proto_Core_V1_ContentType: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
 
   /// Unspecified content type (must be 0)
@@ -38,7 +42,10 @@ public enum Shared_Proto_Core_V1_ContentType: SwiftProtobuf.Enum, Swift.CaseIter
   /// Deprecated for SDP: use CONTENT_TYPE_CALL_SIGNAL for E2EE-wrapped call offer/answer.
   case webrtcSignal // = 10
 
-  /// Presence updates (typing, online, receipts)
+  /// Presence updates (typing, online).
+  /// Not produced or consumed by the iOS client: there is no typing indicator and no online
+  /// status by design, and since 2026-09-14 the client subscribes with include_presence=false.
+  /// Kept so the enum value is never reused.
   case presence // = 11
 
   /// E2EE-wrapped call signal (Double Ratchet).
@@ -55,18 +62,25 @@ public enum Shared_Proto_Core_V1_ContentType: SwiftProtobuf.Enum, Swift.CaseIter
 
   /// DELIVERY_RECEIPT — end-to-end encrypted delivery confirmation (Variant 2).
   /// Sent from recipient to original sender as a regular DR message with content_type=14.
-  /// Payload is JSON: {"type":"delivery_receipt","message_ids":["<uuid>",...]}
+  /// Payload is a binary `signaling.v1.DeliveryReceipt` (the JSON form this comment used to
+  /// describe is gone; `parseBinaryReceipt` is the only reader).
   /// Hides communication metadata from the server (unlike the legacy relay-receipt path).
   /// If stealth mode is active, sealed sender is applied — server cannot correlate
   /// the receipt sender with the original sealed message recipient.
-  /// Backward compat: both this and the legacy stream receipt are sent; receiving side
-  /// deduplicates (guard message.deliveryStatus != .delivered).
+  /// This is the only receipt path. The legacy relay receipt on the message stream was removed
+  /// on 2026-08-02 with `sendReceipt`; nothing dual-sends any more. The receiving side still
+  /// guards on `deliveryStatus != .delivered`, which now only absorbs redelivery.
   case deliveryReceipt // = 14
 
   /// Key exchange initiation (X3DH handshake)
   case keyExchange // = 20
 
-  /// Session reset request
+  /// Session reset request (END_SESSION).
+  ///
+  /// RETIRED 2026-09-27, replaced by DECRYPTION_ERROR (28): a teardown command names no state, so
+  /// a stale one could not be told from a live one and had to be rationed by time windows
+  /// (construct-docs decisions/sessions-renew-by-sending.md, variant B). Kept so a copy from a
+  /// build that still sends it is recognised and dropped silently; nothing sends it.
   case sessionReset // = 21
 
   /// KEY_SYNC — server-triggered silent key renegotiation (Matrix-inspired).
@@ -82,6 +96,9 @@ public enum Shared_Proto_Core_V1_ContentType: SwiftProtobuf.Enum, Swift.CaseIter
   /// Server is opaque to payload — E2EE is fully preserved.
   case senderSync // = 23
 
+  /// RETIRED 2026-09-27 with 25 and 26: a session opens from any message carrying the handshake
+  /// header (decisions/sessions-renew-by-sending.md, variant A). Kept for recognition only.
+  ///
   /// SESSION_RESET_INIT — atomic END_SESSION + new X3DH session init in a single
   /// delivery. The encrypted_payload carries the full EncryptedRatchetMessage with
   /// msgNum=0 under the new INITIATOR session. Eliminates the ordering race of the
@@ -102,22 +119,48 @@ public enum Shared_Proto_Core_V1_ContentType: SwiftProtobuf.Enum, Swift.CaseIter
   /// Server forwards opaquely (treat identically to E2EE_SIGNAL).
   case sessionReady // = 26
 
-  /// INTAKE_KEY — the recipient hands a contact the 32-byte `intake_key` its account
-  /// accepts, so that contact's envelopes can carry an intake tag instead of buying a
-  /// Privacy Pass token (see SealedInner.intake_tag_sealed).
+  /// CONTACT_CARD (was INTAKE_KEY until 2026-09-28) — what an account hands each contact about
+  /// itself: a `ContactCard` (below) with the `intake_key` its account accepts, so that contact's
+  /// envelopes can carry an intake tag instead of buying a Privacy Pass token (see
+  /// SealedInner.intake_tag_sealed), and its `account_address`, so that contact can name it by
+  /// key rather than by server id.
   ///
-  /// Payload is a framed side channel inside the ciphertext, and it has to be: the key is
-  /// a secret, and a credential readable by the relay is a credential the relay can use.
+  /// Payload is a framed side channel inside the ciphertext, and it has to be: the key is a
+  /// secret, and a credential readable by the relay is a credential the relay can use.
   /// knst_byte5 = true for that reason, sealed_inner_content_type = false for the same one.
   ///
-  /// Sent on contact establishment, on rotation (which is how a contact is revoked), and
-  /// lazily to contacts that predate the mechanism — the first send to a peer that has no
-  /// key of ours carries one. Existing contacts are not backfilled in a sweep: a hundred
-  /// contacts would mean a hundred control messages at once, each of which would itself
-  /// need paying for, so the graph migrates as it is used and pays nothing extra.
+  /// Sent to each device of a contact once: when we first hear from it, and when we first write
+  /// to it — whichever comes first — and again on rotation (which is how a contact is revoked).
+  /// Existing contacts are not backfilled in a sweep; each gets its card the next time the two
+  /// devices talk. A payload of exactly 32 bytes is a bare intake key from a build before the
+  /// card: any card with a field is longer.
   ///
   /// Server forwards opaquely (treat identically to E2EE_SIGNAL).
-  case intakeKey // = 27
+  /// decisions/contact-card-carries-the-address-back.md
+  case contactCard // = 27
+
+  /// DECRYPTION_ERROR — "I could not read your message", from the device that failed to the
+  /// device that wrote it. Replaces SESSION_RESET (21).
+  ///
+  /// The payload is a box sealed to the recipient's identity key (the core's
+  /// `seal_decryption_error`) around the unread message's ratchet key and id, and an optional
+  /// hint. Not ratchet-encrypted, and cannot be: the ratchet is what failed. The ratchet key is the
+  /// point — the recipient retires its current state only if the key is that state's, so an error
+  /// that is stale (redelivered, reordered, about a state already replaced) is recognised exactly
+  /// and does nothing. Built and opened only in construct-core, so both platforms agree.
+  ///
+  /// Sealed-sender envelope; the server forwards it opaquely.
+  case decryptionError // = 28
+
+  /// PROFILE — the sender's display name and avatar, as a `ProfileShare` (below), to a contact it
+  /// shares its profile with. Until 2026-10-02 a profile had no type: each client recognised it by
+  /// whether the plaintext parsed as a hand-written binary layout (version byte 0x01, u16 LE
+  /// lengths) that iOS and Android each wrote and read on their own. Readers keep accepting that
+  /// layout on an untyped message for one release; nothing sends it.
+  ///
+  /// Framed side channel inside the ciphertext: knst_byte5 = true, sealed_inner_content_type =
+  /// false. Server forwards opaquely. decisions/profile-share-is-a-typed-versioned-state.md
+  case profile // = 29
   case UNRECOGNIZED(Int)
 
   public init() {
@@ -141,7 +184,9 @@ public enum Shared_Proto_Core_V1_ContentType: SwiftProtobuf.Enum, Swift.CaseIter
     case 24: self = .sessionResetInit
     case 25: self = .sessionPing
     case 26: self = .sessionReady
-    case 27: self = .intakeKey
+    case 27: self = .contactCard
+    case 28: self = .decryptionError
+    case 29: self = .profile
     default: self = .UNRECOGNIZED(rawValue)
     }
   }
@@ -163,7 +208,9 @@ public enum Shared_Proto_Core_V1_ContentType: SwiftProtobuf.Enum, Swift.CaseIter
     case .sessionResetInit: return 24
     case .sessionPing: return 25
     case .sessionReady: return 26
-    case .intakeKey: return 27
+    case .contactCard: return 27
+    case .decryptionError: return 28
+    case .profile: return 29
     case .UNRECOGNIZED(let i): return i
     }
   }
@@ -185,13 +232,15 @@ public enum Shared_Proto_Core_V1_ContentType: SwiftProtobuf.Enum, Swift.CaseIter
     .sessionResetInit,
     .sessionPing,
     .sessionReady,
-    .intakeKey,
+    .contactCard,
+    .decryptionError,
+    .profile,
   ]
 
 }
 
 /// MessagePriority - Delivery priority
-public enum Shared_Proto_Core_V1_MessagePriority: SwiftProtobuf.Enum, Swift.CaseIterable {
+public nonisolated enum Shared_Proto_Core_V1_MessagePriority: SwiftProtobuf.Enum, Swift.CaseIterable {
   public typealias RawValue = Int
 
   /// Normal priority (default)
@@ -244,7 +293,7 @@ public enum Shared_Proto_Core_V1_MessagePriority: SwiftProtobuf.Enum, Swift.Case
 /// Envelope - Universal message container
 /// Wraps all message types (text, media, E2EE, MLS, WebRTC signaling)
 /// Server only sees this outer envelope, content is encrypted
-public struct Shared_Proto_Core_V1_Envelope: @unchecked Sendable {
+public nonisolated struct Shared_Proto_Core_V1_Envelope: @unchecked Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -435,7 +484,7 @@ public struct Shared_Proto_Core_V1_Envelope: @unchecked Sendable {
   /// Message ID (for 1-to-1 direct messages)
   /// For group messages, use group_message_id instead
   /// This is a oneof to avoid ambiguity
-  public enum OneOf_MessageIDType: Equatable, Sendable {
+  public nonisolated enum OneOf_MessageIDType: Equatable, Sendable {
     /// Direct message ID (UUID v4)
     /// Example: "550e8400-e29b-41d4-a716-446655440000"
     case messageID(String)
@@ -452,7 +501,7 @@ public struct Shared_Proto_Core_V1_Envelope: @unchecked Sendable {
 
 /// ServerMetadata - Server-assigned metadata
 /// Read-only for clients, set by server during routing
-public struct Shared_Proto_Core_V1_ServerMetadata: Sendable {
+public nonisolated struct Shared_Proto_Core_V1_ServerMetadata: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -502,7 +551,7 @@ public struct Shared_Proto_Core_V1_ServerMetadata: Sendable {
 
 /// EncryptedMetadataContent - Decrypted content of encrypted_metadata
 /// This is NOT transmitted in proto, but documented for client implementation
-public struct Shared_Proto_Core_V1_EncryptedMetadataContent: Sendable {
+public nonisolated struct Shared_Proto_Core_V1_EncryptedMetadataContent: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -528,7 +577,7 @@ public struct Shared_Proto_Core_V1_EncryptedMetadataContent: Sendable {
 ///
 /// SECURITY: every field here is visible to the server. These values are useful
 /// for tracing and debugging but must never drive E2E semantics.
-public struct Shared_Proto_Core_V1_ClientMetadata: Sendable {
+public nonisolated struct Shared_Proto_Core_V1_ClientMetadata: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -568,7 +617,7 @@ public struct Shared_Proto_Core_V1_ClientMetadata: Sendable {
 
 /// GroupMessageId - Composite message ID for MLS groups
 /// Prevents message ID conflicts in multi-sender groups
-public struct Shared_Proto_Core_V1_GroupMessageId: Sendable {
+public nonisolated struct Shared_Proto_Core_V1_GroupMessageId: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -593,7 +642,7 @@ public struct Shared_Proto_Core_V1_GroupMessageId: Sendable {
 }
 
 /// Reaction - Emoji reaction to a message
-public struct Shared_Proto_Core_V1_Reaction: Sendable {
+public nonisolated struct Shared_Proto_Core_V1_Reaction: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -616,7 +665,7 @@ public struct Shared_Proto_Core_V1_Reaction: Sendable {
 /// SealedSenderEnvelope — outer wrapper on the wire / federation hop
 /// For federation: home server routes by recipient_server and forwards
 /// sealed_inner opaquely. Local SendSealedMessage may leave recipient_server empty.
-public struct Shared_Proto_Core_V1_SealedSenderEnvelope: Sendable {
+public nonisolated struct Shared_Proto_Core_V1_SealedSenderEnvelope: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -646,7 +695,7 @@ public struct Shared_Proto_Core_V1_SealedSenderEnvelope: Sendable {
 /// Server-allowed knowledge: recipient_user_id, delivery_tag, token_*,
 /// ciphertext size. Not allowed for routing/UI: content kind, priority, TTL
 /// (those belong inside the E2E payload — see content_type deprecation note).
-public struct Shared_Proto_Core_V1_SealedInner: Sendable {
+public nonisolated struct Shared_Proto_Core_V1_SealedInner: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -772,6 +821,26 @@ public struct Shared_Proto_Core_V1_SealedInner: Sendable {
   /// tags, the envelope is silently charged a token, and nothing reports a mismatch.
   public var intakeTagSealed: Data = Data()
 
+  /// Session envelope (construct-core 0.26; construct-docs
+  /// decisions/sealed-envelope-keyed-by-the-session.md, PQC-1). Once two devices hold a session,
+  /// a message goes as
+  ///   nonce(12) ‖ tag(16) ‖ ChaCha20-Poly1305(k_env, kind ‖ body, ad = tag)
+  /// with keys derived from the session's post-quantum root, and the recipient finds who wrote
+  /// it by the tag (`OrchestratorCore.open_envelope`). When present:
+  ///   • sender_cert_ciphertext and encrypted_payload are EMPTY — the wire payload, header
+  ///     included, is inside the envelope, and the session names the writer;
+  ///   • the server treats it as opaque, as it does encrypted_payload.
+  /// Empty = the first flight of a session, which goes in first_flight.
+  public var sessionEnvelope: Data = Data()
+
+  /// A session's first flight sealed whole (construct-core `seal_first_flight`, 0.27;
+  /// construct-docs decisions/first-flight-sealed-whole.md):
+  ///   BE32(kyber_prekey_id) ‖ kem_ciphertext ‖ eph ‖ nonce ‖ AEAD(cert ‖ wire payload)
+  /// under a key from X25519 to the recipient's identity key and the handshake's ML-KEM secret.
+  /// When set, sender_cert_ciphertext, encrypted_payload and session_envelope are EMPTY: the
+  /// certificate and the wire payload, PQXDH header included, are inside. Opaque to the server.
+  public var firstFlight: Data = Data()
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -786,7 +855,7 @@ public struct Shared_Proto_Core_V1_SealedInner: Sendable {
 ///   2. Sender encrypts cert to recipient's identity key
 ///   3. Recipient decrypts → verifies server_signature against home server's public key
 ///   4. Recipient checks sender_identity_key matches existing session
-public struct Shared_Proto_Core_V1_SenderCertificate: Sendable {
+public nonisolated struct Shared_Proto_Core_V1_SenderCertificate: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -820,6 +889,152 @@ public struct Shared_Proto_Core_V1_SenderCertificate: Sendable {
   /// iOS StealthSenderService.buildCertPayload).
   public var serverSignature: Data = Data()
 
+  /// Id of the server key that made server_signature_hybrid: SHA-256("konstruct/v1/kid" ‖ key)[0..16].
+  /// The key itself reaches the client as a delegation signed by the offline root, served in
+  /// /.well-known (construct-docs/decisions/server-keys-rooted-offline-and-hybrid.md).
+  public var serverKid: Data = Data()
+
+  /// Hybrid Ed25519 ‖ ML-DSA-65 signature (3373 bytes) by that key over
+  ///   "konstruct/v1/sender-cert" ‖ server_kid ‖ BE16(len) user_id ‖ BE16(len) domain
+  ///   ‖ BE16(len) identity_key ‖ BE16(len) device_id ‖ BE64(issued_at) ‖ BE64(expires_at)
+  /// — construct-server-trust `sender_cert_body`, vectors in conformance/knst_server_trust.json.
+  /// Sent beside server_signature while clients move; server_signature goes once none reads it.
+  public var serverSignatureHybrid: Data = Data()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+/// OwnDeviceCopy — Envelope.encrypted_payload of every SENDER_SYNC (content_type 23).
+///
+/// A copy to one of our own devices goes unsealed (the relay already knows the pair is
+/// (me, me)), so it has no SealedInner to carry the sender certificate in. The receiving
+/// sibling needs the certificate anyway: a first message opens a session with the identity
+/// key the certificate names, once the core has checked the server's signature
+/// (construct-docs/decisions/first-message-opens-without-the-server.md). Without it a sibling
+/// could open a copy only by fetching the sender's bundle.
+///
+/// In the clear, like the rest of this envelope: it names our own account and device to the
+/// server that issued it.
+public nonisolated struct Shared_Proto_Core_V1_OwnDeviceCopy: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// The sending device's current certificate. Absent only when the sender could not obtain
+  /// one; a copy on an existing session still opens, a first message does not.
+  public var senderCertificate: Shared_Proto_Core_V1_SenderCertificate {
+    get {_senderCertificate ?? Shared_Proto_Core_V1_SenderCertificate()}
+    set {_senderCertificate = newValue}
+  }
+  /// Returns true if `senderCertificate` has been explicitly set.
+  public var hasSenderCertificate: Bool {self._senderCertificate != nil}
+  /// Clears the value of `senderCertificate`. Subsequent reads from it will return its default value.
+  public mutating func clearSenderCertificate() {self._senderCertificate = nil}
+
+  /// The core's wire payload (construct-core wire_payload.rs), exactly as for any message.
+  public var wirePayload: Data = Data()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+
+  fileprivate var _senderCertificate: Shared_Proto_Core_V1_SenderCertificate? = nil
+}
+
+/// The payload of CONTENT_TYPE_CONTACT_CARD (27): what an account hands a contact about itself,
+/// inside the ciphertext. Either field may be absent — a client that mints no intake key sends
+/// the address alone, a device that does not know its account's address sends the key alone.
+///
+/// The two fields live differently: `intake_key` rotates (that is how a contact is revoked),
+/// `account_address` never changes for the life of the account. A receiver pins the first address
+/// it hears for an account and treats a different one as a security event, never as an update;
+/// an address from a signed invite outranks one from a card.
+/// The payload of CONTENT_TYPE_PROFILE (29): who the sender is to this contact, by its own account.
+///
+/// A receiver keeps the `edited_at_ms` it last applied for the sender and ignores a profile that is
+/// not newer — whole, name and avatar together — so a resend, a redelivery or a reordered queue
+/// cannot put an older name back. Equal is not newer: the same profile twice is applied once.
+///
+/// `avatar` has three states, and the third is the reason it is a oneof:
+///   set     — download this, replace the avatar;
+///   removed — the sender has no avatar now: clear it;
+///   absent  — the avatar did not change in this profile (or the sender could not upload it):
+///             keep what is held.
+/// A `set` whose key is not 32 bytes is read as absent.
+public nonisolated struct Shared_Proto_Core_V1_ProfileShare: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var displayName: String = String()
+
+  /// When the sender last changed its name or avatar, ms since the epoch, by the sender's clock.
+  /// Not the send time: a profile sent again carries the same value.
+  public var editedAtMs: UInt64 = 0
+
+  public var avatar: Shared_Proto_Core_V1_ProfileShare.OneOf_Avatar? = nil
+
+  public var avatarSet: Shared_Proto_Core_V1_AvatarRef {
+    get {
+      if case .avatarSet(let v)? = avatar {return v}
+      return Shared_Proto_Core_V1_AvatarRef()
+    }
+    set {avatar = .avatarSet(newValue)}
+  }
+
+  public var avatarRemoved: Bool {
+    get {
+      if case .avatarRemoved(let v)? = avatar {return v}
+      return false
+    }
+    set {avatar = .avatarRemoved(newValue)}
+  }
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public nonisolated enum OneOf_Avatar: Equatable, Sendable {
+    case avatarSet(Shared_Proto_Core_V1_AvatarRef)
+    case avatarRemoved(Bool)
+
+  }
+
+  public init() {}
+}
+
+/// An avatar in the media store, encrypted under `media_key`. Lives as long as any other media
+/// (MEDIA_FILE_TTL_SECONDS); a receiver that finds it gone keeps the avatar it has.
+public nonisolated struct Shared_Proto_Core_V1_AvatarRef: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var mediaID: String = String()
+
+  public var mediaURL: String = String()
+
+  /// 32 bytes, AES-256.
+  public var mediaKey: Data = Data()
+
+  public var mimeType: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Shared_Proto_Core_V1_ContactCard: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// 32 bytes. See SealedInner.intake_tag_sealed.
+  public var intakeKey: Data = Data()
+
+  /// 32 bytes: the account's Ed25519 recovery public key (route_id = SHA-256(0x0001 || key)).
+  public var accountAddress: Data = Data()
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -827,17 +1042,17 @@ public struct Shared_Proto_Core_V1_SenderCertificate: Sendable {
 
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
 
-fileprivate let _protobuf_package = "shared.proto.core.v1"
+fileprivate nonisolated let _protobuf_package = "shared.proto.core.v1"
 
-extension Shared_Proto_Core_V1_ContentType: SwiftProtobuf._ProtoNameProviding {
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0CONTENT_TYPE_UNSPECIFIED\0\u{1}CONTENT_TYPE_E2EE_SIGNAL\0\u{1}CONTENT_TYPE_E2EE_MLS\0\u{2}\u{8}CONTENT_TYPE_WEBRTC_SIGNAL\0\u{1}CONTENT_TYPE_PRESENCE\0\u{1}CONTENT_TYPE_CALL_SIGNAL\0\u{1}CONTENT_TYPE_HEARTBEAT\0\u{1}CONTENT_TYPE_DELIVERY_RECEIPT\0\u{2}\u{6}CONTENT_TYPE_KEY_EXCHANGE\0\u{1}CONTENT_TYPE_SESSION_RESET\0\u{1}CONTENT_TYPE_KEY_SYNC\0\u{1}CONTENT_TYPE_SENDER_SYNC\0\u{1}CONTENT_TYPE_SESSION_RESET_INIT\0\u{1}CONTENT_TYPE_SESSION_PING\0\u{1}CONTENT_TYPE_SESSION_READY\0\u{1}CONTENT_TYPE_INTAKE_KEY\0")
+nonisolated extension Shared_Proto_Core_V1_ContentType: SwiftProtobuf._ProtoNameProviding {
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0CONTENT_TYPE_UNSPECIFIED\0\u{1}CONTENT_TYPE_E2EE_SIGNAL\0\u{1}CONTENT_TYPE_E2EE_MLS\0\u{2}\u{8}CONTENT_TYPE_WEBRTC_SIGNAL\0\u{1}CONTENT_TYPE_PRESENCE\0\u{1}CONTENT_TYPE_CALL_SIGNAL\0\u{1}CONTENT_TYPE_HEARTBEAT\0\u{1}CONTENT_TYPE_DELIVERY_RECEIPT\0\u{2}\u{6}CONTENT_TYPE_KEY_EXCHANGE\0\u{1}CONTENT_TYPE_SESSION_RESET\0\u{1}CONTENT_TYPE_KEY_SYNC\0\u{1}CONTENT_TYPE_SENDER_SYNC\0\u{1}CONTENT_TYPE_SESSION_RESET_INIT\0\u{1}CONTENT_TYPE_SESSION_PING\0\u{1}CONTENT_TYPE_SESSION_READY\0\u{1}CONTENT_TYPE_CONTACT_CARD\0\u{1}CONTENT_TYPE_DECRYPTION_ERROR\0\u{1}CONTENT_TYPE_PROFILE\0")
 }
 
-extension Shared_Proto_Core_V1_MessagePriority: SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Core_V1_MessagePriority: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0MESSAGE_PRIORITY_NORMAL\0\u{1}MESSAGE_PRIORITY_HIGH\0\u{1}MESSAGE_PRIORITY_CRITICAL\0\u{1}MESSAGE_PRIORITY_LOW\0")
 }
 
-extension Shared_Proto_Core_V1_Envelope: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Core_V1_Envelope: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".Envelope"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}sender\0\u{3}sender_device\0\u{1}recipient\0\u{3}recipient_device\0\u{3}content_type\0\u{3}message_id\0\u{1}timestamp\0\u{1}ttl\0\u{1}priority\0\u{3}encrypted_payload\0\u{3}conversation_id\0\u{3}server_metadata\0\u{3}client_metadata\0\u{3}forwarding_path\0\u{4}\u{2}ephemeral_seconds\0\u{2}\u{3}reactions\0\u{1}mentions\0\u{3}group_message_id\0\u{4}(sealed_sender\0\u{b}edits_message_id\0\u{c}\u{f}\u{1}\u{c}\u{11}\u{1}\u{c}\u{12}\u{1}\u{c}\u{16}\u{1d}\u{c}3\u{a}\u{c}>\u{9}\u{c}G\u{1}\u{a}\u{c}Q\u{1}\u{14}")
 
@@ -1049,7 +1264,7 @@ extension Shared_Proto_Core_V1_Envelope: SwiftProtobuf.Message, SwiftProtobuf._M
   }
 }
 
-extension Shared_Proto_Core_V1_ServerMetadata: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Core_V1_ServerMetadata: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ServerMetadata"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}message_number\0\u{3}server_timestamp\0\u{3}delivery_attempts\0\u{3}processing_server_id\0\u{3}encrypted_metadata\0\u{c}\u{6}\u{5}")
 
@@ -1103,7 +1318,7 @@ extension Shared_Proto_Core_V1_ServerMetadata: SwiftProtobuf.Message, SwiftProto
   }
 }
 
-extension Shared_Proto_Core_V1_EncryptedMetadataContent: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Core_V1_EncryptedMetadataContent: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".EncryptedMetadataContent"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}precise_timestamp\0\u{3}delivery_hops\0\u{3}processing_time_ms\0\u{c}\u{4}\u{7}")
 
@@ -1143,7 +1358,7 @@ extension Shared_Proto_Core_V1_EncryptedMetadataContent: SwiftProtobuf.Message, 
   }
 }
 
-extension Shared_Proto_Core_V1_ClientMetadata: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Core_V1_ClientMetadata: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ClientMetadata"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}client_timestamp\0\u{3}client_version\0\u{3}correlation_id\0\u{c}\u{4}\u{7}")
 
@@ -1187,7 +1402,7 @@ extension Shared_Proto_Core_V1_ClientMetadata: SwiftProtobuf.Message, SwiftProto
   }
 }
 
-extension Shared_Proto_Core_V1_GroupMessageId: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Core_V1_GroupMessageId: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".GroupMessageId"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}group_id\0\u{1}epoch\0\u{3}sender_index\0\u{1}generation\0")
 
@@ -1232,7 +1447,7 @@ extension Shared_Proto_Core_V1_GroupMessageId: SwiftProtobuf.Message, SwiftProto
   }
 }
 
-extension Shared_Proto_Core_V1_Reaction: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Core_V1_Reaction: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".Reaction"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}user_id\0\u{1}emoji\0\u{1}timestamp\0")
 
@@ -1272,7 +1487,7 @@ extension Shared_Proto_Core_V1_Reaction: SwiftProtobuf.Message, SwiftProtobuf._M
   }
 }
 
-extension Shared_Proto_Core_V1_SealedSenderEnvelope: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Core_V1_SealedSenderEnvelope: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".SealedSenderEnvelope"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}recipient_server\0\u{3}sealed_inner\0\u{3}forwarding_token\0\u{1}timestamp\0\u{c}\u{5}\u{b}")
 
@@ -1317,9 +1532,9 @@ extension Shared_Proto_Core_V1_SealedSenderEnvelope: SwiftProtobuf.Message, Swif
   }
 }
 
-extension Shared_Proto_Core_V1_SealedInner: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Core_V1_SealedInner: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".SealedInner"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}recipient_user_id\0\u{3}delivery_tag\0\u{3}sender_cert_ciphertext\0\u{3}encrypted_payload\0\u{3}content_type\0\u{1}priority\0\u{1}ttl\0\u{4}\u{9}token_nonce\0\u{3}token_bytes\0\u{3}token_spend_id\0\u{3}recipient_device\0\u{3}intake_tag_sealed\0\u{c}\u{8}\u{8}")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}recipient_user_id\0\u{3}delivery_tag\0\u{3}sender_cert_ciphertext\0\u{3}encrypted_payload\0\u{3}content_type\0\u{1}priority\0\u{1}ttl\0\u{4}\u{9}token_nonce\0\u{3}token_bytes\0\u{3}token_spend_id\0\u{3}recipient_device\0\u{3}intake_tag_sealed\0\u{3}session_envelope\0\u{3}first_flight\0\u{c}\u{8}\u{8}")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -1339,6 +1554,8 @@ extension Shared_Proto_Core_V1_SealedInner: SwiftProtobuf.Message, SwiftProtobuf
       case 18: try { try decoder.decodeSingularBytesField(value: &self.tokenSpendID) }()
       case 19: try { try decoder.decodeSingularStringField(value: &self.recipientDevice) }()
       case 20: try { try decoder.decodeSingularBytesField(value: &self.intakeTagSealed) }()
+      case 21: try { try decoder.decodeSingularBytesField(value: &self.sessionEnvelope) }()
+      case 22: try { try decoder.decodeSingularBytesField(value: &self.firstFlight) }()
       default: break
       }
     }
@@ -1381,6 +1598,12 @@ extension Shared_Proto_Core_V1_SealedInner: SwiftProtobuf.Message, SwiftProtobuf
     if !self.intakeTagSealed.isEmpty {
       try visitor.visitSingularBytesField(value: self.intakeTagSealed, fieldNumber: 20)
     }
+    if !self.sessionEnvelope.isEmpty {
+      try visitor.visitSingularBytesField(value: self.sessionEnvelope, fieldNumber: 21)
+    }
+    if !self.firstFlight.isEmpty {
+      try visitor.visitSingularBytesField(value: self.firstFlight, fieldNumber: 22)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -1397,14 +1620,16 @@ extension Shared_Proto_Core_V1_SealedInner: SwiftProtobuf.Message, SwiftProtobuf
     if lhs.tokenSpendID != rhs.tokenSpendID {return false}
     if lhs.recipientDevice != rhs.recipientDevice {return false}
     if lhs.intakeTagSealed != rhs.intakeTagSealed {return false}
+    if lhs.sessionEnvelope != rhs.sessionEnvelope {return false}
+    if lhs.firstFlight != rhs.firstFlight {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
 }
 
-extension Shared_Proto_Core_V1_SenderCertificate: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+nonisolated extension Shared_Proto_Core_V1_SenderCertificate: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".SenderCertificate"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}sender_user_id\0\u{3}sender_domain\0\u{3}sender_identity_key\0\u{3}sender_device_id\0\u{3}issued_at\0\u{3}expires_at\0\u{3}server_signature\0\u{c}\u{8}\u{8}")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}sender_user_id\0\u{3}sender_domain\0\u{3}sender_identity_key\0\u{3}sender_device_id\0\u{3}issued_at\0\u{3}expires_at\0\u{3}server_signature\0\u{3}server_kid\0\u{3}server_signature_hybrid\0\u{c}\u{a}\u{6}")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -1419,6 +1644,8 @@ extension Shared_Proto_Core_V1_SenderCertificate: SwiftProtobuf.Message, SwiftPr
       case 5: try { try decoder.decodeSingularInt64Field(value: &self.issuedAt) }()
       case 6: try { try decoder.decodeSingularInt64Field(value: &self.expiresAt) }()
       case 7: try { try decoder.decodeSingularBytesField(value: &self.serverSignature) }()
+      case 8: try { try decoder.decodeSingularBytesField(value: &self.serverKid) }()
+      case 9: try { try decoder.decodeSingularBytesField(value: &self.serverSignatureHybrid) }()
       default: break
       }
     }
@@ -1446,6 +1673,12 @@ extension Shared_Proto_Core_V1_SenderCertificate: SwiftProtobuf.Message, SwiftPr
     if !self.serverSignature.isEmpty {
       try visitor.visitSingularBytesField(value: self.serverSignature, fieldNumber: 7)
     }
+    if !self.serverKid.isEmpty {
+      try visitor.visitSingularBytesField(value: self.serverKid, fieldNumber: 8)
+    }
+    if !self.serverSignatureHybrid.isEmpty {
+      try visitor.visitSingularBytesField(value: self.serverSignatureHybrid, fieldNumber: 9)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -1457,6 +1690,199 @@ extension Shared_Proto_Core_V1_SenderCertificate: SwiftProtobuf.Message, SwiftPr
     if lhs.issuedAt != rhs.issuedAt {return false}
     if lhs.expiresAt != rhs.expiresAt {return false}
     if lhs.serverSignature != rhs.serverSignature {return false}
+    if lhs.serverKid != rhs.serverKid {return false}
+    if lhs.serverSignatureHybrid != rhs.serverSignatureHybrid {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Shared_Proto_Core_V1_OwnDeviceCopy: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".OwnDeviceCopy"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}sender_certificate\0\u{3}wire_payload\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularMessageField(value: &self._senderCertificate) }()
+      case 2: try { try decoder.decodeSingularBytesField(value: &self.wirePayload) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    try { if let v = self._senderCertificate {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
+    } }()
+    if !self.wirePayload.isEmpty {
+      try visitor.visitSingularBytesField(value: self.wirePayload, fieldNumber: 2)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Shared_Proto_Core_V1_OwnDeviceCopy, rhs: Shared_Proto_Core_V1_OwnDeviceCopy) -> Bool {
+    if lhs._senderCertificate != rhs._senderCertificate {return false}
+    if lhs.wirePayload != rhs.wirePayload {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Shared_Proto_Core_V1_ProfileShare: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ProfileShare"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}display_name\0\u{3}edited_at_ms\0\u{3}avatar_set\0\u{3}avatar_removed\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.displayName) }()
+      case 2: try { try decoder.decodeSingularUInt64Field(value: &self.editedAtMs) }()
+      case 3: try {
+        var v: Shared_Proto_Core_V1_AvatarRef?
+        var hadOneofValue = false
+        if let current = self.avatar {
+          hadOneofValue = true
+          if case .avatarSet(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.avatar = .avatarSet(v)
+        }
+      }()
+      case 4: try {
+        var v: Bool?
+        try decoder.decodeSingularBoolField(value: &v)
+        if let v = v {
+          if self.avatar != nil {try decoder.handleConflictingOneOf()}
+          self.avatar = .avatarRemoved(v)
+        }
+      }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    if !self.displayName.isEmpty {
+      try visitor.visitSingularStringField(value: self.displayName, fieldNumber: 1)
+    }
+    if self.editedAtMs != 0 {
+      try visitor.visitSingularUInt64Field(value: self.editedAtMs, fieldNumber: 2)
+    }
+    switch self.avatar {
+    case .avatarSet?: try {
+      guard case .avatarSet(let v)? = self.avatar else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 3)
+    }()
+    case .avatarRemoved?: try {
+      guard case .avatarRemoved(let v)? = self.avatar else { preconditionFailure() }
+      try visitor.visitSingularBoolField(value: v, fieldNumber: 4)
+    }()
+    case nil: break
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Shared_Proto_Core_V1_ProfileShare, rhs: Shared_Proto_Core_V1_ProfileShare) -> Bool {
+    if lhs.displayName != rhs.displayName {return false}
+    if lhs.editedAtMs != rhs.editedAtMs {return false}
+    if lhs.avatar != rhs.avatar {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Shared_Proto_Core_V1_AvatarRef: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".AvatarRef"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}media_id\0\u{3}media_url\0\u{3}media_key\0\u{3}mime_type\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.mediaID) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.mediaURL) }()
+      case 3: try { try decoder.decodeSingularBytesField(value: &self.mediaKey) }()
+      case 4: try { try decoder.decodeSingularStringField(value: &self.mimeType) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.mediaID.isEmpty {
+      try visitor.visitSingularStringField(value: self.mediaID, fieldNumber: 1)
+    }
+    if !self.mediaURL.isEmpty {
+      try visitor.visitSingularStringField(value: self.mediaURL, fieldNumber: 2)
+    }
+    if !self.mediaKey.isEmpty {
+      try visitor.visitSingularBytesField(value: self.mediaKey, fieldNumber: 3)
+    }
+    if !self.mimeType.isEmpty {
+      try visitor.visitSingularStringField(value: self.mimeType, fieldNumber: 4)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Shared_Proto_Core_V1_AvatarRef, rhs: Shared_Proto_Core_V1_AvatarRef) -> Bool {
+    if lhs.mediaID != rhs.mediaID {return false}
+    if lhs.mediaURL != rhs.mediaURL {return false}
+    if lhs.mediaKey != rhs.mediaKey {return false}
+    if lhs.mimeType != rhs.mimeType {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Shared_Proto_Core_V1_ContactCard: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ContactCard"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}intake_key\0\u{3}account_address\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularBytesField(value: &self.intakeKey) }()
+      case 2: try { try decoder.decodeSingularBytesField(value: &self.accountAddress) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.intakeKey.isEmpty {
+      try visitor.visitSingularBytesField(value: self.intakeKey, fieldNumber: 1)
+    }
+    if !self.accountAddress.isEmpty {
+      try visitor.visitSingularBytesField(value: self.accountAddress, fieldNumber: 2)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Shared_Proto_Core_V1_ContactCard, rhs: Shared_Proto_Core_V1_ContactCard) -> Bool {
+    if lhs.intakeKey != rhs.intakeKey {return false}
+    if lhs.accountAddress != rhs.accountAddress {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

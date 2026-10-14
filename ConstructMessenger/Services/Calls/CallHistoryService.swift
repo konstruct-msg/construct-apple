@@ -2,62 +2,65 @@
 //  CallHistoryService.swift
 //  Construct Messenger
 //
-//  Persists call records to Core Data when calls end.
-//  Called from CallManager.endActiveCall.
+//  Writes a call to the log when it ends (`CallManager.endActiveCall`), through the call store
+//  (`LocalRepositories.calls`).
 //
-//  macOS: calls not yet implemented, stub out to avoid linking CoreData call types.
+//  macOS: calls not yet implemented.
 //
 #if os(iOS)
 
 import Foundation
-import CoreData
 
 @MainActor
 final class CallHistoryService {
     static let shared = CallHistoryService()
-    private init() {}
 
-    private var context: NSManagedObjectContext? {
-        PersistenceController.shared.container.viewContext
+    private let store: () -> any CallStore
+
+    private init() {
+        self.store = { LocalRepositories.calls }
     }
 
     // MARK: - Save
 
     func record(
         session: CallSession,
-        status: CTCallRecord.Status,
+        status: CallRecord.Status,
         startedAt: Date,
         durationSeconds: Int32
     ) {
-        guard let ctx = context else { return }
-        let direction: CTCallRecord.Direction = session.direction == .outgoing ? .outgoing : .incoming
-
-        ctx.perform {
-            CTCallRecord.create(
-                id: session.id,
-                peerUserId: session.peerUserId,
-                peerName: session.peerName,
-                direction: direction,
-                status: status,
-                startedAt: startedAt,
-                endedAt: Date(),
-                durationSeconds: durationSeconds,
-                in: ctx
-            )
-            try? ctx.save()
+        let call = CallRecord(
+            id: session.id,
+            peerUserId: session.peerUserId,
+            peerName: session.peerName,
+            direction: session.direction == .outgoing ? .outgoing : .incoming,
+            status: status,
+            startedAt: startedAt,
+            endedAt: Date(),
+            durationSeconds: durationSeconds
+        )
+        do {
+            try store().upsert(call)
+        } catch {
+            Log.error("Failed to record call: \(error)", category: "CallHistory")
         }
     }
 
     // MARK: - Delete
 
-    func deleteAll() {
-        guard let ctx = context else { return }
+    func delete(_ id: String) {
         do {
-            let records = try CTCallRecord.fetchRecent(limit: 10_000, in: ctx)
-            guard !records.isEmpty else { return }
-            records.forEach(ctx.delete)
-            try ctx.save()
-            Log.info("Deleted \(records.count) call history records", category: "CallHistory")
+            try store().delete(id)
+        } catch {
+            Log.error("Failed to delete call record: \(error)", category: "CallHistory")
+        }
+    }
+
+    /// The whole log, in one store write (`CallStore.deleteAll`).
+    func deleteAll() {
+        do {
+            let removed = try store().deleteAll()
+            Log.info("Deleted \(removed) call history records", category: "CallHistory")
         } catch {
             Log.error("Failed to delete call history: \(error)", category: "CallHistory")
         }

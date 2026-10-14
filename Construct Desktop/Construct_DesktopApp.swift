@@ -28,6 +28,16 @@ struct Construct_DesktopApp: App {
     @State private var commandBridge = DesktopCommandBridge()
 
     init() {
+        // The store first: every repository stands on it, and a failure must be known before the
+        // first screen and before the stream writes anything (`DesktopRootView`).
+        LocalRepositories.openAppStoreIfNeeded()
+        // What Core Data builds left, in the clear. Sandboxed only: unsandboxed, Application
+        // Support is the user's own and shared with other apps (`LocalDataWipe` refuses it too).
+        if ProcessInfo.processInfo.environment["APP_SANDBOX_CONTAINER_ID"] != nil,
+           let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first {
+            PersistenceController.removeLegacyStore(in: support)
+        }
+
         // Foreground-state tracker — transport layer reads this to suppress futile VEIL
         // restarts while the app is inactive (mirrors iOS AppDelegate bootstrap).
         _ = AppActivityState.shared
@@ -55,13 +65,15 @@ struct Construct_DesktopApp: App {
                 .environment(\.commandBridge, commandBridge)
                 .task {
                     if PreviewDetector.isRunningInPreview { return }
-
-                    NSApp.appearance = NSAppearance(named: .darkAqua)
                     let viewContext = PersistenceController.shared.container.viewContext
                     chatsViewModel.setContext(viewContext)
 
                     MediaManager.shared.evictOldFiles()
+                // Packs that ship in the app, into the store once. No network; first launch only.
+                StickerService.shared.seedBundledPacks()
                     StorageMigrationService.shared.migrateIfNeeded(context: viewContext)
+                    // Media from before 2026-09-30 lies in the clear in the container; seal it.
+                    Task.detached(priority: .utility) { MediaManager.sealClearFiles() }
                     Log.debug("Desktop launch bootstrap — storage migration complete", category: "Desktop")
 
                     // Direct path (Strategy B): construct-core (UniFFI) + gRPC-Swift + VEIL from core.
@@ -94,8 +106,8 @@ struct Construct_DesktopApp: App {
             ConstructCommands(bridge: commandBridge)
         }
 
-        // People / Synaps is its own window — not a tab that replaces the open chat (D2).
-        Window(LocalizedStringKey("people"), id: DesktopWindowID.synaps) {
+        // Synapses is its own window — not a tab that replaces the open chat (D2).
+        Window(LocalizedStringKey("synapses"), id: DesktopWindowID.synaps) {
             DesktopSynapsView()
                 .environment(\.managedObjectContext, PersistenceController.shared.container.viewContext)
                 .environment(chatsViewModel)
