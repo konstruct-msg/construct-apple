@@ -14,6 +14,17 @@ import GRPCCore
 /// transport-layer error classification testable and to enforce the invariant
 /// that transport errors are handled before application-layer auth retry.
 enum VeilFailurePolicy {
+    private static let lock = NSLock()
+    nonisolated(unsafe) private static var _webTunnelActive = false
+
+    /// Whether the proxy is up over WebTunnel — the only transport where a non-200 HTTP status is
+    /// a carrier's decoy rather than the server's answer. Mirrors `VeilProxyManager`'s flag for
+    /// classification from any thread.
+    static var webTunnelActive: Bool {
+        get { lock.withLock { _webTunnelActive } }
+        set { lock.withLock { _webTunnelActive = newValue } }
+    }
+
     /// Classify an error as a transport-layer VEIL failure, or nil if application-layer.
     ///
     /// - Returns: `VeilFailureReason` if the error represents a transport failure that
@@ -29,8 +40,12 @@ enum VeilFailurePolicy {
         
         switch rpc.code {
         case .unimplemented:
-            // "Unexpected non-200 HTTP Status Code" → relay decoy 404 on WebTunnel.
-            if isWebTunnelBlocked(rpc) { return .webTunnelBlocked }
+            // "Unexpected non-200 HTTP Status Code" → relay decoy 404 on WebTunnel — only when
+            // WebTunnel carries the call. Over veil-front or direct TLS a 404 is the server's own
+            // answer to a method it does not serve: on 2026-10-14 a server without
+            // ServerTrustService answered 404 and a working veil-front tunnel was torn down as
+            // "WebTunnel blocked" on every trust refresh.
+            if webTunnelActive, isWebTunnelBlocked(rpc) { return .webTunnelBlocked }
             return nil  // Other unimplemented errors are application-layer.
             
         case .unavailable, .unknown:

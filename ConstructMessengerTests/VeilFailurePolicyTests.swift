@@ -11,6 +11,11 @@ import GRPCCore
 @testable import Construct_Messenger
 
 final class VeilFailurePolicyTests: XCTestCase {
+
+    override func tearDown() {
+        VeilFailurePolicy.webTunnelActive = false
+        super.tearDown()
+    }
     
     // MARK: - Helper
     
@@ -35,23 +40,36 @@ final class VeilFailurePolicyTests: XCTestCase {
     // MARK: - Classification: WebTunnel Blocked
     
     func testClassify_WebTunnelBlocked_NonHttpUpgrade() {
+        VeilFailurePolicy.webTunnelActive = true
         let error = makeRPCError(code: .unimplemented, message: "Unexpected non-200 HTTP Status Code (404 Not Found)")
         let reason = VeilFailurePolicy.classify(error)
         XCTAssertEqual(reason, .webTunnelBlocked)
     }
     
     func testClassify_WebTunnelBlocked_HTTPStatusCode() {
+        VeilFailurePolicy.webTunnelActive = true
         let error = makeRPCError(code: .unimplemented, message: "HTTP Status Code: 403 Forbidden")
         let reason = VeilFailurePolicy.classify(error)
         XCTAssertEqual(reason, .webTunnelBlocked)
     }
     
     func testClassify_WebTunnelBlocked_UnexpectedHttp() {
+        VeilFailurePolicy.webTunnelActive = true
         let error = makeRPCError(code: .unimplemented, message: "Unexpected HTTP response from upstream")
         let reason = VeilFailurePolicy.classify(error)
         XCTAssertEqual(reason, .webTunnelBlocked)
     }
     
+    /// 2026-10-14: a server without ServerTrustService answered 404 through a working veil-front
+    /// tunnel, and the tunnel was torn down as "WebTunnel blocked". Without WebTunnel a status
+    /// code is the server's answer, and the transport is fine.
+    func testA404OverVeilFrontIsTheServersAnswerNotABlock() {
+        VeilFailurePolicy.webTunnelActive = false
+        let error = makeRPCError(code: .unimplemented, message: "Unexpected non-200 HTTP Status Code (404 Not Found).")
+        XCTAssertNil(VeilFailurePolicy.classify(error))
+        XCTAssertEqual(RPCFailureClassifier.classify(error), .applicationError, "neutral for transport health")
+    }
+
     func testClassify_Unimplemented_NotWebTunnel() {
         let error = makeRPCError(code: .unimplemented, message: "Method not found: /construct.v1.UserService/GetProfile")
         let reason = VeilFailurePolicy.classify(error)
@@ -205,5 +223,13 @@ final class VeilFailurePolicyTests: XCTestCase {
     func testTTL_StreamTimeout() {
         let type: RelayFailureType = .streamTimeout
         XCTAssertEqual(type.ttl, 60, "Stream timeout should have 60s TTL")
+    }
+
+    // MARK: - The person reads it
+
+    func testNoTunnelSaysSoInWords() {
+        let text = VeilTunnelNotUp().localizedDescription
+        XCTAssertFalse(text.contains("VeilTunnelNotUp"), text)
+        XCTAssertEqual(text, NSLocalizedString("veil_tunnel_not_up", comment: ""))
     }
 }

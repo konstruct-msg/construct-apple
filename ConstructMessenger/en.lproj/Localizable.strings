@@ -540,6 +540,7 @@
 "veil_footer_auto" = "VEIL activates automatically when network blocking is detected.";
 "veil_footer_on" = "All traffic routed through VEIL relay.";
 "veil_footer_on_no_front" = "The relay is not answering. Until it does, nothing is sent or received: with On, VEIL never connects directly. Choose Auto to connect directly while the relay is unreachable.";
+"veil_tunnel_not_up" = "No VEIL relay is answering — not connecting directly.";
 "veil_auto_active" = "Auto-activated · direct blocked";
 "veil_direct_probe_ok" = "Direct: OK (%@)";
 "veil_direct_probe_blocked" = "Direct: blocked";
