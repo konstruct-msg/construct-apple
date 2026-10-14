@@ -466,6 +466,9 @@ final class MessagingServiceClient: Sendable {
         let response = try await msgClient.getPendingMessages(
             request: .init(message: request)
         )
+        if response.hasGap {
+            MailboxGapNotice.record(afterCursor: response.gap.afterCursor, resumesAt: response.gap.resumesAt)
+        }
 
         var failed: [FailedMessage] = []
         let chatMessages = response.messages.enumerated().compactMap { index, msg -> ChatMessage? in
