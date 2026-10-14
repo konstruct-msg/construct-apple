@@ -52,6 +52,19 @@ final class VeilOnNeverDirectTests: XCTestCase {
         #endif
     }
 
+    /// A channel opened under `auto` is not reused once `on` is chosen (2026-10-14: the cached
+    /// direct channel carried a token registration and a fetch 10–30 s after the switch).
+    func testWithOnTheCachedChannelsAreNotReused() throws {
+        let manager = GRPCChannelManager.shared
+        try XCTSkipIf(manager.veilProxyPort() != nil, "a tunnel is up in this host; the case needs none")
+        UserDefaults.standard.set(VeilMode.auto.rawValue, forKey: VeilProxyStore.modeKey)
+        _ = try manager.acquirePersistentClient()
+        _ = try manager.acquireSealedPersistentClient()
+        UserDefaults.standard.set(VeilMode.on.rawValue, forKey: VeilProxyStore.modeKey)
+        XCTAssertThrowsError(try manager.acquirePersistentClient()) { XCTAssertTrue($0 is VeilTunnelNotUp) }
+        XCTAssertThrowsError(try manager.acquireSealedPersistentClient()) { XCTAssertTrue($0 is VeilTunnelNotUp) }
+    }
+
     func testWithAutoAndNoTunnelTheDirectPathStillOpens() throws {
         UserDefaults.standard.set(VeilMode.auto.rawValue, forKey: VeilProxyStore.modeKey)
         let manager = GRPCChannelManager.shared

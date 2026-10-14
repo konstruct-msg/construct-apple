@@ -9,7 +9,11 @@ import Foundation
 
 struct GRPCChannelEffector: ChannelEffector {
     func invalidateClient() async {
-        GRPCChannelManager.shared.invalidatePersistentClient()
+        if VeilProxyStore.loadMode().allowsDirectPath {
+            GRPCChannelManager.shared.invalidatePersistentClient()
+        } else {
+            GRPCChannelManager.shared.dropDirectPath()
+        }
     }
 
     func setVeilPort(_ port: UInt16?) async {
