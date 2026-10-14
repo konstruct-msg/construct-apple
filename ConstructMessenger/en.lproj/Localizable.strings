@@ -907,6 +907,8 @@
 "device_deregistered_warning_title" = "⚠ DEVICE NOT REGISTERED";
 "device_deregistered_warning_body" = "Konstruct no longer recognizes this device. This can happen after a temporary outage or if the device was removed elsewhere.\n\nYour keys are still on this phone — nothing has been deleted. Retry below, or restore your identity from your recovery phrase.";
 "device_deregistered_retry_hint" = "The rejection may be a temporary server issue. Try authenticating again.";
+"store_import_title" = "Moving your chats";
+"store_import_body" = "Once, after the update. Keep Konstruct open — it takes a few seconds.";
 "local_store_unreadable_title" = "THE CHATS ON THIS DEVICE CAN'T BE OPENED";
 "local_store_unreadable_body" = "The chats, messages and people kept on this device could not be opened. Nothing has been deleted, and nothing new is saved until they open again.\n\nUsually the Keychain is not answering yet — for example before the device has been unlocked.";
 "local_store_unreadable_retry_hint" = "Try opening them again, for example after unlocking.";

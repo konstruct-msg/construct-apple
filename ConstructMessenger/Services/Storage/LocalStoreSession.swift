@@ -55,6 +55,16 @@ final class LocalStoreSession: Sendable {
         guard let key else { return .failure(.keyUnavailable) }
         do {
             let store = try LocalStore(path: url.path, key: key.withUnsafeBytes { Data($0) })
+            #if os(iOS)
+            // A push is decrypted and stored with the phone locked: the store must stay readable
+            // after the first unlock, as the Core Data store and the keys are. iOS's default class
+            // for app files is this one; said here rather than relied on.
+            for file in PersistenceController.sqliteFiles(of: url) where FileManager.default.fileExists(atPath: file.path) {
+                try? FileManager.default.setAttributes(
+                    [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication], ofItemAtPath: file.path
+                )
+            }
+            #endif
             return .success(LocalStoreSession(store: store))
         } catch {
             let failure = failure(for: error)

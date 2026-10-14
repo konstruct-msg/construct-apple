@@ -54,9 +54,15 @@ struct AccountSettingsView: View {
                     accountSection
                         .opacity(isEditingProfile ? AccountSettingsLayout.sectionDisabledOpacity : 1)
                         .disabled(isEditingProfile)
-                    backupSection
-                        .opacity(isEditingProfile ? AccountSettingsLayout.sectionDisabledOpacity : 1)
-                        .disabled(isEditingProfile)
+                    // The backup copies Core Data's files (`LocalBackupService`). On construct.db
+                    // its export would fail and a restore would stage files nothing opens, so it is
+                    // not offered there until it copies the store (owner, 2026-10-14). A new device
+                    // still gets the history through device linking.
+                    if !LocalRepositories.isOnStore {
+                        backupSection
+                            .opacity(isEditingProfile ? AccountSettingsLayout.sectionDisabledOpacity : 1)
+                            .disabled(isEditingProfile)
+                    }
                     dangerSection
                         .opacity(isEditingProfile ? AccountSettingsLayout.sectionDisabledOpacity : 1)
                         .disabled(isEditingProfile)
