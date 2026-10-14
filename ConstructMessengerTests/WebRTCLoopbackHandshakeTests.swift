@@ -19,8 +19,8 @@ import XCTest
 final class WebRTCLoopbackHandshakeTests: XCTestCase {
 
     func testTwoSessionsConnectWithThePostQuantumTrialOn() async throws {
-        let caller = try WebRTCSession(role: .caller, turn: nil, video: true)
-        let callee = try WebRTCSession(role: .callee, turn: nil, video: true)
+        let caller = try WebRTCSession(role: .caller, turn: nil, video: true, veilOn: false)
+        let callee = try WebRTCSession(role: .callee, turn: nil, video: true, veilOn: false)
         defer {
             caller.close()
             callee.close()
