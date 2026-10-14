@@ -9,6 +9,9 @@
 
 import SwiftUI
 import Combine
+#if os(macOS)
+import AppKit
+#endif
 
 struct MessageInputTextBar: View {
     @Binding var text: String
@@ -18,8 +21,15 @@ struct MessageInputTextBar: View {
     let onStartVoice: (() -> Void)?     // nil on macOS
     /// A long press on the mic offers the camera; nil leaves the mic a plain button.
     let onStartVideoNote: (() -> Void)?
+    /// ⌘V while the field has focus, offered before the field sees it: true when the composer
+    /// attached what the clipboard holds (`ComposerPaste`), false to let the field paste text.
+    /// macOS only — on iOS the system's paste menu is the field's.
+    let onPasteAttachment: (() -> Bool)?
 
     @FocusState private var focused: Bool
+    #if os(macOS)
+    @State private var pasteMonitor: Any?
+    #endif
     /// The mic ↔ camera switch, drawn over the whole bar: the capsule clips its contents, and
     /// the switch stands above it.
     @State private var micSwitch: MicModeButton.Mode?? = nil
@@ -33,7 +43,8 @@ struct MessageInputTextBar: View {
         sendOnReturn: Bool = true,
         onSend: @escaping () -> Void,
         onStartVoice: (() -> Void)? = nil,
-        onStartVideoNote: (() -> Void)? = nil
+        onStartVideoNote: (() -> Void)? = nil,
+        onPasteAttachment: (() -> Bool)? = nil
     ) {
         self._text = text
         self.canSend = canSend
@@ -41,6 +52,7 @@ struct MessageInputTextBar: View {
         self.onSend = onSend
         self.onStartVoice = onStartVoice
         self.onStartVideoNote = onStartVideoNote
+        self.onPasteAttachment = onPasteAttachment
     }
 
     var body: some View {
@@ -67,6 +79,22 @@ struct MessageInputTextBar: View {
         .animation(.easeOut(duration: 0.15), value: micSwitch != nil)
     }
 
+    #if os(macOS)
+    /// The field editor takes ⌘V through the Edit menu before any SwiftUI modifier sees it, and
+    /// drops what is not text without a word — so the composer is asked first, from a local
+    /// event monitor that exists only while this field has focus.
+    private func setPasteMonitor(_ on: Bool) {
+        if let pasteMonitor { NSEvent.removeMonitor(pasteMonitor) }
+        pasteMonitor = nil
+        guard on, let onPasteAttachment else { return }
+        pasteMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            let modifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+            guard modifiers == .command, event.charactersIgnoringModifiers == "v" else { return event }
+            return onPasteAttachment() ? nil : event
+        }
+    }
+    #endif
+
     // MARK: - Text field
 
     @ViewBuilder
@@ -81,7 +109,13 @@ struct MessageInputTextBar: View {
             // has focus when the keyboard disappears at the start of a voice recording.
             .onChange(of: focused) { _, isFocused in
                 KeyboardEventTracer.shared.noteFocus(isFocused)
+                #if os(macOS)
+                setPasteMonitor(isFocused)
+                #endif
             }
+            #if os(macOS)
+            .onDisappear { setPasteMonitor(false) }
+            #endif
             .accessibilityIdentifier(A11y.Chat.input)
             .padding(.leading, ChatUIConstants.InputBar.textLeadingPad)
             .padding(.trailing, canSend ? ChatUIConstants.Bubble.tightVerticalPadding : CTLayout.inlinePad)
