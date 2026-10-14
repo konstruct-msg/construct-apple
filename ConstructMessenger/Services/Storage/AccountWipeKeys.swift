@@ -259,6 +259,10 @@ enum AccountWipeKeys {
         // whether the build may use the data protection keychain. Never left behind.
         "construct.keychain.placement_probe",
 
+        // A Keychain item: the key this device labels VEIL front names under in its logs
+        // (`LogRedaction`). About the device, not the account; kept so labels stay comparable.
+        "construct.logLabel.key.v1",
+
         // A key inside construct.db (`LocalStoreImport.completedKey`), not in `UserDefaults`; it
         // goes with the store.
         "construct.localStore.importedFromCoreData.v1",
