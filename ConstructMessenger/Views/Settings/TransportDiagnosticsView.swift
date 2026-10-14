@@ -8,6 +8,8 @@
 //
 
 #if DEBUG
+// TestFlight builds compile with DEBUG and show this screen: every line of it passes the same
+// front-name rule as the log (`LogRedaction`, TODO 135) — a screenshot travels as a log does.
 
 import SwiftUI
 import Combine
@@ -45,12 +47,12 @@ struct TransportDiagnosticsView: View {
         VStack(alignment: .leading, spacing: 8) {
             CTSettingsSectionHeader(title: "CURRENT STATE", color: .orange)
             VStack(alignment: .leading, spacing: 6) {
-                Text(stateHeadline)
+                Text(LogRedaction.redact(stateHeadline))
                     .font(CTFont.mono(18, weight: .bold))
                     .foregroundStyle(.orange)
                     .textSelection(.enabled)
                 ForEach(stateDetailLines, id: \.self) { line in
-                    Text(line)
+                    Text(LogRedaction.redact(line))
                         .font(CTFont.mono(12))
                         .foregroundStyle(Color.CT.textDim)
                         .textSelection(.enabled)
@@ -147,21 +149,21 @@ struct TransportDiagnosticsView: View {
                 Text(formatTime(entry.at))
                     .font(CTFont.mono(11))
                     .foregroundStyle(Color.CT.textDim)
-                Text(entry.from.shortLabel)
+                Text(LogRedaction.redact(entry.from.shortLabel))
                     .font(CTFont.mono(11))
                     .foregroundStyle(Color.CT.text)
                 Text(arrow)
                     .font(CTFont.mono(11))
                     .foregroundStyle(.orange)
-                Text(entry.to.shortLabel)
+                Text(LogRedaction.redact(entry.to.shortLabel))
                     .font(CTFont.mono(11, weight: .bold))
                     .foregroundStyle(entry.from == entry.to ? Color.CT.textDim : .orange)
             }
-            Text("event: \(entry.event)")
+            Text(LogRedaction.redact("event: \(entry.event)"))
                 .font(CTFont.mono(10))
                 .foregroundStyle(Color.CT.textDim)
             if !entry.effects.isEmpty {
-                Text("effects: [\(entry.effects.joined(separator: ", "))]")
+                Text(LogRedaction.redact("effects: [\(entry.effects.joined(separator: ", "))]"))
                     .font(CTFont.mono(10))
                     .foregroundStyle(Color.CT.textDim)
             }
@@ -181,7 +183,7 @@ struct TransportDiagnosticsView: View {
                 .font(CTFont.mono(12))
                 .foregroundStyle(Color.CT.textDim)
                 .frame(width: 100, alignment: .leading)
-            Text(value)
+            Text(LogRedaction.redact(value))
                 .font(CTFont.mono(12))
                 .foregroundStyle(Color.CT.text)
                 .textSelection(.enabled)
