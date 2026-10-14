@@ -128,6 +128,28 @@ struct DesktopMessageInputView: View {
         }
     }
 
+    /// ⌘V in the field: files and pictures are attached, as a drop would; text is left to the
+    /// field. Reads the clipboard only for what `ComposerPaste` says it holds.
+    private func attachFromClipboard() -> Bool {
+        let pasteboard = NSPasteboard.general
+        switch ComposerPaste.kind(types: pasteboard.types?.map(\.rawValue) ?? []) {
+        case .files:
+            let urls = pasteboard.readObjects(
+                forClasses: [NSURL.self],
+                options: [.urlReadingFileURLsOnly: true]
+            ) as? [URL] ?? []
+            guard !urls.isEmpty else { return false }
+            attachments.handlePickedFiles(urls)
+            return true
+        case .image:
+            guard let image = NSImage(pasteboard: pasteboard) else { return false }
+            attachments.appendDroppedImages([image])
+            return true
+        case .text:
+            return false
+        }
+    }
+
     private var inputRow: some View {
         HStack(spacing: 8) {
             attachmentButton
@@ -136,7 +158,8 @@ struct DesktopMessageInputView: View {
                 canSend: canSend,
                 sendOnReturn: sendOnEnter,
                 onSend: sendMessage,
-                onStartVoice: startVoiceRecording
+                onStartVoice: startVoiceRecording,
+                onPasteAttachment: attachFromClipboard
             )
         }
         .padding(.horizontal, 16)
