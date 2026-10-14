@@ -315,9 +315,7 @@ struct DesktopRootView: View {
             )
                 .navigationTitle(NSLocalizedString("construct_title", comment: ""))
                 // The same toolbar shape as an open chat (`DesktopChatView`): the system title
-                // removed and the name as a navigation item. With the title alone the window drew
-                // a different toolbar, and in it the sidebar lost its search field and let the top
-                // chat run under the title bar until a chat was opened (2026-10-14).
+                // removed and the name as a navigation item.
                 .toolbar(removing: .title)
                 .toolbar { emptyStateToolbar }
                 .onDrop(of: [.fileURL], isTargeted: nil) { _ in false }
