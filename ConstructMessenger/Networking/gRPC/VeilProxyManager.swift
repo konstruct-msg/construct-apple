@@ -488,7 +488,6 @@ final class VeilProxyManager: ObservableObject {
     /// Fetches the latest relay config from the server and, if the currently active relay
     /// has been deprecated or removed from the manifest, rotates to a live relay immediately.
     ///
-    /// This is the replacement for bare `VeilCertFetcher.shared.fetchAndCacheRelayList()` calls.
     /// All six post-start background fetches use this so that relay retirement is always handled.
     private func fetchConfigAndEvictIfRemoved() async {
         guard let freshList = await VeilCertFetcher.shared.fetchAndCacheRelayConfig() else { return }
