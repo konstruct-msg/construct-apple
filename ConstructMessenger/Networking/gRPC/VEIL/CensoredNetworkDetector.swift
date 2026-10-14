@@ -40,17 +40,13 @@ enum CensoredNetworkDetector {
         "Asia/Dushanbe",    // Tajikistan
     ]
 
-    /// True when the device is likely in a DPI-censored country.
-    /// Primary signal: GeoIPManager (IP-based, cached after first STUN lookup).
-    /// Fallback: timezone heuristic (used at startup before GeoIP resolves).
+    /// True when the device is likely in a DPI-censored country, by timezone alone.
     /// Used by ConnectionLoop to pre-activate VEIL on startup, eliminating
     /// the ~3.2s cold-start penalty of two failing direct attempts.
     static var isCensored: Bool {
         #if DEBUG
         if let override = _testOverride { return override }
         #endif
-        let geoRegion = GeoIPManager.shared.region
-        if geoRegion != .unknown { return geoRegion.isCensored }
         return detectFromTimezone()
     }
 

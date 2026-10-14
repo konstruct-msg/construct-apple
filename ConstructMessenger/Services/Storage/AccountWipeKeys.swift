@@ -162,6 +162,10 @@ enum AccountWipeKeys {
         "construct.selfAddressedResidue.cleared.v1",
         "construct.media_send_cache_v1",
         "construct.manifest_signed_at",
+        // The public IP and region the removed GeoIP lookup cached. `GRPCChannelManager` already
+        // deletes them at launch; listed so a wipe says the same about where the person was.
+        "construct.geoip_ip_v1",
+        "construct.geoip_region_v1",
 
         // Feature toggles that are user choices, not device capabilities
         "veil_enabled",
@@ -205,8 +209,6 @@ enum AccountWipeKeys {
         "construct.ice_relay_infos",
         "construct.ice_relay_regions",
         "construct.ice_deprecated_relay_ids",
-        "construct.geoip_ip_v1",
-        "construct.geoip_region_v1",
 
         // Server-provided public material, identical for every identity on this server. Dropping
         // it would leave sealed-sender attestation unable to vouch anything until a refetch.
