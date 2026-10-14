@@ -28,6 +28,8 @@ struct Construct_DesktopApp: App {
     @State private var commandBridge = DesktopCommandBridge()
 
     init() {
+        // Every front this install knows leaves the logs before the first line could name one.
+        LogRedaction.registerKnownFronts()
         // The store first: every repository stands on it, and a failure must be known before the
         // first screen and before the stream writes anything (`DesktopRootView`).
         LocalRepositories.openAppStoreIfNeeded()

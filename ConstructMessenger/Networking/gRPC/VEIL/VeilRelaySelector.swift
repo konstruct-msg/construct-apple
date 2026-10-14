@@ -67,6 +67,8 @@ enum VeilRelaySelector {
         var addresses = Set<String>()
         VEILConfig.hardcodedRelayAddresses.forEach { addresses.insert($0) }
         VeilProxyStore.cachedRelayList().forEach { addresses.insert($0) }
+        // Logged by the certificate-expiry check before any `VeilRelay` is made of them.
+        LogRedaction.register(addresses)
         return addresses
     }
 
