@@ -604,7 +604,11 @@ struct NetworkSettingsView: View {
             #endif
             return "veil_footer_off"
         case .auto: return "veil_footer_auto"
-        case .on:   return "veil_footer_on"
+        case .on:
+            // On never goes direct (decisions/veil-on-never-goes-direct.md): with the relay down the
+            // person is offline, and this is the one place that says why. The rest of the app
+            // stays neutral ("Connecting…", silent-transport-ui).
+            return veilManager.isOnCooldown ? "veil_footer_on_no_front" : "veil_footer_on"
         }
     }
 
