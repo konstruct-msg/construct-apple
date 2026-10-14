@@ -9,6 +9,10 @@ import Foundation
 
 /// The one decision that makes more than one manifest source safe.
 ///
+/// The GitHub mirror this was written for was removed on 2026-10-13; one HTTP source is left, and
+/// the server-trust RPC will be the next one. The rule stays for both reasons it was ever needed:
+/// a source serving an older signed manifest than the one cached, and two sources racing.
+///
 /// `.well-known/construct-server` is Ed25519-signed, so the domain it arrives from is a location
 /// and not a trust anchor — which is what lets us serve it from a mirror at all. But a signature
 /// says who wrote a manifest, never when, and an old manifest we signed ourselves verifies exactly
