@@ -218,6 +218,10 @@ enum AccountWipeKeys {
         // Delegations of the server's hybrid keys — root-signed public data, the same for everyone.
         "construct.server.trust_delegations",
 
+        // Which store this install stands on: construct-store once iOS has moved to it
+        // (`LocalStoreImport`). A wipe replaces the store with an empty one and stays on it.
+        "construct.localStore.active.v1",
+
         // Device-level app preferences.
         "customServerURL",
         "appTheme",
@@ -258,6 +262,10 @@ enum AccountWipeKeys {
         // A Keychain item: the key this device labels VEIL front names under in its logs
         // (`LogRedaction`). About the device, not the account; kept so labels stay comparable.
         "construct.logLabel.key.v1",
+
+        // A key inside construct.db (`LocalStoreImport.completedKey`), not in `UserDefaults`; it
+        // goes with the store.
+        "construct.localStore.importedFromCoreData.v1",
 
         // Notification names.
         "construct.reaction.didChange"

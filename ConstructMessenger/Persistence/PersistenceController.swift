@@ -22,7 +22,9 @@ struct PersistenceController {
     /// opened again — neither read nor written in the clear.
     static let shared = PersistenceController(inMemory: true)
     #else
-    static let shared = PersistenceController()
+    /// iOS: the file until the install has moved to construct-store (`LocalStoreImport`), then in
+    /// memory as on macOS — the file is removed at that launch (`removeCoreDataLeftovers`).
+    static let shared = LocalStoreImport.hasMoved ? PersistenceController(inMemory: true) : PersistenceController()
     #endif
 
     /// In-memory store for SwiftUI previews and unit tests.

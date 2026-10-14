@@ -5,7 +5,7 @@
 //  The storage seam (`client/specs/LOCAL_STORE_MIGRATION_PLAN.md`): the app reads and writes
 //  through these repositories, never through a managed object or a context, and this is the one
 //  place that decides which implementation answers: `LocalStore` (construct-store) on macOS since
-//  step 3, Core Data on iOS until step 4.
+//  step 3, and on iOS once the install has moved (`LocalStoreImport`, step 4) — Core Data until then.
 //
 
 import Foundation
@@ -15,7 +15,7 @@ enum LocalRepositories {
 
     /// Every repository over one store, so they are installed and replaced together: a message
     /// names its chat and the chat its contact, and half of them on another store is broken links.
-    private struct Backing {
+    struct Backing {
         let peerDevices: any PeerDeviceStore
         let serverMessageIds: any ServerMessageIdStore
         let contacts: any ContactStore
@@ -68,7 +68,6 @@ enum LocalRepositories {
 
     private static let lock = NSLock()
 
-    #if os(macOS)
     /// The app's store, or the closed one the repositories stand on when it would not open.
     private(set) nonisolated(unsafe) static var session: LocalStoreSession?
     /// Why the app's store is not open; nil when it is. The root view shows this instead of the
@@ -76,8 +75,17 @@ enum LocalRepositories {
     private(set) nonisolated(unsafe) static var storeFailure: LocalStoreSession.Failure?
 
     /// Once, and without the lock: the getters below take it, and the first of them to run
-    /// evaluates this.
-    private static let initial: Backing = openAppStore()
+    /// evaluates this. An iOS install that has not moved yet stands on Core Data and does not open
+    /// the store at all — an import may be about to create it.
+    private static let initial: Backing = LocalStoreImport.hasMoved
+        ? openAppStore()
+        : .coreData(PersistenceController.shared.container)
+
+    /// Whether the repositories stand on `construct.db` — always on macOS, on iOS once moved.
+    static var isOnStore: Bool {
+        _ = initial
+        return lock.withLock { session != nil || storeFailure != nil }
+    }
 
     /// Called once for `initial`, then with the lock held.
     private static func openAppStore() -> Backing {
@@ -104,6 +112,7 @@ enum LocalRepositories {
     /// not. Again after a failure: the Keychain may answer once the Mac is unlocked.
     @discardableResult
     static func openAppStoreIfNeeded() -> LocalStoreSession.Failure? {
+        guard LocalStoreImport.hasMoved else { return nil }
         _ = initial
         lock.withLock {
             guard storeFailure != nil else { return }
@@ -134,9 +143,52 @@ enum LocalRepositories {
         }
         NotificationCenter.default.post(name: .localStoreReplaced, object: nil)
     }
-    #else
-    private static let initial: Backing = .coreData(PersistenceController.shared.container)
-    #endif
+
+    /// iOS, once: copy the Core Data install into `construct.db` and stand on it. The lock is held
+    /// from the first read to the switch, so a write that arrives meanwhile — a push handled while
+    /// the import screen is up — waits and lands in the new store instead of in the old one after
+    /// it was copied. The import reads and writes the stores directly, never these getters.
+    ///
+    /// A store left by an import that did not finish is wiped first; one that did finish and only
+    /// missed the flag is taken as it is. On failure the store is wiped and Core Data stays.
+    @discardableResult
+    static func importFromCoreData(
+        ownAccountId: String?,
+        progress: (Double) -> Void = { _ in }
+    ) throws -> LocalStoreImport.Counts {
+        _ = initial
+        var counts = LocalStoreImport.Counts()
+        try lock.withLock {
+            guard !LocalStoreImport.hasMoved else { return }
+            let url = try LocalStoreSession.defaultURL
+            var opened = try LocalStoreSession.open(at: url, key: LocalStoreKey.current()).get()
+            if LocalStoreImport.isComplete(.localStore(opened)) {
+                Log.info("LocalRepositories: an earlier import had finished — taking it", category: "Storage")
+            } else {
+                // Created by this call, or left half-written by one that was interrupted.
+                try opened.wipe()
+                opened = try LocalStoreSession.open(at: url, key: LocalStoreKey.current()).get()
+                let source = Backing.coreData(PersistenceController.shared.container)
+                do {
+                    counts = try LocalStoreImport.run(
+                        from: source,
+                        extras: LocalStoreImport.coreDataExtras(PersistenceController.shared.container, ownAccountId: ownAccountId),
+                        into: .localStore(opened),
+                        progress: progress
+                    )
+                } catch {
+                    try? opened.wipe()
+                    throw error
+                }
+            }
+            LocalStoreImport.markMoved()
+            session = opened
+            storeFailure = nil
+            install(.localStore(opened))
+        }
+        NotificationCenter.default.post(name: .localStoreReplaced, object: nil)
+        return counts
+    }
 
     private static func install(_ backing: Backing) {
         _peerDevices = backing.peerDevices

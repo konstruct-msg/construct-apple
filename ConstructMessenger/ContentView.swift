@@ -9,6 +9,10 @@ import SwiftUI
 import CoreData
 
 struct ContentView: View {
+    /// Why construct.db is not open, or nil (`LocalRepositories.storeFailure`) — an install that
+    /// has moved to it, opened before the first unlock. Read at launch, on return to the
+    /// foreground, after a retry, and whenever the store is replaced.
+    @State private var storeFailure = LocalRepositories.storeFailure
     @Environment(AuthViewModel.self) var authViewModel
     @Environment(DeepLinkHandler.self) var deepLinkHandler
     @Environment(AccountRecoveryViewModel.self) private var recoveryViewModel
@@ -48,7 +52,15 @@ struct ContentView: View {
 
     var body: some View {
         Group {
-            if authViewModel.hasRegisteredDeviceKeys == nil {
+            if storeFailure != nil {
+                // Before anything else: no screen of the app runs on a store that is not open.
+                NavigationStack {
+                    KeysRecoveryView(reason: .storeUnreadable) {
+                        storeFailure = LocalRepositories.openAppStoreIfNeeded()
+                    }
+                }
+                .environment(authViewModel)
+            } else if authViewModel.hasRegisteredDeviceKeys == nil {
                 // Auth state not yet resolved — show splash while Keychain is read.
                 // This happens on cold launch AND when coming to foreground with a locked
                 // device (SecurityGateView sits in ZStack so onAppear fires immediately).
@@ -110,7 +122,12 @@ struct ContentView: View {
             chatsViewModel.setContext(viewContext)
             handleDeepLink(deepLinkHandler.deepLink)
         }
+        .onReceive(NotificationCenter.default.publisher(for: .localStoreReplaced).receive(on: DispatchQueue.main)) { _ in
+            storeFailure = LocalRepositories.storeFailure
+        }
         .onReceive(NotificationCenter.default.publisher(for: .appWillEnterForeground)) { _ in
+            // Unlocked now, if the store would not open in a launch before the first unlock.
+            if storeFailure != nil { storeFailure = LocalRepositories.openAppStoreIfNeeded() }
             // Fires only when returning from true background — not for brief interruptions
             // (Control Center, alerts, biometrics). scenePhase == .active would fire for all of those.
             //

@@ -59,7 +59,7 @@ final class FanoutRetryQueue {
     static let shared = FanoutRetryQueue()
 
     private let store: () -> any KeyValueStore
-    private let storageKey = "construct.fanoutRetryQueue.v1"
+    static let storageKey = "construct.fanoutRetryQueue.v1"
     private let queue = DispatchQueue(label: "construct.FanoutRetryQueue")
 
     /// Matches `OutgoingWirePayloadStore.entryTtl`. A copy owed for longer than a day is not worth
@@ -206,7 +206,7 @@ final class FanoutRetryQueue {
     // MARK: - Storage
 
     private func load() -> [FanoutRetryEntry] {
-        guard let data = try? store().get(storageKey),
+        guard let data = try? store().get(Self.storageKey),
               let decoded = try? JSONDecoder().decode([FanoutRetryEntry].self, from: data)
         else { return [] }
         return decoded
@@ -215,10 +215,10 @@ final class FanoutRetryQueue {
     private func save(_ entries: [FanoutRetryEntry]) {
         do {
             guard !entries.isEmpty else {
-                try store().remove(storageKey)
+                try store().remove(Self.storageKey)
                 return
             }
-            try store().put(storageKey, JSONEncoder().encode(entries))
+            try store().put(Self.storageKey, JSONEncoder().encode(entries))
         } catch {
             Log.error("FanoutRetryQueue: not saved — owed copies will not survive a restart: \(error)", category: "MultiDevice")
         }
