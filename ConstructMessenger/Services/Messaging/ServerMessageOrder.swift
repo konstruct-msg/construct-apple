@@ -59,6 +59,16 @@ enum ServerMessageOrder {
 
     static func isPending(_ key: String) -> Bool { key.hasPrefix(pendingPrefix) }
 
+    /// When the server queued the message a key from the server names; nil for a pending or a
+    /// local key, which carry no server time (a local key has a third component, the message id).
+    static func serverDate(ofKey key: String) -> Date? {
+        guard !isPending(key) else { return nil }
+        let parts = key.split(separator: separator, omittingEmptySubsequences: false)
+        guard parts.count == 2, let milliseconds = UInt64(parts[0]), milliseconds > 0,
+              UInt64(parts[1]) != nil else { return nil }
+        return Date(timeIntervalSince1970: TimeInterval(milliseconds) / 1000)
+    }
+
     /// A row that has no server position and never will: a locally written system notice, an
     /// imported history row, or one written before this column existed. It sits at its own
     /// displayed timestamp — unlike `pending` above, which belongs to a row that is *waiting* for
