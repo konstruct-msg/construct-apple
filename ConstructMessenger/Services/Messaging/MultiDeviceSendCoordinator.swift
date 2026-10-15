@@ -587,7 +587,7 @@ final class MultiDeviceSendCoordinator {
                 return
             }
 
-            await sendToOwnDevices(
+            _ = await sendToOwnDevices(
                 plan: plan, messageId: messageId, otherDevices: otherDevices,
                 senderUserId: senderUserId, senderDeviceId: senderDeviceId, timestamp: timestamp
             )
@@ -601,7 +601,7 @@ final class MultiDeviceSendCoordinator {
 
     /// One plan's payloads to each of our other devices, in envelopes that say SENDER_SYNC (23)
     /// outside — whatever the frame says inside: a copy of a sent message, or read markers (30).
-    /// The relay cannot tell the two apart by type.
+    /// The relay cannot tell the two apart by type. True when every copy went out.
     private func sendToOwnDevices(
         plan: ChunkedMessagePlan,
         messageId: String,
@@ -609,7 +609,8 @@ final class MultiDeviceSendCoordinator {
         senderUserId: String,
         senderDeviceId: String,
         timestamp: UInt64
-    ) async {
+    ) async -> Bool {
+        var allSent = true
         // Our half of the X25519 pair whose public half is in every device's bundle, held by
         // the core. Absent only before registration completes, and then there are no own
         // devices to sync to either.
@@ -654,7 +655,7 @@ final class MultiDeviceSendCoordinator {
                 // one heals on its next exchange, and re-sending here would need a second
                 // queue keyed by our own account. Counted (`sync_send_failed`), not retried —
                 // the number says whether that second queue is worth building.
-                _ = await sendToDevice(
+                let sent = await sendToDevice(
                     plaintext: payload,
                     messageId: DeviceDeliveryPlan.wireId(
                         baseMessageId: messageId, tag: deviceTag,
@@ -670,32 +671,42 @@ final class MultiDeviceSendCoordinator {
                     timestamp: timestamp,
                     spendUnit: syncSpendUnit
                 )
+                allSent = allSent && sent
             }
         }
+        return allSent
     }
 
     /// Read markers (`ReadSync`, CONTENT_TYPE_READ_SYNC 30) to our other devices — and to nobody
     /// else: the targets are our own account's devices only, and with one device there are none.
-    /// Best-effort like SENDER_SYNC: a sibling that misses one is corrected by the next.
-    func sendReadMarkers(_ payload: Data, senderUserId: String, senderDeviceId: String) async {
-        guard !senderDeviceId.isEmpty, !payload.isEmpty else { return }
+    /// True when nothing is owed any more: every own device got them, or there is no other device.
+    /// False tells the caller to keep the markers for another try — unlike a SENDER_SYNC copy, a
+    /// lost marker is not corrected by the next message.
+    func sendReadMarkers(_ payload: Data, senderUserId: String, senderDeviceId: String) async -> Bool {
+        guard !senderDeviceId.isEmpty, !payload.isEmpty else { return true }
         do {
             let otherDevices = try await fetchOwnOtherDevices(myUserId: senderUserId, myDeviceId: senderDeviceId)
-            guard !otherDevices.isEmpty else { return }
+            guard !otherDevices.isEmpty else { return true }
             let id = UUID()
             let plan = ChunkedMessageSender.shared.buildPlan(
                 plaintext: payload, messageId: id,
                 contentType: UInt8(Shared_Proto_Core_V1_ContentType.readSync.rawValue)
             )
-            guard !plan.payloads.isEmpty else { return }
-            await sendToOwnDevices(
+            guard !plan.payloads.isEmpty else { return true }
+            let sent = await sendToOwnDevices(
                 plan: plan, messageId: id.uuidString.lowercased(), otherDevices: otherDevices,
                 senderUserId: senderUserId, senderDeviceId: senderDeviceId,
                 timestamp: UInt64(Date().timeIntervalSince1970)
             )
-            Log.info("ReadSync: markers sent to \(otherDevices.count) own device(s)", category: "MultiDevice")
+            Log.info(
+                sent ? "ReadSync: markers sent to \(otherDevices.count) own device(s)"
+                     : "ReadSync: markers not delivered to every own device — kept for another try",
+                category: "MultiDevice"
+            )
+            return sent
         } catch {
-            Log.info("ReadSync: own-device fetch failed: \(error)", category: "MultiDevice")
+            Log.info("ReadSync: own-device fetch failed: \(error) — kept for another try", category: "MultiDevice")
+            return false
         }
     }
 
