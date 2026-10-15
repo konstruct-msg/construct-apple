@@ -150,7 +150,11 @@ struct MessageValidator {
             )
         }
 
-        // Check file size
+        // Check file size. A file picked from Files or iCloud Drive is security-scoped: until
+        // 2026-10-15 its size was read without asking for it, and every such pick failed with
+        // "you don't have permission". A file of the app's own answers false and reads as before.
+        let scoped = fileURL.startAccessingSecurityScopedResource()
+        defer { if scoped { fileURL.stopAccessingSecurityScopedResource() } }
         let attributes = try FileManager.default.attributesOfItem(atPath: fileURL.path)
         guard let fileSize = attributes[.size] as? Int64 else {
             throw MessageValidationError.fileTooLarge(
