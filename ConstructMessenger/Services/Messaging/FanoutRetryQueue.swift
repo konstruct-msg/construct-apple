@@ -199,6 +199,15 @@ final class FanoutRetryQueue {
         }
     }
 
+    /// When the next live entry comes due; nil when nothing is owed. What the drain is scheduled by.
+    func nextDue(now: Date = Date()) -> Date? {
+        queue.sync {
+            let t = now.timeIntervalSince1970
+            return load().filter { t - $0.createdAt < entryTtl }.map(\.nextAttemptAt).min()
+                .map { Date(timeIntervalSince1970: $0) }
+        }
+    }
+
     func all() -> [FanoutRetryEntry] {
         queue.sync { load() }
     }
