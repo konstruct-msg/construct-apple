@@ -138,7 +138,9 @@ struct MessageValidator {
     ///   - fileURL: URL to the file
     ///   - fileName: Optional custom file name
     /// - Throws: MessageValidationError if file is invalid
-    static func validateFile(at fileURL: URL, fileName: String? = nil) throws {
+    /// - Returns: the file's size, so a caller has no reason to read it again.
+    @discardableResult
+    static func validateFile(at fileURL: URL, fileName: String? = nil) throws -> Int64 {
         let name = fileName ?? fileURL.lastPathComponent
         let fileExtension = fileURL.pathExtension
 
@@ -150,13 +152,7 @@ struct MessageValidator {
             )
         }
 
-        // Check file size. A file picked from Files or iCloud Drive is security-scoped: until
-        // 2026-10-15 its size was read without asking for it, and every such pick failed with
-        // "you don't have permission". A file of the app's own answers false and reads as before.
-        let scoped = fileURL.startAccessingSecurityScopedResource()
-        defer { if scoped { fileURL.stopAccessingSecurityScopedResource() } }
-        let attributes = try FileManager.default.attributesOfItem(atPath: fileURL.path)
-        guard let fileSize = attributes[.size] as? Int64 else {
+        guard let fileSize = try size(of: fileURL) else {
             throw MessageValidationError.fileTooLarge(
                 fileName: name,
                 currentSize: 0,
@@ -172,6 +168,19 @@ struct MessageValidator {
                 maxSize: maxSize
             )
         }
+        return fileSize
+    }
+
+    /// A file's size, read with access to it. A file picked from Files or iCloud Drive is
+    /// security-scoped: read without asking, it answers "you don't have permission" (Cocoa 257).
+    /// Until 2026-10-15 its size was read so in three places — the check at the pick, the check
+    /// at the send, the pending bubble — and a document from iCloud Drive could not be sent. A
+    /// file of the app's own answers false to the ask and reads as before. Read it here only.
+    static func size(of fileURL: URL) throws -> Int64? {
+        let scoped = fileURL.startAccessingSecurityScopedResource()
+        defer { if scoped { fileURL.stopAccessingSecurityScopedResource() } }
+        let attributes = try FileManager.default.attributesOfItem(atPath: fileURL.path)
+        return (attributes[.size] as? NSNumber)?.int64Value
     }
 
     // MARK: - Combined Validation
@@ -192,13 +201,7 @@ struct MessageValidator {
 
         // Validate each file
         for fileURL in fileURLs {
-            try validateFile(at: fileURL)
-
-            // Add to total size
-            let attributes = try FileManager.default.attributesOfItem(atPath: fileURL.path)
-            if let fileSize = attributes[.size] as? Int64 {
-                totalSize += fileSize
-            }
+            totalSize += try validateFile(at: fileURL)
         }
 
         // Check if message has content (text or files)
@@ -213,27 +216,5 @@ struct MessageValidator {
                 maxSize: MessageSizeLimits.maxTotalMessageBytes
             )
         }
-    }
-
-    // MARK: - Helper Methods
-
-    /// Returns a user-friendly warning if file size is approaching the limit
-    /// - Parameter fileURL: URL to the file
-    /// - Returns: Warning message if file is > 80% of limit, nil otherwise
-    static func sizeWarning(for fileURL: URL) -> String? {
-        guard let attributes = try? FileManager.default.attributesOfItem(atPath: fileURL.path),
-              let fileSize = attributes[.size] as? Int64 else {
-            return nil
-        }
-
-        let fileExtension = fileURL.pathExtension
-        let maxSize = MessageSizeLimits.maxSizeForFileType(fileExtension)
-        let percentage = Double(fileSize) / Double(maxSize)
-
-        if percentage > 0.8 {
-            return "File size is \(MessageSizeLimits.formatFileSize(fileSize)) (\(Int(percentage * 100))% of \(MessageSizeLimits.formatFileSize(maxSize)) limit)"
-        }
-
-        return nil
     }
 }
