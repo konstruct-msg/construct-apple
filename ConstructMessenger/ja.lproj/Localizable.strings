@@ -1210,6 +1210,8 @@
 "audio_file" = "オーディオ";
 "audio_play" = "再生";
 "audio_position" = "再生位置";
+"audio_stop" = "停止";
+"now_playing_open_hint" = "このメッセージの位置でチャットを開きます";
 "audio_pause" = "一時停止";
 "forward" = "転送";
 "forward_to" = "転送先";

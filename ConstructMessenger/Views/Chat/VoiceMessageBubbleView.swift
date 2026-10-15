@@ -18,6 +18,8 @@ struct VoiceMessageBubbleView: View {
     var transcript: String? = nil
     var isTranscribing: Bool = false
     var onTranscribe: (() -> Void)? = nil
+    /// The message this is, for the now-playing banner.
+    var source: PlaybackSource? = nil
 
     @StateObject private var player = AudioPlayerService.shared
 
@@ -57,9 +59,6 @@ struct VoiceMessageBubbleView: View {
                 playerBody
             }
         }
-        .onDisappear {
-            if isActive { player.stop() }
-        }
         .onChange(of: ConnectionStatusManager.shared.connectionStatus) { _, newStatus in
             // Auto-retry download when connection restores after a transient failure.
             if newStatus == .connected && loadError && audioData == nil {
@@ -79,9 +78,9 @@ struct VoiceMessageBubbleView: View {
                         // Active track — may have been started by continuous playback, so this
                         // view's `audioData` can be nil. togglePlay ignores `data` for the
                         // active track, so pause/resume works without re-downloading.
-                        player.togglePlay(mediaId: voiceContent.mediaId, data: audioData ?? Data())
+                        player.togglePlay(mediaId: voiceContent.mediaId, data: audioData ?? Data(), source: source)
                     } else if let data = audioData {
-                        player.togglePlay(mediaId: voiceContent.mediaId, data: data)
+                        player.togglePlay(mediaId: voiceContent.mediaId, data: data, source: source)
                     } else if !isLoading {
                         loadAndPlay()
                     }
@@ -171,9 +170,9 @@ struct VoiceMessageBubbleView: View {
     private func seek(to fraction: Double) {
         let id = voiceContent.mediaId
         if isActive {
-            player.seek(mediaId: id, data: Data(), to: fraction)
+            player.seek(mediaId: id, data: Data(), to: fraction, source: source)
         } else if let data = audioData {
-            player.seek(mediaId: id, data: data, to: fraction)
+            player.seek(mediaId: id, data: data, to: fraction, source: source)
         } else if !isLoading {
             loadAndPlay(startingAt: fraction)
         }
@@ -399,9 +398,9 @@ struct VoiceMessageBubbleView: View {
                     self.audioData = data
                     self.isLoading  = false
                     if let fraction {
-                        player.seek(mediaId: voiceContent.mediaId, data: data, to: fraction)
+                        player.seek(mediaId: voiceContent.mediaId, data: data, to: fraction, source: source)
                     } else {
-                        player.togglePlay(mediaId: voiceContent.mediaId, data: data)
+                        player.togglePlay(mediaId: voiceContent.mediaId, data: data, source: source)
                     }
                 }
             } catch {

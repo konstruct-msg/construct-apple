@@ -1200,6 +1200,8 @@
 "audio_file" = "Audio";
 "audio_play" = "Play";
 "audio_position" = "Position";
+"audio_stop" = "Stop";
+"now_playing_open_hint" = "Opens the chat at this message";
 "audio_pause" = "Pause";
 "forward" = "Forward";
 "forward_to" = "Forward to";

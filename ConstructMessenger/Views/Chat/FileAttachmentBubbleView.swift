@@ -18,6 +18,8 @@ import UIKit
 struct FileAttachmentBubbleView: View {
     let fileContent: FileMessageContent
     let isSentByMe: Bool
+    /// The message these files are, for the now-playing banner.
+    var source: PlaybackSource? = nil
 
     @State private var downloadedURLs: [String: URL] = [:] // mediaId → temp file URL
     @State private var downloading: Set<String> = []
@@ -35,6 +37,7 @@ struct FileAttachmentBubbleView: View {
                         file: file,
                         isSentByMe: isSentByMe,
                         isDownloading: downloading.contains(file.mediaId),
+                        source: source.map { PlaybackSource(chatId: $0.chatId, messageId: $0.messageId, fileName: file.filename) },
                         load: { try await loadAudio(file) },
                         open: { openOrDownload(file) }
                     )
@@ -358,6 +361,7 @@ private struct AudioFileRow: View {
     let file: FileMessageContent.FileEntry
     let isSentByMe: Bool
     let isDownloading: Bool
+    let source: PlaybackSource?
     let load: () async throws -> Data
     let open: () -> Void
 
@@ -438,12 +442,12 @@ private struct AudioFileRow: View {
 
     private func seek(to fraction: Double) {
         guard let data else { return }
-        player.seek(mediaId: file.mediaId, data: data, to: fraction, naturalRate: true, title: file.filename)
+        player.seek(mediaId: file.mediaId, data: data, to: fraction, naturalRate: true, title: file.filename, source: source)
     }
 
     private func toggle() {
         if let data {
-            player.togglePlay(mediaId: file.mediaId, data: data, naturalRate: true, title: file.filename)
+            player.togglePlay(mediaId: file.mediaId, data: data, naturalRate: true, title: file.filename, source: source)
             return
         }
         guard !isDownloading else { return }
@@ -451,7 +455,7 @@ private struct AudioFileRow: View {
             do {
                 let bytes = try await load()
                 data = bytes
-                player.togglePlay(mediaId: file.mediaId, data: bytes, naturalRate: true, title: file.filename)
+                player.togglePlay(mediaId: file.mediaId, data: bytes, naturalRate: true, title: file.filename, source: source)
             } catch {
                 Log.error("Audio file download failed: \(error)", category: "FileAttachment")
             }
