@@ -27,10 +27,40 @@ import UIKit
 /// beginning first, then a hard jump to the current messages".
 final class TranscriptScrollView: UIScrollView {
     var onDidLayout: (() -> Void)?
+    /// The controller of the rows inside — a child of the screen's controller while on screen.
+    /// Until 2026-10-15 it was nobody's child: a row's document preview, video or emoji sheet was
+    /// presented from a detached controller, which UIKit warns will become a hard exception
+    /// (TODO 150).
+    weak var rows: UIViewController?
 
     override func layoutSubviews() {
         super.layoutSubviews()
         onDidLayout?()
+    }
+
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        guard let rows else { return }
+        if window != nil, let screen = enclosingController() {
+            guard rows.parent !== screen else { return }
+            if rows.parent != nil { rows.willMove(toParent: nil); rows.removeFromParent() }
+            screen.addChild(rows)
+            rows.didMove(toParent: screen)
+        } else if window == nil, rows.parent != nil {
+            rows.willMove(toParent: nil)
+            rows.removeFromParent()
+        }
+    }
+
+    /// The nearest controller above this view — SwiftUI's for the screen. Looked up from the
+    /// superview, so the rows' own controller below is never the answer.
+    private func enclosingController() -> UIViewController? {
+        var responder: UIResponder? = superview
+        while let current = responder {
+            if let controller = current as? UIViewController { return controller }
+            responder = current.next
+        }
+        return nil
     }
 }
 
@@ -100,6 +130,7 @@ struct ChatTranscriptScrollView<Content: View>: UIViewRepresentable {
         ])
 
         context.coordinator.scrollView = scrollView
+        scrollView.rows = host
         return scrollView
     }
 
@@ -175,6 +206,9 @@ struct ChatTranscriptScrollView<Content: View>: UIViewRepresentable {
             // Intrinsic size only: the hosting view measures itself from the SwiftUI content, and
             // nothing else constrains its height.
             host.sizingOptions = [.intrinsicContentSize]
+            // The scroll view owns every inset. As a child of the screen the rows would also be
+            // handed the window's safe area and pad the first and last message by it.
+            host.safeAreaRegions = []
             host.view.backgroundColor = .clear
             super.init()
         }
