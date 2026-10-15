@@ -161,6 +161,18 @@ public nonisolated enum Shared_Proto_Core_V1_ContentType: SwiftProtobuf.Enum, Sw
   /// Framed side channel inside the ciphertext: knst_byte5 = true, sealed_inner_content_type =
   /// false. Server forwards opaquely. decisions/profile-share-is-a-typed-versioned-state.md
   case profile // = 29
+
+  /// READ_SYNC — how far the reader has read each chat, as `ReadMarkers` (below), from one of the
+  /// reader's devices to its OTHER devices, so their unread counts agree. Never to a contact: a
+  /// contact gets only the delivery receipt (14). Sent only when the account has more than one
+  /// device — the core's `plan_send(recipient_is_self: true)` is empty otherwise.
+  ///
+  /// Framed side channel inside the ciphertext: knst_byte5 = true. The envelope OUTSIDE says
+  /// SENDER_SYNC (23), like every copy to an own device, so the relay cannot tell a read marker
+  /// from a copy of a sent message by its type. A receiver applies markers only from its own
+  /// account's devices; one from anyone else is dropped.
+  /// decisions/read-state-syncs-between-own-devices.md
+  case readSync // = 30
   case UNRECOGNIZED(Int)
 
   public init() {
@@ -187,6 +199,7 @@ public nonisolated enum Shared_Proto_Core_V1_ContentType: SwiftProtobuf.Enum, Sw
     case 27: self = .contactCard
     case 28: self = .decryptionError
     case 29: self = .profile
+    case 30: self = .readSync
     default: self = .UNRECOGNIZED(rawValue)
     }
   }
@@ -211,6 +224,7 @@ public nonisolated enum Shared_Proto_Core_V1_ContentType: SwiftProtobuf.Enum, Sw
     case .contactCard: return 27
     case .decryptionError: return 28
     case .profile: return 29
+    case .readSync: return 30
     case .UNRECOGNIZED(let i): return i
     }
   }
@@ -235,6 +249,7 @@ public nonisolated enum Shared_Proto_Core_V1_ContentType: SwiftProtobuf.Enum, Sw
     .contactCard,
     .decryptionError,
     .profile,
+    .readSync,
   ]
 
 }
@@ -1024,6 +1039,46 @@ public nonisolated struct Shared_Proto_Core_V1_AvatarRef: Sendable {
   public init() {}
 }
 
+/// The payload of CONTENT_TYPE_READ_SYNC (30): how far this account has read each chat, from one
+/// of its devices to the others. One marker per chat whose boundary moved since the last send.
+///
+/// A marker names the last read message by what every device of the reader holds alike — the id
+/// and the sender's timestamp from inside the ciphertext — never by a server position, which is
+/// different in each device's mailbox. A receiver keeps the boundary per partner and applies a
+/// marker only if it is later: `last_read_sent_at_ms` greater, or equal with a greater
+/// `last_read_message_id` (byte order). Incoming messages at or before the boundary count as read,
+/// including ones that arrive after the marker.
+public nonisolated struct Shared_Proto_Core_V1_ReadMarkers: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var markers: [Shared_Proto_Core_V1_ReadMarker] = []
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Shared_Proto_Core_V1_ReadMarker: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// The ServerUserId of the contact the chat is with.
+  public var partnerUserID: String = String()
+
+  /// The last read incoming message, by its id from inside the ciphertext, lowercased.
+  public var lastReadMessageID: String = String()
+
+  /// That message's timestamp by its sender's clock, ms since the epoch.
+  public var lastReadSentAtMs: UInt64 = 0
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
 public nonisolated struct Shared_Proto_Core_V1_ContactCard: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -1045,7 +1100,7 @@ public nonisolated struct Shared_Proto_Core_V1_ContactCard: Sendable {
 fileprivate nonisolated let _protobuf_package = "shared.proto.core.v1"
 
 nonisolated extension Shared_Proto_Core_V1_ContentType: SwiftProtobuf._ProtoNameProviding {
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0CONTENT_TYPE_UNSPECIFIED\0\u{1}CONTENT_TYPE_E2EE_SIGNAL\0\u{1}CONTENT_TYPE_E2EE_MLS\0\u{2}\u{8}CONTENT_TYPE_WEBRTC_SIGNAL\0\u{1}CONTENT_TYPE_PRESENCE\0\u{1}CONTENT_TYPE_CALL_SIGNAL\0\u{1}CONTENT_TYPE_HEARTBEAT\0\u{1}CONTENT_TYPE_DELIVERY_RECEIPT\0\u{2}\u{6}CONTENT_TYPE_KEY_EXCHANGE\0\u{1}CONTENT_TYPE_SESSION_RESET\0\u{1}CONTENT_TYPE_KEY_SYNC\0\u{1}CONTENT_TYPE_SENDER_SYNC\0\u{1}CONTENT_TYPE_SESSION_RESET_INIT\0\u{1}CONTENT_TYPE_SESSION_PING\0\u{1}CONTENT_TYPE_SESSION_READY\0\u{1}CONTENT_TYPE_CONTACT_CARD\0\u{1}CONTENT_TYPE_DECRYPTION_ERROR\0\u{1}CONTENT_TYPE_PROFILE\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0CONTENT_TYPE_UNSPECIFIED\0\u{1}CONTENT_TYPE_E2EE_SIGNAL\0\u{1}CONTENT_TYPE_E2EE_MLS\0\u{2}\u{8}CONTENT_TYPE_WEBRTC_SIGNAL\0\u{1}CONTENT_TYPE_PRESENCE\0\u{1}CONTENT_TYPE_CALL_SIGNAL\0\u{1}CONTENT_TYPE_HEARTBEAT\0\u{1}CONTENT_TYPE_DELIVERY_RECEIPT\0\u{2}\u{6}CONTENT_TYPE_KEY_EXCHANGE\0\u{1}CONTENT_TYPE_SESSION_RESET\0\u{1}CONTENT_TYPE_KEY_SYNC\0\u{1}CONTENT_TYPE_SENDER_SYNC\0\u{1}CONTENT_TYPE_SESSION_RESET_INIT\0\u{1}CONTENT_TYPE_SESSION_PING\0\u{1}CONTENT_TYPE_SESSION_READY\0\u{1}CONTENT_TYPE_CONTACT_CARD\0\u{1}CONTENT_TYPE_DECRYPTION_ERROR\0\u{1}CONTENT_TYPE_PROFILE\0\u{1}CONTENT_TYPE_READ_SYNC\0")
 }
 
 nonisolated extension Shared_Proto_Core_V1_MessagePriority: SwiftProtobuf._ProtoNameProviding {
@@ -1848,6 +1903,76 @@ nonisolated extension Shared_Proto_Core_V1_AvatarRef: SwiftProtobuf.Message, Swi
     if lhs.mediaURL != rhs.mediaURL {return false}
     if lhs.mediaKey != rhs.mediaKey {return false}
     if lhs.mimeType != rhs.mimeType {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Shared_Proto_Core_V1_ReadMarkers: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ReadMarkers"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}markers\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeRepeatedMessageField(value: &self.markers) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.markers.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.markers, fieldNumber: 1)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Shared_Proto_Core_V1_ReadMarkers, rhs: Shared_Proto_Core_V1_ReadMarkers) -> Bool {
+    if lhs.markers != rhs.markers {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Shared_Proto_Core_V1_ReadMarker: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ReadMarker"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}partner_user_id\0\u{3}last_read_message_id\0\u{3}last_read_sent_at_ms\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.partnerUserID) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.lastReadMessageID) }()
+      case 3: try { try decoder.decodeSingularUInt64Field(value: &self.lastReadSentAtMs) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.partnerUserID.isEmpty {
+      try visitor.visitSingularStringField(value: self.partnerUserID, fieldNumber: 1)
+    }
+    if !self.lastReadMessageID.isEmpty {
+      try visitor.visitSingularStringField(value: self.lastReadMessageID, fieldNumber: 2)
+    }
+    if self.lastReadSentAtMs != 0 {
+      try visitor.visitSingularUInt64Field(value: self.lastReadSentAtMs, fieldNumber: 3)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Shared_Proto_Core_V1_ReadMarker, rhs: Shared_Proto_Core_V1_ReadMarker) -> Bool {
+    if lhs.partnerUserID != rhs.partnerUserID {return false}
+    if lhs.lastReadMessageID != rhs.lastReadMessageID {return false}
+    if lhs.lastReadSentAtMs != rhs.lastReadSentAtMs {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

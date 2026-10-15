@@ -1662,6 +1662,13 @@ final class MessageRouter {
             } else {
                 Log.error("Profile from \(otherUserId.prefix(8))… did not decode", category: "MessageRouter")
             }
+        case .readSync:
+            // Read markers travel only between our own devices (the SENDER_SYNC path). One from a
+            // contact would clear our unread counts at its word; the rule drops it.
+            if let myUserId = AuthSessionManager.shared.currentUserId {
+                applyReadMarkers(body, myUserId: myUserId, fromOwnAccount: false)
+            }
+            Log.error("SECURITY[read_sync_from_contact]: read markers from \(otherUserId.prefix(8))… dropped", category: "MessageRouter")
         case .callSignal:
             // The core hands a call signal over as `callSignalDecrypted`, never as a control frame.
             Log.error("Call signal from \(otherUserId.prefix(8))… arrived as a control frame — dropped", category: "MessageRouter")
@@ -1804,7 +1811,10 @@ final class MessageRouter {
         MessagePersistenceService.advancePreview(ofChat: chatId, text: previewSource, at: timestamp)
         // Same "can the user actually see this?" test the banner uses — an open chat behind a
         // backgrounded app is not visible, and used to keep unreadCount pinned at 0.
-        if !InAppNotificationService.isChatVisible(chatId) {
+        // Not when another device of ours has read past it already (ReadSync): a mailbox drained
+        // after the phone read and answered must not come back as unread.
+        if !InAppNotificationService.isChatVisible(chatId),
+           !ReadBoundaries.shared.covers(peerId, ReadSync.Boundary(sentAtMs: UInt64(timestamp.timeIntervalSince1970 * 1000), messageId: canonicalId)) {
             MessagePersistenceService.incrementUnread(ofChat: chatId)
         }
         Log.debug("Chat metadata updated chatId=\(chatId.prefix(8))…", category: "MessageRouter")
@@ -1930,6 +1940,13 @@ final class MessageRouter {
         myUserId: String,
         in context: NSManagedObjectContext
     ) {
+        // Read markers ride the same own-device envelope; the frame inside says which. Opened by
+        // a session with one of our own devices, so they are ours — the one check they need.
+        if let frame = ChunkedMessageCodec.controlFrame(plaintext),
+           ContentTypeRouting.framedSideChannel(for: frame.contentType) == .readSync {
+            applyReadMarkers(frame.payload, myUserId: myUserId, fromOwnAccount: true)
+            return
+        }
         switch chunkReassembler.assemble(data: plaintext, senderId: original.from) {
         case .incomplete:
             Log.debug("SENDER_SYNC: chunk incomplete — waiting for more", category: "MessageRouter")
@@ -1945,6 +1962,28 @@ final class MessageRouter {
                 e2eMessageId: e2eMessageId,
                 in: context
             )
+        }
+    }
+
+    /// Markers from another device of ours: move each partner's boundary if later, and let the
+    /// chat's unread count down to what the boundary leaves.
+    func applyReadMarkers(
+        _ payload: Data, myUserId: String, fromOwnAccount: Bool, boundaries: ReadBoundaries = .shared
+    ) {
+        guard let markers = ReadSync.decode(payload) else {
+            Log.error("ReadSync: markers did not decode", category: "MessageRouter")
+            return
+        }
+        for (partner, boundary) in markers where partner != myUserId.lowercased() {
+            let held = boundaries.boundary(for: partner)
+            guard ReadSync.outcome(of: boundary, held: held, fromOwnAccount: fromOwnAccount) == .apply,
+                  boundaries.advance(partner, to: boundary),
+                  let chat = try? LocalRepositories.chats.chat(withPeer: partner) else { continue }
+            let left = ReadSync.unreadLeft(
+                inChat: chat.id, unread: chat.unreadCount, boundary: boundary, messages: LocalRepositories.messages
+            )
+            if left != chat.unreadCount { _ = try? LocalRepositories.chats.setUnread(chat.id, left) }
+            Log.info("ReadSync: \(partner.prefix(8))… read on another device — unread \(chat.unreadCount) → \(left)", category: "MessageRouter")
         }
     }
 
