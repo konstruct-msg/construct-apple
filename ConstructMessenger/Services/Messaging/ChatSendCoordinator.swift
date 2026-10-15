@@ -829,7 +829,7 @@ final class ChatSendCoordinator {
             items: fileURLs.map {
                 MessagePersistenceService.UploadPlaceholderItem(
                     fileName: $0.lastPathComponent,
-                    fileSize: (try? $0.resourceValues(forKeys: [.fileSizeKey]))?.fileSize
+                    fileSize: (try? MessageValidator.size(of: $0)).flatMap { $0 }.map(Int.init)
                 )
             },
             replyTo: replyTo,
