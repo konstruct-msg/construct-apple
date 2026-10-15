@@ -239,6 +239,13 @@ struct DesktopRootView: View {
                 .navigationSplitViewColumnWidth(min: 230, ideal: 280, max: 360)
         } detail: {
             detailPane
+                // Under the window toolbar, over whichever chat or empty state is open.
+                .safeAreaInset(edge: .top, spacing: 0) {
+                    NowPlayingBanner { source in
+                        ChatOnScreen.shared.requestFocus(source)
+                        chatsViewModel.chatToOpen = source.chatId
+                    }
+                }
         }
         .navigationSplitViewStyle(.balanced)
         .background(Color.CT.bg)

@@ -204,7 +204,10 @@ class ChatViewModel {
                     mediaUrl: next.mediaUrl,
                     mediaKey: next.mediaKey
                 )
-                AudioPlayerService.shared.togglePlay(mediaId: next.mediaId, data: data)
+                AudioPlayerService.shared.togglePlay(
+                    mediaId: next.mediaId, data: data,
+                    source: PlaybackSource(chatId: nextMessage.chatId, messageId: nextMessage.id)
+                )
             } catch {
                 Log.error("Continuous voice playback failed: \(error.localizedDescription)", category: "ChatViewModel")
             }

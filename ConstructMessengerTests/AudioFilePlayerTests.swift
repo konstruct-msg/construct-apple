@@ -16,8 +16,8 @@ final class AudioFilePlayerTests: XCTestCase {
         super.tearDown()
     }
 
-    /// One second of silence, 8 kHz 16-bit mono.
-    private func silence(seconds: Int = 2) -> Data {
+    /// `seconds` of silence, 8 kHz 16-bit mono.
+    static func silence(seconds: Int = 2) -> Data {
         let rate = 8000, samples = rate * seconds, bytes = samples * 2
         var d = Data()
         func u32(_ v: Int) { var x = UInt32(v).littleEndian; d.append(Data(bytes: &x, count: 4)) }
@@ -47,7 +47,7 @@ final class AudioFilePlayerTests: XCTestCase {
 
     func testTheLockScreenButtonsDriveTheLoadedTrack() {
         XCTAssertFalse(player.pauseCurrent(), "nothing loaded — the button is greyed")
-        player.togglePlay(mediaId: "m-lock", data: silence(), naturalRate: true, title: "a.wav")
+        player.togglePlay(mediaId: "m-lock", data: Self.silence(), naturalRate: true, title: "a.wav")
         XCTAssertTrue(player.pauseCurrent())
         XCTAssertTrue(player.isPaused)
         XCTAssertTrue(player.seekCurrent(to: 1))
@@ -62,9 +62,73 @@ final class AudioFilePlayerTests: XCTestCase {
         while player.rate != 2 { player.cycleRate() }
         defer { while player.rate != original { player.cycleRate() } }
 
-        player.togglePlay(mediaId: "m-rate", data: silence(), naturalRate: true, title: "a.wav")
+        player.togglePlay(mediaId: "m-rate", data: Self.silence(), naturalRate: true, title: "a.wav")
         player.togglePlay(mediaId: "m-rate", data: Data(), naturalRate: true, title: "a.wav") // pause
         player.togglePlay(mediaId: "m-rate", data: Data(), naturalRate: true, title: "a.wav") // resume
         XCTAssertEqual(player.currentRate, 1, accuracy: 0.001)
+    }
+}
+
+/// The now-playing banner (2026-10-15): a track keeps playing after its chat is left, and the
+/// banner — on every screen but that chat — is what still names it and controls it.
+@MainActor
+final class NowPlayingBannerTests: XCTestCase {
+
+    private let player = AudioPlayerService.shared
+    private let screen = ChatOnScreen.shared
+    private let a = PlaybackSource(chatId: "chat-a", messageId: "msg-1", fileName: "song.wav")
+
+    override func tearDown() {
+        player.stop()
+        screen.disappeared(screen.chatId ?? "")
+        _ = screen.takeFocus(in: a.chatId)
+        super.tearDown()
+    }
+
+    func testTheBannerStaysOutOfTheTracksOwnChat() {
+        XCTAssertFalse(ChatOnScreen.showsBanner(for: nil, onScreen: nil), "nothing loaded")
+        XCTAssertFalse(ChatOnScreen.showsBanner(for: a, onScreen: "chat-a"), "its row is on screen")
+        XCTAssertTrue(ChatOnScreen.showsBanner(for: a, onScreen: "chat-b"))
+        XCTAssertTrue(ChatOnScreen.showsBanner(for: a, onScreen: nil), "the chat list, settings")
+    }
+
+    func testATrackKeepsItsMessageThroughAPauseAndLosesItOnStop() {
+        player.togglePlay(mediaId: "m-src", data: AudioFilePlayerTests.silence(), naturalRate: true, title: "song.wav", source: a)
+        XCTAssertEqual(player.source, a)
+        XCTAssertTrue(player.pauseCurrent())
+        XCTAssertEqual(player.source, a, "a paused track still has its banner")
+
+        let voice = PlaybackSource(chatId: "chat-b", messageId: "msg-2")
+        player.togglePlay(mediaId: "m-voice", data: AudioFilePlayerTests.silence(), source: voice)
+        XCTAssertEqual(player.source, voice, "the next track replaces it")
+
+        player.stop()
+        XCTAssertNil(player.source)
+    }
+
+    func testATrackThatEndsTakesTheBannerWithIt() {
+        player.togglePlay(mediaId: "m-end", data: AudioFilePlayerTests.silence(seconds: 1), source: a)
+        let ended = expectation(for: NSPredicate { _, _ in
+            MainActor.assumeIsolated { AudioPlayerService.shared.playingMediaId == nil }
+        }, evaluatedWith: nil)
+        wait(for: [ended], timeout: 5)
+        XCTAssertNil(player.source)
+    }
+
+    /// Pushing chat B over chat A shows B before A has gone; A leaving must not clear B.
+    func testOnlyTheChatOnScreenClearsItself() {
+        screen.appeared("chat-a")
+        screen.appeared("chat-b")
+        screen.disappeared("chat-a")
+        XCTAssertEqual(screen.chatId, "chat-b")
+        screen.disappeared("chat-b")
+        XCTAssertNil(screen.chatId)
+    }
+
+    func testTheWayBackScrollsOnceAndOnlyInItsChat() {
+        screen.requestFocus(a)
+        XCTAssertNil(screen.takeFocus(in: "chat-b"))
+        XCTAssertEqual(screen.takeFocus(in: "chat-a"), "msg-1")
+        XCTAssertNil(screen.takeFocus(in: "chat-a"), "a later open lands where it always does")
     }
 }

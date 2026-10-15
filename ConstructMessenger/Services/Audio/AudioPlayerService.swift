@@ -25,6 +25,9 @@ final class AudioPlayerService: NSObject, ObservableObject {
     @Published private(set) var isPaused = false
     /// Playback speed, kept across tracks and launches: 1, 1.25, 1.5 or 2.
     @Published private(set) var rate: Float = AudioPlayerService.storedRate()
+    /// The message the loaded track belongs to, for the now-playing banner; nil with nothing
+    /// loaded, or for a track started without one.
+    @Published private(set) var source: PlaybackSource?
 
     /// Fired when a track finishes playing **naturally** (not when stopped/replaced).
     /// Carries the mediaId that just finished. Used for continuous voice playback —
@@ -77,11 +80,14 @@ final class AudioPlayerService: NSObject, ObservableObject {
 
     /// Move to `fraction` (0…1) of the track. The current track keeps playing or stays paused;
     /// another one starts there.
-    func seek(mediaId: String, data: Data, to fraction: Double, naturalRate: Bool = false, title: String? = nil) {
+    func seek(
+        mediaId: String, data: Data, to fraction: Double, naturalRate: Bool = false, title: String? = nil,
+        source: PlaybackSource? = nil
+    ) {
         let fraction = min(max(fraction, 0), 1)
         if playingMediaId != mediaId {
             stop()
-            play(mediaId: mediaId, data: data, naturalRate: naturalRate, title: title)
+            play(mediaId: mediaId, data: data, naturalRate: naturalRate, title: title, source: source)
         }
         guard let p = player, playingMediaId == mediaId else { return }
         p.currentTime = fraction * p.duration
@@ -93,7 +99,11 @@ final class AudioPlayerService: NSObject, ObservableObject {
     /// Toggle play/pause for the given mediaId, loading audio from `data`. `naturalRate` for a
     /// music file: the voice-message speed does not apply to it.
     /// `title`: a music file's name, for the lock screen; leave it nil for a voice message.
-    func togglePlay(mediaId: String, data: Data, naturalRate: Bool = false, title: String? = nil) {
+    /// `source`: the message it belongs to, which the now-playing banner names and returns to.
+    func togglePlay(
+        mediaId: String, data: Data, naturalRate: Bool = false, title: String? = nil,
+        source: PlaybackSource? = nil
+    ) {
         if playingMediaId == mediaId {
             // Pause or resume
             if let p = player {
@@ -103,7 +113,7 @@ final class AudioPlayerService: NSObject, ObservableObject {
         }
         // New track — stop previous
         stop()
-        play(mediaId: mediaId, data: data, naturalRate: naturalRate, title: title)
+        play(mediaId: mediaId, data: data, naturalRate: naturalRate, title: title, source: source)
     }
 
     // MARK: Lock screen
@@ -153,12 +163,13 @@ final class AudioPlayerService: NSObject, ObservableObject {
         totalDuration  = 0
         if nowPlayingTitle != nil { NowPlaying.publish(nil) }
         nowPlayingTitle = nil
+        source = nil
         deactivateSession()
     }
 
     // MARK: - Private playback
 
-    private func play(mediaId: String, data: Data, naturalRate: Bool, title: String?) {
+    private func play(mediaId: String, data: Data, naturalRate: Bool, title: String?, source: PlaybackSource?) {
         // One sound at a time: a video note playing in place folds back.
         VideoNotePlayback.shared.collapse()
         do {
@@ -174,6 +185,7 @@ final class AudioPlayerService: NSObject, ObservableObject {
 
             player        = p
             playingMediaId = mediaId
+            self.source    = source
             totalDuration  = p.duration
             isPaused       = false
             progress       = 0
@@ -265,6 +277,7 @@ extension AudioPlayerService: AVAudioPlayerDelegate {
             self.player         = nil
             if self.nowPlayingTitle != nil { NowPlaying.publish(nil) }
             self.nowPlayingTitle = nil
+            self.source = nil
             self.deactivateSession()
             if flag, let finishedId { self.onTrackFinished?(finishedId) }
         }

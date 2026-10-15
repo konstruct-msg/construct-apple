@@ -1211,6 +1211,8 @@
 "audio_file" = "Аудио";
 "audio_play" = "Воспроизвести";
 "audio_position" = "Позиция";
+"audio_stop" = "Остановить";
+"now_playing_open_hint" = "Открывает чат на этом сообщении";
 "audio_pause" = "Пауза";
 "forward" = "Переслать";
 "forward_to" = "Переслать в";

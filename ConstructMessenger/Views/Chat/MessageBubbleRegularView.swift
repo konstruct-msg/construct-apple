@@ -136,7 +136,11 @@ struct MessageBubbleRegularView: View {
                 } else if let fileContent {
                     VStack(alignment: .leading, spacing: 0) {
                         replyIndicatorView
-                        FileAttachmentBubbleView(fileContent: fileContent, isSentByMe: message.isSentByMe)
+                        FileAttachmentBubbleView(
+                            fileContent: fileContent,
+                            isSentByMe: message.isSentByMe,
+                            source: PlaybackSource(chatId: message.chatId, messageId: message.id)
+                        )
                             .overlay(
                                 CTShape.control()
                                     .stroke(
@@ -172,7 +176,8 @@ struct MessageBubbleRegularView: View {
                                     Log.error("Transcription failed: \(error)", category: "MessageBubbleRegularView")
                                 }
                             }
-                        }
+                        },
+                        source: PlaybackSource(chatId: message.chatId, messageId: message.id)
                     )
                     .frame(maxWidth: ChatUIConstants.Bubble.maxWidth)
                     .overlay(

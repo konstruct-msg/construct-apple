@@ -185,6 +185,10 @@ struct ChatView: View {
                 .onChange(of: viewport.layoutPrimed) { _, primed in
                     if primed {
                         attemptLoadOlderHistory()
+                        // Opened from the now-playing banner: its message, once the tail is down.
+                        if let focus = ChatOnScreen.shared.takeFocus(in: viewModel.conversation.chatId) {
+                            jumpToMessage(focus)
+                        }
                     }
                 }
                 .onChange(of: viewModel.voicePlaybackScrollTarget) { _, target in
@@ -1216,6 +1220,7 @@ struct ChatView: View {
         // per message. Best-effort; see `refreshRecipientDevices`.
         Task { await MultiDeviceSendCoordinator.shared.refreshRecipientDevices(for: contactId) }
         setActiveChatState(isActive: true)
+        ChatOnScreen.shared.appeared(viewModel.conversation.chatId)
         // Active chat owns continuous voice playback: advance to the next voice message
         // (older → newer) when one finishes, if the setting is on.
         AudioPlayerService.shared.onTrackFinished = { [weak viewModel] finishedMediaId in
@@ -1237,6 +1242,7 @@ struct ChatView: View {
             DraftStore.shared.save(messageText, for: viewModel.conversation.chatId)
         }
         setActiveChatState(isActive: false)
+        ChatOnScreen.shared.disappeared(viewModel.conversation.chatId)
         AudioPlayerService.shared.onTrackFinished = nil
     }
 
