@@ -205,3 +205,71 @@ final class FanoutRetryQueueTests: XCTestCase {
         XCTAssertEqual(reopened.all().first?.owedDeviceIds, ["dev-a"])
     }
 }
+
+/// The drain runs when an owed copy comes due, not only when the network comes back (2026-10-15).
+/// A copy to the owner's phone failed on a transport rebuilt under a live network; the drain was
+/// wired to reachability alone, so it waited for a network change while the sender's row said
+/// delivered.
+@MainActor
+final class FanoutRetryDrainScheduleTests: XCTestCase {
+
+    private let suiteName = "construct.tests.fanoutRetryDrain"
+    private let coordinator = MultiDeviceSendCoordinator.shared
+
+    override func setUp() {
+        super.setUp()
+        UserDefaults().removePersistentDomain(forName: suiteName)
+        LocalRepositories.useKeyValueForTesting(DefaultsKeyValueStore(defaults: UserDefaults(suiteName: suiteName)!))
+    }
+
+    override func tearDown() {
+        FanoutRetryQueue.shared.removeAll()
+        coordinator.scheduleDrain()   // nothing owed: cancels whatever a test scheduled
+        LocalRepositories.useKeyValueForTesting(nil)
+        UserDefaults().removePersistentDomain(forName: suiteName)
+        super.tearDown()
+    }
+
+    func testTheQueueKnowsWhenItsNextEntryIsDue() throws {
+        XCTAssertNil(FanoutRetryQueue.shared.nextDue())
+        let before = Date()
+        FanoutRetryQueue.shared.enqueue(baseMessageId: "m", recipientUserId: "p", senderUserId: "me", owed: ["d"])
+        let due = try XCTUnwrap(FanoutRetryQueue.shared.nextDue())
+        XCTAssertEqual(due.timeIntervalSince(before), 30, accuracy: 2, "the first backoff")
+    }
+
+    /// Mutation: drop `scheduleDrain()` from `noteOwed` — this reddens.
+    func testAnOwedCopySchedulesItsOwnRetry() throws {
+        let before = Date()
+        coordinator.noteOwed("m", "p", "me", owed: ["d"])
+        let at = try XCTUnwrap(coordinator.scheduledDrainAt, "a retry is scheduled without any network change")
+        XCTAssertEqual(at.timeIntervalSince(before), 31, accuracy: 2)
+    }
+
+    /// A pass with nothing due yet still leaves the next one scheduled. Mutation: drop the
+    /// `defer { scheduleDrain() }` in the drain — this reddens.
+    func testAPassWithNothingDueSchedulesTheNext() async throws {
+        coordinator.scheduleDrain()   // empty queue: nothing scheduled
+        // Straight into the queue, as an entry left from an earlier launch: nothing scheduled it.
+        FanoutRetryQueue.shared.enqueue(baseMessageId: "m", recipientUserId: "p", senderUserId: "me", owed: ["d"])
+        XCTAssertNil(coordinator.scheduledDrainAt)
+        await coordinator.drainRetryQueue(currentUserId: "me")
+        let at = try XCTUnwrap(coordinator.scheduledDrainAt)
+        XCTAssertEqual(at.timeIntervalSinceNow, 31, accuracy: 2)
+    }
+
+    /// An entry already overdue is not retried in a tight loop. Mutation: drop the floor — this
+    /// reddens.
+    func testAnOverdueEntryWaitsTheFirstBackoff() throws {
+        FanoutRetryQueue.shared.enqueue(baseMessageId: "m", recipientUserId: "p", senderUserId: "me", owed: ["d"])
+        let later = Date().addingTimeInterval(120)
+        coordinator.scheduleDrain(now: later)
+        let at = try XCTUnwrap(coordinator.scheduledDrainAt)
+        XCTAssertEqual(at.timeIntervalSince(later), MultiDeviceSendCoordinator.retryFloor, accuracy: 0.5)
+    }
+
+    func testNothingOwedNothingScheduled() {
+        coordinator.scheduleDrain()
+        XCTAssertNil(coordinator.scheduledDrainAt)
+    }
+}
