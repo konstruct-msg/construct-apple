@@ -1260,6 +1260,9 @@ struct ChatView: View {
 
     private func markChatAsRead() {
         let chatId = viewModel.conversation.chatId
+        // Our other devices learn how far this chat is read — whether or not this one counted
+        // anything unread: a message that arrived on screen was read without ever being counted.
+        ReadSyncOutbox.shared.noteRead(chatId: chatId)
         guard let unread = try? LocalRepositories.chats.chat(chatId)?.unreadCount, unread > 0 else { return }
         _ = try? LocalRepositories.chats.setUnread(chatId, 0)
     }

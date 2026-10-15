@@ -166,6 +166,9 @@ enum AccountWipeKeys {
         // messages. Lives in the key-value store — `UserDefaults` on an iOS install that has not
         // moved to construct.db, where this wipe is what removes it.
         "construct.mailboxGap.v1",
+        // How far each chat is read, per partner (`ReadBoundaries`, TODO 152): this account's
+        // reading, which another account must not inherit.
+        "construct.readBoundaries.v1",
         // The public IP and region the removed GeoIP lookup cached. `GRPCChannelManager` already
         // deletes them at launch; listed so a wipe says the same about where the person was.
         "construct.geoip_ip_v1",
