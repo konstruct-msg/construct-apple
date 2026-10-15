@@ -181,13 +181,24 @@ final class ReadSyncOutbox {
     init(observesLeaving: Bool = false) {
         guard observesLeaving else { return }
         // Leaving the screen sends what is pending at once: the next chance may be hours away.
+        // On resigning active, not on entering the background: by then the transport cancels its
+        // requests, and on 2026-10-15 the phone's first markers were cancelled exactly so.
+        // Coming back sends whatever an earlier try could not.
         #if canImport(UIKit)
-        let leaving = UIApplication.didEnterBackgroundNotification
+        let leaving = UIApplication.willResignActiveNotification
+        let returning = UIApplication.didBecomeActiveNotification
         #elseif canImport(AppKit)
         let leaving = NSApplication.didResignActiveNotification
+        let returning = NSApplication.didBecomeActiveNotification
         #endif
         NotificationCenter.default.addObserver(forName: leaving, object: nil, queue: .main) { _ in
             MainActor.assumeIsolated { ReadSyncOutbox.shared.flushOnLeaving() }
+        }
+        NotificationCenter.default.addObserver(forName: returning, object: nil, queue: .main) { _ in
+            MainActor.assumeIsolated {
+                guard ReadSyncOutbox.shared.hasPending else { return }
+                Task { await ReadSyncOutbox.shared.flush() }
+            }
         }
     }
 
@@ -204,22 +215,27 @@ final class ReadSyncOutbox {
         Task { await flush() }
         #endif
     }
-    /// Replaced in tests; sends the encoded markers to our other devices.
-    var send: (Data) async -> Void = { payload in
+    /// Replaced in tests; sends the encoded markers to our other devices. True when nothing is
+    /// owed any more; false keeps them for another try.
+    var send: (Data) async -> Bool = { payload in
         guard let userId = AuthSessionManager.shared.currentUserId,
-              let deviceId = AuthSessionManager.shared.currentDeviceId, !deviceId.isEmpty else { return }
-        await MultiDeviceSendCoordinator.shared.sendReadMarkers(
+              let deviceId = AuthSessionManager.shared.currentDeviceId, !deviceId.isEmpty else { return false }
+        return await MultiDeviceSendCoordinator.shared.sendReadMarkers(
             payload, senderUserId: userId, senderDeviceId: deviceId
         )
     }
 
-    /// The person has read the chat with `partner` up to `boundary` on this device.
     /// Where this device's own reading is held too: an older copy arriving later is read already.
     var boundaries: ReadBoundaries = .shared
 
+    /// The person has read the chat with `partner` up to `boundary` on this device.
     func noteRead(partner: String, boundary: ReadSync.Boundary) {
         guard boundaries.advance(partner, to: boundary) else { return }
         pending[partner.lowercased()] = boundary
+        scheduleFlush()
+    }
+
+    private func scheduleFlush() {
         guard flushTask == nil else { return }
         let delay = Self.interval + Double.random(in: 0...Self.jitter)
         flushTask = Task { [weak self] in
@@ -241,8 +257,17 @@ final class ReadSyncOutbox {
         flushTask?.cancel()
         flushTask = nil
         guard !pending.isEmpty, let payload = ReadSync.encode(pending) else { return }
+        let sending = pending
         pending = [:]
-        await send(payload)
+        guard await send(payload) else {
+            // Back into the outbox, unless reading has moved a boundary further meanwhile.
+            for (partner, boundary) in sending {
+                if let newer = pending[partner], ReadSync.isLater(newer, than: boundary) { continue }
+                pending[partner] = boundary
+            }
+            scheduleFlush()
+            return
+        }
     }
 
     var hasPending: Bool { !pending.isEmpty }
