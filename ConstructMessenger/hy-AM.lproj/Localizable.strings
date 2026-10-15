@@ -1200,6 +1200,8 @@
 "audio_file" = "Աուդիո";
 "audio_play" = "Նվագարկել";
 "audio_position" = "Դիրք";
+"audio_stop" = "Կանգնեցնել";
+"now_playing_open_hint" = "Բացում է զրույցը այս հաղորդագրության վրա";
 "audio_pause" = "Դադար";
 "forward" = "Փոխանցել";
 "forward_to" = "Փոխանցել";

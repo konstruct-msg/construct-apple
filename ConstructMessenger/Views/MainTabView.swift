@@ -30,13 +30,20 @@ struct MainTabView: View {
         callContent
             .debugMetricsOverlay()
             .safeAreaInset(edge: .top, spacing: 0) {
-                if CallsFeature.isEnabled, isActiveOrConnecting, !isCallExpanded,
-                   let session = activeCallSession {
-                    InCallMiniBar(
-                        peerName: session.peerName,
-                        isConnecting: isConnectingState,
-                        onTap: { isCallExpanded = true }
-                    )
+                VStack(spacing: 0) {
+                    if CallsFeature.isEnabled, isActiveOrConnecting, !isCallExpanded,
+                       let session = activeCallSession {
+                        InCallMiniBar(
+                            peerName: session.peerName,
+                            isConnecting: isConnectingState,
+                            onTap: { isCallExpanded = true }
+                        )
+                    }
+                    NowPlayingBanner { source in
+                        ChatOnScreen.shared.requestFocus(source)
+                        chatsViewModel.selectedTab = 0
+                        chatsViewModel.chatToOpen = source.chatId
+                    }
                 }
             }
             .fullScreenCover(isPresented: fullScreenCoverBinding) {

@@ -84,6 +84,10 @@ struct DesktopChatView: View {
                 .onChange(of: scrollManager.isOpening) { _, opening in
                     if !opening {
                         attemptLoadOlderHistory()
+                        // Opened from the now-playing banner: its message, once the tail is down.
+                        if let focus = ChatOnScreen.shared.takeFocus(in: viewModel.conversation.chatId) {
+                            scrollManager.scrollTo(messageId: focus, anchor: .center, animated: true)
+                        }
                     }
                 }
                 .onChange(of: searchText) { _, newValue in
@@ -210,6 +214,7 @@ struct DesktopChatView: View {
                 viewModel.onViewAppear()
                 loadContactKTStatus()
                 refreshSessionAtRiskState()
+                ChatOnScreen.shared.appeared(viewModel.conversation.chatId)
             }
             .onReceive(NotificationCenter.default.publisher(for: .contactKeyChanged)) { note in
                 guard let changedId = note.userInfo?["userId"] as? String,
@@ -219,6 +224,7 @@ struct DesktopChatView: View {
             .onDisappear {
                 replyFocusPeekTask?.cancel()
                 replyFocusPeekTask = nil
+                ChatOnScreen.shared.disappeared(viewModel.conversation.chatId)
             }
             .alert(callManager.lastError ?? "", isPresented: Binding(
                 get: { callManager.lastError != nil },
