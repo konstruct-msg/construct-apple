@@ -1128,6 +1128,8 @@
 "audio_file" = "Audio";
 "audio_play" = "Lire";
 "audio_position" = "Position";
+"audio_stop" = "Arrêter";
+"now_playing_open_hint" = "Ouvre la discussion à ce message";
 "audio_pause" = "Pause";
 "forward" = "Transférer";
 "forward_to" = "Transférer à";
