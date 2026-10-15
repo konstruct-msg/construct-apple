@@ -215,7 +215,7 @@ final class ReadSyncTests: XCTestCase {
         let outbox = ReadSyncOutbox()
         outbox.boundaries = ReadBoundaries()
         var sent: [Data] = []
-        outbox.send = { sent.append($0) }
+        outbox.send = { sent.append($0); return true }
         outbox.noteRead(partner: "a", boundary: .init(sentAtMs: 1, messageId: "x"))
         outbox.noteRead(partner: "b", boundary: .init(sentAtMs: 2, messageId: "y"))
         // A send started on the read would be a task already: give it the chance to run.
@@ -228,12 +228,31 @@ final class ReadSyncTests: XCTestCase {
         XCTAssertEqual(sent.count, 1, "nothing pending, nothing sent")
     }
 
+    /// A send that did not go through keeps the markers: on 2026-10-15 the phone's first markers
+    /// were cancelled on the way to the background and lost. Mutation: drop the put-back — this
+    /// reddens.
+    func testMarkersThatDidNotGoOutAreSentAgain() async throws {
+        let outbox = ReadSyncOutbox()
+        outbox.boundaries = ReadBoundaries()
+        var attempts: [Data] = []
+        var delivers = false
+        outbox.send = { attempts.append($0); return delivers }
+        outbox.noteRead(partner: "a", boundary: .init(sentAtMs: 1, messageId: "x"))
+        await outbox.flush()
+        XCTAssertTrue(outbox.hasPending, "the failed markers wait for another try")
+        delivers = true
+        await outbox.flush()
+        XCTAssertEqual(attempts.count, 2)
+        XCTAssertEqual(try XCTUnwrap(attempts.last.flatMap(ReadSync.decode)).map(\.partner), ["a"])
+        XCTAssertFalse(outbox.hasPending)
+    }
+
     /// Reading what was already read sends nothing.
     func testReadingNothingNewSendsNothing() async {
         let outbox = ReadSyncOutbox()
         outbox.boundaries = ReadBoundaries()
         var sent = 0
-        outbox.send = { _ in sent += 1 }
+        outbox.send = { _ in sent += 1; return true }
         outbox.noteRead(partner: "a", boundary: .init(sentAtMs: 5, messageId: "x"))
         await outbox.flush()
         outbox.noteRead(partner: "a", boundary: .init(sentAtMs: 5, messageId: "x"))
