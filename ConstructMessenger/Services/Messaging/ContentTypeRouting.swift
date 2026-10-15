@@ -115,6 +115,9 @@ enum FramedSideChannel: String, Equatable {
     case contactCard = "contact_card"
     /// 29 — the peer's profile (`ProfileShare`): its name and avatar, as a version.
     case profile = "profile"
+    /// 30 — how far this account has read each chat (`ReadMarkers`), from one of our own devices.
+    /// Never from a contact: see `ContentTypeRouting.isOwnDevicesOnly`.
+    case readSync = "read_sync"
 }
 
 /// Named mapping used at the unseal boundary and by ingest parsers.
@@ -126,7 +129,7 @@ enum ContentTypeRouting {
         switch contentType {
         case 1:                  return .transcriptIncoming
         case 23:                 return .transcriptOwnDevice
-        case 12, 13, 14, 21, 24, 25, 26, 27, 28, 29:
+        case 12, 13, 14, 21, 24, 25, 26, 27, 28, 29, 30:
                                  return .silentControl
         default:                 return .notCarried
         }
@@ -143,15 +146,23 @@ enum ContentTypeRouting {
         case 14: return .deliveryReceipt
         case 27: return .contactCard
         case 29: return .profile
+        case 30: return .readSync
         default: return nil
         }
+    }
+
+    /// Types that may travel only between this account's own devices — never to or from a
+    /// contact (`own_devices_only` in the cross-client table). A frame of one of these that
+    /// arrives from a contact is dropped: a contact could otherwise clear our unread counts.
+    static func isOwnDevicesOnly(_ contentType: UInt8) -> Bool {
+        contentType == 23 || contentType == 30
     }
 
     /// Derive routing kind from an authoritative `contentType` (post-unseal or identified outer).
     static func kind(for contentType: UInt8) -> WireMessageKind {
         switch contentType {
         case 21, 28: return .control
-        case 23: return .senderSync
+        case 23, 30: return .senderSync
         case 24: return .sessionResetInit
         default: return .direct
         }
@@ -175,7 +186,7 @@ enum ContentTypeRouting {
     static func isKnownControlContentType(_ contentType: UInt8) -> Bool {
         if SessionControlCodec.op(forContentType: Int(contentType)) != nil { return true }
         switch contentType {
-        case 12, 14, 23, 27, 28, 29: return true  // callSignal, deliveryReceipt, senderSync, contactCard, decryptionError, profile
+        case 12, 14, 23, 27, 28, 29, 30: return true  // callSignal, deliveryReceipt, senderSync, contactCard, decryptionError, profile, readSync
         default: return false
         }
     }

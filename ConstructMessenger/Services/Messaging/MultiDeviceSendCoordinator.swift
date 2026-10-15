@@ -587,73 +587,115 @@ final class MultiDeviceSendCoordinator {
                 return
             }
 
-            // Our half of the X25519 pair whose public half is in every device's bundle, held by
-            // the core. Absent only before registration completes, and then there are no own
-            // devices to sync to either.
-            let tagger = SenderSyncDeviceTag.Tagger.current
-
-            // Targets from the same plan the recipient copies come from, so "which devices, and
-            // is this one of them" is answered once. `otherDevices` has already dropped this
-            // device; the plan drops it again, which is deliberate — the filter belongs to the
-            // decision, not to whichever caller remembered it.
-            let targets = DeviceDeliveryPlan.targets(
-                recipientDevices: [],
-                ownDevices: otherDevices,
-                ourDeviceId: senderDeviceId,
-                recipientIsSelf: true
+            await sendToOwnDevices(
+                plan: plan, messageId: messageId, otherDevices: otherDevices,
+                senderUserId: senderUserId, senderDeviceId: senderDeviceId, timestamp: timestamp
             )
-
-            // Our own account is a DIFFERENT recipient from the peer, so this cannot join the
-            // peer's unit — the server keys `token_spend_id` by `recipient_user_id` precisely so
-            // one token cannot cover envelopes to two people. It gets its own unit instead, which
-            // matters as soon as there is more than one sibling or the message is chunked; with a
-            // single sibling and a single chunk it is one envelope and still one token, and that
-            // one is irreducible.
-            let syncSpendUnit = TokenSpendUnit.forEnvelopeCount(
-                TokenSpendUnit.envelopeCount(
-                    chunkCount: plan.payloads.count, recipientDeviceCount: targets.count
-                )
-            )
-
-            for target in targets {
-                // The tag names the device this copy is for, to that device only. It used to be
-                // `deviceId.prefix(8)` — the id in plain hex, which the relay reads on every copy
-                // it routes. See SenderSyncDeviceTag.
-                let deviceTag = Self.senderSyncTag(
-                    baseMessageId: messageId,
-                    targetDeviceId: target.deviceId,
-                    targetIdentityPublic: target.identityPublic,
-                    tagger: tagger
-                )
-                for (index, payload) in plan.payloads.enumerated() {
-                    // Discarded on purpose: SENDER_SYNC is a copy to one of *our* devices, and
-                    // §C's queue retries copies owed to the **recipient**. A sibling that misses
-                    // one heals on its next exchange, and re-sending here would need a second
-                    // queue keyed by our own account. Counted (`sync_send_failed`), not retried —
-                    // the number says whether that second queue is worth building.
-                    _ = await sendToDevice(
-                        plaintext: payload,
-                        messageId: DeviceDeliveryPlan.wireId(
-                            baseMessageId: messageId, tag: deviceTag,
-                            audience: target.audience,
-                            chunkIndex: index, chunkCount: plan.payloads.count
-                        ),
-                        networkRecipientUserId: senderUserId,
-                        contactId: target.deviceId,
-                        // Own devices come from a bundle fetch, so the plan always carries one.
-                        bundle: target.bundle,
-                        senderUserId: senderUserId,
-                        recipientDeviceId: target.deviceId,
-                        timestamp: timestamp,
-                        spendUnit: syncSpendUnit
-                    )
-                }
-            }
         } catch {
             Log.info(
                 "SenderSync: own-device fetch failed for \(senderUserId.prefix(8))…: \(error)",
                 category: "MultiDevice"
             )
+        }
+    }
+
+    /// One plan's payloads to each of our other devices, in envelopes that say SENDER_SYNC (23)
+    /// outside — whatever the frame says inside: a copy of a sent message, or read markers (30).
+    /// The relay cannot tell the two apart by type.
+    private func sendToOwnDevices(
+        plan: ChunkedMessagePlan,
+        messageId: String,
+        otherDevices: [DeviceBundleData],
+        senderUserId: String,
+        senderDeviceId: String,
+        timestamp: UInt64
+    ) async {
+        // Our half of the X25519 pair whose public half is in every device's bundle, held by
+        // the core. Absent only before registration completes, and then there are no own
+        // devices to sync to either.
+        let tagger = SenderSyncDeviceTag.Tagger.current
+
+        // Targets from the same plan the recipient copies come from, so "which devices, and
+        // is this one of them" is answered once. `otherDevices` has already dropped this
+        // device; the plan drops it again, which is deliberate — the filter belongs to the
+        // decision, not to whichever caller remembered it.
+        let targets = DeviceDeliveryPlan.targets(
+            recipientDevices: [],
+            ownDevices: otherDevices,
+            ourDeviceId: senderDeviceId,
+            recipientIsSelf: true
+        )
+
+        // Our own account is a DIFFERENT recipient from the peer, so this cannot join the
+        // peer's unit — the server keys `token_spend_id` by `recipient_user_id` precisely so
+        // one token cannot cover envelopes to two people. It gets its own unit instead, which
+        // matters as soon as there is more than one sibling or the message is chunked; with a
+        // single sibling and a single chunk it is one envelope and still one token, and that
+        // one is irreducible.
+        let syncSpendUnit = TokenSpendUnit.forEnvelopeCount(
+            TokenSpendUnit.envelopeCount(
+                chunkCount: plan.payloads.count, recipientDeviceCount: targets.count
+            )
+        )
+
+        for target in targets {
+            // The tag names the device this copy is for, to that device only. It used to be
+            // `deviceId.prefix(8)` — the id in plain hex, which the relay reads on every copy
+            // it routes. See SenderSyncDeviceTag.
+            let deviceTag = Self.senderSyncTag(
+                baseMessageId: messageId,
+                targetDeviceId: target.deviceId,
+                targetIdentityPublic: target.identityPublic,
+                tagger: tagger
+            )
+            for (index, payload) in plan.payloads.enumerated() {
+                // Discarded on purpose: SENDER_SYNC is a copy to one of *our* devices, and
+                // §C's queue retries copies owed to the **recipient**. A sibling that misses
+                // one heals on its next exchange, and re-sending here would need a second
+                // queue keyed by our own account. Counted (`sync_send_failed`), not retried —
+                // the number says whether that second queue is worth building.
+                _ = await sendToDevice(
+                    plaintext: payload,
+                    messageId: DeviceDeliveryPlan.wireId(
+                        baseMessageId: messageId, tag: deviceTag,
+                        audience: target.audience,
+                        chunkIndex: index, chunkCount: plan.payloads.count
+                    ),
+                    networkRecipientUserId: senderUserId,
+                    contactId: target.deviceId,
+                    // Own devices come from a bundle fetch, so the plan always carries one.
+                    bundle: target.bundle,
+                    senderUserId: senderUserId,
+                    recipientDeviceId: target.deviceId,
+                    timestamp: timestamp,
+                    spendUnit: syncSpendUnit
+                )
+            }
+        }
+    }
+
+    /// Read markers (`ReadSync`, CONTENT_TYPE_READ_SYNC 30) to our other devices — and to nobody
+    /// else: the targets are our own account's devices only, and with one device there are none.
+    /// Best-effort like SENDER_SYNC: a sibling that misses one is corrected by the next.
+    func sendReadMarkers(_ payload: Data, senderUserId: String, senderDeviceId: String) async {
+        guard !senderDeviceId.isEmpty, !payload.isEmpty else { return }
+        do {
+            let otherDevices = try await fetchOwnOtherDevices(myUserId: senderUserId, myDeviceId: senderDeviceId)
+            guard !otherDevices.isEmpty else { return }
+            let id = UUID()
+            let plan = ChunkedMessageSender.shared.buildPlan(
+                plaintext: payload, messageId: id,
+                contentType: UInt8(Shared_Proto_Core_V1_ContentType.readSync.rawValue)
+            )
+            guard !plan.payloads.isEmpty else { return }
+            await sendToOwnDevices(
+                plan: plan, messageId: id.uuidString.lowercased(), otherDevices: otherDevices,
+                senderUserId: senderUserId, senderDeviceId: senderDeviceId,
+                timestamp: UInt64(Date().timeIntervalSince1970)
+            )
+            Log.info("ReadSync: markers sent to \(otherDevices.count) own device(s)", category: "MultiDevice")
+        } catch {
+            Log.info("ReadSync: own-device fetch failed: \(error)", category: "MultiDevice")
         }
     }
 
