@@ -407,6 +407,8 @@ final class MultiDeviceSendCoordinator {
     /// runs out of them. See `decisions/prekey-bundle-fetch-is-destructive.md`.
     func drainRetryQueue(currentUserId: String) async {
         guard !isDraining else { return }
+        // Whatever is left, or not due yet, gets its own pass when it comes due.
+        defer { scheduleDrain() }
         let due = FanoutRetryQueue.shared.due()
         guard !due.isEmpty else { return }
 
@@ -512,7 +514,40 @@ final class MultiDeviceSendCoordinator {
             senderUserId: senderUserId,
             owed: owed
         )
+        scheduleDrain()
     }
+
+    /// When the owed copies will next be tried; nil when nothing is scheduled.
+    private(set) var scheduledDrainAt: Date?
+    private var drainTask: Task<Void, Never>?
+
+    /// One pass of the drain at the next entry's due time. Until 2026-10-15 the drain ran only
+    /// when the network came back, so a copy lost to anything else — a transport rebuilt under a
+    /// live network, as on the owner's devices that day — waited for the next network change,
+    /// while the sender's row said delivered.
+    func scheduleDrain(now: Date = Date()) {
+        drainTask?.cancel()
+        drainTask = nil
+        guard let next = FanoutRetryQueue.shared.nextDue(now: now) else {
+            scheduledDrainAt = nil
+            return
+        }
+        // Already due means a pass just left it untried (no device id yet): not again at once.
+        let delay = next > now ? next.timeIntervalSince(now) + Self.drainSlack : Self.retryFloor
+        scheduledDrainAt = now.addingTimeInterval(delay)
+        drainTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(delay))
+            guard !Task.isCancelled, let self,
+                  let userId = AuthSessionManager.shared.currentUserId else { return }
+            self.drainTask = nil
+            await self.drainRetryQueue(currentUserId: userId)
+        }
+    }
+
+    /// A moment past the due time, so the entry reads as due when the pass looks.
+    private static let drainSlack: TimeInterval = 1
+    /// The wait when the next entry is already overdue — the queue's own first backoff.
+    static let retryFloor: TimeInterval = 30
 
     /// SenderSync: send a copy of an outgoing message to all of the sender's OWN
     /// other devices, encrypted with per-device sessions, content type = senderSync.
