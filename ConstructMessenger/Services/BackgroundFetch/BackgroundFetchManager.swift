@@ -367,8 +367,10 @@ class BackgroundFetchManager: NSObject {
         let after = (try? context.count(for: countRequest)) ?? before
         let saved = max(0, after - before)
         // Notifications are posted by whoever SAVED each message (InAppNotificationService on
-        // this path), with IncomingFloodGuard collapsing a large backlog into a single alert —
-        // the batch "N messages from M contacts" banner is gone with the duplicate pipeline.
+        // this path); a backlog collapses to one banner per chat by the notification's stable
+        // per-chat identifier. It is not a flood: IncomingFloodGuard counts by server queue time
+        // since 2026-10-15. The batch "N messages from M contacts" banner is gone with the
+        // duplicate pipeline.
         Log.info("Saved \(saved) new messages to Core Data", category: "BackgroundFetch")
         completion(.success(saved))
     }

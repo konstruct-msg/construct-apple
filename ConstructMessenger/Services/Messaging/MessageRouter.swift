@@ -1813,7 +1813,11 @@ final class MessageRouter {
         let senderId = messageData.from
 
         // ── Incoming flood check ────────────────────────────────────────────
-        let floodResult = IncomingFloodGuard.shared.check(senderId: senderId)
+        // By when the server queued it: a mailbox drained at launch is backlog, not a burst.
+        let floodResult = IncomingFloodGuard.shared.check(
+            senderId: senderId,
+            queuedAt: messageData.serverOrderKey.flatMap(ServerMessageOrder.serverDate(ofKey:))
+        )
 
         // ── Lockdown check ──────────────────────────────────────────────────
         let lockdownSuppressed = LockdownManager.shared.shouldSuppress(senderId: senderId)
