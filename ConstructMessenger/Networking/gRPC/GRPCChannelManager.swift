@@ -699,6 +699,10 @@ final class GRPCChannelManager: Sendable {
         var lastError: Error?
         for attempt in 0..<2 {
             let client = try acquireSealedPersistentClient()
+            // Outcomes go to the router tagged `.sealed`: this connection can die while the
+            // authenticated one (and the stream on it) stays up, and the router counts the two
+            // apart (TODO 159). Only the report is here; what it means is `TransportReducer`'s.
+            let target = await currentTransportTarget()
             do {
                 if let timeout {
                     let opTask = Task<Result, Error> { try await operation(client) }
@@ -713,11 +717,21 @@ final class GRPCChannelManager: Sendable {
                     } catch is CancellationError {
                         if Task.isCancelled { opTask.cancel(); throw CancellationError() }
                     }
-                    return try await opTask.value
+                    let result = try await opTask.value
+                    await TransportRouter.shared.send(.rpcSucceeded(via: target, latencyMs: 0, lane: .sealed))
+                    return result
                 } else {
-                    return try await operation(client)
+                    let result = try await operation(client)
+                    await TransportRouter.shared.send(.rpcSucceeded(via: target, latencyMs: 0, lane: .sealed))
+                    return result
                 }
             } catch {
+                await TransportRouter.shared.send(.rpcFailed(
+                    kind: RPCFailureClassifier.classify(error),
+                    via: target,
+                    foreground: AppActivityState.shared.isForeground,
+                    lane: .sealed
+                ))
                 if Self.sealedFailureKeepsConnection(error) { throw error }
                 lastError = error
                 invalidateSealedPersistentClient()
@@ -725,6 +739,16 @@ final class GRPCChannelManager: Sendable {
             }
         }
         throw lastError ?? NetworkError.connectionFailed
+    }
+
+    /// The path the next RPC travels, as the router names it: the VEIL proxy and relay when one is
+    /// up, direct otherwise. The same naming `GRPCCallExecutor` reports with.
+    private func currentTransportTarget() async -> TransportTarget {
+        guard let port = veilProxyPort(),
+              let relay = await TransportRouter.shared.snapshot().state.currentRelay else {
+            return .direct(.h2)
+        }
+        return .veil(port: port, relay: relay)
     }
 
     /// The server answered — a status such as NOT_FOUND for expired media, or a refused

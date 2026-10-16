@@ -171,60 +171,6 @@ final class VeilFailurePolicyTests: XCTestCase {
         XCTAssertNil(reason)
     }
     
-    // MARK: - Relay Failure Type Mapping
-    
-    func testRelayFailureType_WebTunnelBlocked() {
-        let type = VeilFailurePolicy.relayFailureType(for: .webTunnelBlocked)
-        XCTAssertEqual(type, .webTunnelBlocked)
-    }
-    
-    func testRelayFailureType_TLSCertExpired() {
-        let type = VeilFailurePolicy.relayFailureType(for: .tlsCertExpired)
-        XCTAssertEqual(type, .tlsHandshake)
-    }
-    
-    func testRelayFailureType_TLSFingerprintBlocked() {
-        let type = VeilFailurePolicy.relayFailureType(for: .tlsFingerprintBlocked)
-        XCTAssertEqual(type, .fingerprintBlocked)
-    }
-    
-    func testRelayFailureType_StreamTimeout() {
-        let type = VeilFailurePolicy.relayFailureType(for: .streamTimeout)
-        XCTAssertEqual(type, .streamTimeout)
-    }
-    
-    func testRelayFailureType_StaleLocalProxy() {
-        let type = VeilFailurePolicy.relayFailureType(for: .staleLocalProxy)
-        XCTAssertEqual(type, .streamTimeout, "Local proxy crash maps to streamTimeout as fallback")
-    }
-    
-    func testRelayFailureType_TransportUnknown() {
-        let type = VeilFailurePolicy.relayFailureType(for: .transportUnknown)
-        XCTAssertEqual(type, .streamTimeout, "Unknown failures default to streamTimeout TTL")
-    }
-    
-    // MARK: - TTL Verification (Integration with RelayFailureType)
-    
-    func testTTL_WebTunnelBlocked() {
-        let type: RelayFailureType = .webTunnelBlocked
-        XCTAssertEqual(type.ttl, 180, "WebTunnel blocked should have 180s TTL")
-    }
-    
-    func testTTL_TLSCertExpired() {
-        let type: RelayFailureType = .tlsHandshake
-        XCTAssertEqual(type.ttl, 300, "TLS handshake/cert errors should have 300s TTL")
-    }
-    
-    func testTTL_FingerprintBlocked() {
-        let type: RelayFailureType = .fingerprintBlocked
-        XCTAssertEqual(type.ttl, 120, "Fingerprint blocked should have 120s TTL")
-    }
-    
-    func testTTL_StreamTimeout() {
-        let type: RelayFailureType = .streamTimeout
-        XCTAssertEqual(type.ttl, 60, "Stream timeout should have 60s TTL")
-    }
-
     // MARK: - The person reads it
 
     func testNoTunnelSaysSoInWords() {

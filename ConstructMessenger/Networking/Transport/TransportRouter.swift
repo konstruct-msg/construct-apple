@@ -94,7 +94,7 @@ actor TransportRouter {
         let nextState = outcome.state
         let effects = outcome.effects
         if case .auto = modeForEvent, case .veilActive = oldState, nextState == .direct(consecutiveFails: 0),
-           case .rpcSucceeded(let via, _) = event, !via.isVEIL {
+           case .rpcSucceeded(let via, _, _) = event, !via.isVEIL {
             Log.info("Transport: auto de-escalation — direct path confirmed, stopping VEIL", category: "Transport")
         }
 

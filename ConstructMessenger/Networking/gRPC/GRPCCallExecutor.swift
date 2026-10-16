@@ -77,7 +77,7 @@ final class GRPCCallExecutor: Sendable {
                 } else {
                     target = .direct(.h2)
                 }
-                await TransportRouter.shared.send(.rpcSucceeded(via: target, latencyMs: latencyMs))
+                await TransportRouter.shared.send(.rpcSucceeded(via: target, latencyMs: latencyMs, lane: .auth))
                 // A transport just proved it works — top up relay credentials over it.
                 // Rate-limited inside; no-ops while every candidate holds a live
                 // capability. Without this a voucher-bootstrapped device never asks for
@@ -145,7 +145,7 @@ final class GRPCCallExecutor: Sendable {
                 // churn (spin up a session that gets re-suspended seconds later). Hardcoding
                 // `true` here defeated that guard; use the tracker instead.
                 let isForeground = AppActivityState.shared.isForeground
-                await TransportRouter.shared.send(.rpcFailed(kind: kind, via: target, foreground: isForeground))
+                await TransportRouter.shared.send(.rpcFailed(kind: kind, via: target, foreground: isForeground, lane: .auth))
 
                 // On staleLocalProxy the FSM emits effects to rebuild VEIL; let the next
                 // for-iteration use the freshly set port (or fall back to direct if rebuild failed).
