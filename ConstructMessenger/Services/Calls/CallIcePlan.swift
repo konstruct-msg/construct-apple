@@ -2,20 +2,20 @@
 //  CallIcePlan.swift
 //  Construct Messenger
 //
-//  Which ICE servers a call uses, and whether it may go direct.
-//
-//  With VEIL `on` the person asked that nothing of theirs be seen on the network. A call cannot go
-//  through the tunnel today, so the plan keeps it as quiet as it can be outside it (vault
-//  `security/konstrukt-unobservability-map.md`, D8):
+//  Which ICE servers a call uses. Every call goes through our TURN relay (owner, 2026-10-16, for
+//  1.0): a direct call hands each side the other's network address, and an address names a person
+//  where the account does not. Until then this held only with VEIL `on`, and the default (Auto)
+//  allowed host and server-reflexive candidates.
 //
 //  - relay only (`iceTransportPolicy = .relay`): no host or server-reflexive candidates, so no
 //    direct UDP to the peer and neither side learns the other's address;
-//  - TURN over TLS (`turns:`) when the server offers it: the TURN handshake, the username among it,
-//    and the media are inside TLS instead of in clear on 3478;
-//  - no fallback to plain STUN when TURN credentials could not be had: that fallback is a direct
-//    call. The call fails instead, which the person can see; a direct call they could not.
+//  - no fallback to STUN when TURN credentials could not be had: that fallback is a direct call.
+//    The call fails instead, which the person can see; a leaked address they could not;
+//  - with VEIL `on`, TURN over TLS (`turns:`) when the server offers it: the TURN handshake and the
+//    media are inside TLS instead of in clear on 3478 (vault `security/konstrukt-unobservability-map.md`,
+//    D8). Without VEIL plain TURN is kept for latency — UDP first.
 //
-//  What stays visible: a TLS connection to the TURN host. Hiding that needs TURN behind a front.
+//  What stays visible: a connection to the TURN host. Hiding that needs TURN behind a front.
 //
 
 import Foundation
@@ -27,28 +27,20 @@ struct CallIcePlan: Equatable {
         let credential: String?
     }
 
-    enum Policy: Equatable { case all, relay }
+    /// One value since 2026-10-16; kept so the session applies what the plan says, and a test reads it.
+    enum Policy: Equatable { case relay }
 
     let servers: [Server]
     let policy: Policy
 
-    /// Own STUN server, the fallback when no TURN credentials came. Never a public one: call
-    /// metadata must not reach Google or Cloudflare.
-    static let ownStunFallback = "stun:ams.konstruct.cc:3478"
-
-    /// Nil when the call must not be placed: VEIL `on` and no TURN to relay through.
+    /// Nil when the call must not be placed: no TURN to relay through.
     static func make(turnURLs: [String]?, username: String, credential: String, veilOn: Bool) -> CallIcePlan? {
         let urls = turnURLs ?? []
-        guard veilOn else {
-            guard !urls.isEmpty else {
-                return CallIcePlan(servers: [Server(urls: [ownStunFallback], username: nil, credential: nil)], policy: .all)
-            }
-            return CallIcePlan(servers: [Server(urls: urls, username: username, credential: credential)], policy: .all)
-        }
         guard !urls.isEmpty else { return nil }
         let overTLS = urls.filter { $0.lowercased().hasPrefix("turns:") }
+        let chosen = veilOn && !overTLS.isEmpty ? overTLS : urls
         return CallIcePlan(
-            servers: [Server(urls: overTLS.isEmpty ? urls : overTLS, username: username, credential: credential)],
+            servers: [Server(urls: chosen, username: username, credential: credential)],
             policy: .relay
         )
     }

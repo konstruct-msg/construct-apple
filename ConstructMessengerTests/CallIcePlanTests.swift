@@ -2,8 +2,8 @@
 //  CallIcePlanTests.swift
 //  ConstructMessengerTests
 //
-//  With VEIL `on` a call goes through TURN only, over TLS where offered, and never falls back to a
-//  direct call (vault security/konstrukt-unobservability-map.md, D8).
+//  Every call goes through TURN only and never falls back to a direct call (owner, 2026-10-16);
+//  with VEIL `on`, over TLS where offered (vault security/konstrukt-unobservability-map.md, D8).
 //
 
 import XCTest
@@ -34,13 +34,16 @@ final class CallIcePlanTests: XCTestCase {
         XCTAssertNil(CallIcePlan.make(turnURLs: [], username: "", credential: "", veilOn: true))
     }
 
-    func testWithoutVeilNothingChanges() throws {
+    /// The rule before 2026-10-16 was "relay only with VEIL on"; a direct policy for VEIL off reddens this.
+    func testWithoutVeilTheCallIsStillRelayOnlyOverEveryTurnURL() throws {
         let plan = try XCTUnwrap(CallIcePlan.make(turnURLs: turn, username: "u", credential: "c", veilOn: false))
-        XCTAssertEqual(plan.policy, .all)
-        XCTAssertEqual(plan.servers.flatMap(\.urls), turn)
+        XCTAssertEqual(plan.policy, .relay, "a direct call hands the peer our address")
+        XCTAssertEqual(plan.servers.flatMap(\.urls), turn, "plain TURN kept for latency without VEIL")
+    }
 
-        let fallback = try XCTUnwrap(CallIcePlan.make(turnURLs: nil, username: "", credential: "", veilOn: false))
-        XCTAssertEqual(fallback.servers.flatMap(\.urls), [CallIcePlan.ownStunFallback])
-        XCTAssertFalse(fallback.servers.flatMap(\.urls).contains { $0.contains("google") || $0.contains("cloudflare") })
+    /// Mutation: bring back the STUN fallback for VEIL off — this reddens.
+    func testWithoutVeilAndNoTurnThereIsNoCall() {
+        XCTAssertNil(CallIcePlan.make(turnURLs: nil, username: "", credential: "", veilOn: false))
+        XCTAssertNil(CallIcePlan.make(turnURLs: [], username: "", credential: "", veilOn: false))
     }
 }
