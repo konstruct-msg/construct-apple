@@ -22,8 +22,8 @@ enum WebRTCSessionRole: Sendable {
 enum WebRTCSessionError: Error {
     case webRTCLibraryMissing
     case invalidState(String)
-    /// VEIL is `on` and there is no TURN to relay through (`CallIcePlan`).
-    case noRelayWhileVeilOn
+    /// No TURN to relay through, and a call is never direct (`CallIcePlan`).
+    case noRelay
 }
 
 @MainActor
@@ -188,15 +188,15 @@ final class WebRTCSession: NSObject, WebRTCSessionProtocol {
         guard let plan = CallIcePlan.make(
             turnURLs: turn?.urls, username: turn?.username ?? "", credential: turn?.credential ?? "", veilOn: veilOn
         ) else {
-            Log.error("ICE config → none: VEIL is on and no TURN credentials — not placing a direct call", category: "Calls")
-            throw WebRTCSessionError.noRelayWhileVeilOn
+            Log.error("ICE config → none: no TURN credentials — not placing a direct call", category: "Calls")
+            throw WebRTCSessionError.noRelay
         }
         Log.info("ICE config → \(plan.servers.flatMap(\.urls)) policy=\(plan.policy)", category: "Calls")
         let config = RTCConfiguration()
         config.iceServers = plan.servers.map {
             RTCIceServer(urlStrings: $0.urls, username: $0.username, credential: $0.credential)
         }
-        config.iceTransportPolicy = plan.policy == .relay ? .relay : .all
+        switch plan.policy { case .relay: config.iceTransportPolicy = .relay }
         config.sdpSemantics = .unifiedPlan
         config.bundlePolicy = .maxBundle
         config.rtcpMuxPolicy = .require
