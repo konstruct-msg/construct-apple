@@ -230,15 +230,20 @@ struct SettingsView: View {
 
     private var mainSettingsSection: some View {
         CTSectionGroup {
-            NavigationLink(destination: DevicesView()) {
-                CTSettingsRow(label: NSLocalizedString("linked_devices", comment: ""), icon: "laptopcomputer", disclosure: true)
+            // Not in 1.0 (owner, 2026-10-16): linking works but is not fully tested, and a screen
+            // listing one device with nothing to do on it is a question for App Review. One
+            // authority with the linking offer itself, so the two cannot disagree.
+            if DeviceLinkOfferPolicy.isLinkingOffered {
+                NavigationLink(destination: DevicesView()) {
+                    CTSettingsRow(label: NSLocalizedString("linked_devices", comment: ""), icon: "laptopcomputer", disclosure: true)
+                }
+                .buttonStyle(.plain)
+                // On the link, not on the row inside it: an identifier applied within `CTSettingsRow`
+                // is inherited by each of its children, and the tree comes back with the string
+                // tripled on the container plus a copy on the icon, the label and the chevron.
+                .accessibilityIdentifier(A11y.Settings.devices)
+                ConstructRowDivider(indent: CTSettingsRow.dividerIndent)
             }
-            .buttonStyle(.plain)
-            // On the link, not on the row inside it: an identifier applied within `CTSettingsRow`
-            // is inherited by each of its children, and the tree comes back with the string
-            // tripled on the container plus a copy on the icon, the label and the chevron.
-            .accessibilityIdentifier(A11y.Settings.devices)
-            ConstructRowDivider(indent: CTSettingsRow.dividerIndent)
             NavigationLink(destination: AppearanceSettingsView()) {
                 CTSettingsRow(label: NSLocalizedString("appearance", comment: ""), icon: "paintbrush", disclosure: true)
             }
@@ -317,6 +322,10 @@ struct SettingsView: View {
                 icon: "info.circle",
                 valueColor: AppConstants.isNonProductionBuild ? .orange : Color.CT.textDim
             )
+                #if DEBUG || INTERNAL_TOOLS
+                // Debug only (owner, 2026-10-16): a hidden gesture in a store build is a hidden
+                // feature to App Review (2.3.1), and whether the escape hatch is wanted at all is
+                // undecided.
                 .contentShape(Rectangle())
                 .onTapGesture {
                     versionTapCount += 1
@@ -327,6 +336,7 @@ struct SettingsView: View {
                         showEmergencyImport = true
                     }
                 }
+                #endif
         }
         .alert(NSLocalizedString("veil_config_paste", comment: ""), isPresented: $showEmergencyImport) {
             TextField(NSLocalizedString("veil_config_paste", comment: ""), text: $emergencyPasteText)
