@@ -846,7 +846,7 @@ class MediaManager {
         onProgress: (@Sendable (Double) -> Void)? = nil
     ) async throws -> MediaMessageData {
         let filename = url.lastPathComponent
-        Log.info("Uploading file: \(filename)", category: "MediaManager")
+        Log.info("Uploading a file (.\(url.pathExtension.lowercased()))", category: "MediaManager")
 
         // A picked file is security-scoped; a forwarded one is the app's own temporary copy and
         // is not, which `startAccessingSecurityScopedResource` answers with false. Unreadable

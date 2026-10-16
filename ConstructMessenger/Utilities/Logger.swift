@@ -51,4 +51,12 @@ struct Log {
     static func fault(_ message: String, category: String = "Default") {
         log(level: .fault, category: category, message: message)
     }
+
+    /// Whether a value the person typed is there — never the value. Names, @aliases, file names
+    /// and message text are not log material: beta builds write the log to a file the tester
+    /// sends us, and until 2026-10-16 it carried a queued message's first 30 characters, contact
+    /// names and file names (`LogContentTests` holds the line).
+    static func presence(_ value: String?) -> String {
+        (value ?? "").isEmpty ? "none" : "set"
+    }
 }

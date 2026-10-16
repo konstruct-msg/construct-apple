@@ -223,7 +223,7 @@ struct FileAttachmentBubbleView: View {
                     downloadedURLs[file.mediaId] = url
                 }
                 if MediaSaver.export(fileAt: url, suggestedName: file.filename) == .failed {
-                    Log.error("File save failed: \(file.filename)", category: "FileAttachment")
+                    Log.error("File save failed (media \(file.mediaId.prefix(8))…)", category: "FileAttachment")
                 }
             } catch {
                 Log.error("File download failed: \(error)", category: "FileAttachment")

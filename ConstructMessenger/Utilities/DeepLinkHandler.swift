@@ -40,7 +40,7 @@ class DeepLinkHandler {
         Task {
             do {
                 let contactInfo = try await LinkParser.parseContactLink(url)
-                Log.info("DeepLinkHandler: Successfully parsed contact deep link - userId: \(contactInfo.userId), username: \(contactInfo.username)", category: "DeepLink")
+                Log.info("DeepLinkHandler: Successfully parsed contact deep link - userId: \(contactInfo.userId), username: \(Log.presence(contactInfo.username))", category: "DeepLink")
                 await MainActor.run {
                     self.deepLink = .contact(contactInfo)
                     Log.debug("DeepLinkHandler: deepLink property set to: \(String(describing: self.deepLink))", category: "DeepLink")
