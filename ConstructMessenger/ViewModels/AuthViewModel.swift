@@ -1084,7 +1084,7 @@ class AuthViewModel {
     private func handleConnectSuccess(userId: String, username: String) {
         Log.info("ConnectSuccess received!")
         Log.info("   User ID: \(userId)")
-        Log.info("   Username: \(username)")
+        Log.info("   Username: \(Log.presence(username))")
 
         currentUserId = userId
         isAuthenticated = true
@@ -1143,17 +1143,17 @@ class AuthViewModel {
         }
         
         Log.info("loadUserFromCoreData: Searching for userId: \(userId)")
-        if let username = username {
-            Log.info("   Username from parameter: \(username)")
+        if username != nil {
+            Log.info("   Username from parameter: set")
         }
 
         do {
             let profiles = LocalRepositories.ownProfile
             if var me = try profiles.profile(accountId: userId) {
-                Log.info("Found existing user in Core Data: \(me.displayName)")
+                Log.info("Found existing user in Core Data")
                 // Update username if provided and different
                 if let newUsername = username, !newUsername.isEmpty, me.username != newUsername {
-                    Log.info("Updating username: '\(me.username)' -> '\(newUsername)'")
+                    Log.info("Updating username")
                     let oldUsername = me.username
                     me.username = newUsername
                     // Also update displayName if it's empty or was same as old username
@@ -1172,7 +1172,7 @@ class AuthViewModel {
                     avatar: nil, profileEditedAtMs: 0
                 ))
                 Log.info("Created new user in Core Data for ID: \(userId)")
-                Log.info("   username: \(username ?? "")")
+                Log.info("   username: \(Log.presence(username))")
             }
             guard let user = try profiles.profile(accountId: userId) else {
                 throw NSError(domain: "AuthViewModel", code: 1,
@@ -1185,8 +1185,7 @@ class AuthViewModel {
             
             Log.info("Restored user data from Core Data:")
             Log.info("   userId: \(user.accountId)")
-            Log.info("   username: \(user.username)")
-            Log.info("   displayName: \(user.displayName)")
+            Log.info("   username: \(Log.presence(user.username)), displayName: \(Log.presence(user.displayName))")
             
         } catch {
             Log.info("Failed to fetch or create user from Core Data: \(error)")

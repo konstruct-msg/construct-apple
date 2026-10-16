@@ -45,7 +45,7 @@ class ChatManagementService {
                 )
                 try contacts.setNames(user.id, username: names.username, displayName: names.displayName)
                 if !existing.isContact { try contacts.markContact(user.id, addedAt: now) }
-                Log.debug("Using existing user: id=\(user.id), username=\(user.username), displayName=\(names.displayName)", category: "ChatManagementService")
+                Log.debug("Using existing user: id=\(user.id)", category: "ChatManagementService")
             } else {
                 var row = ContactRecord.new(id: user.id, isContact: true, addedAt: now)
                 let names = ContactName.applyingServerUsername(
@@ -54,7 +54,7 @@ class ChatManagementService {
                 row.username = names.username
                 row.displayName = names.displayName
                 try contacts.insert(row)
-                Log.debug("Created new user: id=\(user.id), username=\(user.username), displayName=\(names.displayName)", category: "ChatManagementService")
+                Log.debug("Created new user: id=\(user.id)", category: "ChatManagementService")
             }
 
             if let key = identityPublicKey, !key.isEmpty {
