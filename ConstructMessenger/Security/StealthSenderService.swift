@@ -274,6 +274,32 @@ final class StealthSenderService: SealedSenderResolving {
         return inner.recipientDevice
     }
 
+    /// Whether a sealed inner names no recipient device. Such a copy is written to every device
+    /// of the account (the server treats unnamed as "for all"), so on an account with more than
+    /// one device a copy that does not open here is most likely a sibling's. Android senders
+    /// omitted the field until construct-android `04d666f` (vault TODO 161). A parse failure is
+    /// not "unnamed": that is corruption, and the normal path reports it.
+    nonisolated static func namesNoRecipientDevice(sealedInnerBytes: Data) -> Bool {
+        guard let inner = try? Shared_Proto_Core_V1_SealedInner(serializedBytes: sealedInnerBytes) else { return false }
+        return inner.recipientDevice.isEmpty
+    }
+
+    /// What an unseal failure does with the message. One redelivery normally — a box that fails
+    /// right after an identity-key rotation deserves a second chance — but an unnamed copy on a
+    /// multi-device account is decided already: it was sealed to a sibling, and redelivering it
+    /// opens nothing, costs an unseal and, on 2026-10-16, a push per redelivery. Dropped at once.
+    enum UnsealFailureDisposition: Equatable { case deferOnce, drop }
+
+    nonisolated static func unsealFailureDisposition(
+        namesNoRecipientDevice: Bool,
+        ownDeviceCount: Int,
+        alreadyDeferred: Bool
+    ) -> UnsealFailureDisposition {
+        if alreadyDeferred { return .drop }
+        if namesNoRecipientDevice && ownDeviceCount > 1 { return .drop }
+        return .deferOnce
+    }
+
     /// Whose device a copy we cannot open was addressed to.
     ///
     /// The drop is right in every case — a copy sealed to a key we do not hold can never open

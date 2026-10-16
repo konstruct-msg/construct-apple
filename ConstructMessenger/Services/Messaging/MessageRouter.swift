@@ -407,12 +407,24 @@ final class MessageRouter {
                 // fails to open right after an identity-key rotation deserves a second chance)
                 // before dropping for good, instead of the old instant permanent loss.
                 PerformanceMetrics.shared.record(.stealthUnsealFailure, label: "routeIncomingMessage")
-                if consumeUnsealRetry(message.id) {
+                let unnamed = StealthSenderService.namesNoRecipientDevice(sealedInnerBytes: message.sealedInnerData)
+                let disposition = StealthSenderService.unsealFailureDisposition(
+                    namesNoRecipientDevice: unnamed,
+                    ownDeviceCount: MultiDeviceSendCoordinator.shared.knownOwnDeviceIds(myUserId: currentUserId).count,
+                    alreadyDeferred: unsealDeferredIds.contains(message.id)
+                )
+                switch disposition {
+                case .deferOnce:
+                    _ = consumeUnsealRetry(message.id)
                     Log.error("STEALTH: unseal failed for \(message.id.prefix(8))… — deferring for one redelivery", category: "MessageRouter")
                     PerformanceMetrics.shared.record(.stealthUnsealDefer, label: "routeIncomingMessage")
                     refreshBundleKeyIfStale()
                     streamOutcome = .deferred
-                } else {
+                case .drop where unnamed && !unsealDeferredIds.contains(message.id):
+                    Log.info("STEALTH: \(message.id.prefix(8))… names no device and does not open here — a sibling's copy, dropping", category: "MessageRouter")
+                    PerformanceMetrics.shared.record(.stealthCopyForSibling, label: "unnamed")
+                    streamOutcome = .durable
+                case .drop:
                     Log.error("STEALTH: unseal failed again for \(message.id.prefix(8))… — dropping", category: "MessageRouter")
                     streamOutcome = .durable
                 }
