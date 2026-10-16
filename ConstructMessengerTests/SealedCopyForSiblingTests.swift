@@ -113,4 +113,39 @@ final class SealedCopyForSiblingTests: XCTestCase {
             .notOurs
         )
     }
+
+    // MARK: - Unnamed copies that do not open (2026-10-16, vault TODO 161)
+
+    func testOnlyAnEmptyRecipientDeviceReadsAsUnnamed() {
+        XCTAssertTrue(StealthSenderService.namesNoRecipientDevice(sealedInnerBytes: inner(recipientDevice: "")))
+        XCTAssertFalse(StealthSenderService.namesNoRecipientDevice(sealedInnerBytes: inner(recipientDevice: "device-a")))
+        XCTAssertFalse(StealthSenderService.namesNoRecipientDevice(sealedInnerBytes: Data([0xFF, 0xFF, 0xFF])),
+                       "unparseable is corruption, not unnamed")
+    }
+
+    /// An Android sender's copy for our sibling arrived unnamed and was deferred for a redelivery
+    /// that could not open it — 114 of them in one day, each redelivery a push.
+    /// Mutation: return `.deferOnce` for unnamed on a multi-device account — this reddens.
+    func testAnUnnamedFailureOnAMultiDeviceAccountDropsAtOnce() {
+        XCTAssertEqual(StealthSenderService.unsealFailureDisposition(
+            namesNoRecipientDevice: true, ownDeviceCount: 2, alreadyDeferred: false), .drop)
+    }
+
+    /// One device: nobody else's copy can reach us, so the failure is a real one and keeps its
+    /// redelivery (a box that fails right after an identity-key rotation). Named copies too.
+    /// Mutation: drop every unnamed failure regardless of the device count — this reddens.
+    func testOtherFirstFailuresKeepTheirRedelivery() {
+        XCTAssertEqual(StealthSenderService.unsealFailureDisposition(
+            namesNoRecipientDevice: true, ownDeviceCount: 1, alreadyDeferred: false), .deferOnce)
+        XCTAssertEqual(StealthSenderService.unsealFailureDisposition(
+            namesNoRecipientDevice: true, ownDeviceCount: 0, alreadyDeferred: false), .deferOnce,
+                       "an unknown device set is not 'more than one'")
+        XCTAssertEqual(StealthSenderService.unsealFailureDisposition(
+            namesNoRecipientDevice: false, ownDeviceCount: 2, alreadyDeferred: false), .deferOnce)
+    }
+
+    func testASecondFailureAlwaysDrops() {
+        XCTAssertEqual(StealthSenderService.unsealFailureDisposition(
+            namesNoRecipientDevice: false, ownDeviceCount: 1, alreadyDeferred: true), .drop)
+    }
 }
