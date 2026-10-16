@@ -5,18 +5,18 @@ No phone number. No email. No ads and no feed. You create an identity on this de
 
 WHY IT IS PRIVATE
 
-• End-to-end encrypted. Text and media are decrypted only on your device and your contact's. The server handles a sealed container, not its contents.
+• End-to-end encrypted. Text, media and calls are decrypted only on your device and your contact's. The server handles a sealed container, not its contents.
 
 • Keys stay on the device. They are not uploaded to an account in the cloud and they are not tied to a SIM card.
 
 • Nobody writes to you uninvited. A new person reaches you through a QR code, a link, or a search by @alias — and that search is off until you turn it on.
 
-• Access is yours. Your recovery phrase and your linked devices belong to you, not to a carrier.
+• Access is yours. Your recovery phrase belongs to you, not to a carrier.
 
 
 WHY IT IS QUICK
 
-• Messaging only. No mini-apps, no store, no games — the things that make a messenger heavy and drain a battery.
+• Messages and calls only. No mini-apps, no store, no games — the things that make a messenger heavy and drain a battery.
 
 • A light client. The cryptography is native code built for speed, not a framework built to serve ads.
 
@@ -29,7 +29,7 @@ HOW IT WORKS
 2. Show a QR code or share a link.
 3. Write.
 
-Optional: a public @alias (off by default), several devices on one identity, recovery from a 12-word phrase.
+Optional: a public @alias (off by default) and recovery from a 12-word phrase.
 
 
 WHO IT IS FOR
