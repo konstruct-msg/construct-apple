@@ -9,5 +9,5 @@
 "NSPhotoLibraryAddUsageDescription" = "Konstruct saves photos and videos to your library when you choose to save them from a chat.";
 "NSMicrophoneUsageDescription" = "Konstruct uses the microphone to record voice messages and make encrypted calls.";
 "NSSpeechRecognitionUsageDescription" = "To transcribe your voice messages into text on-device using Apple’s Speech Recognition. Audio never leaves your device.";
-"NSUserNotificationsUsageDescription" = "Konstruct sends you notifications for new messages.";
 "NSLocalNetworkUsageDescription" = "Used to transfer your backup directly to a nearby device over WiFi.";
+"NSFaceIDUsageDescription" = "Konstruct uses Face ID to unlock the app and to protect your recovery phrase.";
