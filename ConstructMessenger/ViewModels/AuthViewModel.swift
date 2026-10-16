@@ -547,46 +547,36 @@ class AuthViewModel {
         }
     }
     
-    /// Refresh access token automatically
+    /// The timer's refresh. Through the single-flight coordinator, like every other refresh: until
+    /// 2026-10-16 this called `refreshToken` itself, and on 2026-10-15 it fired in the same second
+    /// as the foreground restore's coordinator refresh. Both presented the one stored refresh
+    /// token, the second was rejected as already used, and the rejection ran
+    /// `handleSessionExpired` — which wiped the session *and the stream cursor* for an identity
+    /// that was back a second later, so the stream replayed the whole backlog.
+    ///
+    /// A failure here never signs out. Transient: keep the tokens and try again shortly. A refresh
+    /// token the server refuses: authenticate the device again — the same identity, no wipe.
     private func refreshAccessToken() async {
-        guard let refreshToken = AuthSessionManager.shared.refreshToken else {
-            Log.error("No refresh token available - forcing logout", category: "Auth")
-            await MainActor.run {
-                handleSessionExpired()
-            }
-            return
-        }
-        
+        let outcome: TokenRefreshOutcome
         do {
-            Log.info("Attempting to refresh access token", category: "Auth")
-            
-            let response = try await AuthServiceClient.shared.refreshToken(refreshToken: refreshToken)
-            
-            // Save new tokens
-            await MainActor.run {
-                let expiresIn: Int
-                if let expiresAt = response.expiresAt {
-                    expiresIn = max(Int(expiresAt - Int64(Date().timeIntervalSince1970)), 0)
-                } else {
-                    expiresIn = response.expiresIn ?? 3600
-                }
-                AuthSessionManager.shared.saveTokens(
-                    accessToken: response.accessToken,
-                    refreshToken: response.refreshToken,
-                    expiresIn: expiresIn
-                )
-                
-                Log.info("Access token refreshed successfully (expires in: \(expiresIn / 60) min)", category: "Auth")
-                self.scheduleTokenRefresh()
-            }
-            
+            outcome = try await TokenRefreshCoordinator.shared.refreshIfPossible() ? .refreshed : .refused
         } catch {
+            outcome = TokenRefreshCoordinator.isRefreshTokenPermanentlyInvalid(error) ? .refused : .transient
             Log.error("Token refresh failed: \(error.localizedDescription)", category: "Auth")
-            
-            // If refresh fails, logout user
-            await MainActor.run {
-                handleSessionExpired()
+        }
+        switch outcome.action {
+        case .reschedule:
+            Log.info("Access token refreshed (timer)", category: "Auth")
+            scheduleTokenRefresh()
+        case .retry(let after):
+            Log.info("Token refresh will retry in \(Int(after))s; tokens kept", category: "Auth")
+            tokenRefreshTimer?.invalidate()
+            tokenRefreshTimer = Timer.scheduledTimer(withTimeInterval: after, repeats: false) { [weak self] _ in
+                Task { @MainActor in await self?.refreshAccessToken() }
             }
+        case .reauthenticateDevice:
+            Log.info("Refresh token refused — authenticating the device again (no sign-out)", category: "Auth")
+            await restoreOrAuthenticateDevice()
         }
     }
 
