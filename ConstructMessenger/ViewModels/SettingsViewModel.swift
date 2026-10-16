@@ -74,8 +74,7 @@ class SettingsViewModel {
 
         Log.info("SettingsViewModel: Loaded user info")
         Log.info("   userId: \(userId)")
-        Log.info("   username: \(username)")
-        Log.info("   displayName: \(displayName)")
+        Log.info("   username: \(Log.presence(username)), displayName: \(Log.presence(displayName))")
 
         // Load avatar from Core Data
         loadAvatarFromCoreData()

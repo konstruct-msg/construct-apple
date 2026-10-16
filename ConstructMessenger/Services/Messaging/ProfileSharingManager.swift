@@ -38,7 +38,7 @@ class ProfileSharingManager {
     func parseProfileMessage(from data: Data) -> ProfileShareData? {
         // Try binary first (new format, no JSON)
         if let profile = ProfileShareData.fromBinaryData(data) {
-            Log.info("Successfully parsed profile message (binary): displayName=\(profile.displayName), avatarMediaId=\(profile.avatarMediaId ?? "nil")", category: "ProfileSharingManager")
+            Log.info("Successfully parsed profile message (binary): displayName=\(Log.presence(profile.displayName)), avatarMediaId=\(profile.avatarMediaId ?? "nil")", category: "ProfileSharingManager")
             return profile
         }
 
@@ -53,7 +53,7 @@ class ProfileSharingManager {
 
         do {
             let json = try JSONDecoder().decode(ProfileShareData.self, from: data)
-            Log.info("Successfully parsed profile message (legacy JSON): displayName=\(json.displayName), avatarMediaId=\(json.avatarMediaId ?? "nil")", category: "ProfileSharingManager")
+            Log.info("Successfully parsed profile message (legacy JSON): displayName=\(Log.presence(json.displayName)), avatarMediaId=\(json.avatarMediaId ?? "nil")", category: "ProfileSharingManager")
             return json
         } catch {
             Log.error("parseProfileMessage: Failed to decode ProfileShareData: \(error)", category: "ProfileSharingManager")
@@ -87,7 +87,7 @@ class ProfileSharingManager {
                 userId, displayName: trimmedName.isEmpty ? held.displayName : trimmedName,
                 sharedWithMeAt: Date(), profileEditedAtMs: held.profileEditedAtMs
             )
-            Log.info("Profile data updated for user \(userId): displayName=\(profileData.displayName)", category: "ProfileSharingManager")
+            Log.info("Profile data updated for user \(userId): displayName=\(Log.presence(profileData.displayName))", category: "ProfileSharingManager")
         } catch {
             Log.error("Failed to save profile data: \(error)", category: "ProfileSharingManager")
             return

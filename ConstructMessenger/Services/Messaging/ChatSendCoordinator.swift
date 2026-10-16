@@ -354,7 +354,7 @@ final class ChatSendCoordinator {
                 MediaUploadProgressTracker.shared.clear(placeholderId)
                 persistenceService.deleteMessage(id: placeholderId, in: viewContext, autoSave: true)
             }
-            Log.info("Sending queued message: \"\(queued.text.prefix(30))\"", category: "ChatViewModel")
+            Log.info("Sending queued message (\(queued.text.count) chars)", category: "ChatViewModel")
             sendMessage(
                 text: queued.text,
                 attachments: queued.attachments,

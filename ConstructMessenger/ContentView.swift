@@ -185,7 +185,7 @@ struct ContentView: View {
     private func handleDeepLink(_ deepLink: DeepLinkType?) {
         Log.debug("ContentView: Deep link changed: \(String(describing: deepLink))", category: "DeepLink")
         if case .contact(let contactInfo) = deepLink {
-            Log.info("ContentView: Creating chat directly for userId: \(contactInfo.userId), username: \(contactInfo.username)", category: "DeepLink")
+            Log.info("ContentView: Creating chat directly for userId: \(contactInfo.userId), username: \(Log.presence(contactInfo.username))", category: "DeepLink")
 
             // Create chat directly instead of opening modal
             if let chat = chatsViewModel.startChat(

@@ -458,7 +458,7 @@ struct RegistrationFlowView: View {
             Log.info("REGISTRATION DATA SUMMARY:", category: "Registration")
             Log.info("   Device ID:    \(savedDeviceId?.prefix(16) ?? "MISSING")...", category: "Registration")
             Log.info("   User ID:      \(registerData.userId.prefix(8))...", category: "Registration")
-            Log.info("   Username:     \(username ?? "anonymous")", category: "Registration")
+            Log.info("   Username:     \(Log.presence(username))", category: "Registration")
             Log.info("   Keychain:     \(keychainOK ? "✅" : "❌")", category: "Registration")
             Log.info("   Session:      \(savedAccessToken != nil ? "✅" : "❌")", category: "Registration")
             Log.info("   AuthViewModel: \(authViewModel.isAuthenticated ? "✅" : "❌")", category: "Registration")
