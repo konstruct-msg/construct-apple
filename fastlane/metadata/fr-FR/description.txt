@@ -5,18 +5,18 @@ Pas de numéro de téléphone. Pas d’e-mail. Pas de publicité ni de fil d’a
 
 POURQUOI C’EST PRIVÉ
 
-• Chiffrement de bout en bout. Le texte et les médias ne sont déchiffrés que sur votre appareil et sur celui de votre correspondant. Le serveur manipule un contenant scellé, pas son contenu.
+• Chiffrement de bout en bout. Le texte, les médias et les appels ne sont déchiffrés que sur votre appareil et sur celui de votre correspondant. Le serveur manipule un contenant scellé, pas son contenu.
 
 • Les clés restent sur l’appareil. Elles ne partent pas vers un compte dans le cloud et ne sont liées à aucune carte SIM.
 
 • Personne ne vous écrit sans y avoir été invité. Une nouvelle personne arrive par un code QR, un lien, ou une recherche par @alias — et cette recherche est désactivée tant que vous ne l’activez pas.
 
-• L’accès vous appartient. Votre phrase de récupération et vos appareils liés sont à vous, pas à un opérateur.
+• L’accès vous appartient. Votre phrase de récupération est à vous, pas à un opérateur.
 
 
 POURQUOI C’EST LÉGER
 
-• Uniquement de la messagerie. Pas de mini-applications, pas de boutique, pas de jeux — tout ce qui alourdit une messagerie et vide une batterie.
+• Uniquement des messages et des appels. Pas de mini-applications, pas de boutique, pas de jeux — tout ce qui alourdit une messagerie et vide une batterie.
 
 • Un client léger. La cryptographie est du code natif écrit pour la vitesse, pas un cadriciel écrit pour afficher des publicités.
 
@@ -29,7 +29,7 @@ COMMENT ÇA MARCHE
 2. Vous montrez un code QR ou vous partagez un lien.
 3. Vous écrivez.
 
-En option : un @alias public (désactivé par défaut), plusieurs appareils sur une même identité, une récupération par phrase de 12 mots.
+En option : un @alias public (désactivé par défaut) et une récupération par phrase de 12 mots.
 
 
 POUR QUI

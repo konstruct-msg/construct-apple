@@ -9,5 +9,5 @@
 "NSPhotoLibraryAddUsageDescription" = "チャットから保存を選んだときに、写真や動画をライブラリに保存します。";
 "NSMicrophoneUsageDescription" = "コンストラクトは、ボイスメッセージの録音と暗号化通話のためにマイクを使用します。";
 "NSSpeechRecognitionUsageDescription" = "Appleの音声認識を使って、ボイスメッセージを端末内で文字起こしするために使用します。音声が端末を離れることはありません。";
-"NSUserNotificationsUsageDescription" = "コンストラクトは新着メッセージの通知をお送りします。";
 "NSLocalNetworkUsageDescription" = "Wi-Fiを通じて近くのデバイスにバックアップを直接転送するために使用します。";
+"NSFaceIDUsageDescription" = "コンストラクトはアプリのロック解除と復旧フレーズの保護にFace IDを使用します。";
