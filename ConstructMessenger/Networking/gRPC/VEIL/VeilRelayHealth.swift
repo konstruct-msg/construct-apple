@@ -6,48 +6,6 @@
 import Foundation
 import SwiftUI
 
-/// The reason a relay was blacklisted. Determines how long it stays deprioritized.
-enum RelayFailureType: CustomStringConvertible, Equatable {
-    /// obfs4 / TLS handshake could not be completed, likely DPI or cert mismatch.
-    case tlsHandshake
-    /// Tunnel was established but an RPC / stream timed out.
-    case streamTimeout
-    /// WebTunnel HTTP upgrade was rejected and the obfs4 companion also failed.
-    case webTunnelBlocked
-    /// Explicit DPI pattern detected in auto mode.
-    case dpiDetected
-    /// TLS alert 40, indicating relay fingerprint is blocked by DPI.
-    case fingerprintBlocked
-
-    var ttl: TimeInterval {
-        switch self {
-        case .tlsHandshake, .dpiDetected: return 300
-        case .streamTimeout:              return 60
-        case .webTunnelBlocked:           return 180
-        case .fingerprintBlocked:         return 120
-        }
-    }
-
-    var description: String {
-        switch self {
-        case .tlsHandshake:       return "tlsHandshake"
-        case .streamTimeout:      return "streamTimeout"
-        case .webTunnelBlocked:   return "webTunnelBlocked"
-        case .dpiDetected:        return "dpiDetected"
-        case .fingerprintBlocked: return "fingerprintBlocked"
-        }
-    }
-}
-
-struct RelayBlacklistEntry {
-    let type: RelayFailureType
-    let timestamp: Date
-
-    var isExpired: Bool {
-        Date().timeIntervalSince(timestamp) >= type.ttl
-    }
-}
-
 /// Four-level quality classification derived from historical success/failure counts.
 enum RelayQuality: Int, Codable, CaseIterable {
     /// No history yet (< 3 RPCs observed).
@@ -60,25 +18,6 @@ enum RelayQuality: Int, Codable, CaseIterable {
     case good      =  2
     /// >= 90% success rate.
     case excellent =  3
-
-    /// Whether to trust the relay with the full RPC timeout.
-    var useFullTimeout: Bool { self == .excellent || self == .good }
-
-    /// Whether to use the short fetch-missed-messages wall-clock cap.
-    var useFastFetchCap: Bool { self == .excellent || self == .good }
-
-    /// Consecutive stream timeouts on the same relay before blacklisting it.
-    var blacklistThreshold: Int { (self == .excellent || self == .good) ? 1 : 2 }
-
-    var logLabel: String {
-        switch self {
-        case .excellent: return "excellent"
-        case .good:      return "good"
-        case .fair:      return "fair"
-        case .poor:      return "poor"
-        case .unknown:   return "unknown"
-        }
-    }
 
     /// Short badge string shown in Network Settings next to the relay address.
     var badge: String {

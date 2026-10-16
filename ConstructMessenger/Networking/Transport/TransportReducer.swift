@@ -38,7 +38,7 @@ enum TransportReducer {
         // (typically H3-only failures on an otherwise healthy network).
         if case .auto = mode,
            case .veilActive = state,
-           case .rpcSucceeded(let via, _) = event,
+           case .rpcSucceeded(let via, _, _) = event,
            !via.isVEIL {
             outcome.state = .direct(consecutiveFails: 0)
             if !outcome.effects.contains(.requestProxyStop) { outcome.effects.append(.requestProxyStop) }
@@ -95,8 +95,8 @@ enum TransportReducer {
         case .veilProbing:
             return reduceProbing(event: event, config: config, now: now)
 
-        case .veilActive(let relay, let port, let since):
-            return reduceActive(relay: relay, port: port, since: since, event: event, config: config, now: now)
+        case .veilActive(let relay, let port, let since, let softFails):
+            return reduceActive(relay: relay, port: port, since: since, softFails: softFails, event: event, config: config, now: now)
 
         case .veilCooldown(let until):
             return reduceCooldown(until: until, event: event, config: config, now: now)
@@ -190,7 +190,7 @@ enum TransportReducer {
         case .rpcSucceeded:
             return (.direct(consecutiveFails: 0), [])
 
-        case .rpcFailed(let kind, let via, let foreground):
+        case .rpcFailed(let kind, let via, let foreground, _):
             // Only count foreground transport failures over the direct path.
             guard foreground, !via.isVEIL, kind.isTransportFailure else {
                 return (.direct(consecutiveFails: fails), [])
@@ -273,41 +273,55 @@ enum TransportReducer {
         }
     }
 
-    private static func reduceActive(relay: String, port: UInt16, since: Date, event: TransportEvent, config: TransportConfig, now: Date) -> Outcome {
+    private static func reduceActive(relay: String, port: UInt16, since: Date, softFails: SoftFails, event: TransportEvent, config: TransportConfig, now: Date) -> Outcome {
+        func active(_ counts: SoftFails = softFails) -> TransportState {
+            .veilActive(relay: relay, port: port, since: since, softFails: counts)
+        }
         switch event {
-        case .rpcSucceeded:
-            return (.veilActive(relay: relay, port: port, since: since), [])
+        case .rpcSucceeded(let via, _, let lane):
+            // A success resets only its own lane: a receipt over the live auth connection says
+            // nothing about the sealed one. A direct-path success is not evidence about VEIL.
+            guard via.isVEIL, softFails[lane] != 0 else { return (active(), []) }
+            var counts = softFails
+            counts[lane] = 0
+            return (active(counts), [])
 
-        case .rpcFailed(let kind, let via, let foreground):
+        case .rpcFailed(let kind, let via, let foreground, let lane):
             guard foreground, via.isVEIL, kind.isTransportFailure else {
-                return (.veilActive(relay: relay, port: port, since: since), [])
+                return (active(), [])
             }
             // Hard relay failures (observable DPI block, cert expiry, dead local proxy):
             // the relay is broken. Rotate immediately.
             if isHardRelayFailure(kind) {
                 return rotateRelay()
             }
-            // Soft failures (random stream reset, generic transportUnknown / streamTimeout):
-            // the TCP socket got RST'd but the obfs4 tunnel may still be alive. Restarting
-            // the Rust proxy is expensive (8-13s of downtime, kills working tunnel state)
-            // and pointless when there's only one usable relay anyway. Just invalidate the
-            // gRPC client; the next RPC reconnects through the same proxy port.
-            return (.veilActive(relay: relay, port: port, since: since), [.invalidateGRPCClient])
+            // Soft failures (stream timeout, generic transportUnknown): the tunnel may be alive,
+            // so the first ones only invalidate the gRPC client — the next RPC reconnects through
+            // the same proxy. But a proxy or relay that accepts the connection and carries
+            // nothing fails this way forever (TODO 159: receive worked on the old stream, sends
+            // on a fresh connection never did), so consecutive soft failures on one lane count,
+            // and the threshold-th rotates.
+            var counts = softFails
+            counts[lane] += 1
+            if counts[lane] >= config.veilSoftFailThreshold {
+                return rotateRelay()
+            }
+            return (active(counts), [.invalidateGRPCClient])
 
         case .streamOpened, .streamHealthy, .streamSuppressed:
-            return (.veilActive(relay: relay, port: port, since: since), [])
+            return (active(), [])
 
         case .streamFailed(_, _, let via):
             // Data-plane death under VEIL: soft-invalidate gRPC (same as soft rpcFailed).
             // Hard rotate only when short-RPC hard kinds fire; stream alone does not
             // prove the relay is DPI-burned.
             guard via.isVEIL else {
-                return (.veilActive(relay: relay, port: port, since: since), [])
+                return (active(), [])
             }
-            return (.veilActive(relay: relay, port: port, since: since), [.invalidateGRPCClient])
+            return (active(), [.invalidateGRPCClient])
 
         default:
-            return (.veilActive(relay: relay, port: port, since: since), [])
+            return (active(), [])
         }
     }
 
@@ -351,9 +365,9 @@ extension TransportEvent {
     /// Short label for use in transition log entries.
     var shortLabel: String {
         switch self {
-        case .rpcSucceeded(let via, let ms):
+        case .rpcSucceeded(let via, let ms, _):
             return "rpc-ok(via=\(via.isVEIL ? "veil" : "direct"), \(ms)ms)"
-        case .rpcFailed(let kind, let via, let fg):
+        case .rpcFailed(let kind, let via, let fg, _):
             return "rpc-fail(kind=\(kind), via=\(via.isVEIL ? "veil" : "direct"), fg=\(fg))"
         case .streamOpened(let method, let via):
             return "stream-open(method=\(method.shortLabel), via=\(via.isVEIL ? "veil" : "direct"))"

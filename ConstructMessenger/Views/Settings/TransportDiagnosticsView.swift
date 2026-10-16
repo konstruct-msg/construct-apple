@@ -200,9 +200,10 @@ struct TransportDiagnosticsView: View {
             return ["consecutive direct failures: \(f)"]
         case .veilProbing:
             return ["probing"]
-        case .veilActive(let r, let p, let since):
+        case .veilActive(let r, let p, let since, let soft):
             let s = Int(now.timeIntervalSince(since))
-            return ["relay: \(r)", "local port: \(p)", "active for: \(s)s"]
+            return ["relay: \(r)", "local port: \(p)", "active for: \(s)s",
+                    "soft failures: auth \(soft.auth), sealed \(soft.sealed)"]
         case .veilCooldown(let until):
             let s = max(0, Int(until.timeIntervalSinceNow))
             return ["cooldown ends in: \(s)s"]
