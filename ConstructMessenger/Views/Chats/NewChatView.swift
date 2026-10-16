@@ -80,7 +80,7 @@ struct NewChatView: View {
         Task {
             do {
                 let contactInfo = try await LinkParser.parseContactLink(url)
-                Log.info("Parsed contact: userId=\(contactInfo.userId), username=\(contactInfo.username), isDynamic=\(contactInfo.isDynamic)", category: "NewChatView")
+                Log.info("Parsed contact: userId=\(contactInfo.userId), username=\(Log.presence(contactInfo.username)), isDynamic=\(contactInfo.isDynamic)", category: "NewChatView")
                 
                 await MainActor.run {
                     addContact(contactInfo: contactInfo)
@@ -100,16 +100,16 @@ struct NewChatView: View {
     private func addContact(contactInfo: ContactInfo) {
         let userId = contactInfo.userId
         let username = contactInfo.username
-        Log.info("NewChatView: Adding contact userId=\(userId), username=\(username)", category: "NewChatView")
+        Log.info("NewChatView: Adding contact userId=\(userId), username=\(Log.presence(username))", category: "NewChatView")
 
         if let chat = chatsViewModel.startChat(
             redeeming: contactInfo
         ) {
-            Log.info("NewChatView: Chat created with @\(username), chat.id=\(chat.id)", category: "NewChatView")
+            Log.info("NewChatView: Chat created, chat.id=\(chat.id)", category: "NewChatView")
             chatsViewModel.chatToOpen = chat.id
             InviteRedeemUX.presentPostRedeemSafety(for: contactInfo)
         } else {
-            Log.error("NewChatView: Failed to create chat with @\(username)", category: "NewChatView")
+            Log.error("NewChatView: Failed to create chat with \(userId)", category: "NewChatView")
         }
     }
 
