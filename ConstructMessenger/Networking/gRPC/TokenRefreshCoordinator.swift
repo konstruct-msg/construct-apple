@@ -116,3 +116,30 @@ actor TokenRefreshCoordinator {
     }
 }
 
+
+/// What a scheduled refresh does with its result. A pure decision so the rule "a failed refresh
+/// never signs out" is a test, not a comment (`TokenRefreshOutcomeTests`).
+enum TokenRefreshOutcome: Equatable {
+    case refreshed
+    /// The server refused the refresh token (revoked / already used / unauthenticated).
+    case refused
+    /// Network, timeout, relay — the token may still be good.
+    case transient
+
+    enum Action: Equatable {
+        case reschedule
+        case retry(after: TimeInterval)
+        /// Sign the device in again with its own key: same identity, nothing wiped.
+        case reauthenticateDevice
+    }
+
+    static let transientRetryDelay: TimeInterval = 60
+
+    var action: Action {
+        switch self {
+        case .refreshed: return .reschedule
+        case .transient: return .retry(after: Self.transientRetryDelay)
+        case .refused: return .reauthenticateDevice
+        }
+    }
+}
