@@ -209,16 +209,23 @@ final class UserServiceClient: Sendable {
         return trimmed
     }
 
+    /// Every poll carries the accepted requests already made into contacts
+    /// (`AcceptedRequestAcks`); the server deletes their rows before it answers, and they leave
+    /// the queue only once an answer arrives.
     func getContactRequests() async throws -> (
         incoming: [Shared_Proto_Services_V1_IncomingContactRequest],
         sent: [Shared_Proto_Services_V1_SentContactRequest]
     ) {
-        try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.getUserProfile) { grpcClient in
+        let acks = AcceptedRequestAcks.pending()
+        let result = try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.getUserProfile) { grpcClient in
             let client = Shared_Proto_Services_V1_UserService.Client(wrapping: grpcClient)
-            let request = Shared_Proto_Services_V1_GetContactRequestsRequest()
+            var request = Shared_Proto_Services_V1_GetContactRequestsRequest()
+            request.ackAccepted = acks
             let response = try await client.getContactRequests(request: .init(message: request))
             return (incoming: response.incoming, sent: response.sent)
         }
+        AcceptedRequestAcks.confirm(acks)
+        return result
     }
 
     func respondToContactRequest(
@@ -294,5 +301,32 @@ final class SentinelServiceClient: Sendable {
             let response = try await client.reportSpam(request: .init(message: request))
             return response.accepted
         }
+    }
+}
+
+/// Sent contact requests seen ACCEPTED and made into contacts, waiting to tell the server so it
+/// deletes their rows (TODO 157). Kept until a poll that carried them gets an answer: a lost
+/// answer resends them, and a second delete is nothing on the server.
+enum AcceptedRequestAcks {
+    private static let key = "cr_accepted_acks"
+    /// The server honours this many per poll; the rest go with the next one.
+    static let perPoll = 100
+
+    static func add(_ requestId: String, in defaults: UserDefaults = .standard) {
+        var ids = defaults.stringArray(forKey: key) ?? []
+        guard !ids.contains(requestId) else { return }
+        ids.append(requestId)
+        defaults.set(ids, forKey: key)
+    }
+
+    static func pending(in defaults: UserDefaults = .standard) -> [String] {
+        Array((defaults.stringArray(forKey: key) ?? []).prefix(perPoll))
+    }
+
+    /// Only the ids that went out: one added while the poll was in flight stays for the next.
+    static func confirm(_ sent: [String], in defaults: UserDefaults = .standard) {
+        guard !sent.isEmpty else { return }
+        let done = Set(sent)
+        defaults.set((defaults.stringArray(forKey: key) ?? []).filter { !done.contains($0) }, forKey: key)
     }
 }

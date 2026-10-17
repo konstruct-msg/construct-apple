@@ -54,6 +54,7 @@ final class ContactRequestService {
                         displayName: nil
                     )
                     newContacts.append(user)
+                    AcceptedRequestAcks.add(requestId)
                     Log.info(
                         "✅ Contact created from accepted request: \(toUserId)",
                         category: "ContactRequests"
@@ -70,6 +71,9 @@ final class ContactRequestService {
             }
 
             if !newContacts.isEmpty {
+                // Tell the server now rather than at the next poll, which may be days away: the
+                // rows go as soon as the contacts exist. A failure leaves them queued.
+                Task { _ = try? await userServiceClient.getContactRequests() }
                 appendPendingNavigationUserIds(newContacts.map { $0.id })
                 NotificationCenter.default.post(
                     name: .contactRequestAccepted,
