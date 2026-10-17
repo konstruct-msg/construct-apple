@@ -37,7 +37,4 @@ protocol VeilProxyRuntime: AnyObject, Sendable {
 
     /// Stop the active proxy (regardless of which start variant was used).
     func stop()
-
-    /// Whether the Rust proxy process is currently alive.
-    func isAlive() -> Bool
 }

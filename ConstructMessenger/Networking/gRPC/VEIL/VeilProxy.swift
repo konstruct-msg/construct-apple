@@ -131,12 +131,6 @@ actor VeilProxy {
         stopIfRunning()
     }
 
-    /// True if the Rust process is alive (re-checks native flag — Swift state can lag
-    /// after the OS suspends background threads).
-    var isAlive: Bool {
-        runtime.isAlive()
-    }
-
     // MARK: - Private
 
     private func commit(port p: UInt16, relay: VeilRelay, method: VeilMethod) {

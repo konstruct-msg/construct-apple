@@ -135,10 +135,6 @@ final class NativeVeilRuntime: VeilProxyRuntime {
         _ = veil_stop()
     }
 
-    func isAlive() -> Bool {
-        veil_is_alive() != 0
-    }
-
     // MARK: - Legacy per-method API (mock surface only)
 
     func start(_ request: VeilTransportRequest) -> Result<UInt16, VeilProxyRuntimeError> {
