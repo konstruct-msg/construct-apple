@@ -27,25 +27,32 @@ struct MainTabView: View {
         // accept buttons go out of sync (our button bypassed CallKit, leaving
         // the system banner hanging). The custom sheet is preserved for non-iOS
         // platforms (where CallKit doesn't exist) in their own MainTab variant.
-        callContent
-            .debugMetricsOverlay()
-            .safeAreaInset(edge: .top, spacing: 0) {
-                VStack(spacing: 0) {
-                    if CallsFeature.isEnabled, isActiveOrConnecting, !isCallExpanded,
-                       let session = activeCallSession {
-                        InCallMiniBar(
-                            peerName: session.peerName,
-                            isConnecting: isConnectingState,
-                            onTap: { isCallExpanded = true }
-                        )
-                    }
-                    NowPlayingBanner { source in
-                        ChatOnScreen.shared.requestFocus(source)
-                        chatsViewModel.selectedTab = 0
-                        chatsViewModel.chatToOpen = source.chatId
-                    }
+        // Above the tabs, not a `safeAreaInset` on them: the system navigation bars inside each
+        // tab do not move for an inset, and the card lay over the title and the back button
+        // (2026-10-17). In a stack the whole interface, bars included, moves down under it.
+        VStack(spacing: 0) {
+            if CallsFeature.isEnabled, isActiveOrConnecting, !isCallExpanded,
+               let session = activeCallSession {
+                InCallMiniBar(
+                    peerName: session.peerName,
+                    isConnecting: isConnectingState,
+                    onTap: { isCallExpanded = true }
+                )
+            }
+            NowPlayingBanner { source in
+                switch ChatOnScreen.bannerTap(for: source, onScreen: ChatOnScreen.shared.chatId) {
+                case .scrollInPlace:
+                    ChatOnScreen.shared.requestJump(source)
+                case .openChat:
+                    ChatOnScreen.shared.requestFocus(source)
+                    chatsViewModel.selectedTab = 0
+                    chatsViewModel.chatToOpen = source.chatId
                 }
             }
+            callContent
+                .debugMetricsOverlay()
+        }
+        .background(Color.CT.bg.ignoresSafeArea())
             .fullScreenCover(isPresented: fullScreenCoverBinding) {
                 if let session = activeCallSession ?? incomingVideoSession, let callManager {
                     ObservedInCallView(

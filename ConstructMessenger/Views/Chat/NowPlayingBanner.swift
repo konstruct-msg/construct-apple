@@ -2,8 +2,8 @@
 //  NowPlayingBanner.swift
 //  Construct Messenger
 //
-//  The track that keeps playing after its chat was left: a card under the bar, on every screen
-//  but that chat. Pause, stop, and a tap that goes back to the message. The shape is the room
+//  The track that keeps playing: a card above the bars, on every screen, its own chat too.
+//  Pause, stop, and a tap that goes back to the message. The shape is the room
 //  banner's from the room concept (deferred past release 1), so the room can take this place.
 //
 
@@ -14,7 +14,6 @@ struct NowPlayingBanner: View {
     let onOpen: (PlaybackSource) -> Void
 
     @ObservedObject private var player = AudioPlayerService.shared
-    private var onScreen = ChatOnScreen.shared
 
     init(onOpen: @escaping (PlaybackSource) -> Void) {
         self.onOpen = onOpen
@@ -23,7 +22,7 @@ struct NowPlayingBanner: View {
     private static let appearance = Animation.easeInOut(duration: 0.2)
 
     var body: some View {
-        let shown = ChatOnScreen.showsBanner(for: player.source, onScreen: onScreen.chatId)
+        let shown = player.source != nil
         VStack(spacing: 0) {
             if shown, let source = player.source {
                 card(source)
