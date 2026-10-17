@@ -61,12 +61,30 @@ class BackgroundFetchManager: NSObject {
             name: .NSProcessInfoPowerStateDidChange,
             object: nil
         )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(appDidEnterBackground),
+            name: .appDidEnterBackground,
+            object: nil
+        )
         
         Log.info("BackgroundFetchManager initialized", category: "BackgroundFetch")
     }
     
     @objc private func lowPowerModeChanged() {
         checkLowPowerMode()
+    }
+
+    /// What the person had in front of them when they left: unread above this is new (TODO 123).
+    @objc private func appDidEnterBackground() {
+        Task { @MainActor in
+            guard let chats = try? LocalRepositories.chats.chats() else { return }
+            UnreadSeen.record(Self.unreadByChat(chats))
+        }
+    }
+
+    private static func unreadByChat(_ chats: [ChatRecord]) -> [String: Int] {
+        Dictionary(chats.map { ($0.id, $0.unreadCount) }, uniquingKeysWith: max)
     }
     
     deinit {
@@ -290,6 +308,7 @@ class BackgroundFetchManager: NSObject {
                     limit: 50
                 )
                 allMessages.append(contentsOf: result.messages)
+                let backlogRemains = result.hasMore
                 if result.hasMore {
                     Log.info(
                         "Offline backlog deeper than one page — remainder follows on the next fetch/stream",
@@ -311,6 +330,7 @@ class BackgroundFetchManager: NSObject {
                 // all-durable check over the page.
 
                 await MainActor.run { [allMessages] in
+                    self.backlogRemains = backlogRemains
                     // No sealed pre-resolution here: MessageRouter opens the SealedInner at its
                     // own unseal boundary, which is the single place that knows how to do it.
                     self.processOfflineMessages(allMessages, completion: completion)
@@ -442,6 +462,8 @@ class BackgroundFetchManager: NSObject {
     // MARK: - Silent-push fetch (coalesced)
 
     @MainActor private var fetchStartedAt: Date?
+    /// The last fetch left part of the backlog on the server: banners may be for that part.
+    @MainActor private var backlogRemains = false
     @MainActor private var isFetchInFlight = false
     @MainActor private var followUpRequested = false
 
@@ -470,9 +492,11 @@ class BackgroundFetchManager: NSObject {
         // Loop rather than recurse: every push that arrived during a fetch is answered by the
         // next iteration, and any number of them collapses into that one fetch.
         var fetched = false
+        var lastStartedAt = Date()
         repeat {
             followUpRequested = false
-            fetchStartedAt = Date()
+            lastStartedAt = Date()
+            fetchStartedAt = lastStartedAt
             isFetchInFlight = true
             fetched = await fetchPendingMessages()
             isFetchInFlight = false
@@ -481,12 +505,14 @@ class BackgroundFetchManager: NSObject {
         // A push for a delivery receipt shows the same banner as one for a message (TODO 123).
         // Only after a fetch that reached the server: one that failed found nothing because it
         // fetched nothing, and the banner may be a real message's.
-        guard fetched else { return }
+        // Nor while part of the backlog is still on the server: a banner may be for that part.
+        guard fetched, !backlogRemains else { return }
         guard let chats = try? LocalRepositories.chats.chats() else { return }
-        let unread = chats.filter { $0.unreadCount > 0 }.count
-        await MainActor.run {
-            LocalNotificationManager.shared.withdrawPushBannersIfNothingUnread(unreadChats: unread)
-        }
+        let somethingNew = UnreadSeen.somethingNew(seen: UnreadSeen.load(), now: Self.unreadByChat(chats))
+        // Only banners from before the last fetch began: that fetch read the queue after them.
+        LocalNotificationManager.shared.withdrawPushBannersIfNothingNew(
+            somethingNew: somethingNew, deliveredBefore: lastStartedAt
+        )
     }
 
     func enableBackgroundFetch() {
