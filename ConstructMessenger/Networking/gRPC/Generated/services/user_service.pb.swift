@@ -997,6 +997,13 @@ public nonisolated struct Shared_Proto_Services_V1_GetContactRequestsRequest: Se
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
+  /// Sent requests the caller has seen ACCEPTED and made a contact from. The server deletes those
+  /// rows — only ACCEPTED ones whose sender is the caller — before answering: once the sender
+  /// knows, the row has no use, and the less the server holds the better. Resent until a
+  /// response arrives, so deleting twice is a no-op. A server that predates the field ignores
+  /// it, and the retention sweep removes the rows as before.
+  public var ackAccepted: [String] = []
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -2463,18 +2470,29 @@ nonisolated extension Shared_Proto_Services_V1_SendContactRequestResponse: Swift
 
 nonisolated extension Shared_Proto_Services_V1_GetContactRequestsRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".GetContactRequestsRequest"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap()
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}ack_accepted\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
-    // Load everything into unknown fields
-    while try decoder.nextFieldNumber() != nil {}
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeRepeatedStringField(value: &self.ackAccepted) }()
+      default: break
+      }
+    }
   }
 
   public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.ackAccepted.isEmpty {
+      try visitor.visitRepeatedStringField(value: self.ackAccepted, fieldNumber: 1)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Shared_Proto_Services_V1_GetContactRequestsRequest, rhs: Shared_Proto_Services_V1_GetContactRequestsRequest) -> Bool {
+    if lhs.ackAccepted != rhs.ackAccepted {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
