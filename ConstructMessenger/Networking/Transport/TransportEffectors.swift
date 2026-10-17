@@ -25,6 +25,9 @@ protocol ProxyEffector: Sendable {
     /// Tear down the proxy unconditionally. No-op if already stopped.
     func stop() async
 
+    /// Count a failure against a front, so the next `start()` prefers another one.
+    func demote(relay address: String) async
+
     /// Replace the relay candidate set (e.g. after a manifest refresh from the server).
     func updateRelays(_ relays: [VeilRelay]) async
 }

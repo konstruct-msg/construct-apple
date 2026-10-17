@@ -59,7 +59,7 @@ actor NativeProxyEffector: ProxyEffector {
         }
         var tried = Set<String>()
         var last: TransportEvent = .proxyStartFailed(relay: nil, reason: "no usable relay")
-        while let relay = pool.best(), !tried.contains(relay.address) {
+        while let relay = pool.best(notIn: tried) {
             tried.insert(relay.address)
             last = await start(relay)
             if case .proxyStarted = last { return last }
@@ -81,6 +81,9 @@ actor NativeProxyEffector: ProxyEffector {
         }
         do {
             let result = try await ensure(relay)
+            // Up again: forgive it, as Android does. A front demoted by a rotation stays behind
+            // the others until it is next chosen and comes up.
+            pool.recordSuccess(relay)
             if reportsToManager { await VeilProxyManager.shared.reportLastError(nil) }
             return .proxyStarted(relay: relay.address, port: result.port, restarted: result.restarted)
         } catch {
@@ -97,6 +100,11 @@ actor NativeProxyEffector: ProxyEffector {
 
     func stop() async {
         await proxy.stop()
+    }
+
+    func demote(relay address: String) async {
+        pool.recordFailure(address: address)
+        Log.info("VEIL: \(address) demoted — the rotation blames it", category: "VEIL")
     }
 
     func updateRelays(_ relays: [VeilRelay]) async {

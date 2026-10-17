@@ -297,6 +297,11 @@ enum TransportEffect: Equatable, Sendable {
     /// Stop the proxy unconditionally.
     case requestProxyStop
 
+    /// Count a failure against this front so the next start prefers another. Leads a rotation
+    /// that blames the front it leaves; the start alone cannot tell a front that answers and then
+    /// carries nothing from a good one, and picked it again.
+    case demoteRelay(String)
+
     /// Schedule a `cooldownElapsed` event to fire at the given date.
     case scheduleCooldownEnd(at: Date)
 }
