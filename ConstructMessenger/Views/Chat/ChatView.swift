@@ -191,6 +191,12 @@ struct ChatView: View {
                         }
                     }
                 }
+                // The now-playing banner tapped in this chat: its message, wherever history is.
+                .onChange(of: ChatOnScreen.shared.jump) { _, _ in
+                    if let id = ChatOnScreen.shared.takeJump(in: viewModel.conversation.chatId) {
+                        jumpToMessage(id)
+                    }
+                }
                 .onChange(of: viewModel.voicePlaybackScrollTarget) { _, target in
                     // Continuous voice playback advanced — bring the now-playing message
                     // into view (centered), then clear the target so a later replay re-scrolls.

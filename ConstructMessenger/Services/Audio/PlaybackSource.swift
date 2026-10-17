@@ -3,8 +3,8 @@
 //  Construct Messenger
 //
 //  A track keeps playing when its chat is left; the now-playing banner is what still controls it
-//  there. It needs to know which message the track is, and which chat is on screen — the banner
-//  stays out of the chat the track came from, where the message's own row is the control.
+//  there. It needs to know which message the track is, and which chat is on screen — a tap in
+//  the track's own chat scrolls to the message instead of opening the chat again.
 //
 
 import Foundation
@@ -40,6 +40,18 @@ final class ChatOnScreen {
 
     func requestFocus(_ source: PlaybackSource) { focus = source }
 
+    /// A message to bring into view in the chat already on screen: the banner tapped there.
+    private(set) var jump: PlaybackSource?
+
+    func requestJump(_ source: PlaybackSource) { jump = source }
+
+    /// The message to scroll to in `chatId`, once.
+    func takeJump(in chatId: String) -> String? {
+        guard let jump, jump.chatId == chatId else { return nil }
+        self.jump = nil
+        return jump.messageId
+    }
+
     /// The message to scroll to in `chatId`, once.
     func takeFocus(in chatId: String) -> String? {
         guard let focus, focus.chatId == chatId else { return nil }
@@ -49,9 +61,12 @@ final class ChatOnScreen {
 
     // MARK: - The rule, pure
 
-    /// The banner is up while a track it can name is loaded, except in that track's own chat.
-    nonisolated static func showsBanner(for source: PlaybackSource?, onScreen chatId: String?) -> Bool {
-        guard let source else { return false }
-        return source.chatId != chatId
+    enum BannerTap: Equatable { case openChat, scrollInPlace }
+
+    /// The banner is up on every screen while a track is loaded, its own chat too: scrolled back
+    /// through history, the message's row is long off screen (owner, 2026-10-17). There a tap
+    /// scrolls to the message; anywhere else it opens the chat at it.
+    nonisolated static func bannerTap(for source: PlaybackSource, onScreen chatId: String?) -> BannerTap {
+        source.chatId == chatId ? .scrollInPlace : .openChat
     }
 }

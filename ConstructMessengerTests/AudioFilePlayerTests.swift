@@ -82,14 +82,24 @@ final class NowPlayingBannerTests: XCTestCase {
         player.stop()
         screen.disappeared(screen.chatId ?? "")
         _ = screen.takeFocus(in: a.chatId)
+        _ = screen.takeJump(in: a.chatId)
         super.tearDown()
     }
 
-    func testTheBannerStaysOutOfTheTracksOwnChat() {
-        XCTAssertFalse(ChatOnScreen.showsBanner(for: nil, onScreen: nil), "nothing loaded")
-        XCTAssertFalse(ChatOnScreen.showsBanner(for: a, onScreen: "chat-a"), "its row is on screen")
-        XCTAssertTrue(ChatOnScreen.showsBanner(for: a, onScreen: "chat-b"))
-        XCTAssertTrue(ChatOnScreen.showsBanner(for: a, onScreen: nil), "the chat list, settings")
+    /// In the track's own chat the banner scrolls to the message; elsewhere it opens the chat.
+    /// Mutation: always `.openChat` — the first assertion reddens.
+    func testATapInTheTracksOwnChatScrollsInPlace() {
+        XCTAssertEqual(ChatOnScreen.bannerTap(for: a, onScreen: a.chatId), .scrollInPlace)
+        XCTAssertEqual(ChatOnScreen.bannerTap(for: a, onScreen: "chat-b"), .openChat)
+        XCTAssertEqual(ChatOnScreen.bannerTap(for: a, onScreen: nil), .openChat, "the chat list, settings")
+    }
+
+    /// A jump is for the chat it names, and is taken once.
+    func testAJumpIsTakenOnceByItsChat() {
+        screen.requestJump(a)
+        XCTAssertNil(screen.takeJump(in: "chat-b"))
+        XCTAssertEqual(screen.takeJump(in: a.chatId), a.messageId)
+        XCTAssertNil(screen.takeJump(in: a.chatId), "once")
     }
 
     func testATrackKeepsItsMessageThroughAPauseAndLosesItOnStop() {
