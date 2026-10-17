@@ -176,14 +176,23 @@ struct ContentView: View {
         }
         .onOpenURL { url in
             // Handle Universal Links in SwiftUI (iOS 13+)
-            Log.info("ContentView: Received URL via onOpenURL: \(url.absoluteString)", category: "DeepLink")
+            Log.info("ContentView: Received URL via onOpenURL: \(Log.link(url))", category: "DeepLink")
             let result = deepLinkHandler.handleURL(url)
             Log.info("ContentView: Deep link handling result: \(result)", category: "DeepLink")
         }
     }
 
+    /// The case alone: a contact link carries the invite and the @alias.
+    private static func kind(of deepLink: DeepLinkType?) -> String {
+        switch deepLink {
+        case .contact: return "contact"
+        case .openChat: return "openChat"
+        case nil: return "none"
+        }
+    }
+
     private func handleDeepLink(_ deepLink: DeepLinkType?) {
-        Log.debug("ContentView: Deep link changed: \(String(describing: deepLink))", category: "DeepLink")
+        Log.debug("ContentView: Deep link changed: \(Self.kind(of: deepLink))", category: "DeepLink")
         if case .contact(let contactInfo) = deepLink {
             Log.info("ContentView: Creating chat directly for userId: \(contactInfo.userId), username: \(Log.presence(contactInfo.username))", category: "DeepLink")
 

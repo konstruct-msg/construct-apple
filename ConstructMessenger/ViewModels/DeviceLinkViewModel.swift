@@ -79,7 +79,11 @@ final class DeviceLinkViewModel {
             // a DEBUG build it also goes to the log, where `scripts/two_sims.sh link` reads it and
             // pastes it into the other simulator's scanner. Release builds never print it: it
             // authorises joining this account, and the log is exportable from Settings.
+            // Beta is Release + DEBUG and runs on testers' phones, whose logs they export: the
+            // token goes to the log on a simulator only, where the stand needs it.
+            #if targetEnvironment(simulator)
             Log.debug("DeviceLink stand token: \(url)", category: "DeviceLink")
+            #endif
             #endif
         } catch {
             errorMessage = localizedError(error)
