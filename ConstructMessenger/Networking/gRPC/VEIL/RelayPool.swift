@@ -60,6 +60,14 @@ struct RelayPool {
             ?? best()
     }
 
+    /// The best relay not in `tried`, or nil once every one is. Not `best()` in a loop that stops
+    /// at the first repeat: after a failure two fronts can tie, `best()` answers the one already
+    /// tried, and the untried one behind it was never dialled.
+    func best(notIn tried: Set<String>) -> VeilRelay? {
+        relays.filter { !tried.contains($0.address) }
+            .min { effectiveScore(for: $0.address) < effectiveScore(for: $1.address) }
+    }
+
     // MARK: - Feedback
 
     mutating func recordSuccess(_ relay: VeilRelay) {

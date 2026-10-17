@@ -194,6 +194,7 @@ final class TransportRouteConformanceTests: XCTestCase {
             case "set_veil_port": return .setVeilPort((o["port"] as? Int).map { UInt16($0) })
             case "request_proxy_start": return .requestProxyStart
             case "request_proxy_stop": return .requestProxyStop
+            case "demote_relay": return .demoteRelay(o["relay"] as? String ?? "")
             case "schedule_cooldown_end": return .scheduleCooldownEnd(at: date(int64(o["at_ms"])))
             default: throw Unknown(what: "effect \(o)")
             }

@@ -762,6 +762,141 @@
       ]
     },
     {
+      "name": "tls_fingerprint_blocked_rotates_away_from_the_front",
+      "state": {
+        "kind": "veil_active",
+        "relay": "relay.example:443",
+        "port": 49262,
+        "since_ms": 1,
+        "soft_fails": {
+          "auth": 0,
+          "sealed": 0
+        }
+      },
+      "mode": "auto",
+      "events": [
+        {
+          "kind": "rpc_failed",
+          "failure": "tls_fingerprint_blocked",
+          "via": "veil",
+          "foreground": true,
+          "lane": "auth"
+        }
+      ],
+      "expect_state": {
+        "kind": "veil_probing"
+      },
+      "expect_effects": [
+        {
+          "kind": "demote_relay",
+          "relay": "relay.example:443"
+        },
+        {
+          "kind": "request_proxy_stop"
+        },
+        {
+          "kind": "set_veil_port",
+          "port": null
+        },
+        {
+          "kind": "request_proxy_start"
+        },
+        {
+          "kind": "invalidate_grpc_client"
+        }
+      ]
+    },
+    {
+      "name": "tls_cert_expired_rotates_away_from_the_front",
+      "state": {
+        "kind": "veil_active",
+        "relay": "relay.example:443",
+        "port": 49262,
+        "since_ms": 1,
+        "soft_fails": {
+          "auth": 0,
+          "sealed": 0
+        }
+      },
+      "mode": "auto",
+      "events": [
+        {
+          "kind": "rpc_failed",
+          "failure": "tls_cert_expired",
+          "via": "veil",
+          "foreground": true,
+          "lane": "auth"
+        }
+      ],
+      "expect_state": {
+        "kind": "veil_probing"
+      },
+      "expect_effects": [
+        {
+          "kind": "demote_relay",
+          "relay": "relay.example:443"
+        },
+        {
+          "kind": "request_proxy_stop"
+        },
+        {
+          "kind": "set_veil_port",
+          "port": null
+        },
+        {
+          "kind": "request_proxy_start"
+        },
+        {
+          "kind": "invalidate_grpc_client"
+        }
+      ]
+    },
+    {
+      "name": "web_tunnel_blocked_rotates_away_from_the_front",
+      "state": {
+        "kind": "veil_active",
+        "relay": "relay.example:443",
+        "port": 49262,
+        "since_ms": 1,
+        "soft_fails": {
+          "auth": 0,
+          "sealed": 0
+        }
+      },
+      "mode": "auto",
+      "events": [
+        {
+          "kind": "rpc_failed",
+          "failure": "web_tunnel_blocked",
+          "via": "veil",
+          "foreground": true,
+          "lane": "auth"
+        }
+      ],
+      "expect_state": {
+        "kind": "veil_probing"
+      },
+      "expect_effects": [
+        {
+          "kind": "demote_relay",
+          "relay": "relay.example:443"
+        },
+        {
+          "kind": "request_proxy_stop"
+        },
+        {
+          "kind": "set_veil_port",
+          "port": null
+        },
+        {
+          "kind": "request_proxy_start"
+        },
+        {
+          "kind": "invalidate_grpc_client"
+        }
+      ]
+    },
+    {
       "name": "active_reconnects_on_a_soft_failure",
       "state": {
         "kind": "veil_active",
@@ -826,6 +961,10 @@
       },
       "expect_effects": [
         {
+          "kind": "demote_relay",
+          "relay": "relay.example:443"
+        },
+        {
           "kind": "request_proxy_stop"
         },
         {
@@ -880,6 +1019,10 @@
         "kind": "veil_probing"
       },
       "expect_effects": [
+        {
+          "kind": "demote_relay",
+          "relay": "relay.example:443"
+        },
         {
           "kind": "request_proxy_stop"
         },
@@ -960,6 +1103,10 @@
         "kind": "veil_probing"
       },
       "expect_effects": [
+        {
+          "kind": "demote_relay",
+          "relay": "relay.example:443"
+        },
         {
           "kind": "request_proxy_stop"
         },
