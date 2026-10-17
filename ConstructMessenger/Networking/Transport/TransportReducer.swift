@@ -293,7 +293,8 @@ enum TransportReducer {
             // Hard relay failures (observable DPI block, cert expiry, dead local proxy):
             // the relay is broken. Rotate immediately.
             if isHardRelayFailure(kind) {
-                return rotateRelay()
+                // A dead local proxy is our process, not the front: it keeps its place.
+                return rotateRelay(demoting: kind == .staleLocalProxy ? nil : relay)
             }
             // Soft failures (stream timeout, generic transportUnknown): the tunnel may be alive,
             // so the first ones only invalidate the gRPC client — the next RPC reconnects through
@@ -304,7 +305,7 @@ enum TransportReducer {
             var counts = softFails
             counts[lane] += 1
             if counts[lane] >= config.veilSoftFailThreshold {
-                return rotateRelay()
+                return rotateRelay(demoting: relay)
             }
             return (active(counts), [.invalidateGRPCClient])
 
@@ -342,10 +343,11 @@ enum TransportReducer {
         }
     }
 
-    /// Effects for "stop current proxy, drop port + grpc client, start a fresh probe."
-    private static func rotateRelay() -> Outcome {
-        return (.veilProbing,
-                [.requestProxyStop, .setVeilPort(nil), .requestProxyStart, .invalidateGRPCClient])
+    /// Effects for "stop current proxy, drop port + grpc client, start a fresh probe." With
+    /// `demoting`, the front being left is blamed first, so the fresh start goes elsewhere.
+    private static func rotateRelay(demoting relay: String? = nil) -> Outcome {
+        let rotate: [TransportEffect] = [.requestProxyStop, .setVeilPort(nil), .requestProxyStart, .invalidateGRPCClient]
+        return (.veilProbing, (relay.map { [.demoteRelay($0)] } ?? []) + rotate)
     }
 
     private static func reduceCooldown(until: Date, event: TransportEvent, config: TransportConfig, now: Date) -> Outcome {
@@ -415,6 +417,7 @@ extension TransportEffect {
         case .setVeilPort(let p):              return "set-veil-port(\(p.map(String.init) ?? "nil"))"
         case .requestProxyStart:              return "start-proxy"
         case .requestProxyStop:               return "stop-proxy"
+        case .demoteRelay(let relay):         return "demote(\(relay))"
         case .scheduleCooldownEnd(let d):     return "schedule-cooldown(\(Int(d.timeIntervalSinceNow))s)"
         }
     }

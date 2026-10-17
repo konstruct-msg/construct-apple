@@ -236,6 +236,9 @@ actor TransportRouter {
                 proxyStartTask = nil
                 await proxyEffector.stop()
 
+            case .demoteRelay(let relay):
+                await proxyEffector.demote(relay: relay)
+
             case .scheduleCooldownEnd(let date):
                 scheduleCooldown(at: date)
 
