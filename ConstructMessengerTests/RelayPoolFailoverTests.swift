@@ -31,6 +31,35 @@ final class RelayPoolFailoverTests: XCTestCase {
         XCTAssertNotEqual(chosen, "a.example:443", "the failed front stays behind the others")
     }
 
+    /// TODO 159: a front that takes the connection and carries nothing comes up on every start,
+    /// so a rotation without blame restarted on it. The demotion moves the next start elsewhere.
+    /// Mutation: make `demote(relay:)` a no-op — the second start lands on a.example again.
+    func testARotationThatBlamesTheFrontStartsOnAnother() async {
+        let effector = NativeProxyEffector(initialRelays: [relay("a.example:443"), relay("b.example:443")]) { _ in
+            VeilProxyEnsureResult(port: 4242, restarted: true, method: nil, latencyMs: nil)
+        }
+        let first = await effector.start()
+        XCTAssertEqual(first, .proxyStarted(relay: "a.example:443", port: 4242, restarted: true))
+        await effector.demote(relay: "a.example:443")
+        let second = await effector.start()
+        XCTAssertEqual(second, .proxyStarted(relay: "b.example:443", port: 4242, restarted: true))
+    }
+
+    /// Forgiven once it comes up again, so one bad hour does not bury a front for good.
+    /// Mutation: drop `recordSuccess` from `start` — b.example keeps its demotion and a.example wins.
+    /// Mutation: the old `while let best(), !tried.contains` loop — after a fails the two tie, `best()`
+    /// answers a again, the loop stops and b is never dialled.
+    func testADemotedFrontThatComesUpIsForgiven() async {
+        let effector = NativeProxyEffector(initialRelays: [relay("a.example:443"), relay("b.example:443")]) { relay in
+            if relay.address == "a.example:443" { throw Down() }
+            return VeilProxyEnsureResult(port: 4242, restarted: true, method: nil, latencyMs: nil)
+        }
+        await effector.demote(relay: "b.example:443")
+        _ = await effector.start()   // a fails (1), b comes up and is forgiven (0)
+        let chosen = await effector.bestForTesting()
+        XCTAssertEqual(chosen, "b.example:443")
+    }
+
     func testFailuresOfFrontsNoLongerListedAreDropped() {
         let pool = RelayPool(relays: [relay("b.example:443")], failures: ["a.example:443": 3, "b.example:443": 1])
         XCTAssertEqual(pool.failureCounts, ["b.example:443": 1])
