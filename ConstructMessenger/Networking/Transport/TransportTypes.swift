@@ -161,7 +161,7 @@ enum TransportState: Equatable, Sendable {
 /// The classifier (`VeilFailurePolicy`-style) lives outside the FSM and translates raw errors
 /// into one of these kinds before posting an event. The FSM never sees `RPCError`.
 enum RPCFailureKind: Sendable, Equatable {
-    /// Client-side timeout / cooperative cancellation. Connection is not broken.
+    /// Cooperative cancellation — the caller gave up. Says nothing about the connection.
     case transientCancellation
     /// Clean server-side `.unauthenticated` / `.permissionDenied`.
     /// On direct path: real rejection. On ICE: may be relay forgery — handled outside FSM.
@@ -176,7 +176,7 @@ enum RPCFailureKind: Sendable, Equatable {
     case webTunnelBlocked
     /// ECONNREFUSED on the local VEIL proxy — Rust process is dead.
     case staleLocalProxy
-    /// gRPC deadline exceeded.
+    /// A deadline elapsed with no answer — the server's or our own (`GRPCClientError.clientSideTimeout`).
     case streamTimeout
     /// Generic transport-level failure (NWError, POSIXError, unknown).
     case transportUnknown
