@@ -75,7 +75,7 @@ class InviteVerifier {
     /// - `https://konstruct.cc/add?invite=<base64url>`
     func decodeFromURL(_ url: URL) throws -> InviteObject {
         guard let encoded = extractInviteString(from: url), !encoded.isEmpty else {
-            Log.error("Missing invite parameter in URL: \(url.absoluteString)", category: "InviteVerifier")
+            Log.error("Missing invite parameter in URL: \(Log.link(url))", category: "InviteVerifier")
             throw InviteVerificationError.invalidEncoding
         }
         return try decode(encoded)

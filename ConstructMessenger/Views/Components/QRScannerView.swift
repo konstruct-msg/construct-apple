@@ -265,7 +265,7 @@ struct QRScannerView: View {
     private func handleScannedCode(_ code: String) {
         scanner.stopScanning()
         let normalized = normalizeScannedCode(code)
-        Log.debug("QRScannerView: scanned=\(code.prefix(120)), normalized=\(normalized.prefix(120))", category: "QRScannerView")
+        Log.debug("QRScannerView: scanned=\(Log.link(code)), normalized=\(normalized.count) chars", category: "QRScannerView")
 
         // Compact binary invite in QR byte mode (AVFoundation may surface as Latin-1 string).
         if let binary = InviteBinaryCodec.dataFromLatin1QRString(code),
@@ -507,7 +507,7 @@ struct QRCodeScannerViewRepresentable: UIViewRepresentable {
 
 #Preview {
     QRScannerView { code in
-        Log.info("Scanned: \(code)")
+        Log.info("Scanned: \(Log.link(code))")
     }
 }
 

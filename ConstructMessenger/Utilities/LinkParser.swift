@@ -80,7 +80,7 @@ struct LinkParser {
             )
         }
 
-        Log.error("Unsupported contact link prefix: \(urlString)", category: "LinkParser")
+        Log.error("Unsupported contact link prefix: \(Log.link(urlString))", category: "LinkParser")
         throw ContactLinkError.invalidPrefix
     }
 
