@@ -9,7 +9,8 @@
     "direct_fail_threshold": 2,
     "mid_session_death_weight": 2,
     "allow_direct_to_veil_escalation": true,
-    "veil_cooldown_ms": 30000
+    "veil_cooldown_ms": 30000,
+    "veil_soft_fail_threshold": 3
   },
   "cases": [
     {
@@ -58,7 +59,8 @@
           "kind": "rpc_failed",
           "failure": "transport_unknown",
           "via": "direct",
-          "foreground": true
+          "foreground": true,
+          "lane": "auth"
         }
       ],
       "expect_state": {
@@ -79,13 +81,15 @@
           "kind": "rpc_failed",
           "failure": "transport_unknown",
           "via": "direct",
-          "foreground": true
+          "foreground": true,
+          "lane": "auth"
         },
         {
           "kind": "rpc_failed",
           "failure": "transport_unknown",
           "via": "direct",
-          "foreground": true
+          "foreground": true,
+          "lane": "auth"
         }
       ],
       "expect_state": {
@@ -112,7 +116,8 @@
           "kind": "rpc_failed",
           "failure": "transport_unknown",
           "via": "direct",
-          "foreground": true
+          "foreground": true,
+          "lane": "auth"
         }
       ],
       "expect_state": {
@@ -154,7 +159,8 @@
           "kind": "rpc_failed",
           "failure": "transport_unknown",
           "via": "direct",
-          "foreground": true
+          "foreground": true,
+          "lane": "auth"
         }
       ],
       "expect_state": {
@@ -386,7 +392,8 @@
         {
           "kind": "rpc_succeeded",
           "via": "direct",
-          "latency_ms": 50
+          "latency_ms": 50,
+          "lane": "auth"
         }
       ],
       "expect_state": {
@@ -407,7 +414,8 @@
           "kind": "rpc_failed",
           "failure": "transport_unknown",
           "via": "direct",
-          "foreground": false
+          "foreground": false,
+          "lane": "auth"
         }
       ],
       "expect_state": {
@@ -428,7 +436,8 @@
           "kind": "rpc_failed",
           "failure": "application_error",
           "via": "direct",
-          "foreground": true
+          "foreground": true,
+          "lane": "auth"
         }
       ],
       "expect_state": {
@@ -449,7 +458,8 @@
           "kind": "rpc_failed",
           "failure": "auth_rejected",
           "via": "direct",
-          "foreground": true
+          "foreground": true,
+          "lane": "auth"
         }
       ],
       "expect_state": {
@@ -508,7 +518,11 @@
         "kind": "veil_active",
         "relay": "relay.example:443",
         "port": 49262,
-        "since_ms": 1
+        "since_ms": 1,
+        "soft_fails": {
+          "auth": 0,
+          "sealed": 0
+        }
       },
       "mode": "off",
       "events": [
@@ -540,7 +554,11 @@
         "kind": "veil_active",
         "relay": "relay.example:443",
         "port": 49262,
-        "since_ms": 1
+        "since_ms": 1,
+        "soft_fails": {
+          "auth": 0,
+          "sealed": 0
+        }
       },
       "mode": "auto",
       "events": [
@@ -614,7 +632,11 @@
         "kind": "veil_active",
         "relay": "relay.example:443",
         "port": 7,
-        "since_ms": 1000000
+        "since_ms": 1000000,
+        "soft_fails": {
+          "auth": 0,
+          "sealed": 0
+        }
       },
       "expect_effects": [
         {
@@ -688,7 +710,8 @@
           "kind": "rpc_failed",
           "failure": "transport_unknown",
           "via": "direct",
-          "foreground": true
+          "foreground": true,
+          "lane": "auth"
         }
       ],
       "expect_state": {
@@ -703,7 +726,11 @@
         "kind": "veil_active",
         "relay": "relay.example:443",
         "port": 49262,
-        "since_ms": 1
+        "since_ms": 1,
+        "soft_fails": {
+          "auth": 0,
+          "sealed": 0
+        }
       },
       "mode": "auto",
       "events": [
@@ -711,7 +738,8 @@
           "kind": "rpc_failed",
           "failure": "stale_local_proxy",
           "via": "veil",
-          "foreground": true
+          "foreground": true,
+          "lane": "auth"
         }
       ],
       "expect_state": {
@@ -739,7 +767,11 @@
         "kind": "veil_active",
         "relay": "relay.example:443",
         "port": 49262,
-        "since_ms": 1
+        "since_ms": 1,
+        "soft_fails": {
+          "auth": 0,
+          "sealed": 0
+        }
       },
       "mode": "auto",
       "events": [
@@ -747,14 +779,19 @@
           "kind": "rpc_failed",
           "failure": "stream_timeout",
           "via": "veil",
-          "foreground": true
+          "foreground": true,
+          "lane": "auth"
         }
       ],
       "expect_state": {
         "kind": "veil_active",
         "relay": "relay.example:443",
         "port": 49262,
-        "since_ms": 1
+        "since_ms": 1,
+        "soft_fails": {
+          "auth": 1,
+          "sealed": 0
+        }
       },
       "expect_effects": [
         {
@@ -763,12 +800,260 @@
       ]
     },
     {
-      "name": "active_reconnects_on_a_veil_stream_death",
+      "name": "three_soft_failures_in_a_row_rotate",
       "state": {
         "kind": "veil_active",
         "relay": "relay.example:443",
         "port": 49262,
-        "since_ms": 1
+        "since_ms": 1,
+        "soft_fails": {
+          "auth": 2,
+          "sealed": 0
+        }
+      },
+      "mode": "auto",
+      "events": [
+        {
+          "kind": "rpc_failed",
+          "failure": "transport_unknown",
+          "via": "veil",
+          "foreground": true,
+          "lane": "auth"
+        }
+      ],
+      "expect_state": {
+        "kind": "veil_probing"
+      },
+      "expect_effects": [
+        {
+          "kind": "request_proxy_stop"
+        },
+        {
+          "kind": "set_veil_port",
+          "port": null
+        },
+        {
+          "kind": "request_proxy_start"
+        },
+        {
+          "kind": "invalidate_grpc_client"
+        }
+      ]
+    },
+    {
+      "name": "soft_failures_rotate_on_the_sealed_channel_too",
+      "state": {
+        "kind": "veil_active",
+        "relay": "relay.example:443",
+        "port": 49262,
+        "since_ms": 1,
+        "soft_fails": {
+          "auth": 0,
+          "sealed": 0
+        }
+      },
+      "mode": "on",
+      "events": [
+        {
+          "kind": "rpc_failed",
+          "failure": "stream_timeout",
+          "via": "veil",
+          "foreground": true,
+          "lane": "sealed"
+        },
+        {
+          "kind": "rpc_failed",
+          "failure": "stream_timeout",
+          "via": "veil",
+          "foreground": true,
+          "lane": "sealed"
+        },
+        {
+          "kind": "rpc_failed",
+          "failure": "stream_timeout",
+          "via": "veil",
+          "foreground": true,
+          "lane": "sealed"
+        }
+      ],
+      "expect_state": {
+        "kind": "veil_probing"
+      },
+      "expect_effects": [
+        {
+          "kind": "request_proxy_stop"
+        },
+        {
+          "kind": "set_veil_port",
+          "port": null
+        },
+        {
+          "kind": "request_proxy_start"
+        },
+        {
+          "kind": "invalidate_grpc_client"
+        }
+      ]
+    },
+    {
+      "name": "a_success_clears_its_own_channel",
+      "state": {
+        "kind": "veil_active",
+        "relay": "relay.example:443",
+        "port": 49262,
+        "since_ms": 1,
+        "soft_fails": {
+          "auth": 2,
+          "sealed": 2
+        }
+      },
+      "mode": "auto",
+      "events": [
+        {
+          "kind": "rpc_succeeded",
+          "via": "veil",
+          "latency_ms": 50,
+          "lane": "sealed"
+        }
+      ],
+      "expect_state": {
+        "kind": "veil_active",
+        "relay": "relay.example:443",
+        "port": 49262,
+        "since_ms": 1,
+        "soft_fails": {
+          "auth": 2,
+          "sealed": 0
+        }
+      },
+      "expect_effects": []
+    },
+    {
+      "name": "a_success_on_the_other_channel_does_not_clear",
+      "state": {
+        "kind": "veil_active",
+        "relay": "relay.example:443",
+        "port": 49262,
+        "since_ms": 1,
+        "soft_fails": {
+          "auth": 0,
+          "sealed": 2
+        }
+      },
+      "mode": "auto",
+      "events": [
+        {
+          "kind": "rpc_succeeded",
+          "via": "veil",
+          "latency_ms": 50,
+          "lane": "auth"
+        },
+        {
+          "kind": "rpc_failed",
+          "failure": "transport_unknown",
+          "via": "veil",
+          "foreground": true,
+          "lane": "sealed"
+        }
+      ],
+      "expect_state": {
+        "kind": "veil_probing"
+      },
+      "expect_effects": [
+        {
+          "kind": "request_proxy_stop"
+        },
+        {
+          "kind": "set_veil_port",
+          "port": null
+        },
+        {
+          "kind": "request_proxy_start"
+        },
+        {
+          "kind": "invalidate_grpc_client"
+        }
+      ]
+    },
+    {
+      "name": "a_background_soft_failure_does_not_count",
+      "state": {
+        "kind": "veil_active",
+        "relay": "relay.example:443",
+        "port": 49262,
+        "since_ms": 1,
+        "soft_fails": {
+          "auth": 0,
+          "sealed": 2
+        }
+      },
+      "mode": "auto",
+      "events": [
+        {
+          "kind": "rpc_failed",
+          "failure": "transport_unknown",
+          "via": "veil",
+          "foreground": false,
+          "lane": "sealed"
+        }
+      ],
+      "expect_state": {
+        "kind": "veil_active",
+        "relay": "relay.example:443",
+        "port": 49262,
+        "since_ms": 1,
+        "soft_fails": {
+          "auth": 0,
+          "sealed": 2
+        }
+      },
+      "expect_effects": []
+    },
+    {
+      "name": "an_application_error_does_not_count",
+      "state": {
+        "kind": "veil_active",
+        "relay": "relay.example:443",
+        "port": 49262,
+        "since_ms": 1,
+        "soft_fails": {
+          "auth": 0,
+          "sealed": 2
+        }
+      },
+      "mode": "auto",
+      "events": [
+        {
+          "kind": "rpc_failed",
+          "failure": "application_error",
+          "via": "veil",
+          "foreground": true,
+          "lane": "sealed"
+        }
+      ],
+      "expect_state": {
+        "kind": "veil_active",
+        "relay": "relay.example:443",
+        "port": 49262,
+        "since_ms": 1,
+        "soft_fails": {
+          "auth": 0,
+          "sealed": 2
+        }
+      },
+      "expect_effects": []
+    },
+    {
+      "name": "a_veil_stream_death_does_not_count",
+      "state": {
+        "kind": "veil_active",
+        "relay": "relay.example:443",
+        "port": 49262,
+        "since_ms": 1,
+        "soft_fails": {
+          "auth": 2,
+          "sealed": 0
+        }
       },
       "mode": "auto",
       "events": [
@@ -783,7 +1068,48 @@
         "kind": "veil_active",
         "relay": "relay.example:443",
         "port": 49262,
-        "since_ms": 1
+        "since_ms": 1,
+        "soft_fails": {
+          "auth": 2,
+          "sealed": 0
+        }
+      },
+      "expect_effects": [
+        {
+          "kind": "invalidate_grpc_client"
+        }
+      ]
+    },
+    {
+      "name": "active_reconnects_on_a_veil_stream_death",
+      "state": {
+        "kind": "veil_active",
+        "relay": "relay.example:443",
+        "port": 49262,
+        "since_ms": 1,
+        "soft_fails": {
+          "auth": 0,
+          "sealed": 0
+        }
+      },
+      "mode": "auto",
+      "events": [
+        {
+          "kind": "stream_failed",
+          "method": "veil",
+          "failure": "mid_session_timeout",
+          "via": "veil"
+        }
+      ],
+      "expect_state": {
+        "kind": "veil_active",
+        "relay": "relay.example:443",
+        "port": 49262,
+        "since_ms": 1,
+        "soft_fails": {
+          "auth": 0,
+          "sealed": 0
+        }
       },
       "expect_effects": [
         {
@@ -797,14 +1123,19 @@
         "kind": "veil_active",
         "relay": "relay.example:443",
         "port": 49262,
-        "since_ms": 1
+        "since_ms": 1,
+        "soft_fails": {
+          "auth": 0,
+          "sealed": 0
+        }
       },
       "mode": "auto",
       "events": [
         {
           "kind": "rpc_succeeded",
           "via": "direct",
-          "latency_ms": 50
+          "latency_ms": 50,
+          "lane": "auth"
         }
       ],
       "expect_state": {
@@ -827,21 +1158,30 @@
         "kind": "veil_active",
         "relay": "relay.example:443",
         "port": 49262,
-        "since_ms": 1
+        "since_ms": 1,
+        "soft_fails": {
+          "auth": 0,
+          "sealed": 0
+        }
       },
       "mode": "on",
       "events": [
         {
           "kind": "rpc_succeeded",
           "via": "direct",
-          "latency_ms": 50
+          "latency_ms": 50,
+          "lane": "auth"
         }
       ],
       "expect_state": {
         "kind": "veil_active",
         "relay": "relay.example:443",
         "port": 49262,
-        "since_ms": 1
+        "since_ms": 1,
+        "soft_fails": {
+          "auth": 0,
+          "sealed": 0
+        }
       },
       "expect_effects": []
     },
@@ -851,7 +1191,11 @@
         "kind": "veil_active",
         "relay": "relay.example:443",
         "port": 49262,
-        "since_ms": 1
+        "since_ms": 1,
+        "soft_fails": {
+          "auth": 0,
+          "sealed": 0
+        }
       },
       "mode": "auto",
       "events": [
@@ -902,7 +1246,11 @@
         "kind": "veil_active",
         "relay": "relay.example:443",
         "port": 49262,
-        "since_ms": 1
+        "since_ms": 1,
+        "soft_fails": {
+          "auth": 0,
+          "sealed": 0
+        }
       },
       "mode": "auto",
       "events": [
@@ -910,14 +1258,19 @@
           "kind": "rpc_failed",
           "failure": "stale_local_proxy",
           "via": "veil",
-          "foreground": false
+          "foreground": false,
+          "lane": "auth"
         }
       ],
       "expect_state": {
         "kind": "veil_active",
         "relay": "relay.example:443",
         "port": 49262,
-        "since_ms": 1
+        "since_ms": 1,
+        "soft_fails": {
+          "auth": 0,
+          "sealed": 0
+        }
       },
       "expect_effects": []
     },
@@ -927,7 +1280,11 @@
         "kind": "veil_active",
         "relay": "relay.example:443",
         "port": 49262,
-        "since_ms": 1
+        "since_ms": 1,
+        "soft_fails": {
+          "auth": 0,
+          "sealed": 0
+        }
       },
       "mode": "auto",
       "events": [
@@ -982,7 +1339,8 @@
           "kind": "rpc_failed",
           "failure": "transport_unknown",
           "via": "direct",
-          "foreground": true
+          "foreground": true,
+          "lane": "auth"
         }
       ],
       "expect_state": {
@@ -1028,7 +1386,11 @@
         "kind": "veil_active",
         "relay": "relay.example:443",
         "port": 49262,
-        "since_ms": 1
+        "since_ms": 1,
+        "soft_fails": {
+          "auth": 0,
+          "sealed": 0
+        }
       },
       "mode": "auto",
       "events": [
@@ -1060,7 +1422,11 @@
         "kind": "veil_active",
         "relay": "relay.example:443",
         "port": 49262,
-        "since_ms": 1
+        "since_ms": 1,
+        "soft_fails": {
+          "auth": 0,
+          "sealed": 0
+        }
       },
       "mode": "auto",
       "events": [
@@ -1137,7 +1503,11 @@
         "kind": "veil_active",
         "relay": "relay.example:443",
         "port": 49262,
-        "since_ms": 1
+        "since_ms": 1,
+        "soft_fails": {
+          "auth": 0,
+          "sealed": 0
+        }
       },
       "mode": "on",
       "events": [

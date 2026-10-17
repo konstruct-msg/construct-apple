@@ -104,7 +104,10 @@ enum TransportState: Equatable, Sendable {
     case veilProbing
 
     /// VEIL proxy is running and has served at least one transport event without failure.
-    case veilActive(relay: String, port: UInt16, since: Date)
+    ///
+    /// `softFails` counts consecutive foreground soft failures (stream timeout, unknown transport
+    /// error) per channel; see `TransportConfig.veilSoftFailThreshold`.
+    case veilActive(relay: String, port: UInt16, since: Date, softFails: SoftFails = SoftFails())
 
     /// All probing attempts failed; suspended until `until`. Then we drop back to direct.
     case veilCooldown(until: Date)
@@ -122,7 +125,7 @@ enum TransportState: Equatable, Sendable {
     /// The current relay address, if any.
     var currentRelay: String? {
         switch self {
-        case .veilActive(let r, _, _):
+        case .veilActive(let r, _, _, _):
             return r
         case .offline, .direct, .veilProbing, .veilCooldown:
             return nil
@@ -132,7 +135,7 @@ enum TransportState: Equatable, Sendable {
     /// The current VEIL proxy port, if any (nil when no proxy is running).
     var veilPort: UInt16? {
         switch self {
-        case .veilActive(_, let p, _):
+        case .veilActive(_, let p, _, _):
             return p
         case .offline, .direct, .veilProbing, .veilCooldown:
             return nil
@@ -145,7 +148,7 @@ enum TransportState: Equatable, Sendable {
         case .offline:                              return "offline"
         case .direct(let f):                        return "direct(fails=\(f))"
         case .veilProbing:                           return "veil-probing"
-        case .veilActive(let r, _, _):               return "veil-active(\(r))"
+        case .veilActive(let r, _, _, _):            return "veil-active(\(r))"
         case .veilCooldown(let until):               return "veil-cooldown(until=\(Int(until.timeIntervalSinceNow))s)"
         }
     }
@@ -158,7 +161,7 @@ enum TransportState: Equatable, Sendable {
 /// The classifier (`VeilFailurePolicy`-style) lives outside the FSM and translates raw errors
 /// into one of these kinds before posting an event. The FSM never sees `RPCError`.
 enum RPCFailureKind: Sendable, Equatable {
-    /// Client-side timeout / cooperative cancellation. Connection is not broken.
+    /// Cooperative cancellation — the caller gave up. Says nothing about the connection.
     case transientCancellation
     /// Clean server-side `.unauthenticated` / `.permissionDenied`.
     /// On direct path: real rejection. On ICE: may be relay forgery — handled outside FSM.
@@ -173,7 +176,7 @@ enum RPCFailureKind: Sendable, Equatable {
     case webTunnelBlocked
     /// ECONNREFUSED on the local VEIL proxy — Rust process is dead.
     case staleLocalProxy
-    /// gRPC deadline exceeded.
+    /// A deadline elapsed with no answer — the server's or our own (`GRPCClientError.clientSideTimeout`).
     case streamTimeout
     /// Generic transport-level failure (NWError, POSIXError, unknown).
     case transportUnknown
@@ -190,16 +193,38 @@ enum RPCFailureKind: Sendable, Equatable {
     }
 }
 
+// MARK: - Soft-failure counting
+
+/// Which gRPC connection an RPC outcome came through. `auth` is the authenticated channel (it also
+/// carries the MessageStream); `sealed` is its own connection (sealed-sender sends, media
+/// download). Counted apart because a relay can carry one and drop the other: a receipt over the
+/// live auth connection must not hide a dead `sealed` one.
+enum RPCLane: Sendable, Equatable {
+    case auth
+    case sealed
+}
+
+/// Consecutive foreground soft failures through VEIL, per lane.
+struct SoftFails: Sendable, Equatable {
+    var auth: Int = 0
+    var sealed: Int = 0
+
+    subscript(lane: RPCLane) -> Int {
+        get { lane == .auth ? auth : sealed }
+        set { if lane == .auth { auth = newValue } else { sealed = newValue } }
+    }
+}
+
 // MARK: - Event
 
 /// Inputs to the FSM. Every external interaction with the transport layer is one of these.
 enum TransportEvent: Sendable, Equatable {
     /// An RPC completed successfully via `target` in `latencyMs` milliseconds.
-    case rpcSucceeded(via: TransportTarget, latencyMs: Int)
+    case rpcSucceeded(via: TransportTarget, latencyMs: Int, lane: RPCLane = .auth)
 
     /// An RPC failed.
     /// - foreground: true for user-visible flows; false for background prefetch/maintenance.
-    case rpcFailed(kind: RPCFailureKind, via: TransportTarget, foreground: Bool)
+    case rpcFailed(kind: RPCFailureKind, via: TransportTarget, foreground: Bool, lane: RPCLane = .auth)
 
     // MARK: Data-plane (MessageStream) — must not bypass the router
     // See decisions/transport-connection-health-and-escalation.md.
@@ -309,6 +334,11 @@ struct TransportConfig: Sendable, Equatable {
     /// the coordinator does **not** sleep its own cooldown anymore — this is the sole
     /// backoff so we don't re-fire `veil_start` back-to-back (that churn burned CPU).
     var veilCooldownDuration: TimeInterval = 30
+
+    /// Consecutive foreground soft failures on one channel through VEIL before the relay is
+    /// rotated. Vector: `veil_soft_fail_threshold` in `conformance/transport_route.json`
+    /// (asserted equal by `TransportRouteConformanceTests`).
+    var veilSoftFailThreshold: Int = 3
 
     /// Default TTL hint when callers post `streamSuppressed` without a custom policy
     /// (matches MessageStream Fast-UDP suppress window).

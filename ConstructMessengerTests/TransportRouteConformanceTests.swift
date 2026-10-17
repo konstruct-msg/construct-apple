@@ -34,7 +34,7 @@ final class TransportRouteConformanceTests: XCTestCase {
     func testEveryCaseEndsWhereTheVectorsSay() throws {
         let cases = try XCTUnwrap(doc["cases"] as? [[String: Any]])
         // An empty file would make the loop vacuous.
-        XCTAssertGreaterThan(cases.count, 40, "vectors look truncated")
+        XCTAssertGreaterThan(cases.count, 50, "vectors look truncated")
         let now = date(nowMs)
         for c in cases {
             let name = c["name"] as? String ?? "?"
@@ -69,6 +69,7 @@ final class TransportRouteConformanceTests: XCTestCase {
         XCTAssertEqual(c.midSessionDeathWeight, d["mid_session_death_weight"] as? Int)
         XCTAssertEqual(c.allowDirectToVeilEscalation, d["allow_direct_to_veil_escalation"] as? Bool)
         XCTAssertEqual(Int64(c.veilCooldownDuration * 1000), (d["veil_cooldown_ms"] as? NSNumber)?.int64Value)
+        XCTAssertEqual(c.veilSoftFailThreshold, d["veil_soft_fail_threshold"] as? Int)
     }
 
     // MARK: - Decoding
@@ -89,6 +90,7 @@ final class TransportRouteConformanceTests: XCTestCase {
         if let v = o["mid_session_death_weight"] as? Int { c.midSessionDeathWeight = v }
         if let v = o["allow_direct_to_veil_escalation"] as? Bool { c.allowDirectToVeilEscalation = v }
         if let v = o["veil_cooldown_ms"] as? NSNumber { c.veilCooldownDuration = TimeInterval(v.int64Value) / 1000 }
+        if let v = o["veil_soft_fail_threshold"] as? Int { c.veilSoftFailThreshold = v }
         return c
     }
 
@@ -103,7 +105,14 @@ final class TransportRouteConformanceTests: XCTestCase {
         case "direct": return .direct(consecutiveFails: o["fails"] as? Int ?? -1)
         case "veil_probing": return .veilProbing
         case "veil_active":
-            return .veilActive(relay: o["relay"] as? String ?? "", port: UInt16(o["port"] as? Int ?? 0), since: date(int64(o["since_ms"])))
+            // A vector that omits `soft_fails` is a fresh `veil_active`; one that names it must
+            // name both lanes, or a typo would read as zero and assert nothing.
+            var soft = SoftFails()
+            if let sf = o["soft_fails"] as? [String: Any] {
+                soft.auth = try XCTUnwrap(sf["auth"] as? Int, "soft_fails.auth")
+                soft.sealed = try XCTUnwrap(sf["sealed"] as? Int, "soft_fails.sealed")
+            }
+            return .veilActive(relay: o["relay"] as? String ?? "", port: UInt16(o["port"] as? Int ?? 0), since: date(int64(o["since_ms"])), softFails: soft)
         case "veil_cooldown": return .veilCooldown(until: date(int64(o["until_ms"])))
         default: throw Unknown(what: "state \(o)")
         }
@@ -146,11 +155,19 @@ final class TransportRouteConformanceTests: XCTestCase {
         }
     }
 
+    private func lane(_ any: Any?) throws -> RPCLane {
+        switch any as? String {
+        case "auth": return .auth
+        case "sealed": return .sealed
+        default: throw Unknown(what: "lane \(String(describing: any))")
+        }
+    }
+
     private func event(_ o: [String: Any]) throws -> TransportEvent {
         switch o["kind"] as? String {
-        case "rpc_succeeded": return .rpcSucceeded(via: target(o["via"]), latencyMs: o["latency_ms"] as? Int ?? 0)
+        case "rpc_succeeded": return .rpcSucceeded(via: target(o["via"]), latencyMs: o["latency_ms"] as? Int ?? 0, lane: try lane(o["lane"]))
         case "rpc_failed":
-            return .rpcFailed(kind: try rpcFailure(o["failure"]), via: target(o["via"]), foreground: o["foreground"] as? Bool ?? true)
+            return .rpcFailed(kind: try rpcFailure(o["failure"]), via: target(o["via"]), foreground: o["foreground"] as? Bool ?? true, lane: try lane(o["lane"]))
         case "stream_opened": return .streamOpened(method: try streamMethod(o["method"]), via: target(o["via"]))
         case "stream_failed":
             return .streamFailed(method: try streamMethod(o["method"]), kind: try streamFailure(o["failure"]), via: target(o["via"]))

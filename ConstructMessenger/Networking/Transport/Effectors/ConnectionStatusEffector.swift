@@ -18,7 +18,7 @@ struct ConnectionStatusEffector: UIEffector {
             switch event {
             case .rpcSucceeded:
                 ConnectionStatusManager.shared.markRequestSucceeded()
-            case .rpcFailed(let kind, _, _) where kind.isTransportFailure:
+            case .rpcFailed(let kind, _, _, _) where kind.isTransportFailure:
                 ConnectionStatusManager.shared.setLastError("transport: \(kind)")
             case .proxyStartFailed(_, let reason):
                 ConnectionStatusManager.shared.setLastError(reason)
