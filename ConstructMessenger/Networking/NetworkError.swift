@@ -24,8 +24,9 @@ enum NetworkError: Error, LocalizedError {
 /// Using a distinct type (instead of RPCError with a magic message string) lets
 /// callers distinguish our errors from library-generated ones via `is` checks.
 enum GRPCClientError: Error {
-    /// The client-side deadline elapsed before the server responded.
-    /// Distinct from a server `.deadlineExceeded` — the connection is healthy.
+    /// The client-side deadline elapsed before the server responded. Nothing says the connection
+    /// is healthy: the router counts it as a soft failure (`RPCFailureClassifier`), while the
+    /// executor still keeps the persistent connection (`isTransientClientError`).
     case clientSideTimeout
 }
 

@@ -29,7 +29,11 @@ enum RPCFailureClassifier {
     /// Classify any error thrown by a gRPC call.
     static func classify(_ error: Error) -> RPCFailureKind {
         if error is CancellationError { return .transientCancellation }
-        if error is GRPCClientError { return .transientCancellation }
+        // Our own deadline elapsed with no answer. Not "the connection is healthy": a relay that
+        // accepts the connection and carries nothing looks exactly like this, and it is the case
+        // the soft-failure count exists for. Android counts the same thing — a client deadline
+        // reaches its interceptor as DEADLINE_EXCEEDED → STREAM_TIMEOUT.
+        if case GRPCClientError.clientSideTimeout = error { return .streamTimeout }
         if let rpc = error as? RPCError, rpc.code == .cancelled { return .transientCancellation }
 
         // Application-layer validation (bundle/crypto/session) rides on top of a

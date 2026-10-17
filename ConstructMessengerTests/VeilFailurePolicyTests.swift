@@ -171,58 +171,30 @@ final class VeilFailurePolicyTests: XCTestCase {
         XCTAssertNil(reason)
     }
     
-    // MARK: - Relay Failure Type Mapping
-    
-    func testRelayFailureType_WebTunnelBlocked() {
-        let type = VeilFailurePolicy.relayFailureType(for: .webTunnelBlocked)
-        XCTAssertEqual(type, .webTunnelBlocked)
+    // MARK: - Our own deadline
+
+    /// 2026-10-17, TODO 159: a relay that accepts the connection and carries nothing ends every
+    /// RPC on our own deadline. That was classified as a cancellation, which the router does not
+    /// count, so the relay was never rotated; Android counts it (DEADLINE_EXCEEDED → STREAM_TIMEOUT).
+    /// Mutation: map `clientSideTimeout` back to `.transientCancellation` — both assertions redden.
+    func testOurOwnDeadlineIsASoftFailureThatRotatesTheRelay() {
+        XCTAssertEqual(RPCFailureClassifier.classify(GRPCClientError.clientSideTimeout), .streamTimeout)
+
+        let kind = RPCFailureClassifier.classify(GRPCClientError.clientSideTimeout)
+        let via = TransportTarget.veil(port: 7000, relay: "r")
+        var state = TransportState.veilActive(relay: "r", port: 7000, since: Date(timeIntervalSince1970: 0))
+        for _ in 0..<TransportConfig().veilSoftFailThreshold {
+            state = TransportReducer.route(
+                state: state,
+                event: .rpcFailed(kind: kind, via: via, foreground: true, lane: .sealed),
+                mode: .on, config: TransportConfig(), now: Date(timeIntervalSince1970: 60)
+            ).state
+        }
+        XCTAssertEqual(state, .veilProbing, "three timeouts in a row on one lane rotate the relay")
     }
-    
-    func testRelayFailureType_TLSCertExpired() {
-        let type = VeilFailurePolicy.relayFailureType(for: .tlsCertExpired)
-        XCTAssertEqual(type, .tlsHandshake)
-    }
-    
-    func testRelayFailureType_TLSFingerprintBlocked() {
-        let type = VeilFailurePolicy.relayFailureType(for: .tlsFingerprintBlocked)
-        XCTAssertEqual(type, .fingerprintBlocked)
-    }
-    
-    func testRelayFailureType_StreamTimeout() {
-        let type = VeilFailurePolicy.relayFailureType(for: .streamTimeout)
-        XCTAssertEqual(type, .streamTimeout)
-    }
-    
-    func testRelayFailureType_StaleLocalProxy() {
-        let type = VeilFailurePolicy.relayFailureType(for: .staleLocalProxy)
-        XCTAssertEqual(type, .streamTimeout, "Local proxy crash maps to streamTimeout as fallback")
-    }
-    
-    func testRelayFailureType_TransportUnknown() {
-        let type = VeilFailurePolicy.relayFailureType(for: .transportUnknown)
-        XCTAssertEqual(type, .streamTimeout, "Unknown failures default to streamTimeout TTL")
-    }
-    
-    // MARK: - TTL Verification (Integration with RelayFailureType)
-    
-    func testTTL_WebTunnelBlocked() {
-        let type: RelayFailureType = .webTunnelBlocked
-        XCTAssertEqual(type.ttl, 180, "WebTunnel blocked should have 180s TTL")
-    }
-    
-    func testTTL_TLSCertExpired() {
-        let type: RelayFailureType = .tlsHandshake
-        XCTAssertEqual(type.ttl, 300, "TLS handshake/cert errors should have 300s TTL")
-    }
-    
-    func testTTL_FingerprintBlocked() {
-        let type: RelayFailureType = .fingerprintBlocked
-        XCTAssertEqual(type.ttl, 120, "Fingerprint blocked should have 120s TTL")
-    }
-    
-    func testTTL_StreamTimeout() {
-        let type: RelayFailureType = .streamTimeout
-        XCTAssertEqual(type.ttl, 60, "Stream timeout should have 60s TTL")
+
+    func testTheCallerGivingUpIsStillNotCounted() {
+        XCTAssertEqual(RPCFailureClassifier.classify(CancellationError()), .transientCancellation)
     }
 
     // MARK: - The person reads it
