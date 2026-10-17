@@ -60,19 +60,32 @@ final class PushBannerTests: XCTestCase {
 
     // MARK: - Taking a banner back (TODO 123)
 
-    /// A push for a delivery receipt woke a fetch that found nothing to read: its banner goes.
+    /// A push for a delivery receipt woke a fetch that found nothing new: its banner goes.
     /// Mutation: return [] — "New message" stays, and opening it shows nothing (2026-10-06).
-    func testABannerWithNothingToReadIsWithdrawn() {
+    func testABannerWithNothingNewIsWithdrawn() {
         let ids = PushBannerReplacement.bannersToWithdraw(
-            among: [delivered("push-receipt"), delivered("push-older", secondsAgo: 3600)], unreadChats: 0
+            among: [delivered("push-receipt"), delivered("push-older", secondsAgo: 3600)],
+            somethingNew: false, deliveredBefore: now
         )
         XCTAssertEqual(ids, ["push-receipt", "push-older"])
     }
 
-    /// Anything unread keeps every banner: a receipt landing just after a real message must not
-    /// take that message's banner with it. Mutation: drop the `unreadChats` guard.
-    func testAnythingUnreadKeepsTheBanners() {
-        XCTAssertTrue(PushBannerReplacement.bannersToWithdraw(among: [delivered("push-msg")], unreadChats: 1).isEmpty)
+    /// Something new keeps every banner: a blind banner names no chat, and it may be that
+    /// message's only sign. Mutation: drop the `somethingNew` guard.
+    func testSomethingNewKeepsTheBanners() {
+        XCTAssertTrue(PushBannerReplacement.bannersToWithdraw(
+            among: [delivered("push-msg")], somethingNew: true, deliveredBefore: now
+        ).isEmpty)
+    }
+
+    /// A banner that landed after the fetch began may be for a message that fetch did not see.
+    /// Mutation: drop the date term.
+    func testABannerFromAfterTheFetchBeganStays() {
+        let ids = PushBannerReplacement.bannersToWithdraw(
+            among: [delivered("push-before", secondsAgo: 10), delivered("push-after", secondsAgo: 1)],
+            somethingNew: false, deliveredBefore: now.addingTimeInterval(-5)
+        )
+        XCTAssertEqual(ids, ["push-before"])
     }
 
     /// Only push banners for messages: our own banners and other kinds stay.
@@ -84,9 +97,37 @@ final class PushBannerTests: XCTestCase {
                 delivered("push-cr", activity: "contact_request_received"),
                 delivered("push-msg")
             ],
-            unreadChats: 0
+            somethingNew: false, deliveredBefore: now
         )
         XCTAssertEqual(ids, ["push-msg"])
+    }
+
+    // MARK: - What is new (TODO 123, 2026-10-17)
+
+    /// The usual state — one chat left unread days ago — is not new. Until 2026-10-17 any unread
+    /// chat kept every banner, so a receipt's banner was almost never taken back.
+    /// Mutation: compare against 0 instead of the seen count.
+    func testUnreadThePersonAlreadySawIsNotNew() {
+        XCTAssertFalse(UnreadSeen.somethingNew(seen: ["A": 3], now: ["A": 3, "B": 0]))
+    }
+
+    /// Mutation: `>=` for `>` reddens the test above and the one below.
+    func testUnreadThatGrewIsNew() {
+        XCTAssertTrue(UnreadSeen.somethingNew(seen: ["A": 3], now: ["A": 4]))
+        XCTAssertTrue(UnreadSeen.somethingNew(seen: ["A": 3], now: ["A": 3, "B": 1]), "a chat with no record")
+    }
+
+    /// No record yet (first launch): every unread is new, which keeps every banner.
+    func testWithoutARecordAnyUnreadIsNew() {
+        XCTAssertTrue(UnreadSeen.somethingNew(seen: nil, now: ["A": 1]))
+        XCTAssertFalse(UnreadSeen.somethingNew(seen: nil, now: ["A": 0]))
+    }
+
+    func testTheRecordRoundTrips() throws {
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: "UnreadSeenTests"))
+        defer { defaults.removePersistentDomain(forName: "UnreadSeenTests") }
+        UnreadSeen.record(["A": 2, "B": 0], in: defaults)
+        XCTAssertEqual(UnreadSeen.load(from: defaults), ["A": 2])
     }
 
     /// The server (`messaging-service` `blind_alert`) puts these keys in the alert, and iOS looks
