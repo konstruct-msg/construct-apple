@@ -130,7 +130,7 @@ class MediaUploadManager {
         mediaList.reserveCapacity(urls.count)
 
         for (index, url) in urls.enumerated() {
-            Log.info("Uploading file: \(url.lastPathComponent)", category: "MediaUploadManager")
+            Log.info("Uploading a file (.\(url.pathExtension.lowercased()))", category: "MediaUploadManager")
             let count = Double(urls.count)
             let mediaData = try await MediaManager.shared.uploadFile(url, for: recipientId) { fraction in
                 onProgress?((Double(index) + fraction) / count)

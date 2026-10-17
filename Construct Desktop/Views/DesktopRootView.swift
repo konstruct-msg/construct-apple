@@ -143,7 +143,7 @@ struct DesktopRootView: View {
             handleDeepLink(newDeepLink)
         }
         .onOpenURL { url in
-            Log.info("DesktopRootView: Received URL via onOpenURL: \(url.absoluteString)", category: "DeepLink")
+            Log.info("DesktopRootView: Received URL via onOpenURL: \(Log.link(url))", category: "DeepLink")
             let result = deepLinkHandler.handleURL(url)
             Log.info("DesktopRootView: Deep link handling result: \(result)", category: "DeepLink")
         }

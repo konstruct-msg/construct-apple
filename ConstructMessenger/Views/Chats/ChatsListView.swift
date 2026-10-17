@@ -368,7 +368,7 @@ struct ChatsListView: View {
     // MARK: - QR Code Handling
 
     private func handleScannedContact(_ urlString: String) {
-        Log.info("ChatsListView: Handling scanned URL: \(urlString)", category: "ChatsListView")
+        Log.info("ChatsListView: Handling scanned URL: \(Log.link(urlString))", category: "ChatsListView")
         // A voucher scanned here is a voucher, not a malformed contact code.
         if let outcome = VeilVoucherRedemption.messageIfVoucher(urlString) {
             showingQRScanner = false

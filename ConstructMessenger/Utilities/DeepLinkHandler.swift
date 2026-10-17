@@ -18,7 +18,7 @@ class DeepLinkHandler {
 
     // Function to handle URL manually, e.g., from AppDelegate or onOpenURL
     func handleURL(_ url: URL) -> Bool {
-        Log.debug("DeepLinkHandler: Attempting to handle URL: \(url.absoluteString)", category: "DeepLink")
+        Log.debug("DeepLinkHandler: Attempting to handle URL: \(Log.link(url))", category: "DeepLink")
 
         // veil-front access config: konstruct://veil-config?d=<signed base64url blob>.
         // Verified + stored by VeilConfigImporter; never reaches the contact parser.
@@ -46,7 +46,7 @@ class DeepLinkHandler {
                     Log.debug("DeepLinkHandler: deepLink property set to: \(String(describing: self.deepLink))", category: "DeepLink")
                 }
             } catch {
-                Log.error("DeepLinkHandler: Failed to parse deep link \(url.absoluteString): \(error.localizedDescription)", category: "DeepLink")
+                Log.error("DeepLinkHandler: Failed to parse deep link \(Log.link(url)): \(error.localizedDescription)", category: "DeepLink")
                 await MainActor.run {
                     self.deepLink = nil
                     // `LinkParser` produces a fully localized ContactLinkError for every

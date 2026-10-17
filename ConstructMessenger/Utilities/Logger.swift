@@ -59,4 +59,22 @@ struct Log {
     static func presence(_ value: String?) -> String {
         (value ?? "").isEmpty ? "none" : "set"
     }
+
+    /// What a link may say in a log: our own links by scheme and host, anyone else's by scheme
+    /// alone, and how long the rest is. The rest of ours carries an invite — the key material
+    /// that adds the person as a contact — and a link tapped in a message is what was written
+    /// (2026-10-17: a tester's exported log held a whole scanned invite).
+    static func link(_ url: URL) -> String {
+        let scheme = url.scheme ?? "?"
+        let host = url.host ?? ""
+        let ours = scheme == "konstruct" || host == "konstruct.cc" || host.hasSuffix(".konstruct.cc")
+        let rest = url.absoluteString.count - scheme.count - 3 - (ours ? host.count : 0)
+        return ours ? "\(scheme)://\(host) +\(max(0, rest)) chars" : "\(scheme) link, \(url.absoluteString.count) chars"
+    }
+
+    static func link(_ string: String) -> String {
+        // A scanned code may be a bare compact invite, which `URL(string:)` happily accepts.
+        guard let url = URL(string: string), url.scheme != nil else { return "unparsed, \(string.count) chars" }
+        return link(url)
+    }
 }

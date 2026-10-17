@@ -356,7 +356,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
             return false
         }
 
-        Log.info("AppDelegate: Received Universal Link: \(url.absoluteString)", category: "DeepLink")
+        Log.info("AppDelegate: Received Universal Link: \(Log.link(url))", category: "DeepLink")
         let result = deepLinkHandler.handleURL(url)
         Log.info("AppDelegate: Deep link handling result: \(result)", category: "DeepLink")
         return result
@@ -368,7 +368,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         open url: URL,
         options: [UIApplication.OpenURLOptionsKey : Any] = [:]
     ) -> Bool {
-        Log.info("AppDelegate: Received URL Scheme: \(url.absoluteString)", category: "DeepLink")
+        Log.info("AppDelegate: Received URL Scheme: \(Log.link(url))", category: "DeepLink")
         let result = deepLinkHandler.handleURL(url)
         Log.info("AppDelegate: URL Scheme handling result: \(result)", category: "DeepLink")
         return result
