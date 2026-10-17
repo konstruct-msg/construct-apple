@@ -92,13 +92,14 @@ class LocalNotificationManager: NSObject {
         post(content, identifier: identifier, coveredByPushOf: "contact_request_received")
     }
 
-    /// Takes back the "New message" push banners when the fetch they woke found nothing to read
-    /// (`PushBannerReplacement.bannersToWithdraw`).
-    func withdrawPushBannersIfNothingUnread(unreadChats: Int) {
+    /// Takes back the "New message" push banners when the fetch they woke found nothing new to
+    /// read (`PushBannerReplacement.bannersToWithdraw`).
+    func withdrawPushBannersIfNothingNew(somethingNew: Bool, deliveredBefore cutoff: Date) {
         notificationCenter.getDeliveredNotifications { [notificationCenter] delivered in
             let ids = PushBannerReplacement.bannersToWithdraw(
                 among: delivered.map(PushBannerReplacement.Delivered.init),
-                unreadChats: unreadChats
+                somethingNew: somethingNew,
+                deliveredBefore: cutoff
             )
             guard !ids.isEmpty else { return }
             notificationCenter.removeDeliveredNotifications(withIdentifiers: ids)
@@ -382,6 +383,25 @@ private extension String {
     }
 }
 
+/// How many unread each chat had when the app was last left. Unread above that is something the
+/// person has not seen, and a push banner may be its only sign; unread at or below it they saw.
+enum UnreadSeen {
+    private static let key = "construct.notifications.unreadSeen"
+
+    static func record(_ counts: [String: Int], in defaults: UserDefaults = .standard) {
+        defaults.set(counts.filter { $0.value > 0 }, forKey: key)
+    }
+
+    /// Nil before the first record: then every unread counts as new, which keeps every banner.
+    static func load(from defaults: UserDefaults = .standard) -> [String: Int]? {
+        defaults.dictionary(forKey: key) as? [String: Int]
+    }
+
+    static func somethingNew(seen: [String: Int]?, now: [String: Int]) -> Bool {
+        now.contains { chat, unread in unread > (seen?[chat] ?? 0) }
+    }
+}
+
 /// Which push banners already cover a banner of our own. Pure, so the window and the kind match
 /// are reachable from tests without a notification center.
 enum PushBannerReplacement {
@@ -416,16 +436,21 @@ enum PushBannerReplacement {
         }
     }
 
-    /// The push banners to take back after a push-woken fetch: every "New message" push banner,
-    /// when nothing is unread. The server cannot tell a delivery receipt from a message — on
-    /// purpose, `decisions/sealed-content-type-inside-the-plaintext-frame` — so a receipt arrives
-    /// with the same banner, and opening it found nothing (TODO 123, 2026-10-06). With anything
-    /// unread none is taken back: a receipt that lands just after a real message must not
-    /// withdraw that message's banner, and a blind banner names no chat to match it by.
-    static func bannersToWithdraw(among delivered: [Delivered], unreadChats: Int) -> [String] {
-        guard unreadChats == 0 else { return [] }
+    /// The push banners to take back after a push-woken fetch: every "New message" push banner
+    /// delivered before the fetch began, when nothing new is waiting to be read. The server
+    /// cannot tell a delivery receipt from a message — on purpose,
+    /// `decisions/sealed-content-type-inside-the-plaintext-frame` — so a receipt arrives with the
+    /// same banner, and opening it found nothing (TODO 123, 2026-10-06).
+    ///
+    /// "New" is unread that grew since the app was last left (`UnreadSeen`), not unread at all.
+    /// A real message's banner is the push's own — ours is not posted beside it, see `post` — so
+    /// it must stay while that message is unread; but until 2026-10-17 any unread chat kept every
+    /// banner, and one old unread chat is the usual state, so receipts kept their banners almost
+    /// always. A banner delivered after the fetch began may be for a message it did not see.
+    static func bannersToWithdraw(among delivered: [Delivered], somethingNew: Bool, deliveredBefore cutoff: Date) -> [String] {
+        guard !somethingNew else { return [] }
         return delivered
-            .filter { $0.fromPush && $0.activity == "new_message" }
+            .filter { $0.fromPush && $0.activity == "new_message" && $0.date <= cutoff }
             .map(\.identifier)
     }
 
