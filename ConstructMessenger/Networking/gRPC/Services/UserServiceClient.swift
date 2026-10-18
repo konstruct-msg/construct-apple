@@ -70,6 +70,15 @@ final class UserServiceClient: Sendable {
         }
     }
 
+    /// Everyone this account blocks on the server; the server returns the whole list at once.
+    func getBlockedUserIds() async throws -> [String] {
+        try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.blockUser) { grpcClient in
+            let client = Shared_Proto_Services_V1_UserService.Client(wrapping: grpcClient)
+            let response = try await client.getBlockedUsers(request: .init(message: .init()))
+            return response.blockedUsers.map(\.userID)
+        }
+    }
+
     // MARK: - Update Username
 
     func updateUsername(userId: String, username: String) async throws {

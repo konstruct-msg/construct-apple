@@ -158,6 +158,11 @@ struct ContentView: View {
                 }
             }
 
+            // A block or unblock the server never received, then the server's list read back.
+            if AuthSessionManager.shared.isSessionValid {
+                BlockSyncService.shared.sync()
+            }
+
             // Heal degraded (at-risk) sessions whose peer has rotated back to a fresh SPK — closes
             // the stale-peer Phase 3B loop (server wake → peer rotates → sender auto-upgrades) without
             // requiring the user to open each affected chat. Self-throttled per contact.
