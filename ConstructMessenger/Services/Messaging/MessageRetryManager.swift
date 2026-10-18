@@ -106,13 +106,7 @@ class MessageRetryManager {
                     await MainActor.run {
                         // The message must still be there; everything below acts on it.
                         guard (try? LocalRepositories.messages.message(capturedMessageId)) != nil else { return }
-                        let isRetryableTransport: Bool = {
-                            if error is GRPCClientError { return true }
-                            if let rpc = error as? RPCError {
-                                return rpc.code == .deadlineExceeded || rpc.code == .unavailable || rpc.code == .cancelled
-                            }
-                            return false
-                        }()
+                        let isRetryableTransport = SendFailure.isRetryableTransport(error)
                         self.recordOutcome(capturedMessageId, isRetryableTransport ? .queued : .failed)
                         if isRetryableTransport {
                             Log.info("Retry transport failure — queued \(capturedMessageId.prefix(8))… for later", category: "MessageRetryManager")
@@ -509,13 +503,7 @@ class MessageRetryManager {
                         Log.error("Failed to re-send queued message \(messageId): \(error)", category: "MessageRetryManager")
                         // The message must still be there; everything below acts on it.
                         guard (try? LocalRepositories.messages.message(messageId)) != nil else { return }
-                        let isRetryableTransport: Bool = {
-                            if error is GRPCClientError { return true }
-                            if let rpc = error as? RPCError {
-                                return rpc.code == .deadlineExceeded || rpc.code == .unavailable || rpc.code == .cancelled
-                            }
-                            return false
-                        }()
+                        let isRetryableTransport = SendFailure.isRetryableTransport(error)
                         self.recordOutcome(messageId, isRetryableTransport ? .queued : .failed)
                     }
                 }
@@ -648,7 +636,18 @@ class MessageRetryManager {
             return .queued
         }
         guard let plaintext = Self.recoverWirePlaintext(for: message) else {
-            Log.error("reencryptAndSend: \(messageId.prefix(8))… has no recoverable plaintext — failing", category: "MessageRetryManager")
+            // Which guard refused, never the content (TODO 165: a 74-character text came back
+            // "unrecoverable" and nothing said why).
+            let kind: String = {
+                switch message.payload {
+                case .text: return "text"
+                case .legacyUTF8: return "legacyUTF8"
+                case .mediaAlbum: return "mediaAlbum"
+                case .messageContent: return "messageContent"
+                case .profileBinary: return "profileBinary"
+                }
+            }()
+            Log.error("reencryptAndSend: \(messageId.prefix(8))… has no recoverable plaintext — failing (contentType=\(message.contentType), payload=\(kind), body=\(message.body.count)B, display=\(message.payload.displayString.count)ch)", category: "MessageRetryManager")
             return .failed
         }
 
