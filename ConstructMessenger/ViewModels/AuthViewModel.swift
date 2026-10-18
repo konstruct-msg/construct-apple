@@ -238,6 +238,7 @@ class AuthViewModel {
             guard self != nil else { return }
             await ServerKeyManager.shared.prefetch()
         }
+        BlockSyncService.shared.sync()
     }
 
     private static var appLaunchAnnounced = false

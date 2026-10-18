@@ -291,6 +291,7 @@ struct DesktopChatView: View {
 
                 Button {
                     try? LocalRepositories.contacts.setBlocked(peerId, true)
+                    BlockSyncService.shared.request(peerId, blocked: true)
                     IncomingFloodGuard.shared.unsuppress(senderId: senderId)
                 } label: {
                     Label(NSLocalizedString("block_user", comment: ""), systemImage: "hand.raised.fill")
