@@ -1630,10 +1630,10 @@
 		};
 		BFF6FCF72F4C4D6600A31F36 /* XCRemoteSwiftPackageReference "grpc-swift-nio-transport" */ = {
 			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/grpc/grpc-swift-nio-transport";
+			repositoryURL = "https://github.com/maxeliseyev/grpc-swift-nio-transport";
 			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 2.4.2;
+				kind = exactVersion;
+				version = "2.9.0-construct.1";
 			};
 		};
 		BFF6FCFE2F4C4E5300A31F36 /* XCRemoteSwiftPackageReference "swift-protobuf" */ = {
