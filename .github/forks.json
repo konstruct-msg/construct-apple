@@ -5,9 +5,9 @@
       "name": "grpc-swift-nio-transport",
       "fork": "maxeliseyev/grpc-swift-nio-transport",
       "upstream": "grpc/grpc-swift-nio-transport",
-      "base": "2.9.0",
-      "branch": "construct/2.9.0",
-      "pin": "2.9.0-construct.1",
+      "base": "2.11.0",
+      "branch": "construct/2.11.0",
+      "pin": "2.11.0-construct.1",
       "why": "ALPN offers only h2; keepalive jitter (vault TODO 162 A, B2). Our commits are the ones titled 'Construct:'.",
       "spm": true
     }

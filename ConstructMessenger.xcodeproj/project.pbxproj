@@ -1633,7 +1633,7 @@
 			repositoryURL = "https://github.com/maxeliseyev/grpc-swift-nio-transport";
 			requirement = {
 				kind = exactVersion;
-				version = "2.9.0-construct.1";
+				version = "2.11.0-construct.1";
 			};
 		};
 		BFF6FCFE2F4C4E5300A31F36 /* XCRemoteSwiftPackageReference "swift-protobuf" */ = {
