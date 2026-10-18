@@ -163,16 +163,32 @@ actor VeilCertFetcher {
 
     private let timeout: TimeInterval = NetworkTiming.VEIL.certFetchTimeoutHTTPS
 
-    // MPTCP .handover: OS migrates in-flight requests to cellular when WiFi drops,
-    // preventing cert/relay-config fetches from failing on interface transitions.
-    // MPTCP is iOS-only; macOS uses a standard URLSession.
-    private let session: URLSession = {
+    /// A session per fetch, invalidated once it answers. One session for the object's lifetime
+    /// kept its h2 connection to the domain's host open for as long as the app ran, answering
+    /// the host's PING every ~68 s: a standing "the app is running" to an address unrelated to
+    /// the server (TODO 162 C, pcap 2026-10-16). For h2 nothing but invalidation closes it.
+    ///
+    /// MPTCP .handover: the OS migrates an in-flight request to cellular when Wi-Fi drops, so
+    /// a fetch does not fail on an interface transition. iOS only.
+    private static func makeSession() -> URLSession {
         let config = URLSessionConfiguration.default
         #if os(iOS)
         config.multipathServiceType = .handover
         #endif
+        config.urlCache = nil
+        config.httpShouldSetCookies = false
+        config.httpCookieStorage = nil
         return URLSession(configuration: config)
-    }()
+    }
+
+    /// When the last HTTPS fetch was accepted — kept across launches, or every launch of the
+    /// phone app would be a fetch — and when an urgent one last went out in this process.
+    private static let lastAcceptedKey = "construct.manifest_last_accepted"
+    private var lastAccepted: Date? {
+        let t = UserDefaults.standard.double(forKey: Self.lastAcceptedKey)
+        return t > 0 ? Date(timeIntervalSince1970: t) : nil
+    }
+    private var lastUrgent: Date?
 
     // UserDefaults key for cached relay infos (JSON-encoded [RelayInfo])
     private static let cachedRelayInfosKey = "construct.ice_relay_infos"
@@ -208,12 +224,27 @@ actor VeilCertFetcher {
     /// With VEIL `on` this is not fetched over HTTPS — a plain request to the project's domain,
     /// outside the tunnel (`decisions/veil-on-never-goes-direct.md`). The same signed bytes are
     /// asked of `ServerTrustService` instead, over the channel that under `on` is the tunnel.
+    ///
+    /// `urgent` is a caller that needs a fresh manifest now — a relay's certificate expired, a
+    /// sealed message did not verify. Anything else is routine and is answered from the cache
+    /// while it is recent (`ManifestFetchPolicy`).
     @discardableResult
-    func fetchAndCacheRelayConfig() async -> [RelayInfo]? {
+    func fetchAndCacheRelayConfig(urgent: Bool = false) async -> [RelayInfo]? {
         let sources = Self.manifestSources(mode: VeilProxyStore.loadMode())
         guard !sources.isEmpty else {
             return await ServerTrustClient.refresh() ?? Self.cachedRelayInfosSync()
         }
+        let now = Date()
+        guard ManifestFetchPolicy.shouldFetch(
+            urgent: urgent,
+            now: now,
+            lastAccepted: lastAccepted,
+            lastUrgent: lastUrgent,
+            hasCache: UserDefaults.standard.data(forKey: Self.cachedBundleSigningKeyKey) != nil
+        ) else {
+            return Self.cachedRelayInfosSync()
+        }
+        if urgent { lastUrgent = now }
         if let relays = await fetchVerifiedRelayConfig(from: sources) {
             return relays
         }
@@ -229,18 +260,22 @@ actor VeilCertFetcher {
 
     /// Races all provided URLs; returns the first verified result, nil if all fail.
     private func fetchVerifiedRelayConfig(from urls: [URL]) async -> [RelayInfo]? {
+        let session = Self.makeSession()
+        defer { session.finishTasksAndInvalidate() }
         return await withTaskGroup(of: [RelayInfo]?.self) { group in
             for url in urls {
                 group.addTask { [self] in
                     do {
                         var request = URLRequest(url: url, timeoutInterval: self.timeout)
                         request.cachePolicy = .reloadIgnoringLocalCacheData
-                        let (data, response) = try await self.session.data(for: request)
+                        let (data, response) = try await session.data(for: request)
                         guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
                             Log.debug("\(url.host ?? "") returned non-200", category: "ICE")
                             return nil
                         }
-                        return try self.acceptManifest(data, source: url.host ?? "?")
+                        let relays = try self.acceptManifest(data, source: url.host ?? "?")
+                        await self.noteAccepted()
+                        return relays
                     } catch {
                         Log.debug("\(url.host ?? "") fetch error: \(error)", category: "VEIL")
                         return nil
@@ -257,6 +292,10 @@ actor VeilCertFetcher {
             }
             return nil
         }
+    }
+
+    private func noteAccepted() {
+        UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: Self.lastAcceptedKey)
     }
 
     /// Verify, freshness-check and persist one signed manifest, whatever carried it — the HTTPS
@@ -491,3 +530,28 @@ private extension Data {
     }
 }
 
+
+/// How often the signed manifest is asked of the project's domain. It changes rarely (the host
+/// serves it with `max-age=300`, and it was last re-signed weeks ago), and each fetch is a
+/// connection to an address that says which app is running. Nothing cached — always fetch.
+enum ManifestFetchPolicy {
+    /// A routine refresh — after VEIL starts, a relay list update — answered from a cache this young.
+    static let routineInterval: TimeInterval = 6 * 3600
+    /// An urgent one (an expired relay certificate, a sealed message that did not verify) still
+    /// waits this long after the last urgent fetch, so a burst of them is one request.
+    static let urgentInterval: TimeInterval = 10 * 60
+
+    static func shouldFetch(
+        urgent: Bool,
+        now: Date,
+        lastAccepted: Date?,
+        lastUrgent: Date?,
+        hasCache: Bool
+    ) -> Bool {
+        guard hasCache else { return true }
+        if urgent {
+            return lastUrgent.map { now.timeIntervalSince($0) >= urgentInterval } ?? true
+        }
+        return lastAccepted.map { now.timeIntervalSince($0) >= routineInterval } ?? true
+    }
+}
