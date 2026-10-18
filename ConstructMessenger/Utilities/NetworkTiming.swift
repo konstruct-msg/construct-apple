@@ -104,7 +104,10 @@ enum NetworkTiming {
         // relay can easily exceed the 3s ACK timeout — killing the channel every 8s. This
         // was the exact failure mode observed on RU networks 2026-05-29.
         //
-        // Direct path: 10s ping + 5s ack = 15s detection. Fast for healthy networks.
+        // Direct path: 15s ping ±30% (10.5–19.5s) + 5s ack ≤ 24.5s detection, inside the 30s a
+        //   carrier NAT gives an idle TCP flow. It was 10.0s exactly until 2026-10-18 — a ping
+        //   pair every ten seconds, on the dot, is a rhythm one rule reads (TODO 162 B). The
+        //   jitter needs the construct fork of grpc-swift-nio-transport (`Keepalive.jitter`).
         // VEIL path: keepalive deliberately neutered (120s ping + 30s ack = 150s detection).
         //   Observed 2026-05-29: gRPC-swift v2's keepalive timer does NOT seem to reset on
         //   outgoing DATA frames — only on incoming. With our stream-accept being slow on
@@ -114,7 +117,9 @@ enum NetworkTiming {
         //   is the real dead-stream detector on the VEIL path; HTTP/2 keepalive is just a
         //   safety net for when even that doesn't fire.
         static let maxIdleTimeSeconds: Int64 = 300
-        static let keepaliveTimeDirectSeconds: Int64 = 10
+        static let keepaliveTimeDirectSeconds: Int64 = 15
+        /// How far each keepalive interval strays from its base, either way (both paths).
+        static let keepaliveJitter: Double = 0.3
         static let keepaliveTimeVEILSeconds: Int64 = 120
         static let keepaliveTimeoutSeconds: Int64 = 5
         static let keepaliveTimeoutVEILSeconds: Int64 = 30

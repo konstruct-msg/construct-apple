@@ -380,7 +380,8 @@ final class GRPCChannelManager: Sendable {
                         keepalive: .init(
                             time: .seconds(NetworkTiming.GRPC.keepaliveTimeVEILSeconds),
                             timeout: .seconds(NetworkTiming.GRPC.keepaliveTimeoutVEILSeconds),
-                            allowWithoutCalls: true
+                            allowWithoutCalls: true,
+                            jitter: NetworkTiming.GRPC.keepaliveJitter
                         )
                     )
                 }
@@ -411,7 +412,8 @@ final class GRPCChannelManager: Sendable {
                         timeout: .seconds(NetworkTiming.GRPC.keepaliveTimeoutSeconds),
                         // true: send keepalive pings even between calls so the TCP connection
                         // (used by the long-lived message stream) stays alive through NAT tables.
-                        allowWithoutCalls: true
+                        allowWithoutCalls: true,
+                        jitter: NetworkTiming.GRPC.keepaliveJitter
                     )
                 )
             }
@@ -447,7 +449,8 @@ final class GRPCChannelManager: Sendable {
                         keepalive: .init(
                             time: .seconds(NetworkTiming.GRPC.keepaliveTimeVEILSeconds),
                             timeout: .seconds(NetworkTiming.GRPC.keepaliveTimeoutVEILSeconds),
-                            allowWithoutCalls: true
+                            allowWithoutCalls: true,
+                            jitter: NetworkTiming.GRPC.keepaliveJitter
                         )
                     )
                 }
@@ -470,7 +473,8 @@ final class GRPCChannelManager: Sendable {
                     keepalive: .init(
                         time: .seconds(NetworkTiming.GRPC.keepaliveTimeDirectSeconds),
                         timeout: .seconds(NetworkTiming.GRPC.keepaliveTimeoutSeconds),
-                        allowWithoutCalls: true
+                        allowWithoutCalls: true,
+                        jitter: NetworkTiming.GRPC.keepaliveJitter
                     )
                 )
             }
