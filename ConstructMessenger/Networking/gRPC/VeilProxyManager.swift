@@ -153,7 +153,7 @@ final class VeilProxyManager: ObservableObject {
             Log.info("TLS cert expires in \(days) day(s) on relay \(addr) — scheduling refresh", category: "VEIL")
         }
 
-        _ = await VeilCertFetcher.shared.fetchAndCacheRelayConfig()
+        _ = await VeilCertFetcher.shared.fetchAndCacheRelayConfig(urgent: !expiredAddresses.isEmpty)
         Log.info("Cert expiry refresh completed", category: "VEIL")
     }
 

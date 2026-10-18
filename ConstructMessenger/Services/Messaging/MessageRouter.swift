@@ -184,7 +184,7 @@ final class MessageRouter {
     private func refreshBundleKeyIfStale() {
         guard Date().timeIntervalSince(lastBundleKeyRefresh) > 60 else { return }
         lastBundleKeyRefresh = Date()
-        Task { _ = await VeilCertFetcher.shared.fetchAndCacheRelayConfig() }
+        Task { _ = await VeilCertFetcher.shared.fetchAndCacheRelayConfig(urgent: true) }
     }
 
     // MARK: - Envelopes the core is holding
