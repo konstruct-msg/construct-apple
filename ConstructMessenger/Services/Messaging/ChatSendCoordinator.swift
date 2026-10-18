@@ -633,23 +633,7 @@ final class ChatSendCoordinator {
                     self.updateMessageStatus(messageId: messageId, status: .queued)
                     SessionLifecycleController.shared.reestablishSessionForQueuedOutbound(to: recipientId)
                 } catch {
-                    let isRetryableTransportFailure: Bool = {
-                        // VEIL `on` with the tunnel still coming up: nothing went wrong with the
-                        // message, it waits for the tunnel (2026-10-14: a send in those seconds
-                        // was marked failed and its payload dropped).
-                        if error is VeilTunnelNotUp { return true }
-                        if let rpcError = error as? RPCError {
-                            let code = String(describing: rpcError.code).lowercased()
-                            return code == "deadlineexceeded" || code == "unavailable" || code == "cancelled"
-                        }
-                        if let networkError = error as? NetworkError {
-                            switch networkError {
-                            case .connectionFailed, .disconnected, .notConnected: return true
-                            default: return false
-                            }
-                        }
-                        return false
-                    }()
+                    let isRetryableTransportFailure = SendFailure.isRetryableTransport(error)
                     if let networkError = error as? NetworkError,
                        case .serverError(let message, let responseBody) = networkError {
                         Log.error("Failed to send message via gRPC: \(message)\nResponse: \(responseBody ?? "empty")", category: "ChatViewModel")
@@ -663,9 +647,12 @@ final class ChatSendCoordinator {
                         self.updateMessageStatus(messageId: messageId, status: .queued)
                     } else {
                         // The message says it failed — its mark and its retry — so no toast says
-                        // it again (TODO 128: one failure, one signal).
+                        // it again (TODO 128: one failure, one signal). Its ciphertext stays: no
+                        // server refused it, and it is the one thing a retry can send without
+                        // re-encrypting (TODO 165: dropped here, the retry found no plaintext to
+                        // re-encrypt from and the message stayed red for good). The store's TTL
+                        // takes it if nothing does.
                         self.updateMessageStatus(messageId: messageId, status: .failed)
-                        OutgoingWirePayloadStore.shared.remove(baseMessageId: messageId)
                     }
                 }
             }
@@ -1123,3 +1110,41 @@ final class ChatSendCoordinator {
         persistenceService.updateMessageStatus(messageId: messageId, status: status, in: viewContext)
     }
 }
+
+/// What a thrown send error says about the message: only whether to queue it. A refusal by the
+/// server arrives as a response, not an error, and is judged where the response is read.
+enum SendFailure {
+    /// The send never got an answer: the path, not the message, failed, and the same ciphertext
+    /// goes out again once there is a path.
+    static func isRetryableTransport(_ error: Error) -> Bool {
+        // VEIL `on` with the tunnel still coming up: nothing went wrong with the message, it waits
+        // for the tunnel (2026-10-14: a send in those seconds was marked failed and its payload
+        // dropped).
+        if error is VeilTunnelNotUp { return true }
+        // Our own deadline: no answer in time.
+        if error is GRPCClientError { return true }
+        if let rpcError = error as? RPCError {
+            switch rpcError.code {
+            case .deadlineExceeded, .unavailable, .cancelled: return true
+            default: return false
+            }
+        }
+        // The client the call went to was stopped under it — a route change or a relay rotation
+        // replaced the channel mid-send (TODO 165, build 745: `clientIsStopped`, then three
+        // retries with nothing to send).
+        if let runtimeError = error as? RuntimeError {
+            switch runtimeError.code {
+            case .clientIsStopped, .transportError: return true
+            default: return false
+            }
+        }
+        if let networkError = error as? NetworkError {
+            switch networkError {
+            case .connectionFailed, .disconnected, .notConnected: return true
+            default: return false
+            }
+        }
+        return false
+    }
+}
+
