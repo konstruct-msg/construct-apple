@@ -561,8 +561,7 @@ struct UserProfileView: View {
             } else {
                 Log.error("reportSpam skipped for \(userId.prefix(8))… — no known identity key to derive device id", category: "UserProfileView")
             }
-            do { _ = try await UserServiceClient.shared.blockUser(userId: userId, reason: "spam") }
-            catch { Log.error("Block sync failed after report for \(userId.prefix(8))…: \(error)", category: "UserProfileView") }
+            await BlockSyncService.shared.request(userId, blocked: true, reason: "spam")
 
             await MainActor.run {
                 shareAlertMessage = NSLocalizedString(reported ? "report_spam_success" : "report_spam_failed", comment: "")
@@ -574,20 +573,9 @@ struct UserProfileView: View {
     private func handleBlockToggle() {
         let nowBlocked = !user.isBlocked
         write { try $0.setBlocked(userId, nowBlocked) }
-        // Persist the block server-side (durable across reinstall; the authoritative
-        // `user_blocks` row used on the identified path). The local `isBlocked` already drives
-        // the client-side drop, so a failed RPC must NOT revert the local state — best-effort sync.
-        Task {
-            do {
-                if nowBlocked {
-                    _ = try await UserServiceClient.shared.blockUser(userId: userId)
-                } else {
-                    _ = try await UserServiceClient.shared.unblockUser(userId: userId)
-                }
-            } catch {
-                Log.error("Block sync failed for \(userId.prefix(8))… (local state kept): \(error)", category: "UserProfileView")
-            }
-        }
+        // The server's `user_blocks` row is what refuses a call; it is queued and resent until
+        // the server answers, so a lost unblock cannot leave it behind (TODO 170).
+        BlockSyncService.shared.request(userId, blocked: nowBlocked)
     }
 
     /// Persist the local alias. Empty/whitespace clears it (falls back to the resolved name).

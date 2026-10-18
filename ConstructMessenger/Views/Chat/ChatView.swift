@@ -433,11 +433,7 @@ struct ChatView: View {
         } catch {
             Log.error("Flood block not saved locally for \(userId.prefix(8))…: \(error)", category: "ChatView")
         }
-        // Durable server-side block (best-effort; local isBlocked already drives the drop).
-        Task {
-            do { _ = try await UserServiceClient.shared.blockUser(userId: userId) }
-            catch { Log.error("Flood block sync failed for \(userId.prefix(8))… (local kept): \(error)", category: "ChatView") }
-        }
+        BlockSyncService.shared.request(userId, blocked: true)
         IncomingFloodGuard.shared.unsuppress(senderId: floodSenderId)
     }
 
