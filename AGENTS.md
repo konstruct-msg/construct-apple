@@ -58,6 +58,12 @@ Sibling repos: `~/Code/construct-core` (crypto), `~/Code/construct-transport` (Q
   so the app and its notification extension (`ConstructNotifications/`) inherit one value; App
   Store Connect rejects an embedded extension whose version differs. A number typed on a target's
   General tab writes a target-level override; `scripts/check_build_versions.sh` (CI) fails on it.
+- **A forked dependency is listed in `.github/forks.json`** (today: grpc-swift-nio-transport,
+  for h2-only ALPN and keepalive jitter). Moving its pin changes the SPM reference,
+  `Package.resolved` and that file in one PR — `scripts/check_forks.py pins` (CI) fails when they
+  disagree, and a weekly workflow opens an issue when upstream releases past the fork's base.
+  When re-resolving, check that `Package.resolved` changed only the pin you meant: on 2026-10-18 a
+  resolve after the fork switch also lifted swift-crypto 4→5 and a dozen other packages.
 - **`ConstructMessenger` is the scheme with the test target.** A scheme that builds the app alone
   runs zero tests and reports success.
 
