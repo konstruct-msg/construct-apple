@@ -1,0 +1,27 @@
+# Weekly: has upstream released past a fork's base? One issue per fork, kept current.
+#
+# A fork nobody watches stays on the release it was cut from, and upstream fixes never arrive.
+# The list is .github/forks.json; scripts/check_forks.py does the work. The schedule lives here
+# and not in the forks: a fork's scheduled workflows are off by default and run only on its
+# default branch, which is upstream's.
+
+name: fork-upstreams
+
+on:
+  schedule:
+    - cron: "17 6 * * 1"   # Mondays, 06:17 UTC
+  workflow_dispatch:
+
+permissions:
+  issues: write
+  contents: read
+
+jobs:
+  upstream:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compare each fork's base with upstream's latest release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python3 -I scripts/check_forks.py upstream
