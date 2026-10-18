@@ -427,8 +427,8 @@ class MediaManager {
             throw MediaOptimizationError.conversionFailed
         }
         Log.info("Uploading ORIGINAL image for recipient: \(recipientId) (mime=\(attachment.mimeType), \(data.count) bytes)", category: "MediaManager")
-        guard Int64(data.count) <= MessageSizeLimits.maxImageBytes else {
-            throw MediaUploadError.fileTooLarge(data.count, Int(MessageSizeLimits.maxImageBytes))
+        guard Int64(data.count) <= MessageSizeLimits.maxUploadBytes else {
+            throw MediaUploadError.fileTooLarge(data.count, Int(MessageSizeLimits.maxUploadBytes))
         }
         let uploadResult = try await Self.uploadWithRetry(data: data, mimeType: attachment.mimeType, reuse: .forSend(to: recipientId, forwarded: attachment.isForwarded), onProgress: onProgress)
         Log.info("Original image uploaded: \(uploadResult.mediaId)", category: "MediaManager")
@@ -489,8 +489,8 @@ class MediaManager {
         }
 
         let videoData = try Data(contentsOf: transcodedURL)
-        guard Int64(videoData.count) <= MessageSizeLimits.maxVideoBytes else {
-            throw MediaUploadError.fileTooLarge(videoData.count, Int(MessageSizeLimits.maxVideoBytes))
+        guard Int64(videoData.count) <= MessageSizeLimits.maxUploadBytes else {
+            throw MediaUploadError.fileTooLarge(videoData.count, Int(MessageSizeLimits.maxUploadBytes))
         }
 
         let uploadResult = try await Self.uploadWithRetry(

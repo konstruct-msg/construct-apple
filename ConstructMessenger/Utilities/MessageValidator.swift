@@ -156,11 +156,11 @@ struct MessageValidator {
             throw MessageValidationError.fileTooLarge(
                 fileName: name,
                 currentSize: 0,
-                maxSize: MessageSizeLimits.maxFileAttachmentBytes
+                maxSize: MessageSizeLimits.maxUploadBytes
             )
         }
 
-        let maxSize = MessageSizeLimits.maxSizeForFileType(fileExtension)
+        let maxSize = MessageSizeLimits.maxUploadBytes
         guard fileSize <= maxSize else {
             throw MessageValidationError.fileTooLarge(
                 fileName: name,
