@@ -29,6 +29,7 @@ struct DesktopChatView: View {
     @State private var callManager = CallManager.shared
 
     @State private var searchText = ""
+    @State private var showingUserProfile = false
     @State private var isSearchActive = false
     @State private var isEditMode = false
     @State private var selectedMessages: Set<String> = []
@@ -445,12 +446,22 @@ struct DesktopChatView: View {
         }
 
         ToolbarItem(placement: .primaryAction) {
-            Toggle(isOn: Bindable(DesktopInspector.shared).isOpen) {
+            Toggle(isOn: $showingUserProfile) {
                 Image(systemName: "info.circle")
             }
             .toggleStyle(.button)
             .keyboardShortcut("i", modifiers: .command)
             .help(NSLocalizedString("profile", comment: ""))
+            // A popover off the button, as Messages shows a conversation's details: over the chat
+            // only while it is wanted, gone on a click outside or Esc. Tried first as an inspector
+            // column — inside the detail it pushed the window's columns past both edges, on the
+            // split view it looped AppKit's constraint pass until it threw (2026-10-18).
+            .popover(isPresented: $showingUserProfile, arrowEdge: .bottom) {
+                UserProfileView(userId: peerId, showMessageButton: false)
+                    .environment(\.managedObjectContext, viewContext)
+                    .frame(width: Self.profilePopoverWidth)
+                    .frame(minHeight: Self.profilePopoverMinHeight, idealHeight: Self.profilePopoverIdealHeight)
+            }
         }
 
         if isEditMode {
@@ -483,6 +494,9 @@ struct DesktopChatView: View {
     }
 
     private static let searchFieldWidth: CGFloat = 220
+    private static let profilePopoverWidth: CGFloat = 360
+    private static let profilePopoverMinHeight: CGFloat = 360
+    private static let profilePopoverIdealHeight: CGFloat = 560
 
     private var chatTitle: some View {
         HStack(spacing: CTSpace.s) {

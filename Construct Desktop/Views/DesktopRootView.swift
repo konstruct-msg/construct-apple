@@ -248,13 +248,6 @@ struct DesktopRootView: View {
                 }
         }
         .navigationSplitViewStyle(.balanced)
-        // On the split view, not on the chat: a third column the window makes room for. Hung on
-        // the detail it was a split inside the detail, and opening it pushed the sidebar and the
-        // card past both edges of the window (2026-10-18).
-        .inspector(isPresented: Bindable(DesktopInspector.shared).isOpen) {
-            inspectorPane
-                .inspectorColumnWidth(min: 280, ideal: 320, max: 420)
-        }
         .background(Color.CT.bg)
         .toolbarBackground(Color.CT.bg, for: .windowToolbar)
         .toolbarBackgroundVisibility(.visible, for: .windowToolbar)
@@ -302,20 +295,6 @@ struct DesktopRootView: View {
             }
 
         return decorated
-    }
-
-    /// The open chat's contact card, beside it (⌘I). No chat open, nothing to show.
-    @ViewBuilder
-    private var inspectorPane: some View {
-        if let chatId = chatsViewModel.chatToOpen,
-           let conversation = ChatsLive.shared.conversation(chatId) {
-            UserProfileView(userId: conversation.peerId, showMessageButton: false)
-                .environment(\.managedObjectContext, viewContext)
-                .id(conversation.peerId)
-        } else {
-            Color.CT.bg
-                .onAppear { DesktopInspector.shared.isOpen = false }
-        }
     }
 
     /// Detail is the open chat, or the empty state. People are a separate window (D2).
@@ -492,12 +471,4 @@ struct DesktopRootView: View {
     DesktopAddContactView()
         .environment(AuthViewModel(context: PersistenceController.shared.container.viewContext))
         .environment(DeepLinkHandler())
-}
-
-/// Whether the contact inspector is open. The chat's toolbar toggles it; the split view shows it.
-@MainActor @Observable
-final class DesktopInspector {
-    static let shared = DesktopInspector()
-    var isOpen = false
-    private init() {}
 }

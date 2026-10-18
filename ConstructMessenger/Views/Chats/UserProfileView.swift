@@ -114,7 +114,7 @@ struct UserProfileView: View {
     @ViewBuilder
     private var platformBody: some View {
         #if os(macOS)
-        macInspector
+        macCard
         #else
         VStack(spacing: 0) {
             ScrollView(showsIndicators: false) {
@@ -134,13 +134,13 @@ struct UserProfileView: View {
     }
 
     #if os(macOS)
-    // MARK: - macOS inspector
+    // MARK: - macOS card
 
-    /// On the Mac the card is the chat's inspector, beside the conversation rather than over it:
-    /// the system's grouped form, its switch and its push buttons, and no close button — the
-    /// toolbar's info button opens and closes it (owner, 2026-10-18). The phone's hero header and
+    /// On the Mac the card is a popover off the chat's info button, as Messages shows details:
+    /// the system's grouped form and its switch, rows that act as rows, and no close button — a
+    /// click outside or Esc closes it (owner, 2026-10-18). The phone's hero header and
     /// round buttons were a copy of a portrait screen in a landscape window.
-    private var macInspector: some View {
+    private var macCard: some View {
         Form {
             Section { macHeader }
 
@@ -257,7 +257,7 @@ struct UserProfileView: View {
         .onDisappear(perform: saveLocalNameIfChanged)
     }
 
-    /// The person beside their photo, in one row: an inspector is narrow and tall, and a 96-pt
+    /// The person beside their photo, in one row: the card is narrow and tall, and a 96-pt
     /// photo above a centred name spent its first third on whitespace.
     private var macHeader: some View {
         let avatarImage: PlatformImage? = user.avatar.flatMap { PlatformImage(data: $0) }
