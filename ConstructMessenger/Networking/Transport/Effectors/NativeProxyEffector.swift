@@ -61,13 +61,18 @@ actor NativeProxyEffector: ProxyEffector {
         var last: TransportEvent = .proxyStartFailed(relay: nil, reason: "no usable relay")
         while let relay = pool.best(notIn: tried) {
             tried.insert(relay.address)
-            last = await start(relay)
+            guard let outcome = await start(relay) else {
+                // Stopped on purpose, not the relay's fault: no failure counted, no next relay.
+                return .proxyStartFailed(relay: relay.address, reason: VeilProxyError.stopped.localizedDescription)
+            }
+            last = outcome
             if case .proxyStarted = last { return last }
         }
         return last
     }
 
-    private func start(_ relay: VeilRelay) async -> TransportEvent {
+    /// nil when the proxy was stopped while this start dialed.
+    private func start(_ relay: VeilRelay) async -> TransportEvent? {
         // Last gate before `veil_start`. If this device learned a pin for the address, the
         // relay handed to the proxy must carry that exact pin — anything else means the
         // pin was lost or overwritten somewhere in the build path, and dialing a vouched
@@ -86,6 +91,8 @@ actor NativeProxyEffector: ProxyEffector {
             pool.recordSuccess(relay)
             if reportsToManager { await VeilProxyManager.shared.reportLastError(nil) }
             return .proxyStarted(relay: relay.address, port: result.port, restarted: result.restarted)
+        } catch VeilProxyError.stopped {
+            return nil
         } catch {
             pool.recordFailure(relay)
             if reportsToManager { await VeilProxyManager.shared.handleRelayUnavailable(relay.address) }

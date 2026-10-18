@@ -180,20 +180,15 @@ actor TransportRouter {
     /// Adopt a proxy-start outcome only if it still matches the latest generation.
     private func finishProxyStart(generation: UInt64, outcome: TransportEvent) async {
         guard generation == proxyStartGeneration else {
-            // Superseded by stop or a newer start. If this attempt still brought a
-            // proxy up, tear it down so we don't leak a listening socket.
-            if case .proxyStarted = outcome {
-                Log.info(
-                    "Transport: stale proxy start gen=\(generation) (current=\(proxyStartGeneration)) — stopping stray proxy",
-                    category: "Transport"
-                )
-                await proxyEffector.stop()
-            } else {
-                Log.info(
-                    "Transport: ignoring stale proxy outcome gen=\(generation) (current=\(proxyStartGeneration))",
-                    category: "Transport"
-                )
-            }
+            // Superseded by stop or a newer start, and dropped without a stop: the proxy
+            // owns that cleanup. A stop arriving mid-start makes the start tear down its own
+            // result; a newer start stops this one's before bringing up its own. Until
+            // 2026-10-19 this called `proxyEffector.stop()`, which stops whatever is up —
+            // the newer start's proxy when that had already committed (TODO 164).
+            Log.info(
+                "Transport: ignoring stale proxy outcome gen=\(generation) (current=\(proxyStartGeneration))",
+                category: "Transport"
+            )
             return
         }
         proxyStartTask = nil
