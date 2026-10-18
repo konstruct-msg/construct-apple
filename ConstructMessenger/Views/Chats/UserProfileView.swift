@@ -64,6 +64,10 @@ struct UserProfileView: View {
     @State private var sessionSuiteLabel = NSLocalizedString("session_crypto_no_session", comment: "")
     @State private var showingLocalNameEditor = false
     @State private var draftLocalName = ""
+    #if os(macOS)
+    /// The form's content height, so the popover is as tall as the card and does not scroll.
+    @State private var macContentHeight: CGFloat = 0
+    #endif
 
     var body: some View {
         platformBody
@@ -249,6 +253,11 @@ struct UserProfileView: View {
         .font(CTFont.body)
         .scrollContentBackground(.hidden)
         .background(Color.CT.bg)
+        // As tall as what it holds, up to most of the screen — a key-change warning makes it taller.
+        .onScrollGeometryChange(for: CGFloat.self) { $0.contentSize.height } action: { _, height in
+            macContentHeight = height
+        }
+        .frame(height: macContentHeight > 0 ? min(macContentHeight, Self.macMaxHeight) : nil)
         .onAppear { draftLocalName = user.localAlias ?? "" }
         .onChange(of: userId) { _, _ in
             draftLocalName = user.localAlias ?? ""
@@ -336,6 +345,10 @@ struct UserProfileView: View {
     private static func sectionTitle(_ key: String) -> String {
         let title = NSLocalizedString(key, comment: "")
         return title.prefix(1).uppercased() + title.dropFirst()
+    }
+
+    private static var macMaxHeight: CGFloat {
+        (NSScreen.main?.visibleFrame.height ?? 900) * 0.85
     }
 
     private func saveLocalNameIfChanged() {
