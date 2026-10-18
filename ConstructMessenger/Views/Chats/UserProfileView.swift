@@ -66,20 +66,7 @@ struct UserProfileView: View {
     @State private var draftLocalName = ""
 
     var body: some View {
-        VStack(spacing: 0) {
-            ScrollView(showsIndicators: false) {
-                LazyVStack(spacing: SettingsLayout.sectionSpacing) {
-                    avatarHeader
-                    identitySection
-                    sharingSection
-                    securitySection
-                    dangerSection
-                }
-                .padding(.bottom, 32)
-            }
-        }
-        .background(Color.CT.bg.ignoresSafeArea())
-        .screenTitle(NSLocalizedString("profile", comment: ""))
+        platformBody
         .onAppear {
             viewModel.setContext(viewContext)
             refreshSessionSecurityState()
@@ -123,6 +110,215 @@ struct UserProfileView: View {
             Text(LocalizedStringKey("local_name_footer"))
         }
     }
+
+    @ViewBuilder
+    private var platformBody: some View {
+        #if os(macOS)
+        macInspector
+        #else
+        VStack(spacing: 0) {
+            ScrollView(showsIndicators: false) {
+                LazyVStack(spacing: SettingsLayout.sectionSpacing) {
+                    avatarHeader
+                    identitySection
+                    sharingSection
+                    securitySection
+                    dangerSection
+                }
+                .padding(.bottom, 32)
+            }
+        }
+        .background(Color.CT.bg.ignoresSafeArea())
+        .screenTitle(NSLocalizedString("profile", comment: ""))
+        #endif
+    }
+
+    #if os(macOS)
+    // MARK: - macOS inspector
+
+    /// On the Mac the card is the chat's inspector, beside the conversation rather than over it:
+    /// the system's grouped form, its switch and its push buttons, and no close button — the
+    /// toolbar's info button opens and closes it (owner, 2026-10-18). The phone's hero header and
+    /// round buttons were a copy of a portrait screen in a landscape window.
+    private var macInspector: some View {
+        Form {
+            Section { macHeader }
+
+            Section(NSLocalizedString("identity_section", comment: "")) {
+                // Edited in place: a field that saves on Return or when the card closes.
+                LabeledContent(NSLocalizedString("local_name", comment: "")) {
+                    TextField(
+                        "",
+                        text: $draftLocalName,
+                        prompt: Text(NSLocalizedString("local_name_unset", comment: ""))
+                    )
+                    .textFieldStyle(.plain)
+                    .multilineTextAlignment(.trailing)
+                    .onSubmit(saveLocalNameIfChanged)
+                }
+                .help(NSLocalizedString("local_name_footer", comment: ""))
+
+                LabeledContent(NSLocalizedString("identity_fingerprint", comment: "")) {
+                    if let fp = user.knownIdentityKey.flatMap({ IdentityFingerprint.short(from: $0) }) {
+                        HStack(spacing: CTLayout.inlinePad) {
+                            Text(fp)
+                                .font(CTFont.mono(12))
+                                .foregroundStyle(Color.CT.accent)
+                                .textSelection(.enabled)
+                                .lineLimit(1)
+                            Button {
+                                PlatformClipboard.copy(fp)
+                            } label: {
+                                Image(systemName: "doc.on.doc")
+                            }
+                            .buttonStyle(.borderless)
+                            .help(NSLocalizedString("identity_fingerprint_copy_hint", comment: ""))
+                        }
+                    } else {
+                        Text(NSLocalizedString("identity_fingerprint_unknown", comment: ""))
+                            .foregroundStyle(Color.CT.textDim)
+                    }
+                }
+
+                #if DEBUG
+                LabeledContent(NSLocalizedString("user_id", comment: "")) {
+                    Text(user.id)
+                        .font(CTFont.mono(11))
+                        .foregroundStyle(Color.CT.textDim)
+                        .textSelection(.enabled)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
+                #endif
+            }
+
+            Section(NSLocalizedString("profile_sharing_section", comment: "")) {
+                Toggle(isOn: Binding(
+                    get: { user.amISharingWith },
+                    set: { handleShareToggle($0) }
+                )) {
+                    Text(NSLocalizedString("share_my_profile", comment: ""))
+                    Text(NSLocalizedString("share_profile_explanation", comment: ""))
+                }
+                .toggleStyle(.switch)
+                .disabled(isSharingInProgress)
+
+                if let sharedAt = user.sharedWithMeAt, user.isSharingWithMe {
+                    Text(String(format: NSLocalizedString("sharing_with_you", comment: ""), formatDate(sharedAt)))
+                        .foregroundStyle(Color.CT.textDim)
+                }
+            }
+
+            Section(NSLocalizedString("security", comment: "")) {
+                if let alert = user.trustAlert {
+                    keyChangeWarningBlock(alert)
+                }
+                LabeledContent {
+                    HStack(spacing: CTLayout.inlinePad) {
+                        CTStatusBadge(status: hasSession ? .ok : .off, size: 13)
+                        Text(hasSession ? NSLocalizedString("encrypted", comment: "") : sessionSuiteLabel)
+                            .foregroundStyle(hasSession ? Color.CT.text : Color.CT.textDim)
+                    }
+                } label: {
+                    Text(NSLocalizedString("session_crypto_suite", comment: ""))
+                    if hasSession {
+                        Text(sessionSuiteLabel).font(CTFont.mono(11))
+                    }
+                }
+                Button(NSLocalizedString("safety_numbers", comment: "")) {
+                    showingSafetyNumbers = true
+                }
+            }
+
+            Section(NSLocalizedString("danger_zone", comment: "")) {
+                Button(
+                    NSLocalizedString(user.isBlocked ? "unblock_user" : "block_user", comment: ""),
+                    role: user.isBlocked ? nil : .destructive
+                ) { showingBlockConfirmation = true }
+                Button(NSLocalizedString("report_spam", comment: ""), role: .destructive) {
+                    showingReportConfirmation = true
+                }
+                if let prune = onPrune {
+                    Button(NSLocalizedString("synapses_prune_action", comment: ""), role: .destructive) {
+                        prune(); dismiss()
+                    }
+                }
+            }
+        }
+        .formStyle(.grouped)
+        .font(CTFont.body)
+        .scrollContentBackground(.hidden)
+        .background(Color.CT.bg)
+        .onAppear { draftLocalName = user.localAlias ?? "" }
+        .onChange(of: userId) { _, _ in
+            draftLocalName = user.localAlias ?? ""
+            refreshSessionSecurityState()
+        }
+        .onDisappear(perform: saveLocalNameIfChanged)
+    }
+
+    /// The person beside their photo, in one row: an inspector is narrow and tall, and a 96-pt
+    /// photo above a centred name spent its first third on whitespace.
+    private var macHeader: some View {
+        let avatarImage: PlatformImage? = user.avatar.flatMap { PlatformImage(data: $0) }
+        return HStack(spacing: CTLayout.edgePad) {
+            MainAvatarView(
+                userId: user.id,
+                displayName: user.resolvedDisplayName,
+                image: avatarImage,
+                size: CTAvatarSize.header,
+                isActive: false
+            )
+            .contentShape(Rectangle())
+            .onTapGesture { if avatarImage != nil { showAvatarViewer = true } }
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(user.resolvedDisplayName)
+                    .font(CTFont.headline)
+                    .foregroundStyle(Color.CT.text)
+                    .lineLimit(2)
+                if !user.username.isEmpty {
+                    Text("@\(user.username)")
+                        .font(CTFont.secondary)
+                        .foregroundStyle(Color.CT.textDim)
+                        .textSelection(.enabled)
+                }
+                if user.isBlocked {
+                    Label(NSLocalizedString("profile_blocked_badge", comment: ""), systemImage: "nosign")
+                        .font(CTFont.caption)
+                        .foregroundStyle(Color.CT.danger)
+                }
+            }
+            Spacer(minLength: 0)
+            ForEach(actionButtons, id: \.self) { action in
+                switch action {
+                case .message:
+                    Button { onOpenChat?(); dismiss() } label: { Image(systemName: "message") }
+                        .help(NSLocalizedString("message", comment: ""))
+                case .call:
+                    Button { startCall(hasVideo: false) } label: { Image(systemName: "phone") }
+                        .help(NSLocalizedString("chat_action_call", comment: ""))
+                case .video:
+                    Button { startCall(hasVideo: true) } label: { Image(systemName: "video") }
+                        .help(NSLocalizedString("chat_action_video", comment: ""))
+                }
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.large)
+        }
+        .sheet(isPresented: $showAvatarViewer) {
+            if let avatarImage {
+                FullScreenImageView(image: avatarImage, isPresented: $showAvatarViewer)
+            }
+        }
+    }
+
+    private func saveLocalNameIfChanged() {
+        let trimmed = draftLocalName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed != (user.localAlias ?? "") else { return }
+        saveLocalName()
+    }
+    #endif
 
     // MARK: - Avatar header
 
