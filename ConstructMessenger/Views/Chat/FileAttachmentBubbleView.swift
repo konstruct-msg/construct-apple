@@ -500,7 +500,7 @@ private struct MacVideoPlayerSheet: View {
     @State private var player: AVPlayer?
 
     var body: some View {
-        VideoPlayer(player: player)
+        PlayerSurface(player: player)
             .frame(minWidth: 640, idealWidth: 960, minHeight: 400, idealHeight: 600)
             .background(Color.black)
             .onAppear {

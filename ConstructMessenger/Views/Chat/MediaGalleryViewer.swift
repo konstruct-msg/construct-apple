@@ -683,7 +683,7 @@ struct GalleryVideoPage: View {
             ZStack {
                 Color.black.ignoresSafeArea()
                 if let player {
-                    VideoPlayer(player: player)
+                    PlayerSurface(player: player)
                         .ignoresSafeArea()
                 } else if failed {
                     Button { load(forceRetry: true) } label: {
