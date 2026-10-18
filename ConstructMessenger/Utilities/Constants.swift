@@ -231,13 +231,15 @@ struct MessageSizeLimits {
     static let maxDisplayNameCharacters: Int = 50      // reasonable client-side cap
 
     // File Attachment Limits
-    static let maxFileAttachmentBytes: Int64 = 500 * 1024 * 1024  // 500 MB
 
-    // Specific file type limits (can be more restrictive)
-    static let maxImageBytes: Int64 = 100 * 1024 * 1024  // 100 MB for images
-    static let maxVideoBytes: Int64 = 500 * 1024 * 1024  // 500 MB for videos
-    static let maxDocumentBytes: Int64 = 200 * 1024 * 1024  // 200 MB for documents
-    static let maxAudioBytes: Int64 = 100 * 1024 * 1024  // 100 MB for audio
+    /// The largest file that can be uploaded, as the core seals it for the server's limit.
+    /// Until 2026-10-18 this file allowed documents up to 200 MB, files and video up to 500 MB
+    /// and images and audio up to 100 MiB; anything above 100 MB was accepted here and failed
+    /// later at sealing or at the server.
+    static let maxUploadBytes = Int64(mediaMaxPlaintextLen())
+
+    /// A picked video before it is transcoded — the upload is checked against `maxUploadBytes`.
+    static let maxVideoSourceBytes: Int64 = 500 * 1024 * 1024
 
     // Total message size (text + all attachments)
     static let maxTotalMessageBytes: Int64 = 500 * 1024 * 1024  // 500 MB total
@@ -249,22 +251,6 @@ struct MessageSizeLimits {
     static let supportedAudioTypes: Set<String> = ["mp3", "m4a", "wav", "aac", "flac", "ogg", "opus", "aiff", "aif", "caf", "m4b"]
 
     // Helper functions
-    static func maxSizeForFileType(_ fileExtension: String) -> Int64 {
-        let ext = fileExtension.lowercased()
-
-        if supportedImageTypes.contains(ext) {
-            return maxImageBytes
-        } else if supportedVideoTypes.contains(ext) {
-            return maxVideoBytes
-        } else if supportedDocumentTypes.contains(ext) {
-            return maxDocumentBytes
-        } else if supportedAudioTypes.contains(ext) {
-            return maxAudioBytes
-        } else {
-            return maxFileAttachmentBytes
-        }
-    }
-
     static func isFileTypeSupported(_ fileExtension: String) -> Bool {
         let ext = fileExtension.lowercased()
         return supportedImageTypes.contains(ext) ||
