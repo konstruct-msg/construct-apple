@@ -270,24 +270,7 @@ class PushNotificationManager: NSObject {
                 Log.info("Device token registered with server: success=\(response.success)", category: "Push")
                 return
             } catch {
-                var shouldRetry = false
-                if let rpcError = error as? RPCError {
-                    switch rpcError.code {
-                    case .unavailable, .deadlineExceeded:
-                        shouldRetry = true
-                    case .unauthenticated:
-                        // Session may be mid device-auth after dead refresh — wait briefly
-                        // for a valid token (single-flight DeviceAuthCoordinator) then retry.
-                        Log.info("Push register UNAUTH — waiting for session recovery", category: "Push")
-                        for _ in 0..<12 {
-                            if AuthSessionManager.shared.isSessionValid { break }
-                            try? await Task.sleep(for: .milliseconds(250))
-                        }
-                        shouldRetry = AuthSessionManager.shared.isSessionValid
-                    default:
-                        shouldRetry = false
-                    }
-                }
+                let shouldRetry = await TokenRegistrationRetry.shouldRetry(after: error, label: "Push")
                 if shouldRetry && attempt < 2 {
                     let delay = Double(attempt + 1) * 2.0
                     Log.info("Push token registration failed (attempt \(attempt + 1)/3), retrying in \(Int(delay))s", category: "Push")
@@ -386,6 +369,41 @@ extension PushNotificationManager: UNUserNotificationCenterDelegate {
 }
 
 // MARK: - UNAuthorizationStatus Extension
+
+/// Whether a token registration that threw is worth another try — shared by the APNs and the VoIP
+/// token, which until 2026-10-18 each carried a copy that knew only `unavailable` and
+/// `deadlineExceeded` (TODO 166).
+enum TokenRegistrationRetry {
+    /// With VEIL `on`, the launch registers before the tunnel is up and got `VeilTunnelNotUp`;
+    /// nothing tried again until the next launch (build 745, twice in one evening). Now it waits
+    /// for the route, as an upload does, and then tries. Any other failure of the path — our own
+    /// deadline, a client stopped by a route change — is retried; a session mid device-auth is
+    /// waited for. A server's refusal is not.
+    static func shouldRetry(
+        after error: Error,
+        label: String,
+        waitForRoute: () async -> Bool = { await VeilTunnelWait.untilRouted() },
+        waitForSession: () async -> Bool = {
+            for _ in 0..<12 {
+                if AuthSessionManager.shared.isSessionValid { return true }
+                try? await Task.sleep(for: .milliseconds(250))
+            }
+            return AuthSessionManager.shared.isSessionValid
+        }
+    ) async -> Bool {
+        if error is VeilTunnelNotUp {
+            Log.info("\(label) token registration: waiting for the VEIL tunnel", category: label)
+            return await waitForRoute()
+        }
+        if let rpcError = error as? RPCError, rpcError.code == .unauthenticated {
+            // Session may be mid device-auth after a dead refresh — wait briefly for a valid token
+            // (single-flight DeviceAuthCoordinator) then retry.
+            Log.info("\(label) register UNAUTH — waiting for session recovery", category: label)
+            return await waitForSession()
+        }
+        return SendFailure.isRetryableTransport(error)
+    }
+}
 
 #else
 // macOS native app uses different push delivery mechanism (or polling via stream).
