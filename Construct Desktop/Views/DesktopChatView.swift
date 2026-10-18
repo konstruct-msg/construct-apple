@@ -166,11 +166,12 @@ struct DesktopChatView: View {
             .alert(NSLocalizedString("forward_failed", comment: ""), isPresented: $forwardFailed) {
                 Button(NSLocalizedString("ok", comment: ""), role: .cancel) {}
             }
-            .sheet(isPresented: $showingUserProfile) {
+            // Beside the conversation, not over it: the window is wide, and the chat stays
+            // readable while the card is open (owner, 2026-10-18).
+            .inspector(isPresented: $showingUserProfile) {
                 UserProfileView(userId: peerId, showMessageButton: false)
-                    .sheetNavigation()
                     .environment(\.managedObjectContext, viewContext)
-                    .frame(minWidth: 420, minHeight: 480)
+                    .inspectorColumnWidth(min: 300, ideal: 340, max: 460)
             }
             .sheet(item: $quotingMessage) { msg in
                 QuoteSelectionSheet(message: msg) { selectedQuote in
@@ -452,11 +453,11 @@ struct DesktopChatView: View {
         }
 
         ToolbarItem(placement: .primaryAction) {
-            Button {
-                showingUserProfile = true
-            } label: {
+            Toggle(isOn: $showingUserProfile) {
                 Image(systemName: "info.circle")
             }
+            .toggleStyle(.button)
+            .keyboardShortcut("i", modifiers: .command)
             .help(NSLocalizedString("profile", comment: ""))
         }
 
