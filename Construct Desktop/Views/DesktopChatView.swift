@@ -26,10 +26,10 @@ struct DesktopChatView: View {
     @State private var quotingMessage: TranscriptRow? = nil
     @State private var replyFocusIds: Set<String> = []
     @State private var replyFocusPeekTask: Task<Void, Never>?
-    @State private var showingUserProfile = false
     @State private var callManager = CallManager.shared
 
     @State private var searchText = ""
+    @State private var showingUserProfile = false
     @State private var isSearchActive = false
     @State private var isEditMode = false
     @State private var selectedMessages: Set<String> = []
@@ -165,12 +165,6 @@ struct DesktopChatView: View {
             }
             .alert(NSLocalizedString("forward_failed", comment: ""), isPresented: $forwardFailed) {
                 Button(NSLocalizedString("ok", comment: ""), role: .cancel) {}
-            }
-            .sheet(isPresented: $showingUserProfile) {
-                UserProfileView(userId: peerId, showMessageButton: false)
-                    .sheetNavigation()
-                    .environment(\.managedObjectContext, viewContext)
-                    .frame(minWidth: 420, minHeight: 480)
             }
             .sheet(item: $quotingMessage) { msg in
                 QuoteSelectionSheet(message: msg) { selectedQuote in
@@ -452,12 +446,21 @@ struct DesktopChatView: View {
         }
 
         ToolbarItem(placement: .primaryAction) {
-            Button {
-                showingUserProfile = true
-            } label: {
+            Toggle(isOn: $showingUserProfile) {
                 Image(systemName: "info.circle")
             }
+            .toggleStyle(.button)
+            .keyboardShortcut("i", modifiers: .command)
             .help(NSLocalizedString("profile", comment: ""))
+            // A popover off the button, as Messages shows a conversation's details: over the chat
+            // only while it is wanted, gone on a click outside or Esc. Tried first as an inspector
+            // column — inside the detail it pushed the window's columns past both edges, on the
+            // split view it looped AppKit's constraint pass until it threw (2026-10-18).
+            .popover(isPresented: $showingUserProfile, arrowEdge: .bottom) {
+                UserProfileView(userId: peerId, showMessageButton: false)
+                    .environment(\.managedObjectContext, viewContext)
+                    .frame(width: Self.profilePopoverWidth)
+            }
         }
 
         if isEditMode {
@@ -490,6 +493,8 @@ struct DesktopChatView: View {
     }
 
     private static let searchFieldWidth: CGFloat = 220
+    /// Wide enough that the sharing explanation and the fingerprint stay on one line.
+    private static let profilePopoverWidth: CGFloat = 440
 
     private var chatTitle: some View {
         HStack(spacing: CTSpace.s) {
