@@ -120,22 +120,7 @@ final class VoIPPushManager: NSObject {
                 Log.info("VoIP token registered with server: \(ok)", category: "Calls")
                 return
             } catch {
-                var shouldRetry = false
-                if let rpcError = error as? RPCError {
-                    switch rpcError.code {
-                    case .unavailable, .deadlineExceeded:
-                        shouldRetry = true
-                    case .unauthenticated:
-                        Log.info("VoIP register UNAUTH — waiting for session recovery", category: "Calls")
-                        for _ in 0..<12 {
-                            if AuthSessionManager.shared.isSessionValid { break }
-                            try? await Task.sleep(for: .milliseconds(250))
-                        }
-                        shouldRetry = AuthSessionManager.shared.isSessionValid
-                    default:
-                        shouldRetry = false
-                    }
-                }
+                let shouldRetry = await TokenRegistrationRetry.shouldRetry(after: error, label: "Calls")
                 if shouldRetry && attempt < 2 {
                     let delay = Double(attempt + 1) * 2.0
                     Log.info("VoIP token registration failed (attempt \(attempt + 1)/3), retrying in \(Int(delay))s", category: "Calls")
