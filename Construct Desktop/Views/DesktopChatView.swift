@@ -460,7 +460,6 @@ struct DesktopChatView: View {
                 UserProfileView(userId: peerId, showMessageButton: false)
                     .environment(\.managedObjectContext, viewContext)
                     .frame(width: Self.profilePopoverWidth)
-                    .frame(minHeight: Self.profilePopoverMinHeight, idealHeight: Self.profilePopoverIdealHeight)
             }
         }
 
@@ -494,9 +493,8 @@ struct DesktopChatView: View {
     }
 
     private static let searchFieldWidth: CGFloat = 220
-    private static let profilePopoverWidth: CGFloat = 360
-    private static let profilePopoverMinHeight: CGFloat = 360
-    private static let profilePopoverIdealHeight: CGFloat = 560
+    /// Wide enough that the sharing explanation and the fingerprint stay on one line.
+    private static let profilePopoverWidth: CGFloat = 440
 
     private var chatTitle: some View {
         HStack(spacing: CTSpace.s) {
