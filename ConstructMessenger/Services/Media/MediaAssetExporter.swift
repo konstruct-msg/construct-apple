@@ -59,7 +59,7 @@ enum MediaAssetExporter {
             }
         }
 
-        if Int64(data.count) > MessageSizeLimits.maxImageBytes {
+        if Int64(data.count) > MessageSizeLimits.maxUploadBytes {
             throw MediaAssetExportError.tooLarge
         }
 
@@ -112,7 +112,7 @@ enum MediaAssetExporter {
 
         let attrs = try? FileManager.default.attributesOfItem(atPath: dest.path)
         let fileSize = (attrs?[.size] as? NSNumber)?.int64Value ?? 0
-        if fileSize > MessageSizeLimits.maxVideoBytes {
+        if fileSize > MessageSizeLimits.maxVideoSourceBytes {
             try? FileManager.default.removeItem(at: dest)
             throw MediaAssetExportError.tooLarge
         }

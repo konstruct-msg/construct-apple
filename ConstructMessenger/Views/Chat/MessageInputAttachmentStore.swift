@@ -118,7 +118,7 @@ final class MessageInputAttachmentStore: ObservableObject {
             guard let data = try? await item.loadTransferable(type: Data.self),
                   let image = PlatformImage(data: data) else { continue }
 
-            if Int64(data.count) > MessageSizeLimits.maxImageBytes {
+            if Int64(data.count) > MessageSizeLimits.maxUploadBytes {
                 Log.error("Photo too large", category: "MessageInput")
                 continue
             }
@@ -144,7 +144,7 @@ final class MessageInputAttachmentStore: ObservableObject {
 
         let attrs = try? FileManager.default.attributesOfItem(atPath: movie.url.path)
         let fileSize = (attrs?[.size] as? NSNumber)?.int64Value ?? 0
-        if fileSize > MessageSizeLimits.maxVideoBytes {
+        if fileSize > MessageSizeLimits.maxVideoSourceBytes {
             Log.error("Video too large (\(fileSize) bytes)", category: "MessageInput")
             try? FileManager.default.removeItem(at: movie.url)
             return nil
@@ -214,7 +214,7 @@ final class MessageInputAttachmentStore: ObservableObject {
             guard let data = try? Data(contentsOf: url),
                   let image = PlatformImage(data: data) else { continue }
 
-            if Int64(data.count) > MessageSizeLimits.maxImageBytes { continue }
+            if Int64(data.count) > MessageSizeLimits.maxUploadBytes { continue }
 
             let mimeType = UTType(filenameExtension: url.pathExtension)?.preferredMIMEType ?? "image/jpeg"
             selectedAttachments.append(
