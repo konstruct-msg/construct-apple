@@ -33,10 +33,13 @@ struct VeilProxyEnsureResult: Sendable {
 enum VeilProxyError: Error, Sendable {
     /// Rust FFI returned a non-zero code.
     case startFailed(underlying: VeilProxyRuntimeError)
+    /// `stop()` arrived while this start was dialing; the start tore down what it brought up.
+    case stopped
 
     var localizedDescription: String {
         switch self {
         case .startFailed(let e): return e.userFacingMessage
+        case .stopped: return "stopped while starting"
         }
     }
 }
@@ -70,11 +73,24 @@ actor VeilProxy {
     private var externalDialer: VeilFrontExternalDialer?
 
     private let runtime: VeilProxyRuntime
+    private let fingerprint: @Sendable () async -> Data
+
+    /// The start in flight. A start suspends while it dials, and the actor lets another call in
+    /// meanwhile: until 2026-10-19 a second start passed `stopIfRunning()` with nothing up yet,
+    /// then overwrote `externalDialer` without stopping the first one's listener (TODO 164).
+    private var inFlight: Task<Void, Never>?
+
+    /// Bumped by `stop()`. A start that sees it change has been stopped while it dialed.
+    private var stopEpoch: UInt64 = 0
 
     // MARK: - Init
 
-    init(runtime: VeilProxyRuntime = NativeVeilRuntime()) {
+    init(
+        runtime: VeilProxyRuntime = NativeVeilRuntime(),
+        fingerprint: @escaping @Sendable () async -> Data = { await MainActor.run { NetworkFingerprint.current() } }
+    ) {
         self.runtime = runtime
+        self.fingerprint = fingerprint
     }
 
     // MARK: - Public API
@@ -87,6 +103,7 @@ actor VeilProxy {
     /// that case, even if the new instance was assigned the same ephemeral port.
     @discardableResult
     func ensure(relay: VeilRelay) async throws -> VeilProxyEnsureResult {
+        await waitForInFlight()
         if let p = port, currentRelay?.address == relay.address {
             return VeilProxyEnsureResult(port: p, restarted: false, method: activeMethod, latencyMs: nil)
         }
@@ -99,8 +116,43 @@ actor VeilProxy {
     /// The Rust coordinator probes obfs4 + WebTunnel in parallel and binds the winner.
     @discardableResult
     func start(relay: VeilRelay) async throws -> VeilStartOutcome {
-        stopIfRunning()
+        await waitForInFlight()
+        let work = Task { try await self.startNow(relay: relay) }
+        let mine = Task { _ = try? await work.value }
+        inFlight = mine
+        defer { if inFlight == mine { inFlight = nil } }
+        return try await work.value
+    }
 
+    /// Stops the proxy unconditionally, and any start in flight once it has dialed.
+    func stop() {
+        stopEpoch &+= 1
+        stopIfRunning()
+    }
+
+    // MARK: - Private
+
+    /// One start at a time: each begins only once the previous one has committed or failed, so
+    /// its `stopIfRunning()` sees — and stops — what that one brought up.
+    private func waitForInFlight() async {
+        while let previous = inFlight {
+            await previous.value
+            if inFlight == previous { inFlight = nil }
+        }
+    }
+
+    private func startNow(relay: VeilRelay) async throws -> VeilStartOutcome {
+        stopIfRunning()
+        let epoch = stopEpoch
+        let outcome = try await bringUp(relay: relay, epoch: epoch)
+        guard stopEpoch == epoch else {
+            stopIfRunning()
+            throw VeilProxyError.stopped
+        }
+        return outcome
+    }
+
+    private func bringUp(relay: VeilRelay, epoch: UInt64) async throws -> VeilStartOutcome {
         // Host-terminated TLS veil-front (opt-in): terminate TLS in Network.framework
         // for the native Apple ClientHello fingerprint. Falls through to the rustls
         // coordinator when the flag is off, the relay carries no veil-front material,
@@ -110,7 +162,9 @@ actor VeilProxy {
             return outcome
         }
 
-        let fingerprint = await MainActor.run { NetworkFingerprint.current() }
+        let fingerprint = await fingerprint()
+        // Stopped while dialing natively or reading the fingerprint: do not run the probe race.
+        guard stopEpoch == epoch else { throw VeilProxyError.stopped }
         let scoresPath  = NetworkFingerprint.scoresDatabasePath
 
         switch runtime.startUnified(relay: relay, fingerprint: fingerprint, scoresPath: scoresPath) {
@@ -125,13 +179,6 @@ actor VeilProxy {
             throw VeilProxyError.startFailed(underlying: err)
         }
     }
-
-    /// Stops the proxy unconditionally. No-op if already stopped.
-    func stop() {
-        stopIfRunning()
-    }
-
-    // MARK: - Private
 
     private func commit(port p: UInt16, relay: VeilRelay, method: VeilMethod) {
         port = p
