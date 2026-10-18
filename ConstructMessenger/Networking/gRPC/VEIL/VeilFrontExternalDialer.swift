@@ -179,13 +179,44 @@ final class VeilFrontExternalDialer: @unchecked Sendable {
             let fd = currentListenFD()
             if fd < 0 { break }
             let localFD = accept(fd, nil, nil)
-            if localFD < 0 { break }   // listener closed (stop()) or fatal error
+            if localFD < 0 {
+                let err = errno
+                switch Self.afterAcceptFailure(errno: err, listenerCurrent: currentListenFD() == fd) {
+                case .retry:
+                    continue
+                case .retryAfterPause:
+                    Thread.sleep(forTimeInterval: Self.acceptPauseSeconds)
+                    continue
+                case .stop:
+                    if currentListenFD() == fd {
+                        Log.error("VEIL native-TLS: accept failed errno \(err), listener ends", category: "VEIL")
+                    }
+                }
+                break
+            }
             let prepared = first
             first = nil
             serve(localFD: localFD, prepared: prepared)
         }
         // A validated-but-never-served connection (stop() before any accept) is dropped.
         first?.conn.cancel()
+    }
+
+    enum AcceptFailure: Equatable { case retry, retryAfterPause, stop }
+
+    /// Pause after running out of descriptors or buffers, so the loop does not spin.
+    static let acceptPauseSeconds: TimeInterval = 0.1
+
+    /// What a failed `accept` means for the listener. Until 2026-10-18 any failure ended the loop,
+    /// so one connection reset before it was accepted (`ECONNABORTED`) left gRPC pointed at a port
+    /// nobody accepted on, with nothing to say so. Android hit the same class (TODO 164).
+    static func afterAcceptFailure(errno err: Int32, listenerCurrent: Bool) -> AcceptFailure {
+        guard listenerCurrent else { return .stop }   // stop() closed it, or a new listener replaced it
+        switch err {
+        case EINTR, ECONNABORTED: return .retry
+        case EMFILE, ENFILE, ENOBUFS, ENOMEM: return .retryAfterPause
+        default: return .stop
+        }
     }
 
     private func currentListenFD() -> Int32 {
