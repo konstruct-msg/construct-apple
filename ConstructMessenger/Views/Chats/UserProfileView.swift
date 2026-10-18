@@ -144,7 +144,7 @@ struct UserProfileView: View {
         Form {
             Section { macHeader }
 
-            Section(NSLocalizedString("identity_section", comment: "")) {
+            Section(Self.sectionTitle("identity_section")) {
                 // Edited in place: a field that saves on Return or when the card closes.
                 LabeledContent(NSLocalizedString("local_name", comment: "")) {
                     TextField(
@@ -192,7 +192,7 @@ struct UserProfileView: View {
                 #endif
             }
 
-            Section(NSLocalizedString("profile_sharing_section", comment: "")) {
+            Section(Self.sectionTitle("profile_sharing_section")) {
                 Toggle(isOn: Binding(
                     get: { user.amISharingWith },
                     set: { handleShareToggle($0) }
@@ -209,7 +209,7 @@ struct UserProfileView: View {
                 }
             }
 
-            Section(NSLocalizedString("security", comment: "")) {
+            Section(Self.sectionTitle("security")) {
                 if let alert = user.trustAlert {
                     keyChangeWarningBlock(alert)
                 }
@@ -225,21 +225,21 @@ struct UserProfileView: View {
                         Text(sessionSuiteLabel).font(CTFont.mono(11))
                     }
                 }
-                Button(NSLocalizedString("safety_numbers", comment: "")) {
+                macRowButton(NSLocalizedString("safety_numbers", comment: ""), color: Color.CT.text, chevron: true) {
                     showingSafetyNumbers = true
                 }
             }
 
-            Section(NSLocalizedString("danger_zone", comment: "")) {
-                Button(
+            Section(Self.sectionTitle("danger_zone")) {
+                macRowButton(
                     NSLocalizedString(user.isBlocked ? "unblock_user" : "block_user", comment: ""),
-                    role: user.isBlocked ? nil : .destructive
+                    color: user.isBlocked ? Color.CT.text : Color.CT.danger
                 ) { showingBlockConfirmation = true }
-                Button(NSLocalizedString("report_spam", comment: ""), role: .destructive) {
+                macRowButton(NSLocalizedString("report_spam", comment: ""), color: Color.CT.danger) {
                     showingReportConfirmation = true
                 }
                 if let prune = onPrune {
-                    Button(NSLocalizedString("synapses_prune_action", comment: ""), role: .destructive) {
+                    macRowButton(NSLocalizedString("synapses_prune_action", comment: ""), color: Color.CT.danger) {
                         prune(); dismiss()
                     }
                 }
@@ -311,6 +311,31 @@ struct UserProfileView: View {
                 FullScreenImageView(image: avatarImage, isPresented: $showAvatarViewer)
             }
         }
+    }
+
+    /// A form row that acts: the whole row is the target, as in System Settings. A push button in
+    /// a grouped form drew as a tinted capsule against the left edge, and lost the danger colour.
+    private func macRowButton(_ title: String, color: Color, chevron: Bool = false, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack {
+                Text(title).foregroundStyle(color)
+                Spacer()
+                if chevron {
+                    Image(systemName: "chevron.right")
+                        .font(CTIcon.font(CTIcon.caption, weight: .semibold))
+                        .foregroundStyle(Color.CT.textDim)
+                }
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    /// Section titles as the system's are, first letter capitalised: the keys were written for
+    /// the phone's uppercased headers, and "identity" sat beside "Danger Zone".
+    private static func sectionTitle(_ key: String) -> String {
+        let title = NSLocalizedString(key, comment: "")
+        return title.prefix(1).uppercased() + title.dropFirst()
     }
 
     private func saveLocalNameIfChanged() {

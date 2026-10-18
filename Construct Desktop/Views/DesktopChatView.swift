@@ -26,7 +26,6 @@ struct DesktopChatView: View {
     @State private var quotingMessage: TranscriptRow? = nil
     @State private var replyFocusIds: Set<String> = []
     @State private var replyFocusPeekTask: Task<Void, Never>?
-    @State private var showingUserProfile = false
     @State private var callManager = CallManager.shared
 
     @State private var searchText = ""
@@ -165,13 +164,6 @@ struct DesktopChatView: View {
             }
             .alert(NSLocalizedString("forward_failed", comment: ""), isPresented: $forwardFailed) {
                 Button(NSLocalizedString("ok", comment: ""), role: .cancel) {}
-            }
-            // Beside the conversation, not over it: the window is wide, and the chat stays
-            // readable while the card is open (owner, 2026-10-18).
-            .inspector(isPresented: $showingUserProfile) {
-                UserProfileView(userId: peerId, showMessageButton: false)
-                    .environment(\.managedObjectContext, viewContext)
-                    .inspectorColumnWidth(min: 300, ideal: 340, max: 460)
             }
             .sheet(item: $quotingMessage) { msg in
                 QuoteSelectionSheet(message: msg) { selectedQuote in
@@ -453,7 +445,7 @@ struct DesktopChatView: View {
         }
 
         ToolbarItem(placement: .primaryAction) {
-            Toggle(isOn: $showingUserProfile) {
+            Toggle(isOn: Bindable(DesktopInspector.shared).isOpen) {
                 Image(systemName: "info.circle")
             }
             .toggleStyle(.button)
