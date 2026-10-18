@@ -1,5 +1,5 @@
 {
-  "originHash" : "f9c1cd60025aa424c2f24afbb0d17c88768efeba3effe82b07d4565e65f6bcd5",
+  "originHash" : "ecccd61cff2d96ca803af9ed406b9c0db4ee84f35ad7fcf1a7863bda67fae1fa",
   "pins" : [
     {
       "identity" : "argmax-oss-swift",
@@ -22,10 +22,10 @@
     {
       "identity" : "grpc-swift-nio-transport",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/grpc/grpc-swift-nio-transport",
+      "location" : "https://github.com/maxeliseyev/grpc-swift-nio-transport",
       "state" : {
-        "revision" : "2ca31f06658ed288a2560e23ad649acbb3d6b3a3",
-        "version" : "2.9.0"
+        "revision" : "56e5e6de36250cd4afeb969283f2d320d026e2b8",
+        "version" : "2.9.0-construct.1"
       }
     },
     {
