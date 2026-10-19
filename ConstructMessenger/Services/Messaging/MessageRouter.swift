@@ -1825,8 +1825,13 @@ final class MessageRouter {
         // backgrounded app is not visible, and used to keep unreadCount pinned at 0.
         // Not when another device of ours has read past it already (ReadSync): a mailbox drained
         // after the phone read and answered must not come back as unread.
-        if !InAppNotificationService.isChatVisible(chatId),
-           !ReadBoundaries.shared.covers(peerId, ReadSync.Boundary(sentAtMs: UInt64(timestamp.timeIntervalSince1970 * 1000), messageId: canonicalId)) {
+        let attention = IncomingAttention.decide(
+            chatVisible: InAppNotificationService.isChatVisible(chatId),
+            readElsewhere: ReadBoundaries.shared.covers(
+                peerId, ReadSync.Boundary(sentAtMs: UInt64(timestamp.timeIntervalSince1970 * 1000), messageId: canonicalId)
+            )
+        )
+        if attention.countsAsUnread {
             MessagePersistenceService.incrementUnread(ofChat: chatId)
         }
         Log.debug("Chat metadata updated chatId=\(chatId.prefix(8))…", category: "MessageRouter")
@@ -1870,7 +1875,9 @@ final class MessageRouter {
             Log.debug("Suppressed notification from flooder \(senderId.prefix(8))…", category: "FloodGuard")
 
         case .normal:
-            if lockdownSuppressed {
+            if !attention.notifies {
+                Log.debug("Read on another device — no banner for \(canonicalId.prefix(8))…", category: "MessageRouter")
+            } else if lockdownSuppressed {
                 Log.debug("Lockdown: suppressed notification from new sender \(senderId.prefix(8))…", category: "LockdownManager")
             } else {
                 InAppNotificationService.shared.handle(
@@ -1995,6 +2002,10 @@ final class MessageRouter {
                 inChat: chat.id, unread: chat.unreadCount, boundary: boundary, messages: LocalRepositories.messages
             )
             if left != chat.unreadCount { _ = try? LocalRepositories.chats.setUnread(chat.id, left) }
+            // Read there: the banner this device already showed for the chat is stale (owner,
+            // 2026-10-19 — writing on the Desktop, the phone kept the banners).
+            if left == 0 { LocalNotificationManager.shared.withdrawChatBanner(chatId: chat.id) }
+            LocalNotificationManager.shared.syncBadge()
             Log.info("ReadSync: \(partner.prefix(8))… read on another device — unread \(chat.unreadCount) → \(left)", category: "MessageRouter")
         }
     }
