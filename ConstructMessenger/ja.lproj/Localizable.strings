@@ -831,6 +831,8 @@
 // MARK: - Discoverable / User Search
 "searchable_toggle_title" = "ユーザー名で検索可能";
 "searchable_toggle_footer" = "有効にすると、正確なユーザー名を知っている人があなたを見つけられます。ユーザー名の推測や列挙はできず、完全一致の場合のみ機能します。既定ではオフです。";
+"delivery_receipts_toggle_title" = "配信通知";
+"delivery_receipts_toggle_footer" = "メッセージがこの端末に届いたことを送信者に知らせます。オフにすると、送信者には配信済みと表示されず、そのために送信者の端末が起こされることもありません。この設定をオンにしている相手からは、引き続きあなたのメッセージに配信済みが表示されます。";
 "searchable_confirm_title" = "検索を有効にしますか？";
 "searchable_confirm_message" = "あなたのユーザー名を正確に入力した人は、誰でもあなたを見つけることができるようになります。セキュリティ設定でいつでも無効にできます。";
 "searchable_confirm_action" = "有効にする";
