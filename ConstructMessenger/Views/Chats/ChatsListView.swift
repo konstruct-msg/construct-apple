@@ -88,14 +88,21 @@ struct ChatsListView: View {
             .searchable(text: $searchQuery, prompt: Text(LocalizedStringKey("search_prompt")))
             .toolbar {
                 #if os(iOS)
-                // The dot is the connection state here, alone: green while connected. It went with
-                // the floating header on 2026-10-08 (6ceec9cb) and was missed; the subtitle that
-                // replaced it is gone from this list — appearing and vanishing, it moved the title
-                // (owner, 2026-10-19).
-                ToolbarItem(placement: .topBarLeading) {
-                    ConnectionStatusIndicator()
-                        .frame(minWidth: CTLayout.hitTarget, minHeight: CTLayout.hitTarget)
-                        .accessibilityIdentifier(A11y.Chats.connectionDot)
+                // The dot is the connection state here, alone: green while connected, beside the
+                // title. It went with the floating header on 2026-10-08 (6ceec9cb) and was missed;
+                // the subtitle that replaced it is gone from this list — appearing and vanishing,
+                // it moved the title. A bar item of its own sat in a glass capsule; as the title's
+                // neighbour it has none (owner, 2026-10-19). The title is a view here, so it sets
+                // the bar's title face itself, as the conversation's does.
+                ToolbarItem(placement: .principal) {
+                    HStack(spacing: CTLayout.inlinePad) {
+                        Text(LocalizedStringKey("chats"))
+                            .font(CTFont.ui(17, weight: .semibold, relativeTo: .headline))
+                            .foregroundStyle(Color.CT.text)
+                            .lineLimit(1)
+                        ConnectionStatusIndicator()
+                            .accessibilityIdentifier(A11y.Chats.connectionDot)
+                    }
                 }
                 #endif
                 ToolbarItem(placement: .primaryAction) {
