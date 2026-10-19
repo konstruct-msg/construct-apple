@@ -85,13 +85,13 @@ struct ChatsListView: View {
             .ctBackground()
             .navigationTitle(NSLocalizedString("chats", comment: ""))
             .inlineNavTitle()
-            .connectionSubtitle()
             .searchable(text: $searchQuery, prompt: Text(LocalizedStringKey("search_prompt")))
             .toolbar {
                 #if os(iOS)
-                // The dot is how the person sees, at a glance, that everything works: green while
-                // connected, where the subtitle says nothing. It went with the floating header on
-                // 2026-10-08 (6ceec9cb) and was missed (owner, 2026-10-19).
+                // The dot is the connection state here, alone: green while connected. It went with
+                // the floating header on 2026-10-08 (6ceec9cb) and was missed; the subtitle that
+                // replaced it is gone from this list — appearing and vanishing, it moved the title
+                // (owner, 2026-10-19).
                 ToolbarItem(placement: .topBarLeading) {
                     ConnectionStatusIndicator()
                         .frame(minWidth: CTLayout.hitTarget, minHeight: CTLayout.hitTarget)
