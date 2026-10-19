@@ -37,6 +37,7 @@ struct ReplyPreviewContent: View {
             HStack(spacing: ReplyPreviewLayout.spacing) {
                 thumbnailView
                 Text(preview.localizedDisplayText)
+                    .typesetting(asScriptOf: preview.localizedDisplayText)
                     .font(CTFont.secondary)
                     .foregroundColor(Color.CT.textDim)
                     .lineLimit(lineLimit)
@@ -49,12 +50,14 @@ struct ReplyPreviewContent: View {
                     .foregroundColor(Color.CT.textDim)
                     .lineLimit(1).fixedSize()
                 Text(preview.localizedDisplayText)
+                    .typesetting(asScriptOf: preview.localizedDisplayText)
                     .font(CTFont.secondary)
                     .foregroundColor(Color.CT.textDim)
                     .lineLimit(lineLimit)
             }
         } else {
             Text(preview?.localizedDisplayText ?? "")
+                .typesetting(asScriptOf: preview?.localizedDisplayText ?? "")
                 .font(CTFont.secondary)
                 .foregroundColor(Color.CT.textDim)
                 .lineLimit(lineLimit)

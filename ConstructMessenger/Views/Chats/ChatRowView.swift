@@ -102,6 +102,7 @@ private struct ChatRowLayout: View {
                 HStack(alignment: .center, spacing: CTLayout.inlinePad) {
                     if let lastMessage = chat.lastMessageText {
                         Text(Chat.formatPreviewText(lastMessage))
+                            .typesetting(asScriptOf: lastMessage)
                             .font(CTFont.secondary)
                             .foregroundStyle(dimStyle)
                             .lineLimit(1)
@@ -137,11 +138,13 @@ private struct ChatRowLayout: View {
         let alias = user.localAlias?.trimmingCharacters(in: .whitespacesAndNewlines)
         if let alias, !alias.isEmpty {
             Text(alias)
+                .typesetting(asScriptOf: alias)
                 .font(CTFont.bodyEmphasis)
                 .foregroundColor(Color.CT.text)
         } else {
             // Profile-shared name → username → generated (see User.resolvedDisplayName).
             Text(user.resolvedDisplayName)
+                .typesetting(asScriptOf: user.resolvedDisplayName)
                 .font(CTFont.bodyEmphasis)
                 .foregroundColor(Color.CT.text)
         }
