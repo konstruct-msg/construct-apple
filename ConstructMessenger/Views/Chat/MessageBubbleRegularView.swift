@@ -152,43 +152,46 @@ struct MessageBubbleRegularView: View {
                             )
                     }
                 } else if let voiceContent {
-                    VoiceMessageBubbleView(
-                        voiceContent: voiceContent,
-                        isSentByMe: message.isSentByMe,
-                        deliveryStatus: message.deliveryStatus,
-                        onRetry: onRetry != nil ? { onRetry?(message) } : nil,
-                        transcript: message.transcript,
-                        isTranscribing: isTranscribingVoice,
-                        onTranscribe: {
-                            guard !isTranscribingVoice else { return }
-                            isTranscribingVoice = true
-                            Task {
-                                defer { isTranscribingVoice = false }
-                                do {
-                                    let data = try await MediaManager.shared.downloadAndDecryptMedia(
-                                        mediaId: voiceContent.mediaId,
-                                        mediaUrl: voiceContent.mediaUrl,
-                                        mediaKey: voiceContent.mediaKey
-                                    )
-                                    try await VoiceTranscriptionService.shared.transcribe(
-                                        audioData: data,
-                                        messageId: message.id
-                                    )
-                                } catch {
-                                    Log.error("Transcription failed: \(error)", category: "MessageBubbleRegularView")
+                    VStack(alignment: .leading, spacing: .zero) {
+                        replyIndicatorView
+                        VoiceMessageBubbleView(
+                            voiceContent: voiceContent,
+                            isSentByMe: message.isSentByMe,
+                            deliveryStatus: message.deliveryStatus,
+                            onRetry: onRetry != nil ? { onRetry?(message) } : nil,
+                            transcript: message.transcript,
+                            isTranscribing: isTranscribingVoice,
+                            onTranscribe: {
+                                guard !isTranscribingVoice else { return }
+                                isTranscribingVoice = true
+                                Task {
+                                    defer { isTranscribingVoice = false }
+                                    do {
+                                        let data = try await MediaManager.shared.downloadAndDecryptMedia(
+                                            mediaId: voiceContent.mediaId,
+                                            mediaUrl: voiceContent.mediaUrl,
+                                            mediaKey: voiceContent.mediaKey
+                                        )
+                                        try await VoiceTranscriptionService.shared.transcribe(
+                                            audioData: data,
+                                            messageId: message.id
+                                        )
+                                    } catch {
+                                        Log.error("Transcription failed: \(error)", category: "MessageBubbleRegularView")
+                                    }
                                 }
-                            }
-                        },
-                        source: PlaybackSource(chatId: message.chatId, messageId: message.id)
-                    )
-                    .frame(maxWidth: ChatUIConstants.Bubble.maxWidth)
-                    .overlay(
-                        CTShape.control()
-                            .stroke(
-                                isSelected ? Color.CT.accent : Color.clear,
-                                lineWidth: ChatUIConstants.Bubble.selectionStrokeWidth
-                            )
-                    )
+                            },
+                            source: PlaybackSource(chatId: message.chatId, messageId: message.id)
+                        )
+                        .frame(maxWidth: ChatUIConstants.Bubble.maxWidth)
+                        .overlay(
+                            CTShape.control()
+                                .stroke(
+                                    isSelected ? Color.CT.accent : Color.clear,
+                                    lineWidth: ChatUIConstants.Bubble.selectionStrokeWidth
+                                )
+                        )
+                    }
                 } else {
                     VStack(alignment: .leading, spacing: 0) {
                         replyIndicatorView

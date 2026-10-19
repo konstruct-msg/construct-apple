@@ -771,9 +771,23 @@ public nonisolated struct Shared_Proto_Messaging_V1_VoiceMessage: Sendable {
   /// Audio codec (Opus recommended)
   public var codec: String = String()
 
+  /// Quoted message (when the voice note is sent as a reply). Same meaning as
+  /// `TextMessage.quoted` and `MediaAlbumMessage.quoted`. A client that predates
+  /// the field skips it and shows the voice note without the quote.
+  public var quoted: Shared_Proto_Messaging_V1_QuotedMessage {
+    get {_quoted ?? Shared_Proto_Messaging_V1_QuotedMessage()}
+    set {_quoted = newValue}
+  }
+  /// Returns true if `quoted` has been explicitly set.
+  public var hasQuoted: Bool {self._quoted != nil}
+  /// Clears the value of `quoted`. Subsequent reads from it will return its default value.
+  public mutating func clearQuoted() {self._quoted = nil}
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
+
+  fileprivate var _quoted: Shared_Proto_Messaging_V1_QuotedMessage? = nil
 }
 
 /// ReactionMessage - Emoji reaction to a message
@@ -1793,7 +1807,7 @@ nonisolated extension Shared_Proto_Messaging_V1_MediaDimensions: SwiftProtobuf.M
 
 nonisolated extension Shared_Proto_Messaging_V1_VoiceMessage: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".VoiceMessage"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}file_url\0\u{3}encryption_key\0\u{3}file_hash\0\u{3}duration_ms\0\u{1}waveform\0\u{1}codec\0\u{c}\u{7}\u{4}")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}file_url\0\u{3}encryption_key\0\u{3}file_hash\0\u{3}duration_ms\0\u{1}waveform\0\u{1}codec\0\u{1}quoted\0\u{c}\u{8}\u{3}")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -1807,12 +1821,17 @@ nonisolated extension Shared_Proto_Messaging_V1_VoiceMessage: SwiftProtobuf.Mess
       case 4: try { try decoder.decodeSingularUInt32Field(value: &self.durationMs) }()
       case 5: try { try decoder.decodeRepeatedUInt32Field(value: &self.waveform) }()
       case 6: try { try decoder.decodeSingularStringField(value: &self.codec) }()
+      case 7: try { try decoder.decodeSingularMessageField(value: &self._quoted) }()
       default: break
       }
     }
   }
 
   public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
     if !self.fileURL.isEmpty {
       try visitor.visitSingularStringField(value: self.fileURL, fieldNumber: 1)
     }
@@ -1831,6 +1850,9 @@ nonisolated extension Shared_Proto_Messaging_V1_VoiceMessage: SwiftProtobuf.Mess
     if !self.codec.isEmpty {
       try visitor.visitSingularStringField(value: self.codec, fieldNumber: 6)
     }
+    try { if let v = self._quoted {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 7)
+    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -1841,6 +1863,7 @@ nonisolated extension Shared_Proto_Messaging_V1_VoiceMessage: SwiftProtobuf.Mess
     if lhs.durationMs != rhs.durationMs {return false}
     if lhs.waveform != rhs.waveform {return false}
     if lhs.codec != rhs.codec {return false}
+    if lhs._quoted != rhs._quoted {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

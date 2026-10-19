@@ -754,7 +754,13 @@ final class ChatSendCoordinator {
         }
     }
 
-    func sendVoiceMessage(url: URL, duration: TimeInterval, waveform: [Float]) {
+    func sendVoiceMessage(
+        url: URL,
+        duration: TimeInterval,
+        waveform: [Float],
+        replyTo: TranscriptRow? = nil,
+        replyToContentOverride: String? = nil
+    ) {
         let recipientId = conversation.peerId
         guard let currentUserId = AuthSessionManager.shared.currentUserId else {
             Log.error("No recipient/user ID for voice message", category: "ChatViewModel")
@@ -767,6 +773,8 @@ final class ChatSendCoordinator {
             toUserId: recipientId,
             duration: duration,
             waveform: waveform,
+            replyTo: replyTo,
+            replyToContentOverride: replyToContentOverride,
             chatId: conversation.chatId,
             in: viewContext
         )
@@ -775,7 +783,10 @@ final class ChatSendCoordinator {
             do {
                 let voiceContent = try await MediaManager.shared.uploadAudio(
                     url, duration: duration, waveform: waveform, for: recipientId)
-                let wireContent = MediaWireCodec.voiceMessageContent(from: voiceContent)
+                let wireContent = MediaWireCodec.voiceMessageContent(
+                    from: voiceContent,
+                    quoted: buildQuoted(replyTo: replyTo, replyToContentOverride: replyToContentOverride)
+                )
                 let wirePlaintext = try wireContent.serializedData()
                 let storagePayload = LocalMessagePayload.storagePayload(forWireContent: wireContent)
                 let displayJSON = MediaWireCodec.voiceJSON(from: wireContent.voice)
@@ -785,7 +796,8 @@ final class ChatSendCoordinator {
                 persistenceService.deleteMessage(id: placeholderId, in: viewContext, autoSave: false)
                 sendTextMessage(
                     text: displayJSON,
-                    replyTo: nil,
+                    replyTo: replyTo,
+                    replyToContentOverride: replyToContentOverride,
                     wirePlaintext: wirePlaintext,
                     storagePayload: storagePayload
                 )
