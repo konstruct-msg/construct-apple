@@ -125,7 +125,7 @@ class LocalNotificationManager: NSObject {
 
         // Use a stable per-chat identifier so back-to-back messages in the same
         // conversation collapse to a single banner instead of spamming the lock screen.
-        let identifier = chatId.map { "msg-chat-\($0)" } ?? "msg-\(UUID().uuidString)"
+        let identifier = chatId.map(Self.chatBannerId) ?? "msg-\(UUID().uuidString)"
         post(content, identifier: identifier, coveredByPushOf: "new_message")
     }
 
@@ -254,6 +254,15 @@ class LocalNotificationManager: NSObject {
         notificationCenter.removeAllDeliveredNotifications()
     }
 
+    /// The one identifier a chat's "New message" banner carries, so a later read can take it back.
+    static func chatBannerId(_ chatId: String) -> String { "msg-chat-\(chatId)" }
+
+    /// Take back the chat's banner once its messages were read on another device.
+    func withdrawChatBanner(chatId: String) {
+        notificationCenter.removeDeliveredNotifications(withIdentifiers: [Self.chatBannerId(chatId)])
+        notificationCenter.removePendingNotificationRequests(withIdentifiers: [Self.chatBannerId(chatId)])
+    }
+
     /// Remove notification with specific identifier
     func removeNotification(identifier: String) {
         notificationCenter.removeDeliveredNotifications(withIdentifiers: [identifier])
@@ -375,6 +384,22 @@ private extension String {
 
 /// How many unread each chat had when the app was last left. Unread above that is something the
 /// person has not seen, and a push banner may be its only sign; unread at or below it they saw.
+/// What an incoming message asks of the person. One decision for the unread count and the banner:
+/// a message read on another device of ours (ReadSync) is neither — until 2026-10-19 it skipped
+/// the count but still raised a banner, so writing on the Desktop kept the phone ringing.
+enum IncomingAttention {
+    struct Decision: Equatable {
+        let countsAsUnread: Bool
+        let notifies: Bool
+    }
+
+    /// The banner's own visibility test (`InAppNotificationService.isChatVisible`) still applies
+    /// after this; here only what the count and the banner share.
+    static func decide(chatVisible: Bool, readElsewhere: Bool) -> Decision {
+        Decision(countsAsUnread: !chatVisible && !readElsewhere, notifies: !readElsewhere)
+    }
+}
+
 /// The icon badge's number. Pure, so a test reaches it without a notification center.
 enum BadgeCount {
     static func total(_ unreadByChat: [Int]) -> Int {
