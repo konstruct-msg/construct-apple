@@ -404,8 +404,8 @@ class AppDelegate: NSObject, UIApplicationDelegate {
     func applicationDidBecomeActive(_ application: UIApplication) {
         Log.debug("Application did become active")
 
-        // Clear badge when app becomes active
-        LocalNotificationManager.shared.clearBadge()
+        // The badge is the unread count, not zero: opening the app reads nothing yet.
+        LocalNotificationManager.shared.syncBadge()
 
         // Remove all delivered notifications
         LocalNotificationManager.shared.removeAllNotifications()

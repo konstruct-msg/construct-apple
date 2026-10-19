@@ -227,33 +227,24 @@ class LocalNotificationManager: NSObject {
 
     // MARK: - Badge Management
 
-    /// Update app badge number
-    func updateBadge(_ count: Int) {
-        Task { @MainActor in
-            // iOS 16+ uses UNUserNotificationCenter.setBadgeCount
-            if #available(iOS 16.0, *) {
-                try? await UNUserNotificationCenter.current().setBadgeCount(count)
-            } else {
-                #if canImport(UIKit)
-                UIApplication.shared.applicationIconBadgeNumber = count
-                #endif
-            }
-            Log.debug("Badge updated to \(count)", category: "LocalNotifications")
-        }
+    /// Set the icon badge to the unread messages in the store. The one way the badge is set:
+    /// until 2026-10-19 nothing set it above zero — `updateBadge` had no caller, the server's push
+    /// carries no badge, and every foreground and every opened chat cleared it — so a person
+    /// could not tell from the icon whether anything was waiting (testers).
+    /// Called on foreground, on leaving it, after a push-woken fetch and when unread changes.
+    func syncBadge() {
+        Task { await syncBadgeNow() }
     }
 
-    /// Clear app badge
-    func clearBadge() {
-        Task { @MainActor in
-            if #available(iOS 16.0, *) {
-                try? await UNUserNotificationCenter.current().setBadgeCount(0)
-            } else {
-                #if canImport(UIKit)
-                UIApplication.shared.applicationIconBadgeNumber = 0
-                #endif
-            }
-            Log.debug("Badge cleared", category: "LocalNotifications")
-        }
+    /// `syncBadge()` for a caller that must not return before the badge is set: a push-woken
+    /// fetch, after which iOS may suspend the process before a detached task runs.
+    @MainActor
+    func syncBadgeNow() async {
+        // A store that cannot be read leaves the badge as it is rather than zeroing it.
+        guard let chats = try? LocalRepositories.chats.chats() else { return }
+        let count = BadgeCount.total(chats.map(\.unreadCount))
+        try? await UNUserNotificationCenter.current().setBadgeCount(count)
+        Log.debug("Badge set to \(count)", category: "LocalNotifications")
     }
 
     // MARK: - Notification Management
@@ -261,7 +252,6 @@ class LocalNotificationManager: NSObject {
     /// Remove all delivered notifications
     func removeAllNotifications() {
         notificationCenter.removeAllDeliveredNotifications()
-        clearBadge()
     }
 
     /// Remove notification with specific identifier
@@ -385,6 +375,13 @@ private extension String {
 
 /// How many unread each chat had when the app was last left. Unread above that is something the
 /// person has not seen, and a push banner may be its only sign; unread at or below it they saw.
+/// The icon badge's number. Pure, so a test reaches it without a notification center.
+enum BadgeCount {
+    static func total(_ unreadByChat: [Int]) -> Int {
+        unreadByChat.reduce(0) { $0 + max($1, 0) }
+    }
+}
+
 enum UnreadSeen {
     private static let key = "construct.notifications.unreadSeen"
 

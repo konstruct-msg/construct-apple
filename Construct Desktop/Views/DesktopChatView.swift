@@ -670,7 +670,7 @@ struct DesktopChatView: View {
 
     private func registerTranscriptProxy(_ proxy: ScrollViewProxy) {
         scrollManager.registerProxy(proxy)
-        LocalNotificationManager.shared.clearBadge()
+        LocalNotificationManager.shared.syncBadge()
         // Same as iOS: only arm opening when a transcript is already present.
         // Empty → 0→N is handled by handleTranscriptCountChange.
         if !viewModel.entries.isEmpty {
