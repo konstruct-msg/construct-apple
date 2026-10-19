@@ -48,7 +48,7 @@ struct PinDisableView: View {
                 } label: {
                     Text("disable")
                         .font(CTFont.ui(17, weight: .semibold))
-                        .foregroundColor(.white)
+                        .foregroundColor(Color.CT.onFill)
                         .frame(maxWidth: .infinity)
                         .padding()
                         .background(pin.count >= 6 ? Color.red : Color.gray.opacity(0.4))

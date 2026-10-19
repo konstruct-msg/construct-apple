@@ -49,7 +49,7 @@ struct TransportDiagnosticsView: View {
             VStack(alignment: .leading, spacing: 6) {
                 Text(LogRedaction.redact(stateHeadline))
                     .font(CTFont.mono(18, weight: .bold))
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(Color.CT.debug)
                     .textSelection(.enabled)
                 ForEach(stateDetailLines, id: \.self) { line in
                     Text(LogRedaction.redact(line))
@@ -85,13 +85,13 @@ struct TransportDiagnosticsView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("veil-front native TLS")
                         .font(CTFont.mono(13))
-                        .foregroundStyle(.orange)
+                        .foregroundStyle(Color.CT.debug)
                     Text("Terminate the veil-front TLS in Network.framework (native Apple ClientHello) instead of rustls-Chrome131. Toggle VEIL off/on to apply. Opt-in / debug.")
                         .font(CTFont.mono(11))
                         .foregroundStyle(Color.CT.textDim)
                 }
             }
-            .tint(.orange)
+            .tint(Color.CT.debug)
             .padding(.horizontal, 20)
         }
     }
@@ -105,14 +105,14 @@ struct TransportDiagnosticsView: View {
                 } label: {
                     Text("[ MANUAL RESET ]")
                         .font(CTFont.mono(12))
-                        .foregroundStyle(.orange)
+                        .foregroundStyle(Color.CT.debug)
                 }
                 Button {
                     mirror.clearHistory()
                 } label: {
                     Text("[ CLEAR LOG ]")
                         .font(CTFont.mono(12))
-                        .foregroundStyle(.orange)
+                        .foregroundStyle(Color.CT.debug)
                 }
                 Spacer()
             }
@@ -154,7 +154,7 @@ struct TransportDiagnosticsView: View {
                     .foregroundStyle(Color.CT.text)
                 Text(arrow)
                     .font(CTFont.mono(11))
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(Color.CT.debug)
                 Text(LogRedaction.redact(entry.to.shortLabel))
                     .font(CTFont.mono(11, weight: .bold))
                     .foregroundStyle(entry.from == entry.to ? Color.CT.textDim : .orange)

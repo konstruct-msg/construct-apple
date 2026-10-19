@@ -86,7 +86,7 @@ struct DesktopLinkRequestView: View {
             VStack(spacing: 16) {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .font(CTFont.ui(48))
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(Color.CT.warning)
                     .lineLimit(1).fixedSize()
                 Button {
                     vm.errorMessage = nil
@@ -138,7 +138,7 @@ struct DesktopLinkRequestView: View {
                     .scaledToFit()
                     .frame(width: 220, height: 220)
                     .padding(16)
-                    .background(Color.white)
+                    .background(Color.CT.qrPaper)
                     .clipShape(Rectangle())
             }
 

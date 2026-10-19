@@ -306,18 +306,18 @@ private struct SingleMediaCell: View {
             if let progress, progress > 0 {
                 ProgressView(value: progress)
                     .progressViewStyle(.linear)
-                    .tint(.white)
+                    .tint(Color.CT.onMedia)
                     .frame(width: 90)
                 Text("\(Int(progress * 100))%")
-                    .font(CTFont.caption).foregroundColor(.white).monospacedDigit()
+                    .font(CTFont.caption).foregroundColor(Color.CT.onMedia).monospacedDigit()
             } else {
-                ProgressView().scaleEffect(0.75).tint(.white)
+                ProgressView().scaleEffect(0.75).tint(Color.CT.onMedia)
                 Text(LocalizedStringKey("uploading"))
-                    .font(CTFont.caption).foregroundColor(.white)
+                    .font(CTFont.caption).foregroundColor(Color.CT.onMedia)
             }
         }
         .padding(.horizontal, CTLayout.inlinePad).padding(.vertical, ChatUIConstants.Bubble.tightVerticalPadding)
-        .background(.black.opacity(0.55))
+        .background(Color.CT.mediaBadge)
         .clipShape(RoundedRectangle(cornerRadius: ChatUIConstants.Media.badgeCornerRadius, style: .continuous))
         .padding(.bottom, CTLayout.inlinePad)
         .animation(.easeOut(duration: 0.2), value: progress)
@@ -335,17 +335,17 @@ private struct SingleMediaCell: View {
                 if videoDownloadProgress > 0 {
                     ProgressView(value: videoDownloadProgress)
                         .progressViewStyle(.circular)
-                        .tint(.white)
+                        .tint(Color.CT.onMedia)
                         .scaleEffect(1.1)
                 } else {
                     ProgressView()
-                        .tint(.white)
+                        .tint(Color.CT.onMedia)
                         .scaleEffect(1.1)
                 }
                 if videoDownloadProgress > 0 {
                     Text("\(Int(videoDownloadProgress * 100))%")
                         .font(CTFont.caption)
-                        .foregroundColor(.white)
+                        .foregroundColor(Color.CT.onMedia)
                         .monospacedDigit()
                 }
             }
@@ -359,25 +359,25 @@ private struct SingleMediaCell: View {
                     || MediaVideoFile.isLocal(item: itemDict, messageId: message.id, itemIndex: itemIndex) {
             Image(systemName: "play.fill")
                 .font(CTIcon.font(CTIcon.navLg, weight: .regular))
-                .foregroundColor(.white)
+                .foregroundColor(Color.CT.onMedia)
                 .frame(
                     width: ChatUIConstants.Media.playButtonSize,
                     height: ChatUIConstants.Media.playButtonSize
                 )
-                .background(.black.opacity(0.45), in: Circle())
+                .background(Color.CT.mediaScrim, in: Circle())
         } else {
             Image(systemName: "arrow.down.circle.fill")
                 .font(CTIcon.font(CTIcon.overlay, weight: .regular))
-                .foregroundColor(.white)
+                .foregroundColor(Color.CT.onMedia)
                 .shadow(color: .black.opacity(0.35), radius: 8, y: 2)
         }
     }
 
     private func durationBadge(_ seconds: Double) -> some View {
         Text(formatMediaDuration(seconds))
-            .font(CTFont.caption).foregroundColor(.white).monospacedDigit()
+            .font(CTFont.caption).foregroundColor(Color.CT.onMedia).monospacedDigit()
             .padding(.horizontal, 6).padding(.vertical, 3)
-            .background(.black.opacity(0.55))
+            .background(Color.CT.mediaBadge)
             .clipShape(Capsule())
             .padding(8)
     }
@@ -401,10 +401,10 @@ private struct SingleMediaCell: View {
                 if hasReceivedBytes && downloadProgress > 0 && downloadProgress < 1 {
                     Text("\(Int(downloadProgress * 100))%")
                         .font(CTFont.secondary)
-                        .foregroundColor(.white)
+                        .foregroundColor(Color.CT.onMedia)
                         .monospacedDigit()
                 } else {
-                    ProgressView().tint(.white)
+                    ProgressView().tint(Color.CT.onMedia)
                 }
             }
             .padding(14)
@@ -843,7 +843,7 @@ private struct GridCell: View {
             if extraCount > 0 {
                 Color.black.opacity(0.5)
                 Text("+\(extraCount)")
-                    .font(CTFont.ui(22, weight: .semibold)).foregroundColor(.white)
+                    .font(CTFont.ui(22, weight: .semibold)).foregroundColor(Color.CT.onMedia)
             }
 
             if isUploading {
@@ -851,10 +851,10 @@ private struct GridCell: View {
                 let progress = MediaUploadProgressTracker.shared.value(for: message.id)
                 if let progress, progress > 0 {
                     Text("\(Int(progress * 100))%")
-                        .font(CTFont.secondary).foregroundColor(.white).monospacedDigit()
+                        .font(CTFont.secondary).foregroundColor(Color.CT.onMedia).monospacedDigit()
                         .animation(.easeOut(duration: 0.2), value: progress)
                 } else {
-                    ProgressView().tint(.white)
+                    ProgressView().tint(Color.CT.onMedia)
                 }
             }
         }
@@ -921,10 +921,10 @@ private struct GridCell: View {
                 if hasReceivedBytes && downloadProgress > 0 && downloadProgress < 1 {
                     Text("\(Int(downloadProgress * 100))%")
                         .font(CTFont.caption)
-                        .foregroundColor(.white)
+                        .foregroundColor(Color.CT.onMedia)
                         .monospacedDigit()
                 } else {
-                    ProgressView().tint(.white)
+                    ProgressView().tint(Color.CT.onMedia)
                 }
             }
             .padding(12)
@@ -944,17 +944,17 @@ private struct GridCell: View {
                 if videoDownloadProgress > 0 {
                     ProgressView(value: videoDownloadProgress)
                         .progressViewStyle(.circular)
-                        .tint(.white)
+                        .tint(Color.CT.onMedia)
                         .scaleEffect(0.9)
                 } else {
                     ProgressView()
-                        .tint(.white)
+                        .tint(Color.CT.onMedia)
                         .scaleEffect(0.9)
                 }
                 if videoDownloadProgress > 0 {
                     Text("\(Int(videoDownloadProgress * 100))%")
                         .font(CTFont.micro)
-                        .foregroundColor(.white)
+                        .foregroundColor(Color.CT.onMedia)
                         .monospacedDigit()
                 }
             }
@@ -968,16 +968,16 @@ private struct GridCell: View {
                     || MediaVideoFile.isLocal(item: itemDict, messageId: message.id, itemIndex: itemIndex) {
             Image(systemName: "play.fill")
                 .font(CTIcon.font(CTIcon.row, weight: .regular))
-                .foregroundColor(.white)
+                .foregroundColor(Color.CT.onMedia)
                 .frame(
                     width: ChatUIConstants.Voice.controlWidth,
                     height: ChatUIConstants.Voice.controlWidth
                 )
-                .background(.black.opacity(0.45), in: Circle())
+                .background(Color.CT.mediaScrim, in: Circle())
         } else {
             Image(systemName: "arrow.down.circle.fill")
                 .font(CTIcon.font(CTIcon.nav, weight: .regular))
-                .foregroundColor(.white)
+                .foregroundColor(Color.CT.onMedia)
                 .shadow(color: .black.opacity(0.35), radius: 6, y: 2)
         }
     }

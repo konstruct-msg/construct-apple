@@ -304,7 +304,7 @@ private struct CallControlsBar<Secondary: View>: View {
             Button(action: onEnd) {
                 Image(systemName: "phone.down.fill")
                     .font(CTIcon.font(CTIcon.control))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(Color.CT.onFill)
                     .frame(width: CTLayout.callEndSize, height: CTLayout.callEndSize)
                     .background(Color.CT.danger)
                     .clipShape(Circle())

@@ -127,15 +127,15 @@ struct VideoNoteBubbleView: View {
             } label: {
                 Group {
                     if isTranscribing {
-                        ProgressView().tint(.white)
+                        ProgressView().tint(Color.CT.onMedia)
                     } else {
                         Image(systemName: has && showsTranscript ? "captions.bubble.fill" : "captions.bubble")
                             .font(CTIcon.font(CTIcon.row, weight: .regular))
-                            .foregroundColor(.white)
+                            .foregroundColor(Color.CT.onMedia)
                     }
                 }
                 .frame(width: CTLayout.hitTarget, height: CTLayout.hitTarget)
-                .background(.black.opacity(0.45), in: Circle().inset(by: CTLayout.inlinePad))
+                .background(Color.CT.mediaScrim, in: Circle().inset(by: CTLayout.inlinePad))
             }
             .buttonStyle(.plain)
             .disabled(isTranscribing)
@@ -177,10 +177,10 @@ struct VideoNoteBubbleView: View {
                     Text(Self.rateLabel(playback.rate))
                         .font(CTFont.badge)
                         .monospacedDigit()
-                        .foregroundColor(.white)
+                        .foregroundColor(Color.CT.onMedia)
                         .padding(.horizontal, ChatUIConstants.VideoNote.chipHorizontalPadding)
                         .padding(.vertical, ChatUIConstants.VideoNote.chipVerticalPadding)
-                        .background(.black.opacity(0.55),
+                        .background(Color.CT.mediaBadge,
                                     in: RoundedRectangle(cornerRadius: ChatUIConstants.Media.badgeCornerRadius, style: .continuous))
                         .frame(minWidth: CTLayout.hitTarget, minHeight: CTLayout.hitTarget)
                         .contentShape(Rectangle())
@@ -191,7 +191,7 @@ struct VideoNoteBubbleView: View {
             }
             ProgressView(value: playback.progress)
                 .progressViewStyle(.linear)
-                .tint(.white)
+                .tint(Color.CT.onMedia)
                 .padding(.horizontal, CTLayout.inlinePad)
                 .padding(.bottom, CTLayout.inlinePad)
         }
@@ -201,9 +201,9 @@ struct VideoNoteBubbleView: View {
         Button { openFullScreen() } label: {
             Image(systemName: "arrow.up.left.and.arrow.down.right")
                 .font(CTIcon.font(CTIcon.row, weight: .regular))
-                .foregroundColor(.white)
+                .foregroundColor(Color.CT.onMedia)
                 .frame(width: CTLayout.hitTarget, height: CTLayout.hitTarget)
-                .background(.black.opacity(0.45), in: Circle().inset(by: CTLayout.inlinePad))
+                .background(Color.CT.mediaScrim, in: Circle().inset(by: CTLayout.inlinePad))
         }
         .buttonStyle(.plain)
         .accessibilityLabel(Text(LocalizedStringKey("video_note_full_screen")))
@@ -223,10 +223,10 @@ struct VideoNoteBubbleView: View {
             }
         }
         .font(CTFont.badge)
-        .foregroundColor(.white)
+        .foregroundColor(Color.CT.onMedia)
         .padding(.horizontal, ChatUIConstants.VideoNote.chipHorizontalPadding)
         .padding(.vertical, ChatUIConstants.VideoNote.chipVerticalPadding)
-        .background(.black.opacity(0.55),
+        .background(Color.CT.mediaBadge,
                     in: RoundedRectangle(cornerRadius: ChatUIConstants.Media.badgeCornerRadius, style: .continuous))
         .padding(CTLayout.inlinePad)
     }
@@ -234,7 +234,7 @@ struct VideoNoteBubbleView: View {
     @ViewBuilder
     private var centerGlyph: some View {
         if isUploading {
-            ProgressView().tint(.white)
+            ProgressView().tint(Color.CT.onMedia)
         } else if isMissingMedia {
             Image(systemName: "exclamationmark.triangle.fill")
                 .font(CTIcon.font(CTIcon.nav, weight: .semibold))
@@ -242,19 +242,19 @@ struct VideoNoteBubbleView: View {
                 .accessibilityLabel(NSLocalizedString("media_unavailable", comment: ""))
         } else if isDownloading {
             if downloadProgress > 0 {
-                ProgressView(value: downloadProgress).progressViewStyle(.circular).tint(.white)
+                ProgressView(value: downloadProgress).progressViewStyle(.circular).tint(Color.CT.onMedia)
             } else {
-                ProgressView().tint(.white)
+                ProgressView().tint(Color.CT.onMedia)
             }
         } else if isExpanded, playback.isPaused {
             Image(systemName: "play.fill")
                 .font(CTIcon.font(CTIcon.overlay, weight: .regular))
-                .foregroundColor(.white)
+                .foregroundColor(Color.CT.onMedia)
                 .shadow(color: .black.opacity(0.35), radius: 8, y: 2)
         } else if videoURL == nil {
             Image(systemName: "arrow.down.circle.fill")
                 .font(CTIcon.font(CTIcon.overlay, weight: .regular))
-                .foregroundColor(.white)
+                .foregroundColor(Color.CT.onMedia)
                 .shadow(color: .black.opacity(0.35), radius: 8, y: 2)
         }
     }

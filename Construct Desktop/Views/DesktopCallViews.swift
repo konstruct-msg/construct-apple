@@ -37,7 +37,7 @@ struct DesktopIncomingCallView: View {
             } label: {
                 Image(systemName: "phone.down.fill")
                     .font(CTFont.ui(16, weight: .medium))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(Color.CT.onFill)
                     .frame(width: 36, height: 36)
                     .background(Color.CT.danger)
                     .overlay(Rectangle().strokeBorder(Color.CT.danger.opacity(0.6), lineWidth: 1))
@@ -51,7 +51,7 @@ struct DesktopIncomingCallView: View {
             } label: {
                 Image(systemName: "phone.fill")
                     .font(CTFont.ui(16, weight: .medium))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(Color.CT.onFill)
                     .frame(width: 36, height: 36)
                     .background(Color.CT.accent)
                     .overlay(Rectangle().strokeBorder(Color.CT.accent.opacity(0.6), lineWidth: 1))
@@ -134,7 +134,7 @@ struct DesktopInCallView: View {
                 } label: {
                     Image(systemName: "phone.down.fill")
                         .font(CTFont.ui(14, weight: .medium))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(Color.CT.onFill)
                         .frame(width: 28, height: 28)
                         .background(Color.CT.danger)
                         .overlay(Rectangle().strokeBorder(Color.CT.danger.opacity(0.6), lineWidth: 1))

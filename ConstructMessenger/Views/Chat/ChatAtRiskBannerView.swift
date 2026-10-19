@@ -13,7 +13,7 @@ struct ChatAtRiskBannerView: View {
             HStack(spacing: CTLayout.chromeGap) {
                 Image(systemName: "clock.badge.exclamationmark")
                     .font(CTFont.ui(16))
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(Color.CT.warning)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(LocalizedStringKey("session_at_risk_title"))
@@ -28,9 +28,9 @@ struct ChatAtRiskBannerView: View {
             }
             .padding(.horizontal, CTLayout.edgePad)
             .padding(.vertical, CTLayout.chromeGap)
-            .background(Color.orange.opacity(0.08))
+            .background(Color.CT.warning.opacity(0.08))
             .clipShape(CTShape.card())
-            .overlay(CTShape.card().stroke(Color.orange.opacity(0.35), lineWidth: 0.5))
+            .overlay(CTShape.card().stroke(Color.CT.warning.opacity(0.35), lineWidth: 0.5))
             .padding(.horizontal, ChatUIConstants.Shell.auxOuterPad)
             .transition(.move(edge: .top).combined(with: .opacity))
         }

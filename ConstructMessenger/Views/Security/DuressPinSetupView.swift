@@ -44,7 +44,7 @@ struct DuressPinSetupView: View {
                 } label: {
                     Text("continue")
                         .font(CTFont.ui(17, weight: .semibold))
-                        .foregroundColor(.white)
+                        .foregroundColor(Color.CT.onFill)
                         .frame(maxWidth: .infinity)
                         .padding()
                         .background(canProceed ? Color.red.opacity(0.85) : Color.gray.opacity(0.4))

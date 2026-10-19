@@ -754,11 +754,11 @@ struct AvatarViewerSheet: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("close") { dismiss() }
-                        .foregroundColor(.white)
+                        .foregroundColor(Color.CT.onMedia)
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("change_avatar") { onChangeAvatar() }
-                        .foregroundColor(.white)
+                        .foregroundColor(Color.CT.onMedia)
                 }
             }
             .navBarChrome(.black)

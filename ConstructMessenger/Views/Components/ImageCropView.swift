@@ -86,10 +86,10 @@ struct ImageCropView: View {
                     } label: {
                         Text("cancel")
                             .font(CTFont.ui(17, weight: .semibold))
-                            .foregroundColor(.white)
+                            .foregroundColor(Color.CT.onMedia)
                             .frame(maxWidth: .infinity)
                             .frame(height: 50)
-                            .background(Color.white.opacity(0.15))
+                            .background(Color.CT.onMedia.opacity(0.15))
                             .cornerRadius(12)
                     }
 
@@ -217,7 +217,7 @@ private struct CropOverlayShape: View {
 
                 // Bright border
                 Rectangle()
-                    .stroke(Color.white.opacity(0.9), lineWidth: 1.5)
+                    .stroke(Color.CT.onMedia.opacity(0.9), lineWidth: 1.5)
                     .frame(width: cropSize, height: cropSize)
 
                 // Rule-of-thirds grid lines
@@ -236,7 +236,7 @@ private struct CropOverlayShape: View {
                     path.move(to: CGPoint(x: x0, y: y0 + 2 * third))
                     path.addLine(to: CGPoint(x: x0 + cropSize, y: y0 + 2 * third))
                 }
-                .stroke(Color.white.opacity(0.25), lineWidth: 0.5)
+                .stroke(Color.CT.onMedia.opacity(0.25), lineWidth: 0.5)
             }
             .frame(width: geo.size.width, height: geo.size.height)
         }

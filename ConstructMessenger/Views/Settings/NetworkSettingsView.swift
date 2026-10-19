@@ -78,7 +78,7 @@ struct NetworkSettingsView: View {
                                let phase = connectionManager.connectingPhase {
                                 Text(phase)
                                     .font(CTFont.body)
-                                    .foregroundStyle(.orange)
+                                    .foregroundStyle(Color.CT.debug)
                                     .textSelection(.enabled)
                                     .transition(.opacity)
                             }
@@ -270,13 +270,13 @@ struct NetworkSettingsView: View {
                         VStack(alignment: .leading, spacing: 2) {
                             Text("QUIC / HTTP-3 transport")
                                 .font(CTFont.ui(14))
-                                .foregroundStyle(.orange)
+                                .foregroundStyle(Color.CT.debug)
                             Text("Route the message stream over QUIC instead of H2. Watch the transport badge above to confirm.")
                                 .font(CTFont.caption)
                                 .foregroundStyle(Color.CT.textDim)
                         }
                     }
-                    .tint(.orange)
+                    .tint(Color.CT.debug)
                     .padding(.horizontal, NetworkSettingsLayout.rowHorizontalPadding)
                     .padding(.vertical, NetworkSettingsLayout.compactRowVerticalPadding)
                     .onChange(of: engineQuicOn) { _, newValue in
@@ -294,13 +294,13 @@ struct NetworkSettingsView: View {
                         VStack(alignment: .leading, spacing: 2) {
                             Text("QUIC obfuscation (Salamander)")
                                 .font(CTFont.ui(14))
-                                .foregroundStyle(.orange)
+                                .foregroundStyle(Color.CT.debug)
                             Text("Obfuscate QUIC datagrams to evade DPI. Needs a provisioned gateway PSK; otherwise stays plain QUIC.")
                                 .font(CTFont.caption)
                                 .foregroundStyle(Color.CT.textDim)
                         }
                     }
-                    .tint(.orange)
+                    .tint(Color.CT.debug)
                     .disabled(!engineQuicOn)
                     .opacity(engineQuicOn ? 1 : 0.4)
                     .padding(.horizontal, NetworkSettingsLayout.rowHorizontalPadding)
@@ -324,11 +324,11 @@ struct NetworkSettingsView: View {
                         HStack {
                             Text("Transport router state + log")
                                 .font(CTFont.body)
-                                .foregroundStyle(.orange)
+                                .foregroundStyle(Color.CT.debug)
                             Spacer()
                             Image(systemName: "chevron.right")
                                 .font(CTIcon.font(CTIcon.caption, weight: .semibold))
-                                .foregroundStyle(.orange)
+                                .foregroundStyle(Color.CT.debug)
                         }
                         .padding(.horizontal, NetworkSettingsLayout.rowHorizontalPadding)
                         .padding(.vertical, NetworkSettingsLayout.compactRowVerticalPadding)

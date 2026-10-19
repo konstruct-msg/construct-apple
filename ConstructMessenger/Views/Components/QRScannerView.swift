@@ -44,7 +44,7 @@ struct QRScannerView: View {
                     )
 
                     ScannerDimOverlay(scanRect: scanRect)
-                        .fill(Color.black.opacity(0.6), style: FillStyle(eoFill: true))
+                        .fill(Color.CT.mediaGround.opacity(0.6), style: FillStyle(eoFill: true))
 
                     ScannerCornerBrackets(scanRect: scanRect)
                         .stroke(Color.AppBrand.button, lineWidth: 3)
@@ -66,7 +66,7 @@ struct QRScannerView: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("cancel") { dismiss() }
-                        .foregroundColor(.white)
+                        .foregroundColor(Color.CT.onMedia)
                 }
                 // The camera debug panel is a developer surface; until 2026-10-06 its button was in
                 // every build, release included.
@@ -76,7 +76,7 @@ struct QRScannerView: View {
                         showDebugInfo.toggle()
                     } label: {
                         Image(systemName: showDebugInfo ? "info.circle.fill" : "info.circle")
-                            .foregroundColor(.white)
+                            .foregroundColor(Color.CT.onMedia)
                     }
                 }
                 #endif
@@ -105,19 +105,19 @@ struct QRScannerView: View {
         VStack(spacing: 14) {
             Text("scan_qr_code")
                 .font(CTFont.ui(17, weight: .semibold))
-                .foregroundColor(.white)
+                .foregroundColor(Color.CT.onMedia)
 
             Text("position_qr_code_within_frame")
                 .font(CTFont.ui(15))
-                .foregroundColor(.white.opacity(0.8))
+                .foregroundColor(Color.CT.onMediaDim)
 
             Button { handleClipboardPaste() } label: {
                 Label("paste_invite_link", systemImage: "doc.on.clipboard")
                     .font(CTFont.ui(15))
                     .padding(.horizontal, 16)
                     .padding(.vertical, 10)
-                    .background(Color.white.opacity(0.15))
-                    .foregroundColor(.white)
+                    .background(Color.CT.onMedia.opacity(0.15))
+                    .foregroundColor(Color.CT.onMedia)
                     .clipShape(Capsule())
             }
             .accessibilityIdentifier(A11y.QRScanner.paste)
@@ -127,13 +127,13 @@ struct QRScannerView: View {
                     Label("Simulate QR Scan", systemImage: "camera.viewfinder")
                         .padding()
                         .background(Color.blue)
-                        .foregroundColor(.white)
+                        .foregroundColor(Color.CT.onFill)
                         .cornerRadius(8)
                 }
             }
         }
         .padding()
-        .background(Color.black.opacity(0.7))
+        .background(Color.CT.mediaGround.opacity(0.7))
         .cornerRadius(12)
         .padding(.horizontal)
     }
@@ -144,9 +144,9 @@ struct QRScannerView: View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Camera Debug Info")
                 .font(.headline)
-                .foregroundColor(.white)
+                .foregroundColor(Color.CT.onMedia)
 
-            Divider().background(Color.white)
+            Divider().background(Color.CT.onMedia)
 
             debugInfoRow("Session Ready",
                          value: scanner.isSessionReady ? "✅ Yes" : "❌ No",
@@ -167,13 +167,13 @@ struct QRScannerView: View {
                 .padding(.horizontal, 12)
                 .padding(.vertical, 6)
                 .background(Color.blue)
-                .foregroundColor(.white)
+                .foregroundColor(Color.CT.onFill)
                 .cornerRadius(6)
             }
             .padding(.top, 4)
         }
         .padding()
-        .background(Color.black.opacity(0.85))
+        .background(Color.CT.mediaGround.opacity(0.85))
         .cornerRadius(12)
         .padding(.horizontal)
     }
