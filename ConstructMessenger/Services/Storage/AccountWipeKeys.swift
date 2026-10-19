@@ -169,6 +169,9 @@ enum AccountWipeKeys {
         // How far each chat is read, per partner (`ReadBoundaries`, TODO 152): this account's
         // reading, which another account must not inherit.
         "construct.readBoundaries.v1",
+        // Unread counts per chat at the last trip to the background (`UnreadSeen`, construct-ios
+        // #248): chat ids of this account, and the baseline its banners are withdrawn against.
+        "construct.notifications.unreadSeen",
         // The public IP and region the removed GeoIP lookup cached. `GRPCChannelManager` already
         // deletes them at launch; listed so a wipe says the same about where the person was.
         "construct.geoip_ip_v1",
@@ -216,6 +219,9 @@ enum AccountWipeKeys {
         "construct.ice_relay_infos",
         "construct.ice_relay_regions",
         "construct.ice_deprecated_relay_ids",
+        // When the relay manifest was last fetched and accepted (`VeilCertFetcher`): a throttle on
+        // the fetch of public, server-wide data. Wiped, the next launch only fetches again early.
+        "construct.manifest_last_accepted",
 
         // Server-provided public material, identical for every identity on this server. Dropping
         // it would leave sealed-sender attestation unable to vouch anything until a refetch.

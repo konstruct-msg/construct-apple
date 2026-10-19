@@ -178,13 +178,8 @@ final class WebRTCSession: NSObject, WebRTCSessionProtocol {
     private var remoteDescriptionSet = false
     private var pendingRemoteCandidates: [WebRTCIceCandidate] = []
 
-    init(role: WebRTCSessionRole, turn: Shared_Proto_Signaling_V1_TurnCredentials?, video: Bool,
-         veilOn: Bool) throws {
-        self.role = role
-        self.videoEnabled = video
-
-        self.factory = WebRTCFactory.shared.factory
-
+    convenience init(role: WebRTCSessionRole, turn: Shared_Proto_Signaling_V1_TurnCredentials?, video: Bool,
+                     veilOn: Bool) throws {
         guard let plan = CallIcePlan.make(
             turnURLs: turn?.urls, username: turn?.username ?? "", credential: turn?.credential ?? "", veilOn: veilOn
         ) else {
@@ -197,6 +192,27 @@ final class WebRTCSession: NSObject, WebRTCSessionProtocol {
             RTCIceServer(urlStrings: $0.urls, username: $0.username, credential: $0.credential)
         }
         switch plan.policy { case .relay: config.iceTransportPolicy = .relay }
+        try self.init(role: role, video: video, config: config)
+    }
+
+    #if DEBUG
+    /// Two sessions in one process, connected over the host's loopback: no servers, every
+    /// candidate kind. Tests only — a call is relay-only (`CallIcePlan`), and this path is what a
+    /// test needs that a call must never have, so it does not exist in a release build.
+    convenience init(loopbackRole role: WebRTCSessionRole, video: Bool) throws {
+        let config = RTCConfiguration()
+        config.iceTransportPolicy = .all
+        try self.init(role: role, video: video, config: config)
+    }
+    #endif
+
+    /// The ICE part of `config` is the caller's; the rest is set here, the same for every session.
+    private init(role: WebRTCSessionRole, video: Bool, config: RTCConfiguration) throws {
+        self.role = role
+        self.videoEnabled = video
+
+        self.factory = WebRTCFactory.shared.factory
+
         config.sdpSemantics = .unifiedPlan
         config.bundlePolicy = .maxBundle
         config.rtcpMuxPolicy = .require
