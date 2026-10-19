@@ -206,7 +206,7 @@ struct MainAvatarView: View {
 
     private var presenceDot: some View {
         Circle()
-            .fill(Color.green)
+            .fill(Color.CT.online)
             .frame(width: size * 0.22, height: size * 0.22)
             .overlay(
                 Circle()
