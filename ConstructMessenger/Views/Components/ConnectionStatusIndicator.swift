@@ -43,6 +43,15 @@ struct ConnectionStatusIndicator: View {
         }
     }
 
+    /// A dot says nothing to VoiceOver; the state in words does.
+    private var accessibilityKey: String {
+        switch displayState {
+        case .connected:              return "connected"
+        case .disconnected:           return "disconnected"
+        case .connecting, .paused:    return "status_connecting"
+        }
+    }
+
     var body: some View {
         Circle()
             .fill(dotColor)
@@ -51,6 +60,8 @@ struct ConnectionStatusIndicator: View {
             .opacity(dotOpacity)
             .shadow(color: displayState == .connected ? Color.CT.online.opacity(0.7) : .clear, radius: 4)
             .animation(.easeInOut(duration: 0.4), value: dotColor)
+            .accessibilityElement()
+            .accessibilityLabel(Text(LocalizedStringKey(accessibilityKey)))
             .onAppear { apply(displayState) }
             .onChange(of: connectionManager.connectionStatus) { _, newStatus in
                 if newStatus == .connected { hasConnectedOnce = true }
