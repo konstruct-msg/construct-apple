@@ -132,7 +132,6 @@ struct ChatsListView: View {
             .onAppear {
                     recoveryViewModel.refreshBackupPending()
                     chatsViewModel.setContext(viewContext)
-                    LocalNotificationManager.shared.clearBadge()
                     reconcileStalePreviews(from: nil)
                     updateTotalUnreadCount()
             }
@@ -325,6 +324,7 @@ struct ChatsListView: View {
 
     private func updateTotalUnreadCount() {
         chatsViewModel.totalUnreadCount = ChatsLive.shared.totalUnread
+        LocalNotificationManager.shared.syncBadge()
     }
 
     /// Re-align denormalized list previews with each chat's newest transcript message.
