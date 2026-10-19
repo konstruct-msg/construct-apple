@@ -50,7 +50,7 @@ struct FileAttachmentBubbleView: View {
             }
             if !fileContent.caption.isEmpty {
                 Text(fileContent.caption)
-                    .font(CTFont.ui(ChatUIConstants.Typography.captionSize))
+                    .font(CTFont.message(ChatUIConstants.Typography.messageTextSize))
                     .foregroundColor(isSentByMe ? Color.CT.outMsgText : Color.CT.text)
                     .padding(.top, 2)
             }
