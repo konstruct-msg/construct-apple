@@ -442,7 +442,7 @@ struct MessageBubbleRegularView: View {
         case .delivered:
             Image(systemName: "checkmark.circle")
                 .font(CTFont.micro)
-                .foregroundColor(.green)
+                .foregroundColor(Color.CT.delivered)
 
         case .queued:
             Button { onRetry?(message) } label: {

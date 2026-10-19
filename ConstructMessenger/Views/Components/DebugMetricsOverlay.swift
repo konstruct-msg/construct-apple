@@ -105,13 +105,13 @@ struct DebugMetricsOverlay: View {
                     .foregroundColor(avg < 100 ? .orange : avg < 500 ? .yellow : .red)
                     .frame(width: 80)
             } else {
-                Text("avg: —").foregroundColor(.gray).frame(width: 80)
+                Text("avg: —").foregroundColor(Color.CT.textDim).frame(width: 80)
             }
             if let p95 {
                 Text(String(format: "p95: %.0f%@", p95, unit))
                     .foregroundColor(p95 < 200 ? .orange : p95 < 800 ? .yellow : .red)
             } else {
-                Text("p95: —").foregroundColor(.gray)
+                Text("p95: —").foregroundColor(Color.CT.textDim)
             }
         }
     }

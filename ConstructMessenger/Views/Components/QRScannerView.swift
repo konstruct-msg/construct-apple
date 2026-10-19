@@ -126,7 +126,7 @@ struct QRScannerView: View {
                 Button { simulateQRCodeScan() } label: {
                     Label("Simulate QR Scan", systemImage: "camera.viewfinder")
                         .padding()
-                        .background(Color.blue)
+                        .background(Color.CT.accent)
                         .foregroundColor(Color.CT.onFill)
                         .cornerRadius(8)
                 }
@@ -166,7 +166,7 @@ struct QRScannerView: View {
                 .font(.caption)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 6)
-                .background(Color.blue)
+                .background(Color.CT.accent)
                 .foregroundColor(Color.CT.onFill)
                 .cornerRadius(6)
             }
@@ -180,7 +180,7 @@ struct QRScannerView: View {
 
     private func debugInfoRow(_ label: String, value: String, color: Color) -> some View {
         HStack {
-            Text(label + ":").font(.caption).foregroundColor(.gray)
+            Text(label + ":").font(.caption).foregroundColor(Color.CT.textDim)
             Text(value).font(.caption).foregroundColor(color)
         }
     }

@@ -96,7 +96,7 @@ struct RecoveryEntryView: View {
                 if !vm.enteredMnemonic.isEmpty && !vm.enteredMnemonicValid {
                     Text(NSLocalizedString("recovery_invalid_phrase", comment: ""))
                         .font(CTFont.secondary)
-                        .foregroundColor(.red)
+                        .foregroundColor(Color.CT.danger)
                         .padding(.horizontal)
                 }
 
