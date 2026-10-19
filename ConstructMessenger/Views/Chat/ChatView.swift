@@ -480,7 +480,13 @@ struct ChatView: View {
                 }
             },
             onSendVoice: { url, duration, waveform in
-                viewModel.sendVoiceMessage(url: url, duration: duration, waveform: waveform)
+                viewModel.sendVoiceMessage(
+                    url: url, duration: duration, waveform: waveform,
+                    replyTo: replyingTo, replyToContentOverride: replyQuoteText
+                )
+                replyingTo = nil
+                replyQuoteText = nil
+                clearReplyFocus(animated: true)
                 // Same single path as a text send.
                 viewport.followExplicitly()
             },
