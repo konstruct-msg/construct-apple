@@ -471,10 +471,10 @@ private struct MediaPickerCell: View {
                     HStack {
                         Text(formatDuration(asset.duration))
                             .font(CTFont.micro)
-                            .foregroundStyle(.white)
+                            .foregroundStyle(Color.CT.onMedia)
                             .padding(.horizontal, 5)
                             .padding(.vertical, 2)
-                            .background(Color.black.opacity(0.55))
+                            .background(Color.CT.mediaBadge)
                             .clipShape(CTShape.badge())
                         Spacer()
                     }

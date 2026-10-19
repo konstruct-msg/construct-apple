@@ -145,7 +145,7 @@ struct StickerPickerView: View {
             } label: {
                 Text(LocalizedStringKey("sticker_install_fixture"))
                     .font(CTFont.bodyEmphasis)
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(Color.CT.debug)
             }
             .buttonStyle(.plain)
             .accessibilityIdentifier(A11y.MediaPicker.installFixture)

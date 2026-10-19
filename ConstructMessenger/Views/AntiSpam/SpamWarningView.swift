@@ -61,7 +61,7 @@ struct SpamWarningBanner: View {
             HStack(spacing: 10) {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .font(CTFont.ui(14))
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(Color.CT.warning)
                     .lineLimit(1).fixedSize()
 
                 VStack(alignment: .leading, spacing: 2) {
@@ -77,7 +77,7 @@ struct SpamWarningBanner: View {
 
                 Text("\(Int(state.progress * 100))%")
                     .font(CTFont.ui(12, weight: .medium))
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(Color.CT.warning)
                     .monospacedDigit()
             }
             .padding(.horizontal, 14)
@@ -103,7 +103,7 @@ struct SpamStrongWarningSheet: View {
 
             Image(systemName: "exclamationmark.triangle.fill")
                 .font(CTFont.ui(48))
-                .foregroundStyle(.orange)
+                .foregroundStyle(Color.CT.warning)
 
             VStack(spacing: 8) {
                 Text(LocalizedStringKey("spam_strong_warning_title"))
@@ -120,7 +120,7 @@ struct SpamStrongWarningSheet: View {
             VStack(spacing: 4) {
                 Text("\(state.remainingSeconds)")
                     .font(CTFont.ui(40, weight: .bold))
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(Color.CT.warning)
                     .monospacedDigit()
                 Text(LocalizedStringKey("spam_seconds"))
                     .font(CTFont.caption)

@@ -230,7 +230,7 @@ private struct MyQRTab: View {
                     .scaledToFit()
                     .frame(width: 220, height: 220)
                     .padding(16)
-                    .background(Color.white)
+                    .background(Color.CT.qrPaper)
                     .clipShape(CTShape.control())
                     .shadow(color: .black.opacity(0.3), radius: 12)
             } else if let err = errorMessage {
@@ -887,5 +887,5 @@ private struct ScannerBrackets: Shape {
             .stroke(Color.CT.accent, lineWidth: 2.5)
     }
     .frame(width: 300, height: 300)
-    .background(Color.black)
+    .background(Color.CT.mediaGround)
 }

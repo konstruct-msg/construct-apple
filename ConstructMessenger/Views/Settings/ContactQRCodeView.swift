@@ -135,7 +135,7 @@ struct ContactQRCodeView: View {
                 .scaledToFit()
                 .frame(width: size, height: size)
                 .padding(QRCodeSize.padding)
-                .background(Color.white)
+                .background(Color.CT.qrPaper)
                 .clipShape(CTShape.card())
                 .overlay(CTShape.card().strokeBorder(Color.CT.noise, lineWidth: ContactQRCodeLayout.qrCodeBorderWidth))
         } else if let error = generationError {

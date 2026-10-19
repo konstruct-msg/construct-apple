@@ -348,7 +348,7 @@ struct SocialRecoverySetupView: View {
             Spacer()
             Image(systemName: "exclamationmark.triangle.fill")
                 .font(CTFont.ui(48))
-                .foregroundColor(.orange)
+                .foregroundColor(Color.CT.warning)
                 .lineLimit(1).fixedSize()
             Text(NSLocalizedString("recovery_error_title", comment: ""))
                 .font(CTFont.ui(16, weight: .bold))

@@ -262,7 +262,7 @@ struct DesktopChatView: View {
             HStack(spacing: 10) {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .font(CTFont.ui(16))
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(Color.CT.warning)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(LocalizedStringKey("flood_banner_title"))
@@ -279,7 +279,7 @@ struct DesktopChatView: View {
                 } label: {
                     Label(NSLocalizedString("allow", comment: ""), systemImage: "checkmark.circle")
                         .font(CTFont.secondary)
-                        .foregroundStyle(.orange)
+                        .foregroundStyle(Color.CT.warning)
                 }
                 .buttonStyle(.plain)
 
@@ -296,8 +296,8 @@ struct DesktopChatView: View {
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
-            .background(Color.orange.opacity(0.08))
-            .overlay(Rectangle().frame(height: 1).foregroundStyle(.orange.opacity(0.3)), alignment: .bottom)
+            .background(Color.CT.warning.opacity(0.08))
+            .overlay(Rectangle().frame(height: 1).foregroundStyle(Color.CT.warning.opacity(0.3)), alignment: .bottom)
             .transition(.move(edge: .top).combined(with: .opacity))
         }
     }
