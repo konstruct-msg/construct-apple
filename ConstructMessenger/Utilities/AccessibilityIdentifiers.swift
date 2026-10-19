@@ -54,6 +54,7 @@ enum A11y {
         static let list           = "chats.list"
         static let search         = "chats.search"
         static let scanQR         = "chats.scanQR"
+        static let connectionDot  = "chats.connectionDot"
         static let empty          = "chats.empty"
         static let emptyScanQR    = "chats.empty.scanQR"
         static let emptyShowQR    = "chats.empty.showQR"
