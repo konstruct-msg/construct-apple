@@ -30,7 +30,7 @@ struct DuressPinSetupView: View {
 
                 if let errorKey {
                     Text(LocalizedStringKey(errorKey))
-                        .foregroundColor(.red)
+                        .foregroundColor(Color.CT.danger)
                         .font(CTFont.ui(15))
                         .multilineTextAlignment(.center)
                         .padding(.top, 12)

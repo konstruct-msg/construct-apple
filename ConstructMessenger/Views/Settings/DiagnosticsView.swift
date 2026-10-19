@@ -338,7 +338,7 @@ struct DiagnosticsView: View {
                         CTSectionGroup {
                             Text(logText)
                                 .font(CTFont.mono(DiagnosticsLayout.recentLogFontSize))
-                                .foregroundStyle(Color.white)
+                                .foregroundStyle(Color.CT.text)
                                 .frame(maxWidth: .infinity, alignment: .leading)
                                 .padding(DiagnosticsLayout.recentLogPadding)
                                 .textSelection(.enabled)
