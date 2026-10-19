@@ -904,6 +904,8 @@
 "logout_no_backup_proceed_action" = "Se déconnecter quand même";
 "searchable_toggle_title" = "Trouvable par nom d’utilisateur";
 "searchable_toggle_footer" = "Une fois activé, toute personne qui connaît votre nom d’utilisateur exact peut vous trouver. Cela ne permet pas de deviner ni d’énumérer les noms — seules les correspondances exactes fonctionnent. Désactivé par défaut.";
+"delivery_receipts_toggle_title" = "Accusés de réception";
+"delivery_receipts_toggle_footer" = "Indique à l’expéditeur que son message est arrivé sur cet appareil. Désactivé, il ne le verra pas comme distribué et son téléphone ne sera pas réveillé pour cela. Vos messages restent marqués comme distribués par les personnes qui l’ont activé.";
 "searchable_confirm_title" = "activer la recherche ?";
 "searchable_confirm_message" = "Votre nom d’utilisateur sera trouvable par quiconque le tape exactement. Désactivable à tout moment dans les réglages de Sécurité.";
 "searchable_confirm_action" = "activer";
