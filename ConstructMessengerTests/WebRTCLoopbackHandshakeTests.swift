@@ -19,8 +19,8 @@ import XCTest
 final class WebRTCLoopbackHandshakeTests: XCTestCase {
 
     func testTwoSessionsConnectWithThePostQuantumTrialOn() async throws {
-        let caller = try WebRTCSession(role: .caller, turn: nil, video: true, veilOn: false)
-        let callee = try WebRTCSession(role: .callee, turn: nil, video: true, veilOn: false)
+        let caller = try WebRTCSession(loopbackRole: .caller, video: true)
+        let callee = try WebRTCSession(loopbackRole: .callee, video: true)
         defer {
             caller.close()
             callee.close()
@@ -44,5 +44,18 @@ final class WebRTCLoopbackHandshakeTests: XCTestCase {
         try await caller.setRemoteAnswer(sdp: answer)
 
         await fulfillment(of: [callerConnected, calleeConnected], timeout: 30)
+    }
+
+    /// The tests above connect without a relay through `init(loopbackRole:)`, a Debug-only door.
+    /// The door a call uses has none: no TURN, no session.
+    ///
+    /// Mutation: fall back to an empty configuration when `CallIcePlan.make` returns nil — this
+    /// reddens.
+    func testACallWithoutARelayIsNotPlaced() {
+        XCTAssertThrowsError(try WebRTCSession(role: .caller, turn: nil, video: false, veilOn: false)) { error in
+            guard case WebRTCSessionError.noRelay = error else {
+                return XCTFail("expected noRelay, got \(error)")
+            }
+        }
     }
 }
