@@ -456,11 +456,16 @@ domain folder rather than trusting an old link.
 Repo-local `docs/` holds only what documents a file in *this* repo and must change in the same
 commit as it — currently the two-simulator stand and the test tooling.
 
-After any session with architectural changes, design decisions, root-cause analysis or non-obvious
-choices:
+After work on a task, its progress goes into the task's note, `todo/NNN-*.md` ("Ход"), not into a
+session log. Then:
 
-1. Write `sessions/YYYY-MM-DD-<topic>.md` (Context / What Changed / **Why** / Decisions / Open
-   Questions) — `## Why` with rejected alternatives is mandatory.
-2. If it constrains future work, add or update `decisions/<slug>.md`.
+1. A session log, `sessions/YYYY-MM-DD-<topic>.md` (Context / What Changed / **Why** / Decisions /
+   Open Questions), only for what a task note cannot carry: a root cause found the hard way, or a
+   design choice with the alternatives it rejected — `## Why` is mandatory there.
+2. If it constrains future work, add or update `decisions/<slug>.md` — the rule as it stands, why,
+   what was rejected; history goes to `~/Code/construct-docs/_archive/decisions/`.
 3. Patch the affected spec in its domain folder in the **same** session.
 4. Append one line to `~/Code/construct-docs/log.md`: `[YYYY-MM-DD HH:MM] note | <topic>`.
+
+Until 2026-10-19 step 1 was every significant session; 560 session files later the task notes had
+taken over the job, and the vault folds sessions older than a month into monthly digests.
