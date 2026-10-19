@@ -187,7 +187,7 @@ final class CallVideoNegotiationTests: XCTestCase {
     /// mid-call would need an offer.
     /// Mutation: put `"OfferToReceiveVideo": "false"` back — the section goes out `sendonly`.
     func testEveryCallOffersVideoBothWays() async throws {
-        let caller = try WebRTCSession(role: .caller, turn: nil, video: true, veilOn: false)
+        let caller = try WebRTCSession(loopbackRole: .caller, video: true)
         defer { caller.close() }
         XCTAssertTrue(caller.canSendVideo)
         let offer = try await caller.createOffer()
@@ -197,8 +197,8 @@ final class CallVideoNegotiationTests: XCTestCase {
 
     /// Mutation: drop `adoptOfferedVideo()` — the callee answers `recvonly` and can never send.
     func testTheCalleeTakesUpTheOfferedVideo() async throws {
-        let caller = try WebRTCSession(role: .caller, turn: nil, video: true, veilOn: false)
-        let callee = try WebRTCSession(role: .callee, turn: nil, video: true, veilOn: false)
+        let caller = try WebRTCSession(loopbackRole: .caller, video: true)
+        let callee = try WebRTCSession(loopbackRole: .callee, video: true)
         defer { caller.close(); callee.close() }
         XCTAssertFalse(callee.canSendVideo, "nothing to take up before the offer")
 
@@ -213,8 +213,8 @@ final class CallVideoNegotiationTests: XCTestCase {
     /// An audio-only caller — Android today, or this app with video off — gets an audio-only
     /// answer, and the callee has no camera to offer.
     func testAnAudioOnlyOfferStaysAudioOnly() async throws {
-        let caller = try WebRTCSession(role: .caller, turn: nil, video: false, veilOn: false)
-        let callee = try WebRTCSession(role: .callee, turn: nil, video: true, veilOn: false)
+        let caller = try WebRTCSession(loopbackRole: .caller, video: false)
+        let callee = try WebRTCSession(loopbackRole: .callee, video: true)
         defer { caller.close(); callee.close() }
 
         let offer = try await caller.createOffer()
@@ -228,8 +228,8 @@ final class CallVideoNegotiationTests: XCTestCase {
     /// A callee with video off still answers a video offer — receiving only, as every build
     /// before this one did — so a call from a video-capable build connects.
     func testAVideoOfferToAnAudioOnlyCalleeIsAnsweredWithoutSending() async throws {
-        let caller = try WebRTCSession(role: .caller, turn: nil, video: true, veilOn: false)
-        let callee = try WebRTCSession(role: .callee, turn: nil, video: false, veilOn: false)
+        let caller = try WebRTCSession(loopbackRole: .caller, video: true)
+        let callee = try WebRTCSession(loopbackRole: .callee, video: false)
         defer { caller.close(); callee.close() }
 
         try await callee.setRemoteOffer(sdp: caller.createOffer())
