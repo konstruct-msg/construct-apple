@@ -88,6 +88,16 @@ struct ChatsListView: View {
             .connectionSubtitle()
             .searchable(text: $searchQuery, prompt: Text(LocalizedStringKey("search_prompt")))
             .toolbar {
+                #if os(iOS)
+                // The dot is how the person sees, at a glance, that everything works: green while
+                // connected, where the subtitle says nothing. It went with the floating header on
+                // 2026-10-08 (6ceec9cb) and was missed (owner, 2026-10-19).
+                ToolbarItem(placement: .topBarLeading) {
+                    ConnectionStatusIndicator()
+                        .frame(minWidth: CTLayout.hitTarget, minHeight: CTLayout.hitTarget)
+                        .accessibilityIdentifier(A11y.Chats.connectionDot)
+                }
+                #endif
                 ToolbarItem(placement: .primaryAction) {
                     Button { showingQRScanner = true } label: {
                         Label(NSLocalizedString("scan_qr_code", comment: ""), systemImage: "qrcode.viewfinder")
