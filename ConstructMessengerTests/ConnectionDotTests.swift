@@ -20,4 +20,14 @@ final class ConnectionDotTests: XCTestCase {
         )
         XCTAssertTrue(source.contains("ConnectionStatusIndicator()"), "the chats list bar carries the connection dot")
     }
+
+    /// Mutation: put `.connectionSubtitle()` back on the chats list — this reddens.
+    func testTheChatsTitleHasNoConnectionSubtitle() throws {
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        let source = try String(
+            contentsOf: root.appendingPathComponent("ConstructMessenger/Views/Chats/ChatsListView.swift"),
+            encoding: .utf8
+        )
+        XCTAssertFalse(source.contains(".connectionSubtitle()"), "a subtitle that comes and goes moves the title")
+    }
 }
