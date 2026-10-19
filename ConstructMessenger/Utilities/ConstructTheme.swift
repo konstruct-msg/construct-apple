@@ -77,6 +77,9 @@ extension Color {
         /// the platform's to colour. The light value is the accessible one because a dot on #F2F2F2
         /// needs 3:1 and #34C759 gives about 2.0 (#248A3D: 3.9). **Status only — never a control or text.**
         static let online     = Color(dark: 0x30D158, light: 0x248A3D)
+        /// The delivered tick on an outgoing message: a status, so the same green as `online`.
+        /// Named apart as on Android (`delivered`), where the two already differ in use.
+        static let delivered  = online
 
         // MARK: Over media
         /// On a camera picture or a photo the theme's ground is not underneath, so these do not
