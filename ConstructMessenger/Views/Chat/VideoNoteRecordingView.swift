@@ -44,6 +44,10 @@ struct VideoNoteRecordingView: View {
         .padding(.bottom, CTLayout.inlinePad)
         .background(Color.CT.mediaGround.opacity(ChatUIConstants.VideoNote.recordingDim).ignoresSafeArea())
         .task { await begin() }
+        // Recording is hands-off — nothing touches the screen for up to a minute, which is longer
+        // than the shortest Auto-Lock. Kept for the whole recorder, the paused review included.
+        .onAppear { UIApplication.shared.isIdleTimerDisabled = true }
+        .onDisappear { UIApplication.shared.isIdleTimerDisabled = false }
         .alert(
             NSLocalizedString("video_note_camera_unavailable", comment: ""),
             isPresented: Binding(get: { failure != nil }, set: { if !$0 { onClose() } })

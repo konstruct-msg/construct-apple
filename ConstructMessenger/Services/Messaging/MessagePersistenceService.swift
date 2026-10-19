@@ -262,6 +262,8 @@ class MessagePersistenceService {
         toUserId: String,
         duration: TimeInterval,
         waveform: [Float],
+        replyTo: TranscriptRow? = nil,
+        replyToContentOverride: String? = nil,
         chatId: String,
         in context: NSManagedObjectContext
     ) {
@@ -279,8 +281,12 @@ class MessagePersistenceService {
             id: id, chatId: chatId, fromUserId: fromUserId, toUserId: toUserId, isSentByMe: true,
             timestamp: now, orderKey: ServerMessageOrder.pending(localMessageId: id),
             body: Data(placeholderJson.utf8), contentType: .regular, deliveryStatus: .sending,
-            retryCount: 0, suiteId: 0, isEdited: false, editedAt: nil, replyToMessageId: nil,
-            replyQuote: nil, transcript: nil, transcriptLanguage: nil, transcriptGeneratedAt: nil
+            retryCount: 0, suiteId: 0, isEdited: false, editedAt: nil,
+            replyToMessageId: replyTo?.id.lowercased(),
+            replyQuote: replyTo.flatMap {
+                ReplyPreviewPayload.projecting(originalContent: $0.legacyBody, textOverride: replyToContentOverride)?.storedContent
+            },
+            transcript: nil, transcriptLanguage: nil, transcriptGeneratedAt: nil
         ))
 
         Self.advancePreview(ofChat: chatId, text: NSLocalizedString("voice_message", comment: ""), at: now)
