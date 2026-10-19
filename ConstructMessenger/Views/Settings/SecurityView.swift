@@ -22,6 +22,7 @@ struct SecurityView: View {
     @State private var showingDiscoverableConfirm = false
     @State private var showingLockDelayPicker = false
     @State private var lockdown = LockdownManager.shared
+    @AppStorage(DeliveryReceiptPreference.key) private var sendsDeliveryReceipts = true
 
     var body: some View {
         @Bindable var securityViewModel = securityViewModel
@@ -324,6 +325,25 @@ struct SecurityView: View {
                         CTSectionFooter("searchable_no_username_hint",
                                         color: Color.CT.textDim.opacity(SecuritySettingsLayout.hintDisabledOpacity))
                     }
+                }
+
+                // MARK: - Delivery receipts
+                VStack(spacing: .zero) {
+                    CTSectionGroup {
+                        HStack(spacing: SecuritySettingsLayout.rowContentSpacing) {
+                            CTRowIcon(sf: "checkmark.message", color: sendsDeliveryReceipts ? Color.CT.accent : Color.CT.textDim)
+                            Text(LocalizedStringKey("delivery_receipts_toggle_title"))
+                                .font(CTFont.body)
+                                .foregroundStyle(Color.CT.text)
+                            Spacer()
+                            Toggle("", isOn: $sendsDeliveryReceipts)
+                                .labelsHidden()
+                                .tint(Color.CT.accent)
+                                .accessibilityIdentifier(A11y.Settings.deliveryReceiptsToggle)
+                        }
+                        .securityRowInsets(vertical: SecuritySettingsLayout.compactRowVerticalPadding)
+                    }
+                    CTSectionFooter("delivery_receipts_toggle_footer")
                 }
             }
             .padding(.vertical, SecuritySettingsLayout.sectionVerticalPadding)

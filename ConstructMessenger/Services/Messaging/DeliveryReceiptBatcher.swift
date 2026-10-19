@@ -223,3 +223,19 @@ final class DeliveryReceiptBatcher {
     }
     #endif
 }
+
+// MARK: - The preference
+
+/// Whether this device tells a sender their message arrived. On by default.
+///
+/// A receipt says when this phone was online, and every one wakes the sender's phone with a push
+/// the server cannot tell from a message (2026-10-19). Turning it off stops only what we send:
+/// receipts from others still mark our messages delivered, so nobody loses a checkmark over
+/// someone else's choice. Per device, like the rest of `UserDefaults`.
+enum DeliveryReceiptPreference {
+    static let key = "sendDeliveryReceipts"
+
+    static var sends: Bool {
+        UserDefaults.standard.object(forKey: key) as? Bool ?? true
+    }
+}

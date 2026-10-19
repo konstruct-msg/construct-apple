@@ -127,6 +127,8 @@ enum A11y {
         /// exercise SENDER_SYNC: two sims are two accounts by default, which is the pairing
         /// scenario and a different thing entirely.
         static let devices = "settings.devices"
+        /// Security → whether this device sends delivery receipts.
+        static let deliveryReceiptsToggle = "settings.deliveryReceipts"
     }
 
     /// Linking a second device to this account.
