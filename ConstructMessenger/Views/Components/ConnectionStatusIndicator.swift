@@ -7,7 +7,7 @@ import SwiftUI
 
 /// Compact connection indicator for the chat-list header — a single dot, no text.
 ///
-/// - **Connecting** (incl. cold start / unknown): a soft pulsing dot.
+/// - **Connecting** (incl. cold start / unknown): a steady dim dot — no pulse since 2026-10-19.
 /// - **Connected**: a steady green dot (`Color.CT.online`) with a soft glow. It stays — the dot is how the person
 ///   sees they are online and everything works; a dot that faded out read as "something went".
 /// - **Disconnected**: a steady danger dot — but only *after* a first successful connect, so a
@@ -73,11 +73,11 @@ struct ConnectionStatusIndicator: View {
     private func apply(_ state: DisplayState) {
         switch state {
         case .connecting:
-            dotOpacity = 1
-            dotScale = 1
-            withAnimation(.easeInOut(duration: 1.0).repeatForever(autoreverses: true)) {
-                dotScale = 0.6
-                dotOpacity = 0.5
+            // Steady, not a pulse: beside the title a dot that grew and shrank read as the
+            // title rocking (owner, 2026-10-19). The colour alone says "connecting".
+            withAnimation(.easeOut(duration: 0.3)) {
+                dotScale = 1
+                dotOpacity = 1
             }
 
         case .connected:
