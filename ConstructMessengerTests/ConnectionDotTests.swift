@@ -30,4 +30,22 @@ final class ConnectionDotTests: XCTestCase {
         )
         XCTAssertFalse(source.contains(".connectionSubtitle()"), "a subtitle that comes and goes moves the title")
     }
+
+    /// Mutation: give the dot its own leading bar item again (a glass capsule) — this reddens.
+    func testTheDotSitsBesideTheTitle() throws {
+        let source = try Self.source("ConstructMessenger/Views/Chats/ChatsListView.swift")
+        XCTAssertFalse(source.contains("placement: .topBarLeading"), "the dot is the title's neighbour, not a bar item")
+        XCTAssertTrue(source.contains("placement: .principal"), "the title is a view carrying the dot")
+    }
+
+    /// Mutation: bring back the `repeatForever` pulse while connecting — this reddens.
+    func testTheDotDoesNotPulse() throws {
+        let source = try Self.source("ConstructMessenger/Views/Components/ConnectionStatusIndicator.swift")
+        XCTAssertFalse(source.contains("repeatForever"), "beside the title a pulsing dot rocks the title")
+    }
+
+    private static func source(_ path: String) throws -> String {
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        return try String(contentsOf: root.appendingPathComponent(path), encoding: .utf8)
+    }
 }
