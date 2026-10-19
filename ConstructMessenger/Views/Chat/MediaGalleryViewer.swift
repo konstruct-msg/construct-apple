@@ -314,7 +314,7 @@ struct MediaGalleryViewer: View {
                 Button { isPresented = false } label: {
                     Image(systemName: "xmark.circle.fill")
                         .font(CTFont.ui(20))
-                        .foregroundColor(.white.opacity(0.9))
+                        .foregroundColor(Color.CT.onMedia.opacity(0.9))
                         .frame(width: CTLayout.hitTarget, height: CTLayout.hitTarget)
                         .contentShape(Rectangle())
                         .lineLimit(1).fixedSize()
@@ -325,7 +325,7 @@ struct MediaGalleryViewer: View {
                 if entries.count > 1 {
                     Text("\(currentPosition) / \(entries.count)")
                         .font(CTFont.mono(13, weight: .medium))
-                        .foregroundColor(.white.opacity(0.8))
+                        .foregroundColor(Color.CT.onMediaDim)
                 }
 
                 Spacer()
@@ -335,7 +335,7 @@ struct MediaGalleryViewer: View {
                 Button { shareCurrentImage() } label: {
                     Image(systemName: "ellipsis.circle.fill")
                         .font(CTFont.ui(20))
-                        .foregroundColor(.white.opacity(0.9))
+                        .foregroundColor(Color.CT.onMedia.opacity(0.9))
                         .frame(width: CTLayout.hitTarget, height: CTLayout.hitTarget)
                         .contentShape(Rectangle())
                         .lineLimit(1).fixedSize()
@@ -377,7 +377,7 @@ struct MediaGalleryViewer: View {
             Text(GalleryVideoPage.label(for: videoRate))
                 .font(CTFont.ui(14, weight: .semibold))
                 .monospacedDigit()
-                .foregroundColor(.white.opacity(0.9))
+                .foregroundColor(Color.CT.onMedia.opacity(0.9))
                 .frame(minWidth: CTLayout.hitTarget, minHeight: CTLayout.hitTarget)
                 .contentShape(Rectangle())
         }
@@ -492,12 +492,12 @@ struct MediaGalleryPage: View {
                         .onTapGesture(count: 2) { toggleZoom() }
                 } else if isLoading {
                     ProgressView()
-                        .tint(.white)
+                        .tint(Color.CT.onMedia)
                         .scaleEffect(1.5)
                 } else {
                     Image(systemName: "photo")
                         .font(CTIcon.font(CTIcon.overlay, weight: .light))
-                        .foregroundStyle(.white.opacity(0.3))
+                        .foregroundStyle(Color.CT.onMedia.opacity(0.3))
                         .accessibilityHidden(true)
                 }
             }
@@ -691,15 +691,15 @@ struct GalleryVideoPage: View {
                             Image(systemName: "arrow.clockwise").font(CTIcon.font(CTIcon.overlay, weight: .regular))
                             Text(LocalizedStringKey("retry")).font(CTFont.body)
                         }
-                        .foregroundColor(.white.opacity(0.85))
+                        .foregroundColor(Color.CT.onMedia.opacity(0.85))
                     }
                     .buttonStyle(.plain)
                 } else {
                     VStack(spacing: 12) {
-                        ProgressView().tint(.white).scaleEffect(1.3)
+                        ProgressView().tint(Color.CT.onMedia).scaleEffect(1.3)
                         if progress > 0 {
                             Text("\(Int(progress * 100))%")
-                                .font(CTFont.mono(13)).foregroundColor(.white.opacity(0.8)).monospacedDigit()
+                                .font(CTFont.mono(13)).foregroundColor(Color.CT.onMediaDim).monospacedDigit()
                         }
                     }
                 }

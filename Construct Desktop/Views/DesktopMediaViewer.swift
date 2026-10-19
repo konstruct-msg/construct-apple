@@ -95,7 +95,7 @@ struct DesktopMediaViewer: View {
                     .disabled(index == 0)
                 Text("\(index + 1) / \(entries.count)")
                     .font(CTFont.mono(13, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.8))
+                    .foregroundStyle(Color.CT.onMediaDim)
                 Button { step(1) } label: { Image(systemName: "chevron.right") }
                     .disabled(index == entries.count - 1)
             }
@@ -115,7 +115,7 @@ struct DesktopMediaViewer: View {
         }
         .buttonStyle(.plain)
         .font(CTFont.ui(16, weight: .medium))
-        .foregroundStyle(.white.opacity(0.9))
+        .foregroundStyle(Color.CT.onMedia.opacity(0.9))
         .padding(.horizontal, CTLayout.edgePad)
         .padding(.vertical, CTLayout.chromeGap)
         .background(LinearGradient(colors: [.black.opacity(0.55), .clear], startPoint: .top, endPoint: .bottom))

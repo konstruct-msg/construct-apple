@@ -129,7 +129,7 @@ struct VeilVoucherQRSheet: View {
             .scaledToFit()
             .frame(width: VeilVoucherLayout.qrSize, height: VeilVoucherLayout.qrSize)
             .padding(VeilVoucherLayout.qrPadding)
-            .background(Color.white)
+            .background(Color.CT.qrPaper)
             .clipShape(CTShape.card())
         #else
         Image(nsImage: image)
@@ -138,7 +138,7 @@ struct VeilVoucherQRSheet: View {
             .scaledToFit()
             .frame(width: VeilVoucherLayout.qrSize, height: VeilVoucherLayout.qrSize)
             .padding(VeilVoucherLayout.qrPadding)
-            .background(Color.white)
+            .background(Color.CT.qrPaper)
             .clipShape(CTShape.card())
         #endif
     }

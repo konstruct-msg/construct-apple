@@ -98,7 +98,7 @@ struct FileAttachmentBubbleView: View {
                             .scaledToFill()
                     } else {
                         Rectangle()
-                            .fill(Color.black.opacity(0.6))
+                            .fill(Color.CT.mediaGround.opacity(0.6))
                     }
                 }
                 .frame(maxWidth: .infinity)
@@ -115,7 +115,7 @@ struct FileAttachmentBubbleView: View {
                 // Play / Download overlay
                 ZStack {
                     Rectangle()
-                        .fill(Color.black.opacity(0.55))
+                        .fill(Color.CT.mediaBadge)
                         .frame(
                             width: ChatUIConstants.Media.playButtonSize,
                             height: ChatUIConstants.Media.playButtonSize
@@ -127,7 +127,7 @@ struct FileAttachmentBubbleView: View {
                               ? "play.circle.fill"
                               : "arrow.down.circle.fill")
                             .font(CTIcon.font(CTIcon.overlay, weight: .semibold))
-                            .foregroundStyle(.white)
+                            .foregroundStyle(Color.CT.onMedia)
                             .accessibilityHidden(true)
                     }
                 }
@@ -139,9 +139,9 @@ struct FileAttachmentBubbleView: View {
                         Spacer()
                         Text(ByteCountFormatter.string(fromByteCount: Int64(file.size), countStyle: .file))
                             .font(CTFont.mono(10))
-                            .foregroundColor(.white)
+                            .foregroundColor(Color.CT.onMedia)
                             .padding(.horizontal, 6).padding(.vertical, 3)
-                            .background(Color.black.opacity(0.5))
+                            .background(Color.CT.mediaGround.opacity(0.5))
                             .padding(6)
                     }
                 }
@@ -502,7 +502,7 @@ private struct MacVideoPlayerSheet: View {
     var body: some View {
         PlayerSurface(player: player)
             .frame(minWidth: 640, idealWidth: 960, minHeight: 400, idealHeight: 600)
-            .background(Color.black)
+            .background(Color.CT.mediaGround)
             .onAppear {
                 let p = AVPlayer(url: url)
                 player = p

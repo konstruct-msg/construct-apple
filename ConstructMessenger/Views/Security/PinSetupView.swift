@@ -59,7 +59,7 @@ struct PinSetupView: View {
                     } label: {
                         Text(primaryActionTitle)
                             .font(CTFont.ui(14))
-                            .foregroundColor(.white)
+                            .foregroundColor(Color.CT.onFill)
                             .frame(maxWidth: .infinity)
                             .padding()
                             .background(canProceed ? Color.CT.accent : Color.CT.noise)
@@ -174,7 +174,7 @@ struct PinSetupView: View {
                     } label: {
                         Text("done")
                             .font(CTFont.ui(14))
-                            .foregroundColor(.white)
+                            .foregroundColor(Color.CT.onFill)
                             .frame(maxWidth: .infinity)
                             .padding()
                             .background(Color.CT.accent)

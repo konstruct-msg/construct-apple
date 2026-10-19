@@ -108,7 +108,7 @@ struct ScrollPositionSpikeView: View {
         HStack {
             Text(label).foregroundStyle(Color.CT.textDim)
             Spacer()
-            Text(value).foregroundStyle(.orange)
+            Text(value).foregroundStyle(Color.CT.debug)
         }
         .font(CTFont.mono(12))
     }
@@ -146,10 +146,10 @@ struct ScrollPositionSpikeView: View {
         Button(action: action) {
             Text(title)
                 .font(CTFont.mono(12, weight: .medium))
-                .foregroundStyle(.orange)
+                .foregroundStyle(Color.CT.debug)
                 .frame(maxWidth: .infinity)
                 .frame(height: CTLayout.controlHeight)
-                .background(CTShape.control().stroke(.orange.opacity(0.5)))
+                .background(CTShape.control().stroke(Color.CT.debug.opacity(0.5)))
         }
     }
 

@@ -42,7 +42,7 @@ struct VideoNoteRecordingView: View {
         }
         .padding(.horizontal, ChatUIConstants.InputBar.rowOuterPad)
         .padding(.bottom, CTLayout.inlinePad)
-        .background(Color.black.opacity(ChatUIConstants.VideoNote.recordingDim).ignoresSafeArea())
+        .background(Color.CT.mediaGround.opacity(ChatUIConstants.VideoNote.recordingDim).ignoresSafeArea())
         .task { await begin() }
         .alert(
             NSLocalizedString("video_note_camera_unavailable", comment: ""),
@@ -67,10 +67,10 @@ struct VideoNoteRecordingView: View {
                 if recorder.phase == .paused {
                     Text(LocalizedStringKey("video_note_paused"))
                         .font(CTFont.badge)
-                        .foregroundColor(.white)
+                        .foregroundColor(Color.CT.onMedia)
                         .padding(.horizontal, ChatUIConstants.VideoNote.chipHorizontalPadding)
                         .padding(.vertical, ChatUIConstants.VideoNote.chipVerticalPadding)
-                        .background(.black.opacity(0.55), in: Capsule())
+                        .background(Color.CT.mediaBadge, in: Capsule())
                         .padding(CTLayout.edgePad)
                 }
             }
