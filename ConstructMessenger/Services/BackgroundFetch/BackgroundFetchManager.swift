@@ -80,6 +80,7 @@ class BackgroundFetchManager: NSObject {
         Task { @MainActor in
             guard let chats = try? LocalRepositories.chats.chats() else { return }
             UnreadSeen.record(Self.unreadByChat(chats))
+            LocalNotificationManager.shared.syncBadge()
         }
     }
 
@@ -452,11 +453,15 @@ class BackgroundFetchManager: NSObject {
     /// True when the server was reached and the backlog processed — a skip or an error is false.
     @discardableResult
     func fetchPendingMessages() async -> Bool {
-        await withCheckedContinuation { continuation in
+        let fetched = await withCheckedContinuation { continuation in
             performQuickMessageFetch { result in
                 if case .success = result { continuation.resume(returning: true) } else { continuation.resume(returning: false) }
             }
         }
+        // A push-woken fetch is the one moment the app runs while the person is away: the icon
+        // is how they learn that something came.
+        await LocalNotificationManager.shared.syncBadgeNow()
+        return fetched
     }
 
     // MARK: - Silent-push fetch (coalesced)
