@@ -21,14 +21,24 @@ final class ConnectionDotTests: XCTestCase {
         XCTAssertTrue(source.contains("ConnectionStatusIndicator()"), "the chats list bar carries the connection dot")
     }
 
-    /// Mutation: put `.connectionSubtitle()` back on the chats list — this reddens.
-    func testTheChatsTitleHasNoConnectionSubtitle() throws {
+    /// The tab roots' titles have no connection subtitle: it came and went with the connection and
+    /// moved the title each time (owner, 2026-10-19).
+    /// Mutation: a `.navigationSubtitle(` on any screen — this reddens.
+    func testNoTitleHasASubtitleThatComesAndGoes() throws {
         let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
-        let source = try String(
-            contentsOf: root.appendingPathComponent("ConstructMessenger/Views/Chats/ChatsListView.swift"),
-            encoding: .utf8
-        )
-        XCTAssertFalse(source.contains(".connectionSubtitle()"), "a subtitle that comes and goes moves the title")
+        var offenders: [String] = []
+        var scanned = 0
+        for dir in ["ConstructMessenger", "Construct Desktop"] {
+            guard let walker = FileManager.default.enumerator(at: root.appendingPathComponent(dir), includingPropertiesForKeys: nil) else { continue }
+            for case let url as URL in walker where url.pathExtension == "swift" {
+                scanned += 1
+                if try String(contentsOf: url, encoding: .utf8).contains(".navigationSubtitle(") {
+                    offenders.append(url.lastPathComponent)
+                }
+            }
+        }
+        XCTAssertGreaterThan(scanned, 100, "the scan found the sources")
+        XCTAssertEqual(offenders, [])
     }
 
     /// Mutation: give the dot its own leading bar item again (a glass capsule) — this reddens.
