@@ -96,6 +96,8 @@ struct MessageBubbleRegularView: View {
             isVoice: voiceContent != nil,
             text: message.legacyBody  // parser input: decides, never shown
         )
+        // A caption is text with no bubble pad under it; the reaction chip must clear it.
+        let endsInBareText = mediaContent.map { !$0.caption.isEmpty } ?? false
 
         HStack(spacing: ChatUIConstants.Bubble.rowSpacing) {
             // Selection checkbox in edit mode - positioned based on message direction
@@ -241,11 +243,11 @@ struct MessageBubbleRegularView: View {
                 }
                 }
                 .overlay(alignment: ChatUIConstants.Reaction.badgeAlignment(isSentByMe: message.isSentByMe)) {
-                    reactionBadgeRow
+                    reactionBadgeRow(endsInBareText: endsInBareText)
                 }
                 .padding(
                     .bottom,
-                    ReactionBadgeLayout.reservedOverflow(hasBadges: !reactionBadges.isEmpty)
+                    ReactionBadgeLayout.reservedOverflow(hasBadges: !reactionBadges.isEmpty, endsInBareText: endsInBareText)
                 )
 
                 if isLastInGroup && shouldShowMetaRow {
@@ -494,7 +496,7 @@ struct MessageBubbleRegularView: View {
     }
 
     @ViewBuilder
-    private var reactionBadgeRow: some View {
+    private func reactionBadgeRow(endsInBareText: Bool) -> some View {
         if !reactionBadges.isEmpty {
             HStack(spacing: 2) {
                 ForEach(reactionBadges, id: \.reactorUserId) { badge in
@@ -516,7 +518,7 @@ struct MessageBubbleRegularView: View {
             .background(Color.CT.bgMsg)
             .clipShape(Capsule())
             .overlay(Capsule().stroke(Color.CT.noise, lineWidth: ChatUIConstants.Bubble.strokeWidth))
-            .offset(y: ChatUIConstants.Reaction.badgeOverlap)
+            .offset(y: ReactionBadgeLayout.hang(endsInBareText: endsInBareText))
         }
     }
 

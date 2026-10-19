@@ -33,6 +33,22 @@ final class ReactionBadgeLayoutTests: XCTestCase {
         )
     }
 
+    /// A caption under a photo is bare text: no bubble pad below it. The chip hangs entirely
+    /// below it there (owner, 2026-10-19: the emoji sat on "Вылет из Москвы…").
+    /// Mutation: drop the bare-text term from `hang` — this reddens.
+    func testUnderACaptionTheChipClearsTheText() {
+        let chipHeight = ChatUIConstants.Reaction.badgeFontSize * 1.2 + 2 * ChatUIConstants.Reaction.badgePadV
+        XCTAssertGreaterThanOrEqual(
+            ReactionBadgeLayout.hang(endsInBareText: true), chipHeight,
+            "the whole chip below the caption's last line"
+        )
+        XCTAssertEqual(
+            ReactionBadgeLayout.reservedOverflow(hasBadges: true, endsInBareText: true),
+            ReactionBadgeLayout.hang(endsInBareText: true),
+            "the room it hangs into is reserved"
+        )
+    }
+
     func testSentLikeIsNotOnTheTimestampCorner() {
         XCTAssertEqual(
             ChatUIConstants.Reaction.badgeAlignment(isSentByMe: true),
