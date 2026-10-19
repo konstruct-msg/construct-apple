@@ -126,7 +126,7 @@ struct DiagnosticsView: View {
                     if !push.isRegisteredWithServer {
                         Text(LocalizedStringKey("diagnostics_server_token_warning"))
                             .font(CTFont.mono(11))
-                            .foregroundStyle(.orange)
+                            .foregroundStyle(Color.CT.debug)
                             .padding(.horizontal, SettingsLayout.footerHorizontalPadding)
                     }
                 }
@@ -151,7 +151,7 @@ struct DiagnosticsView: View {
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(LocalizedStringKey("diagnostics_skip_backlog_title"))
                                         .font(CTFont.mono(14))
-                                        .foregroundStyle(.orange)
+                                        .foregroundStyle(Color.CT.debug)
                                     Text(heldEntry.map {
                                         String(
                                             format: NSLocalizedString("diagnostics_skip_backlog_held", comment: ""),
@@ -181,13 +181,13 @@ struct DiagnosticsView: View {
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(LocalizedStringKey("diagnostics_owned_inset_title"))
                                         .font(CTFont.mono(14))
-                                        .foregroundStyle(.orange)
+                                        .foregroundStyle(Color.CT.debug)
                                     Text(LocalizedStringKey("diagnostics_owned_inset_hint"))
                                         .font(CTFont.mono(11))
                                         .foregroundStyle(Color.CT.textDim)
                                 }
                             }
-                            .tint(.orange)
+                            .tint(Color.CT.debug)
                             .padding(.horizontal, SettingsLayout.rowHorizontalPadding)
                             .padding(.vertical, SettingsLayout.rowVerticalPadding)
                             .onChange(of: ownedInsetStackEnabled) { _, on in
@@ -197,26 +197,26 @@ struct DiagnosticsView: View {
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(LocalizedStringKey("diagnostics_video_calls_title"))
                                         .font(CTFont.mono(14))
-                                        .foregroundStyle(.orange)
+                                        .foregroundStyle(Color.CT.debug)
                                     Text(LocalizedStringKey("diagnostics_video_calls_hint"))
                                         .font(CTFont.mono(11))
                                         .foregroundStyle(Color.CT.textDim)
                                 }
                             }
-                            .tint(.orange)
+                            .tint(Color.CT.debug)
                             .padding(.horizontal, SettingsLayout.rowHorizontalPadding)
                             .padding(.vertical, SettingsLayout.rowVerticalPadding)
                             Toggle(isOn: $stealthOverrideEnabled) {
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(LocalizedStringKey("diagnostics_stealth_override_title"))
                                         .font(CTFont.mono(14))
-                                        .foregroundStyle(.orange)
+                                        .foregroundStyle(Color.CT.debug)
                                     Text(LocalizedStringKey("diagnostics_stealth_override_hint"))
                                         .font(CTFont.mono(11))
                                         .foregroundStyle(Color.CT.textDim)
                                 }
                             }
-                            .tint(.orange)
+                            .tint(Color.CT.debug)
                             .padding(.horizontal, SettingsLayout.rowHorizontalPadding)
                             .padding(.vertical, SettingsLayout.rowVerticalPadding)
                             ConstructActionRow(systemImage: "arrow.clockwise", title: LocalizedStringKey("diagnostics_force_spk_rotation"), role: .secondary) {

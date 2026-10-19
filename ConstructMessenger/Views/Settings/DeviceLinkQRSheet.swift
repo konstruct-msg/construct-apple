@@ -189,7 +189,7 @@ struct DeviceLinkQRSheet: View {
             .scaledToFit()
             .frame(width: DeviceLinkQRLayout.qrSize, height: DeviceLinkQRLayout.qrSize)
             .padding(DeviceLinkQRLayout.qrPadding)
-            .background(Color.white)
+            .background(Color.CT.qrPaper)
             .clipShape(CTShape.card())
             .overlay(CTShape.card().stroke(Color.CT.noise, lineWidth: DeviceLinkQRLayout.qrBorderWidth))
         #else
@@ -199,7 +199,7 @@ struct DeviceLinkQRSheet: View {
             .scaledToFit()
             .frame(width: DeviceLinkQRLayout.qrSize, height: DeviceLinkQRLayout.qrSize)
             .padding(DeviceLinkQRLayout.qrPadding)
-            .background(Color.white)
+            .background(Color.CT.qrPaper)
             .clipShape(CTShape.card())
             .overlay(CTShape.card().stroke(Color.CT.noise, lineWidth: DeviceLinkQRLayout.qrBorderWidth))
         #endif
@@ -237,7 +237,7 @@ struct DeviceLinkQRSheet: View {
         VStack(spacing: DeviceLinkQRLayout.expiredStateSpacing) {
             Image(systemName: "exclamationmark.triangle.fill")
                 .font(CTFont.ui(DeviceLinkQRLayout.statusIconSize))
-                .foregroundColor(.orange)
+                .foregroundColor(Color.CT.warning)
             Text(message)
                 .font(CTFont.body)
                 .foregroundColor(Color.CT.textDim)

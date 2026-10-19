@@ -56,9 +56,9 @@ struct DeviceLinkScanView: View {
                     VStack(spacing: 16) {
                         ProgressView()
                             .scaleEffect(1.6)
-                            .tint(.white)
+                            .tint(Color.CT.onMedia)
                         Text(LocalizedStringKey("device_link_linking"))
-                            .foregroundStyle(.white)
+                            .foregroundStyle(Color.CT.onMedia)
                             .font(CTFont.ui(17, weight: .semibold))
                     }
                 }
@@ -72,7 +72,7 @@ struct DeviceLinkScanView: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button(LocalizedStringKey("cancel")) { dismiss() }
-                        .foregroundStyle(.white)
+                        .foregroundStyle(Color.CT.onMedia)
                 }
             }
         }

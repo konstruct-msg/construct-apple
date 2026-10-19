@@ -94,6 +94,27 @@ extension Color {
         static let mediaControlOn = Color.white
         /// The answer button of an incoming call: the platform's green, a control by convention.
         static let answer         = Color(hex: 0x30D158)
+        /// What a picture sits on before it loads, and around it in the viewer.
+        static let mediaGround    = Color.black
+        /// A small label or button pinned over a picture (duration, download, close).
+        static let mediaBadge     = Color.black.opacity(0.55)
+
+        /// Text and symbols on a filled control (accent, danger, answer) — white in both themes.
+        static let onFill         = Color.white
+
+        // MARK: Paper
+        /// A QR code is read by a camera, so it is black on white in both themes.
+        static let qrPaper        = Color.white
+        static let qrInk          = Color.black
+
+        // MARK: Caution
+        /// Something the person should weigh before going on — a contact at risk, a flood, a phrase
+        /// shown on screen. Not an error (`danger`) and not a status. The platform's orange, as it
+        /// was at each site before it had a name (2026-10-19).
+        static let warning        = Color.orange
+        /// Debug-only surfaces (`#if DEBUG`, diagnostics). Same orange as `warning` today; named
+        /// apart so the two can part without a search through every site.
+        static let debug          = Color.orange
     }
 }
 

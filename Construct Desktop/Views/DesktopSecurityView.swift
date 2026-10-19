@@ -99,7 +99,7 @@ struct DesktopSecurityView: View {
                         } else if recoveryVM.statusLoaded && !recoveryVM.isSetup {
                             Text(NSLocalizedString("recovery_not_configured", comment: ""))
                                 .font(CTFont.caption)
-                                .foregroundStyle(.orange)
+                                .foregroundStyle(Color.CT.warning)
                         }
                     }
                     Spacer()

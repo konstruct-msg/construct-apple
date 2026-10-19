@@ -25,11 +25,11 @@ struct DebugMetricsOverlay: View {
 
             VStack(alignment: .leading, spacing: 0) {
                 header
-                Divider().background(Color.orange.opacity(0.4))
+                Divider().background(Color.CT.debug.opacity(0.4))
                 ScrollView {
                     VStack(alignment: .leading, spacing: 12) {
                         summarySection
-                        Divider().background(Color.orange.opacity(0.3))
+                        Divider().background(Color.CT.debug.opacity(0.3))
                         recentEventsSection
                     }
                     .padding(12)
@@ -38,7 +38,7 @@ struct DebugMetricsOverlay: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .font(.system(.caption, design: .monospaced))
-        .foregroundColor(.orange)
+        .foregroundColor(Color.CT.debug)
         .onAppear { vm.refresh() }
     }
 
@@ -46,13 +46,13 @@ struct DebugMetricsOverlay: View {
         HStack {
             Text("// DEBUG METRICS")
                 .font(.system(.caption, design: .monospaced).bold())
-                .foregroundColor(.orange)
+                .foregroundColor(Color.CT.debug)
             Spacer()
             Button(action: { vm.clear() }) {
-                Text("CLEAR").foregroundColor(.orange.opacity(0.6))
+                Text("CLEAR").foregroundColor(Color.CT.debug.opacity(0.6))
             }
             Button(action: { isPresented = false }) {
-                Image(systemName: "xmark.circle.fill").foregroundColor(.orange)
+                Image(systemName: "xmark.circle.fill").foregroundColor(Color.CT.debug)
             }
         }
         .padding(10)
@@ -60,7 +60,7 @@ struct DebugMetricsOverlay: View {
 
     private var summarySection: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("── AVERAGES (last 20) ──").foregroundColor(.orange.opacity(0.6))
+            Text("── AVERAGES (last 20) ──").foregroundColor(Color.CT.debug.opacity(0.6))
 
             metricRow("Msg receive→display",
                       avg: vm.avgReceiveDisplay,
@@ -83,12 +83,12 @@ struct DebugMetricsOverlay: View {
                       p95: nil,
                       unit: "ms")
 
-            Text("── FAILOVER (last 200) ──").foregroundColor(.orange.opacity(0.6))
+            Text("── FAILOVER (last 200) ──").foregroundColor(Color.CT.debug.opacity(0.6))
                 .padding(.top, 6)
             HStack {
                 Text("Stream ICE failover")
                     .frame(width: 160, alignment: .leading)
-                    .foregroundColor(.orange.opacity(0.8))
+                    .foregroundColor(Color.CT.debug.opacity(0.8))
                 Text("count: \(vm.streamFastFailoverCount)")
                     .foregroundColor(vm.streamFastFailoverCount == 0 ? .orange.opacity(0.7) : .yellow)
             }
@@ -99,7 +99,7 @@ struct DebugMetricsOverlay: View {
         HStack {
             Text(label)
                 .frame(width: 160, alignment: .leading)
-                .foregroundColor(.orange.opacity(0.8))
+                .foregroundColor(Color.CT.debug.opacity(0.8))
             if let avg {
                 Text(String(format: "avg: %.0f%@", avg, unit))
                     .foregroundColor(avg < 100 ? .orange : avg < 500 ? .yellow : .red)
@@ -118,14 +118,14 @@ struct DebugMetricsOverlay: View {
 
     private var recentEventsSection: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text("── RECENT EVENTS ──").foregroundColor(.orange.opacity(0.6))
+            Text("── RECENT EVENTS ──").foregroundColor(Color.CT.debug.opacity(0.6))
             ForEach(vm.recentSamples) { sample in
                 HStack {
                     Text(sample.formattedDuration)
                         .frame(width: 70, alignment: .trailing)
                         .foregroundColor(sample.durationMs < 150 ? .orange : sample.durationMs < 500 ? .yellow : .red)
                     Text(sample.label)
-                        .foregroundColor(.orange.opacity(0.7))
+                        .foregroundColor(Color.CT.debug.opacity(0.7))
                         .lineLimit(1)
                 }
             }

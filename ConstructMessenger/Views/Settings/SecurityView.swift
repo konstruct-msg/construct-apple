@@ -102,7 +102,7 @@ struct SecurityView: View {
                                     } else if recoveryVM.isSetup && recoveryVM.backupPending {
                                         Text(NSLocalizedString("recovery_backup_pending", comment: ""))
                                             .font(CTFont.caption)
-                                            .foregroundStyle(.orange)
+                                            .foregroundStyle(Color.CT.warning)
                                     } else if recoveryVM.isSetup, let fp = recoveryVM.fingerprint {
                                         Text(fp)
                                             .font(CTFont.mono(11))
@@ -112,7 +112,7 @@ struct SecurityView: View {
                                     } else if recoveryVM.statusLoaded && !recoveryVM.isSetup {
                                         Text(NSLocalizedString("recovery_not_configured", comment: ""))
                                             .font(CTFont.caption)
-                                            .foregroundStyle(.orange)
+                                            .foregroundStyle(Color.CT.warning)
                                     }
                                 }
                                 Spacer()
@@ -197,7 +197,7 @@ struct SecurityView: View {
                                     Text(String(format: NSLocalizedString("lockdown_active_since", comment: ""),
                                                 since.formatted(date: .abbreviated, time: .shortened)))
                                         .font(CTFont.caption)
-                                        .foregroundStyle(.orange)
+                                        .foregroundStyle(Color.CT.warning)
                                 }
                             }
                             Spacer()
@@ -212,7 +212,7 @@ struct SecurityView: View {
                                 }
                             ))
                             .labelsHidden()
-                            .tint(.orange)
+                            .tint(Color.CT.warning)
                         }
                         .securityRowInsets(vertical: SecuritySettingsLayout.compactRowVerticalPadding)
                     }

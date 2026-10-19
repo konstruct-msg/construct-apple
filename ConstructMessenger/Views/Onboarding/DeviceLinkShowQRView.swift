@@ -153,7 +153,7 @@ struct DeviceLinkShowQRView: View {
             .scaledToFit()
             .frame(width: 240, height: 240)
             .padding(16)
-            .background(Color.white)
+            .background(Color.CT.qrPaper)
             .clipShape(CTShape.card())
             .overlay(CTShape.card().stroke(Color.CT.noise, lineWidth: 1))
     }

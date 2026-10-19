@@ -98,7 +98,7 @@ Tokens — source of truth `ConstructMessenger/Utilities/ConstructTheme.swift`:
 
 | Kind | API |
 |------|-----|
-| Colors | `Color.CT.bg`, `.text`, `.textDim`, `.accent`, `.accentDim`, `.danger`, `.online` (status only), `.noise`, `.bgMsg`, `.outMsgBg`, `.outMsgText` |
+| Colors | `Color.CT.bg`, `.text`, `.textDim`, `.accent`, `.accentDim`, `.danger`, `.warning`, `.online` (status only), `.noise`, `.bgMsg`, `.outMsgBg`, `.outMsgText`; over a picture `.onMedia`, `.onMediaDim`, `.mediaScrim`, `.mediaGround`, `.mediaBadge`, `.mediaControl(On)`; `.onFill` on a filled control; `.qrPaper`/`.qrInk` |
 | Fonts | Chrome: the roles `CTFont.title/headline/body/bodyEmphasis/secondary/caption/micro/badge`, or `CTFont.ui(size, weight:)` for a size outside them — JetBrains Mono, Dynamic Type via `relativeTo:`. `CTFont.mono(size)` for content that *is* machine output. `CTFont.message(size)` for message text: the one face the reader chooses, system by default. The pre-split `CTFont.regular/medium/bold` were removed 2026-10-06 |
 | Radii / Shapes | `CTRadius` (`badge` 6 · `card` 8 · `control` 10 · `pill` 999) via `CTShape.*()` — no magic `cornerRadius: 16\|18\|22` |
 | Layout | `CTLayout` (`edgePad` 12 · `controlHeight` 42 · `hitTarget` 44 · …) |
@@ -137,7 +137,8 @@ Tokens — source of truth `ConstructMessenger/Utilities/ConstructTheme.swift`:
   the label colour (`barItem()`), a confirming action the accent (`ConfirmButton`).
 - Background always `Color.CT.bg` (`#090909`) via `.ctBackground()`.
 - New UI must use tokens; when editing a file with a literal `8`/`10`/`18`, migrate that call site.
-- Debug-only UI: `.orange`, `#if DEBUG`.
+- Debug-only UI: `Color.CT.debug`, `#if DEBUG`. Until 2026-10-19 this said `.orange`, and the same
+  literal had spread into release UI as a warning; that one is `Color.CT.warning` now.
 - Tab bar is the standard SwiftUI `TabView`; a conversation hides it with `.hidesTabBar()`
   (`Platform/PlatformNavBar.swift`). Until 2026-10-08 this said `.toolbar(.hidden, for: .tabBar)`,
   which brings the bar back only after the pop has finished — ~0.3 s of a list without its tab

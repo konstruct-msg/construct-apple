@@ -244,7 +244,7 @@ struct VideoCallView: View {
             Button(action: onEnd) {
                 Image(systemName: "phone.down.fill")
                     .font(CTIcon.font(CTIcon.control))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(Color.CT.onFill)
                     .frame(width: CTLayout.callControlSize, height: CTLayout.callControlSize)
                     .background(Color.CT.danger, in: Circle())
             }
