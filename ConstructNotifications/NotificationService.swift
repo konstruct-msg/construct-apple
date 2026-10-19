@@ -93,16 +93,6 @@ private final class OneDelivery: @unchecked Sendable {
         Bundle.main.object(forInfoDictionaryKey: "KonstructFiltersAlerts") as? Bool ?? false
     }
 
-    /// The empty-content trial runs in Debug and Beta (TestFlight) only: a store build keeps
-    /// showing the alert as it came until the beta has shown what iOS does with an empty one.
-    static var emptyAlertTrial: Bool {
-        #if DEBUG
-        true
-        #else
-        false
-        #endif
-    }
-
     func arm(original: UNNotificationContent, handler: @escaping (UNNotificationContent) -> Void) {
         lock.withLock {
             self.original = original
@@ -122,14 +112,11 @@ private final class OneDelivery: @unchecked Sendable {
         case .hide(let frames) where Self.filtersAlerts:
             log.notice("NSE: hide — \(frames, privacy: .public) protocol frame(s)")
             handler(UNNotificationContent())
-        case .hide(let frames) where Self.emptyAlertTrial:
-            // Trial (2026-10-16): without the entitlement the extension must hand back *some*
-            // content. Content with no title, body or sound is reported to be left unpresented
-            // by iOS; whether iOS 27 does is what the beta measures. If it shows an empty
-            // banner instead, that is no worse than "New Message" for a delivery receipt.
-            log.notice("NSE: hide — \(frames, privacy: .public) protocol frame(s); not entitled, empty content (trial)")
-            handler(UNNotificationContent())
         case .hide(let frames):
+            // Not entitled: the push is shown as it came, and the app withdraws it once a wake
+            // finds nothing new (`withdrawPushBannersIfNothingNew`). The empty-content trial that
+            // stood here (Debug and Beta, 2026-10-16 → 10-19) answered its question: iOS 27
+            // presents empty content — testers got notifications "with no message at all".
             log.notice("NSE: would hide — \(frames, privacy: .public) protocol frame(s); not entitled, shown")
             handler(ProbeBanner.marked(original, "\(frames) frame(s) · would hide"))
         case .show(let reason):
