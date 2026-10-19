@@ -39,6 +39,7 @@ struct LinkDetectingText: View {
         let attributedString = makeAttributedString()
         
         Text(attributedString)
+            .typesetting(asScriptOf: text)
             .environment(\.openURL, OpenURLAction { url in
                 handleLink(url)
                 return .handled
