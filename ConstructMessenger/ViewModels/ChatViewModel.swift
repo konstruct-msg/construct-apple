@@ -140,8 +140,17 @@ class ChatViewModel {
         )
     }
 
-    func sendVoiceMessage(url: URL, duration: TimeInterval, waveform: [Float]) {
-        sendCoordinator.sendVoiceMessage(url: url, duration: duration, waveform: waveform)
+    func sendVoiceMessage(
+        url: URL,
+        duration: TimeInterval,
+        waveform: [Float],
+        replyTo: TranscriptRow? = nil,
+        replyToContentOverride: String? = nil
+    ) {
+        sendCoordinator.sendVoiceMessage(
+            url: url, duration: duration, waveform: waveform,
+            replyTo: replyTo, replyToContentOverride: replyToContentOverride
+        )
     }
 
     /// Sends forwarded content here, as this chat's own messages (`ForwardItem`).

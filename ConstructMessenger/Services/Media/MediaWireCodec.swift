@@ -287,7 +287,10 @@ enum MediaWireCodec {
 
     /// Encode app `VoiceMessageContent` as wire `MessageContent.voice` + CTM1 storage blob.
     /// `codec` carries `mime|mediaId|size` so mediaId survives the proto (no dedicated field).
-    static func voiceMessageContent(from voice: VoiceMessageContent) -> Shared_Proto_Messaging_V1_MessageContent {
+    static func voiceMessageContent(
+        from voice: VoiceMessageContent,
+        quoted: Shared_Proto_Messaging_V1_QuotedMessage? = nil
+    ) -> Shared_Proto_Messaging_V1_MessageContent {
         var v = Shared_Proto_Messaging_V1_VoiceMessage()
         v.fileURL = voice.mediaUrl
         v.encryptionKey = voice.mediaKey
@@ -297,6 +300,7 @@ enum MediaWireCodec {
             UInt32(max(0, min(255, Int((sample * 255).rounded()))))
         }
         v.codec = "\(voice.mediaType)|\(voice.mediaId)|\(voice.size)"
+        if let quoted { v.quoted = quoted }
         var content = Shared_Proto_Messaging_V1_MessageContent()
         content.voice = v
         return content

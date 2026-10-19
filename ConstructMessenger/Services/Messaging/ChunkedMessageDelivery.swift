@@ -256,7 +256,7 @@ final class ChunkedMessageReassembler {
             if m.hasCaption { album.caption = m.caption }
             return (MediaWireCodec.mediaJSON(from: album) ?? "", nil, album)
         case .voice(let v):
-            return (MediaWireCodec.voiceJSON(from: v) ?? "", nil, nil)
+            return (MediaWireCodec.voiceJSON(from: v) ?? "", v.hasQuoted ? v.quoted : nil, nil)
         default:
             return ("", nil, nil)
         }
