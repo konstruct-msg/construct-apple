@@ -107,7 +107,6 @@ struct SynapsView: View {
             .ctBackground()
             .navigationTitle(NSLocalizedString("synapses", comment: ""))
             .inlineNavTitle()
-            .connectionSubtitle()
             .searchable(text: $searchText, prompt: Text(LocalizedStringKey("search_prompt")))
             .searchFocused($isSearchFocused)
             .onSubmit(of: .search) { dismissSearchKeyboard() }

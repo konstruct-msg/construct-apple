@@ -19,7 +19,6 @@ struct CallHistoryView: View {
             content
                 .navigationTitle(NSLocalizedString("calls_recents", comment: ""))
                 .inlineNavTitle()
-                .connectionSubtitle()
                 .toolbar {
                     if !records.isEmpty {
                         ToolbarItem(placement: .primaryAction) {
