@@ -684,7 +684,7 @@ struct ChatView: View {
             // The legacy path clears the badge from `registerTranscriptProxy`, which this container
             // never calls — it has no `ScrollViewReader`, so `onProxyReady` does not exist here.
             // Opening a chat therefore left the badge standing for the whole owned-path build.
-            .onAppear { LocalNotificationManager.shared.clearBadge() }
+            .onAppear { LocalNotificationManager.shared.syncBadge() }
             // Under the bar's glass, as a SwiftUI scroll view goes on its own; `topBarInset` keeps
             // the first message clear of it.
             .ignoresSafeArea(.container, edges: .top)
@@ -794,7 +794,7 @@ struct ChatView: View {
 
     private func registerTranscriptProxy(_ proxy: ScrollViewProxy) {
         viewport.registerProxy(proxy)
-        LocalNotificationManager.shared.clearBadge()
+        LocalNotificationManager.shared.syncBadge()
         // .defaultScrollAnchor(.bottom) + LazyVStack + composer safeAreaInset often lands the
         // first offset out of range → blank list until a gesture. Multi-pass non-animated pin
         // covers inset settle and FRC load-more churn.
