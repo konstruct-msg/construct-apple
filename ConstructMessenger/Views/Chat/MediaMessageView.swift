@@ -119,7 +119,7 @@ struct MediaCaptionText: View {
 
     var body: some View {
         Text(caption)
-            .font(CTFont.message(ChatUIConstants.Typography.captionSize))
+            .font(CTFont.message(ChatUIConstants.Typography.messageTextSize))
             .foregroundColor(Color.CT.text)
             .frame(maxWidth: MediaPreviewLayout.maxWidth, alignment: .leading)
             // Captions are message content. They wrap to their intrinsic height instead of
@@ -1208,7 +1208,7 @@ private struct UploadingFilesView: View {
             }
             if !caption.isEmpty {
                 Text(caption)
-                    .font(CTFont.ui(ChatUIConstants.Typography.captionSize))
+                    .font(CTFont.message(ChatUIConstants.Typography.messageTextSize))
                     .foregroundColor(Color.CT.outMsgText)
                     .padding(.top, 2)
             }
