@@ -463,7 +463,7 @@ session log. Then:
    Open Questions), only for what a task note cannot carry: a root cause found the hard way, or a
    design choice with the alternatives it rejected — `## Why` is mandatory there.
 2. If it constrains future work, add or update `decisions/<slug>.md` — the rule as it stands, why,
-   what was rejected; history goes to `_archive/decisions/` (the vault's `AGENTS.md`).
+   what was rejected; history goes to `~/Code/construct-docs/_archive/decisions/`.
 3. Patch the affected spec in its domain folder in the **same** session.
 4. Append one line to `~/Code/construct-docs/log.md`: `[YYYY-MM-DD HH:MM] note | <topic>`.
 
