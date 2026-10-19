@@ -324,8 +324,12 @@ final class OutboundSessionService {
         // re-establish for a peer named "".
         guard !contactId.isEmpty else { return }
         Task { @MainActor in
-            for messageId in messageIds {
-                DeliveryReceiptBatcher.shared.enqueue(messageId: messageId, to: contactId)
+            // Turned off in Security: nothing is owed. The contact card below is not a receipt and
+            // still goes — without it their envelopes to us keep buying tokens.
+            if DeliveryReceiptPreference.sends {
+                for messageId in messageIds {
+                    DeliveryReceiptBatcher.shared.enqueue(messageId: messageId, to: contactId)
+                }
             }
             // We heard from them: hand them our card if a device of theirs still lacks it. Here
             // and not on every incoming envelope, because this is the one place that means "a
