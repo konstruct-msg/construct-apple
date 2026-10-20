@@ -396,43 +396,6 @@ struct FeatureFlags {
 
 }
 
-// MARK: - Traffic Protection Configuration
-struct TrafficProtectionConfig {
-    // Battery Awareness
-    static let batteryLevelThreshold: Float = 0.2  // 20% - disable below this
-    static let defaultBatteryLevel: Float = 1.0    // Assume full battery if unknown
-
-    // Timing Intervals (milliseconds) - Optimized for energy efficiency
-    #if DEBUG
-    // Debug: Shorter intervals for testing
-    static let minIntervalMs: UInt64 = 30_000      // 30 seconds minimum
-    static let maxIntervalMs: UInt64 = 300_000     // 5 minutes maximum
-    static let schedulerCheckInterval: TimeInterval = 30.0  // Check every 30 seconds
-    #else
-    // Release: Longer intervals for battery life (max 30 dummies/hour instead of 120)
-    static let minIntervalMs: UInt64 = 120_000     // 2 minutes minimum
-    static let maxIntervalMs: UInt64 = 900_000     // 15 minutes maximum
-    static let schedulerCheckInterval: TimeInterval = 120.0  // Check every 2 minutes
-    #endif
-
-    static let coalesceWindowMs: UInt64 = 15_000   // 15 seconds coalescing window (increased)
-
-    // Message Configuration
-    static let messageSize: UInt64 = 255           // Match PKCS7 padding block size
-    static let coalesceWithRealMessages = true     // Enable smart coalescing
-
-    // Jitter Configuration (milliseconds)
-    static let highPriorityMaxJitterMs: UInt64 = 50    // User messages: 0-50ms
-    static let lowPriorityMaxJitterMs: UInt64 = 100    // Other messages: 0-100ms
-    static let batteryJitterReductionFactor: Float = 0.5  // 50% reduction at low battery
-
-    // Send Smoothing
-    static let minSendIntervalMs: UInt64 = 200  // Minimum spacing between outgoing messages
-    static let lowBatterySendIntervalMultiplier: Double = 2.0  // Increase interval when battery is low
-    static let sendJitterMinMs: UInt64 = 50
-    static let sendJitterMaxMs: UInt64 = 500
-}
-
 // MARK: - Chunked Delivery Configuration
 struct ChunkedDeliveryConfig {
     static let magic: [UInt8] = [0x4B, 0x4E, 0x53, 0x54] // "KNST"
