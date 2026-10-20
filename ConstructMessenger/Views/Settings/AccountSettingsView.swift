@@ -41,7 +41,7 @@ struct AccountSettingsView: View {
     @State private var showingSocialRecoverySetup = false
     @State private var pendingLogoutAll = false  // which logout action was requested before backup check
     /// Short identity-key fingerprint (user-facing external identity, thread 5.3).
-    @State private var ownFingerprint: String?
+    private var ownFingerprint: String? { viewModel.ownFingerprint }
     @State private var fingerprintCopied = false
 
     var body: some View {
@@ -83,7 +83,7 @@ struct AccountSettingsView: View {
                 viewModel.loadUserInfo(from: authViewModel)
             }
             syncDraftProfileFields()
-            refreshOwnFingerprint()
+            viewModel.refreshOwnFingerprint()
         }
         .onChange(of: viewModel.username) { _, _ in
             if !isEditingProfile { syncDraftProfileFields() }
@@ -717,18 +717,6 @@ struct AccountSettingsView: View {
         }
     }
 
-    private func refreshOwnFingerprint() {
-        guard CryptoManager.shared.isInitialized else {
-            ownFingerprint = nil
-            return
-        }
-        do {
-            let (ik, _) = try CryptoManager.shared.localBundlePublicKeys()
-            ownFingerprint = IdentityFingerprint.short(from: ik)
-        } catch {
-            ownFingerprint = nil
-        }
-    }
 
 }
 

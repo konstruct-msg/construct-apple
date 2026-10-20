@@ -23,6 +23,19 @@ final class ContactRequestsViewModel {
         let createdAt: Date
     }
 
+    /// The remote username search under the Synaps search bar.
+    enum RemoteSearchState {
+        case idle
+        case searching
+        case found(Shared_Proto_Services_V1_UserProfile)
+        case notFound
+    }
+
+    var remoteState: RemoteSearchState = .idle
+    /// Optimistic / session UI for “request sent” — UserDefaults alone does not invalidate the view.
+    private(set) var pendingSentUserIds: Set<String> = []
+    private(set) var sendingRequestToUserId: String?
+
     var incomingRequests: [IncomingRequest] = []
     var sentRequests: [SentRequest] = []
     var isLoading = false
@@ -97,6 +110,63 @@ final class ContactRequestsViewModel {
             username: identity.username,
             displayName: identity.displayName
         )
+    }
+
+    // MARK: - Remote search
+
+    func resetSearch() {
+        remoteState = .idle
+    }
+
+    /// Looks `username` up on the server; skipped when a local contact already matches.
+    func search(username: String, localMatchesExist: Bool) async {
+        guard !localMatchesExist else { return }
+        remoteState = .searching
+
+        do {
+            guard let userId = try await userServiceClient.findUser(username: username) else {
+                remoteState = .notFound
+                return
+            }
+            let profile = try await userServiceClient.getUserProfile(userId: userId)
+            remoteState = .found(profile)
+        } catch {
+            remoteState = .notFound
+        }
+    }
+
+    func isRequestAlreadySent(toUserId: String) -> Bool {
+        if pendingSentUserIds.contains(toUserId) { return true }
+        return hasPendingSentRequest(toUserId: toUserId)
+    }
+
+    /// Sends a contact request to a discoverable user found via remote search.
+    func sendContactRequest(to profile: Shared_Proto_Services_V1_UserProfile) async {
+        guard !isRequestAlreadySent(toUserId: profile.userID) else { return }
+        sendingRequestToUserId = profile.userID
+        defer { sendingRequestToUserId = nil }
+        do {
+            let requestId = try await sendRequest(toUserId: profile.userID)
+            markSentRequest(toUserId: profile.userID, requestId: requestId)
+            // Drive visible “request sent” state (UserDefaults alone is not @Observable).
+            pendingSentUserIds.insert(profile.userID)
+            remoteState = .found(profile)
+        } catch {
+            // Surface the failure instead of swallowing it — a silent catch here hid the
+            // real reason "Send request" did nothing (RPC rejected / no delivery). Log the
+            // exact error and tell the user so it's retryable and diagnosable.
+            // Transport blips surface as gRPC "Stream unexpectedly closed." — map to a
+            // human-readable connection message (RPC already retried in UserServiceClient).
+            Log.error("sendContactRequest failed for \(profile.userID.prefix(8))…: \(error)", category: "ContactRequest")
+            // A connection failure gets the request's own sentence; anything else, the general one.
+            // Classified by type, not by sniffing the error's words for "stream" or "timeout".
+            let appError = AppError.from(error)
+            if case .network = appError {
+                ErrorRouter.shared.report(.said(UserText("contact_request_send_failed")))
+            } else {
+                ErrorRouter.shared.report(appError)
+            }
+        }
     }
 
     /// Local current-user identity used for the request-time snapshot (same source as QR/share).
