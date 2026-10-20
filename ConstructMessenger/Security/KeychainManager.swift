@@ -576,56 +576,35 @@ class KeychainManager {
         delete(forKey: suiteIdKey(for: userId))
     }
 
-    // MARK: - SPK Rotation Epoch (per-peer anti-replay)
-    // Tracks the highest observed SPK rotation epoch for each peer contact.
-    // Security-relevant: if this were in UserDefaults and wiped, SPK replay
-    // attacks would go undetected until the peer rotates again.
-
-    private func spkEpochKey(for userId: String) -> String {
-        "construct.spk_epoch.\(userId)"
-    }
-
-    func saveSpkEpoch(_ epoch: UInt32, for userId: String) {
-        var value = epoch
-        let data = Data(bytes: &value, count: MemoryLayout<UInt32>.size)
-        _ = save(data, forKey: spkEpochKey(for: userId), accessible: kSecAttrAccessibleAfterFirstUnlock)
-    }
-
-    func loadSpkEpoch(for userId: String) -> UInt32 {
-        guard let data = load(forKey: spkEpochKey(for: userId)),
-              data.count == MemoryLayout<UInt32>.size else { return 0 }
-        return data.withUnsafeBytes { $0.loadUnaligned(as: UInt32.self) }
-    }
-
-    func deleteSpkEpoch(for userId: String) {
-        delete(forKey: spkEpochKey(for: userId))
-    }
+    // (The per-peer SPK rotation epoch, `construct.spk_epoch.<account>`, lived here until
+    // 2026-10-20; the core keeps it per device since 0.53.0 — TODO 176.)
 
     // MARK: - At-Risk Session Flag (per-peer)
     // Set when a session was established via DEGRADED init (peer's SPK was past the
     // staleness limit — see the stale-peer-reachability decision). Such a session is
     // authentic (identity key permanent, SPK signature verified) but should be re-keyed
     // once the peer comes online and rotates. Drives a non-blocking UI hint and lets the
-    // next init prefer a fresh (non-degraded) handshake. Cleared on a clean re-init.
+    // next init prefer a fresh (non-degraded) handshake. Cleared on a clean re-init. Keyed by the
+    // peer's **device** (`CryptoDeviceId`) since 2026-10-20 — a session is one device's.
 
-    private func sessionAtRiskKey(for userId: String) -> String {
-        "construct.session.atRisk.\(userId)"
+    private func sessionAtRiskKey(for device: String) -> String {
+        "construct.session.atRisk.\(device)"
     }
 
-    func saveSessionAtRiskFlag(for userId: String) {
+    func saveSessionAtRiskFlag(forDevice device: String) {
         var value: UInt8 = 1
         let data = Data(bytes: &value, count: 1)
-        _ = save(data, forKey: sessionAtRiskKey(for: userId), accessible: kSecAttrAccessibleAfterFirstUnlock)
+        _ = save(data, forKey: sessionAtRiskKey(for: device), accessible: kSecAttrAccessibleAfterFirstUnlock)
     }
 
-    func loadSessionAtRiskFlag(for userId: String) -> Bool {
-        guard let data = load(forKey: sessionAtRiskKey(for: userId)),
+    func loadSessionAtRiskFlag(forDevice device: String) -> Bool {
+        guard let data = load(forKey: sessionAtRiskKey(for: device)),
               data.count == 1 else { return false }
         return data[0] != 0
     }
 
-    func deleteSessionAtRiskFlag(for userId: String) {
-        delete(forKey: sessionAtRiskKey(for: userId))
+    func deleteSessionAtRiskFlag(forDevice device: String) {
+        delete(forKey: sessionAtRiskKey(for: device))
     }
 
     // MARK: - Contact Request Mappings

@@ -252,7 +252,7 @@ struct DesktopChatView: View {
 
     private func refreshSessionAtRiskState() {
         let contactId = peerId
-        isSessionAtRisk = KeychainManager.shared.loadSessionAtRiskFlag(for: contactId)
+        isSessionAtRisk = SessionInitializationService.isSessionAtRisk(withPeer: contactId)
     }
 
     @ViewBuilder
