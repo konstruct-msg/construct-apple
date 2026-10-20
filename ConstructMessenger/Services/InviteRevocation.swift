@@ -12,11 +12,12 @@
 //  back when the record expires. The contract is pinned in
 //  construct-docs backend/INVITE_LIST_REVOKE_SERVER_SPEC.md §2.
 //
-//  Links only, for now. A QR sitting holds up to `ttlSeconds / qrRotateIntervalSeconds`
-//  capabilities — 1440 at the current 12 h TTL — and the honest version of a button behind
-//  that is 1440 requests. The fix is §4 of the same spec: give the QR its own, much shorter
-//  TTL so a sitting holds ten codes instead of fourteen hundred. Until that lands the button
-//  is not offered rather than offered and slow.
+//  A link, and a QR showing as a whole: revoking a showing burns every code it put on screen
+//  that is still live. Until 2026-10-20 a showing offered no button — at the old 12 h TTL it
+//  held up to 1440 codes, so the button meant 1440 requests. QR codes have their own TTL now
+//  (`InviteConfig.qrTTLSeconds`, spec §4), and a showing holds at most
+//  `qrTTLSeconds / qrRotateIntervalSeconds` live codes — ten. Android revokes a showing the
+//  same way (construct-android 520ae86).
 //
 
 import Foundation
@@ -40,11 +41,11 @@ enum InviteRevokeOutcome: Equatable {
 
 enum InviteRevocationDecision {
 
-    /// Whether the screen offers a revoke action for this act.
+    /// Whether the screen offers a revoke action for this act. Every kind can be revoked; the
+    /// switch stays so a new kind has to say so.
     static func canRevoke(kind: InviteIssuance.Kind) -> Bool {
         switch kind {
-        case .link:      return true
-        case .qrSession: return false
+        case .link, .qrSession: return true
         }
     }
 

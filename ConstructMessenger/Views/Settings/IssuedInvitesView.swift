@@ -55,8 +55,7 @@ struct IssuedInvitesView: View {
                     .padding(.horizontal, CTLayout.edgePad)
                     .padding(.top, CTLayout.edgePad)
 
-                    // Why only some rows offer revocation. An asymmetry nobody can account
-                    // for reads as a bug in the rows that lack the button.
+                    // What revoking a row stops — for a QR showing, every code it put on screen.
                     Text("> " + NSLocalizedString("issued_invites_revoke_scope", comment: ""))
                         .font(CTFont.caption)
                         .foregroundStyle(Color.CT.textDim)
