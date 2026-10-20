@@ -245,6 +245,94 @@ struct MessageBubbleRegularView: View {
                     .accessibilityIdentifier(A11y.Chat.message(message.id))
                 }
                 }
+                // The menu belongs to the bubble alone, not to the column with the reaction chips
+                // and the time under it. A reaction picked in the menu adds a chip and the room
+                // below for it while the system's dismissal effect still holds the source view
+                // masked to its frame at lift: with the menu on the column, the column grew under
+                // that mask and showed as a strip cut top and bottom for ~0.8 s (device video,
+                // 2026-10-20). The bubble does not change size when a reaction is added.
+                #if os(iOS)
+                .contentShape(.contextMenuPreview, CTShape.control())
+                #endif
+                .contextMenu {
+                    if !isEditMode {
+                        if let onReact {
+                            ReactionMenuRow(
+                                currentEmoji: ownReactionEmoji,
+                                onPick: { emoji in onReact(message, emoji) },
+                                onPickMore: { showFullEmojiPicker = true }
+                            )
+                        }
+
+                        if let onReply {
+                            Button { onReply(message) } label: {
+                                Label("reply", systemImage: "arrowshape.turn.up.left")
+                            }
+                        }
+
+                        if let onReplyWithQuote, hasActionableText {
+                            Button { onReplyWithQuote(message, message.readableText) } label: {
+                                Label(NSLocalizedString("quote_reply", comment: ""), systemImage: "text.quote")
+                            }
+                        }
+
+                        // Editable: plain text (edit the text) and media/photo/video (edit the
+                        // caption — the edit pipeline rebuilds the album, see ChatSendCoordinator).
+                        // NOT editable: voice, files, profile shares — their payload has no text the
+                        // user should edit, and a text edit would destroy/garble it. Media is the one
+                        // difference from `hasActionableText`, which is why this list stays spelled out:
+                        // a caption is text to edit but is not text to copy or quote.
+                        if message.isSentByMe,
+                           message.hasDecryptedContent,
+                           fileContent == nil,
+                           voiceContent == nil,
+                           profileData == nil,
+                           let onEdit
+                        {
+                            Button { onEdit(message) } label: {
+                                Label(NSLocalizedString("edit_message", comment: ""), systemImage: "pencil")
+                            }
+                        }
+
+                        if hasActionableText {
+                            Button { PlatformClipboard.copy(message.readableText) } label: {
+                                Label("copy", systemImage: "doc.on.doc")
+                            }
+                        }
+
+                        // Any message a person wrote, except a shared profile: its meaning is who shared
+                        // it. What goes is the content alone (`ForwardItem`).
+                        if let onForward, profileData == nil, ForwardItem.isForwardable(message) {
+                            Button { onForward(message) } label: {
+                                Label("forward", systemImage: "arrowshape.turn.up.right")
+                            }
+                        }
+
+                        #if os(iOS)
+                        if let onEnterSelectMode {
+                            Button { onEnterSelectMode(message) } label: {
+                                Label("select_messages", systemImage: "checkmark.circle")
+                            }
+                        }
+                        #endif
+
+                        Divider()
+
+                        if let onDelete {
+                            Button(role: .destructive) { onDelete(message) } label: {
+                                Label("delete", systemImage: "trash")
+                            }
+                        }
+
+                        if (message.deliveryStatus == .failed || message.deliveryStatus == .queued),
+                           let onRetry
+                        {
+                            Button { onRetry(message) } label: {
+                                Label("retry", systemImage: "arrow.clockwise")
+                            }
+                        }
+                    }
+                }
                 .overlay(alignment: ChatUIConstants.Reaction.badgeAlignment(isSentByMe: message.isSentByMe)) {
                     reactionBadgeRow(endsInBareText: endsInBareText)
                 }
@@ -299,9 +387,6 @@ struct MessageBubbleRegularView: View {
                 alignment: message.isSentByMe ? .trailing : .leading
             )
             .contentShape(.interaction, Rectangle())
-            #if os(iOS)
-            .contentShape(.contextMenuPreview, Rectangle())
-            #endif
             .onTapGesture {
                 if isEditMode {
                     onSelect?(message)
@@ -318,85 +403,6 @@ struct MessageBubbleRegularView: View {
                       target.caseInsensitiveCompare(message.id) == .orderedSame
                 else { return }
                 reloadReactionBadges()
-            }
-            .contextMenu {
-                if !isEditMode {
-                    if let onReact {
-                        ReactionMenuRow(
-                            currentEmoji: ownReactionEmoji,
-                            onPick: { emoji in onReact(message, emoji) },
-                            onPickMore: { showFullEmojiPicker = true }
-                        )
-                    }
-
-                    if let onReply {
-                        Button { onReply(message) } label: {
-                            Label("reply", systemImage: "arrowshape.turn.up.left")
-                        }
-                    }
-
-                    if let onReplyWithQuote, hasActionableText {
-                        Button { onReplyWithQuote(message, message.readableText) } label: {
-                            Label(NSLocalizedString("quote_reply", comment: ""), systemImage: "text.quote")
-                        }
-                    }
-
-                    // Editable: plain text (edit the text) and media/photo/video (edit the
-                    // caption — the edit pipeline rebuilds the album, see ChatSendCoordinator).
-                    // NOT editable: voice, files, profile shares — their payload has no text the
-                    // user should edit, and a text edit would destroy/garble it. Media is the one
-                    // difference from `hasActionableText`, which is why this list stays spelled out:
-                    // a caption is text to edit but is not text to copy or quote.
-                    if message.isSentByMe,
-                       message.hasDecryptedContent,
-                       fileContent == nil,
-                       voiceContent == nil,
-                       profileData == nil,
-                       let onEdit
-                    {
-                        Button { onEdit(message) } label: {
-                            Label(NSLocalizedString("edit_message", comment: ""), systemImage: "pencil")
-                        }
-                    }
-
-                    if hasActionableText {
-                        Button { PlatformClipboard.copy(message.readableText) } label: {
-                            Label("copy", systemImage: "doc.on.doc")
-                        }
-                    }
-
-                    // Any message a person wrote, except a shared profile: its meaning is who shared
-                    // it. What goes is the content alone (`ForwardItem`).
-                    if let onForward, profileData == nil, ForwardItem.isForwardable(message) {
-                        Button { onForward(message) } label: {
-                            Label("forward", systemImage: "arrowshape.turn.up.right")
-                        }
-                    }
-
-                    #if os(iOS)
-                    if let onEnterSelectMode {
-                        Button { onEnterSelectMode(message) } label: {
-                            Label("select_messages", systemImage: "checkmark.circle")
-                        }
-                    }
-                    #endif
-
-                    Divider()
-
-                    if let onDelete {
-                        Button(role: .destructive) { onDelete(message) } label: {
-                            Label("delete", systemImage: "trash")
-                        }
-                    }
-
-                    if (message.deliveryStatus == .failed || message.deliveryStatus == .queued),
-                       let onRetry
-                    {
-                        Button { onRetry(message) } label: {
-                            Label("retry", systemImage: "arrow.clockwise")
-                        }
-                    }
-                }
             }
             #if os(iOS)
             .offset(x: -swipeOffset)
