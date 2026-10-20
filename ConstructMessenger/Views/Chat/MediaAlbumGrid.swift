@@ -156,15 +156,18 @@ struct GridCell: View {
     @State private var thumbnailImage: PlatformImage?
     /// See the single-image bubble: distinguishes "showing the stored preview" from "loaded".
     @State private var hasFullCopy = false
-    @State private var isLoading = false
+    @State private var loader = MediaLoader<PlatformImage>(
+        logCategory: "MediaMessageView", logLabel: "Grid media")
     @State private var loadFailed = false
-    @State private var downloadProgress: Double = 0
-    @State private var hasReceivedBytes = false
     @State private var isMissingMedia = false
     @State private var blurPreview: PlatformImage?
     @State private var downloadedVideoURL: URL?
     @State private var isDownloadingVideo = false
     @State private var videoDownloadProgress: Double = 0
+
+    private var isLoading: Bool { loader.isLoading }
+    private var downloadProgress: Double { loader.progress }
+    private var hasReceivedBytes: Bool { loader.hasReceivedBytes }
 
     private var itemDict: [String: Any] {
         mediaContent.mediaItems.indices.contains(itemIndex) ? mediaContent.mediaItems[itemIndex] : [:]
@@ -346,18 +349,10 @@ struct GridCell: View {
     private func loadThumbnail(forceRetry: Bool = false) {
         // See the single-image loader: `thumbnailImage` is now set from the stored preview before
         // the download starts, so it can no longer stand in for "loaded".
-        if hasFullCopy || isLoading { return }
+        if hasFullCopy || loader.isLoading { return }
         if loadFailed && !forceRetry { return }
-        if forceRetry {
-            loadFailed = false
-            isMissingMedia = false
-            hasReceivedBytes = false
-            downloadProgress = 0
-        }
         loadFailed = false
         isMissingMedia = false
-        hasReceivedBytes = false
-        downloadProgress = 0
         // `resolvedCopy`, not `paintable`: only a real decode of the media means "nothing left to
         // load". Returning early on a poster would leave a failed download stuck at 320px forever,
         // with no error and no retry — the tile would look fine and never improve.
@@ -376,70 +371,23 @@ struct GridCell: View {
         if blurPreview == nil, let bh = itemDict["blurhash"] as? String, !bh.isEmpty {
             blurPreview = BlurHash.decode(bh, size: CGSize(width: 32, height: 32))
         }
-        guard let mediaId = itemDict["mediaId"] as? String,
-              let mediaUrl = itemDict["mediaUrl"] as? String,
-              let mediaKeyStr = itemDict["mediaKey"] as? String,
-              let mediaKey = Data(base64Encoded: mediaKeyStr)
-        else { return }
-        isLoading = true
-        let total = Double((itemDict["size"] as? Int) ?? 0)
-        let onProgress: @Sendable (Int64) -> Void = { received in
-            let frac = total > 0 ? min(0.9, Double(received) / total) : 0
-            Task { @MainActor in
-                if isLoading {
-                    hasReceivedBytes = true
-                    if total > 0 {
-                        downloadProgress = frac
-                    }
-                }
-            }
-        }
+        guard let descriptor = MediaLoader<PlatformImage>.Descriptor(item: itemDict) else { return }
+        let messageId = message.id
+        let index = itemIndex
         Task {
-            do {
-                let imageData = try await MediaManager.shared.downloadAndDecryptMedia(
-                    mediaId: mediaId,
-                    mediaUrl: mediaUrl,
-                    mediaKey: mediaKey,
-                    onProgress: onProgress
-                )
-                await MainActor.run {
-                    if isLoading {
-                        downloadProgress = 0.95
-                    }
-                }
-                guard let image = PlatformImage(data: imageData) else {
-                    await MainActor.run {
-                        isLoading = false
-                        loadFailed = true
-                        hasReceivedBytes = false
-                        downloadProgress = 0
-                    }
-                    return
-                }
-                // Full image → gallery cache; a 200px thumb keeps the tile light.
-                let thumb = MediaManager.shared.generateThumbnailImage(from: image, maxSize: 200)
-                await MainActor.run {
-                    MediaImageCache.shared.storeOriginal(image, for: message.id, at: itemIndex)
-                    thumbnailImage = thumb
-                    hasFullCopy = true
-                    isLoading = false
-                    hasReceivedBytes = true
-                    downloadProgress = 1.0
-                }
-            } catch {
-                let disposition = MediaLoadFailurePolicy.disposition(for: error)
-                if disposition == .permanentlyUnavailable {
-                    Log.debug("Grid media unavailable for \(mediaId.prefix(8))…: \(error)", category: "MediaMessageView")
-                } else {
-                    Log.error("Grid media load failed for \(mediaId.prefix(8))…: \(error)", category: "MediaMessageView")
-                }
-                await MainActor.run {
-                    isLoading = false
-                    loadFailed = true
-                    isMissingMedia = disposition == .permanentlyUnavailable
-                    hasReceivedBytes = false
-                    downloadProgress = 0
-                }
+            // Full image → gallery cache; a 200px thumb keeps the tile light.
+            let image = await loader.load(
+                descriptor,
+                cached: { MediaImageCache.shared.resolvedCopy(for: messageId, at: index) },
+                decode: { PlatformImage(data: $0) },
+                store: { MediaImageCache.shared.storeOriginal($0, for: messageId, at: index) }
+            )
+            if let image {
+                thumbnailImage = MediaManager.shared.generateThumbnailImage(from: image, maxSize: 200)
+                hasFullCopy = true
+            } else if let failure = loader.failure {
+                loadFailed = true
+                isMissingMedia = failure.isPermanentlyUnavailable
             }
         }
     }
