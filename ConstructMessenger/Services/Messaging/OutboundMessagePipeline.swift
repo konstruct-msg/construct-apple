@@ -69,9 +69,9 @@ struct RecipientSendReport {
         /// The server took every chunk of this copy.
         var accepted: Bool {
             guard let response else { return false }
-            switch response.status.lowercased() {
-            case "failed", "queued", "blocked": return false
-            default: return true
+            switch response.deliveryStatus {
+            case .sent, .delivered: return true
+            case .queued, .failed, .sending: return false
             }
         }
     }
