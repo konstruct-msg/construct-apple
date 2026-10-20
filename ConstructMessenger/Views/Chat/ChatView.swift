@@ -69,8 +69,6 @@ struct ChatView: View {
     // Key Transparency status for the contact in this chat
     @State var contactKTStatus: KTStatus = .unverified
     @State var contactTrustAlert: ContactTrustAlert?
-    /// True when the session with this contact was established via a degraded (stale-SPK) init.
-    @State private var isSessionAtRisk = false
     /// Safety Numbers sheet after key-change "Verify".
     @State var showingSafetyNumbers = false
 
@@ -390,7 +388,7 @@ struct ChatView: View {
 
     /// Informational banner shown when the session was established via degraded (stale-SPK) init.
     private var atRiskBanner: some View {
-        ChatAtRiskBannerView(isVisible: isSessionAtRisk)
+        ChatAtRiskBannerView(isVisible: viewModel.isSessionAtRisk)
     }
 
     /// First-class trust event: identity key changed or KT verification failed.
@@ -410,10 +408,8 @@ struct ChatView: View {
         }
     }
 
-    /// Refresh the at-risk state from the per-peer Keychain flag set by degraded init.
     private func refreshSessionAtRiskState() {
-        let contactId = peerId
-        isSessionAtRisk = SessionInitializationService.isSessionAtRisk(withPeer: contactId)
+        viewModel.refreshSessionAtRisk()
     }
 
     private var floodSenderId: String { peerId }
@@ -642,15 +638,7 @@ struct ChatView: View {
         markChatAsRead()
         viewModel.onViewAppear()
         loadContactKTStatus()
-        refreshSessionAtRiskState()
-        // Phase 2: if this contact was reached via a degraded session and has since rotated
-        // their keys, opportunistically re-key to a fresh session (no-op otherwise).
-        let contactId = peerId
-        Task { await SessionInitializationService.shared.upgradeAtRiskSessionIfPeerFresh(userId: contactId) }
-        // Who this person's devices are, when nothing recent has said. Opening the chat is the
-        // trigger rather than sending, so the key server is asked once per peer per TTL and never
-        // per message. Best-effort; see `refreshRecipientDevices`.
-        Task { await MultiDeviceSendCoordinator.shared.refreshRecipientDevices(for: contactId) }
+        viewModel.onOpen()
         setActiveChatState(isActive: true)
         ChatOnScreen.shared.appeared(viewModel.conversation.chatId)
         // Active chat owns continuous voice playback: advance to the next voice message
