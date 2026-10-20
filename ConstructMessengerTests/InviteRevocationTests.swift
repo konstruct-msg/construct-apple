@@ -30,17 +30,16 @@ final class InviteRevocationTests: XCTestCase {
         XCTAssertTrue(InviteRevocationDecision.canRevoke(kind: .link))
     }
 
-    /// Not a capability question — a QR sitting is as revocable as a link, one `jti` at a
-    /// time. It is a cost question: at the current TTL a sitting holds up to
-    /// `ttlSeconds / qrRotateIntervalSeconds` codes, so the button would mean that many
-    /// requests. Spec §4 (a short TTL for QR) is what unblocks it.
-    func testAQRSittingOffersNoRevokeUntilItsTTLShrinks() {
-        XCTAssertFalse(InviteRevocationDecision.canRevoke(kind: .qrSession))
+    /// A QR showing is revoked whole, as on Android: at the QR TTL it holds at most ten live
+    /// codes, so the button is ten requests. Mutation: answer false for `.qrSession` — the
+    /// first assertion reddens; give QR codes the link TTL again — the second does.
+    func testAQRShowingCanBeRevokedBecauseItHoldsAHandfulOfCodes() {
+        XCTAssertTrue(InviteRevocationDecision.canRevoke(kind: .qrSession))
 
-        let codesInAFullSitting = InviteConfig.ttlSeconds / InviteConfig.qrRotateIntervalSeconds
-        XCTAssertGreaterThan(
-            codesInAFullSitting, 100,
-            "if this drops to a handful the button becomes reasonable — revisit canRevoke"
+        let codesLiveInAShowing = TimeInterval(InviteConfig.qrTTLSeconds) / InviteConfig.qrRotateIntervalSeconds
+        XCTAssertLessThanOrEqual(
+            codesLiveInAShowing, 10,
+            "a showing holding many more live codes makes the button that many requests — revisit canRevoke"
         )
     }
 

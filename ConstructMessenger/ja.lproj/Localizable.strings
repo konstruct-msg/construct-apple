@@ -1240,8 +1240,8 @@
 "invite_already_used" = "使用済みです — このリンクは誰かが使いました。";
 "invite_revoke_unconfirmed" = "確認できませんでした。リンクはまだ有効かもしれません。もう一度お試しください。";
 "invite_revoke_confirm_title" = "このリンクを取り消しますか？";
-"invite_revoke_confirm_message" = "リンクを持っている人には、予告なく使えなくなります。新しいリンクはいつでもコピーできます。";
-"issued_invites_revoke_scope" = "リンクは取り消せます。QRコードは期限が切れると自動で使えなくなります。";
+"invite_revoke_confirm_message" = "持っている人には、予告なく使えなくなります。新しい招待はいつでも作れます。";
+"issued_invites_revoke_scope" = "リンクやQRコードの表示は、期限が切れるまで取り消せます。その表示で出したコードはすべて同時に使えなくなります。";
 "scroll_to_newest" = "最新のメッセージへ";
 
 "diagnostics_owned_inset_title" = "自前インセットの履歴";
