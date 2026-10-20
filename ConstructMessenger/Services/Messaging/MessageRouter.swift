@@ -1780,12 +1780,9 @@ final class MessageRouter {
         // Fallback: legacy replyToMessageId from envelope (old clients without proto payload).
         var replyToMessageId: String?
         var replyQuote: String?
-        if let qm = quotedMessage, !qm.messageID.isEmpty {
-            replyToMessageId = qm.messageID.lowercased()
-            replyQuote = ReplyPreviewPayload.receiving(
-                textPreview: qm.hasTextPreview ? qm.textPreview : nil,
-                mediaType: qm.hasMediaType ? qm.mediaType : nil
-            )?.storedContent
+        if let reply = Self.replyContext(from: quotedMessage) {
+            replyToMessageId = reply.messageId
+            replyQuote = reply.quote
         } else if !messageData.replyToMessageId.isEmpty {
             replyToMessageId = messageData.replyToMessageId.lowercased()
             do {
@@ -2189,11 +2186,15 @@ final class MessageRouter {
         let storagePayload: Data
         let e2eRowId: String?
         let mediaAlbum: Shared_Proto_Messaging_V1_MediaAlbumMessage?
+        var reply: (messageId: String, quote: String?)?
 
         switch ChunkedMessageReassembler.shared.decodeAssembled(content, e2eMessageId: e2eMessageId) {
-        case .assembled(let text, _, let e2eId, let album, let storage):
+        case .assembled(let text, let quoted, let e2eId, let album, let storage):
             e2eRowId = e2eId
             mediaAlbum = album
+            // A reply sent from a sibling is a reply here too. Until 2026-10-20 the quote was
+            // dropped on this path and the row went in with no strip (TODO 177).
+            reply = Self.replyContext(from: quoted)
             if let storage, !storage.isEmpty {
                 storagePayload = storage
             } else {
@@ -2272,7 +2273,8 @@ final class MessageRouter {
                 orderKey: original.serverOrderKey
                     ?? ServerMessageOrder.local(timestamp: timestamp, messageId: rowId),
                 body: storagePayload, contentType: .regular, deliveryStatus: .sent, retryCount: 0,
-                suiteId: 0, isEdited: false, editedAt: nil, replyToMessageId: nil, replyQuote: nil,
+                suiteId: 0, isEdited: false, editedAt: nil,
+                replyToMessageId: reply?.messageId, replyQuote: reply?.quote,
                 transcript: nil, transcriptLanguage: nil, transcriptGeneratedAt: nil
             ), searchText: LocalMessagePayload.decode(storagePayload).plainText)
         } catch {
@@ -2287,6 +2289,21 @@ final class MessageRouter {
             )
         }
         Log.info("SENDER_SYNC: saved outgoing message in conversation with \(partnerUserId.prefix(8))…", category: "MessageRouter")
+    }
+
+    /// The reply a message's `QuotedMessage` names: the replied-to id and the strip it shows. One
+    /// reading for every path that stores a received or synced message.
+    static func replyContext(
+        from quoted: Shared_Proto_Messaging_V1_QuotedMessage?
+    ) -> (messageId: String, quote: String?)? {
+        guard let quoted, !quoted.messageID.isEmpty else { return nil }
+        return (
+            quoted.messageID.lowercased(),
+            ReplyPreviewPayload.receiving(
+                textPreview: quoted.hasTextPreview ? quoted.textPreview : nil,
+                mediaType: quoted.hasMediaType ? quoted.mediaType : nil
+            )?.storedContent
+        )
     }
 
     /// Map SENDER_SYNC wire id → local row id (E2E id preferred).
@@ -2347,6 +2364,12 @@ enum BlockedContacts {
 
 #if DEBUG
 extension MessageRouter {
+    func _testSaveSenderSyncMessage(
+        _ content: Data, original: ChatMessage, partnerUserId: String, in context: NSManagedObjectContext
+    ) {
+        saveSenderSyncMessage(content, original: original, partnerUserId: partnerUserId, e2eMessageId: nil, in: context)
+    }
+
     func _testPersistRegularIncomingMessage(
         _ decryptedContent: String,
         message: ChatMessage,
