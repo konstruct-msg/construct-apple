@@ -34,9 +34,9 @@ struct NetworkSettingsView: View {
     /// server reports the flow disabled — read once per appearance, not per redraw.
     @State private var showingVeilVoucher = false
     @State private var veilVoucherOffered = VeilVoucherAvailability.isOffered
-//    #if DEBUG
+    #if DEBUG || INTERNAL_TOOLS
     @State private var engineQuicOn = FeatureFlags.engineQuicExperimental
-//    #endif
+    #endif
     #if DEBUG
     @State private var engineQuicObfOn = FeatureFlags.engineQuicObfuscated
     #endif
@@ -263,7 +263,7 @@ struct NetworkSettingsView: View {
                 // production gateway is plain, so enabling obf on a TestFlight build would just get
                 // datagrams dropped (invalid CID) and fall back to H2. Direct path only — ignored
                 // when VEIL is active.
-//                #if DEBUG
+                #if DEBUG || INTERNAL_TOOLS
                 CTSettingsSectionHeader(title: "EXPERIMENTAL", color: .orange)
                 CTSectionGroup {
                     Toggle(isOn: $engineQuicOn) {
@@ -311,7 +311,7 @@ struct NetworkSettingsView: View {
                     }
                     #endif
                 }
-//                #endif
+                #endif
 
                 #if DEBUG || INTERNAL_TOOLS
                 // Live FSM diagnostics (internal builds only). Every transport routing decision
