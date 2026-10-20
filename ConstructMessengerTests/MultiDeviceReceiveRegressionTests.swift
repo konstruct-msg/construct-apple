@@ -129,8 +129,16 @@ final class MultiDeviceReceiveRegressionTests: XCTestCase {
                 encoding: .utf8
             )
         )
-        let walk = try XCTUnwrap(source.range(of: "private func openSenderSync"))
-        let body = String(source[walk.lowerBound...].prefix(1400))
+        let syncSource = try XCTUnwrap(
+            try? String(
+                contentsOf: URL(fileURLWithPath: #filePath)
+                    .deletingLastPathComponent().deletingLastPathComponent()
+                    .appendingPathComponent("ConstructMessenger/Services/Messaging/MessageRouter+SenderSync.swift"),
+                encoding: .utf8
+            )
+        )
+        let walk = try XCTUnwrap(syncSource.range(of: "private func openSenderSync"))
+        let body = String(syncSource[walk.lowerBound...].prefix(1400))
         XCTAssertTrue(
             body.contains("claimedByThisHandler: true"),
             "openSenderSync decrypts one id once per candidate; without this it is refused by the "
