@@ -84,21 +84,6 @@ final class StreamLifecycleCoordinator {
         let pushEnabled: Bool
     }
 
-    // MARK: - Ephemeral subscriptions
-
-    private var ephemeralSubscriptionUserIds: Set<String> = []
-
-    /// Add a one-off stream subscription for a contact who has no User record yet.
-    /// Returns true if the userId was newly inserted (caller can use this to avoid
-    /// duplicate log lines if needed). Triggers a forceReconnect when inserted.
-    @discardableResult
-    func addEphemeralSubscription(for userId: String) -> Bool {
-        guard ephemeralSubscriptionUserIds.insert(userId).inserted else { return false }
-        Log.info("Ephemeral stream subscription added for \(userId.prefix(8))… (pending END_SESSION INITIATOR)", category: "StreamLifecycle")
-        reconnectIfSubscriptionsChanged(force: true)
-        return true
-    }
-
     // MARK: - Init
 
     init(streamManager: MessageStreamManager, sessionCoordinator: SessionCoordinator) {
@@ -527,10 +512,6 @@ final class StreamLifecycleCoordinator {
         }
 
         Log.debug("Dispatching incoming message \(message.id.prefix(8))… from=\(message.from.prefix(8))…", category: "StreamLifecycle")
-        let senderId = message.from
-        if !senderId.isEmpty, ephemeralSubscriptionUserIds.remove(senderId) != nil {
-            Log.info("Ephemeral subscription cleared for \(senderId.prefix(8))… (first message arrived)", category: "StreamLifecycle")
-        }
         sessionCoordinator.routeIncomingMessage(message, in: context)
     }
 
@@ -600,9 +581,9 @@ final class StreamLifecycleCoordinator {
     // MARK: - Contact helpers
 
     private func currentContactIds() -> [String] {
-        guard viewContext != nil else { return Array(ephemeralSubscriptionUserIds) }
+        guard viewContext != nil else { return [] }
         let rows = (try? LocalRepositories.contacts.everyContact(except: AuthSessionManager.shared.currentUserId)) ?? []
-        return Array(Set(rows.map(\.id)).union(ephemeralSubscriptionUserIds)).sorted()
+        return Array(Set(rows.map(\.id))).sorted()
     }
 
     private func prewarmEligibleContactIds() -> [String] {

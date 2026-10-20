@@ -107,7 +107,9 @@ final class MultiDeviceSendCoordinator {
     /// drain never suspends between reading it and clearing it in a `defer`.
     private var isDraining = false
 
-    /// Invalidate the own-device cache (call after linking or revoking a device).
+    /// Invalidate the own-device cache. Called after this device approves a join request and after
+    /// it revokes a device (both wired 2026-10-20; until then nothing called it and the set stayed
+    /// stale for the cache's hour).
     func invalidateOwnDeviceCache() {
         ownDeviceCache = nil
     }
