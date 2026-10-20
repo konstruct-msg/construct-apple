@@ -484,11 +484,17 @@ private struct VideoPlayerView: UIViewControllerRepresentable {
     func makeUIViewController(context: Context) -> AVPlayerViewController {
         let vc = AVPlayerViewController()
         vc.player = AVPlayer(url: url)
+        MediaPlaybackAudio.activate()
         vc.player?.play()
         return vc
     }
 
     func updateUIViewController(_ uiViewController: AVPlayerViewController, context: Context) {}
+
+    static func dismantleUIViewController(_ uiViewController: AVPlayerViewController, coordinator: ()) {
+        uiViewController.player?.pause()
+        MediaPlaybackAudio.deactivate()
+    }
 }
 #endif
 
