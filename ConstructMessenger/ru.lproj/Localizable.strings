@@ -80,7 +80,7 @@
 "camera_access_required" = "Требуется доступ к камере";
 "open_settings" = "Открыть настройки";
 "allow_camera_access_for_qr" = "Разрешите доступ к камере в настройках, чтобы сканировать QR-коды";
-"invalid_qr_code_construct" = "Неверный QR-код. Пожалуйста, отсканируйте контактный код Конструкта.";
+"invalid_qr_code_construct" = "Неверный QR-код. Пожалуйста, отсканируйте контактный код Konstruct.";
 
 // MARK: - Settings Main
 "user" = "Пользователь";
@@ -190,7 +190,7 @@
 "denied" = "Запрещено";
 
 // MARK: - Background Fetch & Local Notifications
-"construct_app_name" = "Конструкт";
+"construct_app_name" = "Konstruct";
 "construct_new_message" = "Новое сообщение";
 "construct_new_messages" = "Новые сообщения";
 "construct_new_messages_count" = "Новых сообщений: %d";
@@ -299,9 +299,9 @@
 "onboarding_existing_title" = "Существующая идентичность";
 "onboarding_existing_intro" = "Выберите, как перенести её на это устройство.";
 "onboarding_restore_title" = "Восстановить по фразе";
-"onboarding_restore_subtitle" = "Нет другого устройства с Конструктом. Используйте вашу фразу из 12 слов.";
+"onboarding_restore_subtitle" = "Нет другого устройства с Konstruct. Используйте вашу фразу из 12 слов.";
 "onboarding_link_title" = "Привязать это устройство";
-"onboarding_link_subtitle" = "Конструкт ещё есть на другом телефоне или компьютере.";
+"onboarding_link_subtitle" = "Konstruct ещё есть на другом телефоне или компьютере.";
 "onboarding_restore" = "Восстановить из ключа восстановления";
 "onboarding_recovery_coming_soon" = "Восстановление скоро будет доступно";
 "onboarding_network_settings" = "Настройки сети";
@@ -310,10 +310,10 @@
 "orientation_section_label" = "> знакомство";
 "orientation_skip" = "Пропустить";
 "orientation_next" = "Продолжить";
-"orientation_enter" = "Войти в Конструкт";
+"orientation_enter" = "Войти в Konstruct";
 "orientation_or" = "или";
 "orientation_page_a11y" = "Страница %d из %d";
-"orientation_settings_replay" = "Как устроен Конструкт";
+"orientation_settings_replay" = "Как устроен Konstruct";
 "orientation_page1_title" = "Идентичность";
 "orientation_page1_body" = "Без телефона, почты и настоящего имени. Идентичность создаётся с нуля на этом телефоне и не отсылает ни к чему вне себя. Кто вы здесь — решаете вы.";
 "orientation_page1_caption" = "Публичный @псевдоним необязателен. Ключи не покидают телефон.";
@@ -373,7 +373,7 @@
 
 // Invite / contact links
 "invite_error_invalid_url" = "Указан некорректный URL.";
-"invite_error_unsupported_link" = "Это не поддерживаемая ссылка-приглашение Конструкта.";
+"invite_error_unsupported_link" = "Это не поддерживаемая ссылка-приглашение Konstruct.";
 "invite_error_expired" = "Срок действия приглашения истёк. Попросите новое.";
 "invite_error_already_used" = "Это приглашение уже использовано. Попросите новое.";
 "invite_error_legacy_unsupported" = "Этот формат ссылки больше не поддерживается. Попросите свежий QR или ссылку.";
@@ -517,7 +517,7 @@
 /* Bootstrap voucher — приём кода (дверь «не подключается?» в онбординге) */
 "onboarding_cant_connect" = "Не подключается?";
 "veil_bootstrap_title" = "Не подключается";
-"veil_bootstrap_intro" = "Если Конструкт не может подключиться к сети, человек с работающим подключением может дать вам одноразовый код доступа. Попросите код, затем отсканируйте его или вставьте ниже.";
+"veil_bootstrap_intro" = "Если Konstruct не может подключиться к сети, человек с работающим подключением может дать вам одноразовый код доступа. Попросите код, затем отсканируйте его или вставьте ниже.";
 "veil_bootstrap_scan_subtitle" = "Наведите камеру на его код";
 "veil_bootstrap_paste_subtitle" = "Если код прислали текстом";
 "veil_bootstrap_ok" = "Подключение настроено";
@@ -527,7 +527,7 @@
 
 // Защита от блокировок (продуктовый soft-control — без VEIL / адресов релеев)
 "censorship_protection" = "Защита от блокировок";
-"censorship_protection_footer_off" = "Выкл. Подключение напрямую к Конструкту.";
+"censorship_protection_footer_off" = "Выкл. Подключение напрямую к Konstruct.";
 "censorship_protection_footer_auto" = "Включается автоматически при обнаружении блокировки. Настройка идёт в фоне.";
 "censorship_protection_footer_on" = "Всегда обходит сетевые блокировки. Настройка идёт в фоне.";
 
@@ -692,10 +692,10 @@
 "diagnostics_apns_token" = "APNs-токен";
 "diagnostics_apns_token_missing" = "отсутствует";
 "diagnostics_apns_token_received_format" = "получен (%@…)";
-"diagnostics_registered_with_server" = "Зарегистрирован в Конструкте";
+"diagnostics_registered_with_server" = "Зарегистрирован в Konstruct";
 "diagnostics_yes" = "да";
 "diagnostics_not_registered_with_server" = "нет — уведомления не будут приходить";
-"diagnostics_server_token_warning" = "Токен не зарегистрирован в Конструкте. Вернитесь в чаты — повторная регистрация выполнится автоматически при возврате приложения на передний план.";
+"diagnostics_server_token_warning" = "Токен не зарегистрирован в Konstruct. Вернитесь в чаты — повторная регистрация выполнится автоматически при возврате приложения на передний план.";
 "diagnostics_log_collection" = "Сбор логов";
 "diagnostics_status_active" = "Активен";
 "diagnostics_status_off" = "Выкл";
@@ -720,7 +720,7 @@
 "onboarding_link_device" = "Привязать существующую идентичность";
 "device_link_scan_title" = "Сканировать для привязки";
 "link_method_title" = "Привязать устройство";
-"link_method_intro" = "Добавьте это устройство к вашей существующей идентичности в Конструкте. Выберите способ по тому, какой камерой удобнее навести.";
+"link_method_intro" = "Добавьте это устройство к вашей существующей идентичности в Konstruct. Выберите способ по тому, какой камерой удобнее навести.";
 "link_method_scan_title" = "Сканировать код";
 "link_method_scan_subtitle" = "Другое устройство показывает QR-код";
 "link_method_show_title" = "Показать код";
@@ -745,16 +745,16 @@
 // MARK: - Device Join Request (Desktop onboarding)
 "device_link_request_title" = "Привязать к существующей идентичности";
 "device_link_request_instruction" = "Отсканируйте с iPhone";
-"device_link_request_steps" = "Откройте Конструкт на iPhone → Настройки → Устройства → нажмите «Привязать новое устройство» — или просто отсканируйте этот код, если Конструкт уже открыт.";
+"device_link_request_steps" = "Откройте Konstruct на iPhone → Настройки → Устройства → нажмите «Привязать новое устройство» — или просто отсканируйте этот код, если Konstruct уже открыт.";
 "device_link_waiting_approval" = "Ожидание подтверждения на iPhone…";
-"device_link_scan_on_phone" = "Отсканируйте этот код через Конструкт на iPhone";
+"device_link_scan_on_phone" = "Отсканируйте этот код через Konstruct на iPhone";
 "device_link_request_timeout" = "Время ожидания истекло — попробуйте снова";
 "device_link_feature_unavailable" = "Функция требует обновления сервера. Попробуйте позже.";
-"device_link_invalid_qr" = "Неверный QR-код — убедитесь, что сканируете код Конструкта.";
+"device_link_invalid_qr" = "Неверный QR-код — убедитесь, что сканируете код Konstruct.";
 "device_link_approve_title" = "Привязать «%@» к вашей идентичности?";
 "device_link_approve_title_fallback" = "Привязать новое устройство к вашей идентичности?";
 "device_link_approve" = "Привязать устройство";
-"device_link_approve_message" = "Это устройство получит полный доступ к вашей идентичности в Конструкте.";
+"device_link_approve_message" = "Это устройство получит полный доступ к вашей идентичности в Konstruct.";
 "device_link_approved_title" = "Устройство привязано";
 "device_link_approved_message" = "Устройство успешно привязано к вашей идентичности.";
 
@@ -914,15 +914,15 @@
 "keys_recovery_wipe_confirm_body" = "Это действие безвозвратно удалит вашу текущую идентичность и все локальные данные. Отменить невозможно.";
 "keys_recovery_wipe_confirm_action" = "удалить и продолжить";
 
-// MARK: - Device Deregistered (Конструкт больше не знает эту реплику)
+// MARK: - Device Deregistered (Konstruct больше не знает эту реплику)
 "device_deregistered_warning_title" = "⚠ УСТРОЙСТВО НЕ ЗАРЕГИСТРИРОВАНО";
-"device_deregistered_warning_body" = "Конструкт больше не распознаёт это устройство. Такое бывает после временного сбоя или если устройство удалили с другого устройства.\n\nКлючи всё ещё на этом телефоне — ничего не удалено. Повторите попытку ниже или восстановите идентичность по фразе восстановления.";
+"device_deregistered_warning_body" = "Konstruct больше не распознаёт это устройство. Такое бывает после временного сбоя или если устройство удалили с другого устройства.\n\nКлючи всё ещё на этом телефоне — ничего не удалено. Повторите попытку ниже или восстановите идентичность по фразе восстановления.";
 "device_deregistered_retry_hint" = "Отказ может быть временным сбоем сервера. Попробуйте пройти аутентификацию ещё раз.";
 "mailbox_gap_title" = "Часть сообщений могла не дойти";
 "mailbox_gap_body" = "Сообщения, отправленные вам с %1$@ по %2$@, удалены с сервера раньше, чем это устройство их забрало. Сервер хранит недоставленные сообщения ограниченное время.";
 "mailbox_gap_body_open" = "Сообщения, отправленные вам с %@, удалены с сервера раньше, чем это устройство их забрало. Сервер хранит недоставленные сообщения ограниченное время.";
 "store_import_title" = "Переносим переписку";
-"store_import_body" = "Один раз, после обновления. Не закрывайте Конструкт — это займёт несколько секунд.";
+"store_import_body" = "Один раз, после обновления. Не закрывайте Konstruct — это займёт несколько секунд.";
 "local_store_unreadable_title" = "НЕ УДАЛОСЬ ОТКРЫТЬ ЧАТЫ НА ЭТОМ УСТРОЙСТВЕ";
 "local_store_unreadable_body" = "Чаты, сообщения и люди, сохранённые на этом устройстве, не удалось открыть. Ничего не удалено, и ничего нового не сохраняется, пока они снова не откроются.\n\nОбычно это значит, что Keychain ещё не отвечает — например, пока устройство не разблокировано.";
 "local_store_unreadable_retry_hint" = "Попробуйте открыть их снова — например, после разблокировки.";
@@ -953,7 +953,7 @@
 "username_not_set" = "Имя пользователя не задано";
 "searchable_indicator" = "В поиске";
 "searchable_indicator_off" = "Не в поиске";
-"synapses_remote_result_header" = "найдено в Конструкте";
+"synapses_remote_result_header" = "найдено в Konstruct";
 "synapses_searching" = "поиск...";
 "synapses_not_found" = "не найдено";
 
@@ -986,8 +986,8 @@
 // Stealth mode
 "stealth_section" = "стелс";
 "stealth_title" = "Анонимность отправителя";
-"stealth_always_on_hint" = "Конструкт никогда не узнаёт, кто отправил сообщение. Работает всегда — выключателя нет, и пополнять ничего не нужно.";
-"stealth_off_hint" = "Выключено — ваши отправки раскрывают Конструкту, кто вы. Только для отладки.";
+"stealth_always_on_hint" = "Konstruct никогда не узнаёт, кто отправил сообщение. Работает всегда — выключателя нет, и пополнять ничего не нужно.";
+"stealth_off_hint" = "Выключено — ваши отправки раскрывают серверу Konstruct, кто вы. Только для отладки.";
 
 // Короткие метки для сегмента режима VEIL в настройках сети.
 
@@ -1074,7 +1074,7 @@
 "backup_restore_success_message" = "Резервная копия проверена и подготовлена. Закройте и откройте приложение снова, чтобы завершить восстановление.";
 
 "backup_error_invalid_mnemonic" = "Неверная фраза восстановления. Проверьте все 12 слов и попробуйте снова.";
-"backup_error_invalid_file" = "Это не резервная копия Конструкта или фраза восстановления неверна.";
+"backup_error_invalid_file" = "Это не резервная копия Konstruct или фраза восстановления неверна.";
 
 // Transfer (P2P nearby)
 "transfer_send_nearby" = "Отправить на соседнее устройство";
@@ -1135,7 +1135,7 @@
 "history_sync_share_file" = "Поделиться файлом";
 "history_sync_preparing_file" = "Готовим файл…";
 "history_sync_looking" = "Поиск другого устройства…";
-"history_sync_not_seen_hint" = "Другое устройство пока не видно. Держите на нём Конструкт открытым, а оба устройства — в одной сети Wi‑Fi. Или сохраните файл.";
+"history_sync_not_seen_hint" = "Другое устройство пока не видно. Держите на нём Konstruct открытым, а оба устройства — в одной сети Wi‑Fi. Или сохраните файл.";
 "history_sync_stage_chats" = "Чаты";
 "history_sync_stage_media" = "Фото и файлы";
 "history_sync_done" = "История перенесена.";
@@ -1283,7 +1283,7 @@
 /* VEIL bootstrap voucher — дать доступ тому, у кого входа ещё нет. */
 "veil_voucher_row" = "Дать кому-то доступ";
 "veil_voucher_title" = "Дать доступ";
-"veil_voucher_instructions" = "Пусть отсканирует этот код в Конструкте. Он настроит подключение, но не добавит вас в контакты.";
+"veil_voucher_instructions" = "Пусть отсканирует этот код в Konstruct. Он настроит подключение, но не добавит вас в контакты.";
 "veil_voucher_expires_in" = "Действует ещё %@";
 "veil_voucher_expired" = "Код истёк";
 "veil_voucher_new" = "Создать новый код";
@@ -1292,7 +1292,7 @@
 "veil_voucher_unavailable" = "Выдача доступа сейчас недоступна.";
 "veil_voucher_err_generic" = "Не удалось создать код";
 "veil_voucher_privacy_hint" = "Показывайте код только тому, для кого он предназначен. Не публикуйте его и не отправляйте через открытый канал.";
-"veil_voucher_intro" = "Создаёт одноразовый код для настройки подключения человека, который пока не может связаться с Конструктом. Код действует недолго, в сутки можно создать три.";
+"veil_voucher_intro" = "Создаёт одноразовый код для настройки подключения человека, который пока не может связаться с Konstruct. Код действует недолго, в сутки можно создать три.";
 "veil_voucher_create" = "Создать код";
 
 /* Desktop chrome — D2–D7 */
@@ -1318,12 +1318,12 @@
 "desktop_add_show_qr" = "Покажите это человеку, чтобы он мог отсканировать";
 "desktop_add_device_unregistered" = "Устройство не зарегистрировано";
 "desktop_add_qr_failed" = "Не удалось создать QR-код";
-"desktop_add_point_camera" = "Наведите камеру на QR-код Конструкта";
+"desktop_add_point_camera" = "Наведите камеру на QR-код Konstruct";
 "desktop_add_camera_privacy" = "Разрешите камеру в Системных настройках → Конфиденциальность и безопасность → Камера";
 "desktop_add_drop_image" = "Перетащите изображение сюда";
 "desktop_add_drop_types" = "PNG, JPG, снимок экрана";
 "desktop_add_choose_file" = "Выбрать файл…";
-"desktop_add_choose_file_panel" = "Выберите снимок или изображение с QR-кодом Конструкта";
+"desktop_add_choose_file_panel" = "Выберите снимок или изображение с QR-кодом Konstruct";
 "desktop_add_cannot_read_file" = "Не удалось прочитать файл";
 "desktop_add_cannot_decode_image" = "Не удалось разобрать изображение";
 "desktop_add_cannot_load_image" = "Не удалось загрузить изображение";
@@ -1334,7 +1334,7 @@
 "desktop_add_supported" = "konstruct://add?invite=… или https://konstruct.cc/add?invite=…";
 
 "backup_restore_required_title" = "Нужно перезапустить";
-"backup_restore_required_message" = "Закройте и снова откройте Конструкт, чтобы закончить восстановление.";
+"backup_restore_required_message" = "Закройте и снова откройте Konstruct, чтобы закончить восстановление.";
 "spam_warning_title" = "Отправка…";
 "spam_warning_wait" = "Подождите %d с";
 "spam_strong_warning_title" = "Необычная активность";
@@ -1354,7 +1354,7 @@
 // Recovery key made silently, copied later (decisions/recovery-key-backup-is-deferred-not-skipped.md)
 "recovery_backup_auth_reason" = "Показать ключ восстановления";
 "recovery_backup_intro_title" = "Сохраните ключ восстановления";
-"recovery_backup_intro_body" = "У Конструкта нет вашего телефона и почты. Этот ключ — единственный способ вернуть аккаунт, если вы потеряете все устройства. Запишите 12 слов и храните их в надёжном месте.";
+"recovery_backup_intro_body" = "У Konstruct нет вашего телефона и почты. Этот ключ — единственный способ вернуть аккаунт, если вы потеряете все устройства. Запишите 12 слов и храните их в надёжном месте.";
 "recovery_backup_show" = "Показать ключ";
 "recovery_backup_pending_title" = "Ключ восстановления не сохранён";
 "recovery_backup_pending_subtitle" = "Запишите ключ восстановления — это единственный способ вернуть аккаунт, если пропадут все устройства.";
@@ -1393,7 +1393,7 @@
 "invite_error_verification_failed" = "Не удалось проверить приглашение. Проверьте соединение и попробуйте снова.";
 "backup_error_wrong_password" = "Неверный пароль или копия повреждена.";
 "device_link_error_keys" = "Не удалось создать ключи для этого устройства. Попробуйте снова.";
-"device_link_error_invalid_qr" = "Это не код устройства Конструкта.";
+"device_link_error_invalid_qr" = "Это не код устройства Konstruct.";
 "device_link_error_rejected" = "Другое ваше устройство отклонило запрос.";
 "device_link_error_expired" = "Срок запроса истёк. Покажите новый код.";
 "device_link_error_token" = "Срок действия кода истёк. Отсканируйте новый.";

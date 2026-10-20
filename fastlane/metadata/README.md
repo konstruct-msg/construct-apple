@@ -32,4 +32,6 @@ marketing URLs. Those live in App Store Connect and change on a different clock.
 - **No number that lives in code.** An invite TTL or a retention window written here
   goes stale silently — the same defect that had the onboarding screen promising a
   5-minute invite for three days after the constant became 12 hours.
-- One product name per script: `Konstruct`, `Конструкт`, `コンストラクト`.
+- The product name is `Konstruct`, in Latin, in every locale (owner, 2026-10-20). The
+  transliteration (`конструкт`, `コンストラクト`) goes in `keywords.txt`, so a search in the
+  local script still finds the app.

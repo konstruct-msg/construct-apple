@@ -174,11 +174,15 @@ theme file is **shared, never copied** — the copy is what killed the last atte
   and had fallen hundreds of keys behind by the time anyone counted. The exemption is what let
   that happen — nothing reported the gap, so it grew by whatever each release added. A locale
   allowed to lag does. Both are complete now and held to the same rule.
-- **One product name per script.** `Konstruct` in Latin, `Конструкт` in Russian, `コンストラクト`
-  in Japanese, `Կոնստրուկտ` in Armenian (case endings attach without a hyphen:
-  `Կոնստրուկտը`) — a localized name is a transliteration, never a translation. The one deliberate
-  exception is `onboarding_tagline`, where "identity is a construct" is the common noun and the
-  pun. Why the Japanese changed: `client/GLOSSARY_PRODUCT_LANGUAGE.md` in the vault.
+- **The product name is `Konstruct`, in Latin, in every locale** — the label under the icon,
+  the store name and running text alike (owner, 2026-10-20). Written in a local script it is
+  also a common word (конструкт, コンストラクト); in Latin it reads as a name. It is not
+  declined: Russian `в Konstruct`, `у Konstruct`; Armenian endings take a hyphen,
+  `Konstruct-ը`, `Konstruct-ում`, as with `Face ID-ն`; Japanese particles attach directly,
+  `Konstructの`, and a following noun takes a space, `Konstruct アカウント`. Until 2026-10-20
+  each script had its own transliteration (`Конструкт`, `コンストラクト`,
+  `Կոնստրուկտ`). Research behind it: `client/shared/scripts-typefaces-and-brand-name.md` in the
+  vault.
 - **App Store listing copy lives in `fastlane/metadata/<locale>/`**, not only in App Store
   Connect, so a change to it has a diff and a reviewer. Read `fastlane/metadata/README.md` before
   touching it — field limits, the four store locales, and what must never go in the copy.

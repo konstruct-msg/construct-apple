@@ -30,7 +30,8 @@ for clarity.
 
 ## Canonical spelling
 
-The correct forms are **Konstruct** (Latin script) and **Конструкт** (Cyrillic). Writing
+The product is named **Konstruct**, in Latin script, in every language; **Конструкт** remains a
+mark of the Project. Writing
 "Construct" in Latin script inside Russian text is an incorrect mixing and is not a Project mark;
 the lowercase technical prefix `construct-` in repository, crate, and module names is descriptive,
 not a brand use.
