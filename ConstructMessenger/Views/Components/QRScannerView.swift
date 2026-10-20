@@ -47,7 +47,7 @@ struct QRScannerView: View {
                         .fill(Color.CT.mediaGround.opacity(0.6), style: FillStyle(eoFill: true))
 
                     ScannerCornerBrackets(scanRect: scanRect)
-                        .stroke(Color.AppBrand.button, lineWidth: 3)
+                        .stroke(Color.CT.accent, lineWidth: 3)
                 }
                 .ignoresSafeArea()
 
