@@ -69,13 +69,7 @@ class MessageRetryManager {
                         timestamp: capturedTimestamp,
                         spendUnit: retrySpendUnit
                     )
-                    let finalStatus: DeliveryStatus
-                    switch report.status.status.lowercased() {
-                    case "failed", "blocked": finalStatus = report.status.retryable ? .queued : .failed
-                    case "queued": finalStatus = .queued
-                    case "delivered": finalStatus = .delivered
-                    default: finalStatus = .sent
-                    }
+                    let finalStatus = report.status.deliveryStatus
                     let maxRetryAfterMs = report.status.retryAfterMs
                     let finalErrorCode = report.status.errorCode
                     let serverOrderKey = report.status.serverOrderKey
@@ -461,12 +455,7 @@ class MessageRetryManager {
                             timestamp: UInt64(Date().timeIntervalSince1970),
                             spendUnit: TokenSpendUnitStore.paidUnit(baseMessageId: messageId, recipientId: recipientId)
                         )
-                        switch report.status.status.lowercased() {
-                        case "failed", "blocked": finalStatus = report.status.retryable ? .queued : .failed
-                        case "queued": finalStatus = .queued
-                        case "delivered": finalStatus = .delivered
-                        default: finalStatus = .sent
-                        }
+                        finalStatus = report.status.deliveryStatus
                         serverOrderKey = report.status.serverOrderKey
                     } else {
                         // The payload disappeared after preflight (e.g. TTL expiry). Preserve
@@ -679,10 +668,10 @@ class MessageRetryManager {
                let chatId = (try? LocalRepositories.messages.message(messageId))??.chatId {
                 MessagePersistenceService.refreshPreview(ofChat: chatId)
             }
-            switch aggregated.status.lowercased() {
-            case "failed", "blocked": return aggregated.retryable ? .queued : .failed
-            case "queued":    return .queued
-            case "delivered":
+            switch aggregated.deliveryStatus {
+            case .failed:  return .failed
+            case .queued:  return .queued
+            case .delivered:
                 await Self.mirror(messageId: messageId, wirePlaintext: plaintext,
                                   recipientId: recipientId, senderId: senderId)
                 return .delivered
