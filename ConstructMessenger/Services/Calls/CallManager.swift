@@ -30,6 +30,9 @@ final class CallManager: CallUIManaging {
         case programmatic = "programmatic"
     }
 
+    // `state`, `lastError`, `callQuality` and `video` were `private(set)` until the split into
+    // `CallManager+*.swift` (2026-10-20, TODO 183): Swift's `private(set)` is per file, and the
+    // extensions set them. Written only by `CallManager` and its extensions — views read them.
     var state: CallState = .idle
     var lastError: String? = nil
     /// Coarse network health for the active call. `good` is the normal

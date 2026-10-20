@@ -237,7 +237,7 @@ extension CallManager {
     }
 
     /// Fail the call if the SDP never arrives after the user answered.
-    func startOfferWaitTimeout(for call: ActiveCall) {
+    private func startOfferWaitTimeout(for call: ActiveCall) {
         call.offerWaitTimeout?.cancel()
         call.offerWaitTimeout = Task { [weak self] in
             try? await Task.sleep(nanoseconds: UInt64(Self.offerAfterAnswerTimeout * 1_000_000_000))
