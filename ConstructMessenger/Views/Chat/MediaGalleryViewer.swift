@@ -467,7 +467,10 @@ struct MediaGalleryPage: View {
     let onDismiss: () -> Void
 
     @State private var image: PlatformImage?
-    @State private var isLoading = false
+    @State private var loader = MediaLoader<PlatformImage>(
+        pacing: .init(cap: 0.9, afterDownload: nil), logCategory: "MediaGalleryViewer", logLabel: "Gallery image")
+
+    private var isLoading: Bool { loader.isLoading }
 
     @State private var scale: CGFloat = 1.0
     @State private var lastScale: CGFloat = 1.0
@@ -571,8 +574,6 @@ struct MediaGalleryPage: View {
             return
         }
 
-        isLoading = true
-
         // Own sends used to take a shortcut here: read the stored thumbnail and call it done, under
         // a comment claiming "full-res stored locally". It is not — `ThumbnailStore` holds a 320px
         // JPEG capped at 12 KB. So opening your own photo full-screen showed an upscaled thumbnail,
@@ -592,30 +593,17 @@ struct MediaGalleryPage: View {
                : [:])
             : mediaItem
 
-        guard let mediaId = item["mediaId"] as? String,
-              let mediaUrl = item["mediaUrl"] as? String,
-              let mediaKeyStr = item["mediaKey"] as? String,
-              let mediaKey = Data(base64Encoded: mediaKeyStr) else {
-            isLoading = false
-            return
-        }
+        guard let descriptor = MediaLoader<PlatformImage>.Descriptor(item: item) else { return }
 
+        let messageId = message.id
+        let index = itemIndex
         Task {
-            do {
-                let data = try await MediaManager.shared.downloadAndDecryptMedia(
-                    mediaId: mediaId, mediaUrl: mediaUrl, mediaKey: mediaKey)
-                if let img = PlatformImage(data: data) {
-                    await MainActor.run {
-                        MediaImageCache.shared.storeOriginal(img, for: message.id, at: itemIndex)
-                        image = img
-                        isLoading = false
-                    }
-                } else {
-                    await MainActor.run { isLoading = false }
-                }
-            } catch {
-                await MainActor.run { isLoading = false }
-            }
+            image = await loader.load(
+                descriptor,
+                cached: { MediaImageCache.shared.original(for: messageId, at: index) },
+                decode: { PlatformImage(data: $0) },
+                store: { MediaImageCache.shared.storeOriginal($0, for: messageId, at: index) }
+            )
         }
     }
 }
@@ -683,9 +671,13 @@ struct GalleryVideoPage: View {
 
     @State private var player: AVPlayer?
     @State private var tempURL: URL?
-    @State private var isLoading = false
-    @State private var progress: Double = 0
+    /// Progress runs to 0.99 and is not bumped after the bytes are in: the clip is playing the
+    /// moment the temp file is written.
+    @State private var loader = MediaLoader<URL>(
+        pacing: .init(cap: 0.99, afterDownload: nil), logCategory: "MediaGalleryViewer", logLabel: "Gallery video")
     @State private var failed = false
+
+    private var progress: Double { loader.progress }
 
     var body: some View {
         return AnyView(
@@ -733,9 +725,8 @@ struct GalleryVideoPage: View {
     }
 
     private func load(forceRetry: Bool = false) {
-        guard player == nil, !isLoading || forceRetry else { return }
+        guard player == nil, !loader.isLoading || forceRetry else { return }
         failed = false
-        progress = 0
 
         if let cachedURL = MediaVideoCache.shared.url(for: message.id, at: itemIndex) {
             let cachedPlayer = AVPlayer(url: cachedURL)
@@ -755,46 +746,40 @@ struct GalleryVideoPage: View {
                : [:])
             : mediaItem
 
-        guard let mediaId = item["mediaId"] as? String,
-              let mediaUrl = item["mediaUrl"] as? String,
-              let mediaKeyStr = item["mediaKey"] as? String,
-              let mediaKey = Data(base64Encoded: mediaKeyStr) else {
+        guard let descriptor = MediaLoader<URL>.Descriptor(item: item) else {
             failed = true
             return
         }
-        isLoading = true
 
-        let total = Double((item["size"] as? Int) ?? 0)
-        let onProgress: @Sendable (Int64) -> Void = { received in
-            guard total > 0 else { return }
-            let frac = min(0.99, Double(received) / total)
-            Task { @MainActor in progress = frac }
-        }
-
+        let messageId = message.id
+        let index = itemIndex
         Task {
-            do {
-                let data = try await MediaManager.shared.downloadAndDecryptMedia(
-                    mediaId: mediaId, mediaUrl: mediaUrl, mediaKey: mediaKey, onProgress: onProgress)
-                let url = FileManager.default.temporaryDirectory
-                    .appendingPathComponent(UUID().uuidString).appendingPathExtension("mp4")
-                try data.write(to: url)
-                await MainActor.run {
-                    let p = AVPlayer(url: url)
-                    MediaVideoCache.shared.store(url, for: message.id, at: itemIndex)
-                    tempURL = url
-                    player = p
-                    isLoading = false
-                    apply(rate)
-                    #if os(iOS)
-                    MediaPlaybackAudio.activate()
-                    #endif
-                    p.play()
-                }
-                await Self.cacheFirstFramePoster(from: url, messageId: message.id, itemIndex: itemIndex)
-            } catch {
-                Log.error("Gallery video load failed: \(error)", category: "MediaGalleryViewer")
-                await MainActor.run { isLoading = false; failed = true }
+            // AVPlayer needs a URL, so the "decode" is writing the clip out. The video-file cache
+            // was consulted above, before the descriptor was read; `cached` has nothing to add.
+            let url = await loader.load(
+                descriptor,
+                cached: { nil },
+                decode: { data in
+                    let url = FileManager.default.temporaryDirectory
+                        .appendingPathComponent(UUID().uuidString).appendingPathExtension("mp4")
+                    try data.write(to: url)
+                    return url
+                },
+                store: { MediaVideoCache.shared.store($0, for: messageId, at: index) }
+            )
+            guard let url else {
+                failed = true
+                return
             }
+            let p = AVPlayer(url: url)
+            tempURL = url
+            player = p
+            apply(rate)
+            #if os(iOS)
+            MediaPlaybackAudio.activate()
+            #endif
+            p.play()
+            await Self.cacheFirstFramePoster(from: url, messageId: messageId, itemIndex: index)
         }
     }
 
