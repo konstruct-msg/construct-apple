@@ -614,6 +614,7 @@ struct ChatView: View {
         VStack(spacing: 0) {
             HStack(spacing: CTLayout.inlinePad / 2) {
                 Text(name)
+                    .typesetting(asScriptOf: name)
                     .font(CTFont.ui(17, weight: .semibold, relativeTo: .headline))
                     .foregroundStyle(Color.CT.text)
                     .lineLimit(1)
