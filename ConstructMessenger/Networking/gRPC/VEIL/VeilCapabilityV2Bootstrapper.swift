@@ -30,8 +30,8 @@ final class VeilCapabilityV2Bootstrapper {
     /// Don't re-attempt routine renewal more often than this within a session.
     private let minRetryInterval: TimeInterval = 60 * 60      // 1 hour
     /// Retry interval while we've never successfully bootstrapped yet. The only call
-    /// site today is `VeilProxyManager.startIfEnabled()`, which fires before
-    /// `ConnectionLoop`/`TransportRouter` has actually brought the VEIL tunnel up — the
+    /// site today is `VeilProxyManager.startIfNeeded()`, which fires before
+    /// `TransportRouter` has actually brought the VEIL tunnel up — the
     /// first attempt routinely loses the race against the direct→veil-probing→veil-active
     /// transport switch (`invalidate-grpc` tears down the in-flight RPC). A short retry
     /// keeps the bootstrap from being stuck for a full hour after that expected first miss.

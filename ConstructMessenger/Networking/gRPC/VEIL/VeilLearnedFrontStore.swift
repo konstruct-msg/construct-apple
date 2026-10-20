@@ -28,7 +28,7 @@ import Foundation
 
 /// One front learned from a signature-verified blob.
 struct VeilLearnedFront: Codable, Equatable {
-    /// `host:port`, lowercased — the exact key `ConnectionLoopRelayBridge.buildRelay`
+    /// `host:port`, lowercased — the exact key `RelaySnapshot.buildRelay`
     /// and `VeilRelayTrust.verify` look up.
     let address: String
     /// TLS SNI to present.
@@ -149,7 +149,7 @@ final class VeilLearnedFrontKeychain: VeilLearnedFrontPersistence {
 /// Thread-safe, nonisolated access to the learned fronts.
 ///
 /// Nonisolated and synchronous because the consumers are: `VeilRelayTrust.verify`,
-/// `ConnectionLoopRelayBridge.buildRelay` and `VeilRelaySelector.cachedRelayAddresses()`
+/// `RelaySnapshot.buildRelay` and `VeilRelaySelector.cachedRelayAddresses()`
 /// — all called from non-async contexts on arbitrary threads, same as `DiscoveredRelayStore`.
 final class VeilLearnedFrontStore: @unchecked Sendable {
 

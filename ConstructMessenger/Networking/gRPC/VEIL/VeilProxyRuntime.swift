@@ -16,10 +16,9 @@ import Foundation
 
 /// Contract for the native VEIL proxy C FFI layer.
 ///
-/// Production path goes through the unified `veil_start` FFI (Rust does parallel
-/// happy-eyeballs probing of obfs4 + WebTunnel internally and picks a winner).
-/// The legacy per-method `start(_:)` / `startSecondary` calls remain on the protocol
-/// for test ergonomics — production code paths must not use them.
+/// One start: the unified `veil_start` FFI (Rust does parallel happy-eyeballs probing of the
+/// obfuscators internally and picks a winner). The per-method `start(_:)` / `startSecondary`
+/// pair of the Swift dual-proxy era was removed on 2026-10-20 with no production caller left.
 protocol VeilProxyRuntime: AnyObject, Sendable {
     /// Unified entry point — Rust coordinator picks the obfuscator via happy-eyeballs.
     /// Returns the local port, the winning method, and the probe latency.
@@ -28,12 +27,6 @@ protocol VeilProxyRuntime: AnyObject, Sendable {
         fingerprint: Data,
         scoresPath: String?
     ) -> Result<VeilStartOutcome, VeilProxyRuntimeError>
-
-    /// Legacy per-method start. Kept for test mocks; production callers use `startUnified`.
-    func start(_ request: VeilTransportRequest) -> Result<UInt16, VeilProxyRuntimeError>
-
-    /// Legacy secondary start for Happy Eyeballs dual-proxy mode. Kept for test mocks.
-    func startSecondary(bridgeLine: String, address: String) -> Result<UInt16, VeilProxyRuntimeError>
 
     /// Stop the active proxy (regardless of which start variant was used).
     func stop()

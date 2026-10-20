@@ -94,7 +94,7 @@ final class VeilProxyManager: ObservableObject {
 
     /// Quality level for the given relay address from persisted history.
     func qualityForRelay(_ address: String) -> RelayQuality {
-        .unknown  // ConnectionLoop uses simple failure counting
+        .unknown  // no per-relay history is kept; the router counts failures
     }
 
     /// An RPC succeeded through `address` — top up that relay's credentials over the
@@ -294,7 +294,7 @@ final class VeilProxyManager: ObservableObject {
         // regime, browse the LAN for domestic island relays (this is the only place that
         // raises the local-network prompt — never at launch). Off-regime: no-op.
         startLocalDiscoveryIfCensored()
-        // ConnectionLoop handles proxy lifecycle. iOS is veil-front-only (SPKI pin +
+        // The transport router handles proxy lifecycle. iOS is veil-front-only (SPKI pin +
         // per-user ticket); the obfs4 bridge cert is not used, so we no longer fetch it
         // here — that fetch only added two 8s .well-known/ice-cert timeouts on censored
         // networks. The relay manifest is still refreshed for AMS relay retirement.
@@ -418,11 +418,6 @@ final class VeilProxyManager: ObservableObject {
         )
     }
 
-    /// Legacy name — forwards to `startIfNeeded()`.
-    func startIfEnabled() async {
-        await startIfNeeded()
-    }
-
     /// Called on app foreground to verify the VEIL proxy process is actually alive.
     /// iOS may kill background threads; `isRunning` may be stale. Restarts if dead.
     func stop() {
@@ -450,7 +445,7 @@ final class VeilProxyManager: ObservableObject {
     /// Re-snapshot the relay pool (now including any LAN-discovered relays) and push it into
     /// the router's proxy pool so the next probe race can pick a discovered island relay.
     private func refreshRelayPoolFromDiscovery() async {
-        let freshRelays = ConnectionLoopRelayBridge.snapshotRelays()
+        let freshRelays = RelaySnapshot.snapshotRelays()
         await TransportRouter.shared.updateRelays(freshRelays)
     }
 
@@ -493,7 +488,7 @@ final class VeilProxyManager: ObservableObject {
     private func fetchConfigAndEvictIfRemoved() async {
         guard let freshList = await VeilCertFetcher.shared.fetchAndCacheRelayConfig() else { return }
         // Always push the fresh manifest into the router's proxy pool so subsequent probes pick it up.
-        let freshRelays = ConnectionLoopRelayBridge.snapshotRelays()
+        let freshRelays = RelaySnapshot.snapshotRelays()
         await TransportRouter.shared.updateRelays(freshRelays)
         guard let active = activeRelay, let mid = active.manifestId else { return }
         let freshIds   = Set(freshList.map(\.id))
@@ -508,7 +503,9 @@ final class VeilProxyManager: ObservableObject {
         VeilProxyStore.saveStoredRelay(relay)
     }
 
-    /// Called by ConnectionLoop to keep published state in sync with the actual proxy.
+    /// Keeps published state in sync with the actual proxy. **No caller since `ConnectionLoop` was
+    /// deleted** — `isRunning`, `activeRelay` and `VeilFailurePolicy.webTunnelActive` stay false
+    /// while a tunnel is up (TODO 188); to be wired from the router, not deleted.
     func updateVEILProxyState(isRunning: Bool, port: UInt16, relay: VeilRelay?, isWebTunnel: Bool) {
         self.isRunning = isRunning
         self.proxyPort = port

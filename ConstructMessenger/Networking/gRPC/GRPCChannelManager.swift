@@ -47,7 +47,7 @@ final class GRPCChannelManager: Sendable {
         NotificationCenter.default.post(name: .grpcServerChanged, object: nil)
     }
 
-    /// Sets the VEIL proxy port managed by `ConnectionLoop`.
+    /// Sets the VEIL proxy port the transport router brought up (`GRPCChannelEffector`).
     /// When non-nil, `veilProxyPort()` returns this value and gRPC routes through the proxy.
     /// Pass `nil` to clear VEIL routing (direct path).
     func setDirectProxyPort(_ port: UInt16?) {
@@ -61,7 +61,7 @@ final class GRPCChannelManager: Sendable {
     }
 
     /// Returns the local proxy port when VEIL is active, nil for direct routing.
-    /// Set by `ConnectionLoop.prepare()` via `setDirectProxyPort()`.
+    /// Set by `GRPCChannelEffector` via `setDirectProxyPort()`.
     func veilProxyPort() -> UInt16? {
         _overrideProxyPortLock.withLock { _overrideProxyPort }
     }
@@ -155,7 +155,7 @@ final class GRPCChannelManager: Sendable {
     }
 #endif
 
-    // Set by ConnectionLoop.prepare() via setDirectProxyPort(). veilProxyPort() returns this value.
+    // Set by GRPCChannelEffector via setDirectProxyPort(). veilProxyPort() returns this value.
     private nonisolated(unsafe) var _overrideProxyPort: UInt16? = nil
     private let _overrideProxyPortLock = NSLock()
 
