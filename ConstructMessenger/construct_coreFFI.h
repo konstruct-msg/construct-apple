@@ -539,11 +539,6 @@ uint64_t uniffi_construct_core_fn_constructor_localstore_new(RustBuffer path, Ru
 int8_t uniffi_construct_core_fn_method_localstore_add_pending_chunk(uint64_t ptr, RustBuffer chunk, RustCallStatus *_Nonnull out_status
 );
 #endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_LOCALSTORE_ADVANCE_CHAT_PREVIEW
-#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_LOCALSTORE_ADVANCE_CHAT_PREVIEW
-int8_t uniffi_construct_core_fn_method_localstore_advance_chat_preview(uint64_t ptr, RustBuffer id, RustBuffer text, int64_t time, RustCallStatus *_Nonnull out_status
-);
-#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_LOCALSTORE_ALL_MESSAGES_AFTER
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_LOCALSTORE_ALL_MESSAGES_AFTER
 RustBuffer uniffi_construct_core_fn_method_localstore_all_messages_after(uint64_t ptr, RustBuffer after_order_key, RustBuffer after_id, uint32_t limit, RustCallStatus *_Nonnull out_status
@@ -2905,12 +2900,6 @@ uint16_t uniffi_construct_core_checksum_method_historysender_snapshot_id(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_LOCALSTORE_ADD_PENDING_CHUNK
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_LOCALSTORE_ADD_PENDING_CHUNK
 uint16_t uniffi_construct_core_checksum_method_localstore_add_pending_chunk(void
-    
-);
-#endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_LOCALSTORE_ADVANCE_CHAT_PREVIEW
-#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_LOCALSTORE_ADVANCE_CHAT_PREVIEW
-uint16_t uniffi_construct_core_checksum_method_localstore_advance_chat_preview(void
     
 );
 #endif

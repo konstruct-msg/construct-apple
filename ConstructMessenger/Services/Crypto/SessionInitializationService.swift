@@ -5,9 +5,10 @@ import os.log
 
 /// Errors specific to the session-init layer (distinct from CryptoManagerError).
 enum SessionError: Error, LocalizedError, ApplicationLayerError {
-    /// Server returned a bundle whose SPK rotation epoch is older than the last
-    /// seen epoch for this contact — possible replay attack.
-    case staleSPKBundle(epoch: UInt32, knownEpoch: UInt32)
+    /// The core refused a bundle whose SPK rotation epoch is older than the last one it saw for
+    /// that device — a possible replay (`CryptoError.PeerSpkEpochRegressed`, core 0.53). The
+    /// detail is the core's text, which names both epochs.
+    case staleSPKBundle(detail: String)
     /// Peer's SPK is older than the Rust core's staleness limit.
     /// The peer must open their app to trigger SPK rotation before a session can be established.
     case peerSPKStale(ageDays: Double)
@@ -43,8 +44,8 @@ enum SessionError: Error, LocalizedError, ApplicationLayerError {
 
     var errorDescription: String? {
         switch self {
-        case .staleSPKBundle(let epoch, let knownEpoch):
-            return "SPK bundle replay: received epoch \(epoch) ≤ known epoch \(knownEpoch)"
+        case .staleSPKBundle(let detail):
+            return "SPK bundle replay refused: \(detail)"
         case .peerSPKStale(let days):
             return "Contact's encryption keys are \(String(format: "%.0f", days)) days old and need to be refreshed — ask them to open the app"
         case .kyberEpochRequired:
@@ -162,23 +163,15 @@ class SessionInitializationService {
     /// decision back rather than keep holding.
     static let maxThrottledWaits = 2
     
-    /// The checks a bundle passes before any init opens from it, whoever asked for the init:
-    /// the SPK epoch must not go backwards (a replayed bundle), and a PQ_HYBRID bundle must name
-    /// a Kyber SPK epoch. Shared by `initializeSession` and `answerOpenSession`, so a bundle the
-    /// one refuses the other refuses too.
+    /// The checks a bundle passes before any init opens from it, whoever asked for the init: a
+    /// PQ_HYBRID bundle must name a Kyber SPK epoch. Shared by `initializeSession` and
+    /// `answerOpenSession`, so a bundle the one refuses the other refuses too.
+    ///
+    /// The SPK rotation-epoch replay check lived here until 2026-10-20, kept in the Keychain per
+    /// **account** while a bundle names one device — a peer's second device was checked against the
+    /// first's counter. It is the core's since construct-core 0.53.0 (TODO 176): per device, on every
+    /// open path, refused as `CryptoError.PeerSpkEpochRegressed`.
     private func admit(_ bundle: PublicKeyBundleData, for userId: String) throws {
-    // Epoch replay-attack check: reject bundles where the server's monotonic
-    // rotation counter has not advanced beyond what we last saw for this contact.
-    // (Skip when epoch == 0, which means the server hasn't migrated yet.)
-    if bundle.spkRotationEpoch > 0 {
-        let knownEpoch = KeychainManager.shared.loadSpkEpoch(for: userId)
-        if bundle.spkRotationEpoch < knownEpoch {
-            Log.error("SESSION_STATE[spk_replay_rejected]: epoch=\(bundle.spkRotationEpoch) < known=\(knownEpoch) for \(userId.prefix(8))… — possible SPK replay attack", category: "SessionInit")
-            throw SessionError.staleSPKBundle(epoch: bundle.spkRotationEpoch, knownEpoch: knownEpoch)
-        }
-        KeychainManager.shared.saveSpkEpoch(bundle.spkRotationEpoch, for: userId)
-    }
-
     // PQ_HYBRID bundles (suiteId == 2) must have a non-zero Kyber SPK epoch.
     // epoch == 0 means the peer never uploaded a Kyber SPK; refuse to proceed
     // rather than silently falling back to classical-only key agreement.
@@ -224,7 +217,7 @@ class SessionInitializationService {
                 return false
             }
             if case .sessionBundleFetched = event, !refused {
-                KeychainManager.shared.deleteSessionAtRiskFlag(for: account)
+                KeychainManager.shared.deleteSessionAtRiskFlag(forDevice: device)
                 Log.info("SESSION_STATE[open_session_done]: new session with device \(device.prefix(8))…, the held one kept as previous", category: "SessionInit")
             }
             return actions
@@ -270,12 +263,15 @@ class SessionInitializationService {
             )
             PerformanceMetrics.shared.end(.sessionInitStart, endEvent: .sessionInitEnd, label: String(userId.prefix(8)))
             // Track at-risk state: a degraded (stale-SPK) init is authentic but should be
-            // re-keyed once the peer rotates; a clean init clears any prior at-risk flag.
+            // re-keyed once the peer rotates; a clean init clears any prior at-risk flag. Kept per
+            // device — the bundle names one (until 2026-10-20 per account, and removed per device,
+            // so it outlived the contact it described; TODO 176).
+            let device = SessionAddressing.cryptoIdentity(ofIdentityKey: bundle.identityPublic)
             if allowStale {
-                KeychainManager.shared.saveSessionAtRiskFlag(for: userId)
+                if let device { KeychainManager.shared.saveSessionAtRiskFlag(forDevice: device) }
                 Log.info("Session initialized as INITIATOR (degraded/at-risk) for \(userId)", category: "SessionInit")
             } else {
-                KeychainManager.shared.deleteSessionAtRiskFlag(for: userId)
+                if let device { KeychainManager.shared.deleteSessionAtRiskFlag(forDevice: device) }
                 Log.info("Session initialized as INITIATOR for \(userId)", category: "SessionInit")
             }
         } catch let sessionError as SessionError {
@@ -709,13 +705,18 @@ class SessionInitializationService {
     private let atRiskUpgradeCooldown: TimeInterval = 3600 // 1 hour
     private static let atRiskUpgradeAttemptPrefix = "session.atRiskUpgrade.lastAttempt."
 
+    /// Whether a session with any device of `peer` was opened from a stale SPK and not re-keyed yet.
+    static func isSessionAtRisk(withPeer peer: String) -> Bool {
+        SessionAddressing.deviceIds(ofPeer: peer).contains { KeychainManager.shared.loadSessionAtRiskFlag(forDevice: $0) }
+    }
+
     /// If the session with `userId` was established via a degraded (stale-SPK) init AND the peer has
     /// since rotated their SPK (now fresh), re-key cleanly to a fresh session and clear the at-risk
     /// flag — restoring full forward secrecy. No-op if the session isn't at-risk, the peer is still
     /// stale (keeps the working degraded session — no churn), or we attempted recently. See the
     /// `stale-peer-reachability` decision record (Phase 2).
     func upgradeAtRiskSessionIfPeerFresh(userId: String) async {
-        guard KeychainManager.shared.loadSessionAtRiskFlag(for: userId) else { return }
+        guard Self.isSessionAtRisk(withPeer: userId) else { return }
         guard CryptoManager.shared.hasSessionWithAnyDevice(ofPeer: userId) else { return }
 
         // Rate-limit per contact.
@@ -768,7 +769,7 @@ class SessionInitializationService {
         let rows = (try? LocalRepositories.contacts.everyContact(except: AuthSessionManager.shared.currentUserId)) ?? []
         let contactIds = rows.filter(\.isContact).map(\.id).filter { !$0.isEmpty }
 
-        let atRisk = contactIds.filter { KeychainManager.shared.loadSessionAtRiskFlag(for: $0) }
+        let atRisk = contactIds.filter { Self.isSessionAtRisk(withPeer: $0) }
         guard !atRisk.isEmpty else { return }
 
         Log.info("SESSION_STATE[at_risk_sweep]: \(atRisk.count) at-risk session(s) on foreground — checking peer freshness", category: "SessionInit")

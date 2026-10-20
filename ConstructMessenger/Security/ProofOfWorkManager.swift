@@ -45,41 +45,19 @@ class ProofOfWorkManager {
         challenge: String,
         difficulty: UInt32,
         onProgress: @escaping (Float) -> Void
-    ) async -> PowSolution {
-        return await Task.detached(priority: .userInitiated) {
+    ) async throws -> PowSolution {
+        return try await Task.detached(priority: .userInitiated) {
             // Create progress observer
             let observer = PowProgressObserver(onProgress: onProgress)
             
-            // Call Rust implementation with progress callback
-            let solution = computePowWithProgress(
+            // Call Rust implementation with progress callback. Throws `PowError.DifficultyTooHigh`
+            // before any work when the server asks for more than the core allows (core 0.53): a
+            // server's number must not be able to hold this device for hours.
+            let solution = try computePowWithProgress(
                 challenge: challenge,
                 difficulty: difficulty,
                 progressCallback: observer
             )
-            
-            Log.info("[PoW] Found solution after \(solution.nonce) attempts")
-            Log.info("[PoW] Hash: \(solution.hash)")
-            
-            return solution
-        }.value
-    }
-    
-    /// Compute a Proof of Work solution (legacy, without progress)
-    ///
-    /// - Parameters:
-    ///   - challenge: Random challenge string from server
-    ///   - difficulty: Required number of leading zero bits (8 = normal, 12 = under attack)
-    /// - Returns: PowSolution containing nonce and hash
-    ///
-    /// - Note: Prefer `computeWithProgress` for better UX
-    static func compute(
-        challenge: String,
-        difficulty: UInt32,
-        onProgress: ((UInt64) -> Void)? = nil
-    ) async -> PowSolution {
-        return await Task.detached(priority: .userInitiated) {
-            // Call Rust implementation
-            let solution = computePow(challenge: challenge, difficulty: difficulty)
             
             Log.info("[PoW] Found solution after \(solution.nonce) attempts")
             Log.info("[PoW] Hash: \(solution.hash)")
@@ -141,64 +119,3 @@ class DeviceIDManager {
         )
     }
 }
-
-// MARK: - Preview/Testing Helpers
-
-#if DEBUG
-extension ProofOfWorkManager {
-    
-    /// Quick test with low difficulty (for development)
-    static func quickTest() async {
-        Log.info("[PoW Test] Starting quick test (difficulty=4)...")
-        
-        let start = Date()
-        let solution = await compute(
-            challenge: "test_challenge_12345",
-            difficulty: 4
-        )
-        let elapsed = Date().timeIntervalSince(start)
-        
-        Log.info("[PoW Test] Completed in \(String(format: "%.1f", elapsed))s")
-        Log.info("[PoW Test] Nonce: \(solution.nonce)")
-        Log.info("[PoW Test] Hash: \(solution.hash)")
-        
-        // Verify solution
-        let isValid = verify(
-            challenge: "test_challenge_12345",
-            solution: solution,
-            difficulty: 4
-        )
-        Log.info("[PoW Test] Verification: \(isValid ? "PASSED" : "FAILED")")
-    }
-}
-
-extension DeviceIDManager {
-    
-    /// Quick test with known value
-    static func quickTest() {
-        Log.info("[DeviceID Test] Starting test...")
-        
-        // Test with all-zeros key (known result)
-        let zeroKey = Data(count: 32)
-        let deviceID = deriveDeviceID(from: zeroKey)
-        
-        // Known value from Rust test
-        let expected = "66687aadf862bd776c8fc18b8e9f8e20"
-        
-        if deviceID == expected {
-            Log.info("[DeviceID Test] PASSED: \(deviceID)")
-        } else {
-            Log.error("[DeviceID Test] FAILED")
-            Log.error("[DeviceID Test] Expected: \(expected)")
-            Log.error("[DeviceID Test] Got: \(deviceID)")
-        }
-        
-        // Test federated format
-        let federated = formatFederatedID(
-            deviceID: deviceID,
-            serverHostname: "ams.konstruct.cc"
-        )
-        Log.info("[DeviceID Test] Federated: \(federated)")
-    }
-}
-#endif
