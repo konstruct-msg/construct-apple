@@ -14,19 +14,6 @@
 import SwiftUI
 import CoreData
 
-/// Human-readable name of the session's NEGOTIATED crypto suite. Must stay in
-/// lockstep with `SuiteID` in construct-core `crypto/suite_id.rs` — the previous
-/// hardcode here claimed Kyber for suite 1 (plain classic) and didn't know
-/// suite 3 at all.
-private func cryptoSuiteName(suiteId: Int) -> String {
-    switch suiteId {
-    case 1: return "X25519 · ChaCha20-Poly1305"
-    case 2: return "PQ Hybrid · X25519+ML-KEM-768 · ML-DSA-65"
-    case 3: return "X25519 · ChaCha20-Poly1305 · PQ Ratchet (ML-KEM-768)"
-    default: return "Suite \(suiteId)"
-    }
-}
-
 struct UserProfileView: View {
     private static let profileDateFormatter: DateFormatter = {
         let formatter = DateFormatter()
@@ -509,27 +496,9 @@ struct UserProfileView: View {
     }
 
     func refreshSessionSecurityState() {
-        let sessionExists = SessionLifecycleController.shared.hasActiveSession(for: user.id)
-        // Real negotiated suite from the Rust core (Keychain only as fallback) —
-        // suite 3 is negotiated per-session and never appears in the peer's bundle.
-        let suiteId = Int(CryptoManager.shared.sessionSuiteIdAcrossDevices(ofPeer: user.id))
-        hasSession = sessionExists
-        if sessionExists && suiteId > 0 {
-            var label = cryptoSuiteName(suiteId: suiteId)
-            // A session opened before PQXDH v2 has no ML-KEM in its first key (or only the old
-            // deferred contribution) until the upgrade sweep replaces it. The core's health report
-            // says which, per device; the Keychain flag this read before is gone with the path
-            // that set it.
-            let preV2 = SessionAddressing.deviceIds(ofPeer: user.id).contains { device in
-                CryptoManager.shared.getSessionHealth(for: device).map { $0.pqHandshake != .initialV2 } ?? false
-            }
-            if preV2 {
-                label += " · PQXDH degraded"
-            }
-            sessionSuiteLabel = label
-        } else {
-            sessionSuiteLabel = NSLocalizedString("session_crypto_no_session", comment: "")
-        }
+        let summary = viewModel.sessionSecurity(ofPeer: user.id)
+        hasSession = summary.hasSession
+        sessionSuiteLabel = summary.suiteLabel
     }
 
     func handleShareToggle(_ share: Bool) {
@@ -559,24 +528,11 @@ struct UserProfileView: View {
     /// is derived locally from the peer's identity key (`SHA256(identity_public)[0..16]`, the same
     /// value the server keys sentinel on), so it works even under sealed sender.
     private func handleReportSpam() {
-        let reportedDeviceId: String? = user.knownIdentityKey.map { deriveDeviceId(identityPublicKey: $0) }
-
-        // Block immediately (local drop + durable server-side); report best-effort alongside.
-        write { try $0.setBlocked(userId, true) }
+        let knownIdentityKey = user.knownIdentityKey
+        let userId = userId
 
         Task {
-            var reported = false
-            if let reportedDeviceId, !reportedDeviceId.isEmpty {
-                do {
-                    reported = try await SentinelServiceClient.shared.reportSpam(reportedDeviceId: reportedDeviceId)
-                } catch {
-                    Log.error("reportSpam failed for \(userId.prefix(8))…: \(error)", category: "UserProfileView")
-                }
-            } else {
-                Log.error("reportSpam skipped for \(userId.prefix(8))… — no known identity key to derive device id", category: "UserProfileView")
-            }
-            await BlockSyncService.shared.request(userId, blocked: true, reason: "spam")
-
+            let reported = await viewModel.blockAndReport(userId: userId, knownIdentityKey: knownIdentityKey)
             await MainActor.run {
                 shareAlertMessage = NSLocalizedString(reported ? "report_spam_success" : "report_spam_failed", comment: "")
                 showingShareAlert = true

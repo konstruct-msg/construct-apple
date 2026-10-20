@@ -209,6 +209,87 @@ class ProfileShareViewModel {
         }
     }
     
+    // MARK: - Block and report
+
+    /// Report the contact for spam and block them. Reporting feeds the server-side
+    /// auto-escalation (flag/ban) engine; we also block (report-and-block is the safe default —
+    /// you should not keep receiving messages from someone you reported). The reported device id
+    /// is derived locally from the peer's identity key (`SHA256(identity_public)[0..16]`, the same
+    /// value the server keys sentinel on), so it works even under sealed sender.
+    /// True when the report reached the server.
+    func blockAndReport(userId: String, knownIdentityKey: Data?) async -> Bool {
+        let reportedDeviceId: String? = knownIdentityKey.map { deriveDeviceId(identityPublicKey: $0) }
+
+        // Block immediately (local drop + durable server-side); report best-effort alongside.
+        do {
+            _ = try LocalRepositories.contacts.setBlocked(userId, true)
+        } catch {
+            Log.error("Contact \(userId.prefix(8))… not saved: \(error)", category: "UserProfileView")
+        }
+
+        var reported = false
+        if let reportedDeviceId, !reportedDeviceId.isEmpty {
+            do {
+                reported = try await SentinelServiceClient.shared.reportSpam(reportedDeviceId: reportedDeviceId)
+            } catch {
+                Log.error("reportSpam failed for \(userId.prefix(8))…: \(error)", category: "UserProfileView")
+            }
+        } else {
+            Log.error("reportSpam skipped for \(userId.prefix(8))… — no known identity key to derive device id", category: "UserProfileView")
+        }
+        await BlockSyncService.shared.request(userId, blocked: true, reason: "spam")
+        return reported
+    }
+
+    // MARK: - Session security summary
+
+    struct SessionSecuritySummary: Equatable {
+        let hasSession: Bool
+        let suiteLabel: String
+    }
+
+    /// Human-readable name of the session's NEGOTIATED crypto suite. Must stay in
+    /// lockstep with `SuiteID` in construct-core `crypto/suite_id.rs` — the previous
+    /// hardcode here claimed Kyber for suite 1 (plain classic) and didn't know
+    /// suite 3 at all.
+    static func cryptoSuiteName(suiteId: Int) -> String {
+        switch suiteId {
+        case 1: return "X25519 · ChaCha20-Poly1305"
+        case 2: return "PQ Hybrid · X25519+ML-KEM-768 · ML-DSA-65"
+        case 3: return "X25519 · ChaCha20-Poly1305 · PQ Ratchet (ML-KEM-768)"
+        default: return "Suite \(suiteId)"
+        }
+    }
+
+    /// The card's security line from what the core reported — no I/O, so a test can drive it.
+    static func sessionSecuritySummary(sessionExists: Bool, suiteId: Int, preV2Handshake: Bool) -> SessionSecuritySummary {
+        guard sessionExists && suiteId > 0 else {
+            return SessionSecuritySummary(
+                hasSession: sessionExists,
+                suiteLabel: NSLocalizedString("session_crypto_no_session", comment: ""))
+        }
+        var label = cryptoSuiteName(suiteId: suiteId)
+        if preV2Handshake {
+            label += " · PQXDH degraded"
+        }
+        return SessionSecuritySummary(hasSession: true, suiteLabel: label)
+    }
+
+    func sessionSecurity(ofPeer userId: String) -> SessionSecuritySummary {
+        let sessionExists = SessionLifecycleController.shared.hasActiveSession(for: userId)
+        // Real negotiated suite from the Rust core (Keychain only as fallback) —
+        // suite 3 is negotiated per-session and never appears in the peer's bundle.
+        let suiteId = Int(CryptoManager.shared.sessionSuiteIdAcrossDevices(ofPeer: userId))
+        // A session opened before PQXDH v2 has no ML-KEM in its first key (or only the old
+        // deferred contribution) until the upgrade sweep replaces it. The core's health report
+        // says which, per device; the Keychain flag this read before is gone with the path
+        // that set it.
+        let preV2 = sessionExists && suiteId > 0 && SessionAddressing.deviceIds(ofPeer: userId).contains { device in
+            CryptoManager.shared.getSessionHealth(for: device).map { $0.pqHandshake != .initialV2 } ?? false
+        }
+        return Self.sessionSecuritySummary(sessionExists: sessionExists, suiteId: suiteId, preV2Handshake: preV2)
+    }
+
     // MARK: - Avatar rebroadcast
 
     /// Re-send current profile (including updated avatar) to all contacts we are sharing with.

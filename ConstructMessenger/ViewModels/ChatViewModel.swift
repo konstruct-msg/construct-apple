@@ -25,6 +25,7 @@ class ChatViewModel {
     var voicePlaybackScrollTarget: String?
     var isSessionReady = false
     var isInitializingSession = false
+    var isSessionAtRisk = false
 
     // MARK: - Core
 
@@ -86,6 +87,24 @@ class ChatViewModel {
             Log.debug("ChatViewModel initialized with viewContext", category: "ChatViewModel")
         }
         sessionManager.fetchRecipientPublicKey()
+    }
+
+    /// Session work an opened chat starts, after `onViewAppear`.
+    func onOpen() {
+        refreshSessionAtRisk()
+        // Phase 2: if this contact was reached via a degraded session and has since rotated
+        // their keys, opportunistically re-key to a fresh session (no-op otherwise).
+        let contactId = conversation.peerId
+        Task { await SessionInitializationService.shared.upgradeAtRiskSessionIfPeerFresh(userId: contactId) }
+        // Who this person's devices are, when nothing recent has said. Opening the chat is the
+        // trigger rather than sending, so the key server is asked once per peer per TTL and never
+        // per message. Best-effort; see `refreshRecipientDevices`.
+        Task { await MultiDeviceSendCoordinator.shared.refreshRecipientDevices(for: contactId) }
+    }
+
+    /// Refresh the at-risk state from the per-peer Keychain flag set by degraded init.
+    func refreshSessionAtRisk() {
+        isSessionAtRisk = SessionInitializationService.isSessionAtRisk(withPeer: conversation.peerId)
     }
 
     func onPreviewAppear() {
