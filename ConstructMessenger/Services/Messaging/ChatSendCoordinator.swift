@@ -571,20 +571,17 @@ final class ChatSendCoordinator {
                             await OutboundSessionService.shared.sendContactCard(to: recipientId)
                         }
                     }
-                    let deliveryStatus: DeliveryStatus
+                    let deliveryStatus = aggregated.deliveryStatus
                     let ecStr = aggregated.errorCode.isEmpty ? "" : " errorCode=\(aggregated.errorCode)"
                     let raStr = aggregated.retryAfterMs > 0 ? " retryAfterMs=\(aggregated.retryAfterMs)" : ""
                     let traceTag = aggregated.attemptId.isEmpty ? "" : " attemptId=\(aggregated.attemptId.prefix(8))"
+                    // The status is `SendMessageResponse.deliveryStatus`, shared with every retry;
+                    // what follows is what only the first send does with it.
                     switch aggregated.status.lowercased() {
-                    case "delivered": deliveryStatus = .delivered
-                    case "queued":    deliveryStatus = .queued
-                    case "sent", "success": deliveryStatus = .sent
                     case "blocked":
-                        deliveryStatus = .failed
                         Log.error("Message blocked by recipient — suppressing retry for \(messageId)\(traceTag)", category: "ChatViewModel")
                     case "failed":
-                        if aggregated.errorCode == "encryptionFailed" {
-                            deliveryStatus = .failed
+                        if aggregated.refusedCiphertext {
                             OutgoingWirePayloadStore.shared.remove(baseMessageId: messageId)
                             // The refusal was of a ciphertext, so it names the ratchet that
                             // produced it — one device's. That ratchet is ours to retire, and the
@@ -600,16 +597,15 @@ final class ChatSendCoordinator {
                                 reason: "server_encryption_rejected"
                             )
                         } else if aggregated.retryable {
-                            deliveryStatus = .queued
                             Log.error("Server rejected message \(messageId): retryable=true\(ecStr)\(raStr)\(traceTag) — queued for retry", category: "ChatViewModel")
                         } else {
-                            deliveryStatus = .failed
                             OutgoingWirePayloadStore.shared.remove(baseMessageId: messageId)
                             Log.error("Server rejected message \(messageId): retryable=false\(ecStr)\(traceTag)", category: "ChatViewModel")
                         }
                     default:
-                        deliveryStatus = .sent
-                        Log.info("Unknown server status: \(aggregated.status), using .sent\(traceTag)", category: "ChatViewModel")
+                        if aggregated.isUnknownStatus {
+                            Log.info("Unknown server status: \(aggregated.status), using .sent\(traceTag)", category: "ChatViewModel")
+                        }
                     }
                     if let serverOrderKey = aggregated.serverOrderKey {
                         self.persistenceService.updateServerOrder(
