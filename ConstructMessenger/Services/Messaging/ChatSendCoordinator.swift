@@ -1125,6 +1125,12 @@ final class ChatSendCoordinator {
 /// What a thrown send error says about the message: only whether to queue it. A refusal by the
 /// server arrives as a response, not an error, and is judged where the response is read.
 enum SendFailure {
+    /// What a send that threw leaves the message as: queued when the path failed, failed
+    /// otherwise. Every send and retry path answers through this, so they cannot disagree.
+    static func status(after error: Error) -> DeliveryStatus {
+        isRetryableTransport(error) ? .queued : .failed
+    }
+
     /// The send never got an answer: the path, not the message, failed, and the same ciphertext
     /// goes out again once there is a path.
     static func isRetryableTransport(_ error: Error) -> Bool {
