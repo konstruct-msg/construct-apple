@@ -167,7 +167,7 @@ final class SealingExemptionSiteTests: XCTestCase {
         // them. That is the §B send merge showing up here as a shorter list.
         .stealthDisabled: [
             "MessagingServiceClient.swift",     // DECRYPTION_ERROR, which has its own RPC
-            "CallManager.swift",                // WebRTC signalling
+            "CallManager+SignalTransport.swift", // WebRTC signalling
             "OutboundMessagePipeline.swift",    // every message and control body — see below
             "OutboundSessionService.swift",     // heartbeat and delivery receipt
         ],
