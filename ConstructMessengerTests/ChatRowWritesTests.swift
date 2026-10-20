@@ -62,7 +62,7 @@ final class ChatRowWritesTests: XCTestCase {
         try container.viewContext.save()
 
         let later = Date(timeIntervalSince1970: 5_000)
-        try chats.advancePreview(chat.id, text: "written by the repository", time: later)
+        try chats.setPreview(chat.id, text: "written by the repository", time: later)
         try chats.incrementUnread(chat.id)
 
         link("two", to: chat)

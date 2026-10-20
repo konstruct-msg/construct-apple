@@ -62,10 +62,9 @@ protocol ChatStore: Sendable {
     /// must exist — it is `ContactStore`'s to write.
     @discardableResult func insert(_ chat: ChatRecord) throws -> Bool
 
-    /// Moves the preview unless the one shown is newer; an equal time moves it — outgoing times
-    /// are whole seconds, and a message sent in the preview's second must still show.
-    @discardableResult func advancePreview(_ id: String, text: String, time: Date) throws -> Bool
-    /// Sets the preview whatever it was — after a deletion; both `nil` when no message is left.
+    /// Sets the preview. What it shows is the transcript's to say, in the server's order
+    /// (`MessagePersistenceService.refreshPreview`) — never decided here by a message's own time,
+    /// which is the sender's clock. Both `nil` when no message is left.
     @discardableResult func setPreview(_ id: String, text: String?, time: Date?) throws -> Bool
     @discardableResult func incrementUnread(_ id: String) throws -> Bool
     @discardableResult func setUnread(_ id: String, _ count: Int) throws -> Bool
@@ -175,15 +174,6 @@ final class CoreDataChatStore: ChatStore, @unchecked Sendable {
             row.isMuted = false
             row.unreadCount = Int16(clamping: chat.unreadCount)
             try context.saveOrThrow(category: "Chats")
-            return true
-        }
-    }
-
-    func advancePreview(_ id: String, text: String, time: Date) throws -> Bool {
-        try update(id) { chat in
-            if let current = chat.lastMessageTime, time < current { return false }
-            chat.lastMessageText = text
-            chat.lastMessageTime = time
             return true
         }
     }
@@ -304,10 +294,6 @@ final class LocalStoreChatStore: ChatStore, @unchecked Sendable {
     /// A peer with no contact row is the crate's foreign key refusing, thrown as it comes.
     func insert(_ chat: ChatRecord) throws -> Bool {
         try store.insertChat(chat: chat.local) == .inserted
-    }
-
-    func advancePreview(_ id: String, text: String, time: Date) throws -> Bool {
-        try store.advanceChatPreview(id: id, text: text, time: time.unixMs)
     }
 
     func setPreview(_ id: String, text: String?, time: Date?) throws -> Bool {

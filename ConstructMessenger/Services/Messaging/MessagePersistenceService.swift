@@ -37,21 +37,14 @@ class MessagePersistenceService {
         Log.debug("Saving message \(message.id), isSentByMe: \(isSentByMe), status: \(status)", category: "MessagePersistence")
 
         let payload = storagePayload ?? Data(decryptedContent.utf8)
-        let previewText: String = {
-            if storagePayload != nil {
-                return LocalMessagePayload.decode(payload).previewHint
-            }
-            return decryptedContent
-        }()
-        
         let messageTimestamp = Date(timeIntervalSince1970: TimeInterval(message.timestamp))
         let store = LocalRepositories.messages
 
         if let existing = try store.message(message.id) {
             Log.debug("Updating existing message \(message.id)", category: "MessagePersistence")
             try store.setDeliveryStatus(existing.id, status)
-            if let serverOrderKey = message.serverOrderKey {
-                try store.setOrderKey(existing.id, serverOrderKey)
+            if let serverOrderKey = message.serverOrderKey, try store.setOrderKey(existing.id, serverOrderKey) {
+                Self.refreshPreview(ofChat: existing.chatId)
             }
             // Recover a previously undecryptable message: if the sender re-sent the same
             // message (same UUID) after a session heal, update the content so the "unavailable"
@@ -60,7 +53,7 @@ class MessagePersistenceService {
                try store.setBody(existing.id, body: payload, searchText: LocalMessagePayload.decode(payload).plainText) {
                 Log.info("Recovered undecryptable message \(message.id.prefix(8))… — content now available", category: "MessagePersistence")
                 // Update chat preview if this was the last message showing "unavailable"
-                Self.advancePreview(ofChat: chatId, text: previewText, at: existing.timestamp)
+                Self.refreshPreview(ofChat: chatId)
             }
             return false
         }
@@ -93,7 +86,7 @@ class MessagePersistenceService {
         let isNewMessage = try store.insert(record, searchText: LocalMessagePayload.decode(payload).plainText)
         if isNewMessage {
             if !isSentByMe { Self.incrementUnread(ofChat: chatId) }
-            Self.advancePreview(ofChat: chatId, text: previewText, at: messageTimestamp)
+            Self.refreshPreview(ofChat: chatId)
         }
 
         Log.debug("Message saved to Core Data", category: "MessagePersistence")
@@ -113,6 +106,11 @@ class MessagePersistenceService {
                 return
             }
             try LocalRepositories.messages.setOrderKey(messageId, serverOrderKey)
+            // Placed, the message may no longer be the last one: a reply that arrived while it
+            // was pending can now follow it.
+            if let chatId = try LocalRepositories.messages.message(messageId)?.chatId {
+                Self.refreshPreview(ofChat: chatId)
+            }
         } catch {
             Log.error("Server order of \(messageId.prefix(8))… not written: \(error)", category: "MessagePersistence")
         }
@@ -245,10 +243,7 @@ class MessagePersistenceService {
             transcript: nil, transcriptLanguage: nil, transcriptGeneratedAt: nil
         ))
 
-        // Update chat metadata so the preview row shows something sensible.
-        let preview = !caption.isEmpty ? caption
-            : (items.first?.fileName.map { "📎 \($0)" } ?? "📷 " + NSLocalizedString("photo", comment: ""))
-        Self.advancePreview(ofChat: chatId, text: preview, at: now)
+        Self.refreshPreview(ofChat: chatId)
 
         Log.debug("Saved upload placeholder \(id.prefix(8))…", category: "MessagePersistence")
     }
@@ -289,7 +284,7 @@ class MessagePersistenceService {
             transcript: nil, transcriptLanguage: nil, transcriptGeneratedAt: nil
         ))
 
-        Self.advancePreview(ofChat: chatId, text: NSLocalizedString("voice_message", comment: ""), at: now)
+        Self.refreshPreview(ofChat: chatId)
 
         Log.debug("Saved voice upload placeholder \(id.prefix(8))…", category: "MessagePersistence")
     }
@@ -364,21 +359,34 @@ class MessagePersistenceService {
     // statements. The message path names a chat by its id; linking a row to its chat is
     // `CoreDataMessageStore`'s.
 
-    /// Move the list's preview to this message, unless the one shown is newer.
-    nonisolated static func advancePreview(ofChat chatId: String, text: String, at time: Date) {
+    /// Move the list's preview to the chat's last message a list may show, **in the transcript's
+    /// order** — the server's `(ms, seq)` order key — after a message is written or placed.
+    ///
+    /// Until 2026-10-20 the preview advanced by the message's own time, which is the sender's
+    /// clock, while the transcript is drawn by the order key: a message written earlier but
+    /// placed later — ours sent through a connection drop and acknowledged after the peer's
+    /// reply, or the peer's delivered after a reconnect — never became the preview, and the list
+    /// showed a message the chat has one or two after. One rule now, `reconcilePreview`.
+    nonisolated static func refreshPreview(
+        ofChat chatId: String,
+        store: any MessageStore = LocalRepositories.messages,
+        chats: any ChatStore = LocalRepositories.chats
+    ) {
         do {
-            if try !LocalRepositories.chats.advancePreview(chatId, text: Chat.formatPreviewText(text), time: time) {
-                Log.debug("Preview of \(chatId.prefix(8))… not advanced — a newer one is shown", category: "MessagePersistence")
-            }
+            guard let chat = try chats.chat(chatId) else { return }
+            reconcilePreview(ofChat: chat, store: store, chats: chats)
         } catch {
-            Log.error("Preview of \(chatId.prefix(8))… not written: \(error)", category: "MessagePersistence")
+            Log.error("Preview of \(chatId.prefix(8))… not refreshed: \(error)", category: "MessagePersistence")
         }
     }
 
     /// Set the preview whatever it was — recomputed from the messages left; nil when none is.
-    nonisolated static func setPreview(ofChat chatId: String, text: String?, at time: Date?) {
+    nonisolated static func setPreview(
+        ofChat chatId: String, text: String?, at time: Date?,
+        chats: any ChatStore = LocalRepositories.chats
+    ) {
         do {
-            try LocalRepositories.chats.setPreview(chatId, text: text.map(Chat.formatPreviewText), time: time)
+            try chats.setPreview(chatId, text: text.map(Chat.formatPreviewText), time: time)
         } catch {
             Log.error("Preview of \(chatId.prefix(8))… not set: \(error)", category: "MessagePersistence")
         }
@@ -398,12 +406,14 @@ class MessagePersistenceService {
     /// future, and the first preview of a chat a history import wrote messages into.
     @discardableResult
     nonisolated static func reconcilePreview(
-        ofChat chat: ChatRecord, store: any MessageStore = LocalRepositories.messages
+        ofChat chat: ChatRecord,
+        store: any MessageStore = LocalRepositories.messages,
+        chats: any ChatStore = LocalRepositories.chats
     ) -> Bool {
         let newest = newestListed(inChat: chat.id, store: store)
         guard let newest else {
             guard chat.lastMessageText != nil || chat.lastMessageTime != nil else { return false }
-            setPreview(ofChat: chat.id, text: nil, at: nil)
+            setPreview(ofChat: chat.id, text: nil, at: nil, chats: chats)
             return true
         }
         let preview = newest.payload.previewHint
@@ -412,7 +422,7 @@ class MessagePersistenceService {
            (chat.lastMessageText ?? "") == Chat.formatPreviewText(preview) {
             return false
         }
-        setPreview(ofChat: chat.id, text: preview, at: newest.timestamp)
+        setPreview(ofChat: chat.id, text: preview, at: newest.timestamp, chats: chats)
         Log.debug("Preview reconciled for \(chat.id.prefix(8))… ts=\(newest.timestamp)", category: "Chat")
         return true
     }

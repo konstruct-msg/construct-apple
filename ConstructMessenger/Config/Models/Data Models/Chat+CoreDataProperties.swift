@@ -46,41 +46,12 @@ extension Chat: Identifiable {
 // MARK: - Conversation Preview
 
 extension Chat {
-    /// Advance the chat-list preview to `text` / `timestamp`.
-    ///
-    /// **The preview must never move backwards.** Messages do not arrive in timestamp order:
-    /// a peer message that sat in the server's offline queue is stored with its *original*
-    /// timestamp long after newer local sends, and background fetch commits whole batches at
-    /// once. Every writer used to assign `lastMessageText` / `lastMessageTime` directly, so one
-    /// late-delivered older message clobbered the preview — the row then showed the peer's stale
-    /// message while the transcript ended with much newer outgoing ones, and it stayed that way
-    /// until the next local send happened to be newer.
-    ///
-    /// `>=` rather than `>`: outgoing timestamps are truncated to whole seconds
-    /// (`UInt64(Date().timeIntervalSince1970)`), so a strict comparison silently drops a message
-    /// sent in the same second as the current preview.
-    ///
-    /// - Parameter force: bypass the ordering check. Only for recomputing the preview from the
-    ///   messages that remain (deletion / clear), which legitimately moves it backwards.
-    func applyPreview(text: String, timestamp: Date, force: Bool = false) {
-        if !force, let current = lastMessageTime, timestamp < current {
-            // Ordinary out-of-order delivery lands here (debug). A large gap means
-            // `lastMessageTime` is ahead of real traffic (future freeze / missed writer)
-            // and will keep the list row stuck until reconcile or wall-clock catch-up.
-            let lag = Int(current.timeIntervalSince(timestamp))
-            if lag >= 300 {
-                Log.info(
-                    "Preview not advanced for \(id.prefix(8))… — incoming ts is \(lag)s older than current preview (possible freeze)",
-                    category: "Chat"
-                )
-            } else {
-                Log.debug(
-                    "Preview not advanced for \(id.prefix(8))… — incoming ts is \(lag)s older than the current preview",
-                    category: "Chat"
-                )
-            }
-            return
-        }
+    /// Set the chat-list preview to `text` / `timestamp` on a managed chat — the launch repair of
+    /// future stamps, which recomputes it from the transcript's last message. Which message the
+    /// preview shows is `MessagePersistenceService.refreshPreview`'s rule, in the transcript's
+    /// order; until 2026-10-20 this refused a message older than the one shown, by the sender's
+    /// clock, and that is what kept a later-placed message out of the list.
+    func applyPreview(text: String, timestamp: Date) {
         lastMessageText = Chat.formatPreviewText(text)
         lastMessageTime = timestamp
     }
