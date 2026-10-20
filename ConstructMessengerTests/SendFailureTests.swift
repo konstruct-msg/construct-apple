@@ -32,6 +32,32 @@ final class SendFailureTests: XCTestCase {
         XCTAssertTrue(SendFailure.isRetryableTransport(NetworkError.notConnected))
     }
 
+    /// A thrown send leaves the message queued exactly when the path failed. Mutation: answer
+    /// `.failed` for a stopped client — the first assertion reddens.
+    func testAThrownSendIsQueuedOnlyWhenThePathFailed() {
+        XCTAssertEqual(SendFailure.status(after: RuntimeError(code: .clientIsStopped, message: "")), .queued)
+        XCTAssertEqual(SendFailure.status(after: VeilTunnelNotUp()), .queued)
+        XCTAssertEqual(SendFailure.status(after: RPCError(code: .permissionDenied, message: "")), .failed)
+    }
+
+    /// One rule on the message path. The retry kept its own copy until 2026-10-20 and failed what
+    /// the first send queued (TODO 175). Mutation: put a hand-written transport check back into
+    /// `MessageRetryManager` — this reddens.
+    func testNoMessagingFileClassifiesTransportErrorsItself() throws {
+        let dir = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("ConstructMessenger/Services/Messaging")
+        var copies: [String] = []
+        for name in try FileManager.default.contentsOfDirectory(atPath: dir.path)
+        where name.hasSuffix(".swift") && name != "ChatSendCoordinator.swift" {
+            let text = try String(contentsOf: dir.appendingPathComponent(name), encoding: .utf8)
+            for (n, line) in text.components(separatedBy: "\n").enumerated()
+            where line.contains(".deadlineExceeded") && !line.trimmingCharacters(in: .whitespaces).hasPrefix("//") {
+                copies.append("\(name):\(n + 1)")
+            }
+        }
+        XCTAssertEqual(copies, [], "classify through SendFailure.isRetryableTransport")
+    }
+
     /// A server's answer is not a path failure. Mutation: return true for any error.
     func testAnAnswerIsNotATransportFailure() {
         XCTAssertFalse(SendFailure.isRetryableTransport(RPCError(code: .permissionDenied, message: "")))
