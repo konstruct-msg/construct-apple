@@ -696,15 +696,11 @@ class MessageRetryManager {
             SessionLifecycleController.shared.reestablishSessionForQueuedOutbound(to: recipientId)
             return .queued
         } catch {
-            let isRetryableTransport: Bool = {
-                if error is GRPCClientError { return true }
-                if let rpc = error as? RPCError {
-                    return rpc.code == .deadlineExceeded || rpc.code == .unavailable || rpc.code == .cancelled
-                }
-                return false
-            }()
             Log.error("reencryptAndSend: send failed for \(messageId.prefix(8))…: \(error.localizedDescription)", category: "MessageRetryManager")
-            return isRetryableTransport ? .queued : .failed
+            // The first send's rule, not a copy of it. Until 2026-10-20 this kept its own, without
+            // `clientIsStopped`, `transportError`, `VeilTunnelNotUp` or `NetworkError`, and failed a
+            // retry the first send would have queued (TODO 175, one cause of TODO 165).
+            return SendFailure.status(after: error)
         }
     }
 
