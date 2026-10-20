@@ -7,7 +7,7 @@
 "editor_rotate" = "回転";
 "editor_mirror" = "反転";
 "unknown" = "不明";
-"construct_title" = "コンストラクト";
+"construct_title" = "Konstruct";
      
 // MARK: - Main Tabs
 "chats" = "チャット";
@@ -73,7 +73,7 @@
 "camera_access_required" = "カメラへのアクセスが必要です";
 "open_settings" = "設定を開く";
 "allow_camera_access_for_qr" = "QRコードをスキャンするために、設定からカメラへのアクセスを許可してください";
-"invalid_qr_code_construct" = "無効なQRコードです。コンストラクトの連絡先コードをスキャンしてください。";
+"invalid_qr_code_construct" = "無効なQRコードです。Konstructの連絡先コードをスキャンしてください。";
 
 // MARK: - Settings Main
 "user" = "ユーザー";
@@ -128,7 +128,7 @@
 
 // MARK: - Settings -> Appearance
 "theme" = "テーマ";
-"theme_footer" = "コンストラクトの外観を選択します。「自動」はシステムの設定に合わせて調整されます。";
+"theme_footer" = "Konstructの外観を選択します。「自動」はシステムの設定に合わせて調整されます。";
 "automatic" = "自動";
 "light" = "ライト";
 "dark" = "ダーク";
@@ -166,7 +166,7 @@
 "enable_push_notifications" = "プッシュ通知を有効にする";
 "push_notifications_footer" = "アプリがバックグラウンドにあるときに通知を受け取ります。メッセージはエンドツーエンドで暗号化されたままです。";
 "push_privacy_notice" = "プライバシーに関する注意";
-"push_privacy_notice_text" = "プッシュ通知は暗号化された匿名トークンで配信されます。コンストラクトはメッセージを読んだり、誰と話しているかを特定したりできません。";
+"push_privacy_notice_text" = "プッシュ通知は暗号化された匿名トークンで配信されます。Konstructはメッセージを読んだり、誰と話しているかを特定したりできません。";
 "system_notification_settings" = "システムの通知設定";
 "open_system_settings" = "システム設定を開く";
 "system_settings_footer" = "iOSの設定で通知の許可を管理します";
@@ -177,7 +177,7 @@
 "denied" = "拒否";
 
 // MARK: - Background Fetch & Local Notifications
-"construct_app_name" = "コンストラクト";
+"construct_app_name" = "Konstruct";
 "construct_new_message" = "新着メッセージ";
 "construct_new_messages" = "新着メッセージ";
 "construct_new_messages_count" = "%d件の新着メッセージがあります";
@@ -210,7 +210,7 @@
 "sharing_with_you" = "あなたと共有中";
 "not_sharing_with_you" = "あなたと共有していません";
 "profile_sharing_info" = "アイデンティティ共有について";
-"profile_sharing_info_footer" = "この相手は、暗号化メッセージ経由でアイデンティティ情報（表示名とアバター）を共有できます。これらの情報はコンストラクトに保存されません。";
+"profile_sharing_info_footer" = "この相手は、暗号化メッセージ経由でアイデンティティ情報（表示名とアバター）を共有できます。これらの情報はKonstructに保存されません。";
 "share_my_data" = "自分のデータを共有";
 "block_user" = "ユーザーをブロック";
 "unblock_user" = "ユーザーのブロックを解除";
@@ -246,16 +246,16 @@
 "reachable" = "接続可能";
 "unreachable" = "接続不可";
 "delete_my_account" = "アイデンティティを削除";
-"delete_account_warning" = "コンストラクトからあなたのアイデンティティを永久に削除します。削除が成功すると、このデバイスからすべてのローカル暗号化キーとアプリデータが自動的に消去されます。";
+"delete_account_warning" = "Konstructからあなたのアイデンティティを永久に削除します。削除が成功すると、このデバイスからすべてのローカル暗号化キーとアプリデータが自動的に消去されます。";
 "delete_account_warning_title" = "アイデンティティを削除しますか？";
-"delete_account_warning_message" = "これにより、コンストラクトからあなたのアイデンティティが永久に削除されます。コンストラクトが削除を確認すると、このデバイス上のすべてのローカルキーとデータが自動的に消去されます。この操作は取り消せません。";
-"delete_account_confirmation_message" = "最終確認：あなたのアイデンティティはコンストラクトから削除され、確認後にすべてのローカル暗号化キーが消去されます。この操作は元に戻せません。";
-"delete_account_irreversible_warning" = "この操作は元に戻せません。すべてのデータはコンストラクトから永久に削除され、復元できません。";
+"delete_account_warning_message" = "これにより、Konstructからあなたのアイデンティティが永久に削除されます。Konstructが削除を確認すると、このデバイス上のすべてのローカルキーとデータが自動的に消去されます。この操作は取り消せません。";
+"delete_account_confirmation_message" = "最終確認：あなたのアイデンティティはKonstructから削除され、確認後にすべてのローカル暗号化キーが消去されます。この操作は元に戻せません。";
+"delete_account_irreversible_warning" = "この操作は元に戻せません。すべてのデータはKonstructから永久に削除され、復元できません。";
 "delete_account" = "アイデンティティを削除";
 "delete_account_countdown" = "%d秒後に削除";
 "delete_account_local_only" = "ローカルデータのみ削除";
 "delete_account_local_only_title" = "ローカルデータのみ削除しますか？";
-"delete_account_local_only_warning" = "ネットワークリクエストが失敗した場合、コンストラクト上のアイデンティティは残る可能性があります。このデバイス上のローカル暗号化キーとアプリデータはすべて永久に削除されます。";
+"delete_account_local_only_warning" = "ネットワークリクエストが失敗した場合、Konstruct上のアイデンティティは残る可能性があります。このデバイス上のローカル暗号化キーとアプリデータはすべて永久に削除されます。";
 "delete_account_local_only_confirm" = "ローカルで削除";
 "warning" = "警告";"DANGER_ZONE" = "危険地帯";
 "account_recovery" = "アイデンティティ復旧";
@@ -273,7 +273,7 @@
 "duress_pin_change" = "破壊PINを変更";
 "create_duress_pin" = "破壊PINを作成";
 "confirm_duress_pin" = "破壊PINを確認";
-"duress_pin_setup_warning" = "ロック画面でこのPINを入力すると、すべてのローカルデータが密かに消去され、コンストラクトからのアイデンティティ削除が試行されます。この操作は取り消せません。";
+"duress_pin_setup_warning" = "ロック画面でこのPINを入力すると、すべてのローカルデータが密かに消去され、Konstructからのアイデンティティ削除が試行されます。この操作は取り消せません。";
 "duress_pin_matches_main" = "破壊PINをメインのPINと同じにすることはできません。別のコードを選択してください。";
 "duress_pin_disable_warning" = "破壊PINが削除されます。ロック画面でのサイレント消去は実行されなくなります。";
 "duress_pin_requires_main_pin" = "破壊PINを使用するには、まずメインのPINを有効にしてください。";
@@ -306,7 +306,7 @@
 // Network Settings
 "server" = "サーバー";
 "port" = "ポート";
-"server_applied_title" = "コンストラクト接続先を更新しました";
+"server_applied_title" = "Konstruct の接続先を更新しました";
 "server_applied_message" = "今後のすべての接続で新しいgRPC接続先を使用します。";
 "close" = "閉じる";
 "back" = "戻る";
@@ -320,9 +320,9 @@
 "onboarding_existing_title" = "既存のアイデンティティを使う";
 "onboarding_existing_intro" = "このデバイスへ持ち込む方法を選んでください。";
 "onboarding_restore_title" = "復旧フレーズから復元";
-"onboarding_restore_subtitle" = "コンストラクトのある他のデバイスがない場合。12語のフレーズを使います。";
+"onboarding_restore_subtitle" = "Konstructのある他のデバイスがない場合。12語のフレーズを使います。";
 "onboarding_link_title" = "このデバイスを連携";
-"onboarding_link_subtitle" = "別のスマホやパソコンにコンストラクトが残っている場合。";
+"onboarding_link_subtitle" = "別のスマホやパソコンにKonstructが残っている場合。";
 "onboarding_restore" = "復旧キーから復元";
 "onboarding_recovery_coming_soon" = "復旧機能は近日公開";
 "onboarding_network_settings" = "ネットワーク設定";
@@ -331,10 +331,10 @@
 "orientation_section_label" = "> ご案内";
 "orientation_skip" = "スキップ";
 "orientation_next" = "続ける";
-"orientation_enter" = "コンストラクトに入る";
+"orientation_enter" = "Konstructに入る";
 "orientation_or" = "または";
 "orientation_page_a11y" = "%d / %d ページ";
-"orientation_settings_replay" = "コンストラクトの使い方";
+"orientation_settings_replay" = "Konstructの使い方";
 "orientation_page1_title" = "アイデンティティ";
 "orientation_page1_body" = "電話番号もメールも本名も不要。アイデンティティはこの端末上でゼロから作られ、外の何ものも指し示しません。ここでの自分は、自分で作るものです。";
 "orientation_page1_caption" = "公開 @エイリアスは任意。鍵はこの端末から出ません。";
@@ -475,7 +475,7 @@
 
 // 検閲対策（本番向け soft-control — VEIL / リレー住所は出さない）
 "censorship_protection" = "検閲対策";
-"censorship_protection_footer_off" = "オフ。コンストラクトへ直接接続します。";
+"censorship_protection_footer_off" = "オフ。Konstructへ直接接続します。";
 "censorship_protection_footer_auto" = "遮断が検出されると自動で有効になります。設定はバックグラウンドで行われます。";
 "censorship_protection_footer_on" = "常にネットワーク遮断を回避します。設定はバックグラウンドで行われます。";
 
@@ -607,10 +607,10 @@
 "diagnostics_apns_token" = "APNsトークン";
 "diagnostics_apns_token_missing" = "未取得";
 "diagnostics_apns_token_received_format" = "取得済み (%@…)";
-"diagnostics_registered_with_server" = "コンストラクトへの登録";
+"diagnostics_registered_with_server" = "Konstructへの登録";
 "diagnostics_yes" = "はい";
 "diagnostics_not_registered_with_server" = "いいえ — 通知は届きません";
-"diagnostics_server_token_warning" = "トークンがコンストラクトに登録されていません。チャット画面に戻ると、アプリがアクティブになったタイミングで自動再登録します。";
+"diagnostics_server_token_warning" = "トークンがKonstructに登録されていません。チャット画面に戻ると、アプリがアクティブになったタイミングで自動再登録します。";
 "diagnostics_log_collection" = "ログ収集";
 "diagnostics_status_active" = "有効";
 "diagnostics_status_off" = "無効";
@@ -650,17 +650,17 @@
 
 // MARK: - Device Join Request (Desktop onboarding)
 "device_link_request_title" = "既存のアイデンティティに連携";
-"device_link_request_instruction" = "iPhoneのコンストラクトでこのコードをスキャンしてください";
-"device_link_request_steps" = "iPhoneでコンストラクトを開き、設定 → 連携済みデバイス → 「新しいデバイスを連携」を選択して、このコードをスキャンしてください。";
+"device_link_request_instruction" = "iPhoneのKonstructでこのコードをスキャンしてください";
+"device_link_request_steps" = "iPhoneでKonstructを開き、設定 → 連携済みデバイス → 「新しいデバイスを連携」を選択して、このコードをスキャンしてください。";
 "device_link_waiting_approval" = "iPhoneでの承認を待機中...";
-"device_link_scan_on_phone" = "iPhoneのコンストラクトでこのコードをスキャンしてください";
+"device_link_scan_on_phone" = "iPhoneのKonstructでこのコードをスキャンしてください";
 "device_link_request_timeout" = "連携リクエストがタイムアウトしました。もう一度お試しください。";
 "device_link_feature_unavailable" = "この機能にはサーバーのアップデートが必要です。後でもう一度お試しください。";
-"device_link_invalid_qr" = "無効なQRコードです。コンストラクトのリンク用コードをスキャンしていることを確認してください。";
+"device_link_invalid_qr" = "無効なQRコードです。Konstructのリンク用コードをスキャンしていることを確認してください。";
 "device_link_approve_title" = "\"%@\" をアイデンティティに連携しますか？";
 "device_link_approve_title_fallback" = "新しいデバイスをアイデンティティに連携しますか？";
 "device_link_approve" = "デバイスを連携";
-"device_link_approve_message" = "このデバイスは、あなたのコンストラクトアイデンティティにフルアクセスできます。";
+"device_link_approve_message" = "このデバイスは、あなたのKonstruct アイデンティティにフルアクセスできます。";
 "device_link_approved_title" = "デバイスを連携しました";
 "device_link_approved_message" = "デバイスが正常にアイデンティティに連携されました。";
 
@@ -801,15 +801,15 @@
 "keys_recovery_wipe_confirm_body" = "これにより、現在のアイデンティティとすべてのローカルデータが永久に削除されます。この操作は取り消せません。";
 "keys_recovery_wipe_confirm_action" = "削除して続行";
 
-// MARK: - Device Deregistered (コンストラクトがこのデバイスを認識しない)
+// MARK: - Device Deregistered (Konstructがこのデバイスを認識しない)
 "device_deregistered_warning_title" = "⚠ デバイスが未登録です";
-"device_deregistered_warning_body" = "コンストラクトはこのデバイスを認識できなくなりました。サーバーの問題が発生した後や、他の端末でデバイスが取り消された場合に起こります。\n\n鍵はこの端末に残っており、何も削除されていません。下で再試行するか、シードフレーズからアイデンティティを復元してください。";
+"device_deregistered_warning_body" = "Konstructはこのデバイスを認識できなくなりました。サーバーの問題が発生した後や、他の端末でデバイスが取り消された場合に起こります。\n\n鍵はこの端末に残っており、何も削除されていません。下で再試行するか、シードフレーズからアイデンティティを復元してください。";
 "device_deregistered_retry_hint" = "拒否は一時的なサーバーの問題かもしれません。もう一度認証してみてください。";
 "mailbox_gap_title" = "届かなかったメッセージがあるかもしれません";
 "mailbox_gap_body" = "%1$@ から %2$@ までに送られたメッセージは、このデバイスが受け取る前にサーバーから削除されました。サーバーは未配信のメッセージを一定期間しか保存しません。";
 "mailbox_gap_body_open" = "%@ 以降に送られたメッセージは、このデバイスが受け取る前にサーバーから削除されました。サーバーは未配信のメッセージを一定期間しか保存しません。";
 "store_import_title" = "チャットを移しています";
-"store_import_body" = "アップデート後に一度だけ行います。コンストラクトを開いたままにしてください。数秒で終わります。";
+"store_import_body" = "アップデート後に一度だけ行います。Konstructを開いたままにしてください。数秒で終わります。";
 "local_store_unreadable_title" = "このデバイスのチャットを開けません";
 "local_store_unreadable_body" = "このデバイスに保存されているチャット、メッセージ、人を開けませんでした。何も削除されておらず、再び開けるまで新しいものは保存されません。\n\n多くの場合、キーチェーンがまだ応答していないことが原因です（デバイスのロック解除前など）。";
 "local_store_unreadable_retry_hint" = "ロック解除後などに、もう一度開いてみてください。";
@@ -840,7 +840,7 @@
 "username_not_set" = "ユーザー名未設定";
 "searchable_indicator" = "検索可能";
 "searchable_indicator_off" = "検索不可";
-"synapses_remote_result_header" = "コンストラクトで見つかりました";
+"synapses_remote_result_header" = "Konstructで見つかりました";
 "synapses_searching" = "検索中...";
 "synapses_not_found" = "見つかりませんでした";
 
@@ -941,7 +941,7 @@
 "backup_restore_success_message" = "バックアップが検証され、準備が整いました。アプリを閉じて再度開くと、復元が完了します。";
 
 "backup_error_invalid_mnemonic" = "復旧フレーズが無効です。12語すべてを確認して、もう一度お試しください。";
-"backup_error_invalid_file" = "これは有効なコンストラクトバックアップではないか、復旧フレーズが正しくありません。";
+"backup_error_invalid_file" = "これは有効なKonstruct バックアップではないか、復旧フレーズが正しくありません。";
 
 // Transfer (P2P nearby)
 "transfer_send_nearby" = "近くのデバイスに送信";
@@ -997,7 +997,7 @@
 "history_sync_share_file" = "ファイルを共有";
 "history_sync_preparing_file" = "ファイルを準備中…";
 "history_sync_looking" = "もう一方のデバイスを探しています…";
-"history_sync_not_seen_hint" = "もう一方のデバイスがまだ見つかりません。そちらでコンストラクトを開いたままにし、両方を同じWi‑Fiにつないでください。またはファイルを保存してください。";
+"history_sync_not_seen_hint" = "もう一方のデバイスがまだ見つかりません。そちらでKonstructを開いたままにし、両方を同じWi‑Fiにつないでください。またはファイルを保存してください。";
 "history_sync_stage_chats" = "チャット";
 "history_sync_stage_media" = "写真とファイル";
 "history_sync_done" = "履歴を転送しました。";
@@ -1121,7 +1121,7 @@
 
 // MARK: - Link device method picker
 "link_method_title" = "デバイスを連携";
-"link_method_intro" = "既存のコンストラクトアイデンティティにこのデバイスを追加します。カメラを向けやすい方のデバイスを選んでください。";
+"link_method_intro" = "既存のKonstruct アイデンティティにこのデバイスを追加します。カメラを向けやすい方のデバイスを選んでください。";
 "link_method_scan_title" = "コードをスキャン";
 "link_method_scan_subtitle" = "もう一方のデバイスがQRコードを表示";
 "link_method_show_title" = "コードを表示";
@@ -1159,7 +1159,7 @@
 /* Bootstrap voucher — 受け取り側（オンボーディングの「接続できない?」入口） */
 "onboarding_cant_connect" = "接続できませんか?";
 "veil_bootstrap_title" = "接続できない";
-"veil_bootstrap_intro" = "ここでコンストラクトがネットワークに接続できない場合、すでに接続できている人が一回限りのアクセスコードを発行できます。それをもらって、下でスキャンするか貼り付けてください。";
+"veil_bootstrap_intro" = "ここでKonstructがネットワークに接続できない場合、すでに接続できている人が一回限りのアクセスコードを発行できます。それをもらって、下でスキャンするか貼り付けてください。";
 "veil_bootstrap_scan_subtitle" = "相手のコードにカメラを向けます";
 "veil_bootstrap_paste_subtitle" = "コードをテキストで受け取った場合";
 "veil_bootstrap_ok" = "接続を設定しました";
@@ -1176,7 +1176,7 @@
 
 // Synced with en.lproj 2026-08-16.
 "invite_error_invalid_url" = "指定されたURLが無効です。";
-"invite_error_unsupported_link" = "コンストラクトの招待リンクではありません。";
+"invite_error_unsupported_link" = "Konstructの招待リンクではありません。";
 "invite_error_expired" = "この招待は期限切れです。新しいものをもらってください。";
 "invite_error_already_used" = "この招待は使用済みです。新しいものをもらってください。";
 "invite_error_legacy_unsupported" = "このリンク形式はサポートされなくなりました。新しい招待QRかリンクをもらってください。";
@@ -1193,8 +1193,8 @@
 "diagnostics_replace_otpk_pool" = "OTPKプールを置き換え（一度きりの復旧）";
 "diagnostics_silent_reinit_footer" = "END_SESSIONを送らずにINITIATORとしてセッションを作り直すため、相手は古いセッションを保持したままになります。次のメッセージは既存セッション上のX3DHキャリアとして届きます。実行後は2通送ってください。PQ寄与が対称に混ざったことを示すのは2通目です。";
 "stealth_title" = "送信者の匿名性";
-"stealth_always_on_hint" = "コンストラクトが、誰がメッセージを送ったのかを知ることはありません。常時有効です — 切り替えるものはなく、補充も必要ありません。";
-"stealth_off_hint" = "オフ — 送信すると、あなたが誰であるかがコンストラクトに開示されます。デバッグ用の上書きのみ。";
+"stealth_always_on_hint" = "Konstructが、誰がメッセージを送ったのかを知ることはありません。常時有効です — 切り替えるものはなく、補充も必要ありません。";
+"stealth_off_hint" = "オフ — 送信すると、あなたが誰であるかがKonstructに開示されます。デバッグ用の上書きのみ。";
 "key_change_banner_title_failed" = "アイデンティティを確認できません";
 "key_change_banner_subtitle_failed" = "この相手のセキュリティキーを透明性ログで確認できませんでした。可能であれば対面で確認してください。";
 "key_change_verify" = "照合";
@@ -1274,7 +1274,7 @@
 /* VEIL bootstrap voucher — まだ接続手段のない相手にアクセスを渡す。 */
 "veil_voucher_row" = "アクセスを渡す";
 "veil_voucher_title" = "アクセスを渡す";
-"veil_voucher_instructions" = "相手にコンストラクトでこのコードをスキャンしてもらってください。接続の設定であり、連絡先の招待ではありません。";
+"veil_voucher_instructions" = "相手にKonstructでこのコードをスキャンしてもらってください。接続の設定であり、連絡先の招待ではありません。";
 "veil_voucher_expires_in" = "残り %@ 有効";
 "veil_voucher_expired" = "このコードは期限切れです";
 "veil_voucher_new" = "新しいコードを作成";
@@ -1283,7 +1283,7 @@
 "veil_voucher_unavailable" = "現在アクセスの発行は利用できません。";
 "veil_voucher_err_generic" = "コードを作成できませんでした";
 "veil_voucher_privacy_hint" = "このコードは渡す相手にだけ見せてください。公開したり、オープンな経路で送らないでください。";
-"veil_voucher_intro" = "まだコンストラクトに接続できない相手のために、接続を設定する使い捨てコードを作ります。有効時間は短く、1日に3つまで作成できます。";
+"veil_voucher_intro" = "まだKonstructに接続できない相手のために、接続を設定する使い捨てコードを作ります。有効時間は短く、1日に3つまで作成できます。";
 "veil_voucher_create" = "コードを作成";
 
 /* Desktop chrome — D2–D7 */
@@ -1309,12 +1309,12 @@
 "desktop_add_show_qr" = "相手に見せてスキャンしてもらってください";
 "desktop_add_device_unregistered" = "このデバイスは登録されていません";
 "desktop_add_qr_failed" = "QRコードを作成できませんでした";
-"desktop_add_point_camera" = "カメラをコンストラクトのQRコードに向けてください";
+"desktop_add_point_camera" = "カメラをKonstructのQRコードに向けてください";
 "desktop_add_camera_privacy" = "システム設定 → プライバシーとセキュリティ → カメラ でカメラを許可してください";
 "desktop_add_drop_image" = "画像をここにドロップ";
 "desktop_add_drop_types" = "PNG、JPG、スクリーンショット";
 "desktop_add_choose_file" = "ファイルを選択…";
-"desktop_add_choose_file_panel" = "コンストラクトのQRコードが写った画像を選んでください";
+"desktop_add_choose_file_panel" = "KonstructのQRコードが写った画像を選んでください";
 "desktop_add_cannot_read_file" = "ファイルを読めません";
 "desktop_add_cannot_decode_image" = "画像を解読できません";
 "desktop_add_cannot_load_image" = "画像を読み込めません";
@@ -1325,7 +1325,7 @@
 "desktop_add_supported" = "konstruct://add?invite=… または https://konstruct.cc/add?invite=…";
 
 "backup_restore_required_title" = "再起動が必要です";
-"backup_restore_required_message" = "復元を終えるには、コンストラクトを閉じて開き直してください。";
+"backup_restore_required_message" = "復元を終えるには、Konstructを閉じて開き直してください。";
 "spam_warning_title" = "送信中…";
 "spam_warning_wait" = "%d秒お待ちください";
 "spam_strong_warning_title" = "いつもと違う操作";
@@ -1345,7 +1345,7 @@
 // Recovery key made silently, copied later (decisions/recovery-key-backup-is-deferred-not-skipped.md)
 "recovery_backup_auth_reason" = "リカバリーキーを表示";
 "recovery_backup_intro_title" = "リカバリーキーを保存";
-"recovery_backup_intro_body" = "コンストラクトはあなたの電話番号もメールアドレスも持っていません。すべての端末を失ったとき、アカウントを取り戻す方法はこのキーだけです。12個の単語を書き留め、安全な場所に保管してください。";
+"recovery_backup_intro_body" = "Konstructはあなたの電話番号もメールアドレスも持っていません。すべての端末を失ったとき、アカウントを取り戻す方法はこのキーだけです。12個の単語を書き留め、安全な場所に保管してください。";
 "recovery_backup_show" = "キーを表示";
 "recovery_backup_pending_title" = "リカバリーキーが未保存です";
 "recovery_backup_pending_subtitle" = "リカバリーキーを書き留めてください。すべての端末を失ったときに戻れる唯一の方法です。";
@@ -1382,7 +1382,7 @@
 "invite_error_verification_failed" = "この招待を確認できませんでした。接続を確認して、もう一度お試しください。";
 "backup_error_wrong_password" = "パスワードが違うか、バックアップが破損しています。";
 "device_link_error_keys" = "このデバイスの鍵を作成できませんでした。もう一度お試しください。";
-"device_link_error_invalid_qr" = "これはコンストラクトのデバイスコードではありません。";
+"device_link_error_invalid_qr" = "これはKonstructのデバイスコードではありません。";
 "device_link_error_rejected" = "もう一方のデバイスがリクエストを拒否しました。";
 "device_link_error_expired" = "リクエストの有効期限が切れました。新しいコードを表示してください。";
 "device_link_error_token" = "このコードは期限切れです。新しいコードをスキャンしてください。";
