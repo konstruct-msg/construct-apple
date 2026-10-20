@@ -318,51 +318,13 @@ class KeychainManager {
         Log.info("Refresh token deleted from Keychain", category: "Keychain")
     }
 
-    // MARK: - Private Key
-    func savePrivateKey(_ keyData: Data) {
-        let success = save(keyData, forKey: APIConstants.privateKeyKey, accessible: Self.cryptoKeyAccessible)
-        if !success {
-            Log.error("Failed to save private key to Keychain", category: "Keychain")
-        }
-    }
+    // The per-key accessors for the private, identity, signed-prekey and signing keys were
+    // removed on 2026-10-20 with no caller left: the device keys live in the core's key record
+    // (`crypto_private_keys`) since 2026-09-29. Only the legacy hybrid key is still read, by the
+    // one-time import in `CryptoManager`.
 
-    func loadPrivateKey() -> Data? {
-        load(forKey: APIConstants.privateKeyKey)
-    }
-    
-    func saveIdentityKey(_ data: Data) -> Bool {
-        return save(data, forKey: "identity_key", accessible: Self.cryptoKeyAccessible)
-    }
-    
-    func loadIdentityKey() -> Data? {
-        return load(forKey: "identity_key")
-    }
-    
-    // Signed prekey (X25519)
-    func saveSignedPrekey(_ data: Data) -> Bool {
-        return save(data, forKey: "signed_prekey", accessible: Self.cryptoKeyAccessible)
-    }
-    
-    func loadSignedPrekey() -> Data? {
-        return load(forKey: "signed_prekey")
-    }
-    
-    // Signing key (Ed25519)
-    func saveSigningKey(_ data: Data) -> Bool {
-        return save(data, forKey: "signing_key", accessible: Self.cryptoKeyAccessible)
-    }
-
-    func loadSigningKey() -> Data? {
-        return load(forKey: "signing_key")
-    }
-
-    // Hybrid PQ identity signing private key (Ed25519 + ML-DSA-65), 2016 bytes.
-    // Local-only and never transmitted; the 1984-byte public key is derived on demand.
-    @discardableResult
-    func saveHybridSigPrivateKey(_ data: Data) -> Bool {
-        return save(data, forKey: "hybrid_sig_private_key", accessible: Self.cryptoKeyAccessible)
-    }
-
+    // Hybrid PQ identity signing private key (Ed25519 + ML-DSA-65), 2016 bytes, as written
+    // before the key record held it.
     func loadHybridSigPrivateKey() -> Data? {
         return load(forKey: "hybrid_sig_private_key")
     }
@@ -549,15 +511,6 @@ class KeychainManager {
         delete(forKey: key)
     }
 
-    /// Load all saved session IDs
-    /// - Returns: Array of contact IDs that have saved sessions
-    func loadAllSessionIds() -> [String] {
-        // Note: Keychain doesn't have a direct way to list all keys
-        // We'll need to track session IDs separately or use a different approach
-        // For now, return empty array - we'll track sessions in Core Data
-        return []
-    }
-    
     // MARK: - Generic Data Storage (for archived sessions, etc.)
     
     /// Save generic data to Keychain.
@@ -742,10 +695,6 @@ class KeychainManager {
 
     func loadRawData(forKey key: String) -> Data? {
         load(forKey: key)
-    }
-
-    func deleteRawData(forKey key: String) {
-        delete(forKey: key)
     }
 
     // MARK: - Generic Helpers

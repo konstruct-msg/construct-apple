@@ -275,7 +275,6 @@ struct AppConstants {
 
     // Debug Settings
     static let enableDebugLogging = BuildConfiguration.current == .debug
-    static let enableVerboseWebSocketLogging = false // Включить для детальных логов
 
     /// True for local Debug and Beta archives (`SWIFT_ACTIVE_COMPILATION_CONDITIONS`
     /// includes `DEBUG`) and future `INTERNAL_TOOLS` TestFlight. False for App Store Release.
@@ -298,11 +297,6 @@ struct AppConstants {
 
 // MARK: - Feature Flags
 struct FeatureFlags {
-    // Можно использовать для A/B тестирования или постепенного rollout
-    static let enableMessageRetry = true
-    static let enableAutoReconnect = true
-    static let enableOfflineQueue = true
-    static let enablePushNotifications = false // Пока не реализовано
     static let maxMessageRetryAttempts = 3
 
     // (sealedSenderUnauthenticatedTransport removed 2026-09-28: a sealed send always leaves
@@ -314,10 +308,6 @@ struct FeatureFlags {
     // now — the per-stream scope and its SecurityView picker are gone. A token rides
     // every sealed send; the server issuance cap (`TOKEN_ISSUANCE_MAX_PER_HOUR`) is the
     // effective sealed-send rate limit. decisions/sealed-sender-anti-abuse-economics.md.)
-
-    // For Desktop we now use the direct iOS path (CryptoManager + gRPC-Swift) per Strategy B.
-    // Engine send path is disabled for Desktop (engine paused for this surface).
-    static let useEngineForSend = false
 
 
     /// QUIC/HTTP-3 via the dedicated `construct-transport` Rust stack (`QuicClientTransport`),
@@ -441,13 +431,6 @@ struct TrafficProtectionConfig {
     static let lowBatterySendIntervalMultiplier: Double = 2.0  // Increase interval when battery is low
     static let sendJitterMinMs: UInt64 = 50
     static let sendJitterMaxMs: UInt64 = 500
-
-    // Feature Flags
-    #if DEBUG
-    static let allowUserToggle = true              // Allow users to disable in debug
-    #else
-    static let allowUserToggle = false             // Always enabled in release
-    #endif
 }
 
 // MARK: - Chunked Delivery Configuration

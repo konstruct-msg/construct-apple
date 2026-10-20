@@ -389,19 +389,11 @@ enum CTLayout {
     /// regardless of whether the bar has a back button, trailing icon, or text only.
     static let navBarHeight: CGFloat = 44
 
-    /// The pre-`CTIcon` names of three icon sizes; `CTIcon` is the authority (TODO 122).
-    static let navIconSize: CGFloat = CTIcon.nav
-    static let callIconSize: CGFloat = CTIcon.control
-
     /// Circular call control (mute / speaker / secondary).
     static let callControlSize: CGFloat = 56
 
     /// Hang-up control diameter (slightly larger than secondary controls).
     static let callEndSize: CGFloat = 64
-
-    /// Fixed side zones keep the title visually centered even when leading and
-    /// trailing controls differ between screens or editing states.
-    static let navBarSideWidth: CGFloat = 96
 
     // MARK: Controls & spacing
 
