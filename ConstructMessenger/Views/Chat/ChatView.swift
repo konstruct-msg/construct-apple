@@ -413,7 +413,7 @@ struct ChatView: View {
     /// Refresh the at-risk state from the per-peer Keychain flag set by degraded init.
     private func refreshSessionAtRiskState() {
         let contactId = peerId
-        isSessionAtRisk = KeychainManager.shared.loadSessionAtRiskFlag(for: contactId)
+        isSessionAtRisk = SessionInitializationService.isSessionAtRisk(withPeer: contactId)
     }
 
     private var floodSenderId: String { peerId }

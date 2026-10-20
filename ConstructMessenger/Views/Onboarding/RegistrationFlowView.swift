@@ -317,7 +317,7 @@ struct RegistrationFlowView: View {
             Log.info("Starting PoW computation (difficulty: \(difficulty))...", category: "Registration")
             
             // Use real progress from Rust with smooth animation
-            let solution = await ProofOfWorkManager.computeWithProgress(
+            let solution = try await ProofOfWorkManager.computeWithProgress(
                 challenge: challenge,
                 difficulty: difficulty,
                 onProgress: { progress in
