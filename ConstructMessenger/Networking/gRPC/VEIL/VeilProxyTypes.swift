@@ -1,29 +1,13 @@
 //
-//  VeilTransportRequest.swift
+//  VeilProxyTypes.swift
 //  Construct Messenger
 //
-//  Fully describes a single proxy start attempt — transport type, addresses, and keys.
-//  Passed to `VeilProxyRuntime.start(_:)`. The runtime owns no selection policy; it only
-//  executes the C FFI call that corresponds to the request variant.
+//  The value types of one VEIL proxy start: what can go wrong, which obfuscator won, and the
+//  outcome. Was `VeilTransportRequest.swift` until 2026-10-20, when the per-method request enum
+//  it was named after went with the legacy `start(_:)` / `startSecondary` calls.
 //
 
 import Foundation
-
-/// Transport configuration for one proxy start attempt.
-enum VeilTransportRequest: Sendable {
-    /// WebTunnel (VEIL v2): HTTP CONNECT-style upgrade over TLS.
-    /// The auth token is computed per-connection inside Rust from `bridgeCert`.
-    case webTunnel(address: String, sni: String, spki: String, hostHeader: String, bridgeCert: String, wtBasePath: String)
-
-    /// obfs4 tunnelled inside TLS with SPKI certificate pinning and a Chrome 131 TLS fingerprint.
-    case tlsPinned(bridgeLine: String, address: String, sni: String, spki: String, profile: String)
-
-    /// obfs4 tunnelled inside TLS with CA-chain certificate validation (no pinning).
-    case tlsUnpinned(bridgeLine: String, address: String, sni: String)
-
-    /// Plain obfs4 without a TLS wrapper.
-    case plainObfs4(bridgeLine: String, address: String)
-}
 
 /// Runtime-level error from a proxy start attempt.
 enum VeilProxyRuntimeError: Error, Sendable {

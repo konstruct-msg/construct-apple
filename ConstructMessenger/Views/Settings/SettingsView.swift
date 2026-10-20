@@ -296,7 +296,7 @@ struct SettingsView: View {
             emergencyImportMsg = NSLocalizedString("veil_config_import_ok", comment: "")
             Task {
                 let vm = VeilProxyManager.shared
-                if vm.mode != .off { vm.stop(); await vm.startIfEnabled() }
+                if vm.mode != .off { vm.stop(); await vm.startIfNeeded() }
             }
         case .failure(let e):
             emergencyImportMsg = e.userFacingMessage

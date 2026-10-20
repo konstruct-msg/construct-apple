@@ -24,7 +24,7 @@ actor TransportRouter {
 
     /// Factory used by `shared` — broken out so tests can construct routers with mock effectors.
     private static func makeDefault() -> TransportRouter {
-        let initialRelays = ConnectionLoopRelayBridge.snapshotRelays()
+        let initialRelays = RelaySnapshot.snapshotRelays()
         let blockedPenalty = WebTunnelPenaltyStore.load()
         return TransportRouter(
             config: .default,
@@ -281,21 +281,18 @@ actor TransportRouter {
     }
 }
 
-// MARK: - Bridge for initial relay snapshot
+// MARK: - Relay snapshot
 
-/// Reads the same relay-candidate set that `ConnectionLoop.shared` used to build at init,
-/// without keeping a dependency on `ConnectionLoop`. Lives here so the router boot path
-/// has a single, obvious place to look for it.
-enum ConnectionLoopRelayBridge {
+/// The relay candidates the router boots with and refreshes from. Was `RelaySnapshot`
+/// until 2026-10-20, a name left from the deleted `ConnectionLoop`; this is the canonical build.
+enum RelaySnapshot {
     static func snapshotRelays() -> [VeilRelay] {
         let addresses = VeilRelaySelector.cachedRelayAddresses()
         // obfs4 is retired (excluded from the probe race), so no bridge cert is needed.
         return addresses.map { buildRelay(address: $0, bridgeCert: "") }
     }
 
-    /// Copy of `ConnectionLoop.buildRelay` — kept here so the router boot path is
-    /// independent of ConnectionLoop. Once ConnectionLoop is deleted in Chunk 3 this
-    /// becomes the canonical implementation.
+    /// One relay from its address, with the identity its source vouches for.
     private static func buildRelay(address: String, bridgeCert: String) -> VeilRelay {
         // EntryDirectory Source 3: a LAN-discovered island relay. Its identity was already
         // trust-gated by VeilLocalDiscovery (advertised SPKI matched a seed pin or a signed-
