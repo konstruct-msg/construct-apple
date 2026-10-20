@@ -43,16 +43,21 @@ final class ErrorRouter: ObservableObject {
     func report(_ error: Error, context: String = "", recovery: (() -> Void)? = nil,
                 file: String = #file, line: Int = #line) {
         let appError = AppError.from(error)
-        report(appError, context: context, recovery: recovery, file: file, line: line)
+        report(appError, context: context, recovery: recovery, cause: error, file: file, line: line)
     }
 
     /// Report a typed AppError directly with an optional one-shot recovery action.
     /// - Parameter recovery: Closure invoked when the user taps the toast action button.
     ///   Pass `nil` to show the toast without an action button.
+    /// - Parameter cause: the error `error` was mapped from, when there was one. The banner says
+    ///   only the mapped case ("sign in again"), so the log names the caller and the cause —
+    ///   without them a banner seen on a device could not be traced to the call that raised it.
     func report(_ error: AppError, context: String = "", recovery: (() -> Void)? = nil,
-                file: String = #file, line: Int = #line) {
+                cause: Error? = nil, file: String = #file, line: Int = #line) {
         let ctx = context.isEmpty ? "" : " [\(context)]"
-        Log.error("ErrorRouter\(ctx): \(error.logDescription)",
+        let site = "\((file as NSString).lastPathComponent):\(line)"
+        let because = cause.map { " ← \(String(describing: $0))" } ?? ""
+        Log.error("ErrorRouter\(ctx): \(error.logDescription) at \(site)\(because)",
                   category: "ErrorRouter")
 
         guard error.shouldDisplay else { return }

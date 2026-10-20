@@ -1086,12 +1086,6 @@ class AuthViewModel {
         Log.info("User authenticated successfully")
     }
     
-    private func handleSessionExpired() {
-        AuthSessionManager.shared.clearSession()
-        self.isAuthenticated = false
-        ErrorRouter.shared.report(.sessionExpired)
-    }
-    
     private func handleDeleteAccountSuccess() {
         Log.info("Account deletion successful", category: "AuthViewModel")
         cancelTimeouts()
