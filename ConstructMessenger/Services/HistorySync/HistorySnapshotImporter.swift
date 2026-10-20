@@ -215,7 +215,7 @@ final class HistorySnapshotImporter {
         }
     }
 
-    /// The batch, one write; then each chat's preview moves to the newest message it gained.
+    /// The batch, one write; then each chat it touched shows its last message in transcript order.
     private func writePending() throws {
         guard !pending.isEmpty else { return }
         let batch = pending
@@ -224,15 +224,9 @@ final class HistorySnapshotImporter {
         summary.applied += added.count
         summary.conflictKeepExisting += batch.count - added.count
 
-        var newest: [String: MessageRecord] = [:]
-        for (message, _) in batch where added.contains(message.id) {
-            if let held = newest[message.chatId], held.timestamp >= message.timestamp { continue }
-            newest[message.chatId] = message
-        }
-        for (chatId, message) in newest {
-            try chats.advancePreview(
-                chatId, text: LocalMessagePayload.decode(message.body).previewHint, time: message.timestamp
-            )
+        let touched = Set(batch.lazy.filter { added.contains($0.message.id) }.map(\.message.chatId))
+        for chatId in touched {
+            MessagePersistenceService.refreshPreview(ofChat: chatId, store: messages, chats: chats)
             try chats.setUnread(chatId, 0)
         }
     }

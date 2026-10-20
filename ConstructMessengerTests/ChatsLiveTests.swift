@@ -57,7 +57,7 @@ final class ChatsLiveTests: XCTestCase {
         let b = try chats.openChat(withPeer: "b", now: Date(timeIntervalSince1970: 200)).chat
         await eventually { live.chats().map(\.id) == [b.id, a.id] }
 
-        try chats.advancePreview(a.id, text: "later", time: Date(timeIntervalSince1970: 300))
+        try chats.setPreview(a.id, text: "later", time: Date(timeIntervalSince1970: 300))
         await eventually { live.chats().map(\.id) == [a.id, b.id] }
         XCTAssertEqual(live.chat(a.id)?.lastMessageText, "later")
     }
