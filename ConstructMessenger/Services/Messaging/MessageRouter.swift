@@ -1749,9 +1749,9 @@ final class MessageRouter {
         // Check if message already exists (from background fetch, retry redelivery, …)
         if let existing = try store.message(canonicalId) {
             if existing.fromUserId == messageData.from {
-                var recoveredPreviewAt: Date?
+                var placedOrRecovered = false
                 if let serverOrderKey = messageData.serverOrderKey {
-                    try store.setOrderKey(existing.id, serverOrderKey)
+                    placedOrRecovered = try store.setOrderKey(existing.id, serverOrderKey)
                 }
                 // Update the content if the message was stored undecryptable — a body read late,
                 // not an edit.
@@ -1759,18 +1759,10 @@ final class MessageRouter {
                    try store.setBody(existing.id, body: storagePayload,
                                      searchText: LocalMessagePayload.decode(storagePayload).plainText) {
                     Log.debug("Updating decrypted content for message \(canonicalId)", category: "MessageRouter")
-                    recoveredPreviewAt = existing.timestamp
+                    placedOrRecovered = true
                 }
-                if let at = recoveredPreviewAt {
-                    // Forced when the preview is blank: a message that was stored undecryptable
-                    // left an empty preview behind, and recovering its text must fill that in
-                    // even though a newer message has since moved the preview's time forward.
-                    let shown = (try? LocalRepositories.chats.chat(existing.chatId))?.lastMessageText ?? ""
-                    if shown.isEmpty {
-                        MessagePersistenceService.setPreview(ofChat: existing.chatId, text: previewSource, at: at)
-                    } else {
-                        MessagePersistenceService.advancePreview(ofChat: existing.chatId, text: previewSource, at: at)
-                    }
+                if placedOrRecovered {
+                    MessagePersistenceService.refreshPreview(ofChat: existing.chatId)
                 }
                 return canonicalId  // Message already exists
             }
@@ -1820,7 +1812,7 @@ final class MessageRouter {
             replyQuote: replyQuote, transcript: nil, transcriptLanguage: nil, transcriptGeneratedAt: nil
         ), searchText: LocalMessagePayload.decode(storagePayload).plainText)
         // The list row, after the message is saved — through the repository, never in this context.
-        MessagePersistenceService.advancePreview(ofChat: chatId, text: previewSource, at: timestamp)
+        MessagePersistenceService.refreshPreview(ofChat: chatId)
         // Same "can the user actually see this?" test the banner uses — an open chat behind a
         // backgrounded app is not visible, and used to keep unreadCount pinned at 0.
         // Not when another device of ours has read past it already (ReadSync): a mailbox drained
@@ -2195,7 +2187,6 @@ final class MessageRouter {
     ) {
         // Decode wire bytes through the same pipeline as inbound chat messages.
         let storagePayload: Data
-        let previewText: String
         let e2eRowId: String?
         let mediaAlbum: Shared_Proto_Messaging_V1_MediaAlbumMessage?
 
@@ -2205,16 +2196,13 @@ final class MessageRouter {
             mediaAlbum = album
             if let storage, !storage.isEmpty {
                 storagePayload = storage
-                previewText = LocalMessagePayload.decode(storage).previewHint
             } else {
                 storagePayload = LocalMessagePayload.encodeText(text)
-                previewText = text
             }
         case .legacy(let text):
             e2eRowId = nil
             mediaAlbum = nil
             storagePayload = LocalMessagePayload.encodeText(text)
-            previewText = text
         case .profile:
             Log.info("SENDER_SYNC: profile-share carrier, not persisting as text", category: "MessageRouter")
             return
@@ -2260,8 +2248,9 @@ final class MessageRouter {
 
         do {
             if let existing = try LocalRepositories.messages.message(rowId) {
-                if let serverOrderKey = original.serverOrderKey {
-                    try LocalRepositories.messages.setOrderKey(existing.id, serverOrderKey)
+                if let serverOrderKey = original.serverOrderKey,
+                   try LocalRepositories.messages.setOrderKey(existing.id, serverOrderKey) {
+                    MessagePersistenceService.refreshPreview(ofChat: existing.chatId)
                 }
                 return // already saved (duplicate delivery / other chunk path)
             }
@@ -2290,7 +2279,7 @@ final class MessageRouter {
             Log.error("SENDER_SYNC: message \(rowId.prefix(8))… not saved: \(error)", category: "MessageRouter")
             return
         }
-        MessagePersistenceService.advancePreview(ofChat: chatId, text: previewText, at: timestamp)
+        MessagePersistenceService.refreshPreview(ofChat: chatId)
 
         if !original.senderDeviceId.isEmpty {
             CryptoManager.shared.saveSessionToKeychain(

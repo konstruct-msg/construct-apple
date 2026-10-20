@@ -2,14 +2,13 @@ import XCTest
 import CoreData
 @testable import Construct_Messenger
 
-/// Regression cover for the chat-list preview freezing on an older message.
+/// The chat-list preview is the transcript's last message, in the transcript's order.
 ///
-/// Messages do not arrive in timestamp order: a peer message held in the server's offline
-/// queue is stored with its *original* timestamp long after newer local sends, and background
-/// fetch commits whole batches at once. Preview writers used to assign
-/// `lastMessageText`/`lastMessageTime` directly, so one late-delivered older message clobbered
-/// the row — the list showed the peer's stale text while the transcript ended with much newer
-/// outgoing messages.
+/// Messages do not arrive in timestamp order, and their timestamps are the sender's clock. The
+/// preview first followed whichever message was written last (a late-delivered older one
+/// clobbered it), then — until 2026-10-20 — the newest by timestamp, which kept a message the
+/// server placed later out of the list: ours sent through a drop and acknowledged after the
+/// peer's reply, or the peer's delivered after a reconnect. Now it is the transcript's order.
 @MainActor
 final class ChatPreviewOrderingTests: XCTestCase {
     private var context: NSManagedObjectContext!
@@ -53,45 +52,6 @@ final class ChatPreviewOrderingTests: XCTestCase {
         return chat
     }
 
-    /// The bug as observed on device: outgoing message at 16:53, then a peer message
-    /// timestamped 15:29 lands late. The row must keep showing the newer outgoing one.
-    func testLateDeliveredOlderMessageDoesNotClobberPreview() {
-        let chat = makeChat()
-        let sentAt = Date()
-
-        chat.applyPreview(text: "Фигня какая", timestamp: sentAt)
-        XCTAssertEqual(chat.lastMessageText, "Фигня какая")
-
-        chat.applyPreview(text: "Проверка связи снова.", timestamp: sentAt.addingTimeInterval(-5000))
-
-        XCTAssertEqual(chat.lastMessageText, "Фигня какая")
-        XCTAssertEqual(chat.lastMessageTime, sentAt)
-    }
-
-    func testNewerMessageAdvancesPreview() {
-        let chat = makeChat()
-        let base = Date()
-
-        chat.applyPreview(text: "older", timestamp: base)
-        chat.applyPreview(text: "newer", timestamp: base.addingTimeInterval(60))
-
-        XCTAssertEqual(chat.lastMessageText, "newer")
-        XCTAssertEqual(chat.lastMessageTime, base.addingTimeInterval(60))
-    }
-
-    /// Outgoing timestamps are truncated to whole seconds (`UInt64(timeIntervalSince1970)`),
-    /// so a strict `>` comparison silently dropped a message sent in the same second as the
-    /// current preview. Equal timestamps must still update.
-    func testSameSecondMessageStillUpdatesPreview() {
-        let chat = makeChat()
-        let sameInstant = Date(timeIntervalSince1970: 1_785_000_000)
-
-        chat.applyPreview(text: "first", timestamp: sameInstant)
-        chat.applyPreview(text: "second", timestamp: sameInstant)
-
-        XCTAssertEqual(chat.lastMessageText, "second")
-    }
-
     func testFirstMessageSetsPreviewFromEmptyChat() {
         let chat = makeChat()
         XCTAssertNil(chat.lastMessageTime)
@@ -101,19 +61,6 @@ final class ChatPreviewOrderingTests: XCTestCase {
 
         XCTAssertEqual(chat.lastMessageText, "hello")
         XCTAssertEqual(chat.lastMessageTime, at)
-    }
-
-    /// Deletion recomputes the preview from the surviving messages, which legitimately moves
-    /// it backwards — the only caller allowed to bypass the ordering check.
-    func testForcedPreviewMovesBackwardsAfterDeletion() {
-        let chat = makeChat()
-        let newest = Date()
-
-        chat.applyPreview(text: "newest", timestamp: newest)
-        chat.applyPreview(text: "survivor", timestamp: newest.addingTimeInterval(-600), force: true)
-
-        XCTAssertEqual(chat.lastMessageText, "survivor")
-        XCTAssertEqual(chat.lastMessageTime, newest.addingTimeInterval(-600))
     }
 
     /// Control-signal payloads must never surface as preview text, and going through
@@ -193,9 +140,6 @@ final class ChatPreviewOrderingTests: XCTestCase {
         msg.chat = chat
         msg.applyStoredEncryption(plaintext: "real tip", contactId: "peer")
 
-        // Without reconcile, applyPreview would refuse a later real message older than freeze.
-        chat.applyPreview(text: "would be refused", timestamp: real.addingTimeInterval(1))
-        XCTAssertEqual(chat.lastMessageText, "frozen future")
         try context.save()
 
         XCTAssertTrue(chat.reconcilePreviewFromTranscript())
@@ -206,11 +150,8 @@ final class ChatPreviewOrderingTests: XCTestCase {
 
 // MARK: - Remote timestamp clamping
 //
-// The ordering guard above has a sharp edge: a timestamp in the FUTURE freezes the row
-// permanently, because every later message — local or remote — is then "older" and refused.
-// Before the guard existed this was self-correcting (the next writer simply overwrote it), so
-// the guard converted a transient wrong preview into a permanent one. Remote timestamps are
-// skew- and sender-controlled, so they are clamped at ingestion.
+// Remote timestamps are skew- and sender-controlled, so they are clamped at ingestion: a time in
+// the future is shown as now. (It once also froze the preview, while the preview went by time.)
 extension ChatPreviewOrderingTests {
 
     func testRemoteTimestampInTheFutureIsClampedToNow() {
@@ -231,34 +172,55 @@ extension ChatPreviewOrderingTests {
 
         XCTAssertEqual(clamped.timeIntervalSince1970, twoDaysAgo.timeIntervalSince1970, accuracy: 1)
     }
+}
 
-    func testClampingKeepsLaterMessagesAbleToAdvanceThePreview() {
-        // The end-to-end property that was broken: a peer with a fast clock must not be able
-        // to freeze the row against every subsequent message.
-        let now = Date(timeIntervalSince1970: 1_700_000_000)
-        let chat = makeChat()
+// MARK: - The transcript's order decides
 
-        let skewed = Date.fromRemoteTimestamp(
-            UInt64(now.addingTimeInterval(3 * 3600).timeIntervalSince1970),
-            now: now
-        )
-        chat.applyPreview(text: "from a peer whose clock is ahead", timestamp: skewed)
-
-        // A local send one second later must still win.
-        chat.applyPreview(text: "my newer reply", timestamp: now.addingTimeInterval(1))
-
-        XCTAssertEqual(chat.lastMessageText, "my newer reply")
+extension ChatPreviewOrderingTests {
+    private func write(
+        _ text: String, in chat: Chat, sentByMe: Bool, at seconds: TimeInterval, orderKey: String,
+        id: String = UUID().uuidString.lowercased()
+    ) throws -> String {
+        try LocalRepositories.messages.insert(MessageRecord(
+            id: id, chatId: chat.id, fromUserId: sentByMe ? "me" : "peer", toUserId: sentByMe ? "peer" : "me",
+            isSentByMe: sentByMe, timestamp: Date(timeIntervalSince1970: seconds), orderKey: orderKey,
+            body: Data(text.utf8), contentType: .regular, deliveryStatus: sentByMe ? .sending : .delivered,
+            retryCount: 0, suiteId: 0, isEdited: false, editedAt: nil, replyToMessageId: nil,
+            replyQuote: nil, transcript: nil, transcriptLanguage: nil, transcriptGeneratedAt: nil
+        ), searchText: text)
+        MessagePersistenceService.refreshPreview(ofChat: chat.id)
+        return id
     }
 
-    func testUnclampedFutureTimestampWouldFreezeTheRow() {
-        // Pins the exact failure the clamp exists to prevent — if this ever passes with the
-        // newer text, the ordering guard has been weakened rather than the clamp fixed.
-        let now = Date(timeIntervalSince1970: 1_700_000_000)
-        let chat = makeChat()
+    private func serverKey(_ ms: Int64, _ seq: UInt64) throws -> String {
+        try XCTUnwrap(ServerMessageOrder.key(serverTimestampMilliseconds: ms, sequence: seq))
+    }
 
-        chat.applyPreview(text: "future", timestamp: now.addingTimeInterval(3 * 3600))
-        chat.applyPreview(text: "my newer reply", timestamp: now.addingTimeInterval(1))
+    /// The peer's message, written on a clock behind ours, is placed after our last one: it is
+    /// the transcript's last, so it is the preview. Mutation: refresh by the message's own time
+    /// (the rule before 2026-10-20) — "mine" stays.
+    func testAMessagePlacedLaterIsThePreviewWhateverItsClockSays() throws {
+        let chat = try makeSavedChat()
+        _ = try write("mine", in: chat, sentByMe: true, at: 1_000, orderKey: serverKey(2_000_000, 1))
+        XCTAssertEqual(try stored(chat).lastMessageText, "mine")
 
-        XCTAssertEqual(chat.lastMessageText, "future", "guard still refuses to move backwards")
+        _ = try write("theirs", in: chat, sentByMe: false, at: 900, orderKey: serverKey(2_000_500, 2))
+        XCTAssertEqual(try stored(chat).lastMessageText, "theirs")
+    }
+
+    /// Ours, sent through a drop: pending, it is last; the peer's reply arrives meanwhile; the
+    /// acknowledgement then places ours before the reply, and the reply becomes the preview.
+    /// Mutation: drop the refresh in `updateServerOrder` — "mine" stays.
+    func testAnAcknowledgementThatPlacesOursEarlierHandsThePreviewToTheReply() throws {
+        let chat = try makeSavedChat()
+        let mine = try write("mine", in: chat, sentByMe: true, at: 1_000,
+                             orderKey: ServerMessageOrder.pending(localMessageId: "m1"), id: "m1")
+        _ = try write("theirs", in: chat, sentByMe: false, at: 1_005, orderKey: serverKey(2_000_500, 2))
+        XCTAssertEqual(try stored(chat).lastMessageText, "mine", "a pending message sits last")
+
+        MessagePersistenceService().updateServerOrder(
+            messageId: mine, serverOrderKey: try serverKey(2_000_000, 1), in: context
+        )
+        XCTAssertEqual(try stored(chat).lastMessageText, "theirs")
     }
 }
