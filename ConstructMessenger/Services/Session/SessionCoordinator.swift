@@ -697,13 +697,9 @@ final class SessionCoordinator: MessageRouterDelegate {
                     timestamp: UInt64(msg.timestamp.timeIntervalSince1970),
                     onlyDevices: [device]
                 ).status
-                let outcome: DeliveryStatus
-                switch response.status.lowercased() {
-                case "delivered": outcome = .delivered
-                case "queued": outcome = .queued
-                case "failed", "blocked": outcome = .failed
-                default: outcome = .sent
-                }
+                // The shared reading: until 2026-10-20 this one marked a rate-limited copy failed
+                // where every other path queued it (TODO 180).
+                let outcome = response.deliveryStatus
                 _ = try? store.setDeliveryStatus(msg.id, outcome)
             } catch is StealthDowngradeBlocked {
                 // Stealth on but could not seal — keep it queued, never send identified.
