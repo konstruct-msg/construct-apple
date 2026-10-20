@@ -349,16 +349,19 @@ struct FeatureFlags {
     static let engineQuicExperimentalKey = "ff.engineQuicExperimental"
     static var engineQuicExperimental: Bool {
         get {
-//            #if DEBUG
+            // These conditionals were commented out from 2026-06-25 to 2026-10-20 by accident
+            // (TODO 178): a release build read the stored value, so a `false` left by a test build
+            // turned QUIC off for good.
+            #if DEBUG || INTERNAL_TOOLS
             UserDefaults.standard.object(forKey: engineQuicExperimentalKey) as? Bool ?? true
-//            #else
-            //true  // forced on in external release — no kill-switch, stale stored value ignored
-//            #endif
+            #else
+            true  // forced on in external release — no kill-switch, stale stored value ignored
+            #endif
         }
         set {
-//            #if DEBUG
+            #if DEBUG || INTERNAL_TOOLS
             UserDefaults.standard.set(newValue, forKey: engineQuicExperimentalKey)
-//            #endif
+            #endif
         }
     }
 
