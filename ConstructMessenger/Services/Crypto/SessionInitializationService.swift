@@ -376,10 +376,6 @@ class SessionInitializationService {
         // one-time prekey. Asking after it would answer a question that has already cost what it
         // was meant to save.
         let decision = planInitiation(context: InitiationContext(
-            myDeviceId: KeychainManager.shared.loadDeviceID() ?? "",
-            // The peer's pinned device, or nothing at first contact — the core takes an
-            // unnameable peer as "cannot rank", not as "cannot write to".
-            peerDeviceId: SessionAddressing.pinnedDevice(ofPeer: userId) ?? "",
             ourInitInFlight: proactiveInitTasks[userId] != nil,
             peerInitInFlight: peerInitInFlight?(userId) ?? false,
             haveOutboundWork: hasOutboundWork
@@ -551,13 +547,10 @@ class SessionInitializationService {
             hasSession: CryptoManager.shared.hasSession(for: target.deviceId)
         )
         guard action != .leave else { return .skipped("session exists") }
-        // Per device, not per account: the core ranks **this pair** to decide whether opening now
-        // walks into a collision, and for a second device the answer can differ from the pinned
-        // one's. `peerInitInFlight` is still account-wide — that store cannot say which device
-        // sent the init it holds.
+        // Asked per device. The context no longer names the pair: `plan_initiation` never read the
+        // two device ids, and core 0.54 removed them (TODO 202). `peerInitInFlight` is still
+        // account-wide — that store cannot say which device sent the init it holds.
         let decision = planInitiation(context: InitiationContext(
-            myDeviceId: KeychainManager.shared.loadDeviceID() ?? "",
-            peerDeviceId: target.deviceId,
             ourInitInFlight: false,
             peerInitInFlight: peerInitInFlight?(userId) ?? false,
             haveOutboundWork: hasOutboundWork

@@ -98,12 +98,8 @@ final class SessionActionExecutor {
         // ── Already handled by higher-level callers (no-op here) ─
         // These are consumed by the MessageRouter / session-init path
         // and should not be re-executed by the generic executor.
-        case .decryptMessage:
-            break
-        case .encryptMessage:
-            break
-        case .archiveSession:
-            break
+        // (`decryptMessage`, `encryptMessage`, `archiveSession`, `sendReceipt` and `cancelTimer`
+        // were never emitted by the core and left the enum in 0.54, TODO 202.)
         case .markMessageDelivered:
             break
         case .duplicateDropped:
@@ -115,8 +111,6 @@ final class SessionActionExecutor {
             // message and moves past it. Nothing for the executor to do.
             break
         case .sendEncryptedMessage:
-            break
-        case .sendReceipt:
             break
         case .notifySessionCreated:
             break
@@ -152,9 +146,6 @@ final class SessionActionExecutor {
         // ── Timers ────────────────────────────────────────────────
         case .scheduleTimer(let timerId, let delayMs):
             OutboundSessionService.shared.scheduleRustTimer(timerId: timerId, delayMs: delayMs)
-
-        case .cancelTimer(let timerId):
-            OutboundSessionService.shared.cancelRustTimer(timerId: timerId)
 
         // ── Network / transport ───────────────────────────────────
         case .openReceiving:

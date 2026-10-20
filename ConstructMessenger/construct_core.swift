@@ -3491,7 +3491,7 @@ public protocol OrchestratorCoreProtocol: AnyObject, Sendable {
     func exportOneTimePrekeys() throws  -> Data
     
     /**
-     * Export the full orchestrator coordination state (init locks, prekey tracker, pins) as a
+     * Export the full orchestrator coordination state (init locks, pins) as a
      * CFE binary blob.
      * Persist under CfeSecureStoreSlot::OrchestratorState.
      */
@@ -3504,7 +3504,7 @@ public protocol OrchestratorCoreProtocol: AnyObject, Sendable {
     /**
      * Drop every piece of local orchestration state this core holds about `contact_id`:
      * the ratchet and its previous states, the prekey counter, the PQ contribution, the init lock,
-     * the queue, the prewarm mark and the active-chat mark.
+     * the queue and the active-chat mark.
      *
      * `remove_session` removes the ratchet **and nothing else**, so all of the above outlive it
      * and steer the next add for the same device — a contact the platform has already forgotten.
@@ -3938,7 +3938,7 @@ open func exportOneTimePrekeys()throws  -> Data  {
 }
     
     /**
-     * Export the full orchestrator coordination state (init locks, prekey tracker, pins) as a
+     * Export the full orchestrator coordination state (init locks, pins) as a
      * CFE binary blob.
      * Persist under CfeSecureStoreSlot::OrchestratorState.
      */
@@ -3970,7 +3970,7 @@ open func exportSession(contactId: String)throws  -> Data  {
     /**
      * Drop every piece of local orchestration state this core holds about `contact_id`:
      * the ratchet and its previous states, the prekey counter, the PQ contribution, the init lock,
-     * the queue, the prewarm mark and the active-chat mark.
+     * the queue and the active-chat mark.
      *
      * `remove_session` removes the ratchet **and nothing else**, so all of the above outlive it
      * and steer the next add for the same device — a contact the platform has already forgotten.
@@ -4773,193 +4773,6 @@ public func FfiConverterTypeRustAckStore_lower(_ value: RustAckStore) -> UInt64 
 
 
 
-
-
-public protocol TrafficProtectionManagerProtocol: AnyObject, Sendable {
-    
-    func currentIntervalMs()  -> UInt64
-    
-    func generateDummy()  -> Data
-    
-    func getMetrics()  -> EnergyMetrics
-    
-    func isCurrentlyActive()  -> Bool
-    
-    func recordRealMessageSent() 
-    
-    func resetMetrics() 
-    
-    func shouldSendDummy()  -> Bool
-    
-    func updateBatteryLevel(level: Float) 
-    
-}
-open class TrafficProtectionManager: TrafficProtectionManagerProtocol, @unchecked Sendable {
-    fileprivate let handle: UInt64
-
-    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
-#if swift(>=5.8)
-    @_documentation(visibility: private)
-#endif
-    public struct NoHandle {
-        public init() {}
-    }
-
-    // TODO: We'd like this to be `private` but for Swifty reasons,
-    // we can't implement `FfiConverter` without making this `required` and we can't
-    // make it `required` without making it `public`.
-#if swift(>=5.8)
-    @_documentation(visibility: private)
-#endif
-    required public init(unsafeFromHandle handle: UInt64) {
-        self.handle = handle
-    }
-
-    // This constructor can be used to instantiate a fake object.
-    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
-    //
-    // - Warning:
-    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
-#if swift(>=5.8)
-    @_documentation(visibility: private)
-#endif
-    public init(noHandle: NoHandle) {
-        self.handle = 0
-    }
-
-#if swift(>=5.8)
-    @_documentation(visibility: private)
-#endif
-    public func uniffiCloneHandle() -> UInt64 {
-        return try! rustCall { uniffi_construct_core_fn_clone_trafficprotectionmanager(self.handle, $0) }
-    }
-public convenience init(config: CoverTrafficConfig) {
-    let handle =
-        try! rustCall() {
-    uniffi_construct_core_fn_constructor_trafficprotectionmanager_new(
-        FfiConverterTypeCoverTrafficConfig_lower(config),$0
-    )
-}
-    self.init(unsafeFromHandle: handle)
-}
-
-    deinit {
-        try! rustCall { uniffi_construct_core_fn_free_trafficprotectionmanager(handle, $0) }
-    }
-
-    
-
-    
-open func currentIntervalMs() -> UInt64  {
-    return try!  FfiConverterUInt64.lift(try! rustCall() {
-    uniffi_construct_core_fn_method_trafficprotectionmanager_current_interval_ms(
-            self.uniffiCloneHandle(),$0
-    )
-})
-}
-    
-open func generateDummy() -> Data  {
-    return try!  FfiConverterData.lift(try! rustCall() {
-    uniffi_construct_core_fn_method_trafficprotectionmanager_generate_dummy(
-            self.uniffiCloneHandle(),$0
-    )
-})
-}
-    
-open func getMetrics() -> EnergyMetrics  {
-    return try!  FfiConverterTypeEnergyMetrics_lift(try! rustCall() {
-    uniffi_construct_core_fn_method_trafficprotectionmanager_get_metrics(
-            self.uniffiCloneHandle(),$0
-    )
-})
-}
-    
-open func isCurrentlyActive() -> Bool  {
-    return try!  FfiConverterBool.lift(try! rustCall() {
-    uniffi_construct_core_fn_method_trafficprotectionmanager_is_currently_active(
-            self.uniffiCloneHandle(),$0
-    )
-})
-}
-    
-open func recordRealMessageSent()  {try! rustCall() {
-    uniffi_construct_core_fn_method_trafficprotectionmanager_record_real_message_sent(
-            self.uniffiCloneHandle(),$0
-    )
-}
-}
-    
-open func resetMetrics()  {try! rustCall() {
-    uniffi_construct_core_fn_method_trafficprotectionmanager_reset_metrics(
-            self.uniffiCloneHandle(),$0
-    )
-}
-}
-    
-open func shouldSendDummy() -> Bool  {
-    return try!  FfiConverterBool.lift(try! rustCall() {
-    uniffi_construct_core_fn_method_trafficprotectionmanager_should_send_dummy(
-            self.uniffiCloneHandle(),$0
-    )
-})
-}
-    
-open func updateBatteryLevel(level: Float)  {try! rustCall() {
-    uniffi_construct_core_fn_method_trafficprotectionmanager_update_battery_level(
-            self.uniffiCloneHandle(),
-        FfiConverterFloat.lower(level),$0
-    )
-}
-}
-    
-
-    
-}
-
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public struct FfiConverterTypeTrafficProtectionManager: FfiConverter {
-    typealias FfiType = UInt64
-    typealias SwiftType = TrafficProtectionManager
-
-    public static func lift(_ handle: UInt64) throws -> TrafficProtectionManager {
-        return TrafficProtectionManager(unsafeFromHandle: handle)
-    }
-
-    public static func lower(_ value: TrafficProtectionManager) -> UInt64 {
-        return value.uniffiCloneHandle()
-    }
-
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> TrafficProtectionManager {
-        let handle: UInt64 = try readInt(&buf)
-        return try lift(handle)
-    }
-
-    public static func write(_ value: TrafficProtectionManager, into buf: inout [UInt8]) {
-        writeInt(&buf, lower(value))
-    }
-}
-
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypeTrafficProtectionManager_lift(_ handle: UInt64) throws -> TrafficProtectionManager {
-    return try FfiConverterTypeTrafficProtectionManager.lift(handle)
-}
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypeTrafficProtectionManager_lower(_ value: TrafficProtectionManager) -> UInt64 {
-    return FfiConverterTypeTrafficProtectionManager.lower(value)
-}
-
-
-
-
 /**
  * Binary key bundle passed across the FFI boundary — no JSON encoding.
  * Replaces the former bytes JSON payload for init_session / init_receiving_session.
@@ -5120,78 +4933,6 @@ public func FfiConverterTypeBinaryKeyBundle_lower(_ value: BinaryKeyBundle) -> R
 }
 
 
-public struct CoverTrafficConfig: Equatable, Hashable {
-    public var enabled: Bool
-    public var batteryLevelThreshold: Float
-    public var minIntervalMs: UInt64
-    public var maxIntervalMs: UInt64
-    public var messageSize: UInt64
-    public var coalesceWithRealMessages: Bool
-    public var coalesceWindowMs: UInt64
-
-    // Default memberwise initializers are never public by default, so we
-    // declare one manually.
-    public init(enabled: Bool, batteryLevelThreshold: Float, minIntervalMs: UInt64, maxIntervalMs: UInt64, messageSize: UInt64, coalesceWithRealMessages: Bool, coalesceWindowMs: UInt64) {
-        self.enabled = enabled
-        self.batteryLevelThreshold = batteryLevelThreshold
-        self.minIntervalMs = minIntervalMs
-        self.maxIntervalMs = maxIntervalMs
-        self.messageSize = messageSize
-        self.coalesceWithRealMessages = coalesceWithRealMessages
-        self.coalesceWindowMs = coalesceWindowMs
-    }
-
-    
-}
-
-#if compiler(>=6)
-extension CoverTrafficConfig: Sendable {}
-#endif
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public struct FfiConverterTypeCoverTrafficConfig: FfiConverterRustBuffer {
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> CoverTrafficConfig {
-        return
-            try CoverTrafficConfig(
-                enabled: FfiConverterBool.read(from: &buf), 
-                batteryLevelThreshold: FfiConverterFloat.read(from: &buf), 
-                minIntervalMs: FfiConverterUInt64.read(from: &buf), 
-                maxIntervalMs: FfiConverterUInt64.read(from: &buf), 
-                messageSize: FfiConverterUInt64.read(from: &buf), 
-                coalesceWithRealMessages: FfiConverterBool.read(from: &buf), 
-                coalesceWindowMs: FfiConverterUInt64.read(from: &buf)
-        )
-    }
-
-    public static func write(_ value: CoverTrafficConfig, into buf: inout [UInt8]) {
-        FfiConverterBool.write(value.enabled, into: &buf)
-        FfiConverterFloat.write(value.batteryLevelThreshold, into: &buf)
-        FfiConverterUInt64.write(value.minIntervalMs, into: &buf)
-        FfiConverterUInt64.write(value.maxIntervalMs, into: &buf)
-        FfiConverterUInt64.write(value.messageSize, into: &buf)
-        FfiConverterBool.write(value.coalesceWithRealMessages, into: &buf)
-        FfiConverterUInt64.write(value.coalesceWindowMs, into: &buf)
-    }
-}
-
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypeCoverTrafficConfig_lift(_ buf: RustBuffer) throws -> CoverTrafficConfig {
-    return try FfiConverterTypeCoverTrafficConfig.lift(buf)
-}
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypeCoverTrafficConfig_lower(_ value: CoverTrafficConfig) -> RustBuffer {
-    return FfiConverterTypeCoverTrafficConfig.lower(value)
-}
-
-
 public struct DecryptedMessageResult: Equatable, Hashable {
     public var plaintext: Data
     public var storageKey: Data
@@ -5293,62 +5034,6 @@ public func FfiConverterTypeDeliveryTarget_lift(_ buf: RustBuffer) throws -> Del
 #endif
 public func FfiConverterTypeDeliveryTarget_lower(_ value: DeliveryTarget) -> RustBuffer {
     return FfiConverterTypeDeliveryTarget.lower(value)
-}
-
-
-public struct EnergyMetrics: Equatable, Hashable {
-    public var dummiesSent: UInt64
-    public var coalescedCount: UInt64
-    public var batterySkipped: UInt64
-
-    // Default memberwise initializers are never public by default, so we
-    // declare one manually.
-    public init(dummiesSent: UInt64, coalescedCount: UInt64, batterySkipped: UInt64) {
-        self.dummiesSent = dummiesSent
-        self.coalescedCount = coalescedCount
-        self.batterySkipped = batterySkipped
-    }
-
-    
-}
-
-#if compiler(>=6)
-extension EnergyMetrics: Sendable {}
-#endif
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public struct FfiConverterTypeEnergyMetrics: FfiConverterRustBuffer {
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> EnergyMetrics {
-        return
-            try EnergyMetrics(
-                dummiesSent: FfiConverterUInt64.read(from: &buf), 
-                coalescedCount: FfiConverterUInt64.read(from: &buf), 
-                batterySkipped: FfiConverterUInt64.read(from: &buf)
-        )
-    }
-
-    public static func write(_ value: EnergyMetrics, into buf: inout [UInt8]) {
-        FfiConverterUInt64.write(value.dummiesSent, into: &buf)
-        FfiConverterUInt64.write(value.coalescedCount, into: &buf)
-        FfiConverterUInt64.write(value.batterySkipped, into: &buf)
-    }
-}
-
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypeEnergyMetrics_lift(_ buf: RustBuffer) throws -> EnergyMetrics {
-    return try FfiConverterTypeEnergyMetrics.lift(buf)
-}
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypeEnergyMetrics_lower(_ value: EnergyMetrics) -> RustBuffer {
-    return FfiConverterTypeEnergyMetrics.lower(value)
 }
 
 
@@ -5944,11 +5629,6 @@ public func FfiConverterTypeHybridSignatureKeyPair_lower(_ value: HybridSignatur
  */
 public struct InitiationContext: Equatable, Hashable {
     /**
-     * Ours and theirs in the space the session is addressed by.
-     */
-    public var myDeviceId: String
-    public var peerDeviceId: String
-    /**
      * We are opening a session with this device right now (bundle fetch and init).
      */
     public var ourInitInFlight: Bool
@@ -5965,9 +5645,6 @@ public struct InitiationContext: Equatable, Hashable {
     // declare one manually.
     public init(
         /**
-         * Ours and theirs in the space the session is addressed by.
-         */myDeviceId: String, peerDeviceId: String, 
-        /**
          * We are opening a session with this device right now (bundle fetch and init).
          */ourInitInFlight: Bool, 
         /**
@@ -5976,8 +5653,6 @@ public struct InitiationContext: Equatable, Hashable {
         /**
          * Something is waiting to be sent to this device. Not "a warm session would be nice".
          */haveOutboundWork: Bool) {
-        self.myDeviceId = myDeviceId
-        self.peerDeviceId = peerDeviceId
         self.ourInitInFlight = ourInitInFlight
         self.peerInitInFlight = peerInitInFlight
         self.haveOutboundWork = haveOutboundWork
@@ -5997,8 +5672,6 @@ public struct FfiConverterTypeInitiationContext: FfiConverterRustBuffer {
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> InitiationContext {
         return
             try InitiationContext(
-                myDeviceId: FfiConverterString.read(from: &buf), 
-                peerDeviceId: FfiConverterString.read(from: &buf), 
                 ourInitInFlight: FfiConverterBool.read(from: &buf), 
                 peerInitInFlight: FfiConverterBool.read(from: &buf), 
                 haveOutboundWork: FfiConverterBool.read(from: &buf)
@@ -6006,8 +5679,6 @@ public struct FfiConverterTypeInitiationContext: FfiConverterRustBuffer {
     }
 
     public static func write(_ value: InitiationContext, into buf: inout [UInt8]) {
-        FfiConverterString.write(value.myDeviceId, into: &buf)
-        FfiConverterString.write(value.peerDeviceId, into: &buf)
         FfiConverterBool.write(value.ourInitInFlight, into: &buf)
         FfiConverterBool.write(value.peerInitInFlight, into: &buf)
         FfiConverterBool.write(value.haveOutboundWork, into: &buf)
@@ -7722,62 +7393,6 @@ public func FfiConverterTypeOtpkPair_lower(_ value: OtpkPair) -> RustBuffer {
 }
 
 
-public struct OtpkRecord: Equatable, Hashable {
-    public var keyId: UInt32
-    public var privateKey: Data
-    public var publicKey: Data
-
-    // Default memberwise initializers are never public by default, so we
-    // declare one manually.
-    public init(keyId: UInt32, privateKey: Data, publicKey: Data) {
-        self.keyId = keyId
-        self.privateKey = privateKey
-        self.publicKey = publicKey
-    }
-
-    
-}
-
-#if compiler(>=6)
-extension OtpkRecord: Sendable {}
-#endif
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public struct FfiConverterTypeOtpkRecord: FfiConverterRustBuffer {
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> OtpkRecord {
-        return
-            try OtpkRecord(
-                keyId: FfiConverterUInt32.read(from: &buf), 
-                privateKey: FfiConverterData.read(from: &buf), 
-                publicKey: FfiConverterData.read(from: &buf)
-        )
-    }
-
-    public static func write(_ value: OtpkRecord, into buf: inout [UInt8]) {
-        FfiConverterUInt32.write(value.keyId, into: &buf)
-        FfiConverterData.write(value.privateKey, into: &buf)
-        FfiConverterData.write(value.publicKey, into: &buf)
-    }
-}
-
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypeOtpkRecord_lift(_ buf: RustBuffer) throws -> OtpkRecord {
-    return try FfiConverterTypeOtpkRecord.lift(buf)
-}
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypeOtpkRecord_lower(_ value: OtpkRecord) -> RustBuffer {
-    return FfiConverterTypeOtpkRecord.lower(value)
-}
-
-
 public struct PowChallenge: Equatable, Hashable {
     public var challenge: String
     public var difficulty: UInt32
@@ -7883,82 +7498,6 @@ public func FfiConverterTypePowSolution_lift(_ buf: RustBuffer) throws -> PowSol
 #endif
 public func FfiConverterTypePowSolution_lower(_ value: PowSolution) -> RustBuffer {
     return FfiConverterTypePowSolution.lower(value)
-}
-
-
-public struct PrivateKeysJson: Equatable, Hashable {
-    public var identitySecret: String
-    public var signingSecret: String
-    public var signedPrekeySecret: String
-    public var prekeySignature: String
-    public var suiteId: String
-    public var identityPublicCheck: String?
-    public var verifyingKeyCheck: String?
-    public var signedPrekeyPublicCheck: String?
-
-    // Default memberwise initializers are never public by default, so we
-    // declare one manually.
-    public init(identitySecret: String, signingSecret: String, signedPrekeySecret: String, prekeySignature: String, suiteId: String, identityPublicCheck: String?, verifyingKeyCheck: String?, signedPrekeyPublicCheck: String?) {
-        self.identitySecret = identitySecret
-        self.signingSecret = signingSecret
-        self.signedPrekeySecret = signedPrekeySecret
-        self.prekeySignature = prekeySignature
-        self.suiteId = suiteId
-        self.identityPublicCheck = identityPublicCheck
-        self.verifyingKeyCheck = verifyingKeyCheck
-        self.signedPrekeyPublicCheck = signedPrekeyPublicCheck
-    }
-
-    
-}
-
-#if compiler(>=6)
-extension PrivateKeysJson: Sendable {}
-#endif
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public struct FfiConverterTypePrivateKeysJson: FfiConverterRustBuffer {
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> PrivateKeysJson {
-        return
-            try PrivateKeysJson(
-                identitySecret: FfiConverterString.read(from: &buf), 
-                signingSecret: FfiConverterString.read(from: &buf), 
-                signedPrekeySecret: FfiConverterString.read(from: &buf), 
-                prekeySignature: FfiConverterString.read(from: &buf), 
-                suiteId: FfiConverterString.read(from: &buf), 
-                identityPublicCheck: FfiConverterOptionString.read(from: &buf), 
-                verifyingKeyCheck: FfiConverterOptionString.read(from: &buf), 
-                signedPrekeyPublicCheck: FfiConverterOptionString.read(from: &buf)
-        )
-    }
-
-    public static func write(_ value: PrivateKeysJson, into buf: inout [UInt8]) {
-        FfiConverterString.write(value.identitySecret, into: &buf)
-        FfiConverterString.write(value.signingSecret, into: &buf)
-        FfiConverterString.write(value.signedPrekeySecret, into: &buf)
-        FfiConverterString.write(value.prekeySignature, into: &buf)
-        FfiConverterString.write(value.suiteId, into: &buf)
-        FfiConverterOptionString.write(value.identityPublicCheck, into: &buf)
-        FfiConverterOptionString.write(value.verifyingKeyCheck, into: &buf)
-        FfiConverterOptionString.write(value.signedPrekeyPublicCheck, into: &buf)
-    }
-}
-
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypePrivateKeysJson_lift(_ buf: RustBuffer) throws -> PrivateKeysJson {
-    return try FfiConverterTypePrivateKeysJson.lift(buf)
-}
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypePrivateKeysJson_lower(_ value: PrivateKeysJson) -> RustBuffer {
-    return FfiConverterTypePrivateKeysJson.lower(value)
 }
 
 
@@ -8630,70 +8169,6 @@ public func FfiConverterTypeSessionInitResult_lower(_ value: SessionInitResult) 
 }
 
 
-public struct TimingConfig: Equatable, Hashable {
-    public var heartbeatIntervalSec: UInt64
-    public var heartbeatJitterMs: UInt64
-    public var maxSendDelayMs: UInt64
-    public var enabled: Bool
-    public var batteryAware: Bool
-
-    // Default memberwise initializers are never public by default, so we
-    // declare one manually.
-    public init(heartbeatIntervalSec: UInt64, heartbeatJitterMs: UInt64, maxSendDelayMs: UInt64, enabled: Bool, batteryAware: Bool) {
-        self.heartbeatIntervalSec = heartbeatIntervalSec
-        self.heartbeatJitterMs = heartbeatJitterMs
-        self.maxSendDelayMs = maxSendDelayMs
-        self.enabled = enabled
-        self.batteryAware = batteryAware
-    }
-
-    
-}
-
-#if compiler(>=6)
-extension TimingConfig: Sendable {}
-#endif
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public struct FfiConverterTypeTimingConfig: FfiConverterRustBuffer {
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> TimingConfig {
-        return
-            try TimingConfig(
-                heartbeatIntervalSec: FfiConverterUInt64.read(from: &buf), 
-                heartbeatJitterMs: FfiConverterUInt64.read(from: &buf), 
-                maxSendDelayMs: FfiConverterUInt64.read(from: &buf), 
-                enabled: FfiConverterBool.read(from: &buf), 
-                batteryAware: FfiConverterBool.read(from: &buf)
-        )
-    }
-
-    public static func write(_ value: TimingConfig, into buf: inout [UInt8]) {
-        FfiConverterUInt64.write(value.heartbeatIntervalSec, into: &buf)
-        FfiConverterUInt64.write(value.heartbeatJitterMs, into: &buf)
-        FfiConverterUInt64.write(value.maxSendDelayMs, into: &buf)
-        FfiConverterBool.write(value.enabled, into: &buf)
-        FfiConverterBool.write(value.batteryAware, into: &buf)
-    }
-}
-
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypeTimingConfig_lift(_ buf: RustBuffer) throws -> TimingConfig {
-    return try FfiConverterTypeTimingConfig.lift(buf)
-}
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypeTimingConfig_lower(_ value: TimingConfig) -> RustBuffer {
-    return FfiConverterTypeTimingConfig.lower(value)
-}
-
-
 public struct WirePayload: Equatable, Hashable {
     public var dhPublicKey: Data
     public var messageNumber: UInt32
@@ -9017,12 +8492,6 @@ public func FfiConverterTypeCertificateVerdict_lower(_ value: CertificateVerdict
 
 public enum CfeAction: Equatable, Hashable {
     
-    case decryptMessage(contactId: String, ciphertext: Data
-    )
-    case encryptMessage(contactId: String, plaintext: Data
-    )
-    case archiveSession(contactId: String
-    )
     case messageDecrypted(contactId: String, messageId: String, plaintext: Data
     )
     /**
@@ -9066,8 +8535,6 @@ public enum CfeAction: Equatable, Hashable {
     )
     case sendEncryptedMessage(to: String, payload: Data, messageId: String, contentType: UInt8
     )
-    case sendReceipt(messageId: String, status: String
-    )
     /**
      * We could not read `message_id` from `contact_id`: send `payload` to that device as a
      * DECRYPTION_ERROR (content type 28) envelope, sealed-sender, and acknowledge the message.
@@ -9096,12 +8563,10 @@ public enum CfeAction: Equatable, Hashable {
     )
     case scheduleTimer(timerId: String, delayMs: UInt64
     )
-    case cancelTimer(timerId: String
-    )
     case callSignalDecrypted(contactId: String, messageId: String, protoBytes: Data
     )
     /**
-     * A silent control frame other than a call signal (13, 14, 25, 26, 27, 29), named by byte 5
+     * A silent control frame other than a call signal (13, 14, 25, 26, 27, 29, 30), named by byte 5
      * of its KNST frame; `body` is without the header. Never a chat message: handle by
      * `content_type` and record the message processed.
      */
@@ -9131,82 +8596,67 @@ public struct FfiConverterTypeCfeAction: FfiConverterRustBuffer {
         let variant: Int32 = try readInt(&buf)
         switch variant {
         
-        case 1: return .decryptMessage(contactId: try FfiConverterString.read(from: &buf), ciphertext: try FfiConverterData.read(from: &buf)
+        case 1: return .messageDecrypted(contactId: try FfiConverterString.read(from: &buf), messageId: try FfiConverterString.read(from: &buf), plaintext: try FfiConverterData.read(from: &buf)
         )
         
-        case 2: return .encryptMessage(contactId: try FfiConverterString.read(from: &buf), plaintext: try FfiConverterData.read(from: &buf)
+        case 2: return .openSession(contactId: try FfiConverterString.read(from: &buf)
         )
         
-        case 3: return .archiveSession(contactId: try FfiConverterString.read(from: &buf)
+        case 3: return .messageQueuedPendingInit(contactId: try FfiConverterString.read(from: &buf), queuedCount: try FfiConverterUInt32.read(from: &buf)
         )
         
-        case 4: return .messageDecrypted(contactId: try FfiConverterString.read(from: &buf), messageId: try FfiConverterString.read(from: &buf), plaintext: try FfiConverterData.read(from: &buf)
+        case 4: return .saveToSecureStore(slot: try FfiConverterTypeCfeSecureStoreSlot.read(from: &buf), data: try FfiConverterData.read(from: &buf)
         )
         
-        case 5: return .openSession(contactId: try FfiConverterString.read(from: &buf)
+        case 5: return .persistAck(messageId: try FfiConverterString.read(from: &buf), timestamp: try FfiConverterUInt64.read(from: &buf)
         )
         
-        case 6: return .messageQueuedPendingInit(contactId: try FfiConverterString.read(from: &buf), queuedCount: try FfiConverterUInt32.read(from: &buf)
+        case 6: return .pruneAckStore(cutoffTs: try FfiConverterUInt64.read(from: &buf)
         )
         
-        case 7: return .saveToSecureStore(slot: try FfiConverterTypeCfeSecureStoreSlot.read(from: &buf), data: try FfiConverterData.read(from: &buf)
+        case 7: return .markMessageDelivered(messageId: try FfiConverterString.read(from: &buf)
         )
         
-        case 8: return .persistAck(messageId: try FfiConverterString.read(from: &buf), timestamp: try FfiConverterUInt64.read(from: &buf)
+        case 8: return .duplicateDropped(messageId: try FfiConverterString.read(from: &buf)
         )
         
-        case 9: return .pruneAckStore(cutoffTs: try FfiConverterUInt64.read(from: &buf)
+        case 9: return .malformedDropped(messageId: try FfiConverterString.read(from: &buf)
         )
         
-        case 10: return .markMessageDelivered(messageId: try FfiConverterString.read(from: &buf)
+        case 10: return .openReceiving(contactId: try FfiConverterString.read(from: &buf)
         )
         
-        case 11: return .duplicateDropped(messageId: try FfiConverterString.read(from: &buf)
+        case 11: return .sendEncryptedMessage(to: try FfiConverterString.read(from: &buf), payload: try FfiConverterData.read(from: &buf), messageId: try FfiConverterString.read(from: &buf), contentType: try FfiConverterUInt8.read(from: &buf)
         )
         
-        case 12: return .malformedDropped(messageId: try FfiConverterString.read(from: &buf)
+        case 12: return .sendDecryptionError(contactId: try FfiConverterString.read(from: &buf), messageId: try FfiConverterString.read(from: &buf), payload: try FfiConverterData.read(from: &buf), enveloped: try FfiConverterBool.read(from: &buf)
         )
         
-        case 13: return .openReceiving(contactId: try FfiConverterString.read(from: &buf)
+        case 13: return .sessionRetired(contactId: try FfiConverterString.read(from: &buf), withoutOneTimePrekey: try FfiConverterBool.read(from: &buf)
         )
         
-        case 14: return .sendEncryptedMessage(to: try FfiConverterString.read(from: &buf), payload: try FfiConverterData.read(from: &buf), messageId: try FfiConverterString.read(from: &buf), contentType: try FfiConverterUInt8.read(from: &buf)
+        case 14: return .resendMessage(contactId: try FfiConverterString.read(from: &buf), messageId: try FfiConverterString.read(from: &buf)
         )
         
-        case 15: return .sendReceipt(messageId: try FfiConverterString.read(from: &buf), status: try FfiConverterString.read(from: &buf)
+        case 15: return .notifyNewMessage(chatId: try FfiConverterString.read(from: &buf), preview: try FfiConverterString.read(from: &buf)
         )
         
-        case 16: return .sendDecryptionError(contactId: try FfiConverterString.read(from: &buf), messageId: try FfiConverterString.read(from: &buf), payload: try FfiConverterData.read(from: &buf), enveloped: try FfiConverterBool.read(from: &buf)
+        case 16: return .notifySessionCreated(contactId: try FfiConverterString.read(from: &buf)
         )
         
-        case 17: return .sessionRetired(contactId: try FfiConverterString.read(from: &buf), withoutOneTimePrekey: try FfiConverterBool.read(from: &buf)
+        case 17: return .notifyError(code: try FfiConverterString.read(from: &buf), message: try FfiConverterString.read(from: &buf)
         )
         
-        case 18: return .resendMessage(contactId: try FfiConverterString.read(from: &buf), messageId: try FfiConverterString.read(from: &buf)
+        case 18: return .scheduleTimer(timerId: try FfiConverterString.read(from: &buf), delayMs: try FfiConverterUInt64.read(from: &buf)
         )
         
-        case 19: return .notifyNewMessage(chatId: try FfiConverterString.read(from: &buf), preview: try FfiConverterString.read(from: &buf)
+        case 19: return .callSignalDecrypted(contactId: try FfiConverterString.read(from: &buf), messageId: try FfiConverterString.read(from: &buf), protoBytes: try FfiConverterData.read(from: &buf)
         )
         
-        case 20: return .notifySessionCreated(contactId: try FfiConverterString.read(from: &buf)
+        case 20: return .controlFrameDecrypted(contactId: try FfiConverterString.read(from: &buf), messageId: try FfiConverterString.read(from: &buf), contentType: try FfiConverterUInt8.read(from: &buf), body: try FfiConverterData.read(from: &buf)
         )
         
-        case 21: return .notifyError(code: try FfiConverterString.read(from: &buf), message: try FfiConverterString.read(from: &buf)
-        )
-        
-        case 22: return .scheduleTimer(timerId: try FfiConverterString.read(from: &buf), delayMs: try FfiConverterUInt64.read(from: &buf)
-        )
-        
-        case 23: return .cancelTimer(timerId: try FfiConverterString.read(from: &buf)
-        )
-        
-        case 24: return .callSignalDecrypted(contactId: try FfiConverterString.read(from: &buf), messageId: try FfiConverterString.read(from: &buf), protoBytes: try FfiConverterData.read(from: &buf)
-        )
-        
-        case 25: return .controlFrameDecrypted(contactId: try FfiConverterString.read(from: &buf), messageId: try FfiConverterString.read(from: &buf), contentType: try FfiConverterUInt8.read(from: &buf), body: try FfiConverterData.read(from: &buf)
-        )
-        
-        case 26: return .checkAckInDb(messageId: try FfiConverterString.read(from: &buf)
+        case 21: return .checkAckInDb(messageId: try FfiConverterString.read(from: &buf)
         )
         
         default: throw UniffiInternalError.unexpectedEnumCase
@@ -9217,94 +8667,71 @@ public struct FfiConverterTypeCfeAction: FfiConverterRustBuffer {
         switch value {
         
         
-        case let .decryptMessage(contactId,ciphertext):
-            writeInt(&buf, Int32(1))
-            FfiConverterString.write(contactId, into: &buf)
-            FfiConverterData.write(ciphertext, into: &buf)
-            
-        
-        case let .encryptMessage(contactId,plaintext):
-            writeInt(&buf, Int32(2))
-            FfiConverterString.write(contactId, into: &buf)
-            FfiConverterData.write(plaintext, into: &buf)
-            
-        
-        case let .archiveSession(contactId):
-            writeInt(&buf, Int32(3))
-            FfiConverterString.write(contactId, into: &buf)
-            
-        
         case let .messageDecrypted(contactId,messageId,plaintext):
-            writeInt(&buf, Int32(4))
+            writeInt(&buf, Int32(1))
             FfiConverterString.write(contactId, into: &buf)
             FfiConverterString.write(messageId, into: &buf)
             FfiConverterData.write(plaintext, into: &buf)
             
         
         case let .openSession(contactId):
-            writeInt(&buf, Int32(5))
+            writeInt(&buf, Int32(2))
             FfiConverterString.write(contactId, into: &buf)
             
         
         case let .messageQueuedPendingInit(contactId,queuedCount):
-            writeInt(&buf, Int32(6))
+            writeInt(&buf, Int32(3))
             FfiConverterString.write(contactId, into: &buf)
             FfiConverterUInt32.write(queuedCount, into: &buf)
             
         
         case let .saveToSecureStore(slot,data):
-            writeInt(&buf, Int32(7))
+            writeInt(&buf, Int32(4))
             FfiConverterTypeCfeSecureStoreSlot.write(slot, into: &buf)
             FfiConverterData.write(data, into: &buf)
             
         
         case let .persistAck(messageId,timestamp):
-            writeInt(&buf, Int32(8))
+            writeInt(&buf, Int32(5))
             FfiConverterString.write(messageId, into: &buf)
             FfiConverterUInt64.write(timestamp, into: &buf)
             
         
         case let .pruneAckStore(cutoffTs):
-            writeInt(&buf, Int32(9))
+            writeInt(&buf, Int32(6))
             FfiConverterUInt64.write(cutoffTs, into: &buf)
             
         
         case let .markMessageDelivered(messageId):
-            writeInt(&buf, Int32(10))
+            writeInt(&buf, Int32(7))
             FfiConverterString.write(messageId, into: &buf)
             
         
         case let .duplicateDropped(messageId):
-            writeInt(&buf, Int32(11))
+            writeInt(&buf, Int32(8))
             FfiConverterString.write(messageId, into: &buf)
             
         
         case let .malformedDropped(messageId):
-            writeInt(&buf, Int32(12))
+            writeInt(&buf, Int32(9))
             FfiConverterString.write(messageId, into: &buf)
             
         
         case let .openReceiving(contactId):
-            writeInt(&buf, Int32(13))
+            writeInt(&buf, Int32(10))
             FfiConverterString.write(contactId, into: &buf)
             
         
         case let .sendEncryptedMessage(to,payload,messageId,contentType):
-            writeInt(&buf, Int32(14))
+            writeInt(&buf, Int32(11))
             FfiConverterString.write(to, into: &buf)
             FfiConverterData.write(payload, into: &buf)
             FfiConverterString.write(messageId, into: &buf)
             FfiConverterUInt8.write(contentType, into: &buf)
             
         
-        case let .sendReceipt(messageId,status):
-            writeInt(&buf, Int32(15))
-            FfiConverterString.write(messageId, into: &buf)
-            FfiConverterString.write(status, into: &buf)
-            
-        
         case let .sendDecryptionError(contactId,messageId,payload,enveloped):
-            writeInt(&buf, Int32(16))
+            writeInt(&buf, Int32(12))
             FfiConverterString.write(contactId, into: &buf)
             FfiConverterString.write(messageId, into: &buf)
             FfiConverterData.write(payload, into: &buf)
@@ -9312,54 +8739,49 @@ public struct FfiConverterTypeCfeAction: FfiConverterRustBuffer {
             
         
         case let .sessionRetired(contactId,withoutOneTimePrekey):
-            writeInt(&buf, Int32(17))
+            writeInt(&buf, Int32(13))
             FfiConverterString.write(contactId, into: &buf)
             FfiConverterBool.write(withoutOneTimePrekey, into: &buf)
             
         
         case let .resendMessage(contactId,messageId):
-            writeInt(&buf, Int32(18))
+            writeInt(&buf, Int32(14))
             FfiConverterString.write(contactId, into: &buf)
             FfiConverterString.write(messageId, into: &buf)
             
         
         case let .notifyNewMessage(chatId,preview):
-            writeInt(&buf, Int32(19))
+            writeInt(&buf, Int32(15))
             FfiConverterString.write(chatId, into: &buf)
             FfiConverterString.write(preview, into: &buf)
             
         
         case let .notifySessionCreated(contactId):
-            writeInt(&buf, Int32(20))
+            writeInt(&buf, Int32(16))
             FfiConverterString.write(contactId, into: &buf)
             
         
         case let .notifyError(code,message):
-            writeInt(&buf, Int32(21))
+            writeInt(&buf, Int32(17))
             FfiConverterString.write(code, into: &buf)
             FfiConverterString.write(message, into: &buf)
             
         
         case let .scheduleTimer(timerId,delayMs):
-            writeInt(&buf, Int32(22))
+            writeInt(&buf, Int32(18))
             FfiConverterString.write(timerId, into: &buf)
             FfiConverterUInt64.write(delayMs, into: &buf)
             
         
-        case let .cancelTimer(timerId):
-            writeInt(&buf, Int32(23))
-            FfiConverterString.write(timerId, into: &buf)
-            
-        
         case let .callSignalDecrypted(contactId,messageId,protoBytes):
-            writeInt(&buf, Int32(24))
+            writeInt(&buf, Int32(19))
             FfiConverterString.write(contactId, into: &buf)
             FfiConverterString.write(messageId, into: &buf)
             FfiConverterData.write(protoBytes, into: &buf)
             
         
         case let .controlFrameDecrypted(contactId,messageId,contentType,body):
-            writeInt(&buf, Int32(25))
+            writeInt(&buf, Int32(20))
             FfiConverterString.write(contactId, into: &buf)
             FfiConverterString.write(messageId, into: &buf)
             FfiConverterUInt8.write(contentType, into: &buf)
@@ -9367,7 +8789,7 @@ public struct FfiConverterTypeCfeAction: FfiConverterRustBuffer {
             
         
         case let .checkAckInDb(messageId):
-            writeInt(&buf, Int32(26))
+            writeInt(&buf, Int32(21))
             FfiConverterString.write(messageId, into: &buf)
             
         }
@@ -11837,268 +11259,6 @@ public func FfiConverterCallbackInterfacePeekSessionSource_lower(_ v: PeekSessio
 
 
 
-/**
- * Callback interface implemented by Swift / Kotlin.
- *
- * Rust orchestration logic is I/O-free: it calls through this bridge to
- * request platform operations (Keychain, Core Data, os_log / Logcat).
- * Each method is synchronous from Rust's perspective.
- */
-public protocol PlatformBridge: AnyObject, Sendable {
-    
-    /**
-     * Persist `data` under `key` in the platform secure store (Keychain / Keystore).
-     */
-    func saveToSecureStore(key: String, data: Data) 
-    
-    /**
-     * Retrieve data previously saved under `key`. Returns null if absent.
-     */
-    func loadFromSecureStore(key: String)  -> Data?
-    
-    /**
-     * Append / upsert a JSON record in the platform data store (Core Data / Room).
-     * `table` is a logical table name; `json` is the record payload.
-     */
-    func persistRecord(table: String, json: String) 
-    
-    /**
-     * Query the platform data store. Returns a JSON-encoded result or null.
-     */
-    func queryRecord(table: String, queryJson: String)  -> String?
-    
-    /**
-     * Emit a log entry through the platform logging system (os_log / Logcat).
-     * `level` ∈ {"debug", "info", "warn", "error"}.
-     */
-    func logEvent(level: String, tag: String, message: String) 
-    
-}
-
-
-// Put the implementation in a struct so we don't pollute the top-level namespace
-fileprivate struct UniffiCallbackInterfacePlatformBridge {
-
-    // Create the VTable using a series of closures.
-    // Swift automatically converts these into C callback functions.
-    //
-    // This creates 1-element array, since this seems to be the only way to construct a const
-    // pointer that we can pass to the Rust code.
-    static let vtable: [UniffiVTableCallbackInterfacePlatformBridge] = [UniffiVTableCallbackInterfacePlatformBridge(
-        uniffiFree: { (uniffiHandle: UInt64) -> () in
-            do {
-                try FfiConverterCallbackInterfacePlatformBridge.handleMap.remove(handle: uniffiHandle)
-            } catch {
-                print("Uniffi callback interface PlatformBridge: handle missing in uniffiFree")
-            }
-        },
-        uniffiClone: { (uniffiHandle: UInt64) -> UInt64 in
-            do {
-                return try FfiConverterCallbackInterfacePlatformBridge.handleMap.clone(handle: uniffiHandle)
-            } catch {
-                fatalError("Uniffi callback interface PlatformBridge: handle missing in uniffiClone")
-            }
-        },
-        saveToSecureStore: { (
-            uniffiHandle: UInt64,
-            key: RustBuffer,
-            data: RustBuffer,
-            uniffiOutReturn: UnsafeMutableRawPointer,
-            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
-        ) in
-            let makeCall = {
-                () throws -> () in
-                guard let uniffiObj = try? FfiConverterCallbackInterfacePlatformBridge.handleMap.get(handle: uniffiHandle) else {
-                    throw UniffiInternalError.unexpectedStaleHandle
-                }
-                return uniffiObj.saveToSecureStore(
-                     key: try FfiConverterString.lift(key),
-                     data: try FfiConverterData.lift(data)
-                )
-            }
-
-            
-            let writeReturn = { () }
-            uniffiTraitInterfaceCall(
-                callStatus: uniffiCallStatus,
-                makeCall: makeCall,
-                writeReturn: writeReturn
-            )
-        },
-        loadFromSecureStore: { (
-            uniffiHandle: UInt64,
-            key: RustBuffer,
-            uniffiOutReturn: UnsafeMutablePointer<RustBuffer>,
-            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
-        ) in
-            let makeCall = {
-                () throws -> Data? in
-                guard let uniffiObj = try? FfiConverterCallbackInterfacePlatformBridge.handleMap.get(handle: uniffiHandle) else {
-                    throw UniffiInternalError.unexpectedStaleHandle
-                }
-                return uniffiObj.loadFromSecureStore(
-                     key: try FfiConverterString.lift(key)
-                )
-            }
-
-            
-            let writeReturn = { uniffiOutReturn.pointee = FfiConverterOptionData.lower($0) }
-            uniffiTraitInterfaceCall(
-                callStatus: uniffiCallStatus,
-                makeCall: makeCall,
-                writeReturn: writeReturn
-            )
-        },
-        persistRecord: { (
-            uniffiHandle: UInt64,
-            table: RustBuffer,
-            json: RustBuffer,
-            uniffiOutReturn: UnsafeMutableRawPointer,
-            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
-        ) in
-            let makeCall = {
-                () throws -> () in
-                guard let uniffiObj = try? FfiConverterCallbackInterfacePlatformBridge.handleMap.get(handle: uniffiHandle) else {
-                    throw UniffiInternalError.unexpectedStaleHandle
-                }
-                return uniffiObj.persistRecord(
-                     table: try FfiConverterString.lift(table),
-                     json: try FfiConverterString.lift(json)
-                )
-            }
-
-            
-            let writeReturn = { () }
-            uniffiTraitInterfaceCall(
-                callStatus: uniffiCallStatus,
-                makeCall: makeCall,
-                writeReturn: writeReturn
-            )
-        },
-        queryRecord: { (
-            uniffiHandle: UInt64,
-            table: RustBuffer,
-            queryJson: RustBuffer,
-            uniffiOutReturn: UnsafeMutablePointer<RustBuffer>,
-            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
-        ) in
-            let makeCall = {
-                () throws -> String? in
-                guard let uniffiObj = try? FfiConverterCallbackInterfacePlatformBridge.handleMap.get(handle: uniffiHandle) else {
-                    throw UniffiInternalError.unexpectedStaleHandle
-                }
-                return uniffiObj.queryRecord(
-                     table: try FfiConverterString.lift(table),
-                     queryJson: try FfiConverterString.lift(queryJson)
-                )
-            }
-
-            
-            let writeReturn = { uniffiOutReturn.pointee = FfiConverterOptionString.lower($0) }
-            uniffiTraitInterfaceCall(
-                callStatus: uniffiCallStatus,
-                makeCall: makeCall,
-                writeReturn: writeReturn
-            )
-        },
-        logEvent: { (
-            uniffiHandle: UInt64,
-            level: RustBuffer,
-            tag: RustBuffer,
-            message: RustBuffer,
-            uniffiOutReturn: UnsafeMutableRawPointer,
-            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
-        ) in
-            let makeCall = {
-                () throws -> () in
-                guard let uniffiObj = try? FfiConverterCallbackInterfacePlatformBridge.handleMap.get(handle: uniffiHandle) else {
-                    throw UniffiInternalError.unexpectedStaleHandle
-                }
-                return uniffiObj.logEvent(
-                     level: try FfiConverterString.lift(level),
-                     tag: try FfiConverterString.lift(tag),
-                     message: try FfiConverterString.lift(message)
-                )
-            }
-
-            
-            let writeReturn = { () }
-            uniffiTraitInterfaceCall(
-                callStatus: uniffiCallStatus,
-                makeCall: makeCall,
-                writeReturn: writeReturn
-            )
-        }
-    )]
-}
-
-private func uniffiCallbackInitPlatformBridge() {
-    uniffi_construct_core_fn_init_callback_vtable_platformbridge(UniffiCallbackInterfacePlatformBridge.vtable)
-}
-
-// FfiConverter protocol for callback interfaces
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-fileprivate struct FfiConverterCallbackInterfacePlatformBridge {
-    fileprivate static let handleMap = UniffiHandleMap<PlatformBridge>()
-}
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-extension FfiConverterCallbackInterfacePlatformBridge : FfiConverter {
-    typealias SwiftType = PlatformBridge
-    typealias FfiType = UInt64
-
-#if swift(>=5.8)
-    @_documentation(visibility: private)
-#endif
-    public static func lift(_ handle: UInt64) throws -> SwiftType {
-        try handleMap.get(handle: handle)
-    }
-
-#if swift(>=5.8)
-    @_documentation(visibility: private)
-#endif
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
-        let handle: UInt64 = try readInt(&buf)
-        return try lift(handle)
-    }
-
-#if swift(>=5.8)
-    @_documentation(visibility: private)
-#endif
-    public static func lower(_ v: SwiftType) -> UInt64 {
-        return handleMap.insert(obj: v)
-    }
-
-#if swift(>=5.8)
-    @_documentation(visibility: private)
-#endif
-    public static func write(_ v: SwiftType, into buf: inout [UInt8]) {
-        writeInt(&buf, lower(v))
-    }
-}
-
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterCallbackInterfacePlatformBridge_lift(_ handle: UInt64) throws -> PlatformBridge {
-    return try FfiConverterCallbackInterfacePlatformBridge.lift(handle)
-}
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterCallbackInterfacePlatformBridge_lower(_ v: PlatformBridge) -> UInt64 {
-    return FfiConverterCallbackInterfacePlatformBridge.lower(v)
-}
-
-
-
-
 public protocol PowProgressCallback: AnyObject, Sendable {
     
     func onProgress(currentNonce: UInt64, attempts: UInt64, estimatedProgress: Float) 
@@ -13350,15 +12510,6 @@ fileprivate struct FfiConverterSequenceTypeHistoryEvent: FfiConverterRustBuffer 
         return seq
     }
 }
-public func batteryAwareJitterMs(baseMs: UInt64, maxJitterMs: UInt64, batteryLevel: Float) -> UInt64  {
-    return try!  FfiConverterUInt64.lift(try! rustCall() {
-    uniffi_construct_core_fn_func_battery_aware_jitter_ms(
-        FfiConverterUInt64.lower(baseMs),
-        FfiConverterUInt64.lower(maxJitterMs),
-        FfiConverterFloat.lower(batteryLevel),$0
-    )
-})
-}
 public func computePow(challenge: String, difficulty: UInt32)throws  -> PowSolution  {
     return try  FfiConverterTypePowSolution_lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
     uniffi_construct_core_fn_func_compute_pow(
@@ -13431,13 +12582,6 @@ public func formatFederatedId(deviceId: String, serverHostname: String) -> Strin
     )
 })
 }
-public func generateDummyMessage(size: UInt64) -> Data  {
-    return try!  FfiConverterData.lift(try! rustCall() {
-    uniffi_construct_core_fn_func_generate_dummy_message(
-        FfiConverterUInt64.lower(size),$0
-    )
-})
-}
 public func generateEphemeralKeypair()throws  -> EphemeralKeyPair  {
     return try  FfiConverterTypeEphemeralKeyPair_lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
     uniffi_construct_core_fn_func_generate_ephemeral_keypair($0
@@ -13463,13 +12607,6 @@ public func generateMnemonic(wordCount: UInt8)throws  -> String  {
 public func generatePrivateKeys()throws  -> Data  {
     return try  FfiConverterData.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
     uniffi_construct_core_fn_func_generate_private_keys($0
-    )
-})
-}
-public func heartbeatIntervalMs(baseIntervalSec: UInt64) -> UInt64  {
-    return try!  FfiConverterUInt64.lift(try! rustCall() {
-    uniffi_construct_core_fn_func_heartbeat_interval_ms(
-        FfiConverterUInt64.lower(baseIntervalSec),$0
     )
 })
 }
@@ -13681,21 +12818,6 @@ public func intakeTag(intakeKey: Data, recipientAccountId: String, epoch: UInt64
         FfiConverterData.lower(intakeKey),
         FfiConverterString.lower(recipientAccountId),
         FfiConverterUInt64.lower(epoch),$0
-    )
-})
-}
-public func isDummyMessage(data: Data) -> Bool  {
-    return try!  FfiConverterBool.lift(try! rustCall() {
-    uniffi_construct_core_fn_func_is_dummy_message(
-        FfiConverterData.lower(data),$0
-    )
-})
-}
-public func jitteredIntervalMs(baseMs: UInt64, jitterMs: UInt64) -> UInt64  {
-    return try!  FfiConverterUInt64.lift(try! rustCall() {
-    uniffi_construct_core_fn_func_jittered_interval_ms(
-        FfiConverterUInt64.lower(baseMs),
-        FfiConverterUInt64.lower(jitterMs),$0
     )
 })
 }
@@ -13912,13 +13034,6 @@ public func ppVerifyDleq(blinded: [Data], evaluated: [Data], proof: Data, issuer
     )
 })
 }
-public func randomSendDelayMs(maxDelayMs: UInt64) -> UInt64  {
-    return try!  FfiConverterUInt64.lift(try! rustCall() {
-    uniffi_construct_core_fn_func_random_send_delay_ms(
-        FfiConverterUInt64.lower(maxDelayMs),$0
-    )
-})
-}
 /**
  * Classify a message: can it open a receiving session? One rule, one implementation —
  * every client asks rather than reimplements. A handshake header (the KEM ciphertext) opens
@@ -14067,20 +13182,6 @@ public func srReconstructVaultKey(mnemonics: [String])throws  -> Data  {
     )
 })
 }
-/**
- * Verify that a PlatformBridge implementation correctly round-trips a
- * save → load through the platform secure store.
- * Returns true if the loaded bytes equal the saved bytes.
- */
-public func testPlatformBridgeRoundtrip(bridge: PlatformBridge, key: String, data: Data)throws  -> Bool  {
-    return try  FfiConverterBool.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
-    uniffi_construct_core_fn_func_test_platform_bridge_roundtrip(
-        FfiConverterCallbackInterfacePlatformBridge_lower(bridge),
-        FfiConverterString.lower(key),
-        FfiConverterData.lower(data),$0
-    )
-})
-}
 public func validateMnemonic(mnemonic: String) -> Bool  {
     return try!  FfiConverterBool.lift(try! rustCall() {
     uniffi_construct_core_fn_func_validate_mnemonic(
@@ -14151,9 +13252,6 @@ private let initializationResult: InitializationResult = {
     if bindings_contract_version != scaffolding_contract_version {
         return InitializationResult.contractVersionMismatch
     }
-    if (uniffi_construct_core_checksum_func_battery_aware_jitter_ms() != 100) {
-        return InitializationResult.apiChecksumMismatch
-    }
     if (uniffi_construct_core_checksum_func_compute_pow() != 30246) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -14181,9 +13279,6 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_func_format_federated_id() != 19004) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_func_generate_dummy_message() != 19539) {
-        return InitializationResult.apiChecksumMismatch
-    }
     if (uniffi_construct_core_checksum_func_generate_ephemeral_keypair() != 59553) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -14194,9 +13289,6 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_func_generate_private_keys() != 4994) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_construct_core_checksum_func_heartbeat_interval_ms() != 51594) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_func_history_discovery_instance_name() != 37477) {
@@ -14268,12 +13360,6 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_func_intake_tag() != 36931) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_func_is_dummy_message() != 57872) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_construct_core_checksum_func_jittered_interval_ms() != 6840) {
-        return InitializationResult.apiChecksumMismatch
-    }
     if (uniffi_construct_core_checksum_func_knst_encode_chunks() != 7537) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -14325,9 +13411,6 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_func_pp_verify_dleq() != 53114) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_func_random_send_delay_ms() != 9943) {
-        return InitializationResult.apiChecksumMismatch
-    }
     if (uniffi_construct_core_checksum_func_receiving_init_kind() != 46602) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -14362,9 +13445,6 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_func_sr_reconstruct_vault_key() != 55657) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_construct_core_checksum_func_test_platform_bridge_roundtrip() != 58358) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_func_validate_mnemonic() != 51524) {
@@ -15033,30 +14113,6 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_method_rustackstore_prune_expired() != 19780) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_method_trafficprotectionmanager_current_interval_ms() != 34869) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_construct_core_checksum_method_trafficprotectionmanager_generate_dummy() != 32319) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_construct_core_checksum_method_trafficprotectionmanager_get_metrics() != 5234) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_construct_core_checksum_method_trafficprotectionmanager_is_currently_active() != 35027) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_construct_core_checksum_method_trafficprotectionmanager_record_real_message_sent() != 27042) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_construct_core_checksum_method_trafficprotectionmanager_reset_metrics() != 18109) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_construct_core_checksum_method_trafficprotectionmanager_should_send_dummy() != 33097) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_construct_core_checksum_method_trafficprotectionmanager_update_battery_level() != 31087) {
-        return InitializationResult.apiChecksumMismatch
-    }
     if (uniffi_construct_core_checksum_constructor_localstore_in_memory() != 10006) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -15069,28 +14125,10 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_constructor_rustackstore_new() != 64675) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_constructor_trafficprotectionmanager_new() != 21642) {
-        return InitializationResult.apiChecksumMismatch
-    }
     if (uniffi_construct_core_checksum_method_localstoreobserver_on_change() != 28445) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_peeksessionsource_session() != 52815) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_construct_core_checksum_method_platformbridge_save_to_secure_store() != 64407) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_construct_core_checksum_method_platformbridge_load_from_secure_store() != 51286) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_construct_core_checksum_method_platformbridge_persist_record() != 26855) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_construct_core_checksum_method_platformbridge_query_record() != 16143) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_construct_core_checksum_method_platformbridge_log_event() != 27900) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_powprogresscallback_on_progress() != 50608) {
@@ -15099,7 +14137,6 @@ private let initializationResult: InitializationResult = {
 
     uniffiCallbackInitLocalStoreObserver()
     uniffiCallbackInitPeekSessionSource()
-    uniffiCallbackInitPlatformBridge()
     uniffiCallbackInitPowProgressCallback()
     return InitializationResult.ok
 }()
