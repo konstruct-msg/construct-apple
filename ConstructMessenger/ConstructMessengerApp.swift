@@ -109,7 +109,7 @@ struct Construct_MessengerApp: App {
                     context: rootContainer.viewContext
                 )
                 // Start VEIL proxy if user has it enabled — async to allow .well-known cert fetch
-                await VeilProxyManager.shared.startIfEnabled()
+                await VeilProxyManager.shared.startIfNeeded()
                 // Kick the TransportRouter FSM into action. If the initial state demands ICE
                 // (mode=.on or censored region), this triggers the first proxy probe.
                 await TransportRouter.shared.bootstrap()

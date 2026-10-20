@@ -6,7 +6,7 @@
 //  gRPC/TLS traffic. Uses timezone as a heuristic (CoreTelephony carrier
 //  APIs were deprecated in iOS 16 and no longer return usable data).
 //
-//  Used by ConnectionLoop to pre-activate VEIL on startup, eliminating
+//  Used by the transport router to pre-activate VEIL on startup, eliminating
 //  the ~3.2s cold-start penalty of two failing direct attempts on
 //  DPI-censored networks.
 //
@@ -41,7 +41,7 @@ enum CensoredNetworkDetector {
     ]
 
     /// True when the device is likely in a DPI-censored country, by timezone alone.
-    /// Used by ConnectionLoop to pre-activate VEIL on startup, eliminating
+    /// Used by the transport router to pre-activate VEIL on startup, eliminating
     /// the ~3.2s cold-start penalty of two failing direct attempts.
     static var isCensored: Bool {
         #if DEBUG
