@@ -18,18 +18,15 @@ import XCTest
 final class DeletedContactsRetentionTests: XCTestCase {
 
     private let v2Key = "construct.deletedContacts.v2"
-    private let v1Key = "com.konstruct.deletedContacts.v1"
     private let peer = "14f28d31-0000-0000-0000-0000000000aa"
 
     override func setUp() {
         super.setUp()
         UserDefaults.standard.removeObject(forKey: v2Key)
-        UserDefaults.standard.removeObject(forKey: v1Key)
     }
 
     override func tearDown() {
         UserDefaults.standard.removeObject(forKey: v2Key)
-        UserDefaults.standard.removeObject(forKey: v1Key)
         super.tearDown()
     }
 

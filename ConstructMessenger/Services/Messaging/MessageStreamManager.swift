@@ -36,8 +36,9 @@ enum StreamEvent: Sendable {
 enum StreamCursorStore {
     /// The Keychain account, spelled where the extension reads it too.
     static let keychainAccount = KeychainSessionAccounts.streamCursor
-    /// Where it lived until 2026-10-11, moved on first read.
-    static let legacyDefaultsKey = "construct.stream.cursor"
+    // Until 2026-10-11 it lived in UserDefaults (`construct.stream.cursor`) and moved on first
+    // read; that move was removed on 2026-10-20 — every install in use is build 745 or later,
+    // which already carried it, and UserDefaults goes with the app.
 
     static func save(_ cursor: String) {
         _ = KeychainManager.shared.saveData(
@@ -46,18 +47,12 @@ enum StreamCursorStore {
     }
 
     static func load() -> String? {
-        if let data = KeychainManager.shared.loadData(forKey: keychainAccount) {
-            return String(decoding: data, as: UTF8.self)
-        }
-        guard let legacy = UserDefaults.standard.string(forKey: legacyDefaultsKey) else { return nil }
-        save(legacy)
-        UserDefaults.standard.removeObject(forKey: legacyDefaultsKey)
-        return legacy
+        guard let data = KeychainManager.shared.loadData(forKey: keychainAccount) else { return nil }
+        return String(decoding: data, as: UTF8.self)
     }
 
     static func clear() {
         KeychainManager.shared.deleteData(forKey: keychainAccount)
-        UserDefaults.standard.removeObject(forKey: legacyDefaultsKey)
     }
 }
 @MainActor
