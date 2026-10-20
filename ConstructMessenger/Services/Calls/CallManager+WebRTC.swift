@@ -16,7 +16,7 @@ import UIKit
 #endif
 
 extension CallManager {
-    func scheduleIceRestartIfNeeded() {
+    private func scheduleIceRestartIfNeeded() {
         guard let active else { return }
         guard active.mediaConnected else { return }
         guard active.session.direction == .outgoing else {
@@ -48,7 +48,7 @@ extension CallManager {
         Log.info("ICE disconnected — scheduling restart for call_id=\(active.session.id.prefix(8))…", category: "Calls")
     }
 
-    func performIceRestart(for active: ActiveCall) async {
+    private func performIceRestart(for active: ActiveCall) async {
         guard self.active === active else { return }
         guard !active.isIceRestartInFlight else { return }
         guard active.iceRestartAttempts < NetworkTiming.Calls.maxIceRestartAttempts else { return }
@@ -353,7 +353,7 @@ extension CallManager {
 
     /// ICE candidates are batched with a 200ms debounce before sending to stay under the
     /// server's 10/sec signal rate limit. A burst of 10 candidates uses 1 signal slot, not 10.
-    func sendIceCandidate(_ c: WebRTCIceCandidate) {
+    private func sendIceCandidate(_ c: WebRTCIceCandidate) {
         guard let active else { return }
         let peerUserId = active.session.peerUserId
         var ice = Shared_Proto_Signaling_V1_IceCandidate()

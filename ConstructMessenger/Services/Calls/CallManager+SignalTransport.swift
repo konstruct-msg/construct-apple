@@ -187,7 +187,7 @@ extension CallManager {
     // MARK: - Stealth helpers for calls
 
 
-    func fetchRecipientIdentityKey(for userId: String) async -> Data? {
+    private func fetchRecipientIdentityKey(for userId: String) async -> Data? {
         if let cached = identityKeyCache[userId] {
             return cached
         }
@@ -205,7 +205,7 @@ extension CallManager {
         }
     }
 
-    func buildSealedForCallSignalIfNeeded(
+    private func buildSealedForCallSignalIfNeeded(
         recipient: String,
         payload: Data,
         afterCredentialRejection: Bool = false
