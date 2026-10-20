@@ -1742,28 +1742,13 @@ final class MessageRouter {
         // own id and is preferred anyway; the fallback strips the suffix so a transcript row has
         // the same id on every device of the account. Without it a reaction sent from one device
         // would reference an id its siblings never stored.
-        let envelopeId = DeviceCopyWireId.baseId(of: messageData.id) ?? messageData.id
-        var canonicalId = (e2eMessageId ?? envelopeId).lowercased()
+        var canonicalId = Self.incomingRowId(e2eMessageId: e2eMessageId, wireMessageId: messageData.id)
         let store = LocalRepositories.messages
 
         // Check if message already exists (from background fetch, retry redelivery, …)
         if let existing = try store.message(canonicalId) {
             if existing.fromUserId == messageData.from {
-                var placedOrRecovered = false
-                if let serverOrderKey = messageData.serverOrderKey {
-                    placedOrRecovered = try store.setOrderKey(existing.id, serverOrderKey)
-                }
-                // Update the content if the message was stored undecryptable — a body read late,
-                // not an edit.
-                if existing.body.isEmpty,
-                   try store.setBody(existing.id, body: storagePayload,
-                                     searchText: LocalMessagePayload.decode(storagePayload).plainText) {
-                    Log.debug("Updating decrypted content for message \(canonicalId)", category: "MessageRouter")
-                    placedOrRecovered = true
-                }
-                if placedOrRecovered {
-                    MessagePersistenceService.refreshPreview(ofChat: existing.chatId)
-                }
+                try Self.refreshExistingRow(existing, serverOrderKey: messageData.serverOrderKey, body: storagePayload)
                 return canonicalId  // Message already exists
             }
             // The E2E id collides with a row from a different author — never overwrite or
@@ -2245,13 +2230,17 @@ final class MessageRouter {
 
         // Canonical row id: E2E id from KNST when present, else strip multi-device wire suffixes
         // (`-ss-…`, `-ss-…-cN`) so edits/receipts still match the originating device's message id.
-        let rowId = Self.senderSyncRowId(e2eMessageId: e2eRowId, wireMessageId: original.id)
+        let rowId = Self.incomingRowId(e2eMessageId: e2eRowId, wireMessageId: original.id)
 
         do {
             if let existing = try LocalRepositories.messages.message(rowId) {
-                if let serverOrderKey = original.serverOrderKey,
-                   try LocalRepositories.messages.setOrderKey(existing.id, serverOrderKey) {
-                    MessagePersistenceService.refreshPreview(ofChat: existing.chatId)
+                if existing.fromUserId == original.from {
+                    // The same row the regular receive path would refresh, the same way — until
+                    // 2026-10-20 this path took only the order key and left a row stored
+                    // undecryptable empty (TODO 181).
+                    try Self.refreshExistingRow(existing, serverOrderKey: original.serverOrderKey, body: storagePayload)
+                } else {
+                    Log.error("SENDER_SYNC: \(rowId.prefix(8))… is another author's row — not overwritten", category: "MessageRouter")
                 }
                 return // already saved (duplicate delivery / other chunk path)
             }
@@ -2306,17 +2295,34 @@ final class MessageRouter {
         )
     }
 
-    /// Map SENDER_SYNC wire id → local row id (E2E id preferred).
-    private static func senderSyncRowId(e2eMessageId: String?, wireMessageId: String) -> String {
+    /// The row id of a received or synced message: the sender's own id from the KNST header, else
+    /// the wire id without its per-device marker (`-fd-…`, `-ss-…`), so the row has the same id on
+    /// every device of the account. One rule since 2026-10-20 — SENDER_SYNC had its own copy that
+    /// knew only `-ss-` (TODO 181).
+    static func incomingRowId(e2eMessageId: String?, wireMessageId: String) -> String {
         if let e2eMessageId, !e2eMessageId.isEmpty {
             return e2eMessageId.lowercased()
         }
-        var id = wireMessageId.lowercased()
-        // Strip `-ss-<device>` and optional `-cN` chunk suffix used by MultiDeviceSendCoordinator.
-        if let range = id.range(of: "-ss-") {
-            id = String(id[..<range.lowerBound])
+        return (DeviceCopyWireId.baseId(of: wireMessageId) ?? wireMessageId).lowercased()
+    }
+
+    /// A message arrived again for a row we hold by the same author: take the server's position,
+    /// and the body when the row was stored undecryptable — a body read late, not an edit. Then the
+    /// chat's preview, if either changed.
+    static func refreshExistingRow(_ existing: MessageRecord, serverOrderKey: String?, body: Data) throws {
+        let store = LocalRepositories.messages
+        var changed = false
+        if let serverOrderKey {
+            changed = try store.setOrderKey(existing.id, serverOrderKey)
         }
-        return id
+        if existing.body.isEmpty, !body.isEmpty,
+           try store.setBody(existing.id, body: body, searchText: LocalMessagePayload.decode(body).plainText) {
+            Log.debug("Updating decrypted content for message \(existing.id.prefix(8))…", category: "MessageRouter")
+            changed = true
+        }
+        if changed {
+            MessagePersistenceService.refreshPreview(ofChat: existing.chatId)
+        }
     }
 
     /// Open the session a sibling's SENDER_SYNC arrived on, from the copy itself, then route it.
