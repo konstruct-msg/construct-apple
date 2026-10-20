@@ -8,7 +8,7 @@
 //  Why a separate store: `VeilLocalDiscovery` is `@MainActor` (it drives an
 //  `NWBrowser` and owns UI-adjacent state), but the relay-build path that must
 //  consume its output — `VeilRelaySelector.cachedRelayAddresses()` and
-//  `ConnectionLoopRelayBridge.buildRelay(address:)` — is nonisolated and
+//  `RelaySnapshot.buildRelay(address:)` — is nonisolated and
 //  synchronous (called from `makeRelay`-style non-async contexts). This store is
 //  the hand-off: the MainActor discovery *publishes* a snapshot here, and the
 //  sync resolvers *read* it from any thread under a lock.

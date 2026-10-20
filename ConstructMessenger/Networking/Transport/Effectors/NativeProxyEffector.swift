@@ -6,9 +6,8 @@
 //  pick the next relay candidate. This is the bridge between the FSM and the
 //  Rust VEIL proxy lifecycle.
 //
-//  Selection logic here is intentionally minimal — `RelayPool.best()` is the
-//  same call ConnectionLoop used. Chunk 5 will replace this with a geo-aware
-//  RelaySelector; the FSM remains unchanged.
+//  Selection logic here is intentionally minimal — `RelayPool.best()`. A geo-aware
+//  selector is deferred; the FSM would remain unchanged.
 //
 
 import Foundation

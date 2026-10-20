@@ -246,7 +246,7 @@ final class VeilLearnedFrontStoreTests: XCTestCase {
         let address = "learned-build-test.invalid:443"
         let pin = String(repeating: "2", count: 64)
         try withLearnedFront(address: address, sni: "learned-build-test.invalid", pin: pin) {
-            let relays = ConnectionLoopRelayBridge.snapshotRelays()
+            let relays = RelaySnapshot.snapshotRelays()
             let built = relays.first { $0.address == address }
             XCTAssertNotNil(built, "a learned address must reach the relay pool")
             XCTAssertEqual(built?.pinnedSpki, pin)

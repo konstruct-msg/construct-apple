@@ -2,7 +2,7 @@
 //  RelayPool.swift
 //  Construct Messenger
 //
-//  Relay selection and failure tracking for the new ConnectionLoop.
+//  Relay selection and failure tracking for the transport router.
 //
 //  Replaces the blacklist TTL / cooldown / quality-score system with a simple
 //  consecutive-failure counter per relay. `best()` always returns a relay —
@@ -109,7 +109,7 @@ struct RelayPool {
     /// Consecutive failures per relay — carried into a rebuilt pool (`NativeProxyEffector.updateRelays`).
     var failureCounts: [String: Int] { failures }
 
-    /// Current WebTunnel block penalties — read by `ConnectionLoop` to persist across launches.
+    /// Current WebTunnel block penalties — read by the router to persist across launches.
     var blockedPenalty: [String: Int] { webTunnelBlockedPenalty }
 
     func failureCount(for relay: VeilRelay) -> Int {

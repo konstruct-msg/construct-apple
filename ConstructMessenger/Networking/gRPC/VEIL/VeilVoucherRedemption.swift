@@ -8,7 +8,7 @@
 //  Importing is not enough. The pin lands in `VeilLearnedFrontStore`, but the
 //  proxy pool is only rebuilt when something pushes a fresh snapshot into the
 //  router — and the two paths that did that went through
-//  `VeilProxyManager.startIfEnabled()`, which returns early on a device that is
+//  `VeilProxyManager.startIfNeeded()`, which returns early on a device that is
 //  not registered yet. That is precisely the case the voucher exists for: B has
 //  no account and cannot get one without the tunnel the voucher just granted.
 //
@@ -64,11 +64,11 @@ enum VeilVoucherRedemption {
     /// fetch fails — the normal outcome on the censored network a voucher is
     /// redeemed on.
     static func armTransport() async {
-        await TransportRouter.shared.updateRelays(ConnectionLoopRelayBridge.snapshotRelays())
+        await TransportRouter.shared.updateRelays(RelaySnapshot.snapshotRelays())
 
         let manager = VeilProxyManager.shared
         guard KeychainManager.shared.isDeviceRegistered() else {
-            // Fresh install. `startIfEnabled()` guards on registration and would be a
+            // Fresh install. `startIfNeeded()` guards on registration and would be a
             // no-op. Force VEIL through the router, which has no such guard.
             //
             // Direct must not be tried first. A clearnet attempt after a successful
@@ -83,6 +83,6 @@ enum VeilVoucherRedemption {
 
         guard manager.mode != .off else { return }
         manager.stop()
-        await manager.startIfEnabled()
+        await manager.startIfNeeded()
     }
 }

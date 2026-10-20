@@ -80,7 +80,7 @@ struct Construct_DesktopApp: App {
 
                     // Direct path (Strategy B): construct-core (UniFFI) + gRPC-Swift + VEIL from core.
                     // Engine layer is paused for Desktop.
-                    await VeilProxyManager.shared.startIfEnabled()
+                    await VeilProxyManager.shared.startIfNeeded()
                     await TransportRouter.shared.bootstrap()
 
                     // Post-auth key maintenance lives in AuthViewModel; this task can run before

@@ -101,9 +101,6 @@ private final class RecordingRuntime: VeilProxyRuntime, @unchecked Sendable {
         return .success(VeilStartOutcome(port: nextPort, method: .obfs4, latencyMs: 1))
     }
 
-    func start(_ request: VeilTransportRequest) -> Result<UInt16, VeilProxyRuntimeError> { .success(0) }
-    func startSecondary(bridgeLine: String, address: String) -> Result<UInt16, VeilProxyRuntimeError> { .success(0) }
-
     func stop() {
         lock.lock(); defer { lock.unlock() }
         log.append("stop")
