@@ -63,3 +63,62 @@ final class SenderSyncReplyQuoteTests: XCTestCase {
         XCTAssertNil(row.replyQuote)
     }
 }
+
+/// One rule for the row a received or synced message lands in (TODO 181).
+@MainActor
+final class IncomingRowRuleTests: XCTestCase {
+    private var container: NSPersistentContainer!
+
+    override func setUp() {
+        super.setUp()
+        container = PersistenceController(inMemory: true).container
+        LocalRepositories.useContactsForTesting(container)
+        LocalRepositories.useChatsForTesting(container)
+        LocalRepositories.useMessagesForTesting(container)
+    }
+
+    override func tearDown() {
+        LocalRepositories.useContactsForTesting(nil)
+        LocalRepositories.useChatsForTesting(nil)
+        LocalRepositories.useMessagesForTesting(nil)
+        container = nil
+        super.tearDown()
+    }
+
+    func testTheRowIdDropsEitherPerDeviceMarker() {
+        let base = "8a0c1f6e-0000-0000-0000-0000000000b1"
+        XCTAssertEqual(MessageRouter.incomingRowId(e2eMessageId: nil, wireMessageId: base + "-ss-1a2b"), base)
+        XCTAssertEqual(MessageRouter.incomingRowId(e2eMessageId: nil, wireMessageId: base + "-fd-1a2b"), base)
+        XCTAssertEqual(MessageRouter.incomingRowId(e2eMessageId: "", wireMessageId: base), base)
+        XCTAssertEqual(MessageRouter.incomingRowId(e2eMessageId: "E2E-ID", wireMessageId: base), "e2e-id")
+    }
+
+    /// A row stored undecryptable gets its body when the message arrives again from our other
+    /// device, as it does on the regular receive path. Mutation: drop `refreshExistingRow` from the
+    /// SENDER_SYNC path — this reddens.
+    func testASyncedMessageFillsARowStoredUndecryptable() throws {
+        let id = "8a0c1f6e-0000-0000-0000-0000000000b2"
+        let partner = "8a0c1f6e-0000-0000-0000-000000000009"
+        try LocalRepositories.contacts.insert(.new(id: partner, isContact: true, addedAt: Date()))
+        let chat = try LocalRepositories.chats.openChat(withPeer: partner, now: nil).chat
+        try LocalRepositories.messages.insert(MessageRecord(
+            id: id, chatId: chat.id, fromUserId: "me", toUserId: partner, isSentByMe: true,
+            timestamp: Date(timeIntervalSince1970: 2), orderKey: ServerMessageOrder.local(timestamp: Date(timeIntervalSince1970: 2), messageId: id),
+            body: Data(), contentType: .regular, deliveryStatus: .sent, retryCount: 0, suiteId: 0,
+            isEdited: false, editedAt: nil, replyToMessageId: nil, replyQuote: nil,
+            transcript: nil, transcriptLanguage: nil, transcriptGeneratedAt: nil
+        ), searchText: nil)
+
+        var text = Shared_Proto_Messaging_V1_TextMessage()
+        text.text = "late body"
+        var content = Shared_Proto_Messaging_V1_MessageContent()
+        content.text = text
+        MessageRouter()._testSaveSenderSyncMessage(
+            try content.serializedData(), original: ChatMessage(id: id + "-ss-1a2b", from: "me", to: "me", timestamp: 2),
+            partnerUserId: partner, in: container.viewContext
+        )
+        let row = try XCTUnwrap(try LocalRepositories.messages.message(id))
+        XCTAssertEqual(LocalMessagePayload.decode(row.body).plainText, "late body")
+    }
+}
+
