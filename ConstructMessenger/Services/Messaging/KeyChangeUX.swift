@@ -24,7 +24,7 @@ enum KeyChangeUX {
     /// Record `notice` on the contact and tell the user — the banner in their chat until
     /// acknowledged, and a notice here unless that chat is open.
     ///
-    /// Our own account is never the subject: a row for us is residue (`SelfAddressedResidue`). No row means no contact to warn about — the
+    /// Our own account is never the subject: a row for us is residue (self-addressed deliveries before 2026-08-28). No row means no contact to warn about — the
     /// event exists to protect a conversation.
     @discardableResult
     static func raise(_ notice: SecurityNotice, userId: String) -> Bool {
