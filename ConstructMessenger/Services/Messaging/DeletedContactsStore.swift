@@ -51,8 +51,8 @@ final class DeletedContactsStore {
     /// The old name sat outside that scan, so a store of contact ids survived an account wipe and
     /// a new identity on the device inherited the previous one's pruned contacts.
     private let defaultsKey = "construct.deletedContacts.v2"
-    /// The pre-TTL names, read once at load: a bare array of ids, under the unscanned key.
-    private let legacyDefaultsKey = "com.konstruct.deletedContacts.v1"
+    // The pre-TTL `com.konstruct.deletedContacts.v1` array was read once at load until
+    // 2026-10-20; every install in use (build 745+) had already moved it.
     /// id → when it was pruned.
     private var deletedAt: [String: Date] = [:]
     private let lock = NSLock()
@@ -102,19 +102,12 @@ final class DeletedContactsStore {
         lock.lock()
         if let stored = UserDefaults.standard.dictionary(forKey: defaultsKey) as? [String: Double] {
             deletedAt = stored.mapValues { Date(timeIntervalSince1970: $0) }
-        } else if let legacy = UserDefaults.standard.stringArray(forKey: legacyDefaultsKey), !legacy.isEmpty {
-            // Migrated as pruned **now**, not as already expired: an upgrade must not hand every
-            // previously-deleted contact a fresh path back on the next reconnect's replay, which
-            // is the exact defect this store was written to stop.
-            let now = Date()
-            deletedAt = Dictionary(uniqueKeysWithValues: legacy.map { ($0, now) })
         }
         // Drop what has aged out, so an install that sits unopened does not carry a decade of ids.
         let cutoff = Date().addingTimeInterval(-Self.retention)
         deletedAt = deletedAt.filter { $0.value > cutoff }
         lock.unlock()
         persist()
-        UserDefaults.standard.removeObject(forKey: legacyDefaultsKey)
     }
 
     private func persist() {

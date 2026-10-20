@@ -628,20 +628,6 @@ class KeychainManager {
         delete(forKey: sessionAtRiskKey(for: userId))
     }
 
-    // MARK: - Session Establishment Time (legacy)
-
-    // The session establishment time lived here, for the END_SESSION stale-check. Both went on
-    // 2026-09-27; only the delete is kept, to clear the entry older builds left behind when the
-    // session it dated is removed.
-
-    private func sessionEstablishedAtKey(for userId: String) -> String {
-        "construct.session.establishedAt.\(userId)"
-    }
-
-    func deleteSessionEstablishedAt(for userId: String) {
-        delete(forKey: sessionEstablishedAtKey(for: userId))
-    }
-
     // MARK: - Contact Request Mappings
     //
     // Stores requestId → toUserId so User A can create a contact after acceptance.
