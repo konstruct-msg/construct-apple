@@ -17,8 +17,8 @@ struct ChatView: View {
     /// Lazy holder — SwiftUI re-runs View.init on parent re-render; we must not
     /// allocate ChatViewModel there or discarded copies spam deinit / waste work.
     @State private var lazyViewModel: LazyChatViewModel
-    private var viewModel: ChatViewModel { lazyViewModel.value }
-    private var peerId: String { viewModel.conversation.peerId }
+    var viewModel: ChatViewModel { lazyViewModel.value }
+    var peerId: String { viewModel.conversation.peerId }
     private var peerName: String {
         ContactsLive.shared.contact(peerId)?.resolvedDisplayName ?? DisplayNameGenerator.generate(from: peerId)
     }
@@ -27,37 +27,37 @@ struct ChatView: View {
     /// Sampling the flag in `body` would let a mid-session flip put two owners on screen, which is
     /// build 586: two `ChatScrollManager`s on one NotificationCenter, each arming a pin series
     /// against the other. The Diagnostics toggle therefore lands on the next push of a chat.
-    @State private var viewport: any TranscriptViewportOwning
+    @State var viewport: any TranscriptViewportOwning
     /// Whether this view was built on the owned-inset path. Read from `viewport`'s type would be a
     /// second carrier of the same fact; this one is written once beside it.
-    private let usesOwnedInset: Bool
+    let usesOwnedInset: Bool
     private var connectionManager = ConnectionStatusManager.shared
     @State private var messageText = ""
-    @State private var replyingTo: TranscriptRow?
+    @State var replyingTo: TranscriptRow?
     /// When non-nil, the user selected a partial quote from `replyingTo` for reply.
-    @State private var replyQuoteText: String? = nil
+    @State var replyQuoteText: String? = nil
     /// Message opened for "Quote & Reply" selection sheet.
-    @State private var quotingMessage: TranscriptRow? = nil
+    @State var quotingMessage: TranscriptRow? = nil
     /// Soft reply focus — lowercased message ids that stay full-opacity; others dim.
     /// Empty = idle chat (no visual change). See ``ChatUIConstants.ReplyFocus``.
-    @State private var replyFocusIds: Set<String> = []
-    @State private var replyFocusPeekTask: Task<Void, Never>?
-    @State private var showingUserProfile = false
+    @State var replyFocusIds: Set<String> = []
+    @State var replyFocusPeekTask: Task<Void, Never>?
+    @State var showingUserProfile = false
     /// The top safe area — status bar and the system bar. The UIKit transcript lays out under the
     /// bar and needs it as padding; a SwiftUI scroll view does that itself.
-    @State private var topBarInset: CGFloat = 0
+    @State var topBarInset: CGFloat = 0
     @State private var callManager: (any CallUIManaging)? = CallRuntimeProvider.makeUIManager()
 
-    @State private var searchText = ""
-    @State private var isSearchActive = false
-    @State private var isEditMode = false
-    @State private var selectedMessages: Set<String> = []
+    @State var searchText = ""
+    @State var isSearchActive = false
+    @State var isEditMode = false
+    @State var selectedMessages: Set<String> = []
     /// What the forward picker on screen will send.
-    @State private var forwarding: [TranscriptRow] = []
-    @State private var showingForwardPicker = false
-    @State private var forwardFailed = false
-    @Environment(ChatsViewModel.self) private var chatsViewModel
-    @State private var galleryStartItem: GalleryStartItem?  // media gallery presenter
+    @State var forwarding: [TranscriptRow] = []
+    @State var showingForwardPicker = false
+    @State var forwardFailed = false
+    @Environment(ChatsViewModel.self) var chatsViewModel
+    @State var galleryStartItem: GalleryStartItem?  // media gallery presenter
 
     // Drop target for drag-and-drop from Finder (macOS) over the whole chat area
     @State private var chatDropImages: [PlatformImage] = []
@@ -67,17 +67,17 @@ struct ChatView: View {
     @ObservedObject private var floodGuard = IncomingFloodGuard.shared
 
     // Key Transparency status for the contact in this chat
-    @State private var contactKTStatus: KTStatus = .unverified
-    @State private var contactTrustAlert: ContactTrustAlert?
+    @State var contactKTStatus: KTStatus = .unverified
+    @State var contactTrustAlert: ContactTrustAlert?
     /// True when the session with this contact was established via a degraded (stale-SPK) init.
     @State private var isSessionAtRisk = false
     /// Safety Numbers sheet after key-change "Verify".
-    @State private var showingSafetyNumbers = false
+    @State var showingSafetyNumbers = false
 
-    @State private var containerWidth: CGFloat = ChatUIConstants.Bubble.defaultContainerWidth
+    @State var containerWidth: CGFloat = ChatUIConstants.Bubble.defaultContainerWidth
     /// Current height of the bottom composer (safeAreaInset). Tracked so we can re-pin the
     /// scroll when it changes — see the composer's `.onGeometryChange` below.
-    @State private var composerHeight: CGFloat = 0
+    @State var composerHeight: CGFloat = 0
     /// Bottom safe area, and the scroll view's own height. Held because the keyboard moves both
     /// while leaving the composer's height alone, and a latch blind to that reads a keyboard
     /// animation as a settled layout.
@@ -86,8 +86,8 @@ struct ChatView: View {
     /// state only because the composer's own report — which cannot see the scroll view — needs the
     /// two numbers it does not carry. `bottomSafeAreaInset` was declared here and never assigned
     /// at all until 2026-08-21.
-    @State private var bottomSafeAreaInset: CGFloat = 0
-    @State private var transcriptContainerHeight: CGFloat = 0
+    @State var bottomSafeAreaInset: CGFloat = 0
+    @State var transcriptContainerHeight: CGFloat = 0
     /// Where the held row sits in content coordinates, reported by that row alone, tagged with
     /// which row reported it.
     ///
@@ -99,11 +99,11 @@ struct ChatView: View {
     /// The tag is what makes it safe to leave lying around: nothing clears this when a history
     /// visit ends, so without it the next visit's first sample would be differenced against the
     /// previous visit's last one — two different rows, and a shift that measures nothing.
-    @State private var anchorSample: TranscriptRowSample?
+    @State var anchorSample: TranscriptRowSample?
     /// Where the row a guest scroll is heading for sits. Same reporter as the anchor, installed on
     /// a different row and for a different question: the anchor's *movement* is the reading
     /// position, this row's *position* is the destination.
-    @State private var scrollTargetSample: TranscriptRowSample?
+    @State var scrollTargetSample: TranscriptRowSample?
     /// Last geometry sample, so the new path can hand `handleTranscriptGeometry` an `old` value
     /// the way the container's `(old, new)` callback does.
     ///
@@ -114,11 +114,11 @@ struct ChatView: View {
     /// emits another sample. That loop is idempotent in a short chat, where the height is stable;
     /// in a long one it is the flicker. What it was buying is the `old` argument of a log that is
     /// off by default.
-    @State private var geometryHistory = TranscriptGeometryHistory()
+    @State var geometryHistory = TranscriptGeometryHistory()
     // "Is the layout settled enough to read geometry as intent" lives with the owner
     // (`layoutPrimed`). It was a `@State` here and was armed from the wrong evidence.
 
-    private enum Layout {
+    enum Layout {
         static let composerHorizontalPadding = ChatUIConstants.Shell.composerHorizontalPadding
         static let composerBottomPadding = ChatUIConstants.Shell.composerBottomPadding
         static let messageBottomClearance = ChatUIConstants.Shell.messageBottomClearance
@@ -129,7 +129,7 @@ struct ChatView: View {
     /// Probe log for viewport moves. Gated by ``ChatScrollManager.verboseGeometryLogging`` —
     /// default off so thermal/export sessions stay readable. Requires a real move/growth even
     /// during opening (the old `|| isOpening` branch logged every layout pass).
-    private func logScrollGeometryIfChanged(from old: ChatScrollGeometry, to new: ChatScrollGeometry) {
+    func logScrollGeometryIfChanged(from old: ChatScrollGeometry, to new: ChatScrollGeometry) {
         guard ChatScrollManager.verboseGeometryLogging else { return }
         let moved = abs(new.visibleMinY - old.visibleMinY) >= Layout.geometryLogThreshold
         let grew = abs(new.contentHeight - old.contentHeight) >= Layout.geometryLogThreshold
@@ -448,7 +448,7 @@ struct ChatView: View {
         }
     }
     
-    private var messageInputView: some View {
+    var messageInputView: some View {
         IOSMessageInputView(
             text: $messageText,
             droppedImages: $chatDropImages,
@@ -543,492 +543,6 @@ struct ChatView: View {
         }
     }
     
-    // MARK: - Bar
-
-    /// The conversation on the system bar (`decisions/navigation-bars-are-the-systems.md`): the
-    /// system back, the person's name as the title, the actions in one menu.
-    @ToolbarContentBuilder
-    private var chatToolbar: some ToolbarContent {
-        // The title is a button: a tap on the name opens the person (owner, 2026-10-08). The one
-        // bar of ours whose title is a view, so it sets the bar's title face itself.
-        ToolbarItem(placement: .principal) {
-            Button { showingUserProfile = true } label: {
-                ObservedPeerName(userId: peerId) { chatTitle($0) }
-            }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier(A11y.Chat.title)
-            .accessibilityHint(Text(LocalizedStringKey("profile")))
-        }
-
-        if contactTrustAlert != nil {
-            ToolbarItem(placement: .primaryAction) {
-                Button { showingSafetyNumbers = true } label: {
-                    Label(NSLocalizedString("kt_warning", comment: ""), systemImage: "exclamationmark.shield.fill")
-                }
-                .tint(Color.CT.danger)
-                .accessibilityHint(Text(LocalizedStringKey("key_change_verify")))
-            }
-        }
-
-        if isEditMode {
-            ToolbarItem(placement: .confirmationAction) {
-                ConfirmButton(title: NSLocalizedString("done", comment: "")) {
-                    withAnimation {
-                        isEditMode = false
-                        selectedMessages.removeAll()
-                    }
-                }
-            }
-        } else {
-            ToolbarItem(placement: .primaryAction) {
-                chatActionsItem.barItem()
-            }
-        }
-    }
-
-    /// Search, call, video call — one menu. With a single action (no callable contact) it is
-    /// that action's own button: a menu of one is a detour.
-    @ViewBuilder
-    private var chatActionsItem: some View {
-        let actions = headerActions
-        if actions.count == 1, let only = actions.first {
-            Button { performHeaderAction(only) } label: { chatActionLabel(only) }
-        } else {
-            Menu {
-                ForEach(actions, id: \.self) { action in
-                    Button { performHeaderAction(action) } label: { chatActionLabel(action) }
-                }
-            } label: {
-                Label(NSLocalizedString("chat_actions", comment: ""), systemImage: "ellipsis.circle")
-            }
-        }
-    }
-
-    private func chatActionLabel(_ action: ChatAction) -> some View {
-        Label(NSLocalizedString(action.labelKey, comment: ""), systemImage: action.symbol)
-    }
-
-    /// Name, then the session or connection state under it — the bar's title and subtitle, drawn
-    /// in the faces the app-wide bar appearance gives a plain title.
-    private func chatTitle(_ name: String) -> some View {
-        VStack(spacing: 0) {
-            HStack(spacing: CTLayout.inlinePad / 2) {
-                Text(name)
-                    .typesetting(asScriptOf: name)
-                    .font(CTFont.ui(17, weight: .semibold, relativeTo: .headline))
-                    .foregroundStyle(Color.CT.text)
-                    .lineLimit(1)
-                if contactTrustAlert == nil, contactKTStatus == .verified {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(CTFont.caption)
-                        .foregroundStyle(Color.CT.accent)
-                        .accessibilityLabel(Text(LocalizedStringKey("kt_verified")))
-                }
-            }
-            if let subtitle = navigationStatusSubtitle {
-                Text(subtitle)
-                    .font(CTFont.caption)
-                    .foregroundStyle(Color.CT.textDim)
-                    .lineLimit(1)
-                    .transition(.opacity)
-            }
-        }
-        .contentShape(Rectangle())
-    }
-
-    /// Load KT status for the contact — as saved, since this runs on the notification a write
-    /// posts.
-    private func loadContactKTStatus() {
-        if let contact = try? LocalRepositories.contacts.contact(peerId) {
-            contactKTStatus = contact.ktStatus
-            contactTrustAlert = contact.trustAlert
-        }
-    }
-
-    /// Infinite-scroll entry point. Policy lives in `ChatScrollManager.shouldLoadOlderHistory` so
-    /// entry-time LazyVStack top materialisation cannot widen the window (TODO 34).
-    // MARK: - Transcript container wiring
-    //
-    // Each of these was an inline closure at the call site until PR-2. Twelve arguments, five of
-    // them multi-line closures, over a two-generic view: the type checker gave up
-    // ("unable to type-check this expression in reasonable time"). Named methods are also what
-    // makes the next PR readable — the flag will swap the container, not four hundred lines.
-
-    /// The transcript container, built away from the modifier chain that decorates it.
-    ///
-    /// Not a style choice. Twelve arguments over a two-generic view, followed by ten `.onChange`
-    /// blocks, is one expression as far as the type checker is concerned, and it gives up on it —
-    /// "unable to type-check this expression in reasonable time", twice while this PR was written.
-    /// The extraction is what keeps the file compilable, and it is why the container's arguments
-    /// are named methods rather than inline closures.
-    @ViewBuilder
-    private func transcript(_ renderedMessages: [TranscriptEntry]) -> some View {
-        if usesOwnedInset {
-            ChatTranscriptScrollView(
-                bottomInset: transcriptBottomPad,
-                mode: ownedViewport?.mode ?? .following,
-                layoutPrimed: viewport.layoutPrimed,
-                // Nil unless the sample is of the row currently bound, so a stale one cannot be
-                // read as a measurement of the new anchor.
-                anchor: anchorSample?.messageId == viewport.heldMessageId ? anchorSample : nil,
-                scrollTarget: transcriptScrollTarget,
-                landRequest: ownedViewport?.landRequest ?? 0,
-                onLanded: { ownedViewport?.noteTailLanded() },
-                onReachedScrollTarget: { ownedViewport?.noteScrollTargetResolved() },
-                onGeometry: { handleTranscriptGeometry(from: geometryHistory.last, to: $0) },
-                onUserInteraction: { viewport.noteScrollPhase(.tracking) }
-            ) {
-                VStack(spacing: ChatUIConstants.Shell.listSpacing) {
-                    loadMoreSentinel(renderedMessages)
-                    transcriptRows(renderedMessages)
-                    Color.clear.frame(height: Layout.messageBottomClearance)
-                }
-                .padding(.top, topBarInset + ChatUIConstants.Shell.scrollContentTopPad + callBarInset)
-                .padding(.horizontal)
-                .coordinateSpace(name: Self.transcriptContentSpace)
-                .environment(\.containerWidth, containerWidth)
-            }
-            // The legacy path clears the badge from `registerTranscriptProxy`, which this container
-            // never calls — it has no `ScrollViewReader`, so `onProxyReady` does not exist here.
-            // Opening a chat therefore left the badge standing for the whole owned-path build.
-            .onAppear { LocalNotificationManager.shared.syncBadge() }
-            // Under the bar's glass, as a SwiftUI scroll view goes on its own; `topBarInset` keeps
-            // the first message clear of it.
-            .ignoresSafeArea(.container, edges: .top)
-        } else {
-            legacyTranscript(renderedMessages)
-        }
-    }
-
-    /// Content-space name the held row reports its position in. One name, declared beside the only
-    /// two places that use it, so the reporter and the reader cannot drift apart.
-    static let transcriptContentSpace = "transcript.content"
-
-    /// The viewport when it is the owned one. `viewport` is the protocol, and three of its inputs
-    /// (mode, the two request tokens) exist only on this side of the flag.
-    private var ownedViewport: ChatViewport? { viewport as? ChatViewport }
-
-    /// The pending guest scroll, paired with its measurement.
-    ///
-    /// The sample is passed only when it is of the row actually being asked for. A stale one — the
-    /// previous jump's row, still in `scrollTargetSample` because nothing clears it — would be read
-    /// as this jump's destination and land the viewport on the wrong message. Same guard, and the
-    /// same reason, as the anchor's `messageId ==` test above.
-    private var transcriptScrollTarget: TranscriptScrollTarget? {
-        guard let owned = ownedViewport, let targetId = owned.scrollTargetId else { return nil }
-        return TranscriptScrollTarget(
-            request: owned.scrollRequest,
-            anchor: owned.scrollTargetAnchor,
-            sample: scrollTargetSample?.messageId == targetId ? scrollTargetSample : nil
-        )
-    }
-
-    @ViewBuilder
-    private func legacyTranscript(_ renderedMessages: [TranscriptEntry]) -> some View {
-        ChatTranscriptContainer(
-            rowSpacing: ChatUIConstants.Shell.listSpacing,
-            topContentPad: ChatUIConstants.Shell.scrollContentTopPad + callBarInset,
-            bottomContentPad: transcriptBottomPad,
-            accessibilityIdentifier: A11y.Chat.messageList,
-            usesEagerStack: usesOwnedInset,
-            onProxyReady: registerTranscriptProxy,
-            onGeometryChange: handleTranscriptGeometry,
-            onScrollPhaseChange: handleTranscriptScrollPhase,
-            onTapBackground: hideKeyboard,
-            onBottomAnchorVisible: logBottomAnchorVisibility,
-            sentinel: { loadMoreSentinel(renderedMessages) },
-            rows: { transcriptRows(renderedMessages) }
-        )
-        .environment(\.containerWidth, containerWidth)
-    }
-
-    /// Room left at the end of the transcript for the composer.
-    ///
-    /// Hoisted out of the container's argument list on purpose: that call takes twelve arguments
-    /// over a two-generic view, and a ternary inside it is enough to make the type checker give up
-    /// — which it did, with "unable to type-check this expression in reasonable time".
-    ///
-    /// On the legacy path the composer is a safe-area inset and the system reserves its height, so
-    /// only the constant clearance belongs in the content. On the owned-inset path nothing reserves
-    /// anything and this number is the whole reason the tail is not under the glass.
-    private var transcriptBottomPad: CGFloat {
-        guard usesOwnedInset else { return Layout.messageBottomClearance }
-        return composerHeight + Layout.messageBottomClearance
-    }
-
-    /// The composer, and the one place its height is reported.
-    ///
-    /// On the owned-inset path this view is an overlay and the height it reports becomes the
-    /// transcript's `bottomContentPad` — the tail sits above the glass because the content says so,
-    /// not because a corrective scroll pushed it there. On the legacy path it is a
-    /// `.safeAreaInset` and the same number is only a pin trigger.
-    private var composer: some View {
-        messageInputView
-            .padding(.horizontal, Layout.composerHorizontalPadding)
-            .padding(.bottom, Layout.composerBottomPadding)
-            .background(Color.clear)
-            .onGeometryChange(for: CGFloat.self) { proxy in
-                proxy.size.height
-            } action: { _, newHeight in
-                guard newHeight.isFinite, newHeight >= 0 else { return }
-                // Sub-point thrash from the keyboard and the glass is not a layout change. The
-                // same cutoff the owner uses to latch, so the pad and the latch cannot disagree
-                // about whether anything moved.
-                let changed = abs(newHeight - composerHeight) > ChatViewport.Threshold.padNoise
-                composerHeight = newHeight
-                guard changed else { return }
-                reportComposerGeometry()
-                // Legacy path only: it has no owned pad, so a growing inset dematerialises the
-                // lazy list and something has to scroll. Reading history with a reply open, that
-                // something must be the replied-to message rather than the bottom.
-                if !usesOwnedInset, !viewport.isFollowing,
-                   let anchorId = (replyingTo ?? viewModel.editingMessage)?.id {
-                    viewport.scrollTo(messageId: anchorId, anchor: .center, animated: false)
-                }
-            }
-    }
-
-    /// All three bottom-inset sources in one call. A keyboard moves the safe area and the container
-    /// without touching the composer's own height, so a latch fed by the composer alone reads the
-    /// keyboard as a settled layout.
-    private func reportComposerGeometry() {
-        viewport.noteComposerGeometry(
-            composerHeight: composerHeight,
-            safeAreaBottom: bottomSafeAreaInset,
-            containerHeight: transcriptContainerHeight
-        )
-    }
-
-    private func registerTranscriptProxy(_ proxy: ScrollViewProxy) {
-        viewport.registerProxy(proxy)
-        LocalNotificationManager.shared.syncBadge()
-        // .defaultScrollAnchor(.bottom) + LazyVStack + composer safeAreaInset often lands the
-        // first offset out of range → blank list until a gesture. Multi-pass non-animated pin
-        // covers inset settle and FRC load-more churn.
-        //
-        // Only when there is a transcript to open. On a cold entry there is not: the store
-        // publishes from `viewModel.onViewAppear()`, which runs after this, so the list is empty
-        // here and the opening is armed by the 0 → N change instead. Declaring the opening
-        // finished on an empty list is what let load-more growth take the animated branch and
-        // blank the chat.
-        viewport.noteTranscriptAppeared(messageCount: viewModel.entries.count)
-    }
-
-    private func handleTranscriptGeometry(from old: ChatScrollGeometry, to metrics: ChatScrollGeometry) {
-        // The inset latch is a per-tick measurement, so it is fed per tick. Its two previous call
-        // sites both fired *because* something had moved, which meant `noteInsetDelta` never once
-        // saw a quiet pass and `insetSettling` stayed true from the first container measurement
-        // onward — see `ChatViewport.insetSettling`. The latch has its own `padNoise` threshold;
-        // pre-filtering on its behalf is what broke it.
-        //
-        // Owned path only. The legacy owner answers the same call with `pinToBottom(.composerInset)`
-        // — a scroll, not a measurement — so feeding it every tick would arm a pin per frame. Its
-        // one caller stays the composer's own change report, which is all it ever watched.
-        if usesOwnedInset {
-            viewport.noteComposerGeometry(
-                composerHeight: composerHeight,
-                safeAreaBottom: metrics.safeAreaBottom,
-                containerHeight: metrics.containerHeight
-            )
-        }
-        viewport.updateGeometry(metrics, messageCount: viewModel.entries.count)
-        // The blank chat is a *geometry* state and no log has ever shown it: we know where the
-        // messages are and nothing about where the viewport is. One line per meaningful move
-        // answers "was the offset wrong, or were the cells absent".
-        logScrollGeometryIfChanged(from: old, to: metrics)
-        // Ignore zero-width passes during mid-layout; avoid thrashing on sub-pixel noise.
-        if metrics.width > 1, abs(metrics.width - containerWidth) > 0.5 {
-            containerWidth = metrics.width
-        }
-        // Held for the composer's own report, which cannot see the scroll view. The latch was
-        // already fed this tick, with fresher numbers than these; the thresholds are here because
-        // these two are `@State` and every write costs a body pass.
-        if metrics.containerHeight.isFinite,
-           abs(metrics.containerHeight - transcriptContainerHeight) > 0.5 {
-            transcriptContainerHeight = metrics.containerHeight
-        }
-        if metrics.safeAreaBottom.isFinite,
-           abs(metrics.safeAreaBottom - bottomSafeAreaInset) > 0.5 {
-            bottomSafeAreaInset = metrics.safeAreaBottom
-        }
-        // Offer the stick on the pass where following has just stopped and none is bound. Here
-        // rather than in an `.onChange(of: isFollowing)` so the offer sits next to the geometry
-        // that decided it; `bindAnchorRow` remains the authority on whether to take it.
-        //
-        // The two cheap checks are not redundant with that authority — they keep `filteredMessages`
-        // (an O(n) filter) off the per-frame path, and it has to be that list rather than
-        // `viewModel.entries`: it is what the rows are built from, so it is the only one whose
-        // first element is guaranteed to be a row that can install the reporter.
-        if !viewport.isFollowing, viewport.heldMessageId == nil {
-            viewport.bindAnchorRow(filteredMessages.first?.id)
-        }
-        geometryHistory.last = metrics
-        // Near-top geometry is the reliable trigger once the user scrolls up: sentinel `onAppear`
-        // alone misses the case where the top stayed materialised from entry (no second appear)
-        // and would never widen the window.
-        attemptLoadOlderHistory()
-    }
-
-    private func handleTranscriptScrollPhase(_ phase: ScrollPhase) {
-        // Phase → intent is a decision, so it lives in ChatScrollManager where a test can reach it.
-        viewport.noteScrollPhase(phase)
-    }
-
-    private func logBottomAnchorVisibility(_ visible: Bool) {
-        ChatScrollManager.logGeometry(
-            visible
-                ? "SCROLL_ANCHOR bottom visible (primed=\(viewport.layoutPrimed))"
-                : "SCROLL_ANCHOR bottom left the viewport"
-        )
-    }
-
-    /// Infinite-scroll sentinel at the TOP (oldest edge). No button — history loads as the person
-    /// reaches the oldest edge. `LazyVStack` materialises this on first layout even when
-    /// bottom-anchored; the load is gated by `ChatScrollManager.shouldLoadOlderHistory` (TODO 34).
-    @ViewBuilder
-    private func loadMoreSentinel(_ renderedMessages: [TranscriptEntry]) -> some View {
-        if viewModel.hasMoreMessages && !renderedMessages.isEmpty {
-            Group {
-                if viewModel.isLoadingMore {
-                    ProgressView()
-                        .padding(.vertical, ChatUIConstants.Shell.listSpacing)
-                } else {
-                    Color.clear
-                        .frame(height: 1)
-                }
-            }
-            .frame(maxWidth: .infinity)
-            .id("loadMoreIndicator")
-            .accessibilityHidden(true)
-            .onAppear {
-                attemptLoadOlderHistory()
-            }
-        }
-    }
-
-    /// The message rows, lifted out of `body` so `ChatTranscriptContainer` owns only the scroll.
-    /// Every callback still belongs to `ChatView` — the container never sees a view model.
-    @ViewBuilder
-    private func transcriptRows(_ renderedMessages: [TranscriptEntry]) -> some View {
-                // Messages in oldest-first order (ScrollView anchored to bottom via .defaultScrollAnchor)
-                ForEach(Array(renderedMessages.enumerated()), id: \.element.id) { index, message in
-                    VStack(spacing: 0) {
-                        ObservedTranscriptRow(entry: message) { row in MessageBubble(
-                            message: row,
-                            isLastInGroup: message.isLastInGroup(at: index, in: renderedMessages),
-                            isSelected: selectedMessages.contains(message.id),
-                            isEditMode: isEditMode,
-                            onRetry: { msg in
-                                viewModel.retryMessage(msg)
-                            },
-                            onReply: { msg in
-                                replyingTo = msg
-                                replyQuoteText = nil
-                                setComposeReplyFocus(messageId: msg.id)
-                            },
-                            onDelete: { msg in
-                                viewModel.deleteMessage(msg)
-                            },
-                            onSelect: { msg in
-                                toggleMessageSelection(msg)
-                            },
-                            onEnterSelectMode: { msg in
-                                withAnimation {
-                                    isEditMode = true
-                                    isSearchActive = false
-                                    searchText = ""
-                                }
-                                selectedMessages.insert(msg.id)
-                            },
-                            onTapMedia: { msg, itemIndex in
-                                galleryStartItem = GalleryStartItem(id: msg.id, itemIndex: itemIndex)
-                            },
-                            onEdit: { msg in
-                                viewModel.editingMessage = msg
-                            },
-                            onReplyWithQuote: { msg, _ in
-                                quotingMessage = msg
-                            },
-                            onJumpToReply: { msg in
-                                peekReplyChain(for: msg)
-                            },
-                            onReact: { msg, emoji in
-                                viewModel.sendReaction(msg, emoji: emoji)
-                            },
-                            onForward: { msg in startForward([msg]) }
-                        ) }
-                        .id(message.id)
-                        // The LAST message only, and no longer just a probe. Auto-scroll
-                        // promises the newest message is on screen; this is the only place
-                        // that can tell whether the promise holds. Build 583 showed it
-                        // broken for seconds at a time — the transcript measured 5792pt,
-                        // the pin anchored there, the height settled at 3952pt and the
-                        // viewport was left 922pt past the end. See
-                        // `ChatScrollManager.shouldRecoverStrandedViewport`.
-                        .background {
-                            // At most two rows measure themselves: the held anchor, and the row a
-                            // guest scroll is trying to reach. Thirty reporters would be a
-                            // per-frame cost for a number that is meaningless for every row but
-                            // those, which is why the target is named before it is measured rather
-                            // than every row being measured in case someone asks.
-                            if usesOwnedInset,
-                               message.id == viewport.heldMessageId || message.id == ownedViewport?.scrollTargetId {
-                                GeometryReader { proxy in
-                                    Color.clear.onChange(
-                                        of: proxy.frame(in: .named(Self.transcriptContentSpace)),
-                                        initial: true
-                                    ) { _, frame in
-                                        let sample = TranscriptRowSample(
-                                            messageId: message.id,
-                                            minY: frame.minY,
-                                            height: frame.height
-                                        )
-                                        if message.id == viewport.heldMessageId { anchorSample = sample }
-                                        if message.id == ownedViewport?.scrollTargetId { scrollTargetSample = sample }
-                                    }
-                                }
-                            }
-                        }
-                        .onAppear {
-                            if index == renderedMessages.count - 1 {
-                                ChatScrollManager.logGeometry(
-                                    "SCROLL_ANCHOR last message visible (\(message.id.prefix(8))…, idx=\(index)/\(renderedMessages.count))"
-                                )
-                                viewport.noteLastMessageVisible(true, searchActive: isSearchActive)
-                            }
-                        }
-                        .onDisappear {
-                            if index == renderedMessages.count - 1 {
-                                ChatScrollManager.logGeometry(
-                                    "SCROLL_ANCHOR last message left the viewport (\(message.id.prefix(8))…)"
-                                )
-                                viewport.noteLastMessageVisible(false, searchActive: isSearchActive)
-                            }
-                        }
-                        .opacity(replyFocusOpacity(for: message.id))
-                        .animation(
-                            .easeInOut(duration: ChatUIConstants.ReplyFocus.animationDuration),
-                            value: replyFocusIds
-                        )
-
-                        // Add spacing after each message
-                        if index < renderedMessages.count - 1 {
-                            Spacer()
-                                .frame(height: message.spacingAfterMessage(at: index, in: renderedMessages))
-                        }
-                    }
-                }
-    }
-
-    private func attemptLoadOlderHistory() {
-        guard viewport.shouldLoadOlderHistory(
-            isSearchActive: isSearchActive,
-            isLoadingMore: viewModel.isLoadingMore,
-            hasMoreMessages: viewModel.hasMoreMessages
-        ) else { return }
-        viewModel.loadMoreMessages(trigger: .indicatorAppeared)
-    }
-
 
     private var canStartCall: Bool {
         guard CallsFeature.isEnabled,
@@ -1037,11 +551,11 @@ struct ChatView: View {
         return true
     }
 
-    private var headerActions: [ChatAction] {
+    var headerActions: [ChatAction] {
         ChatAction.available(canCall: canStartCall, videoEnabled: CallsFeature.isVideoEnabled)
     }
 
-    private func performHeaderAction(_ action: ChatAction) {
+    func performHeaderAction(_ action: ChatAction) {
         switch action {
         case .search: withAnimation { isSearchActive = true }
         case .call: startCall()
@@ -1072,7 +586,7 @@ struct ChatView: View {
     /// pushed ChatView down — TabView doesn't propagate that inset into a NavigationStack
     /// destination. So when a call is active/connecting (bar is showing), ChatView reserves the
     /// bar's height itself to keep the floating nav capsule from sitting under it.
-    private var callBarInset: CGFloat {
+    var callBarInset: CGFloat {
         guard CallsFeature.isEnabled, let state = callManager?.state else { return 0 }
         switch state {
         case .active, .connecting: return InCallMiniBar.barHeight
@@ -1080,7 +594,7 @@ struct ChatView: View {
         }
     }
 
-    private var navigationStatusSubtitle: String? {
+    var navigationStatusSubtitle: String? {
         connectionManager.navigationStatusSubtitle(
             isInitializingSession: viewModel.isInitializingSession
         )
@@ -1088,7 +602,7 @@ struct ChatView: View {
 
     // MARK: - Computed Properties
 
-    private var filteredMessages: [TranscriptEntry] {
+    var filteredMessages: [TranscriptEntry] {
         let valid = viewModel.entries
         if searchText.isEmpty {
             return valid
@@ -1105,97 +619,6 @@ struct ChatView: View {
         entries.map(\.row).filter {
             guard let mc = parseMediaContent(from: $0.legacyBody) else { return false }
             return (mc.media["_placeholder"] as? Bool) != true
-        }
-    }
-
-    // MARK: - Soft reply focus (dim non-related bubbles)
-
-    private func replyFocusOpacity(for messageId: String) -> Double {
-        guard !isEditMode, !replyFocusIds.isEmpty else {
-            return ChatUIConstants.ReplyFocus.focusedOpacity
-        }
-        let id = messageId.lowercased()
-        if replyFocusIds.contains(id) {
-            return ChatUIConstants.ReplyFocus.focusedOpacity
-        }
-        return ChatUIConstants.ReplyFocus.dimmedOpacity
-    }
-
-    /// Compose-reply focus: keep the quoted parent bright while the reply bar is up.
-    private func setComposeReplyFocus(messageId: String) {
-        replyFocusPeekTask?.cancel()
-        replyFocusPeekTask = nil
-        // Do not wrap in withAnimation — each bubble already has
-        // `.animation(..., value: replyFocusIds)`. A second transaction here
-        // animated the whole LazyVStack with composer inset change → flash.
-        replyFocusIds = [messageId.lowercased()]
-    }
-
-    /// Take the reader to one message, if the transcript is showing it.
-    ///
-    /// Every guest scroll goes through here, for two reasons the call sites cannot handle
-    /// individually.
-    ///
-    /// **The id is resolved against the rendered list, and the rendered one is what travels on.**
-    /// `peekReplyChain` lowercases both ids before it asks, `Message.id` is not lowercase, and the
-    /// row that installs the target's reporter matches on `message.id` — so an unresolved id asks
-    /// for a row that, to every comparison downstream, does not exist. One normalisation, at the
-    /// boundary, rather than a `.lowercased()` at each of the places that compare.
-    ///
-    /// **A message outside the loaded window is refused here.** The destination is measured by a
-    /// reporter installed on the target row, so a message the transcript has not rendered has
-    /// nowhere to put one, and the request would sit unfulfilled forever. Saying so is the point: a
-    /// jump that silently does nothing is the defect this whole change closes, and replacing it
-    /// with a differently-shaped silence would be no better.
-    private func jumpToMessage(_ messageId: String, anchor: UnitPoint = .center) {
-        guard let rendered = filteredMessages.first(
-            where: { $0.id.caseInsensitiveCompare(messageId) == .orderedSame }
-        ) else {
-            Log.info(
-                "SCROLL_GUEST[not_rendered]: \(messageId.prefix(8))… is not in the loaded transcript — no jump",
-                category: "ChatView"
-            )
-            return
-        }
-        viewport.scrollTo(messageId: rendered.id, anchor: anchor, animated: true)
-    }
-
-    /// Tap on in-bubble reply strip: scroll to parent, keep parent + child bright briefly.
-    private func peekReplyChain(for message: TranscriptRow) {
-        let childId = message.id.lowercased()
-        let parentId = (message.replyToMessageId ?? "").lowercased()
-        guard !parentId.isEmpty else { return }
-
-        replyFocusPeekTask?.cancel()
-        withAnimation(.easeInOut(duration: ChatUIConstants.ReplyFocus.animationDuration)) {
-            replyFocusIds = [parentId, childId]
-        }
-        // Prefer scrolling to the parent (what the user is looking for).
-        jumpToMessage(parentId)
-
-        // Hold while composing a reply to this parent; otherwise auto-clear.
-        let holdParent = parentId
-        replyFocusPeekTask = Task { @MainActor in
-            try? await Task.sleep(nanoseconds: ChatUIConstants.ReplyFocus.peekHoldNanoseconds)
-            guard !Task.isCancelled else { return }
-            if replyingTo?.id.lowercased() == holdParent {
-                // Compose focus owns the set now.
-                return
-            }
-            clearReplyFocus(animated: true)
-        }
-    }
-
-    private func clearReplyFocus(animated: Bool) {
-        replyFocusPeekTask?.cancel()
-        replyFocusPeekTask = nil
-        guard !replyFocusIds.isEmpty else { return }
-        if animated {
-            withAnimation(.easeInOut(duration: ChatUIConstants.ReplyFocus.animationDuration)) {
-                replyFocusIds = []
-            }
-        } else {
-            replyFocusIds = []
         }
     }
 
@@ -1276,7 +699,7 @@ struct ChatView: View {
         _ = try? LocalRepositories.chats.setUnread(chatId, 0)
     }
 
-    private func toggleMessageSelection(_ message: TranscriptRow) {
+    func toggleMessageSelection(_ message: TranscriptRow) {
         if selectedMessages.contains(message.id) {
             selectedMessages.remove(message.id)
         } else {
@@ -1284,37 +707,6 @@ struct ChatView: View {
         }
     }
     
-    // MARK: - Forward
-
-    private func startForward(_ rows: [TranscriptRow]) {
-        forwarding = rows
-        showingForwardPicker = true
-    }
-
-    private func forwardSelectedMessages() {
-        startForward(viewModel.entries.map(\.row).filter { selectedMessages.contains($0.id) })
-    }
-
-    /// The picked chat sends it: this one at once, any other when it opens.
-    private func finishForward(to chat: ChatRecord) {
-        ForwardDrafts.shared.hand(ForwardItem.content(of: forwarding), to: chat.id)
-        forwarding = []
-        withAnimation {
-            selectedMessages.removeAll()
-            isEditMode = false
-        }
-        if chat.id != viewModel.conversation.chatId {
-            chatsViewModel.chatToOpen = chat.id
-        }
-    }
-
-    private func sendForwardedHere() async {
-        let items = ForwardDrafts.shared.take(for: viewModel.conversation.chatId)
-        guard !items.isEmpty else { return }
-        let failures = await viewModel.forward(items)
-        if !failures.isEmpty { forwardFailed = true }
-    }
-
     private func deleteSelectedMessages() {
         guard !selectedMessages.isEmpty else { return }
         
@@ -1327,7 +719,7 @@ struct ChatView: View {
         }
     }
     
-    private func hideKeyboard() {
+    func hideKeyboard() {
         #if canImport(UIKit)
         UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
         #endif
@@ -1393,7 +785,7 @@ struct ChatView: View {
 /// chat list row (a `@FetchRequest`) and left this header on the old name until the chat was
 /// reopened. `@ObservedObject` re-renders on the object's `objectWillChange`, which a save or a
 /// merge into the view context fires.
-private struct ObservedPeerName<Content: View>: View {
+struct ObservedPeerName<Content: View>: View {
     let userId: String
     let content: (String) -> Content
 
