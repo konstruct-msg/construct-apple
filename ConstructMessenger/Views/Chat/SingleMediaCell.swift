@@ -22,7 +22,10 @@ struct SingleMediaCell: View {
     /// True once `thumbnailImage` holds a decode of the real media rather than the stored preview.
     /// The two used to be indistinguishable because only our own sends ever had a preview to paint.
     @State private var hasFullCopy = false
-    @State private var isLoading = false
+    /// Download, progress and failure of the full image. `isLoading` below hides it while a stored
+    /// preview is already painted, so the spinner never covers a picture.
+    @State private var loader = MediaLoader<PlatformImage>(
+        logCategory: "MediaMessageView", logLabel: "Single media")
     @State private var loadError: String?
     @State private var isMissingMedia = false
     /// The media descriptor (mediaId/mediaUrl/mediaKey) is not readable yet — distinct from
@@ -30,8 +33,6 @@ struct SingleMediaCell: View {
     /// were one state and the "not yet" case rendered as "Failed to load" for a frame on every
     /// outgoing photo.
     @State private var isAwaitingDescriptor = false
-    @State private var downloadProgress: Double = 0
-    @State private var hasReceivedBytes = false
     @State private var blurPreview: PlatformImage?
     @State private var downloadedVideoURL: URL?
     @State private var isDownloadingVideo = false
@@ -57,6 +58,10 @@ struct SingleMediaCell: View {
             image: thumbnailImage ?? blurPreview
         )
     }
+
+    private var isLoading: Bool { loader.isLoading && thumbnailImage == nil }
+    private var downloadProgress: Double { loader.progress }
+    private var hasReceivedBytes: Bool { loader.hasReceivedBytes }
 
     var body: some View {
         Group {
@@ -363,13 +368,11 @@ struct SingleMediaCell: View {
         // received media too, `thumbnailImage` is set before the download even starts — so the old
         // guard would have made every re-appear a no-op and left the bubble at 320px permanently
         // whenever the first download failed.
-        if hasFullCopy || isLoading { return }
+        if hasFullCopy || loader.isLoading { return }
         if loadError != nil && !forceRetry { return }
         loadError = nil
         isMissingMedia = false
         isAwaitingDescriptor = false
-        hasReceivedBytes = false
-        downloadProgress = 0
 
         // A copy from an earlier appearance of this row. LazyVStack recreates the view when it
         // scrolls back in, which resets `@State`, so without this the bubble re-decodes media it
@@ -401,11 +404,7 @@ struct SingleMediaCell: View {
             thumbnailImage = img
         }
 
-        guard let mediaId = itemDict["mediaId"] as? String,
-              let mediaUrl = itemDict["mediaUrl"] as? String,
-              let mediaKeyStr = itemDict["mediaKey"] as? String,
-              let mediaKey = Data(base64Encoded: mediaKeyStr)
-        else {
+        guard let descriptor = MediaLoader<PlatformImage>.Descriptor(item: itemDict) else {
             // NOT a failure — the descriptor is not readable *yet*. On our own send this row is
             // created moments before its thumbnail is stored and before the media JSON lands, so
             // for one frame the bubble has neither; painting `errorPlaceholder` there is what made
@@ -418,69 +417,35 @@ struct SingleMediaCell: View {
             return
         }
         isAwaitingDescriptor = false
-        if thumbnailImage == nil { isLoading = true }
-        // Real byte-level progress: encrypted total comes from the descriptor `size`.
-        let total = Double((itemDict["size"] as? Int) ?? 0)
-        let onProgress: @Sendable (Int64) -> Void = { received in
-            let frac = total > 0 ? min(0.9, Double(received) / total) : 0
-            Task { @MainActor in
-                if isLoading {
-                    hasReceivedBytes = true
-                    if total > 0 {
-                        downloadProgress = frac
-                    }
-                }
-            }
-        }
+        let messageId = message.id
+        let index = itemIndex
         Task {
-            do {
-                let imageData = try await MediaManager.shared.downloadAndDecryptMedia(
-                    mediaId: mediaId,
-                    mediaUrl: mediaUrl,
-                    mediaKey: mediaKey,
-                    onProgress: onProgress
-                )
-                await MainActor.run { if isLoading { downloadProgress = 0.95 } }
-                // Decode at bubble size. This used to be `PlatformImage(data:)` — a full-resolution
-                // decode (~11.8 MB for a 1440×2048 photo) whose only purposes were to make a 320px
-                // thumbnail from it and to hand the gallery a copy it can fetch itself. The bubble
-                // never needed those pixels, and holding them is what took footprint to 447 MB.
-                guard let displayImage = ImageDownsampler.image(from: imageData) else {
-                    await MainActor.run {
-                        isLoading = false
-                        if thumbnailImage == nil { loadError = "Invalid image data" }
-                        hasReceivedBytes = false
-                        downloadProgress = 0
-                    }
-                    return
-                }
-                await MainActor.run {
-                    // Display compartment only. The gallery, save and share still want the real
-                    // thing and load it on demand from MediaManager — a disk-cache hit, not a
-                    // re-download. Storing this copy under the full-resolution key would make
-                    // "save to photos" quietly write a 1024px file.
-                    MediaImageCache.shared.storeDisplay(displayImage, for: message.id, at: itemIndex)
-                    thumbnailImage = displayImage
-                    hasFullCopy = true
-                    isLoading = false
-                    hasReceivedBytes = true
-                    downloadProgress = 1.0
-                }
-            } catch {
-                let disposition = MediaLoadFailurePolicy.disposition(for: error)
-                if disposition == .permanentlyUnavailable {
-                    Log.debug("Single media unavailable for \(mediaId.prefix(8))…: \(error)", category: "MediaMessageView")
-                } else {
-                    Log.error("Single media load failed for \(mediaId.prefix(8))…: \(error)", category: "MediaMessageView")
-                }
-                await MainActor.run {
-                    isLoading = false
-                    if thumbnailImage == nil {
-                        isMissingMedia = disposition == .permanentlyUnavailable
-                        loadError = error.userFacingMessage
-                    }
-                    hasReceivedBytes = false
-                    downloadProgress = 0
+            // Decode at bubble size. This used to be `PlatformImage(data:)` — a full-resolution
+            // decode (~11.8 MB for a 1440×2048 photo) whose only purposes were to make a 320px
+            // thumbnail from it and to hand the gallery a copy it can fetch itself. The bubble
+            // never needed those pixels, and holding them is what took footprint to 447 MB.
+            let image = await loader.load(
+                descriptor,
+                cached: { MediaImageCache.shared.resolvedCopy(for: messageId, at: index) },
+                decode: { ImageDownsampler.image(from: $0) },
+                // Display compartment only. The gallery, save and share still want the real
+                // thing and load it on demand from MediaManager — a disk-cache hit, not a
+                // re-download. Storing this copy under the full-resolution key would make
+                // "save to photos" quietly write a 1024px file.
+                store: { MediaImageCache.shared.storeDisplay($0, for: messageId, at: index) }
+            )
+            if let image {
+                thumbnailImage = image
+                hasFullCopy = true
+            } else if let failure = loader.failure, thumbnailImage == nil {
+                switch failure {
+                case .undecodable:
+                    loadError = "Invalid image data"
+                case .unavailable(let error):
+                    isMissingMedia = true
+                    loadError = error.userFacingMessage
+                case .retryable(let error):
+                    loadError = error.userFacingMessage
                 }
             }
         }
