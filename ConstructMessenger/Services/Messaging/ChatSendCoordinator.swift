@@ -501,7 +501,7 @@ final class ChatSendCoordinator {
             Log.info("Sending message via gRPC (direct core path): \(messageId)", category: "ChatViewModel")
             Task { [weak self] in
                 guard let self else { return }
-                let jitterMs = TrafficProtectionService.shared.recommendedSendDelay(isHighPriority: true)
+                let jitterMs = await SendJitter.delayMs(isHighPriority: true)
                 if jitterMs > 0 {
                     try? await Task.sleep(for: .milliseconds(Int(jitterMs)))
                 }
@@ -532,7 +532,6 @@ final class ChatSendCoordinator {
                         spendUnit: peerSpendUnit
                     )
                     let aggregated = report.status
-                    TrafficProtectionService.shared.recordRealMessageSent()
                     if let myDeviceId = AuthSessionManager.shared.currentDeviceId, !myDeviceId.isEmpty {
                         // C1c: sync the same wire bytes as the send (MessageContent / pre-KNST),
                         // not display JSON. Coordinator re-applies KNST framing per own device.
