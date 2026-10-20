@@ -162,7 +162,7 @@ final class MultiDeviceReceiveRegressionTests: XCTestCase {
             try? String(
                 contentsOf: URL(fileURLWithPath: #filePath)
                     .deletingLastPathComponent().deletingLastPathComponent()
-                    .appendingPathComponent("ConstructMessenger/Security/CryptoManager.swift"),
+                    .appendingPathComponent("ConstructMessenger/Security/CryptoManager+MessageCrypto.swift"),
                 encoding: .utf8
             )
         )

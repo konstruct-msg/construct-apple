@@ -166,7 +166,9 @@ final class CryptoIdentitySpaceTests: XCTestCase {
     /// account. Step 6 took it out of these three files; this keeps it out.
     func testTheCryptoLayerDoesNotResolveThePeerItself() throws {
         let cryptoLayer: Set<String> = [
-            "CryptoManager.swift", "CryptoManager+SessionArchive.swift", "MessageCryptoService.swift"
+            "CryptoManager.swift", "CryptoManager+SessionArchive.swift", "MessageCryptoService.swift",
+            "CryptoManager+Prekeys.swift", "CryptoManager+Persistence.swift",
+            "CryptoManager+SessionQueries.swift", "CryptoManager+MessageCrypto.swift"
         ]
         var offenders: [String] = []
         for file in try appSources() where cryptoLayer.contains(file.name) {
@@ -188,7 +190,9 @@ final class CryptoIdentitySpaceTests: XCTestCase {
     /// The scan above is only worth anything if the file set it names still exists.
     func testTheCryptoLayerFilesAreWhereTheScanLooks() throws {
         let names = Set(try appSources().map(\.name))
-        for expected in ["CryptoManager.swift", "CryptoManager+SessionArchive.swift", "MessageCryptoService.swift"] {
+        for expected in ["CryptoManager.swift", "CryptoManager+SessionArchive.swift", "MessageCryptoService.swift",
+            "CryptoManager+Prekeys.swift", "CryptoManager+Persistence.swift",
+            "CryptoManager+SessionQueries.swift", "CryptoManager+MessageCrypto.swift"] {
             XCTAssertTrue(names.contains(expected), "\(expected) moved — the step 6 scan now guards nothing")
         }
     }
