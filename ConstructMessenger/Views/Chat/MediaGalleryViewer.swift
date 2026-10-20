@@ -332,7 +332,7 @@ struct MediaGalleryViewer: View {
 
                 if currentIsVideo { speedMenu }
 
-                Button { shareCurrentImage() } label: {
+                Button { shareCurrent() } label: {
                     Image(systemName: "ellipsis.circle.fill")
                         .font(CTFont.ui(20))
                         .foregroundColor(Color.CT.onMedia.opacity(0.9))
@@ -434,14 +434,23 @@ struct MediaGalleryViewer: View {
         }
     }
 
-    private func shareCurrentImage() {
-        guard let entry = entries.first(where: { $0.id == currentEntryId }),
-              !Self.isVideoEntry(entry),
-              let img = MediaImageCache.shared.original(for: entry.message.id, at: entry.itemIndex) else { return }
-
+    /// The system share sheet for what is on screen: the picture, or the clip's decrypted file —
+    /// which is what gives a video "Save Video", AirDrop and the rest. Until 2026-10-20 the button
+    /// did nothing on a video: this returned early for anything that was not a picture.
+    private func shareCurrent() {
+        guard let entry = entries.first(where: { $0.id == currentEntryId }) else { return }
+        let item: Any
+        if Self.isVideoEntry(entry) {
+            // Written by the page once the clip is downloaded; before that there is nothing to share.
+            guard let url = MediaVideoCache.shared.url(for: entry.message.id, at: entry.itemIndex) else { return }
+            item = url
+        } else {
+            guard let img = MediaImageCache.shared.original(for: entry.message.id, at: entry.itemIndex) else { return }
+            item = img
+        }
 #if canImport(UIKit)
         // iPad requires popover sourceView — see ActivityShare / Diagnostics share-logs crash.
-        ActivityShare.present(items: [img])
+        ActivityShare.present(items: [item])
 #endif
     }
 }
@@ -709,6 +718,9 @@ struct GalleryVideoPage: View {
             .onChange(of: rate) { _, rate in apply(rate) }
             .onDisappear {
                 player?.pause()
+                #if os(iOS)
+                MediaPlaybackAudio.deactivate()
+                #endif
             }
         )
     }
@@ -730,6 +742,9 @@ struct GalleryVideoPage: View {
             tempURL = cachedURL
             player = cachedPlayer
             apply(rate)
+            #if os(iOS)
+            MediaPlaybackAudio.activate()
+            #endif
             cachedPlayer.play()
             return
         }
@@ -770,6 +785,9 @@ struct GalleryVideoPage: View {
                     player = p
                     isLoading = false
                     apply(rate)
+                    #if os(iOS)
+                    MediaPlaybackAudio.activate()
+                    #endif
                     p.play()
                 }
                 await Self.cacheFirstFramePoster(from: url, messageId: message.id, itemIndex: itemIndex)
