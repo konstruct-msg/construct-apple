@@ -31,6 +31,22 @@ class SettingsViewModel {
         return nil
     }
 
+    /// Short identity-key fingerprint (user-facing external identity, thread 5.3); nil until the core is up.
+    private(set) var ownFingerprint: String?
+
+    func refreshOwnFingerprint() {
+        guard CryptoManager.shared.isInitialized else {
+            ownFingerprint = nil
+            return
+        }
+        do {
+            let (ik, _) = try CryptoManager.shared.localBundlePublicKeys()
+            ownFingerprint = IdentityFingerprint.short(from: ik)
+        } catch {
+            ownFingerprint = nil
+        }
+    }
+
     // Username save state
     var isSavingUsername = false
     var usernameSaveError: String?

@@ -40,17 +40,12 @@ struct SynapsView: View {
     @State private var topOverlayHeight: CGFloat = 0
 
     // MARK: - Remote search state
-    enum RemoteSearchState {
-        case idle
-        case searching
-        case found(Shared_Proto_Services_V1_UserProfile)
-        case notFound
+    // The state itself lives in `ContactRequestsViewModel` (`search(username:)`).
+    private var remoteState: ContactRequestsViewModel.RemoteSearchState {
+        contactRequestsVM?.remoteState ?? .idle
     }
-    @State private var remoteState: RemoteSearchState = .idle
+    private var sendingRequestToUserId: String? { contactRequestsVM?.sendingRequestToUserId }
     @State private var searchTask: Task<Void, Never>? = nil
-    /// Optimistic / session UI for “request sent” — UserDefaults alone does not invalidate the view.
-    @State private var pendingSentUserIds: Set<String> = []
-    @State private var sendingRequestToUserId: String? = nil
 
     // MARK: - QR Scanner
     @State private var showingQRScanner = false
@@ -142,7 +137,7 @@ struct SynapsView: View {
                     canvasOffset = .zero
                 }
                 searchTask?.cancel()
-                remoteState = .idle
+                contactRequestsVM?.resetSearch()
                 if newValue.isEmpty {
                     dismissSearchKeyboard()
                     return
@@ -153,7 +148,9 @@ struct SynapsView: View {
                     let query = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
                     guard !query.isEmpty else { return }
                     let hasLocalMatches = contacts.contains { $0.matches(query: query) }
-                    await performRemoteSearch(username: query, localMatchesExist: hasLocalMatches)
+                    let vm = contactRequestsVM ?? ContactRequestsViewModel(viewContext: context)
+                    contactRequestsVM = vm
+                    await vm.search(username: query, localMatchesExist: hasLocalMatches)
                 }
             }
             .onChange(of: contacts.count) { _, _ in
@@ -360,8 +357,7 @@ struct SynapsView: View {
     }
 
     private func isRequestAlreadySent(toUserId: String) -> Bool {
-        if pendingSentUserIds.contains(toUserId) { return true }
-        return contactRequestsVM?.hasPendingSentRequest(toUserId: toUserId) ?? false
+        contactRequestsVM?.isRequestAlreadySent(toUserId: toUserId) ?? false
     }
 
     // MARK: - Empty state
@@ -503,51 +499,11 @@ struct SynapsView: View {
 
     // MARK: - Remote Search Logic
 
-    private func performRemoteSearch(username: String, localMatchesExist: Bool) async {
-        guard !localMatchesExist else { return }
-        remoteState = .searching
-
-        do {
-            guard let userId = try await UserServiceClient.shared.findUser(username: username) else {
-                remoteState = .notFound
-                return
-            }
-            let profile = try await UserServiceClient.shared.getUserProfile(userId: userId)
-            remoteState = .found(profile)
-        } catch {
-            remoteState = .notFound
-        }
-    }
-
     /// Sends a contact request to a discoverable user found via remote search.
     @MainActor
     private func sendContactRequest(to profile: Shared_Proto_Services_V1_UserProfile) async {
         guard let vm = contactRequestsVM else { return }
-        guard !isRequestAlreadySent(toUserId: profile.userID) else { return }
-        sendingRequestToUserId = profile.userID
-        defer { sendingRequestToUserId = nil }
-        do {
-            let requestId = try await vm.sendRequest(toUserId: profile.userID)
-            vm.markSentRequest(toUserId: profile.userID, requestId: requestId)
-            // Drive visible “request sent” state (UserDefaults alone is not @Observable).
-            pendingSentUserIds.insert(profile.userID)
-            remoteState = .found(profile)
-        } catch {
-            // Surface the failure instead of swallowing it — a silent catch here hid the
-            // real reason "Send request" did nothing (RPC rejected / no delivery). Log the
-            // exact error and tell the user so it's retryable and diagnosable.
-            // Transport blips surface as gRPC "Stream unexpectedly closed." — map to a
-            // human-readable connection message (RPC already retried in UserServiceClient).
-            Log.error("sendContactRequest failed for \(profile.userID.prefix(8))…: \(error)", category: "ContactRequest")
-            // A connection failure gets the request's own sentence; anything else, the general one.
-            // Classified by type, not by sniffing the error's words for "stream" or "timeout".
-            let appError = AppError.from(error)
-            if case .network = appError {
-                ErrorRouter.shared.report(.said(UserText("contact_request_send_failed")))
-            } else {
-                ErrorRouter.shared.report(appError)
-            }
-        }
+        await vm.sendContactRequest(to: profile)
     }
 
     // MARK: - Requests Section
@@ -610,7 +566,7 @@ struct SynapsView: View {
                 displayName: profile.hasDisplayName ? profile.displayName : nil
             )
             searchText = ""
-            remoteState = .idle
+            contactRequestsVM?.resetSearch()
             chatsViewModel.openOrCreateChat(withContact: user.id)
         } catch {
             Log.error("addRemoteUserAndChat failed: \(error)", category: "SynapsView")
