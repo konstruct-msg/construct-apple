@@ -119,6 +119,28 @@ final class CryptoWireIntegrationTests: XCTestCase {
         XCTAssertEqual(decrypted1, plaintext1, "First message through full wire pipeline")
     }
 
+    // MARK: - SPK rotation epoch (core 0.53, TODO 176)
+
+    /// The core keeps the highest SPK rotation epoch it saw per device and refuses a bundle that
+    /// goes back — what this app checked per account in the Keychain until 2026-10-20 and relies on
+    /// the core for now. `CryptoSessionInitializationService` maps the refusal to
+    /// `SessionError.staleSPKBundle`.
+    func testABundleWhoseEpochGoesBackIsRefused() throws {
+        let alice = try CryptoPeer()
+        let bob = try CryptoPeer()
+        var newer = try bob.bundle()
+        newer.spkRotationEpoch = 5
+        _ = try alice.core.initSession(contactId: bob.userId, recipientBundle: newer)
+
+        var replayed = try bob.bundle()
+        replayed.spkRotationEpoch = 4
+        XCTAssertThrowsError(try alice.core.initSession(contactId: bob.userId, recipientBundle: replayed)) { error in
+            guard case CryptoError.PeerSpkEpochRegressed = error else {
+                return XCTFail("expected CryptoError.PeerSpkEpochRegressed, got \(error)")
+            }
+        }
+    }
+
     // MARK: - Stale-peer reachability (Phase 1 — degraded init)
 
     /// The strict initiator path must reject a peer whose SPK is past the 30-day staleness limit.

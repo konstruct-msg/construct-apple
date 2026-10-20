@@ -85,6 +85,12 @@ final class CryptoSessionInitializationService {
             let ageDays = Double(ageSecs) / 86400.0
             Log.error("Peer SPK stale for \(userId.prefix(8))… — age ≈ \(String(format: "%.1f", ageDays))d", category: "CryptoManager")
             throw SessionError.peerSPKStale(ageDays: ageDays)
+        } catch CryptoError.PeerSpkEpochRegressed(let message) {
+            // The core keeps the highest SPK rotation epoch per device and refused this bundle
+            // before spending anything on it (core 0.53, TODO 176). Nothing was created; a held
+            // session is still there.
+            Log.error("SESSION_STATE[spk_replay_rejected]: \(contactId.prefix(8))… — \(message)", category: "SessionInit")
+            throw SessionError.staleSPKBundle(detail: message)
         } catch CryptoError.SessionInitializationFailed(let message) where message.contains("PQ_REQUIRED") {
             // Nothing was created, and a held session is still there. The reason names what the
             // bundle lacked; the peer is usually on a build from before PQXDH v2.

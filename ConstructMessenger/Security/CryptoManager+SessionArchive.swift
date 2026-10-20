@@ -104,7 +104,7 @@ extension CryptoManager {
         orchestratorCore?.forgetContactState(contactId: deviceId)
         KeychainManager.shared.deleteSession(for: deviceId)
         KeychainManager.shared.deleteSessionSuiteId(userId: deviceId)
-        KeychainManager.shared.deleteSessionAtRiskFlag(for: deviceId)
+        KeychainManager.shared.deleteSessionAtRiskFlag(forDevice: deviceId)
     }
 
     /// Retire the current state with `deviceId` — the person reset the session, or the server

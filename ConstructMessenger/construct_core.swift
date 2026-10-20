@@ -1330,12 +1330,6 @@ public protocol LocalStoreProtocol: AnyObject, Sendable {
     func addPendingChunk(chunk: LocalPendingChunk) throws  -> Bool
     
     /**
-     * Each write below changes its named fields of one chat in one statement; false: no such chat.
-     * Moves the preview unless the one shown is newer; false also when it is.
-     */
-    func advanceChatPreview(id: String, text: String, time: Int64) throws  -> Bool
-    
-    /**
      * Every chat's messages after (`after_order_key`, `after_id`) — both null from the start — a
      * page at a time, in that order: a history snapshot.
      */
@@ -1617,7 +1611,10 @@ public protocol LocalStoreProtocol: AnyObject, Sendable {
     func setChatPinned(id: String, pinned: Bool) throws  -> Bool
     
     /**
-     * Sets the preview whatever it was — after a deletion; both null when no message is left.
+     * Each write below changes its named fields of one chat in one statement; false: no such chat.
+     * Sets the preview whatever it was. Which message it shows is the client's to say, as the
+     * transcript's last in the server's order — never by a message's own time, which is the
+     * sender's clock. Both null when no message is left.
      */
     func setChatPreview(id: String, text: String?, time: Int64?) throws  -> Bool
     
@@ -1790,21 +1787,6 @@ open func addPendingChunk(chunk: LocalPendingChunk)throws  -> Bool  {
     uniffi_construct_core_fn_method_localstore_add_pending_chunk(
             self.uniffiCloneHandle(),
         FfiConverterTypeLocalPendingChunk_lower(chunk),$0
-    )
-})
-}
-    
-    /**
-     * Each write below changes its named fields of one chat in one statement; false: no such chat.
-     * Moves the preview unless the one shown is newer; false also when it is.
-     */
-open func advanceChatPreview(id: String, text: String, time: Int64)throws  -> Bool  {
-    return try  FfiConverterBool.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
-    uniffi_construct_core_fn_method_localstore_advance_chat_preview(
-            self.uniffiCloneHandle(),
-        FfiConverterString.lower(id),
-        FfiConverterString.lower(text),
-        FfiConverterInt64.lower(time),$0
     )
 })
 }
@@ -2617,7 +2599,10 @@ open func setChatPinned(id: String, pinned: Bool)throws  -> Bool  {
 }
     
     /**
-     * Sets the preview whatever it was — after a deletion; both null when no message is left.
+     * Each write below changes its named fields of one chat in one statement; false: no such chat.
+     * Sets the preview whatever it was. Which message it shows is the client's to say, as the
+     * transcript's last in the server's order — never by a message's own time, which is the
+     * sender's clock. Both null when no message is left.
      */
 open func setChatPreview(id: String, text: String?, time: Int64?)throws  -> Bool  {
     return try  FfiConverterBool.lift(try rustCallWithError(FfiConverterTypeLocalStoreError_lift) {
@@ -9731,6 +9716,10 @@ public enum CryptoError: Swift.Error, Equatable, Hashable, Foundation.LocalizedE
     
     case PeerSpkStale(message: String)
     
+    case PowDifficultyTooHigh(message: String)
+    
+    case PeerSpkEpochRegressed(message: String)
+    
 
     
 
@@ -9798,6 +9787,14 @@ public struct FfiConverterTypeCryptoError: FfiConverterRustBuffer {
             message: try FfiConverterString.read(from: &buf)
         )
         
+        case 11: return .PowDifficultyTooHigh(
+            message: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 12: return .PeerSpkEpochRegressed(
+            message: try FfiConverterString.read(from: &buf)
+        )
+        
 
         default: throw UniffiInternalError.unexpectedEnumCase
         }
@@ -9829,6 +9826,10 @@ public struct FfiConverterTypeCryptoError: FfiConverterRustBuffer {
             writeInt(&buf, Int32(9))
         case .PeerSpkStale(_ /* message is ignored*/):
             writeInt(&buf, Int32(10))
+        case .PowDifficultyTooHigh(_ /* message is ignored*/):
+            writeInt(&buf, Int32(11))
+        case .PeerSpkEpochRegressed(_ /* message is ignored*/):
+            writeInt(&buf, Int32(12))
 
         
         }
@@ -13358,16 +13359,16 @@ public func batteryAwareJitterMs(baseMs: UInt64, maxJitterMs: UInt64, batteryLev
     )
 })
 }
-public func computePow(challenge: String, difficulty: UInt32) -> PowSolution  {
-    return try!  FfiConverterTypePowSolution_lift(try! rustCall() {
+public func computePow(challenge: String, difficulty: UInt32)throws  -> PowSolution  {
+    return try  FfiConverterTypePowSolution_lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
     uniffi_construct_core_fn_func_compute_pow(
         FfiConverterString.lower(challenge),
         FfiConverterUInt32.lower(difficulty),$0
     )
 })
 }
-public func computePowWithProgress(challenge: String, difficulty: UInt32, progressCallback: PowProgressCallback?) -> PowSolution  {
-    return try!  FfiConverterTypePowSolution_lift(try! rustCall() {
+public func computePowWithProgress(challenge: String, difficulty: UInt32, progressCallback: PowProgressCallback?)throws  -> PowSolution  {
+    return try  FfiConverterTypePowSolution_lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
     uniffi_construct_core_fn_func_compute_pow_with_progress(
         FfiConverterString.lower(challenge),
         FfiConverterUInt32.lower(difficulty),
@@ -14153,10 +14154,10 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_func_battery_aware_jitter_ms() != 100) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_func_compute_pow() != 52528) {
+    if (uniffi_construct_core_checksum_func_compute_pow() != 30246) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_construct_core_checksum_func_compute_pow_with_progress() != 63236) {
+    if (uniffi_construct_core_checksum_func_compute_pow_with_progress() != 22167) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_func_compute_safety_number() != 8965) {
@@ -14472,9 +14473,6 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_localstore_add_pending_chunk() != 42119) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_construct_core_checksum_method_localstore_advance_chat_preview() != 18597) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_localstore_all_messages_after() != 48577) {
