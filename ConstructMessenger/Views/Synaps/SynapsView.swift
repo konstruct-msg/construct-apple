@@ -429,6 +429,7 @@ struct SynapsView: View {
                     VStack(alignment: .leading, spacing: 2) {
                         if profile.hasDisplayName {
                             Text(profile.displayName)
+                                .typesetting(asScriptOf: profile.displayName)
                                 .font(CTFont.headline)
                                 .foregroundStyle(Color.CT.text)
                         }
@@ -567,6 +568,7 @@ struct SynapsView: View {
                         VStack(alignment: .leading, spacing: 2) {
                             if let name = request.displayName, !name.isEmpty {
                                 Text(name)
+                                    .typesetting(asScriptOf: name)
                                     .font(CTFont.body)
                                     .foregroundStyle(Color.CT.text)
                             } else if let username = request.username, !username.isEmpty {
@@ -785,6 +787,7 @@ private struct ContactCircle: View {
         .overlay(alignment: .top) {
             // A name of two words wraps onto a second line rather than being cut.
             Text(user.resolvedDisplayName)
+                .typesetting(asScriptOf: user.resolvedDisplayName)
                 .font(CTFont.ui(10, weight: .medium))
                 .foregroundStyle(user.isBlocked ? Color.CT.textDim : Color.CT.text)
                 .lineLimit(2)
