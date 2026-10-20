@@ -112,7 +112,7 @@ class ChatStoreTests: XCTestCase {
         XCTAssertTrue(opened.created)
         XCTAssertNil(try store.chat(opened.chat.id)?.lastMessageTime)
         let sent = Date(timeIntervalSince1970: 1_000)
-        XCTAssertTrue(try store.advancePreview(opened.chat.id, text: "hi", time: sent))
+        XCTAssertTrue(try store.setPreview(opened.chat.id, text: "hi", time: sent))
         XCTAssertEqual(try store.chat(opened.chat.id)?.lastMessageTime, sent)
     }
 
@@ -142,22 +142,12 @@ class ChatStoreTests: XCTestCase {
         }
     }
 
-    /// Messages arrive out of order: the preview moves forward and on an equal time, never back.
-    /// Mutation: compare with `<=` — the equal time is dropped; drop the comparison — an older
-    /// message replaces the newer preview.
-    func testThePreviewMovesOnlyForward() throws {
+    /// The preview is set whatever it was — which message it shows is the transcript's to say —
+    /// and cleared when nothing is left.
+    func testThePreviewIsSetAndCleared() throws {
         try contact("p")
         let t = Date(timeIntervalSince1970: 100)
         try store.insert(record("c", peer: "p"))
-        XCTAssertTrue(try store.advancePreview("c", text: "one", time: t))
-        XCTAssertFalse(try store.advancePreview("c", text: "older", time: t.addingTimeInterval(-1)))
-        XCTAssertEqual(try store.chat("c")?.lastMessageText, "one")
-        XCTAssertTrue(try store.advancePreview("c", text: "same second", time: t))
-        XCTAssertEqual(try store.chat("c")?.lastMessageText, "same second")
-        XCTAssertTrue(try store.advancePreview("c", text: "newer", time: t.addingTimeInterval(1)))
-        XCTAssertEqual(try store.chat("c")?.lastMessageTime, t.addingTimeInterval(1))
-
-        // After a deletion it is set whatever it was, and cleared when nothing is left.
         XCTAssertTrue(try store.setPreview("c", text: "back", time: t.addingTimeInterval(-50)))
         XCTAssertEqual(try store.chat("c")?.lastMessageText, "back")
         XCTAssertTrue(try store.setPreview("c", text: nil, time: nil))
@@ -183,7 +173,7 @@ class ChatStoreTests: XCTestCase {
     func testAWriteToNoChatIsReportedAndCreatesNothing() throws {
         XCTAssertFalse(try store.incrementUnread("nothing"))
         XCTAssertFalse(try store.setPinned("nothing", true))
-        XCTAssertFalse(try store.advancePreview("nothing", text: "x", time: Date()))
+        XCTAssertFalse(try store.setPreview("nothing", text: "x", time: Date()))
         XCTAssertTrue(try store.chats().isEmpty)
     }
 

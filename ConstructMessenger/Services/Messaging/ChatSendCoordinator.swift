@@ -412,11 +412,10 @@ final class ChatSendCoordinator {
                 Log.error("Failed queued message \(id.prefix(8))… not saved: \(error)", category: "ChatViewModel")
             }
         }
-        // These rows bypass MessagePersistenceService.saveMessage, so the preview needs advancing
+        // These rows bypass MessagePersistenceService.saveMessage, so the preview needs refreshing
         // here too — otherwise the list keeps showing an older message than the transcript does.
-        // After the insert, through the repository; only the newest can be the preview.
-        if let newest = queuedMessages.filter({ $0.placeholderId == nil }).max(by: { $0.timestamp < $1.timestamp }) {
-            MessagePersistenceService.advancePreview(ofChat: conversation.chatId, text: newest.text, at: newest.timestamp)
+        if queuedMessages.contains(where: { $0.placeholderId == nil }) {
+            MessagePersistenceService.refreshPreview(ofChat: conversation.chatId)
         }
         queuedMessages.removeAll()
     }

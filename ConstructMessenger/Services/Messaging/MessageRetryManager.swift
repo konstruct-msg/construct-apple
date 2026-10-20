@@ -286,9 +286,12 @@ class MessageRetryManager {
     private func recordOutcome(_ id: String, _ status: DeliveryStatus, orderKey: String? = nil) -> Bool {
         let store = LocalRepositories.messages
         do {
-            guard try store.message(id) != nil else { return false }
+            guard let message = try store.message(id) else { return false }
             try store.setDeliveryStatus(id, status)
-            if let orderKey { try store.setOrderKey(id, orderKey) }
+            if let orderKey, try store.setOrderKey(id, orderKey) {
+                // Placed, it may no longer be the chat's last message.
+                MessagePersistenceService.refreshPreview(ofChat: message.chatId)
+            }
             return true
         } catch {
             Log.error("Outcome of \(id.prefix(8))… not written: \(error)", category: "MessageRetryManager")
@@ -671,8 +674,10 @@ class MessageRetryManager {
                 timestamp: UInt64(Date().timeIntervalSince1970),
                 spendUnit: TokenSpendUnitStore.paidUnit(baseMessageId: messageId, recipientId: recipientId)
             ).status
-            if let serverOrderKey = aggregated.serverOrderKey {
-                _ = try? LocalRepositories.messages.setOrderKey(messageId, serverOrderKey)
+            if let serverOrderKey = aggregated.serverOrderKey,
+               (try? LocalRepositories.messages.setOrderKey(messageId, serverOrderKey)) == true,
+               let chatId = (try? LocalRepositories.messages.message(messageId))??.chatId {
+                MessagePersistenceService.refreshPreview(ofChat: chatId)
             }
             switch aggregated.status.lowercased() {
             case "failed", "blocked": return aggregated.retryable ? .queued : .failed
