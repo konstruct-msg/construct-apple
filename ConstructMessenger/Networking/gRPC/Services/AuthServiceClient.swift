@@ -402,6 +402,9 @@ final class AuthServiceClient: Sendable {
                 request: .init(message: request)
             )
         }
+        // Our own device set just changed; without this the sender-sync fan-out kept the revoked
+        // device for the rest of the cache's hour.
+        await MultiDeviceSendCoordinator.shared.invalidateOwnDeviceCache()
     }
 
     // MARK: - Device Join Request (Flow B: Desktop submits; phone approves)

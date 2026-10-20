@@ -272,11 +272,6 @@ final class ChunkedMessageReassembler {
     /// how many arrived and which indices are missing, plus `chunkReassemblyExpired` — but the
     /// window is now the store's 24 h retention rather than 60 s: the point of the durable copy is
     /// to outlive a relaunch, and a one-minute expiry would have thrown it away first.
-    ///
-    /// Test seam kept here for callers that drive expiry directly.
-    func cleanupExpired(now: Date = Date()) {
-        store.sweepExpired(now: now)
-    }
 }
 
 /// The framing layer's answer, before anything looks at what was carried.
@@ -373,13 +368,6 @@ enum ChunkedMessageCodec {
         guard let parsed = parseChunk(data: data), parsed.totalChunks == 1 else { return nil }
         guard parsed.plaintextLength <= parsed.payload.count else { return nil }
         return (parsed.contentType, Data(parsed.payload.prefix(parsed.plaintextLength)))
-    }
-
-    static func extractPayloadString(from decryptedText: String) -> String? {
-        guard decryptedText.hasPrefix(prefix) else {
-            return nil
-        }
-        return String(decryptedText.dropFirst(prefix.count))
     }
 
     /// The header and payload of a frame, read by the core (`knst_parse`, core 0.31). Nil when

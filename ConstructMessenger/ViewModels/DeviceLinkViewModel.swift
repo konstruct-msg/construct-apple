@@ -292,6 +292,8 @@ final class DeviceLinkViewModel {
                 newDevicePlatform: platform
             )
             approvedJoinPendingId = pendingId
+            // A device joined our set: the cached own-device list is now one short.
+            MultiDeviceSendCoordinator.shared.invalidateOwnDeviceCache()
             // Flow B: the QR is the one out-of-band channel; the history sender checks the
             // new device's bundle identity against it (`qr_pin_mismatch`), not the directory alone.
             // base64 here is the QR text boundary, not application logic.
