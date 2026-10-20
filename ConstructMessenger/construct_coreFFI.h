@@ -257,41 +257,6 @@ typedef void (*UniffiCallbackInterfacePeekSessionSourceMethod0)(uint64_t, RustBu
     );
 
 #endif
-#ifndef UNIFFI_FFIDEF_CALLBACK_INTERFACE_PLATFORM_BRIDGE_METHOD0
-#define UNIFFI_FFIDEF_CALLBACK_INTERFACE_PLATFORM_BRIDGE_METHOD0
-typedef void (*UniffiCallbackInterfacePlatformBridgeMethod0)(uint64_t, RustBuffer, RustBuffer, void* _Nonnull, 
-        RustCallStatus *_Nonnull uniffiCallStatus
-    );
-
-#endif
-#ifndef UNIFFI_FFIDEF_CALLBACK_INTERFACE_PLATFORM_BRIDGE_METHOD1
-#define UNIFFI_FFIDEF_CALLBACK_INTERFACE_PLATFORM_BRIDGE_METHOD1
-typedef void (*UniffiCallbackInterfacePlatformBridgeMethod1)(uint64_t, RustBuffer, RustBuffer* _Nonnull, 
-        RustCallStatus *_Nonnull uniffiCallStatus
-    );
-
-#endif
-#ifndef UNIFFI_FFIDEF_CALLBACK_INTERFACE_PLATFORM_BRIDGE_METHOD2
-#define UNIFFI_FFIDEF_CALLBACK_INTERFACE_PLATFORM_BRIDGE_METHOD2
-typedef void (*UniffiCallbackInterfacePlatformBridgeMethod2)(uint64_t, RustBuffer, RustBuffer, void* _Nonnull, 
-        RustCallStatus *_Nonnull uniffiCallStatus
-    );
-
-#endif
-#ifndef UNIFFI_FFIDEF_CALLBACK_INTERFACE_PLATFORM_BRIDGE_METHOD3
-#define UNIFFI_FFIDEF_CALLBACK_INTERFACE_PLATFORM_BRIDGE_METHOD3
-typedef void (*UniffiCallbackInterfacePlatformBridgeMethod3)(uint64_t, RustBuffer, RustBuffer, RustBuffer* _Nonnull, 
-        RustCallStatus *_Nonnull uniffiCallStatus
-    );
-
-#endif
-#ifndef UNIFFI_FFIDEF_CALLBACK_INTERFACE_PLATFORM_BRIDGE_METHOD4
-#define UNIFFI_FFIDEF_CALLBACK_INTERFACE_PLATFORM_BRIDGE_METHOD4
-typedef void (*UniffiCallbackInterfacePlatformBridgeMethod4)(uint64_t, RustBuffer, RustBuffer, RustBuffer, void* _Nonnull, 
-        RustCallStatus *_Nonnull uniffiCallStatus
-    );
-
-#endif
 #ifndef UNIFFI_FFIDEF_CALLBACK_INTERFACE_POW_PROGRESS_CALLBACK_METHOD0
 #define UNIFFI_FFIDEF_CALLBACK_INTERFACE_POW_PROGRESS_CALLBACK_METHOD0
 typedef void (*UniffiCallbackInterfacePowProgressCallbackMethod0)(uint64_t, uint64_t, uint64_t, float, void* _Nonnull, 
@@ -315,19 +280,6 @@ typedef struct UniffiVTableCallbackInterfacePeekSessionSource {
     UniffiCallbackInterfaceClone _Nonnull uniffiClone;
     UniffiCallbackInterfacePeekSessionSourceMethod0 _Nonnull session;
 } UniffiVTableCallbackInterfacePeekSessionSource;
-
-#endif
-#ifndef UNIFFI_FFIDEF_V_TABLE_CALLBACK_INTERFACE_PLATFORM_BRIDGE
-#define UNIFFI_FFIDEF_V_TABLE_CALLBACK_INTERFACE_PLATFORM_BRIDGE
-typedef struct UniffiVTableCallbackInterfacePlatformBridge {
-    UniffiCallbackInterfaceFree _Nonnull uniffiFree;
-    UniffiCallbackInterfaceClone _Nonnull uniffiClone;
-    UniffiCallbackInterfacePlatformBridgeMethod0 _Nonnull saveToSecureStore;
-    UniffiCallbackInterfacePlatformBridgeMethod1 _Nonnull loadFromSecureStore;
-    UniffiCallbackInterfacePlatformBridgeMethod2 _Nonnull persistRecord;
-    UniffiCallbackInterfacePlatformBridgeMethod3 _Nonnull queryRecord;
-    UniffiCallbackInterfacePlatformBridgeMethod4 _Nonnull logEvent;
-} UniffiVTableCallbackInterfacePlatformBridge;
 
 #endif
 #ifndef UNIFFI_FFIDEF_V_TABLE_CALLBACK_INTERFACE_POW_PROGRESS_CALLBACK
@@ -1520,61 +1472,6 @@ void uniffi_construct_core_fn_method_rustackstore_mark_processed(uint64_t ptr, R
 void uniffi_construct_core_fn_method_rustackstore_prune_expired(uint64_t ptr, RustCallStatus *_Nonnull out_status
 );
 #endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_CLONE_TRAFFICPROTECTIONMANAGER
-#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_CLONE_TRAFFICPROTECTIONMANAGER
-uint64_t uniffi_construct_core_fn_clone_trafficprotectionmanager(uint64_t handle, RustCallStatus *_Nonnull out_status
-);
-#endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FREE_TRAFFICPROTECTIONMANAGER
-#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FREE_TRAFFICPROTECTIONMANAGER
-void uniffi_construct_core_fn_free_trafficprotectionmanager(uint64_t handle, RustCallStatus *_Nonnull out_status
-);
-#endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_CONSTRUCTOR_TRAFFICPROTECTIONMANAGER_NEW
-#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_CONSTRUCTOR_TRAFFICPROTECTIONMANAGER_NEW
-uint64_t uniffi_construct_core_fn_constructor_trafficprotectionmanager_new(RustBuffer config, RustCallStatus *_Nonnull out_status
-);
-#endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_TRAFFICPROTECTIONMANAGER_CURRENT_INTERVAL_MS
-#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_TRAFFICPROTECTIONMANAGER_CURRENT_INTERVAL_MS
-uint64_t uniffi_construct_core_fn_method_trafficprotectionmanager_current_interval_ms(uint64_t ptr, RustCallStatus *_Nonnull out_status
-);
-#endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_TRAFFICPROTECTIONMANAGER_GENERATE_DUMMY
-#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_TRAFFICPROTECTIONMANAGER_GENERATE_DUMMY
-RustBuffer uniffi_construct_core_fn_method_trafficprotectionmanager_generate_dummy(uint64_t ptr, RustCallStatus *_Nonnull out_status
-);
-#endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_TRAFFICPROTECTIONMANAGER_GET_METRICS
-#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_TRAFFICPROTECTIONMANAGER_GET_METRICS
-RustBuffer uniffi_construct_core_fn_method_trafficprotectionmanager_get_metrics(uint64_t ptr, RustCallStatus *_Nonnull out_status
-);
-#endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_TRAFFICPROTECTIONMANAGER_IS_CURRENTLY_ACTIVE
-#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_TRAFFICPROTECTIONMANAGER_IS_CURRENTLY_ACTIVE
-int8_t uniffi_construct_core_fn_method_trafficprotectionmanager_is_currently_active(uint64_t ptr, RustCallStatus *_Nonnull out_status
-);
-#endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_TRAFFICPROTECTIONMANAGER_RECORD_REAL_MESSAGE_SENT
-#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_TRAFFICPROTECTIONMANAGER_RECORD_REAL_MESSAGE_SENT
-void uniffi_construct_core_fn_method_trafficprotectionmanager_record_real_message_sent(uint64_t ptr, RustCallStatus *_Nonnull out_status
-);
-#endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_TRAFFICPROTECTIONMANAGER_RESET_METRICS
-#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_TRAFFICPROTECTIONMANAGER_RESET_METRICS
-void uniffi_construct_core_fn_method_trafficprotectionmanager_reset_metrics(uint64_t ptr, RustCallStatus *_Nonnull out_status
-);
-#endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_TRAFFICPROTECTIONMANAGER_SHOULD_SEND_DUMMY
-#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_TRAFFICPROTECTIONMANAGER_SHOULD_SEND_DUMMY
-int8_t uniffi_construct_core_fn_method_trafficprotectionmanager_should_send_dummy(uint64_t ptr, RustCallStatus *_Nonnull out_status
-);
-#endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_TRAFFICPROTECTIONMANAGER_UPDATE_BATTERY_LEVEL
-#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_METHOD_TRAFFICPROTECTIONMANAGER_UPDATE_BATTERY_LEVEL
-void uniffi_construct_core_fn_method_trafficprotectionmanager_update_battery_level(uint64_t ptr, float level, RustCallStatus *_Nonnull out_status
-);
-#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_INIT_CALLBACK_VTABLE_LOCALSTOREOBSERVER
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_INIT_CALLBACK_VTABLE_LOCALSTOREOBSERVER
 void uniffi_construct_core_fn_init_callback_vtable_localstoreobserver(const UniffiVTableCallbackInterfaceLocalStoreObserver* _Nonnull vtable
@@ -1585,19 +1482,9 @@ void uniffi_construct_core_fn_init_callback_vtable_localstoreobserver(const Unif
 void uniffi_construct_core_fn_init_callback_vtable_peeksessionsource(const UniffiVTableCallbackInterfacePeekSessionSource* _Nonnull vtable
 );
 #endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_INIT_CALLBACK_VTABLE_PLATFORMBRIDGE
-#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_INIT_CALLBACK_VTABLE_PLATFORMBRIDGE
-void uniffi_construct_core_fn_init_callback_vtable_platformbridge(const UniffiVTableCallbackInterfacePlatformBridge* _Nonnull vtable
-);
-#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_INIT_CALLBACK_VTABLE_POWPROGRESSCALLBACK
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_INIT_CALLBACK_VTABLE_POWPROGRESSCALLBACK
 void uniffi_construct_core_fn_init_callback_vtable_powprogresscallback(const UniffiVTableCallbackInterfacePowProgressCallback* _Nonnull vtable
-);
-#endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_BATTERY_AWARE_JITTER_MS
-#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_BATTERY_AWARE_JITTER_MS
-uint64_t uniffi_construct_core_fn_func_battery_aware_jitter_ms(uint64_t base_ms, uint64_t max_jitter_ms, float battery_level, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_COMPUTE_POW
@@ -1646,11 +1533,6 @@ RustBuffer uniffi_construct_core_fn_func_derive_recovery_keypair(RustBuffer seed
 RustBuffer uniffi_construct_core_fn_func_format_federated_id(RustBuffer device_id, RustBuffer server_hostname, RustCallStatus *_Nonnull out_status
 );
 #endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_GENERATE_DUMMY_MESSAGE
-#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_GENERATE_DUMMY_MESSAGE
-RustBuffer uniffi_construct_core_fn_func_generate_dummy_message(uint64_t size, RustCallStatus *_Nonnull out_status
-);
-#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_GENERATE_EPHEMERAL_KEYPAIR
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_GENERATE_EPHEMERAL_KEYPAIR
 RustBuffer uniffi_construct_core_fn_func_generate_ephemeral_keypair(RustCallStatus *_Nonnull out_status
@@ -1672,11 +1554,6 @@ RustBuffer uniffi_construct_core_fn_func_generate_mnemonic(uint8_t word_count, R
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_GENERATE_PRIVATE_KEYS
 RustBuffer uniffi_construct_core_fn_func_generate_private_keys(RustCallStatus *_Nonnull out_status
     
-);
-#endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_HEARTBEAT_INTERVAL_MS
-#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_HEARTBEAT_INTERVAL_MS
-uint64_t uniffi_construct_core_fn_func_heartbeat_interval_ms(uint64_t base_interval_sec, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_HISTORY_DISCOVERY_INSTANCE_NAME
@@ -1797,16 +1674,6 @@ uint64_t uniffi_construct_core_fn_func_intake_epoch(uint64_t unix_seconds, RustC
 RustBuffer uniffi_construct_core_fn_func_intake_tag(RustBuffer intake_key, RustBuffer recipient_account_id, uint64_t epoch, RustCallStatus *_Nonnull out_status
 );
 #endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_IS_DUMMY_MESSAGE
-#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_IS_DUMMY_MESSAGE
-int8_t uniffi_construct_core_fn_func_is_dummy_message(RustBuffer data, RustCallStatus *_Nonnull out_status
-);
-#endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_JITTERED_INTERVAL_MS
-#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_JITTERED_INTERVAL_MS
-uint64_t uniffi_construct_core_fn_func_jittered_interval_ms(uint64_t base_ms, uint64_t jitter_ms, RustCallStatus *_Nonnull out_status
-);
-#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_KNST_ENCODE_CHUNKS
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_KNST_ENCODE_CHUNKS
 RustBuffer uniffi_construct_core_fn_func_knst_encode_chunks(RustBuffer payload, uint8_t content_type, RustBuffer message_id, RustCallStatus *_Nonnull out_status
@@ -1894,11 +1761,6 @@ int8_t uniffi_construct_core_fn_func_pp_verify_client(RustBuffer evaluated_bytes
 int8_t uniffi_construct_core_fn_func_pp_verify_dleq(RustBuffer blinded, RustBuffer evaluated, RustBuffer proof, RustBuffer issuer_public, RustCallStatus *_Nonnull out_status
 );
 #endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_RANDOM_SEND_DELAY_MS
-#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_RANDOM_SEND_DELAY_MS
-uint64_t uniffi_construct_core_fn_func_random_send_delay_ms(uint64_t max_delay_ms, RustCallStatus *_Nonnull out_status
-);
-#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_RECEIVING_INIT_KIND
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_RECEIVING_INIT_KIND
 RustBuffer uniffi_construct_core_fn_func_receiving_init_kind(RustBuffer carrier, RustCallStatus *_Nonnull out_status
@@ -1958,11 +1820,6 @@ RustBuffer uniffi_construct_core_fn_func_sr_generate_vault_key(RustCallStatus *_
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_SR_RECONSTRUCT_VAULT_KEY
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_SR_RECONSTRUCT_VAULT_KEY
 RustBuffer uniffi_construct_core_fn_func_sr_reconstruct_vault_key(RustBuffer mnemonics, RustCallStatus *_Nonnull out_status
-);
-#endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_TEST_PLATFORM_BRIDGE_ROUNDTRIP
-#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_TEST_PLATFORM_BRIDGE_ROUNDTRIP
-int8_t uniffi_construct_core_fn_func_test_platform_bridge_roundtrip(uint64_t bridge, RustBuffer key, RustBuffer data, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_VALIDATE_MNEMONIC
@@ -2255,12 +2112,6 @@ void ffi_construct_core_rust_future_free_void(uint64_t handle
 void ffi_construct_core_rust_future_complete_void(uint64_t handle, RustCallStatus *_Nonnull out_status
 );
 #endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_BATTERY_AWARE_JITTER_MS
-#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_BATTERY_AWARE_JITTER_MS
-uint16_t uniffi_construct_core_checksum_func_battery_aware_jitter_ms(void
-    
-);
-#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_COMPUTE_POW
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_COMPUTE_POW
 uint16_t uniffi_construct_core_checksum_func_compute_pow(void
@@ -2315,12 +2166,6 @@ uint16_t uniffi_construct_core_checksum_func_format_federated_id(void
     
 );
 #endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_GENERATE_DUMMY_MESSAGE
-#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_GENERATE_DUMMY_MESSAGE
-uint16_t uniffi_construct_core_checksum_func_generate_dummy_message(void
-    
-);
-#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_GENERATE_EPHEMERAL_KEYPAIR
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_GENERATE_EPHEMERAL_KEYPAIR
 uint16_t uniffi_construct_core_checksum_func_generate_ephemeral_keypair(void
@@ -2342,12 +2187,6 @@ uint16_t uniffi_construct_core_checksum_func_generate_mnemonic(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_GENERATE_PRIVATE_KEYS
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_GENERATE_PRIVATE_KEYS
 uint16_t uniffi_construct_core_checksum_func_generate_private_keys(void
-    
-);
-#endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_HEARTBEAT_INTERVAL_MS
-#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_HEARTBEAT_INTERVAL_MS
-uint16_t uniffi_construct_core_checksum_func_heartbeat_interval_ms(void
     
 );
 #endif
@@ -2489,18 +2328,6 @@ uint16_t uniffi_construct_core_checksum_func_intake_tag(void
     
 );
 #endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_IS_DUMMY_MESSAGE
-#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_IS_DUMMY_MESSAGE
-uint16_t uniffi_construct_core_checksum_func_is_dummy_message(void
-    
-);
-#endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_JITTERED_INTERVAL_MS
-#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_JITTERED_INTERVAL_MS
-uint16_t uniffi_construct_core_checksum_func_jittered_interval_ms(void
-    
-);
-#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_KNST_ENCODE_CHUNKS
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_KNST_ENCODE_CHUNKS
 uint16_t uniffi_construct_core_checksum_func_knst_encode_chunks(void
@@ -2603,12 +2430,6 @@ uint16_t uniffi_construct_core_checksum_func_pp_verify_dleq(void
     
 );
 #endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_RANDOM_SEND_DELAY_MS
-#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_RANDOM_SEND_DELAY_MS
-uint16_t uniffi_construct_core_checksum_func_random_send_delay_ms(void
-    
-);
-#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_RECEIVING_INIT_KIND
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_RECEIVING_INIT_KIND
 uint16_t uniffi_construct_core_checksum_func_receiving_init_kind(void
@@ -2678,12 +2499,6 @@ uint16_t uniffi_construct_core_checksum_func_sr_generate_vault_key(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_SR_RECONSTRUCT_VAULT_KEY
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_SR_RECONSTRUCT_VAULT_KEY
 uint16_t uniffi_construct_core_checksum_func_sr_reconstruct_vault_key(void
-    
-);
-#endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_TEST_PLATFORM_BRIDGE_ROUNDTRIP
-#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_TEST_PLATFORM_BRIDGE_ROUNDTRIP
-uint16_t uniffi_construct_core_checksum_func_test_platform_bridge_roundtrip(void
     
 );
 #endif
@@ -4019,54 +3834,6 @@ uint16_t uniffi_construct_core_checksum_method_rustackstore_prune_expired(void
     
 );
 #endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_TRAFFICPROTECTIONMANAGER_CURRENT_INTERVAL_MS
-#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_TRAFFICPROTECTIONMANAGER_CURRENT_INTERVAL_MS
-uint16_t uniffi_construct_core_checksum_method_trafficprotectionmanager_current_interval_ms(void
-    
-);
-#endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_TRAFFICPROTECTIONMANAGER_GENERATE_DUMMY
-#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_TRAFFICPROTECTIONMANAGER_GENERATE_DUMMY
-uint16_t uniffi_construct_core_checksum_method_trafficprotectionmanager_generate_dummy(void
-    
-);
-#endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_TRAFFICPROTECTIONMANAGER_GET_METRICS
-#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_TRAFFICPROTECTIONMANAGER_GET_METRICS
-uint16_t uniffi_construct_core_checksum_method_trafficprotectionmanager_get_metrics(void
-    
-);
-#endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_TRAFFICPROTECTIONMANAGER_IS_CURRENTLY_ACTIVE
-#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_TRAFFICPROTECTIONMANAGER_IS_CURRENTLY_ACTIVE
-uint16_t uniffi_construct_core_checksum_method_trafficprotectionmanager_is_currently_active(void
-    
-);
-#endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_TRAFFICPROTECTIONMANAGER_RECORD_REAL_MESSAGE_SENT
-#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_TRAFFICPROTECTIONMANAGER_RECORD_REAL_MESSAGE_SENT
-uint16_t uniffi_construct_core_checksum_method_trafficprotectionmanager_record_real_message_sent(void
-    
-);
-#endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_TRAFFICPROTECTIONMANAGER_RESET_METRICS
-#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_TRAFFICPROTECTIONMANAGER_RESET_METRICS
-uint16_t uniffi_construct_core_checksum_method_trafficprotectionmanager_reset_metrics(void
-    
-);
-#endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_TRAFFICPROTECTIONMANAGER_SHOULD_SEND_DUMMY
-#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_TRAFFICPROTECTIONMANAGER_SHOULD_SEND_DUMMY
-uint16_t uniffi_construct_core_checksum_method_trafficprotectionmanager_should_send_dummy(void
-    
-);
-#endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_TRAFFICPROTECTIONMANAGER_UPDATE_BATTERY_LEVEL
-#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_TRAFFICPROTECTIONMANAGER_UPDATE_BATTERY_LEVEL
-uint16_t uniffi_construct_core_checksum_method_trafficprotectionmanager_update_battery_level(void
-    
-);
-#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_CONSTRUCTOR_LOCALSTORE_IN_MEMORY
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_CONSTRUCTOR_LOCALSTORE_IN_MEMORY
 uint16_t uniffi_construct_core_checksum_constructor_localstore_in_memory(void
@@ -4091,12 +3858,6 @@ uint16_t uniffi_construct_core_checksum_constructor_rustackstore_new(void
     
 );
 #endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_CONSTRUCTOR_TRAFFICPROTECTIONMANAGER_NEW
-#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_CONSTRUCTOR_TRAFFICPROTECTIONMANAGER_NEW
-uint16_t uniffi_construct_core_checksum_constructor_trafficprotectionmanager_new(void
-    
-);
-#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_LOCALSTOREOBSERVER_ON_CHANGE
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_LOCALSTOREOBSERVER_ON_CHANGE
 uint16_t uniffi_construct_core_checksum_method_localstoreobserver_on_change(void
@@ -4106,36 +3867,6 @@ uint16_t uniffi_construct_core_checksum_method_localstoreobserver_on_change(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_PEEKSESSIONSOURCE_SESSION
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_PEEKSESSIONSOURCE_SESSION
 uint16_t uniffi_construct_core_checksum_method_peeksessionsource_session(void
-    
-);
-#endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_PLATFORMBRIDGE_SAVE_TO_SECURE_STORE
-#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_PLATFORMBRIDGE_SAVE_TO_SECURE_STORE
-uint16_t uniffi_construct_core_checksum_method_platformbridge_save_to_secure_store(void
-    
-);
-#endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_PLATFORMBRIDGE_LOAD_FROM_SECURE_STORE
-#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_PLATFORMBRIDGE_LOAD_FROM_SECURE_STORE
-uint16_t uniffi_construct_core_checksum_method_platformbridge_load_from_secure_store(void
-    
-);
-#endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_PLATFORMBRIDGE_PERSIST_RECORD
-#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_PLATFORMBRIDGE_PERSIST_RECORD
-uint16_t uniffi_construct_core_checksum_method_platformbridge_persist_record(void
-    
-);
-#endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_PLATFORMBRIDGE_QUERY_RECORD
-#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_PLATFORMBRIDGE_QUERY_RECORD
-uint16_t uniffi_construct_core_checksum_method_platformbridge_query_record(void
-    
-);
-#endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_PLATFORMBRIDGE_LOG_EVENT
-#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_METHOD_PLATFORMBRIDGE_LOG_EVENT
-uint16_t uniffi_construct_core_checksum_method_platformbridge_log_event(void
     
 );
 #endif

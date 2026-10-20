@@ -967,7 +967,6 @@ final class MessageRouter {
             case .duplicateDropped:              return "duplicateDropped"
             case .malformedDropped:              return "malformedDropped"
             case .scheduleTimer:                 return "scheduleTimer"
-            case .cancelTimer:                   return "cancelTimer"
             default:                             return "unknown(\(action))"
             }
         }.joined(separator: ",")
