@@ -689,18 +689,19 @@ final class SessionCoordinator: MessageRouterDelegate {
                     _ = try? store.applySessionArchive(msg.id, maxRetries: 0)
                     return
                 }
-                let response = try await OutboundMessagePipeline.shared.sendToRecipientDevices(
+                let report = try await OutboundMessagePipeline.shared.sendToRecipientDevices(
                     plan: plan,
                     baseMessageId: msg.id,
                     senderId: myId,
                     recipientId: peer.account,
                     timestamp: UInt64(msg.timestamp.timeIntervalSince1970),
                     onlyDevices: [device]
-                ).status
+                )
                 // The shared reading: until 2026-10-20 this one marked a rate-limited copy failed
                 // where every other path queued it (TODO 180).
-                let outcome = response.deliveryStatus
+                let outcome = report.status.deliveryStatus
                 _ = try? store.setDeliveryStatus(msg.id, outcome)
+                CiphertextRefusal.retireIfRefused(report, messageId: msg.id, recipientId: peer.account)
             } catch is StealthDowngradeBlocked {
                 // Stealth on but could not seal — keep it queued, never send identified.
                 _ = try? store.setDeliveryStatus(msg.id, .queued)

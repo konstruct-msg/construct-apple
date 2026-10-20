@@ -581,22 +581,12 @@ final class ChatSendCoordinator {
                     case "blocked":
                         Log.error("Message blocked by recipient — suppressing retry for \(messageId)\(traceTag)", category: "ChatViewModel")
                     case "failed":
-                        if aggregated.refusedCiphertext {
-                            OutgoingWirePayloadStore.shared.remove(baseMessageId: messageId)
-                            // The refusal was of a ciphertext, so it names the ratchet that
-                            // produced it — one device's. That ratchet is ours to retire, and the
-                            // next send opens a new one; the peer is told nothing, because nothing
-                            // it holds is wrong. Until 2026-09-27 it was sent an END_SESSION.
-                            let refused = report.copies
-                                .filter { $0.response?.errorCode == "encryptionFailed" }
-                                .map(\.deviceId)
-                            Log.error("encryptionFailed from server — retiring our state with \(recipientId.prefix(8))… devices=\(refused.map { $0.prefix(8) })\(traceTag)", category: "ChatViewModel")
-                            SessionLifecycleController.shared.resetSession(
-                                with: recipientId,
-                                devices: refused.isEmpty ? nil : refused,
-                                reason: "server_encryption_rejected"
-                            )
-                        } else if aggregated.retryable {
+                        // A refused ciphertext names the ratchet that wrote it — ours to retire.
+                        // Until 2026-09-27 the peer was sent an END_SESSION.
+                        if CiphertextRefusal.retireIfRefused(report, messageId: messageId, recipientId: recipientId, trace: traceTag) {
+                            break
+                        }
+                        if aggregated.retryable {
                             Log.error("Server rejected message \(messageId): retryable=true\(ecStr)\(raStr)\(traceTag) — queued for retry", category: "ChatViewModel")
                         } else {
                             OutgoingWirePayloadStore.shared.remove(baseMessageId: messageId)
