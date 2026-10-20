@@ -80,6 +80,7 @@ class MessageRetryManager {
                         if finalStatus == .sent || finalStatus == .delivered {
                             OutgoingWirePayloadStore.shared.remove(baseMessageId: capturedMessageId)
                         }
+                        CiphertextRefusal.retireIfRefused(report, messageId: capturedMessageId, recipientId: recipientId)
                         let ecStr = finalErrorCode.isEmpty ? "" : " errorCode=\(finalErrorCode)"
                         let raStr = maxRetryAfterMs > 0 ? " retryAfterMs=\(maxRetryAfterMs)" : ""
                         Log.info("Message retry completed: \(capturedMessageId) status=\(finalStatus)\(ecStr)\(raStr)", category: "MessageRetryManager")
@@ -446,6 +447,7 @@ class MessageRetryManager {
                 do {
                     var finalStatus: DeliveryStatus = .sent
                     var serverOrderKey: String?
+                    var sendReport: RecipientSendReport?
                     if let chunks = OutgoingWirePayloadStore.shared.loadChunks(baseMessageId: messageId) {
                         let report = try await self.resendStored(
                             self.storedCopies(chunks, recipientId: recipientId),
@@ -457,6 +459,7 @@ class MessageRetryManager {
                         )
                         finalStatus = report.status.deliveryStatus
                         serverOrderKey = report.status.serverOrderKey
+                        sendReport = report
                     } else {
                         // The payload disappeared after preflight (e.g. TTL expiry). Preserve
                         // the local queue so the user can still manually retry as a fresh send.
@@ -471,6 +474,9 @@ class MessageRetryManager {
                             OutgoingWirePayloadStore.shared.remove(baseMessageId: messageId)
                         } else if finalStatus == .failed {
                             OutgoingWirePayloadStore.shared.remove(baseMessageId: messageId)
+                        }
+                        if let sendReport {
+                            CiphertextRefusal.retireIfRefused(sendReport, messageId: messageId, recipientId: recipientId)
                         }
                         Log.debug("Re-sent queued message via gRPC: \(messageId) status=\(finalStatus) (attempt \((try? LocalRepositories.messages.message(messageId))?.retryCount ?? 0))", category: "MessageRetryManager")
                     }
@@ -655,14 +661,16 @@ class MessageRetryManager {
         }
 
         do {
-            let aggregated = try await OutboundMessagePipeline.shared.sendToRecipientDevices(
+            let report = try await OutboundMessagePipeline.shared.sendToRecipientDevices(
                 plan: plan,
                 baseMessageId: messageId,
                 senderId: senderId,
                 recipientId: recipientId,
                 timestamp: UInt64(Date().timeIntervalSince1970),
                 spendUnit: TokenSpendUnitStore.paidUnit(baseMessageId: messageId, recipientId: recipientId)
-            ).status
+            )
+            let aggregated = report.status
+            CiphertextRefusal.retireIfRefused(report, messageId: messageId, recipientId: recipientId)
             if let serverOrderKey = aggregated.serverOrderKey,
                (try? LocalRepositories.messages.setOrderKey(messageId, serverOrderKey)) == true,
                let chatId = (try? LocalRepositories.messages.message(messageId))??.chatId {
