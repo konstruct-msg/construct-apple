@@ -93,7 +93,7 @@ class AuthViewModel {
     private var tokenObserverTask: Task<Void, Never>?
 
     // Timer for monitoring token expiration
-    private var tokenRefreshTimer: Timer?
+    var tokenRefreshTimer: Timer?
 
     private var restoreInFlight = false
     private var lastRestoreAttemptAt: Date?
@@ -192,7 +192,7 @@ class AuthViewModel {
         }
     }
 
-    private func finishAuthenticatedSession(userId: String, reason: String) {
+    func finishAuthenticatedSession(userId: String, reason: String) {
         // Upgrade path, and it is load-bearing: every device installed before the ownership
         // marker existed has unlabelled data plus a valid identity. Claiming here — while
         // that identity is still authenticated and long before registration is reachable —
@@ -213,107 +213,6 @@ class AuthViewModel {
         runPostAuthMaintenance(userId: userId, reason: reason)
     }
 
-    private func runPostAuthMaintenance(userId: String, reason: String) {
-        Task { [weak self] in
-            guard self != nil else { return }
-            let deviceId = KeychainManager.shared.loadDeviceID() ?? ""
-            guard !deviceId.isEmpty else {
-                Log.error("Post-auth key maintenance skipped — deviceId unavailable (\(reason))", category: "Auth")
-                return
-            }
-            #if os(macOS)
-            Log.debug("Post-auth key maintenance (\(reason), Desktop direct core path)", category: "Auth")
-            #endif
-            // Kyber first: its first publish carries the hybrid identity in the same request, which
-            // is what lets the server check the hybrid signature on every Kyber key. The hybrid
-            // publish after it then finds nothing left to do, or re-attaches the classic SPK's
-            // signature after a rotation.
-            await KyberPrekeyService.publishIfNeeded(deviceId: deviceId)
-            Self.announceAppLaunchedOnce()
-            await HybridIdentityService.publishIfNeeded(deviceId: deviceId)
-            await PreKeyRotationService.shared.rotateIfNeeded(deviceId: deviceId)
-            await Self.logOwnDeviceSet(userId: userId, thisDeviceId: deviceId)
-        }
-        Task { [weak self] in
-            guard self != nil else { return }
-            await ServerKeyManager.shared.prefetch()
-        }
-        BlockSyncService.shared.sync()
-    }
-
-    private static var appLaunchAnnounced = false
-
-    /// Tell the core the app has launched, once per process: it answers with the launch timers,
-    /// among them `pq_upgrade_sweep`, which reopens pre-v2 classical sessions as PQXDH v2 15 s later.
-    ///
-    /// Nothing sent this event until 2026-09-25 — the enum case existed only in the logging
-    /// switch — so the upgrade sweep never ran on iOS and every classical session stayed
-    /// classical. Here and not at core init because the reopen it leads to fetches the peer's
-    /// bundle, which needs an authenticated transport; once, because re-auth runs this path again
-    /// and the core would re-arm the timers each time.
-    private static func announceAppLaunchedOnce() {
-        guard !appLaunchAnnounced else { return }
-        do {
-            let actions = try CryptoManager.shared.handleOrchestratorEvent(.appLaunched, tag: "post_auth")
-            appLaunchAnnounced = true
-            SessionActionExecutor.shared.executeOffRouter(actions, site: "app_launched")
-        } catch {
-            Log.error("AppLaunched not delivered to the core: \(error)", category: "Auth")
-        }
-    }
-
-    /// State the account's device set, once per authenticated session, before anything needs it.
-    ///
-    /// Until 2026-09-02 nothing did. The composition of the set was visible only indirectly, in
-    /// `SESSION_STATE[responder_candidates]`, and only when a session failed to initialise — so a
-    /// run set up as one device per account, which was actually two because a Desktop unlinked a
-    /// week earlier still counted as active, read as a clean single-device run in every log line
-    /// it produced. Every message was being sent twice and every sibling copy dropped, and the
-    /// only way to learn that was to reverse-trace message ids across two devices' logs.
-    ///
-    /// A powered-off device is indistinguishable from a live one here, deliberately: this reports
-    /// what the server holds, which is the set every sender will fan out to. It is the same fetch
-    /// the receive path already makes on a cache miss, so it also warms that cache at launch
-    /// rather than on the first message that needs it, and it never consumes a one-time pre-key.
-    private static func logOwnDeviceSet(userId: String, thisDeviceId: String) async {
-        // Retried, because post-auth maintenance runs while the transport is still choosing a
-        // path. On 2026-09-02 the first attempt landed in the same second as the direct→VEIL
-        // switch and came back `unavailable: "Stream unexpectedly closed."` — along with the OTPK
-        // replenish, the MLS package refresh, the push token registration and a peer bundle
-        // fetch. Every one of those retries; this did not, so the only thing it produced was an
-        // ERROR about a perfectly healthy account, and the line it exists to print never appeared
-        // for the rest of the session. Same ladder as the push registration next to it.
-        var devices: [DeviceBundleData] = []
-        for attempt in 1...3 {
-            devices = await MultiDeviceSendCoordinator.shared.refreshOwnDevices(myUserId: userId)
-            if !devices.isEmpty { break }
-            guard attempt < 3 else { break }
-            try? await Task.sleep(nanoseconds: UInt64(attempt) * 2_000_000_000)
-        }
-        guard !devices.isEmpty else {
-            // Not "no devices" — the fetch failed, and `refreshOwnDevices` has already said why.
-            Log.error("DEVICE_SET: \(userId.prefix(8))… — set unknown after 3 attempts", category: "Auth")
-            return
-        }
-        let listed = devices
-            .map { "\($0.deviceId.prefix(8))…\($0.deviceId == thisDeviceId ? "(this)" : "")" }
-            .joined(separator: ", ")
-        Log.info("DEVICE_SET: \(userId.prefix(8))… has \(devices.count) device(s): \(listed)", category: "Auth")
-
-        // The set is known here and nowhere earlier, and it is the only thing that invalidates a
-        // published metadata blob — in both directions: a device added has no copy until we
-        // re-seal, and a device removed can still read until we do. `publish` is a no-op when the
-        // set has not moved.
-        await DeviceMetadataService.publish(myUserId: userId, reason: "device_set_known")
-        if !devices.contains(where: { $0.deviceId == thisDeviceId }) {
-            // We are authenticated as a device the key service does not list. Every peer fans out
-            // to a set that excludes us, so nothing addressed per-device can arrive.
-            Log.error(
-                "DEVICE_SET: this device \(thisDeviceId.prefix(8))… is NOT in its own account's active set",
-                category: "Auth"
-            )
-        }
-    }
 
     // MARK: - Session Management
     
@@ -525,61 +424,6 @@ class AuthViewModel {
         }
     }
 
-    // FIXED: Monitor token expiration (single scheduled refresh)
-    private func startTokenRefreshMonitoring() {
-        scheduleTokenRefresh()
-    }
-
-    private func scheduleTokenRefresh() {
-        tokenRefreshTimer?.invalidate()
-
-        guard isAuthenticated else { return }
-        guard let expiresAt = AuthSessionManager.shared.sessionExpires else { return }
-
-        let now = Date()
-        let refreshTime = expiresAt.addingTimeInterval(-300) // refresh 5 minutes early
-        let interval = max(refreshTime.timeIntervalSince(now), 5)
-
-        tokenRefreshTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: false) { [weak self] _ in
-            Task { @MainActor in
-                Log.info("Token refresh timer fired", category: "Auth")
-                await self?.refreshAccessToken()
-            }
-        }
-    }
-    
-    /// The timer's refresh. Through the single-flight coordinator, like every other refresh: until
-    /// 2026-10-16 this called `refreshToken` itself, and on 2026-10-15 it fired in the same second
-    /// as the foreground restore's coordinator refresh. Both presented the one stored refresh
-    /// token, the second was rejected as already used, and the rejection ran
-    /// `handleSessionExpired` — which wiped the session *and the stream cursor* for an identity
-    /// that was back a second later, so the stream replayed the whole backlog.
-    ///
-    /// A failure here never signs out. Transient: keep the tokens and try again shortly. A refresh
-    /// token the server refuses: authenticate the device again — the same identity, no wipe.
-    private func refreshAccessToken() async {
-        let outcome: TokenRefreshOutcome
-        do {
-            outcome = try await TokenRefreshCoordinator.shared.refreshIfPossible() ? .refreshed : .refused
-        } catch {
-            outcome = TokenRefreshCoordinator.isRefreshTokenPermanentlyInvalid(error) ? .refused : .transient
-            Log.error("Token refresh failed: \(error.localizedDescription)", category: "Auth")
-        }
-        switch outcome.action {
-        case .reschedule:
-            Log.info("Access token refreshed (timer)", category: "Auth")
-            scheduleTokenRefresh()
-        case .retry(let after):
-            Log.info("Token refresh will retry in \(Int(after))s; tokens kept", category: "Auth")
-            tokenRefreshTimer?.invalidate()
-            tokenRefreshTimer = Timer.scheduledTimer(withTimeInterval: after, repeats: false) { [weak self] _ in
-                Task { @MainActor in await self?.refreshAccessToken() }
-            }
-        case .reauthenticateDevice:
-            Log.info("Refresh token refused — authenticating the device again (no sign-out)", category: "Auth")
-            await restoreOrAuthenticateDevice()
-        }
-    }
 
 
     func finalizeDeviceRegistration(userId: String, username: String?) {
@@ -603,165 +447,7 @@ class AuthViewModel {
         )
     }
 
-    /// Unified post-link bootstrap for Flow A (confirm) and Flow B (join request / approve).
-    func completeDeviceLink(_ outcome: DeviceLinkOutcome) async {
-        Log.info("completeDeviceLink role=\(outcome.role) deviceId=\(outcome.deviceId.prefix(8))…", category: "DeviceLink")
 
-        currentUserId = outcome.userId
-        isAuthenticated = true
-        hasRegisteredDeviceKeys = true
-
-        if outcome.role == .linkedNewDevice {
-            // A device that joins an account has not seen its phrase, so it holds no address for
-            // it. One left from an earlier account on this device would go into the cards.
-            KeychainManager.shared.deleteOwnAccountAddress()
-        }
-
-        if outcome.role == .linkedNewDevice, !CryptoManager.shared.isInitialized {
-            CryptoManager.shared.resetOrchestratorStateForDeviceLink()
-            CryptoManager.shared.setLocalUserId(outcome.userId)
-        }
-
-        await refreshUserProfileFromServer(userId: outcome.userId)
-        finishAuthenticatedSession(userId: outcome.userId, reason: "device_link")
-
-        guard DeviceLinkHistorySyncPolicy.isOffered else {
-            deviceLinkPhase = .idle
-            Log.info("Post-link history sync disabled — continuing with account only", category: "DeviceLink")
-            return
-        }
-
-        Log.info("Post-link history sync offered role=\(outcome.role)", category: "DeviceLink")
-        switch outcome.role {
-        case .linkedNewDevice:
-            #if os(macOS)
-            let pendingId = outcome.pendingDeviceId ?? outcome.deviceId
-            deviceLinkPhase = .historySyncReceive(pendingDeviceId: pendingId)
-            #else
-            deviceLinkPhase = .historySyncReceive(pendingDeviceId: outcome.deviceId)
-            #endif
-        case .approvedJoinRequest:
-            #if os(iOS)
-            if let pendingId = outcome.pendingDeviceId {
-                deviceLinkPhase = .historySyncSend(pendingDeviceId: pendingId)
-            }
-            #endif
-        }
-    }
-
-    func clearDeviceLinkPhase() {
-        deviceLinkPhase = .idle
-    }
-
-    private func refreshUserProfileFromServer(userId: String) async {
-        do {
-            let profile = try await UserServiceClient.shared.getUserProfile(userId: userId)
-            let username = profile.username.isEmpty ? nil : profile.username
-            loadUserFromCoreData(userId: userId, username: username)
-        } catch {
-            Log.debug("Profile fetch after device link failed (non-fatal): \(error)", category: "DeviceLink")
-        }
-    }
-
-    /// Wipe the local store unless `userId` owns it, then record ownership.
-    ///
-    /// The gate, not a wipe-on-sign-out: signing out and recovering with a seed phrase keeps the
-    /// same `userId`, and deleting history there would be a second bug. Data belongs to an
-    /// identity; nobody else may see it. See `LocalStoreOwnership`.
-    func enforceLocalStoreOwnership(for userId: String) {
-        guard !userId.isEmpty else { return }
-
-        let stored = LocalStoreOwnership.storedOwner()
-        let hasData = localStoreHasUserData(previousOwner: stored)
-
-        switch LocalStoreOwnership.disposition(
-            storedOwner: stored,
-            incomingUser: userId,
-            storeHasData: hasData
-        ) {
-        case .keep:
-            LocalStoreOwnership.claim(userId)
-        case .wipe:
-            Log.error(
-                "Local store belongs to \(stored?.prefix(8).description ?? "an unknown identity") — " +
-                "wiping before \(userId.prefix(8))… is shown anything",
-                category: "Auth"
-            )
-            wipeLocalStoreContents()
-            LocalStoreOwnership.claim(userId)
-        }
-    }
-
-    /// True when the store holds anything that identifies people or conversations.
-    ///
-    /// Deliberately narrow: people (a contact list with no transcript is the more sensitive half),
-    /// chats (a message needs its chat), and the last owner's own profile, which the crate keeps
-    /// apart from the people and Core Data keeps among them.
-    private func localStoreHasUserData(previousOwner: String?) -> Bool {
-        let people = (try? LocalRepositories.contacts.everyContact(except: nil)) ?? []
-        let chats = (try? LocalRepositories.chats.chats()) ?? []
-        let ownProfile = previousOwner.flatMap { try? LocalRepositories.ownProfile.profile(accountId: $0) }
-        return !people.isEmpty || !chats.isEmpty || ownProfile != nil
-    }
-
-    /// Deletes every entity the previous identity could have left behind.
-    ///
-    /// Same list `deleteAccount()` uses — kept in one place on purpose, because the three wipe
-    /// paths having three different lists is how `performLocalSignOut` ended up never clearing
-    /// Core Data at all.
-    private func wipeLocalStoreContents() {
-        // The store goes whole, under its key, and an empty one replaces it — macOS, and iOS once
-        // the install has moved to `construct.db`.
-        if LocalRepositories.isOnStore {
-            LocalRepositories.replaceAppStore()
-            return
-        }
-        guard let context = PersistenceController.shared.safeViewContext else {
-            Log.error("Local store wipe skipped — no persistent store", category: "Auth")
-            return
-        }
-        for entityName in Self.userDataEntityNames {
-            let request = NSFetchRequest<NSFetchRequestResult>(entityName: entityName)
-            let batchDelete = NSBatchDeleteRequest(fetchRequest: request)
-            batchDelete.resultType = .resultTypeObjectIDs
-            do {
-                let result = try context.execute(batchDelete) as? NSBatchDeleteResult
-                if let objectIDs = result?.result as? [NSManagedObjectID], !objectIDs.isEmpty {
-                    NSManagedObjectContext.mergeChanges(
-                        fromRemoteContextSave: [NSDeletedObjectsKey: objectIDs],
-                        into: [context]
-                    )
-                }
-            } catch {
-                Log.error("Failed to wipe \(entityName): \(error)", category: "Auth")
-            }
-        }
-        // What macOS takes with the store lives outside Core Data here: the invite journal and
-        // the fan-out queue in `UserDefaults`, partial messages in sealed files.
-        Self.forgetServiceRows()
-        Log.info("Local store wiped — previous identity's data removed", category: "Auth")
-    }
-
-    /// The previous identity's service rows on iOS: issued invites, owed fan-out copies, partial
-    /// messages. Each through its own owner, so none keeps a copy of them in memory.
-    static func forgetServiceRows() {
-        do {
-            let invites = LocalRepositories.issuedInvites
-            try invites.delete(jtis: invites.all().map(\.jti))
-        } catch {
-            Log.error("Ownership gate: issued invites not removed: \(error)", category: "Auth")
-        }
-        InviteJournal.shared.reload()
-        FanoutRetryQueue.shared.removeAll()
-        PendingReassemblyStore.shared.removeAll()
-    }
-
-    /// Every entity that carries user data. One list, used by both the ownership gate and
-    /// account deletion.
-    static let userDataEntityNames = [
-        "Message", "HealingMessage", "ProcessedMessage", "CallRecord", "Chat", "User",
-        "Reaction", "PeerDevice", "ServerMessageId"
-    ]
 
     /// Handles the critical case where the user is authenticated (has a session token) but
     /// device crypto keys couldn't be loaded from Keychain (partial state or iOS Keychain bug).
@@ -838,139 +524,6 @@ class AuthViewModel {
         OrientationStore.reset()
     }
 
-    func logout() {
-        Task { [weak self] in
-            guard let self else { return }
-            if AuthSessionManager.shared.sessionToken != nil {
-                // Nothing is announced to contacts: the device leaves the account's directory,
-                // and a peer's next message to it is answered by nobody. Until 2026-09-27 an
-                // END_SESSION went to every contact here.
-                do {
-                    try await AuthServiceClient.shared.logout()
-                } catch {
-                    Log.error("Logout API call failed: \(error.localizedDescription)", category: "Auth")
-                }
-            }
-            await MainActor.run {
-                self.performLocalSignOut()
-            }
-            await MediaSendCache.shared.clear()
-        }
-    }
-
-    /// Wipes the session, the device identity and every local trace of the account
-    /// (`LocalDataWipe`), so ContentView routes back to onboarding.
-    /// Safe to call when the server logout RPC is unavailable (revoked/inactive device).
-    func performLocalSignOut() {
-        cancelTimeouts()
-        MessageStreamManager.shared.disconnect()
-        AuthSessionManager.shared.clearSession()
-        StealthSenderService.shared.clearCertCache()   // drop the old identity's sealed-sender cert
-        CryptoManager.shared.deleteAllCryptoKeys()
-        KeychainManager.shared.deleteDeviceKeys()
-        KeychainManager.shared.deleteOtpks()
-        KeychainManager.shared.deleteAllContactRequestMappings()
-        UserDefaults.standard.removeObject(forKey: "recovery_is_setup")
-        UserDefaults.standard.removeObject(forKey: "recovery_banner_dismissed")
-        UserDefaults.standard.removeObject(forKey: "cr_pending_nav_user_ids")
-        OrientationStore.reset()
-        // Signing out leaves nothing of the account on this device: the transcript used to stay
-        // for a later seed recovery of the same account. History moves between devices now, and
-        // a device that was signed out — or removed — must not keep reading as the account.
-        LocalDataWipe.run(reason: "sign_out")
-        deviceLinkPhase = .idle
-        deviceKeysUnavailable = false
-        deviceDeregistered = false
-        isAuthenticated = false
-        currentUserId = nil
-        hasRegisteredDeviceKeys = false
-        Log.info("Local sign-out complete — routing to onboarding", category: "Auth")
-    }
-
-    /// Signs out of ALL devices simultaneously (invalidates all refresh tokens server-side),
-    /// then performs local logout. Use when a device may have been compromised.
-    func logoutAllDevices() {
-        Task { [weak self] in
-            guard let self else { return }
-            if AuthSessionManager.shared.sessionToken != nil {
-                do {
-                    try await AuthServiceClient.shared.logout(allDevices: true)
-                    Log.info("Signed out of all devices", category: "Auth")
-                } catch {
-                    Log.error("logoutAllDevices API call failed: \(error.localizedDescription)", category: "Auth")
-                }
-            }
-            await MainActor.run {
-                self.performLocalSignOut()
-            }
-        }
-    }
-    
-    func deleteAccount() {
-        self.isLoading = true
-        
-        Log.info("Requesting account deletion", category: "AuthViewModel")
-        
-        Task { [weak self] in
-            guard let self else { return }
-            do {
-                try await self.deleteAccountWithDeviceSignature()
-                await MainActor.run { self.handleDeleteAccountSuccess() }
-            } catch {
-                Log.error("deleteAccount raw error: \(error)", category: "AuthViewModel")
-                await MainActor.run {
-                    self.cancelTimeouts()
-                    self.isLoading = false
-                    self.deleteAccountFailed = true
-                    ErrorRouter.shared.report(Self.friendlyDeleteError(error))
-                }
-            }
-        }
-    }
-
-    private static func friendlyDeleteError(_ error: Error) -> AppError {
-        // Unimplemented (code 12): the server endpoint is not there yet.
-        if let rpc = error as? RPCError, rpc.code == .unimplemented {
-            return .said(UserText("delete_account_not_available"))
-        }
-        // The reason is our own sentence for the failure, never the error's words.
-        return .said(UserText("delete_account_failed", AppError.from(error).userText.resolved))
-    }
-
-    /// Deletes all local data without contacting the server.
-    /// Used as a fallback when the server is unreachable (e.g. blocked by censorship).
-    func deleteAccountLocally() {
-        Log.info("Deleting account locally only (server unreachable)", category: "AuthViewModel")
-        handleDeleteAccountSuccess()
-    }
-
-    /// Called when duress PIN is entered on the lock screen.
-    /// Immediately wipes all local data; attempts server deletion best-effort in background.
-    func triggerDuressWipe() {
-        Log.info("Duress PIN triggered — initiating silent wipe", category: "AuthViewModel")
-        Task { [weak self] in
-            guard self != nil else { return }
-            do {
-                _ = try await UserServiceClient.shared.deleteAccount(
-                    confirmation: "DELETE",
-                    reason: "duress"
-                )
-            } catch {
-                Log.error("Duress wipe: remote delete failed: \(error.localizedDescription)", category: "AuthViewModel")
-            }
-        }
-        handleDeleteAccountSuccess()
-    }
-
-    private func deleteAccountWithDeviceSignature() async throws {
-        let response = try await UserServiceClient.shared.deleteAccount(
-            confirmation: "DELETE",
-            reason: "user_requested"
-        )
-        guard response.success else {
-            throw NSError(domain: "AuthViewModel", code: 3, userInfo: [NSLocalizedDescriptionKey: response.message])
-        }
-    }
 
     // MARK: - Timeout Helpers
     private func startAuthTimeout() {
@@ -1001,7 +554,7 @@ class AuthViewModel {
         }
     }
 
-    private func cancelTimeouts() {
+    func cancelTimeouts() {
         authOperationTimer?.invalidate()
         authOperationTimer = nil
         sessionRestoreTimer?.invalidate()
@@ -1086,7 +639,7 @@ class AuthViewModel {
         Log.info("User authenticated successfully")
     }
     
-    private func handleDeleteAccountSuccess() {
+    func handleDeleteAccountSuccess() {
         Log.info("Account deletion successful", category: "AuthViewModel")
         cancelTimeouts()
         self.isLoading = false
@@ -1120,7 +673,7 @@ class AuthViewModel {
     /// - Parameters:
     ///   - userId: The user ID to load data for
     ///   - username: Optional username to update/set (from login response)
-    private func loadUserFromCoreData(userId: String, username: String? = nil) {
+    func loadUserFromCoreData(userId: String, username: String? = nil) {
         // Check if persistent store coordinator is ready before accessing entities
         guard viewContext.persistentStoreCoordinator != nil else {
             Log.info("Core Data persistent store coordinator not ready yet, skipping user load")
