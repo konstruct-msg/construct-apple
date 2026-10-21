@@ -136,17 +136,19 @@ final class MessageRouter {
     /// The call signals in `actions`, as the proto bytes CallManager reads. Separate so the
     /// sender it is dispatched under is visible at the call site — the account, never the device
     /// id the action carries.
-    static func callSignals(in actions: [CfeAction]) -> [Data] {
+    /// Each carries the device the core opened it under: the call answers that device, and a
+    /// sender cannot name another (`decisions/a-call-rings-every-device.md`).
+    static func callSignals(in actions: [CfeAction]) -> [(device: String, bytes: Data)] {
         actions.compactMap { action in
-            if case .callSignalDecrypted(_, _, let protoBytes) = action { return protoBytes }
+            if case .callSignalDecrypted(let device, _, let protoBytes) = action { return (device, protoBytes) }
             return nil
         }
     }
 
     private static func dispatchCallSignals(in actions: [CfeAction], from account: String) {
-        for bytes in callSignals(in: actions) {
+        for (device, bytes) in callSignals(in: actions) {
             if let signal = CallManager.decodeSignalProto(from: bytes) {
-                CallManager.shared.handleCallSignalProto(from: account, signal: signal)
+                CallManager.shared.handleCallSignalProto(from: account, device: device, signal: signal)
             } else {
                 Log.error("Call signal from \(account.prefix(8))… failed to decode", category: "MessageRouter")
             }
