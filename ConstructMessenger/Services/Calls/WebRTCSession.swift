@@ -40,6 +40,8 @@ protocol WebRTCSessionProtocol: AnyObject {
     func setRemoteAnswer(sdp: String) async throws
     func addRemoteIceCandidate(_ candidate: WebRTCIceCandidate) async throws
     func setMuted(_ muted: Bool)
+    /// The microphone's level as WebRTC measures it at the source, 0…1; nil before it has one.
+    func microphoneLevel() async -> Double?
     /// This side has a video sender the camera can feed.
     var canSendVideo: Bool { get }
     /// Feed the camera into the video sender, or take it away. A swap on the sender the call
@@ -89,6 +91,46 @@ enum WebRTCFieldTrials {
     static let dtlsPqcKey = "WebRTC-EnableDtlsPqc"
     static let configured = "\(dtlsPqcKey)/Enabled/"
 }
+
+#if os(macOS)
+/// The Mac's audio devices as WebRTC's audio device module sees them. iOS routes audio through
+/// the audio session and CallKit instead, so this exists on macOS only. `nil` selects the
+/// system's current default and follows it when it changes.
+@MainActor
+enum WebRTCAudioDevices {
+    struct Device: Identifiable, Equatable, Sendable {
+        let id: String
+        let name: String
+    }
+
+    private static var module: RTCAudioDeviceModule { WebRTCFactory.shared.factory.audioDeviceModule }
+
+    static var inputs: [Device] { module.inputDevices.filter { !$0.isDefault }.map(Device.init) }
+    static var outputs: [Device] { module.outputDevices.filter { !$0.isDefault }.map(Device.init) }
+
+    static var selectedInput: String? {
+        get { module.inputDevice.isDefault ? nil : module.inputDevice.deviceId }
+        set {
+            module.inputDevice = newValue.flatMap { id in module.inputDevices.first { $0.deviceId == id } }
+                ?? RTCIODevice.defaultDevice(with: .input)
+        }
+    }
+
+    static var selectedOutput: String? {
+        get { module.outputDevice.isDefault ? nil : module.outputDevice.deviceId }
+        set {
+            module.outputDevice = newValue.flatMap { id in module.outputDevices.first { $0.deviceId == id } }
+                ?? RTCIODevice.defaultDevice(with: .output)
+        }
+    }
+}
+
+private extension WebRTCAudioDevices.Device {
+    init(_ device: RTCIODevice) {
+        self.init(id: device.deviceId, name: device.name)
+    }
+}
+#endif
 
 /// One-time WebRTC runtime setup. Call `bootstrap()` exactly once at app launch,
 /// before any code touches `RTCAudioSession` or `CallKitProvider`. This puts
@@ -271,6 +313,15 @@ final class WebRTCSession: NSObject, WebRTCSessionProtocol {
 
     func setMuted(_ muted: Bool) {
         localAudioTrack?.isEnabled = !muted
+    }
+
+    func microphoneLevel() async -> Double? {
+        let report = await peerConnection.statistics()
+        // `media-source` is the capture side: it keeps measuring while the track is muted, so
+        // the level meter shows whether the microphone hears anything at all.
+        return report.statistics.values
+            .first { $0.type == "media-source" && ($0.values["kind"] as? String) == "audio" }?
+            .values["audioLevel"] as? Double
     }
 
     func setCameraOn(_ on: Bool, facing: CameraFacing) {
@@ -716,6 +767,7 @@ final class WebRTCSession: WebRTCSessionProtocol {
     func setRemoteAnswer(sdp: String) async throws { throw WebRTCSessionError.webRTCLibraryMissing }
     func addRemoteIceCandidate(_ candidate: WebRTCIceCandidate) async throws { throw WebRTCSessionError.webRTCLibraryMissing }
     func setMuted(_ muted: Bool) {}
+    func microphoneLevel() async -> Double? { nil }
     func close() {}
 }
 

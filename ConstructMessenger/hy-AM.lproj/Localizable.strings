@@ -1388,3 +1388,30 @@
 "device_link_error_token" = "Այս կոդի ժամկետը լրացել է։ Սկանավորեք նորը։";
 "device_link_error_already_linked" = "Այս սարքն արդեն կապված է։";
 "voice_playback_speed" = "Նվագարկման արագություն";
+
+/* Desktop call surfaces */
+"call_status_ringing" = "Զանգում է…";
+"call_reconnecting_title" = "Վերամիացում…";
+"call_ended_after" = "Զանգն ավարտվեց · %@";
+"call_no_answer" = "Պատասխան չկա";
+"call_not_connected" = "Չհաջողվեց միանալ";
+"call_detail_reconnecting" = "Կապը ընդհատվեց։ Զանգը կշարունակվի, երբ ցանցը վերադառնա։";
+"call_detail_declined" = "Զանգը մերժվեց։";
+"call_detail_busy" = "Զրուցակիցը այլ զանգի մեջ է։";
+"call_detail_no_answer" = "Ոչ ոք չպատասխանեց։";
+"call_detail_failed" = "Զանգը չմիացավ։ Ստուգեք ցանցը և նորից զանգեք։";
+"call_audio_devices" = "Խոսափող և ձայնի ելք";
+"call_incoming_from" = "Մուտքային զանգ՝ %@";
+"call_with" = "Զանգ · %@";
+"call_open_window" = "Բացել զանգի պատուհանը";
+"call_mic_off" = "Խոսափողն անջատված է";
+"call_window_title" = "Զանգ";
+"call_microphone" = "Խոսափող";
+"call_sound" = "Ձայն";
+"call_mic_denied" = "Խոսափողի հասանելիություն չկա — զրուցակիցը ձեզ չի լսում։ Թույլատրեք այն Համակարգի կարգավորումներ → Գաղտնիություն և անվտանգություն → Խոսափող բաժնում։";
+"call_open_settings" = "Բացել կարգավորումները";
+"call_encrypted_via_relay" = "Ծայրից ծայր գաղտնագրված · Konstruct սերվերի միջոցով";
+"call_mic_level" = "Խոսափողի մակարդակ";
+"call_mic_level_hint" = "Ինչ-որ բան ասեք — գիծը պետք է շարժվի։";
+"call_audio_output" = "Ելք";
+"call_device_system" = "Ինչպես համակարգում";

@@ -1308,3 +1308,30 @@
 "device_link_error_token" = "Ce code a expiré. Scannez-en un nouveau.";
 "device_link_error_already_linked" = "Cet appareil est déjà associé.";
 "voice_playback_speed" = "Vitesse de lecture";
+
+/* Desktop call surfaces */
+"call_status_ringing" = "Ça sonne…";
+"call_reconnecting_title" = "Reconnexion…";
+"call_ended_after" = "Appel terminé · %@";
+"call_no_answer" = "Pas de réponse";
+"call_not_connected" = "Connexion impossible";
+"call_detail_reconnecting" = "La connexion a été coupée. L'appel reprendra dès le retour du réseau.";
+"call_detail_declined" = "L'appel a été refusé.";
+"call_detail_busy" = "Votre correspondant est déjà en ligne.";
+"call_detail_no_answer" = "Personne n'a répondu.";
+"call_detail_failed" = "L'appel n'a pas abouti. Vérifiez votre réseau et rappelez.";
+"call_audio_devices" = "Micro et sortie audio";
+"call_incoming_from" = "Appel entrant de %@";
+"call_with" = "Appel · %@";
+"call_open_window" = "Ouvrir la fenêtre d'appel";
+"call_mic_off" = "Micro coupé";
+"call_window_title" = "Appel";
+"call_microphone" = "Micro";
+"call_sound" = "Son";
+"call_mic_denied" = "Pas d'accès au micro — votre correspondant ne vous entend pas. Autorisez-le dans Réglages Système → Confidentialité et sécurité → Micro.";
+"call_open_settings" = "Ouvrir les réglages";
+"call_encrypted_via_relay" = "Chiffré de bout en bout · via le serveur Konstruct";
+"call_mic_level" = "Niveau du micro";
+"call_mic_level_hint" = "Dites quelque chose — la barre doit bouger.";
+"call_audio_output" = "Sortie";
+"call_device_system" = "Par défaut du système";

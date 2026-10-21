@@ -1388,3 +1388,30 @@
 "device_link_error_token" = "このコードは期限切れです。新しいコードをスキャンしてください。";
 "device_link_error_already_linked" = "このデバイスはすでにリンクされています。";
 "voice_playback_speed" = "再生速度";
+
+/* Desktop call surfaces */
+"call_status_ringing" = "呼び出し中…";
+"call_reconnecting_title" = "再接続中…";
+"call_ended_after" = "通話終了 · %@";
+"call_no_answer" = "応答なし";
+"call_not_connected" = "接続できませんでした";
+"call_detail_reconnecting" = "接続が切れました。ネットワークが戻ると通話が再開します。";
+"call_detail_declined" = "通話が拒否されました。";
+"call_detail_busy" = "相手は別の通話中です。";
+"call_detail_no_answer" = "誰も応答しませんでした。";
+"call_detail_failed" = "通話が接続されませんでした。ネットワークを確認してもう一度かけてください。";
+"call_audio_devices" = "マイクと出力";
+"call_incoming_from" = "%@からの着信";
+"call_with" = "通話 · %@";
+"call_open_window" = "通話ウインドウを開く";
+"call_mic_off" = "マイクオフ";
+"call_window_title" = "通話";
+"call_microphone" = "マイク";
+"call_sound" = "サウンド";
+"call_mic_denied" = "マイクへのアクセスがありません。相手にはあなたの声が聞こえません。システム設定 → プライバシーとセキュリティ → マイク で許可してください。";
+"call_open_settings" = "設定を開く";
+"call_encrypted_via_relay" = "エンドツーエンド暗号化 · Konstruct サーバー経由";
+"call_mic_level" = "マイクのレベル";
+"call_mic_level_hint" = "何か話してください。バーが動けば大丈夫です。";
+"call_audio_output" = "出力";
+"call_device_system" = "システムのデフォルト";
