@@ -101,14 +101,14 @@ final class CallManager: CallUIManaging {
     /// id remembered as ended, so the push and the offer — whichever comes second — find it ended
     /// instead of ringing. The call in progress is not touched. Not over the signaling stream: that
     /// stream belongs to the call in progress; the caller's client tells the server when it ends.
-    func declineAsBusy(callId: String, callerUserId: String) {
+    func declineAsBusy(callId: String, callerUserId: String, callerDevice: String? = nil) {
         rememberEnded(callId: callId)
         var sig = Shared_Proto_Signaling_V1_WebRTCSignal()
         sig.callID = callId
         sig.senderDeviceID = Self.currentDeviceId()
         sig.timestamp = Self.nowMs()
         sig.signal = .hangup(Self.makeCallHangup(deviceId: Self.currentDeviceId(), timestampMs: Self.nowMs(), reason: .busy))
-        let result = sendCallSignalProto(sig, to: callerUserId)
+        let result = sendCallSignalProto(sig, to: callerUserId, devices: callerDevice.map { [$0] })
         Log.info("Busy hangup for callId=\(callId.prefix(8))… to \(callerUserId.prefix(8))… (\(result))", category: "Calls")
     }
 
@@ -140,6 +140,12 @@ final class CallManager: CallUIManaging {
         var acceptTask: Task<Void, Never>?
         let startedAt: Date = Date()
         var answeredAt: Date? = nil
+        /// The peer's device this call talks to: the one that sent the offer (incoming), or the
+        /// one whose answer came first (outgoing). Known from the session the core opened its
+        /// signal under, never from `sender_device_id`. Nil until then.
+        var peerDevice: String?
+        /// The peer's devices our offer went to (outgoing, before an answer).
+        var offeredDevices: [String] = []
         /// SDP offer received via MessagingService before the user answered.
         ///
         /// Read it through `usableRemoteOfferSdp`, never directly: the raw field answers "is there
@@ -179,7 +185,9 @@ final class CallManager: CallUIManaging {
         var streamRetryCount: Int = 0
         static let maxStreamRetries = 3
         /// ICE candidates waiting to be flushed as a batch to stay under 10/sec signal rate limit.
-        var pendingOutgoingIce: [Shared_Proto_Signaling_V1_IceCandidate] = []
+        /// Our candidates waiting for the debounce, in the clear: each is encrypted per target
+        /// device at the flush, because which devices those are can change before it runs.
+        var pendingOutgoingIce: [WebRTCIceCandidate] = []
         /// Task that fires after a short debounce to flush pendingOutgoingIce.
         var iceFlushTask: Task<Void, Never>? = nil
         /// True once WebRTC media (ICE/DTLS) has connected at least once. After this, a
@@ -532,12 +540,16 @@ final class CallManager: CallUIManaging {
         }
 
         #if os(iOS)
-        CallHistoryService.shared.record(
-            session: session,
-            status: historyStatus,
-            startedAt: startedAt,
-            durationSeconds: duration
-        )
+        // Taken on another of our devices: that device records the call; this one neither shows
+        // a missed call nor a second entry for it.
+        if reason != .hangup(.acceptedElsewhere) {
+            CallHistoryService.shared.record(
+                session: session,
+                status: historyStatus,
+                startedAt: startedAt,
+                durationSeconds: duration
+            )
+        }
         #endif
 
         #if os(iOS)
@@ -710,7 +722,7 @@ final class CallManager: CallUIManaging {
         return c
     }
 
-    private static func makeCallHangup(
+    static func makeCallHangup(
         deviceId: String,
         timestampMs: Int64,
         reason: Shared_Proto_Signaling_V1_HangupReason

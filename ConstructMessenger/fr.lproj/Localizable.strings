@@ -422,7 +422,7 @@
 "recovery_confirm_placeholder" = "12 mots séparés par des espaces";
 "recovery_confirm_action" = "Confirmer";
 "recovery_confirm_invalid_phrase" = "Ce n'est pas une phrase valide de 12 mots. Vérifiez l'orthographe de chaque mot.";
-"recovery_confirm_other_account" = "Cette phrase appartient à un autre compte.";
+"recovery_confirm_other_account" = "Ce n'est pas la phrase de récupération de ce compte. Vérifiez les mots.";
 "invite_error_recovery_key_required" = "Configurez votre phrase de récupération avant d'ajouter des contacts.";
 "recovery_generate" = "Générer la phrase de récupération";
 "recovery_write_down" = "Notez ces 12 mots dans l'ordre. Conservez-les dans un endroit sûr — ne les partagez jamais.";
