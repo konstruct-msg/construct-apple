@@ -9,7 +9,7 @@
 //  ends and says so: the first one, then a line every few seconds, and a line when they stop.
 //
 
-#if os(iOS) && canImport(WebRTC)
+#if canImport(WebRTC)
 import AVFoundation
 import Foundation
 import os
@@ -84,8 +84,13 @@ final class CaptureSessionWatcher {
     init(session: AVCaptureSession, label: String) {
         let center = NotificationCenter.default
         tokens.append(center.addObserver(forName: AVCaptureSession.wasInterruptedNotification, object: session, queue: nil) { note in
+            #if os(iOS)
             let raw = note.userInfo?[AVCaptureSessionInterruptionReasonKey] as? Int ?? -1
             Log.error("VIDEO[\(label)] capture interrupted, reason=\(raw) (\(Self.reasonName(raw)))", category: "Calls")
+            #else
+            // macOS gives no interruption reason.
+            Log.error("VIDEO[\(label)] capture interrupted", category: "Calls")
+            #endif
         })
         tokens.append(center.addObserver(forName: AVCaptureSession.interruptionEndedNotification, object: session, queue: nil) { _ in
             Log.info("VIDEO[\(label)] capture interruption ended", category: "Calls")
@@ -100,6 +105,7 @@ final class CaptureSessionWatcher {
         tokens.forEach(NotificationCenter.default.removeObserver)
     }
 
+    #if os(iOS)
     private static func reasonName(_ raw: Int) -> String {
         switch AVCaptureSession.InterruptionReason(rawValue: raw) {
         case .videoDeviceNotAvailableInBackground: return "in background"
@@ -110,5 +116,6 @@ final class CaptureSessionWatcher {
         default: return "other"
         }
     }
+    #endif
 }
 #endif

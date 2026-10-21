@@ -1,14 +1,10 @@
 import Foundation
 
 enum CallsFeature {
-    /// Audio calls — implemented for iOS; Desktop entry points stay disabled while the
-    /// protocol is being stabilized.
+    /// Audio calls, on iOS and on macOS (Desktop since 2026-10-21: studio mode is a mode of a
+    /// call). Video stays iOS-only — `isVideoEnabled`.
     static var isEnabled: Bool {
-        #if os(macOS)
-        false
-        #else
         !PreviewDetector.isRunningInPreview
-        #endif
     }
 
     /// Video calls (TODO 105, `client/specs/VIDEO_CALLS_DESIGN.md`). On in every iOS build since
