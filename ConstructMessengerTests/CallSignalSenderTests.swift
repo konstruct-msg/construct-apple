@@ -31,7 +31,14 @@ final class CallSignalSenderTests: XCTestCase {
 
     func testTheRouterTakesTheSignalBytesAndNothingElse() {
         let other = CfeAction.notifyNewMessage(chatId: "c", preview: "p")
-        XCTAssertEqual(MessageRouter.callSignals(in: [other, action, other]), [Data([0x0a, 0x01, 0x41])])
+        XCTAssertEqual(MessageRouter.callSignals(in: [other, action, other]).map(\.bytes), [Data([0x0a, 0x01, 0x41])])
         XCTAssertTrue(MessageRouter.callSignals(in: [other]).isEmpty)
+    }
+
+    /// The device a call answers is the one the core opened the signal under — carried beside the
+    /// account, not instead of it (`decisions/a-call-rings-every-device.md`). Mutation: hand the
+    /// router the message id in its place — this reddens.
+    func testTheRouterKeepsTheDeviceTheCoreOpenedTheSignalUnder() {
+        XCTAssertEqual(MessageRouter.callSignals(in: [action]).map(\.device), ["6f5e37ac6f5e37ac6f5e37ac6f5e37ac"])
     }
 }
