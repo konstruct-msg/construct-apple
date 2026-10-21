@@ -34,7 +34,11 @@ final class RecoveryKeyProvisioner {
     }
 
     struct Dependencies {
-        var knownAddress: () -> Data?
+        /// This account's address, only when the server confirms it (`AccountAddress.confirmedOwn`).
+        /// A stored one alone is not enough: a Keychain item outlives the account it was made for,
+        /// and taking it on trust skipped the key for a new account and put the old address into
+        /// its invites, which the server refused (2026-10-21).
+        var knownAddress: () async -> Data?
         /// Whether the server holds a key for the account. Throws when it cannot be asked.
         var serverHasKey: () async throws -> Bool
         var generatePhrase: () throws -> String
@@ -69,7 +73,7 @@ final class RecoveryKeyProvisioner {
 
     private func run(userId: String) async -> Outcome {
         let d = dependencies
-        if d.knownAddress() != nil { return .alreadyKnown }
+        if await d.knownAddress() != nil { return .alreadyKnown }
 
         // A phrase made on an earlier launch whose upload never got an answer goes first, before
         // anything is asked: the server may already hold its key.
@@ -124,7 +128,7 @@ final class RecoveryKeyProvisioner {
 extension RecoveryKeyProvisioner.Dependencies {
     static var live: Self {
         Self(
-            knownAddress: { AccountAddress.own() },
+            knownAddress: { await AccountAddress.confirmedOwn() },
             serverHasKey: { try await AuthServiceClient.shared.getRecoveryStatus().isSetup },
             generatePhrase: { try generateMnemonic(wordCount: 12) },
             upload: { phrase, userId in
