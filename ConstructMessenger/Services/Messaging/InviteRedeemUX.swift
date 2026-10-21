@@ -63,7 +63,7 @@ enum InviteRedeemUX {
         } catch {
             Log.error("Post-redeem block not saved locally for \(userId.prefix(8))…: \(error)", category: "InviteRedeemUX")
         }
-        await BlockSyncService.shared.request(userId, blocked: true, reason: "invite_undo")
+        BlockSyncService.shared.request(userId, blocked: true, reason: "invite_undo")
         Log.info("Post-redeem block queued for \(userId.prefix(8))…", category: "InviteRedeemUX")
     }
 

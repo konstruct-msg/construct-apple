@@ -49,10 +49,11 @@ struct StoreImportView: View {
         .onChange(of: scenePhase, initial: true) { _, phase in
             guard phase == .active, !started else { return }
             started = true
+            let ownAccountId = AuthSessionManager.shared.currentUserId
             Task.detached(priority: .userInitiated) {
                 do {
                     let counts = try LocalRepositories.importFromCoreData(
-                        ownAccountId: AuthSessionManager.shared.currentUserId
+                        ownAccountId: ownAccountId
                     ) { value in
                         Task { @MainActor in progress = value }
                     }
