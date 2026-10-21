@@ -310,6 +310,11 @@ final class CallManager: CallUIManaging {
         active?.webrtc?.setMuted(muted)
     }
 
+    /// The live call's microphone level, 0…1, for a level meter; nil without a call.
+    func microphoneLevel() async -> Double? {
+        await active?.webrtc?.microphoneLevel()
+    }
+
     // MARK: - Camera
 
     /// Turn the camera on or off. Asks for camera access the first time; a refusal leaves the

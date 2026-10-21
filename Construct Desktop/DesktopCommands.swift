@@ -17,6 +17,8 @@
 //    ⌘W          — close front window (macOS standard)
 //    ⌘⇧C         — copy id of the open chat
 //    ⌘R          — sync pending messages (manual fetch)
+//    ⌘⇧M         — mute / unmute the call
+//    ⌘⇧E         — end the call
 //
 //  Do not bind a shortcut to a feature that does not exist. ⌘⇧F was "global search"
 //  and called the same function as ⌘F.
@@ -110,6 +112,23 @@ struct ConstructCommands: Commands {
             Button(NSLocalizedString("desktop_show_security", comment: "")) {
                 bridge.showSecurity()
             }
+        }
+
+        // Call menu — only what a call in progress can do.
+        CommandMenu(LocalizedStringKey("call_window_title")) {
+            let call = DesktopCallModel.shared
+            let live = call.phase?.isLive == true
+            Button(NSLocalizedString(call.muted ? "call_unmute" : "call_mute", comment: "")) {
+                call.toggleMute()
+            }
+            .keyboardShortcut("m", modifiers: [.command, .shift])
+            .disabled(!live)
+
+            Button(NSLocalizedString("call_end", comment: "")) {
+                call.end()
+            }
+            .keyboardShortcut("e", modifiers: [.command, .shift])
+            .disabled(!live)
         }
     }
 }

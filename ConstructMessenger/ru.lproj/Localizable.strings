@@ -1399,3 +1399,30 @@
 "device_link_error_token" = "Срок действия кода истёк. Отсканируйте новый.";
 "device_link_error_already_linked" = "Это устройство уже привязано.";
 "voice_playback_speed" = "Скорость воспроизведения";
+
+/* Desktop call surfaces */
+"call_status_ringing" = "Звонит у собеседника…";
+"call_reconnecting_title" = "Переподключение…";
+"call_ended_after" = "Звонок завершён · %@";
+"call_no_answer" = "Нет ответа";
+"call_not_connected" = "Не удалось соединиться";
+"call_detail_reconnecting" = "Связь прервалась. Звонок продолжится, когда сеть вернётся.";
+"call_detail_declined" = "Собеседник отклонил звонок.";
+"call_detail_busy" = "Собеседник сейчас в другом звонке.";
+"call_detail_no_answer" = "Никто не ответил.";
+"call_detail_failed" = "Звонок не соединился. Проверьте сеть и позвоните ещё раз.";
+"call_audio_devices" = "Микрофон и вывод звука";
+"call_incoming_from" = "Входящий звонок от %@";
+"call_with" = "Звонок · %@";
+"call_open_window" = "Открыть окно звонка";
+"call_mic_off" = "Микрофон выкл.";
+"call_window_title" = "Звонок";
+"call_microphone" = "Микрофон";
+"call_sound" = "Звук";
+"call_mic_denied" = "Нет доступа к микрофону — собеседник вас не слышит. Разрешите его в Системных настройках → Конфиденциальность и безопасность → Микрофон.";
+"call_open_settings" = "Открыть настройки";
+"call_encrypted_via_relay" = "Сквозное шифрование · через сервер Konstruct";
+"call_mic_level" = "Уровень микрофона";
+"call_mic_level_hint" = "Скажите что-нибудь — полоса должна двигаться.";
+"call_audio_output" = "Вывод звука";
+"call_device_system" = "Как в системе";
