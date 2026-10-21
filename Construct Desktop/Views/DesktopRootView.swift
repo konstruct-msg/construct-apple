@@ -24,6 +24,7 @@ struct DesktopRootView: View {
     @Environment(AuthViewModel.self) private var authViewModel
     @Environment(ChatsViewModel.self) private var chatsViewModel
     @Environment(DeepLinkHandler.self) private var deepLinkHandler
+    @Environment(AccountRecoveryViewModel.self) private var recoveryViewModel
     @Environment(\.managedObjectContext) private var viewContext
     @Environment(\.commandBridge) private var commandBridge
     @Environment(\.openSettings) private var openSettings
@@ -33,9 +34,11 @@ struct DesktopRootView: View {
     @AppStorage(OrientationStore.completedUserIdsKey) private var orientationCompletedUserIds = ""
 
     @State private var showAddContact = false
-    /// The recovery key, offered once right after the first orientation — same as iOS
-    /// `ContentView`. Contacts wait on it (`RecoveryGated`), so this is where it is asked for
-    /// before anyone reaches for an invite.
+    /// The recovery setup, shown after the first orientation only when the key could not be made
+    /// silently — same as iOS `ContentView`. Everyone else gets the key without a screen and
+    /// copies the phrase later from Security (`RecoveryKeyProvisioner`,
+    /// `decisions/recovery-key-backup-is-deferred-not-skipped.md`). Until 2026-10-21 Desktop
+    /// never made the key, so a new account met the full setup before its first invite.
     @State private var showingRecoveryPrompt = false
     /// Read again when the recovery sheet closes: `AccountAddress` is not observable.
     @State private var hasAccountAddress = AccountAddress.own() != nil
@@ -51,6 +54,21 @@ struct DesktopRootView: View {
             for: authViewModel.currentUserId ?? AuthSessionManager.shared.currentUserId,
             rawList: orientationCompletedUserIds
         )
+    }
+
+    private func provisionRecoveryKey(promptIfNeeded: Bool) async {
+        guard let userId = authViewModel.currentUserId ?? AuthSessionManager.shared.currentUserId else {
+            return
+        }
+        switch await RecoveryKeyProvisioner.shared.ensureKey(userId: userId) {
+        case .provisioned:
+            await recoveryViewModel.refreshStatus()
+        case .needsVisibleSetup, .setElsewhere:
+            if promptIfNeeded, AccountAddress.own() == nil { showingRecoveryPrompt = true }
+        case .alreadyKnown, .deferred:
+            break
+        }
+        hasAccountAddress = AccountAddress.own() != nil
     }
 
     var body: some View {
@@ -96,8 +114,15 @@ struct DesktopRootView: View {
             storeFailure = LocalRepositories.storeFailure
         }
         .onChange(of: orientationCompletedForCurrentUser) { _, completed in
-            if completed, AccountAddress.own() == nil {
-                showingRecoveryPrompt = true
+            if completed {
+                Task { await provisionRecoveryKey(promptIfNeeded: true) }
+            }
+        }
+        // Every launch of a signed-in account: one registered before this got its key here, and
+        // an upload that never got an answer is retried. Never prompts.
+        .task(id: authViewModel.isAuthenticated && orientationCompletedForCurrentUser) {
+            if authViewModel.isAuthenticated && orientationCompletedForCurrentUser {
+                await provisionRecoveryKey(promptIfNeeded: false)
             }
         }
         .onChange(of: showingRecoveryPrompt) { _, showing in
