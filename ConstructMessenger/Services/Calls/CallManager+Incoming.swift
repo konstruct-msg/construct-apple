@@ -273,7 +273,17 @@ extension CallManager {
     ///
     /// `sdp` is plaintext, like every other writer of `pendingRemoteOfferSdp` — see
     /// `holdRemoteOffer` for what the removed `decryptSdp` hop was hiding.
-    func handleIncomingCallOffer(callId: String, callerUserId: String, callerName: String?, sdp: String, hasVideo: Bool) {
+    ///
+    /// `callerDevice`: the caller's device the core opened this offer under. Whatever call this
+    /// offer ends up starting or completing talks to that device and no other
+    /// (`decisions/a-call-rings-every-device.md`).
+    func handleIncomingCallOffer(callId: String, callerUserId: String, callerName: String?, sdp: String, hasVideo: Bool,
+                                 callerDevice: String? = nil) {
+        defer {
+            if let callerDevice, let active, active.session.id == callId, active.peerDevice == nil {
+                active.peerDevice = callerDevice
+            }
+        }
         // Refused here rather than stored: an unusable offer that gets filed rings CallKit for a
         // call that cannot be negotiated, and the caller learns nothing until a human hangs up.
         guard offerSdpIsUsable(sdp) else {
@@ -305,7 +315,7 @@ extension CallManager {
         ) {
         case .declineBusy:
             Log.info("Busy — declining offer for a second call from \(callerUserId.prefix(8))… (callId=\(callId.prefix(8))…)", category: "Calls")
-            declineAsBusy(callId: callId, callerUserId: callerUserId)
+            declineAsBusy(callId: callId, callerUserId: callerUserId, callerDevice: callerDevice)
             return
 
         case .ignoreCallEnded:

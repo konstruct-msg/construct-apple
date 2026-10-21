@@ -115,30 +115,24 @@ final class CallSignalCrypto {
     /// ciphertext. A second scheme used to re-pad this to 1024 bytes — see the 2026-08-21 removal
     /// of `MessagePadding`, which made call signals the one traffic class with a distinct size.
     ///
-    /// Encrypts for the peer's **pinned** device, like the offer that opened the call — the two
-    /// have to name the same ratchet, so this surface moves when call signalling does, not before
-    /// (`decisions/a-peer-is-a-set-of-devices.md`).
-    func encryptCandidate(_ plaintext: String, for peerUserId: String) throws -> Data {
-        guard let peerDevice = SessionAddressing.pinnedDevice(ofPeer: peerUserId) else {
-            throw CallSignalCryptoError.missingSession(peerUserId: peerUserId)
-        }
+    /// Encrypts for one device of the peer — the same device the signal carrying it goes to, so
+    /// the two name the same ratchet. A call to several devices encrypts each candidate once per
+    /// device; a sealed candidate is never copied to another (`decisions/a-call-rings-every-device.md`).
+    func encryptCandidate(_ plaintext: String, forDevice device: String) throws -> Data {
         do {
-            let wire = try CryptoManager.shared.encryptMessage(plaintext, forDevice: peerDevice)
+            let wire = try CryptoManager.shared.encryptMessage(plaintext, forDevice: device)
             return CallSignalFrame.encode(wirePayload: wire)
         } catch CryptoManagerError.sessionNotFound {
-            throw CallSignalCryptoError.missingSession(peerUserId: peerUserId)
+            throw CallSignalCryptoError.missingSession(peerUserId: device)
         }
     }
 
     // MARK: Decrypt
 
-    /// Decrypt a candidate from a peer — on the same pinned device's ratchet it was encrypted for.
-    func decryptCandidate(_ frame: Data, from peerUserId: String) throws -> String {
-        guard let peerDevice = SessionAddressing.pinnedDevice(ofPeer: peerUserId) else {
-            throw CallSignalCryptoError.missingSession(peerUserId: peerUserId)
-        }
+    /// Decrypt a candidate from the device whose signal carried it.
+    func decryptCandidate(_ frame: Data, fromDevice device: String) throws -> String {
         let wire = try CallSignalFrame.decode(frame)
-        return try CryptoManager.shared.decryptCallSignal(contactId: peerDevice, wirePayload: wire)
+        return try CryptoManager.shared.decryptCallSignal(contactId: device, wirePayload: wire)
     }
 
 }
