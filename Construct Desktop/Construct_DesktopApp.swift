@@ -13,6 +13,7 @@ import UserNotifications
 /// Scene identifiers for secondary Desktop windows (D2).
 enum DesktopWindowID {
     static let synaps = "synaps"
+    static let call = "call"
 }
 
 @main
@@ -119,6 +120,15 @@ struct Construct_DesktopApp: App {
         }
         .defaultSize(width: 720, height: 560)
         .windowToolbarStyle(.unified)
+
+        // The call's own window (design: claude.ai/artifact/NjvFrSAuKZxc43tqxRJHdj). Opened by
+        // DesktopRootView when a call starts or is answered; closes itself when the call is over.
+        Window(LocalizedStringKey("call_window_title"), id: DesktopWindowID.call) {
+            DesktopCallWindowView(model: DesktopCallModel.shared)
+        }
+        .defaultSize(width: 440, height: 600)
+        .windowResizability(.contentMinSize)
+        .defaultPosition(.topTrailing)
 
         // MARK: - macOS Settings window (⌘,)
         Settings {
