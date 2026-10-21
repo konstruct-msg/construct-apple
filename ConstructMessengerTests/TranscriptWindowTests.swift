@@ -42,11 +42,11 @@ final class TranscriptWindowTests: XCTestCase {
 
     @discardableResult
     private func add(_ n: Int, body: String? = nil, type: MessageContentType = .regular, chat: String? = nil,
-                     status: DeliveryStatus = .delivered) throws -> String {
+                     status: DeliveryStatus = .delivered, orderKey: String? = nil) throws -> String {
         let id = String(format: "m%05d", n)
         try store.insert(MessageRecord(
             id: id, chatId: chat ?? chatId, fromUserId: "peer", toUserId: "me", isSentByMe: false,
-            timestamp: Date(timeIntervalSince1970: TimeInterval(n)), orderKey: key(n),
+            timestamp: Date(timeIntervalSince1970: TimeInterval(n)), orderKey: orderKey ?? key(n),
             body: LocalMessagePayload.encodeText(body ?? "message \(n)"), contentType: type,
             deliveryStatus: status, retryCount: 0, suiteId: 4, isEdited: false, editedAt: nil,
             replyToMessageId: nil, replyQuote: nil, transcript: nil, transcriptLanguage: nil,
@@ -172,6 +172,53 @@ final class TranscriptWindowTests: XCTestCase {
         window.loadMore()
         XCTAssertFalse(window.hasMore)
         XCTAssertEqual(window.rows.count, 30)
+    }
+
+    /// A chat that begins with our message: the row sits on the `pending` key until the server
+    /// places it below, and what the peer writes then lands below that key too. Both stay on
+    /// screen. The 2026-10-21 defect: a chat opened from a scanned invite went blank after the
+    /// first send and stayed blank until it was opened again.
+    /// Mutation: read from the oldest row's key when the window holds the whole chat — the placed
+    /// row and the reply drop out.
+    func testAChatThatBeginsWithOurSendKeepsItOnceTheServerPlacesIt() async throws {
+        let window = open()
+        XCTAssertEqual(window.rows.count, 0)
+        try addOurs(1, orderKey: ServerMessageOrder.pending(localMessageId: "m00001"))
+        await eventually { window.rows.map(\.id) == ["m00001"] }
+        try store.setOrderKey("m00001", serverKey(1))
+        try add(2, orderKey: serverKey(2))
+        await eventually { window.rows.map(\.id) == ids(1...2) }
+    }
+
+    /// The peer's reply arrives while our first message is still unplaced: it is below the
+    /// pending key and is shown all the same, above our bubble until that is placed.
+    /// Mutation: as above — the reply never appears.
+    func testAReplyBeforeOurSendIsPlacedIsShown() async throws {
+        let window = open()
+        try addOurs(5, orderKey: ServerMessageOrder.pending(localMessageId: "m00005"))
+        await eventually { window.rows.count == 1 }
+        try add(2, orderKey: serverKey(2))
+        await eventually { window.rows.map(\.id) == ["m00002", "m00005"] }
+    }
+
+    /// A key as the server gives one: digits, below the `pending` key. The `k…` keys of `add` are
+    /// letters and sort above it, which is not what a real chat holds.
+    private func serverKey(_ n: Int) -> String {
+        ServerMessageOrder.key(serverTimestampMilliseconds: Int64(1_000 + n), sequence: 0)!
+    }
+
+    @discardableResult
+    private func addOurs(_ n: Int, orderKey: String) throws -> String {
+        let id = String(format: "m%05d", n)
+        try store.insert(MessageRecord(
+            id: id, chatId: chatId, fromUserId: "me", toUserId: "peer", isSentByMe: true,
+            timestamp: Date(timeIntervalSince1970: TimeInterval(n)), orderKey: orderKey,
+            body: LocalMessagePayload.encodeText("ours \(n)"), contentType: .regular,
+            deliveryStatus: .sending, retryCount: 0, suiteId: 4, isEdited: false, editedAt: nil,
+            replyToMessageId: nil, replyQuote: nil, transcript: nil, transcriptLanguage: nil,
+            transcriptGeneratedAt: nil
+        ), searchText: nil)
+        return id
     }
 
     /// The rows a read decrypted are not read again to be shown: the window's own read is the
