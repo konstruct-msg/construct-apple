@@ -35,8 +35,50 @@ extension CallManager {
     /// The RPC send is still fire-and-forget (chained). Encrypt is synchronous — the
     /// result tells the caller whether Rust produced a send, or whether there is no
     /// session to encrypt under (D858E6FE logged success after CALL_SIGNAL_ENCRYPT_FAILED).
+    ///
+    /// One envelope per device the signal goes to, each encrypted on that device's ratchet and
+    /// sealed to that device's key. `devices` names them; nil asks the call it belongs to
+    /// (`callSignalTargets`). Encrypted if any device got it; otherwise a missing session wins
+    /// over a failure, since that is the one the caller can wait out.
     @discardableResult
-    func sendCallSignalProto(_ signal: Shared_Proto_Signaling_V1_WebRTCSignal, to peerUserId: String) -> CallSignalEncryptResult {
+    func sendCallSignalProto(_ signal: Shared_Proto_Signaling_V1_WebRTCSignal, to peerUserId: String,
+                             devices: [String]? = nil) -> CallSignalEncryptResult {
+        let targets = devices ?? callSignalTargets(callId: signal.callID, peerUserId: peerUserId)
+        guard !targets.isEmpty else {
+            Log.error("Call signal: no device of \(peerUserId.prefix(8))… to send to — no pinned identity key", category: "Calls")
+            return .failed
+        }
+        let results = targets.map { sendCallSignalProto(signal, to: peerUserId, device: $0) }
+        if results.contains(.encrypted) { return .encrypted }
+        return results.contains(.sessionMissing) ? .sessionMissing : .failed
+    }
+
+    /// The devices a signal of call `callId` goes to: the call's own device once it has one, the
+    /// devices its offer went to before that, the pinned device for a call we do not hold.
+    func callSignalTargets(callId: String, peerUserId: String) -> [String] {
+        let call = active.flatMap { $0.session.id == callId ? $0 : nil }
+        return CallDeviceRouting.targets(
+            chosen: call?.peerDevice,
+            offered: call?.offeredDevices ?? [],
+            pinned: SessionAddressing.pinnedDevice(ofPeer: peerUserId)
+        )
+    }
+
+    /// Tell `devices` that the call was taken on another device of theirs — E2EE only. Never on
+    /// the signaling stream: the server ends the whole call on any callee hangup.
+    func releaseDevices(_ devices: [String], callId: String, peerUserId: String) {
+        guard !devices.isEmpty else { return }
+        var sig = Shared_Proto_Signaling_V1_WebRTCSignal()
+        sig.callID = callId
+        sig.senderDeviceID = Self.currentDeviceId()
+        sig.timestamp = Self.nowMs()
+        sig.signal = .hangup(Self.makeCallHangup(deviceId: Self.currentDeviceId(), timestampMs: sig.timestamp, reason: .acceptedElsewhere))
+        sendCallSignalProto(sig, to: peerUserId, devices: devices)
+        Log.info("Released \(devices.count) other device(s) of \(peerUserId.prefix(8))… — taken elsewhere (call_id=\(callId.prefix(8))…)", category: "Calls")
+    }
+
+    private func sendCallSignalProto(_ signal: Shared_Proto_Signaling_V1_WebRTCSignal, to peerUserId: String,
+                                     device peerContactId: String) -> CallSignalEncryptResult {
         guard let protoData = try? signal.serializedData() else {
             Log.error("Failed to serialize WebRTCSignal proto", category: "Calls")
             return .failed
@@ -58,15 +100,7 @@ extension CallManager {
         // envelope's type.) See decisions/sealed-content-type-inside-the-plaintext-frame.md.
         // Seam: the orchestrator keeps sessions under a device id like the rest of the core.
         //
-        // **Still the pinned device, and named as such.** Call signalling is the one surface step
-        // 6 did not convert: an offer reaches whichever device the pin happens to hold, so a
-        // person's second device never rings. Fixing it is not a rename — it is deciding what a
-        // call to someone with two devices means, which is its own decision and not this one.
-        // `decisions/a-peer-is-a-set-of-devices.md`.
-        guard let peerContactId = SessionAddressing.pinnedDevice(ofPeer: peerUserId) else {
-            Log.error("Call signal: cannot name a device for \(peerUserId.prefix(8))… — no pinned identity key", category: "Calls")
-            return .failed
-        }
+        // One device: the caller of this function chose it (`decisions/a-call-rings-every-device.md`).
         let event = CfeIncomingEvent.outgoingCallSignal(
             contactId: peerContactId,
             messageId: messageId,
@@ -101,7 +135,7 @@ extension CallManager {
 
                         // Apply stealth/sealed sender for call signals when policy allows.
                         // Uses dedicated helper with cache + proper logging.
-                        let sealedInnerBytes = await buildSealedForCallSignalIfNeeded(recipient: to, payload: payload)
+                        let sealedInnerBytes = await buildSealedForCallSignalIfNeeded(recipient: to, device: peerContactId, payload: payload)
 
                         // Fail-closed: while stealth is on a call signal is sealed or dropped — never
                         // sent identified. The signal carries the real senderId to the server; leaking
@@ -122,6 +156,7 @@ extension CallManager {
                                 _ = try await StealthSendRecovery.sendSealed(sealedInnerBytes, rebuild: { afterCredentialRejection in
                                     await self.buildSealedForCallSignalIfNeeded(
                                         recipient: to,
+                                        device: peerContactId,
                                         payload: payload,
                                         afterCredentialRejection: afterCredentialRejection
                                     )
@@ -133,6 +168,7 @@ extension CallManager {
                                         conversationId: "",
                                         encryptedPayload: payload,
                                         timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+                                        recipientDeviceId: peerContactId,
                                         contentType: .unspecified,
                                         sealing: .sealed(inner)
                                     )
@@ -145,6 +181,7 @@ extension CallManager {
                                     conversationId: "",
                                     encryptedPayload: payload,
                                     timestamp: UInt64(Date().timeIntervalSince1970 * 1000),
+                                    recipientDeviceId: peerContactId,
                                     contentType: .unspecified,
                                     sealing: .identified(.stealthDisabled)
                                 )
@@ -207,6 +244,7 @@ extension CallManager {
 
     private func buildSealedForCallSignalIfNeeded(
         recipient: String,
+        device: String,
         payload: Data,
         afterCredentialRejection: Bool = false
     ) async -> Data? {
@@ -214,7 +252,17 @@ extension CallManager {
             return nil
         }
 
-        guard let ik = await fetchRecipientIdentityKey(for: recipient) else {
+        // Sealed to the device the payload is encrypted for. The account's bundle names one
+        // device the server picks, and a seal to another device's key is one this device cannot
+        // open — the fallback serves only a device whose key is not stored here yet.
+        var ik = SessionAddressing.identityKey(ofDevice: device)
+        if ik?.isEmpty != false { ik = await fetchRecipientIdentityKey(for: recipient) }
+        return await sealCallSignal(recipient: recipient, ik: ik ?? Data(), payload: payload,
+                                    afterCredentialRejection: afterCredentialRejection)
+    }
+
+    private func sealCallSignal(recipient: String, ik: Data, payload: Data, afterCredentialRejection: Bool) async -> Data? {
+        guard !ik.isEmpty else {
             Log.info("STEALTH: no identity key for call signal to \(recipient.prefix(8))… — sending in clear", category: "Calls")
             return nil
         }
@@ -236,14 +284,42 @@ extension CallManager {
         }
     }
 
+    /// A hangup or busy from one of the peer's devices. A decline anywhere ends the call and
+    /// releases the other devices; busy on one device only takes that one out while others ring;
+    /// taken elsewhere ends this device's ringing without telling the server, which would end
+    /// the call for the device that took it.
+    private func endFromPeer(reason: Shared_Proto_Signaling_V1_HangupReason, device: String, callId: String, peerUserId: String) {
+        guard let call = active, call.session.id == callId else { return }
+        if reason == .acceptedElsewhere {
+            endActiveCall(reason: .hangup(.acceptedElsewhere), reportToCallKit: true)
+            return
+        }
+        switch CallDeviceRouting.onHangup(from: device, reason: reason, chosen: call.peerDevice, offered: call.offeredDevices) {
+        case .ignore:
+            return
+        case .dropDevice(let remaining):
+            call.offeredDevices = remaining
+            Log.info("Device \(device.prefix(8))… is busy — \(remaining.count) still ringing (call_id=\(callId.prefix(8))…)", category: "Calls")
+        case .end(let release):
+            releaseDevices(release, callId: callId, peerUserId: peerUserId)
+            // Occupancy lives on signaling-service. The peer already knows (they sent
+            // this); tell the server so a callback in the next few seconds is not
+            // "Callee is busy" (AC92380B).
+            sendHangup(reason: reason, origin: .remote)
+            endActiveCall(reason: .hangup(reason), reportToCallKit: true)
+        }
+    }
+
     /// Call at end of a call to drop cached keys (privacy + memory).
     func clearIdentityKeyCache() {
         identityKeyCache.removeAll()
     }
 
 
-    /// Handle a decrypted `WebRTCSignal` proto received via MessagingService.
-    func handleCallSignalProto(from senderUserId: String, signal: Shared_Proto_Signaling_V1_WebRTCSignal) {
+    /// Handle a decrypted `WebRTCSignal` proto received via MessagingService. `device`: the
+    /// sender's device the core opened it under — the only device id here a sender cannot
+    /// choose (`sender_device_id` it writes itself, and the server does not check it).
+    func handleCallSignalProto(from senderUserId: String, device: String, signal: Shared_Proto_Signaling_V1_WebRTCSignal) {
         Log.info("handleCallSignalProto type=\(signal.signal.map { "\($0)" } ?? "none") from=\(senderUserId.prefix(8))… callId=\(signal.callID.prefix(8))…", category: "Calls")
         // Note: if the original wire message was sealed, the real sender was already resolved
         // in MessageRouter before the Rust decrypt action produced this .callSignalDecrypted.
@@ -260,9 +336,21 @@ extension CallManager {
             return
         }
 
+        // Once the call has its device, its siblings do not move it.
+        if let active, active.session.id == signal.callID,
+           !CallDeviceRouting.admits(device, chosen: active.peerDevice) {
+            if case .answer? = signal.signal {
+                // A second device answered after the first: release it, below.
+            } else {
+                Log.info("Call signal from \(device.prefix(8))…, not this call's device — ignored (call_id=\(signal.callID.prefix(8))…)", category: "Calls")
+                return
+            }
+        }
+
         switch signal.signal {
         case .offer(let offer):
             if let active, active.session.id == signal.callID {
+                if active.peerDevice == nil { active.peerDevice = device }
                 switch remoteOfferDisposition(
                     isIncomingCall: { if case .incoming = active.session.direction { return true } else { return false } }(),
                     hasAnswered: active.answeredAt != nil
@@ -284,13 +372,24 @@ extension CallManager {
                                         callerName: nil,
                                         sdp: offer.sdp,
                                         hasVideo: CallVideoSignal.answersWithCamera(
-                                            offerCallType: offer.callType, videoEnabled: CallsFeature.isVideoEnabled))
+                                            offerCallType: offer.callType, videoEnabled: CallsFeature.isVideoEnabled),
+                                        callerDevice: device)
                 if let active, active.session.id == signal.callID {
                     takeUpVideoCall(offer, for: active)
                 }
             }
         case .answer(let answer):
-            guard active?.session.id == signal.callID else { return }
+            guard let call = active, call.session.id == signal.callID else { return }
+            switch CallDeviceRouting.onAnswer(from: device, chosen: call.peerDevice, offered: call.offeredDevices) {
+            case .releaseLate(let late):
+                Log.info("Late answer from \(late.prefix(8))… — another device took the call", category: "Calls")
+                releaseDevices([late], callId: signal.callID, peerUserId: senderUserId)
+                return
+            case .accept(let chosen, let release):
+                call.peerDevice = chosen
+                call.offeredDevices = []
+                releaseDevices(release, callId: signal.callID, peerUserId: senderUserId)
+            }
             let sdp = answer.sdp
             let callId = signal.callID
             // Re-fetch `active` inside the @MainActor task rather than capturing it, so
@@ -324,7 +423,7 @@ extension CallManager {
             guard let active, active.session.id == signal.callID else { return }
             // ICE candidate SDP is always CallSignalCrypto-encrypted before sending.
             // Decrypt it here (stream path decrypts in handleRemoteIceCandidate).
-            guard let candidateSdp = try? CallSignalCrypto.shared.decryptCandidate(ice.candidate, from: senderUserId) else {
+            guard let candidateSdp = try? CallSignalCrypto.shared.decryptCandidate(ice.candidate, fromDevice: device) else {
                 Log.error("Failed to decrypt E2EE ICE candidate from \(senderUserId.prefix(8))… — dropping", category: "Calls")
                 return
             }
@@ -341,7 +440,7 @@ extension CallManager {
             guard let active, active.session.id == signal.callID else { return }
             var buffered = 0
             for ice in batch.candidates {
-                guard let candidateSdp = try? CallSignalCrypto.shared.decryptCandidate(ice.candidate, from: senderUserId) else {
+                guard let candidateSdp = try? CallSignalCrypto.shared.decryptCandidate(ice.candidate, fromDevice: device) else {
                     Log.error("Failed to decrypt E2EE ICE candidate (batch) from \(senderUserId.prefix(8))… — dropping", category: "Calls")
                     continue
                 }
@@ -357,16 +456,9 @@ extension CallManager {
                 Log.debug("Buffered \(buffered)/\(batch.candidates.count) E2EE ICE candidates (pending SDP)", category: "Calls")
             }
         case .hangup(let hangup):
-            guard active?.session.id == signal.callID else { return }
-            // Occupancy lives on signaling-service. The peer already knows (they sent
-            // this); tell the server so a callback in the next few seconds is not
-            // "Callee is busy" (AC92380B).
-            sendHangup(reason: hangup.reason, origin: .remote)
-            endActiveCall(reason: .hangup(hangup.reason), reportToCallKit: true)
+            endFromPeer(reason: hangup.reason, device: device, callId: signal.callID, peerUserId: senderUserId)
         case .busy:
-            guard active?.session.id == signal.callID else { return }
-            sendHangup(reason: .busy, origin: .remote)
-            endActiveCall(reason: .hangup(.busy), reportToCallKit: true)
+            endFromPeer(reason: .busy, device: device, callId: signal.callID, peerUserId: senderUserId)
         case .ringing:
             guard let active, active.session.id == signal.callID else { return }
             if case .dialing = state { state = .ringing(active.session) }
