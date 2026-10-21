@@ -448,7 +448,7 @@
 "recovery_confirm_placeholder" = "12 слов через пробел";
 "recovery_confirm_action" = "Подтвердить";
 "recovery_confirm_invalid_phrase" = "Это не фраза из 12 слов. Проверьте написание каждого слова.";
-"recovery_confirm_other_account" = "Эта фраза от другого аккаунта.";
+"recovery_confirm_other_account" = "Это не фраза восстановления этого аккаунта. Проверьте слова.";
 "invite_error_recovery_key_required" = "Настройте фразу восстановления, прежде чем добавлять контакты.";
 "recovery_generate" = "Сгенерировать фразу";
 "recovery_write_down" = "Запишите эти 12 слов по порядку. Храните их в надёжном месте — никому не передавайте.";

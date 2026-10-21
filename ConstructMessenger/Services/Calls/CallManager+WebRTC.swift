@@ -242,7 +242,11 @@ extension CallManager {
     func handleRemoteIceCandidate(_ c: Shared_Proto_Signaling_V1_IceCandidate, for session: CallSession) async {
         guard let active, active.session == session else { return }
         do {
-            let candidateSdp = try CallSignalCrypto.shared.decryptCandidate(c.candidate, from: session.peerUserId)
+            guard let device = active.peerDevice ?? SessionAddressing.pinnedDevice(ofPeer: session.peerUserId) else {
+                Log.error("ICE candidate on the stream with no device to open it — dropping", category: "Calls")
+                return
+            }
+            let candidateSdp = try CallSignalCrypto.shared.decryptCandidate(c.candidate, fromDevice: device)
             try ensureWebRTC(role: active.session.direction == .outgoing ? .caller : .callee)
             let ice = WebRTCIceCandidate(sdp: candidateSdp, sdpMid: c.sdpMid, sdpMLineIndex: Int32(c.sdpMLineIndex))
             try await active.webrtc?.addRemoteIceCandidate(ice)
@@ -324,6 +328,10 @@ extension CallManager {
         sig.senderDeviceID = Self.currentDeviceId()
         sig.timestamp = Self.nowMs()
         sig.signal = .offer(offer)
+        if !isIceRestart, active.peerDevice == nil, case .outgoing = active.session.direction {
+            active.offeredDevices = Self.offerDevices(ofPeer: toUserId)
+            Log.info("Offer goes to \(active.offeredDevices.count) device(s) of \(toUserId.prefix(8))…", category: "Calls")
+        }
         let encrypt = sendCallSignalProto(sig, to: toUserId)
         let kind = isIceRestart ? "ICE restart offer" : "Offer"
         switch encrypt {
@@ -356,15 +364,6 @@ extension CallManager {
     private func sendIceCandidate(_ c: WebRTCIceCandidate) {
         guard let active else { return }
         let peerUserId = active.session.peerUserId
-        var ice = Shared_Proto_Signaling_V1_IceCandidate()
-        do {
-            ice.candidate = try CallSignalCrypto.shared.encryptCandidate(c.sdp, for: peerUserId)
-        } catch {
-            Log.error("Failed to encrypt ICE candidate: \(error) — dropping", category: "Calls")
-            return
-        }
-        ice.sdpMid = c.sdpMid
-        ice.sdpMLineIndex = UInt32(max(0, c.sdpMLineIndex))
 
         // Trickle candidates over E2EE (MessagingService) — the same reliable, queued
         // path the offer/answer/hangup use. The signaling-stream relay is real-time
@@ -374,55 +373,96 @@ extension CallManager {
         // received the other's candidates → ICE stuck at `checking` → medialess,
         // silent call. E2EE delivery is persisted/queued, so it arrives regardless of
         // join order. Batch with a 200ms debounce to coalesce the initial burst.
-        active.pendingOutgoingIce.append(ice)
+        active.pendingOutgoingIce.append(c)
         active.iceFlushTask?.cancel()
         active.iceFlushTask = Task { @MainActor [weak self] in
             try? await Task.sleep(for: .milliseconds(200))
             guard !Task.isCancelled, let self, let active = self.active else { return }
-            let batch = active.pendingOutgoingIce
-            guard !batch.isEmpty else { return }
+            let plain = active.pendingOutgoingIce
+            guard !plain.isEmpty else { return }
             active.pendingOutgoingIce.removeAll()
             active.iceFlushTask = nil
-
-            // Split the flush into size-bounded signals: each candidate field is an
-            // `CallSignalFrame` carrying a whole wire payload (a PQ-ratchet blob on suite-3
-            // sessions, a KEM identity answer until the peer proves itself), so one
-            // burst can exceed the Rust E2EE padding cap of 65536 bytes (observed on
-            // device: a 134KB batch → CALL_SIGNAL_ENCRYPT_FAILED → the whole batch
-            // silently lost). Chunks stay well under the cap, leaving headroom for the
-            // outer WebRTCSignal proto + DR overhead. A burst of 24 candidates becomes
-            // ~2–4 signals — still far below the server's 10/sec signal rate limit.
-            let maxSignalBytes = 40_000
-            var chunks: [[Shared_Proto_Signaling_V1_IceCandidate]] = []
-            var current: [Shared_Proto_Signaling_V1_IceCandidate] = []
-            var currentBytes = 0
-            for candidate in batch {
-                let size = candidate.candidate.count + candidate.sdpMid.utf8.count + 16
-                if !current.isEmpty, currentBytes + size > maxSignalBytes {
-                    chunks.append(current)
-                    current = []
-                    currentBytes = 0
-                }
-                current.append(candidate)
-                currentBytes += size
+            // Every candidate is sealed once per device the call is talking to, on that device's
+            // ratchet, and goes in that device's own signal: a candidate sealed to one device
+            // opens nowhere else (`decisions/a-call-rings-every-device.md`).
+            for device in self.callSignalTargets(callId: active.session.id, peerUserId: peerUserId) {
+                self.flushIce(plain, to: device, of: active, peerUserId: peerUserId)
             }
-            if !current.isEmpty { chunks.append(current) }
-
-            for chunk in chunks {
-                var sig = Shared_Proto_Signaling_V1_WebRTCSignal()
-                sig.callID = active.session.id
-                sig.senderDeviceID = Self.currentDeviceId()
-                sig.timestamp = Self.nowMs()
-                if chunk.count == 1 {
-                    sig.signal = .iceCandidate(chunk[0])
-                } else {
-                    var candidates = Shared_Proto_Signaling_V1_IceCandidateBatch()
-                    candidates.candidates = chunk
-                    sig.signal = .iceCandidates(candidates)
-                }
-                self.sendCallSignalProto(sig, to: peerUserId)
-            }
-            Log.info("Flushed \(batch.count) ICE candidate(s) in \(chunks.count) signal(s) via E2EE (call_id=\(active.session.id.prefix(8))…)", category: "Calls")
         }
+    }
+
+    private func flushIce(_ plain: [WebRTCIceCandidate], to device: String, of active: ActiveCall, peerUserId: String) {
+        var batch: [Shared_Proto_Signaling_V1_IceCandidate] = []
+        for c in plain {
+            var ice = Shared_Proto_Signaling_V1_IceCandidate()
+            do {
+                ice.candidate = try CallSignalCrypto.shared.encryptCandidate(c.sdp, forDevice: device)
+            } catch {
+                Log.error("Failed to encrypt ICE candidate for \(device.prefix(8))…: \(error) — dropping", category: "Calls")
+                continue
+            }
+            ice.sdpMid = c.sdpMid
+            ice.sdpMLineIndex = UInt32(max(0, c.sdpMLineIndex))
+            batch.append(ice)
+        }
+        guard !batch.isEmpty else { return }
+
+        // Split the flush into size-bounded signals: each candidate field is an
+        // `CallSignalFrame` carrying a whole wire payload (a PQ-ratchet blob on suite-3
+        // sessions, a KEM identity answer until the peer proves itself), so one
+        // burst can exceed the Rust E2EE padding cap of 65536 bytes (observed on
+        // device: a 134KB batch → CALL_SIGNAL_ENCRYPT_FAILED → the whole batch
+        // silently lost). Chunks stay well under the cap, leaving headroom for the
+        // outer WebRTCSignal proto + DR overhead. A burst of 24 candidates becomes
+        // ~2–4 signals — still far below the server's 10/sec signal rate limit.
+        let maxSignalBytes = 40_000
+        var chunks: [[Shared_Proto_Signaling_V1_IceCandidate]] = []
+        var current: [Shared_Proto_Signaling_V1_IceCandidate] = []
+        var currentBytes = 0
+        for candidate in batch {
+            let size = candidate.candidate.count + candidate.sdpMid.utf8.count + 16
+            if !current.isEmpty, currentBytes + size > maxSignalBytes {
+                chunks.append(current)
+                current = []
+                currentBytes = 0
+            }
+            current.append(candidate)
+            currentBytes += size
+        }
+        if !current.isEmpty { chunks.append(current) }
+
+        for chunk in chunks {
+            var sig = Shared_Proto_Signaling_V1_WebRTCSignal()
+            sig.callID = active.session.id
+            sig.senderDeviceID = Self.currentDeviceId()
+            sig.timestamp = Self.nowMs()
+            if chunk.count == 1 {
+                sig.signal = .iceCandidate(chunk[0])
+            } else {
+                var candidates = Shared_Proto_Signaling_V1_IceCandidateBatch()
+                candidates.candidates = chunk
+                sig.signal = .iceCandidates(candidates)
+            }
+            self.sendCallSignalProto(sig, to: peerUserId, devices: [device])
+        }
+        Log.info("Flushed \(batch.count) ICE candidate(s) in \(chunks.count) signal(s) via E2EE to \(device.prefix(8))… (call_id=\(active.session.id.prefix(8))…)", category: "Calls")
+    }
+}
+
+extension CallManager {
+    /// The devices an outgoing offer rings: every device of the peer the core plans a send to —
+    /// none of our own (`plan_send` with no own devices) — that we hold a session with.
+    static func offerDevices(ofPeer peerUserId: String) -> [String] {
+        let planned = planSend(
+            recipientDeviceIds: SessionAddressing.deviceIds(ofPeer: peerUserId),
+            ownDeviceIds: [],
+            ourDeviceId: "",
+            recipientIsSelf: false
+        ).filter { $0.audience == .recipient }.map(\.deviceId)
+        return CallDeviceRouting.offerDevices(
+            planned: planned,
+            hasSession: { CryptoManager.shared.hasSession(for: $0) },
+            pinned: SessionAddressing.pinnedDevice(ofPeer: peerUserId)
+        )
     }
 }

@@ -447,7 +447,7 @@
 "recovery_confirm_placeholder" = "12 words, separated by spaces";
 "recovery_confirm_action" = "Confirm";
 "recovery_confirm_invalid_phrase" = "That isn't a valid 12-word phrase. Check the spelling of each word.";
-"recovery_confirm_other_account" = "This phrase belongs to a different account.";
+"recovery_confirm_other_account" = "This isn't this account's recovery phrase. Check the words.";
 "invite_error_recovery_key_required" = "Set up your recovery phrase before adding contacts.";
 "recovery_generate" = "Generate Recovery Phrase";
 "recovery_write_down" = "Write down these 12 words in order. Store them somewhere safe — never share them.";

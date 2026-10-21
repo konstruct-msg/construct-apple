@@ -417,7 +417,7 @@
 "recovery_confirm_placeholder" = "12語をスペースで区切って入力";
 "recovery_confirm_action" = "確認";
 "recovery_confirm_invalid_phrase" = "有効な12語のフレーズではありません。各単語のつづりを確認してください。";
-"recovery_confirm_other_account" = "このフレーズは別のアカウントのものです。";
+"recovery_confirm_other_account" = "このアカウントの復旧フレーズではありません。単語を確認してください。";
 "invite_error_recovery_key_required" = "連絡先を追加する前に復旧フレーズを設定してください。";
 "recovery_generate" = "復旧フレーズを生成";
 "recovery_write_down" = "これらの12語を順番に書き留めてください。安全な場所に保管し、決して共有しないでください。";
