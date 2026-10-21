@@ -432,6 +432,11 @@ class AuthViewModel {
         // twelve inherited contacts. Registration is the one moment a *different* identity
         // takes over a device, so the gate belongs here.
         enforceLocalStoreOwnership(for: userId)
+        // The same moment for the address: a new account has no recovery key yet, and one left
+        // from an account this device used to be went into every invite (the server refused them:
+        // "address does not match the account's recovery key") and told the provisioner the key
+        // already existed (2026-10-21).
+        KeychainManager.shared.deleteOwnAccountAddress()
 
         currentUserId = userId
         isAuthenticated = true
