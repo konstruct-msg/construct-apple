@@ -129,12 +129,23 @@ final class TranscriptWindow {
         publish(read)
     }
 
+    /// A window that reached the start of the chat holds all of it, and is read again from the
+    /// start: its oldest row's key is no bound when that row is ours and unsent. A send sits on the
+    /// `pending` key, above every server key, until the server places it — so in a chat that began
+    /// with it, reading from that key found neither the placed row nor anything that came after,
+    /// and the chat stayed empty until it was opened again (2026-10-21).
     private func reread() {
         guard let oldest else {
             readFirstPage()
             return
         }
-        let read = (try? store.messages(inChat: chatId, from: oldest, limit: Self.windowCeiling)) ?? []
+        let read: [MessageRecord]
+        if hasMore {
+            read = (try? store.messages(inChat: chatId, from: oldest, limit: Self.windowCeiling)) ?? []
+        } else {
+            read = (try? store.messages(inChat: chatId, before: nil, limit: Self.windowCeiling)) ?? []
+            self.oldest = read.first.map { ($0.orderKey, $0.id) }
+        }
         publish(read)
     }
 
