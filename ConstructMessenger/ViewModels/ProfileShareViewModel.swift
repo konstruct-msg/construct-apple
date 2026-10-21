@@ -237,7 +237,7 @@ class ProfileShareViewModel {
         } else {
             Log.error("reportSpam skipped for \(userId.prefix(8))… — no known identity key to derive device id", category: "UserProfileView")
         }
-        await BlockSyncService.shared.request(userId, blocked: true, reason: "spam")
+        BlockSyncService.shared.request(userId, blocked: true, reason: "spam")
         return reported
     }
 
