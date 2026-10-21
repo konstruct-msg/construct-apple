@@ -53,6 +53,8 @@ final class RecoveryKeyProvisionerTests: XCTestCase {
 
     private var store = FakeStore()
     private var address: Data?
+    /// Whether the server confirms the stored address as this account's.
+    private var confirmed = true
     private var serverHasKey = false
     private var statusFails = false
     private var uploadResult: Result<Data, Error> = .success(Data(repeating: 7, count: 32))
@@ -71,7 +73,7 @@ final class RecoveryKeyProvisionerTests: XCTestCase {
 
     private func provisioner() -> RecoveryKeyProvisioner {
         RecoveryKeyProvisioner(dependencies: .init(
-            knownAddress: { [unowned self] in address },
+            knownAddress: { [unowned self] in confirmed ? address : nil },
             serverHasKey: { [unowned self] in
                 if statusFails { throw Offline() }
                 return serverHasKey
@@ -132,6 +134,18 @@ final class RecoveryKeyProvisionerTests: XCTestCase {
         await expectOutcome(.alreadyKnown)
         XCTAssertEqual(generated, 0)
         XCTAssertTrue(uploads.isEmpty)
+    }
+
+    /// An address the server does not confirm is one left from another account: the key is made
+    /// for this one and its address replaces the stale one. Not reached here: that the live
+    /// dependency asks `AccountAddress.confirmedOwn()` rather than reading the Keychain — the
+    /// 2026-10-21 defect was exactly that line, and only its comment guards it.
+    func testAStoredAddressTheServerDoesNotConfirmIsReplaced() async {
+        address = Data(repeating: 1, count: 32)
+        confirmed = false
+        await expectOutcome(.provisioned)
+        XCTAssertEqual(uploads, ["phrase-1"])
+        XCTAssertEqual(address, Data(repeating: 7, count: 32))
     }
 
     /// A key set on another device is not replaced, and no phrase is made for it.
