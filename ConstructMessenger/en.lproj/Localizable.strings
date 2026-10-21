@@ -1388,3 +1388,30 @@
 "device_link_error_token" = "This code has expired. Scan a new one.";
 "device_link_error_already_linked" = "This device is already linked.";
 "voice_playback_speed" = "Playback speed";
+
+/* Desktop call surfaces */
+"call_status_ringing" = "Ringing…";
+"call_reconnecting_title" = "Reconnecting…";
+"call_ended_after" = "Call ended · %@";
+"call_no_answer" = "No answer";
+"call_not_connected" = "Couldn't connect";
+"call_detail_reconnecting" = "The connection dropped. The call continues when the network is back.";
+"call_detail_declined" = "The call was declined.";
+"call_detail_busy" = "They're on another call.";
+"call_detail_no_answer" = "No one answered.";
+"call_detail_failed" = "The call didn't connect. Check your network and call again.";
+"call_audio_devices" = "Microphone and output";
+"call_incoming_from" = "Incoming call from %@";
+"call_with" = "Call · %@";
+"call_open_window" = "Open call window";
+"call_mic_off" = "Mic off";
+"call_window_title" = "Call";
+"call_microphone" = "Microphone";
+"call_sound" = "Sound";
+"call_mic_denied" = "No microphone access — the other side can't hear you. Allow it in System Settings → Privacy & Security → Microphone.";
+"call_open_settings" = "Open Settings";
+"call_encrypted_via_relay" = "End-to-end encrypted · via the Konstruct server";
+"call_mic_level" = "Microphone level";
+"call_mic_level_hint" = "Say something — the bar should move.";
+"call_audio_output" = "Output";
+"call_device_system" = "System default";
