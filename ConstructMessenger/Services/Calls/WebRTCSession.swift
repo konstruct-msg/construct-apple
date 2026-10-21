@@ -48,7 +48,7 @@ protocol WebRTCSessionProtocol: AnyObject {
     func close()
 }
 
-#if os(iOS) && canImport(WebRTC)
+#if canImport(WebRTC)
 import AVFoundation
 import WebRTC
 

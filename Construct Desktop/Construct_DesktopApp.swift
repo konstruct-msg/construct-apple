@@ -87,7 +87,7 @@ struct Construct_DesktopApp: App {
                     // async session restore completes.
                     _ = try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge])
 
-                    // Calls remain iOS-only while the protocol is being stabilized.
+                    // Calls on Desktop since 2026-10-21; no CallKit, WebRTC drives Core Audio itself.
                     if CallsFeature.isEnabled {
                         #if canImport(WebRTC)
                         WebRTCRuntime.bootstrap()
