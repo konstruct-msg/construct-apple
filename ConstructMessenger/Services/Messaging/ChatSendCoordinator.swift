@@ -76,9 +76,10 @@ final class ChatSendCoordinator {
         conversation: Conversation,
         viewContext: NSManagedObjectContext,
         sessionManager: ChatSessionManager,
-        pendingUploads: PendingUploads = .shared
+        pendingUploads: PendingUploads? = nil
     ) {
-        self.pendingUploads = pendingUploads
+        // `.shared` is main-actor state; a default argument is evaluated outside the actor.
+        self.pendingUploads = pendingUploads ?? .shared
         self.conversation = conversation
         self.viewContext = viewContext
         self.sessionManager = sessionManager
@@ -501,7 +502,7 @@ final class ChatSendCoordinator {
             Log.info("Sending message via gRPC (direct core path): \(messageId)", category: "ChatViewModel")
             Task { [weak self] in
                 guard let self else { return }
-                let jitterMs = await SendJitter.delayMs(isHighPriority: true)
+                let jitterMs = SendJitter.delayMs(isHighPriority: true)
                 if jitterMs > 0 {
                     try? await Task.sleep(for: .milliseconds(Int(jitterMs)))
                 }
