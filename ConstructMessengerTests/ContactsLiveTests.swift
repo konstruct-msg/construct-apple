@@ -156,4 +156,25 @@ final class ContactsLiveTests: XCTestCase {
         try contact("a", "Ada")
         XCTAssertEqual(try store.contacts().map(\.id), ["a"])
     }
+
+    /// Sign-out on macOS puts a new store under the running app; the next account's contacts are
+    /// read from it, and its writes heard. Mutation: keep the store the reader was made with —
+    /// the contact is never found. Mutation: keep listening to the old store's changes — the
+    /// contact written after the replacement stays missing from the list.
+    func testAfterAReplacementContactsComeFromTheNewStore() async throws {
+        try store.insert(.new(id: "a", isContact: true, addedAt: nil))
+        var current: any ContactStore = store
+        let live = ContactsLive { current }
+        XCTAssertEqual(live.contacts().map(\.id), ["a"])
+
+        let next = PersistenceController(inMemory: true).container
+        let nextStore = CoreDataContactStore(container: next)
+        try nextStore.insert(.new(id: "b", isContact: true, addedAt: nil))
+        current = nextStore
+        NotificationCenter.default.post(name: .localStoreReplaced, object: nil)
+        await eventually { live.contacts().map(\.id) == ["b"] }
+
+        try nextStore.insert(.new(id: "c", isContact: true, addedAt: nil))
+        await eventually { Set(live.contacts().map(\.id)) == ["b", "c"] }
+    }
 }

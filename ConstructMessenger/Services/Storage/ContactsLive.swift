@@ -18,14 +18,14 @@ import CoreData
 final class ContactsLive {
 
     #if DEBUG
-    static private(set) var shared = ContactsLive(store: LocalRepositories.contacts)
+    static private(set) var shared = ContactsLive { LocalRepositories.contacts }
 
     /// A preview's own container: previews seed rows there, not in the app's store.
     static func useForPreview(_ container: NSPersistentContainer) {
         shared = ContactsLive(store: CoreDataContactStore(container: container))
     }
     #else
-    static let shared = ContactsLive(store: LocalRepositories.contacts)
+    static let shared = ContactsLive { LocalRepositories.contacts }
     #endif
 
     /// Moves on every change a reader could see. Read by `contact(_:)`, which is how a view comes
@@ -37,20 +37,36 @@ final class ContactsLive {
     @ObservationIgnored private var cache: [String: ContactRecord?] = [:]
     /// The contacts list, once a screen has asked for it.
     @ObservationIgnored private var list: [ContactRecord]?
-    @ObservationIgnored private let store: any ContactStore
+    /// Asked on every read, never kept: a sign-out replaces the app's store under a running app,
+    /// and a reader holding the old one reads a closed store — no contacts, until a relaunch.
+    @ObservationIgnored private let currentStore: () -> any ContactStore
     @ObservationIgnored nonisolated(unsafe) private var listening: Task<Void, Never>?
     @ObservationIgnored nonisolated(unsafe) private var replaced: NSObjectProtocol?
 
-    init(store: any ContactStore) {
-        self.store = store
-        let changes = store.changes()
-        listening = Task { [weak self] in
-            for await ids in changes { self?.refresh(ids) }
-        }
+    /// One store for the reader's life — a test's or a preview's.
+    convenience init(store: any ContactStore) {
+        self.init { store }
+    }
+
+    init(store: @escaping () -> any ContactStore) {
+        currentStore = store
+        listen()
         replaced = NotificationCenter.default.addObserver(
             forName: .localStoreReplaced, object: nil, queue: .main
         ) { [weak self] _ in
-            MainActor.assumeIsolated { self?.forgetEverything() }
+            MainActor.assumeIsolated {
+                // The old store's changes have finished; the new one's are heard from here on.
+                self?.listen()
+                self?.forgetEverything()
+            }
+        }
+    }
+
+    private func listen() {
+        listening?.cancel()
+        let changes = currentStore().changes()
+        listening = Task { [weak self] in
+            for await ids in changes { self?.refresh(ids) }
         }
     }
 
@@ -63,7 +79,7 @@ final class ContactsLive {
     func contact(_ id: String) -> ContactRecord? {
         _ = revision
         if let held = cache[id] { return held }
-        let row = try? store.contact(id)
+        let row = try? currentStore().contact(id)
         cache[id] = row
         return row
     }
@@ -74,7 +90,7 @@ final class ContactsLive {
     func contacts() -> [ContactRecord] {
         _ = revision
         if let list { return list }
-        let rows = ((try? store.contacts()) ?? []).sorted(by: Self.shownOrder)
+        let rows = ((try? currentStore().contacts()) ?? []).sorted(by: Self.shownOrder)
         list = rows
         return rows
     }
@@ -92,7 +108,7 @@ final class ContactsLive {
         // Any change may add to the list, take from it or reorder it.
         let listHeld = list != nil
         guard !held.isEmpty || listHeld else { return }
-        for id in held { cache[id] = try? store.contact(id) }
+        for id in held { cache[id] = try? currentStore().contact(id) }
         list = nil
         revision += 1
     }
