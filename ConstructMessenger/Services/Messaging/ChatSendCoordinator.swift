@@ -404,7 +404,7 @@ final class ChatSendCoordinator {
                 try LocalRepositories.messages.insert(MessageRecord(
                     id: id, chatId: conversation.chatId, fromUserId: currentUserId, toUserId: recipientId,
                     isSentByMe: true, timestamp: queued.timestamp,
-                    orderKey: ServerMessageOrder.pending(localMessageId: id),
+                    orderKey: ServerMessageOrder.pending(localMessageId: id, composedAt: queued.timestamp),
                     body: Data(queued.text.utf8), contentType: .regular, deliveryStatus: .failed,
                     retryCount: 0, suiteId: 0, isEdited: false, editedAt: nil, replyToMessageId: nil,
                     replyQuote: nil, transcript: nil, transcriptLanguage: nil, transcriptGeneratedAt: nil

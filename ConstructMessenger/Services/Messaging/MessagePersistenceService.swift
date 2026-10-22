@@ -69,7 +69,7 @@ class MessagePersistenceService {
             isSentByMe: isSentByMe, timestamp: messageTimestamp,
             orderKey: message.serverOrderKey
                 ?? (isSentByMe
-                    ? ServerMessageOrder.pending(localMessageId: id)
+                    ? ServerMessageOrder.pending(localMessageId: id, composedAt: messageTimestamp)
                     : ServerMessageOrder.local(timestamp: messageTimestamp, messageId: id)),
             body: payload, contentType: .regular, deliveryStatus: status, retryCount: 0,
             suiteId: suiteId, isEdited: false, editedAt: nil,
@@ -233,7 +233,7 @@ class MessagePersistenceService {
         // maps media payloads to `.regular` for the same reason.
         insertOwn(MessageRecord(
             id: rowId, chatId: chatId, fromUserId: fromUserId, toUserId: toUserId, isSentByMe: true,
-            timestamp: now, orderKey: ServerMessageOrder.pending(localMessageId: rowId),
+            timestamp: now, orderKey: ServerMessageOrder.pending(localMessageId: rowId, composedAt: now),
             body: Data(placeholderJson.utf8), contentType: .regular, deliveryStatus: .sending,
             retryCount: 0, suiteId: 0, isEdited: false, editedAt: nil,
             replyToMessageId: replyTo?.id.lowercased(),
@@ -274,7 +274,7 @@ class MessagePersistenceService {
         // fetches `contentTypeRaw == 0`. The id keeps its case: the upload tracks it as given.
         insertOwn(MessageRecord(
             id: id, chatId: chatId, fromUserId: fromUserId, toUserId: toUserId, isSentByMe: true,
-            timestamp: now, orderKey: ServerMessageOrder.pending(localMessageId: id),
+            timestamp: now, orderKey: ServerMessageOrder.pending(localMessageId: id, composedAt: now),
             body: Data(placeholderJson.utf8), contentType: .regular, deliveryStatus: .sending,
             retryCount: 0, suiteId: 0, isEdited: false, editedAt: nil,
             replyToMessageId: replyTo?.id.lowercased(),
