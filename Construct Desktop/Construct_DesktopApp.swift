@@ -93,6 +93,7 @@ struct Construct_DesktopApp: App {
                         #if canImport(WebRTC)
                         WebRTCRuntime.bootstrap()
                         CallManager.makeStudioCapture = StudioProcessTap.make
+                        CallManager.makeStudioOutput = StudioPlayoutOutput.make
                         #endif
                     }
 

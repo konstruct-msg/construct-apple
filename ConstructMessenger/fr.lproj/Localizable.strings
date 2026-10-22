@@ -1336,3 +1336,4 @@
 "call_audio_output" = "Sortie";
 "call_device_system" = "Par défaut du système";
 "studio_debug_start" = "Démarrer Studio (développement)";
+"studio_debug_stop" = "Quitter Studio (développement)";

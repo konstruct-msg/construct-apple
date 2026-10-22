@@ -137,6 +137,10 @@ struct ConstructCommands: Commands {
                     Task { await CallManager.shared.startStudio() }
                 }
                 .disabled(!live)
+                Button(NSLocalizedString("studio_debug_stop", comment: "")) {
+                    CallManager.shared.stopStudio()
+                }
+                .disabled(!live)
             }
         }
     }
