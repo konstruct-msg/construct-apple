@@ -22,7 +22,8 @@ final class RecoveryKeyProvisioner {
         /// This device knows the address already; nothing to do.
         case alreadyKnown
         /// The account has a key this device has not seen (set up on another device, or another
-        /// device of the account won a race). The gate's confirm path covers it.
+        /// device of the account won a race). Nothing is shown for it: the address is asked for by
+        /// `RecoveryGated` when the person reaches for an invite.
         case setElsewhere
         /// Created and accepted; the phrase waits in the vault for its copy.
         case provisioned
@@ -31,6 +32,13 @@ final class RecoveryKeyProvisioner {
         /// The server could not be reached or refused for a passing reason. A pending phrase, if
         /// one was made, stays for the next attempt.
         case deferred
+
+        /// Whether the recovery setup opens by itself after the first orientation. Only when no
+        /// key could be made without a screen. A key set elsewhere is not one: a linked device
+        /// has no phrase to show, and the setup asked it for the phrase at the end of linking
+        /// (2026-10-22) — the device does not learn the address with the link yet (decision
+        /// point 7), and nothing short of an invite needs it.
+        var opensSetup: Bool { self == .needsVisibleSetup }
     }
 
     struct Dependencies {
