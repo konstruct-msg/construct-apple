@@ -196,11 +196,7 @@ struct ChatsListView: View {
                     .listRowSeparator(.hidden)
             }
 
-            if renderedChats.isEmpty {
-                streamsEmptyState
-                    .listRowBackground(Color.clear)
-                    .listRowSeparator(.hidden)
-            } else {
+            if !renderedChats.isEmpty {
                 ForEach(renderedChats) { chat in
                     Button {
                         open(chat.id)
@@ -272,6 +268,11 @@ struct ChatsListView: View {
         .contentMargins(.horizontal, CTLayout.edgePad, for: .scrollContent)
         // ASCII matrix watermark behind the rows (base #090909 comes from .ctBackground()).
         .background(CTMatrixBackground())
+        // Over the list, not a row in it: a row is as tall as its content, so the state sat at the
+        // top of the screen. Calls and Synaps centre theirs the same way.
+        .overlay {
+            if renderedChats.isEmpty { streamsEmptyState }
+        }
         .accessibilityIdentifier(A11y.Chats.list)
     }
 
@@ -409,15 +410,28 @@ struct ChatsListView: View {
 
 // DEBUG only: the preview seeds `ChatsLive.useForPreview`, which a release build does not have.
 #if DEBUG
-#Preview {
+#Preview("Chats") {
+    chatsListPreview { context in
+        let user1 = PreviewHelpers.createSampleUser(context: context, id: "user1", username: "alice", displayName: "Alice")
+        let user2 = PreviewHelpers.createSampleUser(context: context, id: "user2", username: "bob", displayName: "")
+        let user3 = PreviewHelpers.createSampleUser(context: context, id: "b5257245-ab24-4765-b0ab-1098f599f957", username: "", displayName: "")
+        _ = PreviewHelpers.createSampleChat(context: context, with: user1, unread: 12000)
+        _ = PreviewHelpers.createSampleChat(context: context, with: user2, unread: 33)
+        _ = PreviewHelpers.createSampleChat(context: context, with: user3, unread: 1)
+    }
+}
+
+/// The empty state as the list shows it: inside a `List` row, which is where its layout broke on
+/// iPhone Duo (2026-10-22) and where a preview of `ChatsEmptyState` alone would not show it.
+#Preview("No chats") {
+    chatsListPreview { _ in }
+}
+
+@MainActor
+private func chatsListPreview(seed: (NSManagedObjectContext) -> Void) -> some View {
     let container = PreviewHelpers.createPreviewContainer()
     let context = container.viewContext
-    let user1 = PreviewHelpers.createSampleUser(context: context, id: "user1", username: "alice", displayName: "Alice")
-    let user2 = PreviewHelpers.createSampleUser(context: context, id: "user2", username: "bob", displayName: "")
-    let user3 = PreviewHelpers.createSampleUser(context: context, id: "b5257245-ab24-4765-b0ab-1098f599f957", username: "", displayName: "")
-    _ = PreviewHelpers.createSampleChat(context: context, with: user1, unread: 12000)
-    _ = PreviewHelpers.createSampleChat(context: context, with: user2, unread: 33)
-    _ = PreviewHelpers.createSampleChat(context: context, with: user3, unread: 1)
+    seed(context)
     try? context.save()
     ChatsLive.useForPreview(container)
     ContactsLive.useForPreview(container)
@@ -449,11 +463,10 @@ struct ChatsEmptyState: View {
             Text(LocalizedStringKey("chats_empty_subtitle"))
                 .font(CTFont.body)
         } actions: {
-            // This sits in a `List` row, and a row styles its labels as rows: the title went into a
-            // column a few letters wide ("Sh/ow/my/QR"), the prominent button became an empty
-            // capsule, and the plain buttons took the label colour (iPhone Duo, 2026-10-22).
-            // `titleAndIcon` keeps each label one line; `borderless` gives the plain ones the
-            // accent back and keeps a tap on the row from pressing every button in it.
+            // Stated, not inherited: inside a `List` row the labels were styled as rows — the
+            // title went into a column a few letters wide ("Sh/ow/my/QR"), the prominent button
+            // became an empty capsule, the plain buttons took the label colour (iPhone Duo,
+            // 2026-10-22). The state is an overlay now; these keep it right wherever it sits.
             VStack(spacing: CTSpace.m) {
                 Button {
                     onScanQR()
