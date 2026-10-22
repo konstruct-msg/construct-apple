@@ -277,39 +277,11 @@ struct ChatsListView: View {
 
     /// Empty streams list — points users to invite paths (QR / Synaps).
     private var streamsEmptyState: some View {
-        ContentUnavailableView {
-            Label {
-                Text(LocalizedStringKey("chats_empty_title"))
-                    .font(CTFont.headline)
-            } icon: {
-                Image(systemName: "bubble.left.and.bubble.right")
-            }
-        } description: {
-            Text(LocalizedStringKey("chats_empty_subtitle"))
-                .font(CTFont.body)
-        } actions: {
-            Button {
-                showingQRScanner = true
-            } label: {
-                Label(LocalizedStringKey("chats_empty_scan_qr"), systemImage: "qrcode.viewfinder")
-            }
-            .buttonStyle(.borderedProminent)
-            .accessibilityIdentifier(A11y.Chats.emptyScanQR)
-            Button {
-                showingMyQR = true
-            } label: {
-                Label(LocalizedStringKey("chats_empty_show_qr"), systemImage: "qrcode")
-            }
-            .accessibilityIdentifier(A11y.Chats.emptyShowQR)
-            Button {
-                NotificationCenter.default.post(name: .openSynapsTab, object: nil)
-            } label: {
-                Label(LocalizedStringKey("chats_empty_open_synaps"), systemImage: "circle.grid.cross")
-            }
-            .accessibilityIdentifier(A11y.Chats.emptyOpenSynaps)
-        }
-        .font(CTFont.body)
-        .accessibilityIdentifier(A11y.Chats.empty)
+        ChatsEmptyState(
+            onScanQR: { showingQRScanner = true },
+            onShowQR: { showingMyQR = true },
+            onOpenSynaps: { NotificationCenter.default.post(name: .openSynapsTab, object: nil) }
+        )
     }
 
     // MARK: - Actions
@@ -454,7 +426,61 @@ struct ChatsListView: View {
     return ChatsListView()
         .environment(\.managedObjectContext, context)
         .environment(chatsViewModel)
+        .environment(AuthViewModel(context: context))
+        .environment(AccountRecoveryViewModel())
 }
 #endif
+
+/// The chats list when there is no chat: what to do to get one.
+struct ChatsEmptyState: View {
+    let onScanQR: () -> Void
+    let onShowQR: () -> Void
+    let onOpenSynaps: () -> Void
+
+    var body: some View {
+        ContentUnavailableView {
+            Label {
+                Text(LocalizedStringKey("chats_empty_title"))
+                    .font(CTFont.headline)
+            } icon: {
+                Image(systemName: "bubble.left.and.bubble.right")
+            }
+        } description: {
+            Text(LocalizedStringKey("chats_empty_subtitle"))
+                .font(CTFont.body)
+        } actions: {
+            // This sits in a `List` row, and a row styles its labels as rows: the title went into a
+            // column a few letters wide ("Sh/ow/my/QR"), the prominent button became an empty
+            // capsule, and the plain buttons took the label colour (iPhone Duo, 2026-10-22).
+            // `titleAndIcon` keeps each label one line; `borderless` gives the plain ones the
+            // accent back and keeps a tap on the row from pressing every button in it.
+            VStack(spacing: CTSpace.m) {
+                Button {
+                    onScanQR()
+                } label: {
+                    Label(LocalizedStringKey("chats_empty_scan_qr"), systemImage: "qrcode.viewfinder")
+                }
+                .buttonStyle(.borderedProminent)
+                .accessibilityIdentifier(A11y.Chats.emptyScanQR)
+                Button {
+                    onShowQR()
+                } label: {
+                    Label(LocalizedStringKey("chats_empty_show_qr"), systemImage: "qrcode")
+                }
+                .accessibilityIdentifier(A11y.Chats.emptyShowQR)
+                Button {
+                    onOpenSynaps()
+                } label: {
+                    Label(LocalizedStringKey("chats_empty_open_synaps"), systemImage: "circle.grid.cross")
+                }
+                .accessibilityIdentifier(A11y.Chats.emptyOpenSynaps)
+            }
+            .labelStyle(.titleAndIcon)
+            .buttonStyle(.borderless)
+        }
+        .font(CTFont.body)
+        .accessibilityIdentifier(A11y.Chats.empty)
+    }
+}
 
 #endif
