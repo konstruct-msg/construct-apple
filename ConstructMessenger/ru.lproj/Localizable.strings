@@ -1426,3 +1426,4 @@
 "call_mic_level_hint" = "Скажите что-нибудь — полоса должна двигаться.";
 "call_audio_output" = "Вывод звука";
 "call_device_system" = "Как в системе";
+"studio_debug_start" = "Начать Студию (разработка)";

@@ -130,6 +130,8 @@ final class CallManager: CallUIManaging {
         var stream: SignalStream?
         var turn: Shared_Proto_Signaling_V1_TurnCredentials?
         var webrtc: (any WebRTCSessionProtocol)?
+        /// The program capture while this side hosts a studio (`CallManager+Studio.swift`).
+        var studioCapture: (any StudioProgramCapture)?
         /// Asked for with the video button: the camera comes on as soon as there is a sender.
         var startsWithCamera = false
         /// Answered with "without video": a video offer that arrives after the answer does not
@@ -224,6 +226,8 @@ final class CallManager: CallUIManaging {
             iceFlushTask = nil
             iceRestartTask = nil
             offerWaitTimeout = nil
+            studioCapture?.stop()
+            studioCapture = nil
             webrtc?.close()
             webrtc = nil
             stream?.close()
