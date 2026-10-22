@@ -37,13 +37,13 @@ final class TranscriptOrderIsTotalTests: XCTestCase {
         XCTAssertLessThan(a, b, "and the tie-break must be stable, not merely unequal")
     }
 
-    /// Mutation: make `local` return `pending(localMessageId:)` — this reddens. A row with no
+    /// Mutation: make `local` return `pending(localMessageId:composedAt:)` — this reddens. A row with no
     /// server position is not a row *waiting* for one; pinning a notice below every later message
     /// is a different bug from ordering it at random.
     func testALocalRowSitsAtItsOwnTimestampAndNotAtTheBottom() {
         let older = ServerMessageOrder.local(timestamp: Date(timeIntervalSince1970: 1_000), messageId: "a")
         let newer = ServerMessageOrder.local(timestamp: Date(timeIntervalSince1970: 2_000), messageId: "b")
-        let waiting = ServerMessageOrder.pending(localMessageId: "c")
+        let waiting = ServerMessageOrder.pending(localMessageId: "c", composedAt: Date(timeIntervalSince1970: 0))
         XCTAssertLessThan(older, newer, "a local key orders by its own timestamp")
         XCTAssertLessThan(newer, waiting, "a row still waiting for a server position stays below both")
     }
@@ -55,7 +55,7 @@ final class TranscriptOrderIsTotalTests: XCTestCase {
         let epoch = ServerMessageOrder.local(timestamp: Date(timeIntervalSince1970: 0), messageId: "a")
         let later = ServerMessageOrder.local(timestamp: Date(timeIntervalSince1970: 1), messageId: "b")
         XCTAssertLessThan(epoch, later)
-        XCTAssertLessThan(epoch, ServerMessageOrder.pending(localMessageId: "c"))
+        XCTAssertLessThan(epoch, ServerMessageOrder.pending(localMessageId: "c", composedAt: Date(timeIntervalSince1970: 0)))
     }
 
     // MARK: - Every row carries one
