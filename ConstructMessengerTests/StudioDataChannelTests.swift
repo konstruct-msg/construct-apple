@@ -137,6 +137,21 @@ final class StudioDataChannelTests: XCTestCase {
         XCTAssertEqual(first?.1, Data("accept".utf8))
     }
 
+    /// The guest makes Studio's channels only for an offer that has Studio in it: not for the
+    /// call's first offer, not for an ICE restart.
+    ///
+    /// Mutation: `carriesStudio` true for any offer — this reddens.
+    func testOnlyAStudioOfferIsTakenForStudio() async throws {
+        let first = try await connectCall()
+        XCTAssertFalse(StudioOffer.carriesStudio(sdp: first))
+        let restart = try await caller.restartIce()
+        XCTAssertFalse(StudioOffer.carriesStudio(sdp: restart))
+        try await callee.setRemoteOffer(sdp: restart)
+        try await caller.setRemoteAnswer(sdp: try await callee.createAnswer())
+        let studio = try await startStudio()
+        XCTAssertTrue(StudioOffer.carriesStudio(sdp: studio))
+    }
+
     /// Leaving Studio closes the channels; the call stays.
     func testClosingStudioLeavesNothingToSendOn() async throws {
         _ = try await connectCall()

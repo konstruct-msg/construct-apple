@@ -596,6 +596,17 @@ final class WebRTCSession: NSObject, WebRTCSessionProtocol {
         return dataChannel.sendData(RTCDataBuffer(data: data, isBinary: true))
     }
 
+    /// A send on `channel` usable from any thread — the capture's, where the program is produced.
+    /// `RTCDataChannel` is safe to send on from any thread; it is held, not the session. Nil when
+    /// the channel was not made.
+    func studioSender(on channel: StudioChannel) -> (@Sendable (Data) -> Bool)? {
+        guard let dataChannel = studioChannels[channel] else { return nil }
+        nonisolated(unsafe) let held = dataChannel
+        return { data in
+            held.readyState == .open && held.sendData(RTCDataBuffer(data: data, isBinary: true))
+        }
+    }
+
     /// Bytes queued on `channel` and not yet handed to the network — the sender's measure of a
     /// path that cannot keep up.
     func studioBufferedAmount(on channel: StudioChannel) -> UInt64 {
