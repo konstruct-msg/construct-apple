@@ -1427,3 +1427,4 @@
 "call_audio_output" = "Вывод звука";
 "call_device_system" = "Как в системе";
 "studio_debug_start" = "Начать Студию (разработка)";
+"studio_debug_stop" = "Выйти из Студии (разработка)";
