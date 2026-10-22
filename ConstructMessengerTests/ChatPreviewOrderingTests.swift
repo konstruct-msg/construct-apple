@@ -214,7 +214,7 @@ extension ChatPreviewOrderingTests {
     func testAnAcknowledgementThatPlacesOursEarlierHandsThePreviewToTheReply() throws {
         let chat = try makeSavedChat()
         let mine = try write("mine", in: chat, sentByMe: true, at: 1_000,
-                             orderKey: ServerMessageOrder.pending(localMessageId: "m1"), id: "m1")
+                             orderKey: ServerMessageOrder.pending(localMessageId: "m1", composedAt: Date(timeIntervalSince1970: 0)), id: "m1")
         _ = try write("theirs", in: chat, sentByMe: false, at: 1_005, orderKey: serverKey(2_000_500, 2))
         XCTAssertEqual(try stored(chat).lastMessageText, "mine", "a pending message sits last")
 

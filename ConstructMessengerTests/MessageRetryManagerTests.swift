@@ -90,7 +90,7 @@ final class MessageRetryManagerTests: XCTestCase {
         message.contentType = .regular
         message.encryptedContent = Data()
         message.decryptedContent = "hello"
-        message.serverOrderKey = ServerMessageOrder.pending(localMessageId: id)
+        message.serverOrderKey = ServerMessageOrder.pending(localMessageId: id, composedAt: Date(timeIntervalSince1970: 0))
         message.chat = chat
         return message
     }

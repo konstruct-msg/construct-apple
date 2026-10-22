@@ -35,7 +35,7 @@ final class PendingOrderSettlesTests: XCTestCase {
 
     /// Mutation: drop the `settleOrder` call from `markDelivered` — this reddens.
     func testAReceiptPutsAMessageLeftPendingAtItsOwnTime() throws {
-        let mine = try add(sentByMe: true, at: 1_000, key: { ServerMessageOrder.pending(localMessageId: $0) }, status: .sending)
+        let mine = try add(sentByMe: true, at: 1_000, key: { ServerMessageOrder.pending(localMessageId: $0, composedAt: Date(timeIntervalSince1970: 0)) }, status: .sending)
         let theirs = try add(sentByMe: false, at: 2_000, key: { ServerMessageOrder.local(timestamp: Date(timeIntervalSince1970: 2_000), messageId: $0) })
         XCTAssertEqual(try newest(), mine, "fixture: the pending row starts below the later one")
 
@@ -48,7 +48,7 @@ final class PendingOrderSettlesTests: XCTestCase {
     /// Mutation: move the `settleOrder` call below the `!= .delivered` guard — this reddens. A row
     /// already delivered and stuck is what the screenshot showed; the next receipt for it repairs it.
     func testARepeatedReceiptAlsoSettlesIt() throws {
-        let mine = try add(sentByMe: true, at: 1_000, key: { ServerMessageOrder.pending(localMessageId: $0) }, status: .delivered)
+        let mine = try add(sentByMe: true, at: 1_000, key: { ServerMessageOrder.pending(localMessageId: $0, composedAt: Date(timeIntervalSince1970: 0)) }, status: .delivered)
         StreamLifecycleCoordinator.markDelivered([mine], in: store)
         XCTAssertFalse(ServerMessageOrder.isPending(try XCTUnwrap(store.message(mine)).orderKey))
     }
@@ -65,8 +65,8 @@ final class PendingOrderSettlesTests: XCTestCase {
     /// Mutation: drop the status clause from the repair's predicate — the waiting row is settled
     /// and this reddens.
     func testTheLaunchRepairSettlesOnlyWhatThePeerConfirmed() throws {
-        let stuck = try add(sentByMe: true, at: 1_000, key: { ServerMessageOrder.pending(localMessageId: $0) }, status: .delivered)
-        let waiting = try add(sentByMe: true, at: 1_500, key: { ServerMessageOrder.pending(localMessageId: $0) }, status: .sending)
+        let stuck = try add(sentByMe: true, at: 1_000, key: { ServerMessageOrder.pending(localMessageId: $0, composedAt: Date(timeIntervalSince1970: 0)) }, status: .delivered)
+        let waiting = try add(sentByMe: true, at: 1_500, key: { ServerMessageOrder.pending(localMessageId: $0, composedAt: Date(timeIntervalSince1970: 0)) }, status: .sending)
 
         PersistenceController.settleDeliveredPendingRows(in: container.viewContext)
 
@@ -81,7 +81,7 @@ final class PendingOrderSettlesTests: XCTestCase {
     }
 
     func testOnlyAPendingKeyIsPending() {
-        XCTAssertTrue(ServerMessageOrder.isPending(ServerMessageOrder.pending(localMessageId: "A")))
+        XCTAssertTrue(ServerMessageOrder.isPending(ServerMessageOrder.pending(localMessageId: "A", composedAt: Date(timeIntervalSince1970: 0))))
         XCTAssertFalse(ServerMessageOrder.isPending(ServerMessageOrder.local(timestamp: Date(), messageId: "A")))
     }
 
