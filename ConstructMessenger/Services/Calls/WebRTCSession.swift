@@ -26,6 +26,24 @@ enum WebRTCSessionError: Error {
     case noRelay
 }
 
+/// Studio's data channels on the call's own peer connection (`decisions/studio-mode-on-desktop.md`):
+/// negotiated — neither side announces them in-band — ordered and reliable. The ids and labels are
+/// fixed by `client/studio/studio.proto` in construct-protos; both clients must agree on them, so
+/// they are written once, here.
+enum StudioChannel: Int32, CaseIterable, Sendable {
+    /// `StudioControl` messages.
+    case control = 1
+    /// `ProgramPacket`s.
+    case program = 2
+
+    var label: String {
+        switch self {
+        case .control: "studio-control"
+        case .program: "studio-program"
+        }
+    }
+}
+
 @MainActor
 protocol WebRTCSessionProtocol: AnyObject {
     var onLocalIceCandidate: (@Sendable (WebRTCIceCandidate) -> Void)? { get set }
@@ -52,6 +70,7 @@ protocol WebRTCSessionProtocol: AnyObject {
 
 #if canImport(WebRTC)
 import AVFoundation
+import Synchronization
 import WebRTC
 
 @MainActor
@@ -220,6 +239,15 @@ final class WebRTCSession: NSObject, WebRTCSessionProtocol {
     private var remoteDescriptionSet = false
     private var pendingRemoteCandidates: [WebRTCIceCandidate] = []
 
+    /// Studio's channels while a studio runs; empty otherwise. A call that never starts Studio
+    /// makes none, so its SDP has no `m=application` and is what it always was.
+    private var studioChannels: [StudioChannel: RTCDataChannel] = [:]
+    /// Fires once, when both of Studio's channels are open.
+    var onStudioChannelsOpen: (@Sendable () -> Void)?
+    private var studioOpenAnnounced = false
+    /// Who receives Studio's messages (`setStudioReceiver`). Called on WebRTC's thread.
+    private let studioReceiver = Mutex<(@Sendable (StudioChannel, Data) -> Void)?>(nil)
+
     convenience init(role: WebRTCSessionRole, turn: Shared_Proto_Signaling_V1_TurnCredentials?, video: Bool,
                      veilOn: Bool) throws {
         guard let plan = CallIcePlan.make(
@@ -299,6 +327,7 @@ final class WebRTCSession: NSObject, WebRTCSessionProtocol {
     }
 
     func close() {
+        closeStudioChannels()
         stopCapture()
         if videoTransceiver != nil { Log.info(receiveCounter.summary(), category: "Calls") }
         peerConnection.close()
@@ -535,6 +564,69 @@ final class WebRTCSession: NSObject, WebRTCSessionProtocol {
         return "typ \(typ) \(proto)"
     }
 
+    // MARK: - Studio
+
+    /// Make Studio's channels on this side. Both sides make them, since they are negotiated: the
+    /// side that starts Studio then makes an offer, which carries the `m=application` section, and
+    /// the other side makes them before it answers. Making them again is a no-op.
+    func openStudioChannels() throws {
+        for channel in StudioChannel.allCases where studioChannels[channel] == nil {
+            let config = RTCDataChannelConfiguration()
+            config.isNegotiated = true
+            config.channelId = channel.rawValue
+            config.isOrdered = true
+            guard let dataChannel = peerConnection.dataChannel(forLabel: channel.label, configuration: config) else {
+                closeStudioChannels()
+                throw WebRTCSessionError.invalidState("Studio channel \(channel.label) not created")
+            }
+            dataChannel.delegate = self
+            studioChannels[channel] = dataChannel
+        }
+        Log.info("Studio channels made (negotiated, ids \(StudioChannel.allCases.map(\.rawValue)))", category: "Calls")
+    }
+
+    var studioChannelsOpen: Bool {
+        StudioChannel.allCases.allSatisfy { studioChannels[$0]?.readyState == .open }
+    }
+
+    /// Queue `data` on `channel`. False when the channel is not open, or WebRTC refused it.
+    @discardableResult
+    func sendStudio(_ data: Data, on channel: StudioChannel) -> Bool {
+        guard let dataChannel = studioChannels[channel], dataChannel.readyState == .open else { return false }
+        return dataChannel.sendData(RTCDataBuffer(data: data, isBinary: true))
+    }
+
+    /// Bytes queued on `channel` and not yet handed to the network — the sender's measure of a
+    /// path that cannot keep up.
+    func studioBufferedAmount(on channel: StudioChannel) -> UInt64 {
+        studioChannels[channel]?.bufferedAmount ?? 0
+    }
+
+    /// Who receives Studio's messages, and on which channel each came. Called on WebRTC's
+    /// signalling thread, never the main actor: the program goes into a ring buffer from there
+    /// (`StudioPlayout`), and a hop per packet would put the main thread on the audio path.
+    nonisolated func setStudioReceiver(_ receiver: (@Sendable (StudioChannel, Data) -> Void)?) {
+        studioReceiver.withLock { $0 = receiver }
+    }
+
+    func closeStudioChannels() {
+        guard !studioChannels.isEmpty else { return }
+        for dataChannel in studioChannels.values {
+            dataChannel.delegate = nil
+            dataChannel.close()
+        }
+        studioChannels.removeAll()
+        studioOpenAnnounced = false
+        Log.info("Studio channels closed", category: "Calls")
+    }
+
+    private func studioChannelChanged() {
+        guard !studioOpenAnnounced, studioChannelsOpen else { return }
+        studioOpenAnnounced = true
+        Log.info("Studio channels open", category: "Calls")
+        onStudioChannelsOpen?()
+    }
+
     // MARK: - Helpers
 
     private func createSessionDescription(
@@ -691,6 +783,19 @@ extension WebRTCSession: RTCPeerConnectionDelegate {
             "TRACKS[\(label)] senders=[\(senders.joined(separator: " | "))] receivers=[\(receivers.joined(separator: " | "))]",
             category: "Calls"
         )
+    }
+}
+
+extension WebRTCSession: RTCDataChannelDelegate {
+    nonisolated func dataChannelDidChangeState(_ dataChannel: RTCDataChannel) {
+        Log.info("Studio channel \(dataChannel.label) (id \(dataChannel.channelId)) → state \(dataChannel.readyState.rawValue)", category: "Calls")
+        Task { @MainActor in self.studioChannelChanged() }
+    }
+
+    nonisolated func dataChannel(_ dataChannel: RTCDataChannel, didReceiveMessageWith buffer: RTCDataBuffer) {
+        guard let channel = StudioChannel(rawValue: dataChannel.channelId) else { return }
+        let data = buffer.data
+        studioReceiver.withLock { $0 }?(channel, data)
     }
 }
 
