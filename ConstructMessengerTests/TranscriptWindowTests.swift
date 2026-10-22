@@ -183,7 +183,7 @@ final class TranscriptWindowTests: XCTestCase {
     func testAChatThatBeginsWithOurSendKeepsItOnceTheServerPlacesIt() async throws {
         let window = open()
         XCTAssertEqual(window.rows.count, 0)
-        try addOurs(1, orderKey: ServerMessageOrder.pending(localMessageId: "m00001"))
+        try addOurs(1, orderKey: ServerMessageOrder.pending(localMessageId: "m00001", composedAt: Date(timeIntervalSince1970: 0)))
         await eventually { window.rows.map(\.id) == ["m00001"] }
         try store.setOrderKey("m00001", serverKey(1))
         try add(2, orderKey: serverKey(2))
@@ -195,7 +195,7 @@ final class TranscriptWindowTests: XCTestCase {
     /// Mutation: as above — the reply never appears.
     func testAReplyBeforeOurSendIsPlacedIsShown() async throws {
         let window = open()
-        try addOurs(5, orderKey: ServerMessageOrder.pending(localMessageId: "m00005"))
+        try addOurs(5, orderKey: ServerMessageOrder.pending(localMessageId: "m00005", composedAt: Date(timeIntervalSince1970: 0)))
         await eventually { window.rows.count == 1 }
         try add(2, orderKey: serverKey(2))
         await eventually { window.rows.map(\.id) == ["m00002", "m00005"] }
