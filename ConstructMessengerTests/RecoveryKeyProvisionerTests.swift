@@ -155,6 +155,18 @@ final class RecoveryKeyProvisionerTests: XCTestCase {
         XCTAssertEqual(generated, 0)
     }
 
+    /// Only a key that could not be made silently opens the setup. A linked device sees the key
+    /// as set elsewhere, and was asked for the phrase at the end of linking (2026-10-22).
+    ///
+    /// Mutation: `opensSetup` true for `.setElsewhere`.
+    func testOnlyTheVisibleSetupOutcomeOpensTheSetup() {
+        XCTAssertTrue(RecoveryKeyProvisioner.Outcome.needsVisibleSetup.opensSetup)
+        XCTAssertFalse(RecoveryKeyProvisioner.Outcome.setElsewhere.opensSetup)
+        XCTAssertFalse(RecoveryKeyProvisioner.Outcome.provisioned.opensSetup)
+        XCTAssertFalse(RecoveryKeyProvisioner.Outcome.alreadyKnown.opensSetup)
+        XCTAssertFalse(RecoveryKeyProvisioner.Outcome.deferred.opensSetup)
+    }
+
     /// Nothing is generated while the server cannot say whether a key exists: a phrase made then
     /// could lose to the account's real key.
     func testNoPhraseIsMadeWhileTheStatusIsUnknown() async {
