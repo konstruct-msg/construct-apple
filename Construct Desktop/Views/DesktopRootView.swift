@@ -60,14 +60,9 @@ struct DesktopRootView: View {
         guard let userId = authViewModel.currentUserId ?? AuthSessionManager.shared.currentUserId else {
             return
         }
-        switch await RecoveryKeyProvisioner.shared.ensureKey(userId: userId) {
-        case .provisioned:
-            await recoveryViewModel.refreshStatus()
-        case .needsVisibleSetup, .setElsewhere:
-            if promptIfNeeded, AccountAddress.own() == nil { showingRecoveryPrompt = true }
-        case .alreadyKnown, .deferred:
-            break
-        }
+        let outcome = await RecoveryKeyProvisioner.shared.ensureKey(userId: userId)
+        if outcome == .provisioned { await recoveryViewModel.refreshStatus() }
+        if promptIfNeeded, outcome.opensSetup, AccountAddress.own() == nil { showingRecoveryPrompt = true }
         hasAccountAddress = AccountAddress.own() != nil
     }
 
