@@ -50,8 +50,15 @@ enum ServerMessageOrder {
     /// A locally-created row has no server position until its send is acknowledged. Putting it
     /// after every real server key keeps the optimistic bubble at the bottom and lets it snap to
     /// its authoritative position when the ACK arrives.
-    static func pending(localMessageId: String) -> String {
-        "\(pendingPrefix)\(localMessageId.lowercased())"
+    ///
+    /// Among themselves, rows still waiting stand in the order they were written: the time of
+    /// writing comes before the id. With the id alone — a random UUID — two messages waiting on a
+    /// slow link stood in a random order until acknowledged (Android, under a VPN, 2026-10-22).
+    /// Android writes the same key character for character (`ServerMessageOrder.kt`), so the
+    /// prefix, and with it "still pending", reads the same from either app's rows.
+    static func pending(localMessageId: String, composedAt: Date) -> String {
+        let milliseconds = UInt64(max(Int64(composedAt.timeIntervalSince1970 * 1000), 0))
+        return "\(pendingPrefix)\(padded(milliseconds))\(separator)\(localMessageId.lowercased())"
     }
 
     /// Everything a `pending` key starts with — what a store predicate matches on.

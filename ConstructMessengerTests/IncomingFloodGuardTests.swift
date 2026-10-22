@@ -79,7 +79,7 @@ final class IncomingFloodGuardTests: XCTestCase {
         let server = try XCTUnwrap(ServerMessageOrder.key(serverTimestampMilliseconds: 1_800_000_000_123, sequence: 4))
         XCTAssertEqual(try XCTUnwrap(ServerMessageOrder.serverDate(ofKey: server)).timeIntervalSince1970, 1_800_000_000.123, accuracy: 0.001)
         XCTAssertNil(ServerMessageOrder.serverDate(ofKey: ServerMessageOrder.local(timestamp: now, messageId: "m1")))
-        XCTAssertNil(ServerMessageOrder.serverDate(ofKey: ServerMessageOrder.pending(localMessageId: "m2")))
+        XCTAssertNil(ServerMessageOrder.serverDate(ofKey: ServerMessageOrder.pending(localMessageId: "m2", composedAt: Date(timeIntervalSince1970: 0))))
     }
 
     private func burst() -> IncomingFloodGuard {
