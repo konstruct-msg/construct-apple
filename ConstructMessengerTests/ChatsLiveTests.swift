@@ -104,4 +104,28 @@ final class ChatsLiveTests: XCTestCase {
         NotificationCenter.default.post(name: .localStoreReplaced, object: nil)
         await eventually { live.chats().isEmpty }
     }
+
+    /// Sign-out on macOS puts a new store under the running app, and the next account's chats are
+    /// written there — by a history sync seconds later. The list reads them, and hears the writes.
+    /// Mutation: keep the store the list was made with — the list stays empty (2026-10-22, a
+    /// linked Mac after a sign-out showed no chats until relaunched).
+    /// Mutation: keep listening to the old store's changes — the chat written after the
+    /// replacement never appears.
+    func testAfterAReplacementTheListReadsAndHearsTheNewStore() async throws {
+        try contact("a")
+        _ = try chats.openChat(withPeer: "a")
+        var current: any ChatStore = chats
+        let following = ChatsLive { current }
+        await eventually { following.chats().count == 1 }
+
+        let next = PersistenceController(inMemory: true).container
+        let nextChats = CoreDataChatStore(container: next)
+        current = nextChats
+        NotificationCenter.default.post(name: .localStoreReplaced, object: nil)
+        await eventually { following.chats().isEmpty }
+
+        try CoreDataContactStore(container: next).insert(.new(id: "b", isContact: true, addedAt: nil))
+        let b = try nextChats.openChat(withPeer: "b").chat
+        await eventually { following.chats().map(\.id) == [b.id] }
+    }
 }
