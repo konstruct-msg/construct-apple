@@ -18,14 +18,14 @@ import CoreData
 final class ChatsLive {
 
     #if DEBUG
-    static private(set) var shared = ChatsLive(store: LocalRepositories.chats)
+    static private(set) var shared = ChatsLive { LocalRepositories.chats }
 
     /// A preview's own container: previews seed rows there, not in the app's store.
     static func useForPreview(_ container: NSPersistentContainer) {
         shared = ChatsLive(store: CoreDataChatStore(container: container))
     }
     #else
-    static let shared = ChatsLive(store: LocalRepositories.chats)
+    static let shared = ChatsLive { LocalRepositories.chats }
     #endif
 
     /// Moves on every change a reader could see.
@@ -34,20 +34,36 @@ final class ChatsLive {
     /// The list, once a screen has asked for it. Not observed: filled while a view draws, which
     /// must not itself be a change.
     @ObservationIgnored private var list: [ChatRecord]?
-    @ObservationIgnored private let store: any ChatStore
+    /// Asked on every read, never kept: a sign-out replaces the app's store under a running app,
+    /// and a reader holding the old one reads a closed store — an empty list, until a relaunch.
+    @ObservationIgnored private let currentStore: () -> any ChatStore
     @ObservationIgnored nonisolated(unsafe) private var listening: Task<Void, Never>?
     @ObservationIgnored nonisolated(unsafe) private var replaced: NSObjectProtocol?
 
-    init(store: any ChatStore) {
-        self.store = store
-        let changes = store.changes()
-        listening = Task { [weak self] in
-            for await _ in changes { self?.refresh() }
-        }
+    /// One store for the reader's life — a test's or a preview's.
+    convenience init(store: any ChatStore) {
+        self.init { store }
+    }
+
+    init(store: @escaping () -> any ChatStore) {
+        currentStore = store
+        listen()
         replaced = NotificationCenter.default.addObserver(
             forName: .localStoreReplaced, object: nil, queue: .main
         ) { [weak self] _ in
-            MainActor.assumeIsolated { self?.refresh() }
+            MainActor.assumeIsolated {
+                // The old store's changes have finished; the new one's are heard from here on.
+                self?.listen()
+                self?.refresh()
+            }
+        }
+    }
+
+    private func listen() {
+        listening?.cancel()
+        let changes = currentStore().changes()
+        listening = Task { [weak self] in
+            for await _ in changes { self?.refresh() }
         }
     }
 
@@ -60,7 +76,7 @@ final class ChatsLive {
     func chats() -> [ChatRecord] {
         _ = revision
         if let list { return list }
-        let rows = (try? store.chats()) ?? []
+        let rows = (try? currentStore().chats()) ?? []
         list = rows
         return rows
     }
@@ -72,7 +88,7 @@ final class ChatsLive {
     /// The chat `id` to open. Read from the store when the list has not caught up with it yet — a
     /// chat opened a moment ago is navigated to before its change event arrives.
     func conversation(_ id: String) -> Conversation? {
-        (chat(id) ?? (try? store.chat(id)))?.conversation
+        (chat(id) ?? (try? currentStore().chat(id)))?.conversation
     }
 
     /// The badge on the chats tab.
