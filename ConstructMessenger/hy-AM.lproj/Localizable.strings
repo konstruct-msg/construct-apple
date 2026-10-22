@@ -1416,3 +1416,4 @@
 "call_audio_output" = "Ելք";
 "call_device_system" = "Ինչպես համակարգում";
 "studio_debug_start" = "Սկսել Studio (մշակում)";
+"studio_debug_stop" = "Դուրս գալ Studio-ից (մշակում)";

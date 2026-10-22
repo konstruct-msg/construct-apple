@@ -2,13 +2,14 @@
 //  CallManager+Studio.swift
 //  Construct Messenger
 //
-//  Studio added to a call in progress (`decisions/studio-mode-on-desktop.md`, step 3): the host
+//  Studio added to a call in progress (`decisions/studio-mode-on-desktop.md`, steps 3–4): the host
 //  makes Studio's channels and offers again; the guest makes its own before it answers. Once both
-//  channels are open the host's program capture runs into the `studio-program` channel.
+//  channels are open the host invites on `studio-control` with the program's format and its
+//  decoder cookie; when the guest accepts, the host's capture runs into `studio-program` and the
+//  guest plays it through its ring and drift loop.
 //
-//  Behind `StudioFeature`, a switch nobody but a developer sets: no invite yet, no consent, no
-//  playout — the guest counts what arrives (step 4 plays it, and the `studio-control` invite comes
-//  with it).
+//  Behind `StudioFeature`, a switch nobody but a developer sets: no invite screen, no path choice
+//  (always relay), no screen — those are steps 5–6.
 //
 
 import Foundation
@@ -49,40 +50,72 @@ protocol StudioProgramCapture: AnyObject {
     func stop()
 }
 
-/// Counts what arrives on Studio's channels and says so in the log, sparsely — until step 4
-/// plays the program, the guest's only reader. Called on WebRTC's thread.
-final class StudioReceiveCounter: Sendable {
-    private struct Counts {
-        var control = 0
-        var program = 0
-        var programBytes = 0
-        var lastSequence: UInt32?
-        var lastFirstFrame: UInt64?
-        var malformed = 0
-    }
-    private let counts = Mutex(Counts())
-    static let logEvery = 250
+/// What plays the program on this machine — the Desktop's output with its drift loop. Started and
+/// stopped on the main actor; reads `playout` on the audio render thread.
+protocol StudioProgramOutput: AnyObject {
+    func stop()
+}
 
-    func receive(_ channel: StudioChannel, _ data: Data) {
-        let line: String? = counts.withLock { c in
-            switch channel {
-            case .control:
-                c.control += 1
-                return "Studio control message \(c.control) (\(data.count) B)"
-            case .program:
-                guard let packet = try? StudioProgramPacket(serializedBytes: data) else {
-                    c.malformed += 1
-                    return "Studio program: malformed packet (\(c.malformed))"
-                }
-                c.program += 1
-                c.programBytes += data.count
-                c.lastSequence = packet.sequence
-                c.lastFirstFrame = packet.firstFrame
-                guard c.program == 1 || c.program % Self.logEvery == 0 else { return nil }
-                return "Studio program: \(c.program) packets, \(c.programBytes) B, seq \(packet.sequence), frame \(packet.firstFrame), epoch \(packet.formatEpoch)"
-            }
+/// The program receiver the `studio-program` channel feeds, swapped on the main actor when the
+/// format changes and read on WebRTC's thread for every packet.
+final class StudioProgramRoute: Sendable {
+    private let current = Mutex<StudioProgramReceiver?>(nil)
+
+    func use(_ receiver: StudioProgramReceiver?) { current.withLock { $0 = receiver } }
+
+    func deliver(_ data: Data) { current.withLock { $0 }?.receive(data) }
+}
+
+/// One studio on one call: the control link and whatever runs for it on this side.
+@MainActor
+final class StudioRun {
+    let link: StudioLink
+    let route = StudioProgramRoute()
+    /// Host: made with the invite, whose magic cookie is its encoder's.
+    var sender: StudioProgramSender?
+    var capture: (any StudioProgramCapture)?
+    /// Guest.
+    var receiver: StudioProgramReceiver?
+    var output: (any StudioProgramOutput)?
+    /// Guest: the depth the invite asked for.
+    var bufferMs = StudioBuffer.defaultMs
+    var inviteTimeout: Task<Void, Never>?
+
+    init(link: StudioLink) { self.link = link }
+
+    func stop() {
+        inviteTimeout?.cancel()
+        inviteTimeout = nil
+        capture?.stop()
+        capture = nil
+        output?.stop()
+        output = nil
+        route.use(nil)
+        if let sender {
+            Log.info("Studio program sent: \(sender.sent) packets, \(sender.refused) refused", category: "Calls")
         }
-        if let line { Log.info(line, category: "Calls") }
+        if let receiver {
+            let c = receiver.counts
+            Log.info(
+                "Studio program received: \(c.packets) packets, \(c.otherEpoch) of another format, "
+                + "\(c.malformed) malformed, \(c.undecodable) undecodable; \(receiver.playout.gapFrames) frames of gap, "
+                + "\(receiver.playout.underruns) underruns, \(receiver.playout.droppedSamples) samples dropped",
+                category: "Calls"
+            )
+        }
+        sender = nil
+        receiver = nil
+    }
+}
+
+/// The program's buffer depth until question 5 of the decision (fixed or adaptive) is settled.
+enum StudioBuffer {
+    static let defaultMs: UInt32 = 400
+    /// What a guest takes from an invite: deep enough for a resend to arrive, short enough that a
+    /// mistaken value cannot hold the program back for seconds.
+    static func targetSeconds(invite bufferMs: UInt32) -> Double {
+        let ms = bufferMs == 0 ? defaultMs : min(max(bufferMs, 100), 2_000)
+        return Double(ms) / 1_000
     }
 }
 
@@ -90,26 +123,38 @@ final class StudioReceiveCounter: Sendable {
 extension CallManager {
     /// What makes the host's capture on this machine; set by the Desktop app at launch.
     nonisolated(unsafe) static var makeStudioCapture: (() throws -> any StudioProgramCapture)?
+    /// What plays the program on this machine; set by the Desktop app at launch.
+    nonisolated(unsafe) static var makeStudioOutput: ((StudioPlayout) throws -> any StudioProgramOutput)?
 
-    /// Host: add Studio to the call in progress.
+    /// How long the host waits for the guest's answer.
+    static let studioInviteTimeout: Duration = .seconds(30)
+
+    /// Host: add Studio to the call in progress. Once both channels are open the invite goes out
+    /// on `studio-control`; the program starts when the guest accepts.
     func startStudio() async {
         guard StudioFeature.isEnabled else { return }
         guard let active, let webrtc = active.webrtc as? WebRTCSession else {
             Log.info("Studio: no call to add it to", category: "Calls")
             return
         }
+        guard active.studio == nil else {
+            Log.info("Studio: already on", category: "Calls")
+            return
+        }
         guard Self.makeStudioCapture != nil else {
             Log.error("Studio: nothing on this machine can capture the program", category: "Calls")
             return
         }
+        let run = makeStudioRun(role: .host, on: webrtc, for: active)
         do {
             webrtc.onStudioChannelsOpen = { [weak self, weak active] in
-                Task { @MainActor in
-                    guard let self, let active, self.active === active else { return }
-                    self.startStudioProgram(for: active, on: webrtc)
+                DispatchQueue.main.async {
+                    MainActor.assumeIsolated {
+                        guard let self, let active, self.active === active, active.studio === run else { return }
+                        self.inviteToStudio(run, on: webrtc, for: active)
+                    }
                 }
             }
-            webrtc.setStudioReceiver(StudioReceiveCounter().receive)
             try webrtc.openStudioChannels()
             let sdp = try await webrtc.createOffer()
             guard self.active === active else { return }
@@ -117,48 +162,155 @@ extension CallManager {
             Log.info("Studio offer sent call_id=\(active.session.id.prefix(8))…", category: "Calls")
         } catch {
             Log.error("Studio not started: \(error)", category: "Calls")
-            webrtc.closeStudioChannels()
+            endStudio(run, for: active)
         }
     }
 
     /// Guest: the peer offered Studio; make our channels before the answer, so the answer accepts
-    /// them. Nothing is played yet — what arrives is counted.
+    /// them. The invite follows on `studio-control`.
     func joinStudioIfOffered(sdp: String, on webrtc: any WebRTCSessionProtocol) {
-        guard StudioFeature.isEnabled, StudioOffer.carriesStudio(sdp: sdp),
-              let webrtc = webrtc as? WebRTCSession, !webrtc.studioChannelsOpen else { return }
+        guard StudioFeature.isEnabled, StudioOffer.carriesStudio(sdp: sdp), let active,
+              let webrtc = webrtc as? WebRTCSession, !webrtc.studioChannelsOpen, active.studio == nil else { return }
+        let run = makeStudioRun(role: .guest, on: webrtc, for: active)
         do {
-            webrtc.setStudioReceiver(StudioReceiveCounter().receive)
-            webrtc.onStudioChannelsOpen = { Log.info("Studio: joined as guest", category: "Calls") }
+            webrtc.onStudioChannelsOpen = { Log.info("Studio: channels open as guest", category: "Calls") }
             try webrtc.openStudioChannels()
         } catch {
             Log.error("Studio offered, channels not made: \(error)", category: "Calls")
+            endStudio(run, for: active)
         }
     }
 
+    /// Leave the studio; the call goes on.
     func stopStudio() {
         guard let active else { return }
-        active.studioCapture?.stop()
-        active.studioCapture = nil
-        (active.webrtc as? WebRTCSession)?.closeStudioChannels()
+        if let run = active.studio {
+            run.link.handle(.leave)
+        } else {
+            (active.webrtc as? WebRTCSession)?.closeStudioChannels()
+        }
     }
 
-    private func startStudioProgram(for active: ActiveCall, on webrtc: WebRTCSession) {
-        guard active.studioCapture == nil, let make = Self.makeStudioCapture,
-              let send = webrtc.studioSender(on: .program) else { return }
+    private func makeStudioRun(role: StudioControlMachine.Role, on webrtc: WebRTCSession, for active: ActiveCall) -> StudioRun {
+        let run = StudioRun(link: StudioLink(role: role) { webrtc.sendStudio($0, on: .control) })
+        active.studio = run
+        let route = run.route
+        // Control messages go to the main actor in arrival order (a queue, not a task per
+        // message, whose order is not promised); program packets stay off it.
+        webrtc.setStudioReceiver { [weak run] channel, data in
+            switch channel {
+            case .control:
+                DispatchQueue.main.async { MainActor.assumeIsolated { run?.link.receive(data) } }
+            case .program:
+                route.deliver(data)
+            }
+        }
+        run.link.onInvite = { [weak self, weak run, weak active] invite in
+            guard let self, let run, let active else { return }
+            self.answerStudioInvite(invite, run: run, for: active)
+        }
+        run.link.onUseFormat = { [weak self, weak run, weak active] format in
+            guard let self, let run, let active else { return }
+            switch role {
+            case .host: self.startStudioProgram(format, run: run, on: webrtc, for: active)
+            case .guest: self.playStudioProgram(format, run: run, for: active)
+            }
+        }
+        run.link.onEnd = { [weak self, weak run, weak active] reason in
+            Log.info("Studio ended: \(reason)", category: "Calls")
+            guard let self, let run, let active else { return }
+            self.endStudio(run, for: active)
+        }
+        return run
+    }
+
+    private func inviteToStudio(_ run: StudioRun, on webrtc: WebRTCSession, for active: ActiveCall) {
+        guard let send = webrtc.studioSender(on: .program) else { return }
+        do {
+            let sender = try StudioProgramSender(format: .lossless, epoch: 0, send: send)
+            run.sender = sender
+            var invite = StudioInvite()
+            invite.program = StudioAudioFormat.lossless.program(magicCookie: sender.magicCookie)
+            invite.bufferMs = StudioBuffer.defaultMs
+            // Relay: the path choice comes with the invite screen (step 6).
+            run.link.handle(.invite(invite, ownPath: .relay, veil: false))
+            Log.info("Studio invite sent (FLAC 48/24, \(invite.bufferMs) ms)", category: "Calls")
+            run.inviteTimeout = Task { [weak run] in
+                try? await Task.sleep(for: Self.studioInviteTimeout)
+                guard !Task.isCancelled else { return }
+                run?.link.handle(.inviteTimedOut)
+            }
+        } catch {
+            Log.error("Studio invite not made: \(error)", category: "Calls")
+            endStudio(run, for: active)
+        }
+    }
+
+    /// Guest. There is no invite screen until step 6, and the switch that turns Studio on is set
+    /// by hand on this Mac: setting it is the consent, so the invite is taken here — on relay.
+    private func answerStudioInvite(_ invite: StudioInvite, run: StudioRun, for active: ActiveCall) {
+        guard Self.makeStudioOutput != nil else {
+            Log.error("Studio invite declined: nothing on this machine can play the program", category: "Calls")
+            run.link.handle(.decline)
+            return
+        }
+        run.bufferMs = invite.bufferMs
+        Log.info("Studio invite accepted (\(invite.program.codec), \(invite.bufferMs) ms)", category: "Calls")
+        run.link.handle(.accept(ownPath: .relay, veil: false))
+    }
+
+    private func startStudioProgram(_ format: StudioProgramFormat, run: StudioRun, on webrtc: WebRTCSession, for active: ActiveCall) {
+        run.inviteTimeout?.cancel()
+        guard run.capture == nil else {
+            // A format change mid-studio needs a new encoder and a new invite cookie; not built yet.
+            Log.error("Studio: a change of format is not supported yet", category: "Calls")
+            return
+        }
+        guard let sender = run.sender, format.epoch == sender.epoch, let make = Self.makeStudioCapture else { return }
         do {
             let capture = try make()
-            let sender = try StudioProgramSender(format: .lossless, epoch: 0, send: send)
-            let packetizer = StudioCapturePacketizer(format: .lossless) { samples, firstFrame in
+            let packetizer = StudioCapturePacketizer(format: sender.format) { samples, firstFrame in
                 do { try sender.submit(samples, firstFrame: firstFrame) } catch {
                     Log.error("Studio program not encoded: \(error)", category: "Calls")
                 }
             }
             try capture.start(into: packetizer)
-            active.studioCapture = capture
+            run.capture = capture
             Log.info("Studio program: capturing \(capture.sourceDescription) → FLAC 48/24", category: "Calls")
         } catch {
             Log.error("Studio program not started: \(error)", category: "Calls")
+            run.link.handle(.leave)
         }
+    }
+
+    private func playStudioProgram(_ format: StudioProgramFormat, run: StudioRun, for active: ActiveCall) {
+        guard let makeOutput = Self.makeStudioOutput else {
+            run.link.handle(.leave)
+            return
+        }
+        do {
+            let receiver = try StudioProgramReceiver(
+                program: format, targetSeconds: StudioBuffer.targetSeconds(invite: run.bufferMs)
+            )
+            let output = try makeOutput(receiver.playout)
+            run.output?.stop()
+            run.output = output
+            run.receiver = receiver
+            run.route.use(receiver)
+            Log.info("Studio program: playing \(format.codec) \(format.sampleRate / 1_000) kHz, buffer \(Int(StudioBuffer.targetSeconds(invite: run.bufferMs) * 1_000)) ms", category: "Calls")
+        } catch {
+            Log.error("Studio program not played: \(error)", category: "Calls")
+            run.link.handle(.leave)
+        }
+    }
+
+    private func endStudio(_ run: StudioRun, for active: ActiveCall) {
+        run.stop()
+        if active.studio === run { active.studio = nil }
+        guard let webrtc = active.webrtc as? WebRTCSession else { return }
+        webrtc.setStudioReceiver(nil)
+        webrtc.onStudioChannelsOpen = nil
+        webrtc.closeStudioChannels()
     }
 }
 #else
