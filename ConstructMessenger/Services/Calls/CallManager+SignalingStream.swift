@@ -86,7 +86,17 @@ extension CallManager {
             }
         }
 
-        // Receive loop
+        receiveSignals(from: stream, for: active)
+
+        Log.info("Signaling stream connecting (call_id=\(active.session.id.prefix(8))…)", category: "Calls")
+    }
+
+    /// The receive loop: one message at a time, each handled on the main actor and awaited before
+    /// the next is taken. Nothing the peer sends can queue ahead of a local hang-up — `end` runs
+    /// as its own task and closes the media without waiting on this loop or the network (the
+    /// Signal defect of 2026-10, where a flood of call events kept the hang-up from being
+    /// processed; `HangupUnderFloodTests`).
+    func receiveSignals(from stream: SignalStream, for active: ActiveCall) {
         active.receiveTask?.cancel()
         active.receiveTask = Task { [weak self, weak active] in
             guard let self else { return }
@@ -135,8 +145,6 @@ extension CallManager {
                 }
             }
         }
-
-        Log.info("Signaling stream connecting (call_id=\(active.session.id.prefix(8))…)", category: "Calls")
     }
 
     func handleSignalResponse(_ response: Shared_Proto_Signaling_V1_SignalResponse, for session: CallSession) {
