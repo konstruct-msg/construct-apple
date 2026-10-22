@@ -31,11 +31,34 @@ final class ServerMessageOrderTests: XCTestCase {
     }
 
     func testPendingKeySortsAfterAuthoritativeServerKeys() {
-        let pending = ServerMessageOrder.pending(localMessageId: "LOCAL")
+        let pending = ServerMessageOrder.pending(localMessageId: "LOCAL", composedAt: Date(timeIntervalSince1970: 1))
         let server = ServerMessageOrder.key(serverTimestampMilliseconds: 9_999_999_999, sequence: 9_999)!
 
         XCTAssertGreaterThan(pending, server)
         XCTAssertTrue(pending.hasSuffix("-local"))
+    }
+
+    /// The key Android writes for the same row, character for character
+    /// (`ServerMessageOrderTest.kt`): history moves rows between the two apps, and a pending row
+    /// is matched by its prefix on either side.
+    func testPendingKeyIsAndroidsKey() {
+        XCTAssertEqual(
+            ServerMessageOrder.pending(localMessageId: "AbC", composedAt: Date(timeIntervalSince1970: 1.2)),
+            "99999999999999999999-99999999999999999999-00000000000000001200-abc"
+        )
+    }
+
+    /// Two of ours still waiting stand in the order they were written, whatever their ids. With
+    /// the id alone they stood by a random UUID until acknowledged (Android under a VPN,
+    /// 2026-10-22). Mutation: leave the time out of the key — the later message, whose id sorts
+    /// first, stands first; this reddens.
+    func testPendingRowsStandInTheOrderTheyWereWritten() {
+        let first = ServerMessageOrder.pending(localMessageId: "ffffffff-0000-4000-8000-000000000000",
+                                               composedAt: Date(timeIntervalSince1970: 1_792_686_800))
+        let second = ServerMessageOrder.pending(localMessageId: "00000000-0000-4000-8000-000000000000",
+                                                composedAt: Date(timeIntervalSince1970: 1_792_686_812))
+        XCTAssertLessThan(first, second)
+        XCTAssertTrue(ServerMessageOrder.isPending(first))
     }
 
     func testStreamParserCarriesEnvelopeMetadataAndCursorIntoChatMessage() {
