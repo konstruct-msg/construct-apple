@@ -129,6 +129,15 @@ struct ConstructCommands: Commands {
             }
             .keyboardShortcut("e", modifiers: [.command, .shift])
             .disabled(!live)
+
+            // Studio while it is built: only with `StudioFeature` set by hand.
+            if StudioFeature.isEnabled {
+                Divider()
+                Button(NSLocalizedString("studio_debug_start", comment: "")) {
+                    Task { await CallManager.shared.startStudio() }
+                }
+                .disabled(!live)
+            }
         }
     }
 }
