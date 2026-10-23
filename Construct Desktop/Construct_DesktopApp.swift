@@ -95,6 +95,7 @@ struct Construct_DesktopApp: App {
                         CallManager.makeStudioCapture = StudioProcessTap.make
                         CallManager.makeStudioOutput = StudioPlayoutOutput.make
                         #endif
+                        DesktopIncomingCallRinger.shared.start()
                     }
 
                     // Touch STT early on Desktop too so WhisperModelManager runs reconcileModels()
