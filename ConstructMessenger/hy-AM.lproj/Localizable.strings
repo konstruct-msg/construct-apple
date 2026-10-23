@@ -993,6 +993,9 @@
 "address_change_toast_fmt" = "%@-ն այժմ պնդում է այլ հասցե։ Բացեք զրույցը՝ ստուգելու համար։";
 "security_notice_address_title" = "Այլ հասցե";
 "security_notice_address_body_fmt" = "%@-ն պնդում է այլ հասցե, քան նախկինում։ Համեմատեք անվտանգության թվերը, նախքան այս զրույցին վստահելը։";
+"security_notice_device_title" = "Չհաստատված սարք";
+"security_notice_device_body_fmt" = "%@-ն ունի սարք, որը նրա մյուս սարքերից ոչ մեկը չի հաստատել։ Եթե նա հենց նոր սարք չի ավելացրել, համեմատեք անվտանգության թվերը, նախքան այս զրույցին վստահելը։";
+"unvouched_device_toast_fmt" = "%@-ն ունի սարք, որը նրա մյուս սարքերից ոչ մեկը չի հաստատել։ Բացեք զրույցը՝ ստուգելու համար։";
 "security_notice_acknowledge" = "Ստուգված է";
 "safety_numbers_device_fmt" = "Սարք %@";
 "key_change_toast_open" = "Բացել";
