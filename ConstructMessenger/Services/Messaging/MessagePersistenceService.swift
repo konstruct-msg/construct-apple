@@ -131,14 +131,26 @@ class MessagePersistenceService {
         storagePayload: Data? = nil,
         in context: NSManagedObjectContext
     ) {
-        let body = storagePayload ?? Data(newContent.utf8)
+        // `isEdited` is always true at the callers; an edit marks the message, as the crate's does.
+        Self.applyEdit(messageId, body: storagePayload ?? Data(newContent.utf8), editedAt: editedAt)
+    }
+
+    /// Every edit, ours or the peer's: the new body, and the chat's list line after it. Until
+    /// 2026-10-23 both paths wrote the body alone, and an edit of the last message left the
+    /// list showing the text before it.
+    nonisolated static func applyEdit(
+        _ messageId: String, body: Data, editedAt: Date,
+        store: any MessageStore = LocalRepositories.messages,
+        chats: any ChatStore = LocalRepositories.chats
+    ) {
         do {
-            // `isEdited` is always true at the callers; an edit marks the message, as the crate's does.
-            if try !LocalRepositories.messages.edit(
+            guard try store.edit(
                 messageId, body: body, searchText: LocalMessagePayload.decode(body).plainText, editedAt: editedAt
-            ) {
+            ), let chatId = try store.message(messageId)?.chatId else {
                 Log.error("Cannot find message to update content: \(messageId)", category: "MessagePersistence")
+                return
             }
+            refreshPreview(ofChat: chatId, store: store, chats: chats)
         } catch {
             Log.error("Content of \(messageId.prefix(8))… not written: \(error)", category: "MessagePersistence")
         }
