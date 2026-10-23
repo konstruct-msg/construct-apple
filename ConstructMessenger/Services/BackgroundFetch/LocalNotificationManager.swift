@@ -10,6 +10,9 @@ import UserNotifications
 #if canImport(UIKit)
 import UIKit
 #endif
+#if os(macOS)
+import AppKit
+#endif
 
 /// Manages local notifications for background message delivery
 /// Shows user-friendly notifications when messages arrive in background
@@ -305,6 +308,30 @@ extension LocalNotificationManager: UNUserNotificationCenterDelegate {
         withCompletionHandler completionHandler: @escaping () -> Void
     ) {
         let userInfo = response.notification.request.content.userInfo
+
+        #if os(macOS)
+        if response.notification.request.content.categoryIdentifier == IncomingCallAlert.category {
+            let callId = userInfo[IncomingCallAlert.callIdKey] as? String
+            let action = response.actionIdentifier
+            Task { @MainActor in
+                let calls = CallManager.shared
+                let ringing = IncomingCallAlert.ringing(calls.state)?.id
+                switch IncomingCallAlert.response(action: action, notificationCallId: callId, ringingCallId: ringing) {
+                case .answer:
+                    NSApp.activate()
+                    calls.answerIncomingCall(withCamera: false)
+                case .decline:
+                    calls.declineIncomingCall()
+                case .open:
+                    NSApp.activate()
+                case .ignore:
+                    Log.info("Incoming call notification pressed for a call no longer ringing — ignored", category: "Calls")
+                }
+                completionHandler()
+            }
+            return
+        }
+        #endif
 
         Log.debug("Notification tapped: \(userInfo)")
 
