@@ -65,4 +65,14 @@ extension CryptoManager {
         guard let core = orchestratorCore else { throw CryptoManagerError.coreNotInitialized }
         return try core.issueDeviceCertificate(subject: subject, evidence: evidence)
     }
+
+    /// The core's verdict on each device the server lists for one account, given the devices of
+    /// that account this client already trusts. nil before the core is up — nothing is judged then,
+    /// and nothing is alarmed.
+    func judgePeerDevices(trustedDeviceIds: [String], offered: [OfferedPeerDevice]) -> [PeerDeviceVerdict]? {
+        coreLock.lock()
+        defer { coreLock.unlock() }
+        guard let core = orchestratorCore else { return nil }
+        return core.judgePeerDevices(trustedDeviceIds: trustedDeviceIds, offered: offered)
+    }
 }
