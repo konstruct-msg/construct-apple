@@ -115,6 +115,68 @@ final class DeviceCertificateLinkTests: XCTestCase {
         XCTAssertNil(DeviceCertificateIssuer.subjectKeys(from: withoutKey))
     }
 
+    // MARK: - Receiving side: which devices raise the alarm
+
+    private func vouch(_ signer: Device, for subject: Device) throws -> Data {
+        let fp = historyQrFingerprint(identityPublic: subject.entry.bundle.identityPublic, hybridPublic: subject.entry.hybridIdentityKey)
+        return try signer.core.issueDeviceCertificate(
+            subject: try XCTUnwrap(DeviceCertificateIssuer.subjectKeys(from: subject.entry)),
+            evidence: .qrFingerprint(fingerprint: fp)
+        )
+    }
+
+    private func withCertificate(_ d: Device, _ certificate: Data?) -> DeviceBundleData {
+        var entry = d.entry
+        entry.deviceCertificate = certificate
+        return entry
+    }
+
+    /// A contact with a trusted phone links a Mac (vouched) and the server adds a device of its
+    /// own (not vouched): the alarm names the server's device and only it.
+    func testOnlyTheDeviceNobodyVouchedForRaisesTheAlarm() throws {
+        let (phone, mac, rogue, me) = (try makeDevice(), try makeDevice(), try makeDevice(), try makeDevice())
+        let bundles = [
+            withCertificate(phone, nil),
+            withCertificate(mac, try vouch(phone, for: mac)),
+            withCertificate(rogue, nil),
+        ]
+        let offered = PeerDeviceVetting.offered(bundles)
+        let verdicts = me.core.judgePeerDevices(trustedDeviceIds: [phone.id], offered: offered)
+        XCTAssertEqual(PeerDeviceVetting.unvouched(trusted: [phone.id], offered: offered, verdicts: verdicts), [rogue.id])
+    }
+
+    /// The first time an account is seen there is nothing to compare against: no alarm.
+    func testAnAccountSeenForTheFirstTimeRaisesNothing() throws {
+        let (phone, other, me) = (try makeDevice(), try makeDevice(), try makeDevice())
+        let offered = PeerDeviceVetting.offered([withCertificate(phone, nil), withCertificate(other, nil)])
+        let verdicts = me.core.judgePeerDevices(trustedDeviceIds: [], offered: offered)
+        XCTAssertEqual(PeerDeviceVetting.unvouched(trusted: [], offered: offered, verdicts: verdicts), [])
+    }
+
+    /// A device already pinned here is not alarmed about again, even if nobody vouched for it.
+    func testADeviceAlreadyTrustedIsNotAlarmedAgain() {
+        let offered = [OfferedPeerDevice(
+            deviceId: "aa", keys: DeviceCertKeys(identityPublic: Data(), verifyingKey: Data(), hybridPublic: Data(), hybridBinding: Data()),
+            certificate: nil
+        )]
+        XCTAssertEqual(PeerDeviceVetting.unvouched(trusted: ["aa"], offered: offered, verdicts: [.unvouched]), [])
+        XCTAssertEqual(PeerDeviceVetting.unvouched(trusted: [], offered: offered, verdicts: [.unvouched]), ["aa"])
+    }
+
+    /// A bundle without the hybrid key cannot open a session with anyone, so it is not judged.
+    func testABundleWithoutTheHybridKeyIsNotJudged() throws {
+        let d = try makeDevice()
+        let bare = DeviceBundleData(deviceId: d.id, bundle: d.entry.bundle, platform: .unspecified, hybridIdentityKey: Data())
+        XCTAssertTrue(PeerDeviceVetting.offered([bare]).isEmpty)
+        XCTAssertEqual(PeerDeviceVetting.offered([d.entry]).map(\.deviceId), [d.id])
+    }
+
+    /// The certificate the directory served reaches the core with the bundle.
+    func testTheServedCertificateIsHandedToTheCore() throws {
+        let d = try makeDevice()
+        XCTAssertEqual(PeerDeviceVetting.offered([withCertificate(d, Data([1, 2]))]).first?.certificate, Data([1, 2]))
+    }
+
     func testLinkSecretAndFingerprintAreReadFromTheQR() {
         let s = String(repeating: "07", count: 32)
         let fp = String(repeating: "ab", count: 32)

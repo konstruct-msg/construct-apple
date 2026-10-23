@@ -36,11 +36,16 @@ enum SecurityNotice: Int16, Sendable {
     case none = 0
     /// The contact named an account address other than the one pinned for them.
     case addressChanged = 1
+    /// The contact's account has a device none of its devices we trust vouched for — the server
+    /// may have added it (`decisions/devices-of-an-account-sign-each-other.md`). Only the alarm:
+    /// the device still receives copies, by the owner's choice (2026-10-23).
+    case unvouchedDevice = 3
 }
 
 /// The warning shown for a contact, whichever source raised it.
 enum ContactTrustAlert: Equatable, Sendable {
     case addressChanged
+    case unvouchedDevice
     /// The key server's proof for their bundle did not verify.
     case verificationFailed
 
@@ -48,6 +53,7 @@ enum ContactTrustAlert: Equatable, Sendable {
     init?(notice: SecurityNotice, ktStatus: KTStatus) {
         switch notice {
         case .addressChanged: self = .addressChanged
+        case .unvouchedDevice: self = .unvouchedDevice
         case .none:
             guard ktStatus == .failed else { return nil }
             self = .verificationFailed
@@ -57,6 +63,7 @@ enum ContactTrustAlert: Equatable, Sendable {
     var titleKey: String {
         switch self {
         case .addressChanged: return "security_notice_address_title"
+        case .unvouchedDevice: return "security_notice_device_title"
         case .verificationFailed: return "key_change_banner_title_failed"
         }
     }
@@ -65,6 +72,8 @@ enum ContactTrustAlert: Equatable, Sendable {
         switch self {
         case .addressChanged:
             return String(format: NSLocalizedString("security_notice_address_body_fmt", comment: ""), contactName)
+        case .unvouchedDevice:
+            return String(format: NSLocalizedString("security_notice_device_body_fmt", comment: ""), contactName)
         case .verificationFailed:
             return NSLocalizedString("key_change_banner_subtitle_failed", comment: "")
         }
