@@ -1415,5 +1415,6 @@
 "call_mic_level_hint" = "Say something — the bar should move.";
 "call_audio_output" = "Output";
 "call_device_system" = "System default";
-"studio_debug_start" = "Start Studio (developer)";
-"studio_debug_stop" = "Leave Studio (developer)";
+"call_studio" = "Studio";
+"call_studio_start" = "Start Studio";
+"call_studio_stop" = "Leave Studio";
