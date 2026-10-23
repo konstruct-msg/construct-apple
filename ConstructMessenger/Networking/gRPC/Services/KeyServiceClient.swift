@@ -127,7 +127,8 @@ final class KeyServiceClient: Sendable {
                     deviceId: deviceBundle.deviceID,
                     bundle: bundle,
                     platform: deviceBundle.platform,
-                    hybridIdentityKey: b.hasHybridIdentityKey ? b.hybridIdentityKey : Data()
+                    hybridIdentityKey: b.hasHybridIdentityKey ? b.hybridIdentityKey : Data(),
+                    deviceCertificate: deviceBundle.hasDeviceCertificate ? deviceBundle.deviceCertificate : nil
                 )
             }
             // Carried out of the closure beside the bundles, and deliberately not folded into

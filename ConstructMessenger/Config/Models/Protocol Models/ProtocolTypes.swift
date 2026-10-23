@@ -329,6 +329,10 @@ struct DeviceBundleData {
     let platform: Shared_Proto_Core_V1_DevicePlatform
     /// Hybrid identity public (Ed25519‖ML-DSA-65). Empty when the peer has none.
     var hybridIdentityKey: Data = Data()
+    /// Certificate by which another device of the same account vouches for this one
+    /// (`decisions/devices-of-an-account-sign-each-other.md`). nil for an account's first device
+    /// and for a device nobody vouched for; the core judges it, never this app.
+    var deviceCertificate: Data? = nil
 }
 
 // MARK: - Auth Response Data
