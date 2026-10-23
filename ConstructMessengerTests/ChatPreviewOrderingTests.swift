@@ -224,3 +224,42 @@ extension ChatPreviewOrderingTests {
         XCTAssertEqual(try stored(chat).lastMessageText, "theirs")
     }
 }
+
+// MARK: - An edit is the list line too
+
+extension ChatPreviewOrderingTests {
+    /// The last message, edited: the list shows the edit (owner's report, 2026-10-23 — "нерт"
+    /// stayed in the list after it was corrected to "нет"). Mutation: `applyEdit` without the
+    /// refresh — the typo stays; this reddens.
+    func testAnEditOfTheLastMessageIsWhatTheListShows() throws {
+        let chat = try makeSavedChat()
+        let id = try write("Инстаграм и телеграм нерт", in: chat, sentByMe: true, at: 1_000,
+                           orderKey: serverKey(2_000_000, 1))
+        XCTAssertEqual(try stored(chat).lastMessageText, "Инстаграм и телеграм нерт")
+
+        MessagePersistenceService.applyEdit(id, body: Data("Инстаграм и телеграм нет".utf8), editedAt: Date())
+        XCTAssertEqual(try stored(chat).lastMessageText, "Инстаграм и телеграм нет")
+    }
+
+    /// Our own edit goes through the same funnel. Mutation: `updateMessageContent` writing the
+    /// body by itself again — the typo stays; this reddens.
+    func testOurEditThroughThePersistenceServiceMovesTheListLine() throws {
+        let chat = try makeSavedChat()
+        let id = try write("typo", in: chat, sentByMe: true, at: 1_000, orderKey: serverKey(2_000_000, 1))
+
+        MessagePersistenceService().updateMessageContent(
+            messageId: id, newContent: "fixed", isEdited: true, editedAt: Date(), in: context
+        )
+        XCTAssertEqual(try stored(chat).lastMessageText, "fixed")
+    }
+
+    /// An edit of an earlier message leaves the list on the last one.
+    func testAnEditOfAnEarlierMessageLeavesTheListAlone() throws {
+        let chat = try makeSavedChat()
+        let first = try write("first", in: chat, sentByMe: false, at: 1_000, orderKey: serverKey(2_000_000, 1))
+        _ = try write("last", in: chat, sentByMe: true, at: 1_001, orderKey: serverKey(2_000_500, 2))
+
+        MessagePersistenceService.applyEdit(first, body: Data("first, edited".utf8), editedAt: Date())
+        XCTAssertEqual(try stored(chat).lastMessageText, "last")
+    }
+}
