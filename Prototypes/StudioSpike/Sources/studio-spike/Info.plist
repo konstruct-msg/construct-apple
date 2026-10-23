@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleIdentifier</key>
+	<string>cc.konstruct.studio-spike</string>
+	<key>CFBundleName</key>
+	<string>studio-spike</string>
+	<key>NSAudioCaptureUsageDescription</key>
+	<string>The studio spike captures the audio of the DAW you name, to send it to the other side.</string>
+</dict>
+</plist>
