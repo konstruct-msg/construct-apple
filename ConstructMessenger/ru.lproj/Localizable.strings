@@ -1426,5 +1426,6 @@
 "call_mic_level_hint" = "Скажите что-нибудь — полоса должна двигаться.";
 "call_audio_output" = "Вывод звука";
 "call_device_system" = "Как в системе";
-"studio_debug_start" = "Начать Студию (разработка)";
-"studio_debug_stop" = "Выйти из Студии (разработка)";
+"call_studio" = "Студия";
+"call_studio_start" = "Начать Студию";
+"call_studio_stop" = "Выйти из Студии";

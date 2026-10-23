@@ -105,6 +105,26 @@ private struct CallDevicesButton: View {
     }
 }
 
+/// Studio: on and off like mute — the symbol filled with the accent while Studio is on.
+private struct CallStudioButton: View {
+    let model: DesktopCallModel
+    let size: CGFloat
+
+    var body: some View {
+        let key = model.studioOn ? "call_studio_stop" : "call_studio_start"
+        Button(action: model.toggleStudio) {
+            Image(systemName: "waveform")
+                .font(CTFont.ui(size * 0.4, weight: .medium))
+                .foregroundStyle(model.studioOn ? Color.CT.onFill : Color.CT.text)
+                .frame(width: size, height: size)
+                .background(model.studioOn ? Color.CT.accent : Color.CT.noise, in: Circle())
+        }
+        .buttonStyle(.plain)
+        .help(NSLocalizedString(key, comment: ""))
+        .accessibilityLabel(NSLocalizedString(key, comment: ""))
+    }
+}
+
 private struct CallEndButton: View {
     let model: DesktopCallModel
     let size: CGFloat
@@ -304,6 +324,9 @@ struct DesktopCallWindowView: View {
                     CallMuteButton(model: model, size: CTLayout.callControlSize)
                 }
                 labelled("call_sound") { CallDevicesButton(size: CTLayout.callControlSize) }
+                if model.studioAvailable {
+                    labelled("call_studio") { CallStudioButton(model: model, size: CTLayout.callControlSize) }
+                }
                 labelled("call_end") { CallEndButton(model: model, size: CTLayout.callControlSize) }
             }
         default:

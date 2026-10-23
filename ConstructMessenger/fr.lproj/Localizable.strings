@@ -1335,5 +1335,6 @@
 "call_mic_level_hint" = "Dites quelque chose — la barre doit bouger.";
 "call_audio_output" = "Sortie";
 "call_device_system" = "Par défaut du système";
-"studio_debug_start" = "Démarrer Studio (développement)";
-"studio_debug_stop" = "Quitter Studio (développement)";
+"call_studio" = "Studio";
+"call_studio_start" = "Démarrer Studio";
+"call_studio_stop" = "Quitter Studio";
