@@ -1415,5 +1415,6 @@
 "call_mic_level_hint" = "何か話してください。バーが動けば大丈夫です。";
 "call_audio_output" = "出力";
 "call_device_system" = "システムのデフォルト";
-"studio_debug_start" = "Studio を開始（開発用）";
-"studio_debug_stop" = "Studio を終了（開発用）";
+"call_studio" = "Studio";
+"call_studio_start" = "Studio を開始";
+"call_studio_stop" = "Studio を終了";

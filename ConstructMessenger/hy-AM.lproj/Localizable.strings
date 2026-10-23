@@ -1415,5 +1415,6 @@
 "call_mic_level_hint" = "Ինչ-որ բան ասեք — գիծը պետք է շարժվի։";
 "call_audio_output" = "Ելք";
 "call_device_system" = "Ինչպես համակարգում";
-"studio_debug_start" = "Սկսել Studio (մշակում)";
-"studio_debug_stop" = "Դուրս գալ Studio-ից (մշակում)";
+"call_studio" = "Studio";
+"call_studio_start" = "Սկսել Studio";
+"call_studio_stop" = "Դուրս գալ Studio-ից";

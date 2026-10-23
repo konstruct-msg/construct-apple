@@ -8,23 +8,24 @@
 //  decoder cookie; when the guest accepts, the host's capture runs into `studio-program` and the
 //  guest plays it through its ring and drift loop.
 //
-//  Behind `StudioFeature`, a switch nobody but a developer sets: no invite screen, no path choice
-//  (always relay), no screen — those are steps 5–6.
+//  Behind `StudioFeature`, on by default on a Mac while the Desktop build goes only to its testers:
+//  no invite screen, no path choice (always relay), no screen — those are steps 5–6.
 //
 
 import Foundation
 import SwiftProtobuf
 import Synchronization
 
-/// Studio mode, while it is built. Off unless set by hand on a Mac:
-/// `defaults write <Desktop bundle id> StudioDebug -bool YES`. A user default rather than a Debug
+/// Studio mode, while it is built. On by default on a Mac since 2026-10-23: the Desktop build is
+/// handed only to the testers who asked for Studio. Off by hand:
+/// `defaults write <Desktop bundle id> StudioDebug -bool NO`. A user default rather than a Debug
 /// build, so the notarised build can be tried on two Macs.
 enum StudioFeature {
     static let defaultsKey = "StudioDebug"
 
     static var isEnabled: Bool {
         #if os(macOS)
-        UserDefaults.standard.bool(forKey: defaultsKey)
+        UserDefaults.standard.object(forKey: defaultsKey) as? Bool ?? true
         #else
         false
         #endif
@@ -194,6 +195,7 @@ extension CallManager {
     private func makeStudioRun(role: StudioControlMachine.Role, on webrtc: WebRTCSession, for active: ActiveCall) -> StudioRun {
         let run = StudioRun(link: StudioLink(role: role) { webrtc.sendStudio($0, on: .control) })
         active.studio = run
+        studioCallId = active.session.id
         let route = run.route
         // Control messages go to the main actor in arrival order (a queue, not a task per
         // message, whose order is not promised); program packets stay off it.
@@ -306,7 +308,10 @@ extension CallManager {
 
     private func endStudio(_ run: StudioRun, for active: ActiveCall) {
         run.stop()
-        if active.studio === run { active.studio = nil }
+        if active.studio === run {
+            active.studio = nil
+            if studioCallId == active.session.id { studioCallId = nil }
+        }
         guard let webrtc = active.webrtc as? WebRTCSession else { return }
         webrtc.setStudioReceiver(nil)
         webrtc.onStudioChannelsOpen = nil

@@ -63,6 +63,19 @@ final class DesktopCallModel {
         CallManager.shared.endCall()
     }
 
+    var studioAvailable: Bool { StudioFeature.isEnabled }
+
+    /// On from the host's press (or the guest's join) until either side leaves or the call ends.
+    var studioOn: Bool { CallManager.shared.studioIsOn }
+
+    func toggleStudio() {
+        if studioOn {
+            CallManager.shared.stopStudio()
+        } else {
+            Task { await CallManager.shared.startStudio() }
+        }
+    }
+
     /// Close an outcome that is being kept, or the ended call CallManager still shows.
     func dismiss() {
         CallManager.shared.dismissEndedCall()

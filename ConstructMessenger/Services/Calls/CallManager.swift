@@ -55,6 +55,15 @@ final class CallManager: CallUIManaging {
 
     var active: ActiveCall?
 
+    /// The call Studio is on, for the call window; `ActiveCall` is not observed. Read through
+    /// `studioIsOn`, so a call that ended with Studio on does not leave it showing.
+    var studioCallId: String?
+
+    var studioIsOn: Bool {
+        guard let studioCallId else { return false }
+        return studioCallId == active?.session.id
+    }
+
     /// Serializes outgoing E2EE call-signal RPC sends so they reach the server in the
     /// order the orchestrator encrypted them (see `sendCallSignalProto`). Without this,
     /// rapid transitions (offer → candidates → hangup) spawn independent send Tasks that

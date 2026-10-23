@@ -130,15 +130,11 @@ struct ConstructCommands: Commands {
             .keyboardShortcut("e", modifiers: [.command, .shift])
             .disabled(!live)
 
-            // Studio while it is built: only with `StudioFeature` set by hand.
-            if StudioFeature.isEnabled {
+            // Studio while it is built: on unless `StudioFeature` is turned off by hand.
+            if call.studioAvailable {
                 Divider()
-                Button(NSLocalizedString("studio_debug_start", comment: "")) {
-                    Task { await CallManager.shared.startStudio() }
-                }
-                .disabled(!live)
-                Button(NSLocalizedString("studio_debug_stop", comment: "")) {
-                    CallManager.shared.stopStudio()
+                Button(NSLocalizedString(call.studioOn ? "call_studio_stop" : "call_studio_start", comment: "")) {
+                    call.toggleStudio()
                 }
                 .disabled(!live)
             }
