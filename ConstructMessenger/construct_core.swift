@@ -3479,6 +3479,11 @@ public protocol OrchestratorCoreProtocol: AnyObject, Sendable {
     func deviceCopyTagMatches(tag: String, baseMessageId: String, peerIdentityPublic: Data)  -> Bool
     
     /**
+     * Flow A, on the new device: the answer to the secret in the old device's QR.
+     */
+    func deviceLinkKeyProof(secret: Data) throws  -> Data
+    
+    /**
      * Encrypt for a device and return the whole wire payload. Sent as it is: a payload rebuilt
      * from components dropped fields (decisions/responder-authenticates-initiator-by-kem.md).
      */
@@ -3593,6 +3598,19 @@ public protocol OrchestratorCoreProtocol: AnyObject, Sendable {
     func initSession(contactId: String, recipientBundle: BinaryKeyBundle) throws  -> String
     
     func initSessionAllowingStale(contactId: String, recipientBundle: BinaryKeyBundle) throws  -> String
+    
+    /**
+     * Vouch for a device being linked to this account. Refused (`EvidenceMismatch`) unless the
+     * evidence from the link QR names exactly these keys: keys the server alone vouches for are
+     * never signed.
+     */
+    func issueDeviceCertificate(subject: DeviceCertKeys, evidence: DeviceLinkEvidence) throws  -> Data
+    
+    /**
+     * One verdict per offered device, in order. `trusted_device_ids`: the devices of the same
+     * account this client already trusts; `offered`: what the server lists for it now.
+     */
+    func judgePeerDevices(trustedDeviceIds: [String], offered: [OfferedPeerDevice])  -> [PeerDeviceVerdict]
     
     func kyberOneTimePrekeyCount()  -> UInt32
     
@@ -3895,6 +3913,18 @@ open func deviceCopyTagMatches(tag: String, baseMessageId: String, peerIdentityP
         FfiConverterString.lower(tag),
         FfiConverterString.lower(baseMessageId),
         FfiConverterData.lower(peerIdentityPublic),$0
+    )
+})
+}
+    
+    /**
+     * Flow A, on the new device: the answer to the secret in the old device's QR.
+     */
+open func deviceLinkKeyProof(secret: Data)throws  -> Data  {
+    return try  FfiConverterData.lift(try rustCallWithError(FfiConverterTypeDeviceCertError_lift) {
+    uniffi_construct_core_fn_method_orchestratorcore_device_link_key_proof(
+            self.uniffiCloneHandle(),
+        FfiConverterData.lower(secret),$0
     )
 })
 }
@@ -4221,6 +4251,35 @@ open func initSessionAllowingStale(contactId: String, recipientBundle: BinaryKey
             self.uniffiCloneHandle(),
         FfiConverterString.lower(contactId),
         FfiConverterTypeBinaryKeyBundle_lower(recipientBundle),$0
+    )
+})
+}
+    
+    /**
+     * Vouch for a device being linked to this account. Refused (`EvidenceMismatch`) unless the
+     * evidence from the link QR names exactly these keys: keys the server alone vouches for are
+     * never signed.
+     */
+open func issueDeviceCertificate(subject: DeviceCertKeys, evidence: DeviceLinkEvidence)throws  -> Data  {
+    return try  FfiConverterData.lift(try rustCallWithError(FfiConverterTypeDeviceCertError_lift) {
+    uniffi_construct_core_fn_method_orchestratorcore_issue_device_certificate(
+            self.uniffiCloneHandle(),
+        FfiConverterTypeDeviceCertKeys_lower(subject),
+        FfiConverterTypeDeviceLinkEvidence_lower(evidence),$0
+    )
+})
+}
+    
+    /**
+     * One verdict per offered device, in order. `trusted_device_ids`: the devices of the same
+     * account this client already trusts; `offered`: what the server lists for it now.
+     */
+open func judgePeerDevices(trustedDeviceIds: [String], offered: [OfferedPeerDevice]) -> [PeerDeviceVerdict]  {
+    return try!  FfiConverterSequenceTypePeerDeviceVerdict.lift(try! rustCall() {
+    uniffi_construct_core_fn_method_orchestratorcore_judge_peer_devices(
+            self.uniffiCloneHandle(),
+        FfiConverterSequenceString.lower(trustedDeviceIds),
+        FfiConverterSequenceTypeOfferedPeerDevice.lower(offered),$0
     )
 })
 }
@@ -5034,6 +5093,70 @@ public func FfiConverterTypeDeliveryTarget_lift(_ buf: RustBuffer) throws -> Del
 #endif
 public func FfiConverterTypeDeliveryTarget_lower(_ value: DeliveryTarget) -> RustBuffer {
     return FfiConverterTypeDeliveryTarget.lower(value)
+}
+
+
+/**
+ * A device's public keys as its bundle presents them; `hybrid_binding` is the Ed25519 signature
+ * binding `hybrid_public` to `verifying_key`.
+ */
+public struct DeviceCertKeys: Equatable, Hashable {
+    public var identityPublic: Data
+    public var verifyingKey: Data
+    public var hybridPublic: Data
+    public var hybridBinding: Data
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(identityPublic: Data, verifyingKey: Data, hybridPublic: Data, hybridBinding: Data) {
+        self.identityPublic = identityPublic
+        self.verifyingKey = verifyingKey
+        self.hybridPublic = hybridPublic
+        self.hybridBinding = hybridBinding
+    }
+
+    
+}
+
+#if compiler(>=6)
+extension DeviceCertKeys: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeDeviceCertKeys: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> DeviceCertKeys {
+        return
+            try DeviceCertKeys(
+                identityPublic: FfiConverterData.read(from: &buf), 
+                verifyingKey: FfiConverterData.read(from: &buf), 
+                hybridPublic: FfiConverterData.read(from: &buf), 
+                hybridBinding: FfiConverterData.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: DeviceCertKeys, into buf: inout [UInt8]) {
+        FfiConverterData.write(value.identityPublic, into: &buf)
+        FfiConverterData.write(value.verifyingKey, into: &buf)
+        FfiConverterData.write(value.hybridPublic, into: &buf)
+        FfiConverterData.write(value.hybridBinding, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDeviceCertKeys_lift(_ buf: RustBuffer) throws -> DeviceCertKeys {
+    return try FfiConverterTypeDeviceCertKeys.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDeviceCertKeys_lower(_ value: DeviceCertKeys) -> RustBuffer {
+    return FfiConverterTypeDeviceCertKeys.lower(value)
 }
 
 
@@ -7341,6 +7464,62 @@ public func FfiConverterTypeMemberAddition_lower(_ value: MemberAddition) -> Rus
 }
 
 
+public struct OfferedPeerDevice: Equatable, Hashable {
+    public var deviceId: String
+    public var keys: DeviceCertKeys
+    public var certificate: Data?
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(deviceId: String, keys: DeviceCertKeys, certificate: Data?) {
+        self.deviceId = deviceId
+        self.keys = keys
+        self.certificate = certificate
+    }
+
+    
+}
+
+#if compiler(>=6)
+extension OfferedPeerDevice: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeOfferedPeerDevice: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> OfferedPeerDevice {
+        return
+            try OfferedPeerDevice(
+                deviceId: FfiConverterString.read(from: &buf), 
+                keys: FfiConverterTypeDeviceCertKeys.read(from: &buf), 
+                certificate: FfiConverterOptionData.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: OfferedPeerDevice, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.deviceId, into: &buf)
+        FfiConverterTypeDeviceCertKeys.write(value.keys, into: &buf)
+        FfiConverterOptionData.write(value.certificate, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeOfferedPeerDevice_lift(_ buf: RustBuffer) throws -> OfferedPeerDevice {
+    return try FfiConverterTypeOfferedPeerDevice.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeOfferedPeerDevice_lower(_ value: OfferedPeerDevice) -> RustBuffer {
+    return FfiConverterTypeOfferedPeerDevice.lower(value)
+}
+
+
 public struct OtpkPair: Equatable, Hashable {
     public var keyId: UInt32
     public var publicKey: Data
@@ -9344,6 +9523,191 @@ public func FfiConverterTypeDeliveryAudience_lower(_ value: DeliveryAudience) ->
 
 
 
+public enum DeviceCertError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError {
+
+    
+    
+    case KeysMalformed(message: String)
+    
+    case BindingInvalid(message: String)
+    
+    case EvidenceMismatch(message: String)
+    
+    case SignerIsSubject(message: String)
+    
+    case SigningFailed(message: String)
+    
+
+    
+
+    
+    public var errorDescription: String? {
+        String(reflecting: self)
+    }
+    
+}
+
+#if compiler(>=6)
+extension DeviceCertError: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeDeviceCertError: FfiConverterRustBuffer {
+    typealias SwiftType = DeviceCertError
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> DeviceCertError {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+
+        
+
+        
+        case 1: return .KeysMalformed(
+            message: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 2: return .BindingInvalid(
+            message: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 3: return .EvidenceMismatch(
+            message: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 4: return .SignerIsSubject(
+            message: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 5: return .SigningFailed(
+            message: try FfiConverterString.read(from: &buf)
+        )
+        
+
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: DeviceCertError, into buf: inout [UInt8]) {
+        switch value {
+
+        
+
+        
+        case .KeysMalformed(_ /* message is ignored*/):
+            writeInt(&buf, Int32(1))
+        case .BindingInvalid(_ /* message is ignored*/):
+            writeInt(&buf, Int32(2))
+        case .EvidenceMismatch(_ /* message is ignored*/):
+            writeInt(&buf, Int32(3))
+        case .SignerIsSubject(_ /* message is ignored*/):
+            writeInt(&buf, Int32(4))
+        case .SigningFailed(_ /* message is ignored*/):
+            writeInt(&buf, Int32(5))
+
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDeviceCertError_lift(_ buf: RustBuffer) throws -> DeviceCertError {
+    return try FfiConverterTypeDeviceCertError.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDeviceCertError_lower(_ value: DeviceCertError) -> RustBuffer {
+    return FfiConverterTypeDeviceCertError.lower(value)
+}
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+/**
+ * What the link QR showed about the new device.
+ */
+
+public enum DeviceLinkEvidence: Equatable, Hashable {
+    
+    /**
+     * Flow B: the new device's QR carried `history_qr_fingerprint(identity, hybrid)`.
+     */
+    case qrFingerprint(fingerprint: Data
+    )
+    /**
+     * Flow A: our QR carried `secret`; the new device answered with `proof`.
+     */
+    case qrSecret(secret: Data, proof: Data
+    )
+
+
+
+}
+
+#if compiler(>=6)
+extension DeviceLinkEvidence: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeDeviceLinkEvidence: FfiConverterRustBuffer {
+    typealias SwiftType = DeviceLinkEvidence
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> DeviceLinkEvidence {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .qrFingerprint(fingerprint: try FfiConverterData.read(from: &buf)
+        )
+        
+        case 2: return .qrSecret(secret: try FfiConverterData.read(from: &buf), proof: try FfiConverterData.read(from: &buf)
+        )
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: DeviceLinkEvidence, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case let .qrFingerprint(fingerprint):
+            writeInt(&buf, Int32(1))
+            FfiConverterData.write(fingerprint, into: &buf)
+            
+        
+        case let .qrSecret(secret,proof):
+            writeInt(&buf, Int32(2))
+            FfiConverterData.write(secret, into: &buf)
+            FfiConverterData.write(proof, into: &buf)
+            
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDeviceLinkEvidence_lift(_ buf: RustBuffer) throws -> DeviceLinkEvidence {
+    return try FfiConverterTypeDeviceLinkEvidence.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDeviceLinkEvidence_lower(_ value: DeviceLinkEvidence) -> RustBuffer {
+    return FfiConverterTypeDeviceLinkEvidence.lower(value)
+}
+
+
+
 /**
  * Why a transfer was refused. Each case's message is the spec's name for it (`record_order`,
  * `qr_pin_mismatch`, …) — log that, map the case to what a person reads.
@@ -10752,6 +11116,120 @@ public func FfiConverterTypePeekVerdict_lift(_ buf: RustBuffer) throws -> PeekVe
 #endif
 public func FfiConverterTypePeekVerdict_lower(_ value: PeekVerdict) -> RustBuffer {
     return FfiConverterTypePeekVerdict.lower(value)
+}
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+
+public enum PeerDeviceVerdict: Equatable, Hashable {
+    
+    /**
+     * Already trusted, same hybrid key.
+     */
+    case pinned
+    /**
+     * Nothing of this account was trusted yet: trusted on first use.
+     */
+    case firstOfAccount
+    /**
+     * Signed by a trusted device of the account, directly or through a chain.
+     */
+    case vouched(by: String
+    )
+    /**
+     * Signed by no trusted device: the alarm.
+     */
+    case unvouched
+    /**
+     * Trusted before, now another hybrid key under the same id.
+     */
+    case keyChanged
+    /**
+     * The bundle does not hold together.
+     */
+    case invalid
+
+
+
+}
+
+#if compiler(>=6)
+extension PeerDeviceVerdict: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypePeerDeviceVerdict: FfiConverterRustBuffer {
+    typealias SwiftType = PeerDeviceVerdict
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> PeerDeviceVerdict {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .pinned
+        
+        case 2: return .firstOfAccount
+        
+        case 3: return .vouched(by: try FfiConverterString.read(from: &buf)
+        )
+        
+        case 4: return .unvouched
+        
+        case 5: return .keyChanged
+        
+        case 6: return .invalid
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: PeerDeviceVerdict, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case .pinned:
+            writeInt(&buf, Int32(1))
+        
+        
+        case .firstOfAccount:
+            writeInt(&buf, Int32(2))
+        
+        
+        case let .vouched(by):
+            writeInt(&buf, Int32(3))
+            FfiConverterString.write(by, into: &buf)
+            
+        
+        case .unvouched:
+            writeInt(&buf, Int32(4))
+        
+        
+        case .keyChanged:
+            writeInt(&buf, Int32(5))
+        
+        
+        case .invalid:
+            writeInt(&buf, Int32(6))
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypePeerDeviceVerdict_lift(_ buf: RustBuffer) throws -> PeerDeviceVerdict {
+    return try FfiConverterTypePeerDeviceVerdict.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypePeerDeviceVerdict_lower(_ value: PeerDeviceVerdict) -> RustBuffer {
+    return FfiConverterTypePeerDeviceVerdict.lower(value)
 }
 
 
@@ -12439,6 +12917,31 @@ fileprivate struct FfiConverterSequenceTypeLocalSearchHit: FfiConverterRustBuffe
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterSequenceTypeOfferedPeerDevice: FfiConverterRustBuffer {
+    typealias SwiftType = [OfferedPeerDevice]
+
+    public static func write(_ value: [OfferedPeerDevice], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeOfferedPeerDevice.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [OfferedPeerDevice] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [OfferedPeerDevice]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeOfferedPeerDevice.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterSequenceTypeOtpkPair: FfiConverterRustBuffer {
     typealias SwiftType = [OtpkPair]
 
@@ -12506,6 +13009,31 @@ fileprivate struct FfiConverterSequenceTypeHistoryEvent: FfiConverterRustBuffer 
         seq.reserveCapacity(Int(len))
         for _ in 0 ..< len {
             seq.append(try FfiConverterTypeHistoryEvent.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypePeerDeviceVerdict: FfiConverterRustBuffer {
+    typealias SwiftType = [PeerDeviceVerdict]
+
+    public static func write(_ value: [PeerDeviceVerdict], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypePeerDeviceVerdict.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [PeerDeviceVerdict] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [PeerDeviceVerdict]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypePeerDeviceVerdict.read(from: &buf))
         }
         return seq
     }
@@ -12913,6 +13441,15 @@ public func mnemonicToSeed(mnemonic: String)throws  -> Data  {
     return try  FfiConverterData.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
     uniffi_construct_core_fn_func_mnemonic_to_seed(
         FfiConverterString.lower(mnemonic),$0
+    )
+})
+}
+/**
+ * Flow A: the 32-byte secret for the old device's link QR. Never sent to the server.
+ */
+public func newDeviceLinkSecret() -> Data  {
+    return try!  FfiConverterData.lift(try! rustCall() {
+    uniffi_construct_core_fn_func_new_device_link_secret($0
     )
 })
 }
@@ -13385,6 +13922,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_func_mnemonic_to_seed() != 49697) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_func_new_device_link_secret() != 40860) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_func_open_media() != 63953) {
@@ -13924,6 +14464,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_method_orchestratorcore_device_copy_tag_matches() != 16613) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_construct_core_checksum_method_orchestratorcore_device_link_key_proof() != 42897) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_construct_core_checksum_method_orchestratorcore_encrypt_to_wire() != 5089) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -14012,6 +14555,12 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_orchestratorcore_init_session_allowing_stale() != 35577) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_orchestratorcore_issue_device_certificate() != 9657) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_method_orchestratorcore_judge_peer_devices() != 26370) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_method_orchestratorcore_kyber_one_time_prekey_count() != 51317) {
