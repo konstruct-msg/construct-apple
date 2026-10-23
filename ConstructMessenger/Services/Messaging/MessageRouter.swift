@@ -1217,10 +1217,7 @@ final class MessageRouter {
                             }
                         }
                         // Future: if newMedia populated, convert via MediaWireCodec + album wrapper here.
-                        _ = try? LocalRepositories.messages.edit(
-                            original.id, body: body,
-                            searchText: LocalMessagePayload.decode(body).plainText, editedAt: Date()
-                        )
+                        MessagePersistenceService.applyEdit(original.id, body: body, editedAt: Date())
                         Log.info("Applied modern edit to \(targetMessageID.prefix(8))… from \(otherUserId.prefix(8))…", category: "MessageRouter")
                     } else {
                         Log.error("Modern edit target not found: \(targetMessageID.prefix(8))… from \(otherUserId.prefix(8))… — edit dropped", category: "MessageRouter")
