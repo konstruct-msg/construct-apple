@@ -23,14 +23,17 @@ struct FullScreenImageView: View {
         ZStack(alignment: .topLeading) {
             Color.black.ignoresSafeArea()
 
-            Image(platformImage: image)
-                .resizable()
-                .scaledToFit()
-                .scaleEffect(scale)
-                .offset(x: offset.width, y: offset.height + dismissOffset)
-                .gesture(magnification)
-                .simultaneousGesture(drag)
-                .onTapGesture(count: 2) { toggleZoom() }
+            GeometryReader { geo in
+                Image(platformImage: image)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: geo.size.width, height: geo.size.height)
+                    .scaleEffect(scale)
+                    .offset(x: offset.width, y: offset.height + dismissOffset)
+                    .gesture(magnification(in: geo.size))
+                    .simultaneousGesture(drag(in: geo.size))
+                    .onTapGesture(count: 2) { toggleZoom() }
+            }
 
             Button { isPresented = false } label: {
                 Image(systemName: "xmark.circle.fill")
@@ -47,12 +50,20 @@ struct FullScreenImageView: View {
 
     // MARK: - Gestures
 
-    private var magnification: some Gesture {
+    private func panLimit(in container: CGSize) -> CGSize {
+        ZoomPanBounds.limit(
+            fitted: ZoomPanBounds.fittedSize(of: image.size, in: container), scale: scale, container: container)
+    }
+
+    private func magnification(in container: CGSize) -> some Gesture {
         MagnificationGesture()
             .onChanged { value in
                 let delta = value / lastScale
                 lastScale = value
                 scale = min(max(scale * delta, 1.0), 5.0)
+                // Zooming out shrinks the room to pan: keep the image's edge at the screen's.
+                offset = ZoomPanBounds.clamped(offset, limit: panLimit(in: container))
+                lastOffset = offset
             }
             .onEnded { _ in
                 lastScale = 1.0
@@ -61,20 +72,24 @@ struct FullScreenImageView: View {
     }
 
     /// One drag gesture: pan while zoomed, vertical drag-to-dismiss while not zoomed.
-    private var drag: some Gesture {
+    private func drag(in container: CGSize) -> some Gesture {
         DragGesture()
             .onChanged { value in
                 if scale > 1.0 {
-                    offset = CGSize(
+                    let raw = CGSize(
                         width: lastOffset.width + value.translation.width,
                         height: lastOffset.height + value.translation.height
                     )
+                    offset = ZoomPanBounds.rubberBanded(raw, limit: panLimit(in: container), container: container)
                 } else if value.translation.height > 0 {
                     dismissOffset = value.translation.height
                 }
             }
             .onEnded { _ in
                 if scale > 1.0 {
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+                        offset = ZoomPanBounds.clamped(offset, limit: panLimit(in: container))
+                    }
                     lastOffset = offset
                 } else if dismissOffset > 100 {
                     isPresented = false
