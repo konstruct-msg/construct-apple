@@ -1247,13 +1247,6 @@
 
 "backup_restore_required_title" = "Redémarrage nécessaire";
 "backup_restore_required_message" = "Fermez et rouvrez Konstruct pour terminer la restauration.";
-"spam_warning_title" = "Envoi…";
-"spam_warning_wait" = "Patientez %d secondes";
-"spam_strong_warning_title" = "Activité inhabituelle";
-"spam_strong_warning_body" = "Vous envoyez des messages plus vite que d’habitude. Patientez un instant.";
-"spam_seconds" = "s";
-"spam_force_send" = "Je comprends le risque, envoyer quand même";
-"spam_force_banned" = "Vous ne pouvez pas passer l’attente pendant %d min";
 "stt_error_no_model" = "Aucun modèle de transcription n’est téléchargé.";
 "stt_error_unavailable" = "La transcription n’est pas disponible sur cet appareil.";
 "call_status_calling" = "Appel…";
