@@ -29,7 +29,8 @@ import Foundation
 ///
 /// In-memory on purpose. After a relaunch one extra receipt per message is harmless; persisting
 /// this would trade a real cost (disk, another store to keep honest) for nothing.
-final class ReceiptResendThrottle {
+/// `@unchecked`: `sentAt` is read and written only on `queue`.
+final class ReceiptResendThrottle: @unchecked Sendable {
 
     static let shared = ReceiptResendThrottle()
 

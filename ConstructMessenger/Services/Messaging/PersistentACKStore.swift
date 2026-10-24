@@ -21,8 +21,9 @@
 //  Removed 2026-08-02, see decisions/one-ack-cache-one-durable-store.md.
 
 import Foundation
+import Synchronization
 
-final class PersistentACKStore {
+final class PersistentACKStore: Sendable {
 
     static let shared = PersistentACKStore()
 
@@ -70,14 +71,11 @@ final class PersistentACKStore {
     // two calls turn it into one that is checked: the executor records the obligation, the router
     // settles it at the single point every routing pass exits through.
 
-    private let expectationLock = NSLock()
-    private var awaitingDurableWrite: Set<String> = []
+    private let awaitingDurableWrite = Mutex<Set<String>>([])
 
     /// The core requires `messageId` to survive a restart as "processed".
     func expectDurableWrite(_ messageId: String) {
-        expectationLock.lock()
-        awaitingDurableWrite.insert(messageId)
-        expectationLock.unlock()
+        _ = awaitingDurableWrite.withLock { $0.insert(messageId) }
     }
 
     /// Clear the obligation and report whether it is still outstanding.
@@ -87,24 +85,18 @@ final class PersistentACKStore {
     /// the cursor moves on, the core's in-memory cache dies with the process, and the message comes
     /// back after a restart with nothing left that remembers handling it.
     func settleDurableWrite(_ messageId: String) -> Bool {
-        expectationLock.lock()
-        let wasExpected = awaitingDurableWrite.remove(messageId) != nil
-        expectationLock.unlock()
+        let wasExpected = awaitingDurableWrite.withLock { $0.remove(messageId) != nil }
         guard wasExpected else { return false }
         return !isProcessedDurably(messageId)
     }
 
     #if DEBUG
     func hasOutstandingDurableWriteForTesting(_ messageId: String) -> Bool {
-        expectationLock.lock()
-        defer { expectationLock.unlock() }
-        return awaitingDurableWrite.contains(messageId)
+        awaitingDurableWrite.withLock { $0.contains(messageId) }
     }
 
     func resetDurableWriteExpectationsForTesting() {
-        expectationLock.lock()
-        awaitingDurableWrite.removeAll()
-        expectationLock.unlock()
+        awaitingDurableWrite.withLock { $0.removeAll() }
     }
     #endif
 

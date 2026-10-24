@@ -44,7 +44,7 @@ protocol RecoveryPhraseStore: AnyObject {
     func forgetHeld()
 }
 
-final class RecoveryPhraseVault: RecoveryPhraseStore {
+final class RecoveryPhraseVault: RecoveryPhraseStore, Sendable {
     static let shared = RecoveryPhraseVault()
 
     static let pendingItem = "construct.recovery.phrase.pending"

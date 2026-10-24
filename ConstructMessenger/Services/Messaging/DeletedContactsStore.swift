@@ -31,12 +31,14 @@
 //  retention, not forever.
 //
 //  Storage: UserDefaults — lightweight, no Core Data migration needed.
-//  Thread safety: protected by NSLock (called from @MainActor, but keeping it safe).
+//  Thread safety: `deletedAt` lives in a `Mutex`, and it is persisted under the same lock, so two
+//  concurrent changes cannot write their snapshots in the opposite order.
 //
 
 import Foundation
+import Synchronization
 
-final class DeletedContactsStore {
+final class DeletedContactsStore: Sendable {
 
     static let shared = DeletedContactsStore()
     private init() { load() }
@@ -54,8 +56,7 @@ final class DeletedContactsStore {
     // The pre-TTL `com.konstruct.deletedContacts.v1` array was read once at load until
     // 2026-10-20; every install in use (build 745+) had already moved it.
     /// id → when it was pruned.
-    private var deletedAt: [String: Date] = [:]
-    private let lock = NSLock()
+    private let deletedAt = Mutex<[String: Date]>([:])
 
     // MARK: - Public API
 
@@ -64,8 +65,7 @@ final class DeletedContactsStore {
     /// Expiry is decided here rather than by a sweep: a sweep that never runs leaves a store that
     /// never forgets, which is the state this type is being moved away from.
     func isDeleted(_ userId: String) -> Bool {
-        lock.lock(); defer { lock.unlock() }
-        guard let at = deletedAt[userId] else { return false }
+        guard let at = deletedAt.withLock({ $0[userId] }) else { return false }
         return Self.isShielded(prunedAt: at, now: Date())
     }
 
@@ -81,39 +81,37 @@ final class DeletedContactsStore {
 
     /// Mark a contact as pruned. Call when the user deletes the contact.
     func add(_ userId: String) {
-        lock.lock()
-        deletedAt[userId] = Date()
-        lock.unlock()
-        persist()
+        deletedAt.withLock {
+            $0[userId] = Date()
+            persist($0)
+        }
     }
 
     /// Unmark a contact — the user started a new conversation with them, or their handshake
     /// arrived and `MessageRouter` decided to let them back.
     func remove(_ userId: String) {
-        lock.lock()
-        deletedAt.removeValue(forKey: userId)
-        lock.unlock()
-        persist()
+        deletedAt.withLock {
+            $0.removeValue(forKey: userId)
+            persist($0)
+        }
     }
 
     // MARK: - Persistence
 
     private func load() {
-        lock.lock()
-        if let stored = UserDefaults.standard.dictionary(forKey: defaultsKey) as? [String: Double] {
-            deletedAt = stored.mapValues { Date(timeIntervalSince1970: $0) }
+        deletedAt.withLock { deletedAt in
+            if let stored = UserDefaults.standard.dictionary(forKey: defaultsKey) as? [String: Double] {
+                deletedAt = stored.mapValues { Date(timeIntervalSince1970: $0) }
+            }
+            // Drop what has aged out, so an install that sits unopened does not carry a decade of ids.
+            let cutoff = Date().addingTimeInterval(-Self.retention)
+            deletedAt = deletedAt.filter { $0.value > cutoff }
+            persist(deletedAt)
         }
-        // Drop what has aged out, so an install that sits unopened does not carry a decade of ids.
-        let cutoff = Date().addingTimeInterval(-Self.retention)
-        deletedAt = deletedAt.filter { $0.value > cutoff }
-        lock.unlock()
-        persist()
     }
 
-    private func persist() {
-        lock.lock()
-        let snapshot = deletedAt.mapValues { $0.timeIntervalSince1970 }
-        lock.unlock()
-        UserDefaults.standard.set(snapshot, forKey: defaultsKey)
+    /// Called with the lock held, so snapshots reach UserDefaults in the order the changes happened.
+    private func persist(_ deletedAt: [String: Date]) {
+        UserDefaults.standard.set(deletedAt.mapValues { $0.timeIntervalSince1970 }, forKey: defaultsKey)
     }
 }

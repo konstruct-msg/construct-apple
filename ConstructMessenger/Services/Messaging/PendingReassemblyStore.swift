@@ -53,7 +53,8 @@ struct PendingReassembly {
     }
 }
 
-final class PendingReassemblyStore {
+/// `@unchecked`: `lastSweep` and every store read-modify-write run on `queue`.
+final class PendingReassemblyStore: @unchecked Sendable {
 
     static let shared = PendingReassemblyStore()
 
