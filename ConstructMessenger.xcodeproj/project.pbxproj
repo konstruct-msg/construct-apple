@@ -818,12 +818,12 @@
 				INFOPLIST_KEY_CFBundleDisplayName = Konstruct;
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.social-networking";
-				INFOPLIST_KEY_NSCameraUsageDescription = "Construct uses the camera to scan invite QR codes and to capture photos and videos for your messages.";
+				INFOPLIST_KEY_NSCameraUsageDescription = "Konstruct uses the camera to scan invite QR codes and to capture photos and videos for your messages.";
 				INFOPLIST_KEY_NSFaceIDUsageDescription = "Konstruct uses Face ID to unlock the app and to protect your recovery phrase.";
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Used to transfer your backup directly to a nearby device over WiFi.";
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Construct uses the microphone to record voice messages and make encrypted calls.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Konstruct uses the microphone to record voice messages and make encrypted calls.";
 				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Construct saves photos and videos to your library when you choose to save them from a chat.";
-				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Construct needs access to your photo library so you can attach photos and videos to messages.";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Konstruct needs access to your photo library so you can attach photos and videos to messages.";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "To transcribe your voice messages into text on-device using Apple’s Speech Recognition. Audio never leaves your device.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -849,7 +849,7 @@
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_INCLUDE_PATHS = "$(PROJECT_DIR)";
 				SWIFT_OBJC_BRIDGING_HEADER = "ConstructMessenger/ConstructMessenger-Bridging-Header.h";
-				SWIFT_VERSION = 5.7;
+				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2,6";
 			};
 			name = Beta;
@@ -891,7 +891,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 755;
+				CURRENT_PROJECT_VERSION = 756;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = PK2473XF3P;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -913,7 +913,7 @@
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.1;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
-				MARKETING_VERSION = 0.26.15;
+				MARKETING_VERSION = 0.26.16;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
@@ -961,7 +961,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 755;
+				CURRENT_PROJECT_VERSION = 756;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = PK2473XF3P;
 				ENABLE_NS_ASSERTIONS = NO;
@@ -977,7 +977,7 @@
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.1;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
-				MARKETING_VERSION = 0.26.15;
+				MARKETING_VERSION = 0.26.16;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				SDKROOT = iphoneos;
@@ -1005,12 +1005,12 @@
 				INFOPLIST_KEY_CFBundleDisplayName = Konstruct;
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.social-networking";
-				INFOPLIST_KEY_NSCameraUsageDescription = "Construct uses the camera to scan invite QR codes and to capture photos and videos for your messages.";
+				INFOPLIST_KEY_NSCameraUsageDescription = "Konstruct uses the camera to scan invite QR codes and to capture photos and videos for your messages.";
 				INFOPLIST_KEY_NSFaceIDUsageDescription = "Konstruct uses Face ID to unlock the app and to protect your recovery phrase.";
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Used to transfer your backup directly to a nearby device over WiFi.";
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Construct uses the microphone to record voice messages and make encrypted calls.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Konstruct uses the microphone to record voice messages and make encrypted calls.";
 				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Construct saves photos and videos to your library when you choose to save them from a chat.";
-				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Construct needs access to your photo library so you can attach photos and videos to messages.";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Konstruct needs access to your photo library so you can attach photos and videos to messages.";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "To transcribe your voice messages into text on-device using Apple’s Speech Recognition. Audio never leaves your device.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -1036,7 +1036,7 @@
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_INCLUDE_PATHS = "$(PROJECT_DIR)";
 				SWIFT_OBJC_BRIDGING_HEADER = "ConstructMessenger/ConstructMessenger-Bridging-Header.h";
-				SWIFT_VERSION = 5.7;
+				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2,6";
 			};
 			name = Debug;
@@ -1059,12 +1059,12 @@
 				INFOPLIST_KEY_CFBundleDisplayName = Konstruct;
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.social-networking";
-				INFOPLIST_KEY_NSCameraUsageDescription = "Construct uses the camera to scan invite QR codes and to capture photos and videos for your messages.";
+				INFOPLIST_KEY_NSCameraUsageDescription = "Konstruct uses the camera to scan invite QR codes and to capture photos and videos for your messages.";
 				INFOPLIST_KEY_NSFaceIDUsageDescription = "Konstruct uses Face ID to unlock the app and to protect your recovery phrase.";
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Used to transfer your backup directly to a nearby device over WiFi.";
-				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Construct uses the microphone to record voice messages and make encrypted calls.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Konstruct uses the microphone to record voice messages and make encrypted calls.";
 				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Construct saves photos and videos to your library when you choose to save them from a chat.";
-				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Construct needs access to your photo library so you can attach photos and videos to messages.";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Konstruct needs access to your photo library so you can attach photos and videos to messages.";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "To transcribe your voice messages into text on-device using Apple’s Speech Recognition. Audio never leaves your device.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -1090,7 +1090,7 @@
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_INCLUDE_PATHS = "$(PROJECT_DIR)";
 				SWIFT_OBJC_BRIDGING_HEADER = "ConstructMessenger/ConstructMessenger-Bridging-Header.h";
-				SWIFT_VERSION = 5.7;
+				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2,6";
 			};
 			name = Release;
@@ -1503,7 +1503,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
-				CURRENT_PROJECT_VERSION = 755;
+				CURRENT_PROJECT_VERSION = 756;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = PK2473XF3P;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -1518,7 +1518,7 @@
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.1;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
-				MARKETING_VERSION = 0.26.15;
+				MARKETING_VERSION = 0.26.16;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				SDKROOT = iphoneos;
