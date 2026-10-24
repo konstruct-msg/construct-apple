@@ -22,6 +22,7 @@ import Combine
 /// 2. Any incoming message from a sender NOT in the snapshot is silently
 ///    suppressed (saved to Core Data but no notification shown).
 /// 3. The user can review suppressed senders in Settings and approve individually.
+@MainActor
 @Observable
 final class LockdownManager {
 

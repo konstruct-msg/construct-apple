@@ -34,6 +34,7 @@ enum SendDecision: Equatable {
 /// Stateless facade that computes a `SendDecision` for a given outgoing message.
 ///
 /// All state is owned by `LocalRateLimiter`, `LocalTrustScore`, and `SpamHeuristics`.
+@MainActor
 struct AntiSpamService {
 
     static let shared = AntiSpamService()
