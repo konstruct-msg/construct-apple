@@ -108,11 +108,7 @@ final class DeviceLinkViewModel {
     func scanAndLink(scannedURL: String) async {
         if scannedURL.hasPrefix("konstruct://link-to-me") {
             // Parse join request and surface a confirmation dialog in the view.
-            guard let components = URLComponents(string: scannedURL),
-                  let name = components.queryItems?
-                      .first(where: { $0.name == "name" })?.value?
-                      .removingPercentEncoding
-            else {
+            guard let name = Self.joinRequestName(from: scannedURL) else {
                 errorMessage = NSLocalizedString("device_link_invalid_qr", comment: "")
                 return
             }
@@ -201,12 +197,9 @@ final class DeviceLinkViewModel {
             )
             let name = DeviceInfo.deviceName
             let platform = platformString()
-            let encoded = name.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? name
             let pubkeyB64 = bundle.identityPublic.base64EncodedString()
-            var queryValueAllowed = CharacterSet.alphanumerics
-            queryValueAllowed.insert(charactersIn: "-._~")
-            let pubkeyEncoded = pubkeyB64.addingPercentEncoding(withAllowedCharacters: queryValueAllowed) ?? pubkeyB64
-            let url = "konstruct://link-to-me?id=\(deviceId)&pubkey=\(pubkeyEncoded)&fp=\(Self.hex(fp))&name=\(encoded)&platform=\(platform)"
+            let url = "konstruct://link-to-me?id=\(deviceId)&pubkey=\(Self.queryValue(pubkeyB64))"
+                + "&fp=\(Self.hex(fp))&name=\(Self.queryValue(name))&platform=\(platform)"
 
             try await AuthServiceClient.shared.submitJoinRequest(
                 deviceId: deviceId,
@@ -290,7 +283,7 @@ final class DeviceLinkViewModel {
         guard let components = URLComponents(string: scannedURL),
               let pendingId  = components.queryItems?.first(where: { $0.name == "id" })?.value,
               let pubkey     = components.queryItems?.first(where: { $0.name == "pubkey" })?.value,
-              let name       = components.queryItems?.first(where: { $0.name == "name" })?.value?.removingPercentEncoding,
+              let name       = Self.joinRequestName(from: scannedURL),
               let platform   = components.queryItems?.first(where: { $0.name == "platform" })?.value
         else {
             errorMessage = NSLocalizedString("device_link_invalid_qr", comment: "")
@@ -409,6 +402,23 @@ final class DeviceLinkViewModel {
     /// 64 hex chars → 32-byte fingerprint. Flow A: the offering device's pin — missing is allowed
     /// (old QR); history handshake then logs `qr_pin_absent` and refuses history, not the link.
     /// Flow B: the new device's keys, which the phone vouches for.
+    /// RFC 3986 unreserved characters, ASCII only, for a value inside the link QR's query.
+    /// `.urlQueryAllowed` leaves `&`, `=` and `+` as they are, so a device named "Mac & iPad" cut
+    /// the query short; `.alphanumerics` is Unicode, so it would leave a Cyrillic name unescaped.
+    private static let queryValueAllowed = CharacterSet(
+        charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~"
+    )
+
+    static func queryValue(_ value: String) -> String {
+        value.addingPercentEncoding(withAllowedCharacters: queryValueAllowed) ?? value
+    }
+
+    /// The device name in a join-request QR. `queryItems` has already decoded it once; decoding
+    /// again turned a name with `%` in it into nil, and the QR read as invalid.
+    static func joinRequestName(from url: String) -> String? {
+        URLComponents(string: url)?.queryItems?.first(where: { $0.name == "name" })?.value
+    }
+
     static func extractFp(from url: String) -> Data? {
         extractHex32("fp", from: url)
     }
