@@ -691,6 +691,18 @@ public nonisolated struct Shared_Proto_Services_V1_DevicePreKeyBundle: @unchecke
   /// Clears the value of `treeHead`. Subsequent reads from it will return its default value.
   public mutating func clearTreeHead() {_uniqueStorage()._treeHead = nil}
 
+  /// Certificate by which another device of the same account vouches for this one
+  /// (PublishDeviceCertificate). Absent for an account's first device and for a device nobody
+  /// vouched for; a client hands it to construct-core `judge_peer_devices`, which decides.
+  public var deviceCertificate: Data {
+    get {_storage._deviceCertificate ?? Data()}
+    set {_uniqueStorage()._deviceCertificate = newValue}
+  }
+  /// Returns true if `deviceCertificate` has been explicitly set.
+  public var hasDeviceCertificate: Bool {_storage._deviceCertificate != nil}
+  /// Clears the value of `deviceCertificate`. Subsequent reads from it will return its default value.
+  public mutating func clearDeviceCertificate() {_uniqueStorage()._deviceCertificate = nil}
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -1805,7 +1817,7 @@ nonisolated extension Shared_Proto_Services_V1_GetPreKeyBundlesResponse: SwiftPr
 
 nonisolated extension Shared_Proto_Services_V1_DevicePreKeyBundle: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".DevicePreKeyBundle"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}device_id\0\u{1}bundle\0\u{1}platform\0\u{3}kt_proof\0\u{3}verifying_key\0\u{3}hybrid_kt_proof\0\u{3}tree_head\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}device_id\0\u{1}bundle\0\u{1}platform\0\u{3}kt_proof\0\u{3}verifying_key\0\u{3}hybrid_kt_proof\0\u{3}tree_head\0\u{3}device_certificate\0")
 
   fileprivate class _StorageClass {
     var _deviceID: String = String()
@@ -1815,6 +1827,7 @@ nonisolated extension Shared_Proto_Services_V1_DevicePreKeyBundle: SwiftProtobuf
     var _verifyingKey: Data = Data()
     var _hybridKtProof: Shared_Proto_Services_V1_KtInclusionProof? = nil
     var _treeHead: Shared_Proto_Services_V1_SignedTreeHead? = nil
+    var _deviceCertificate: Data? = nil
 
       // This property is used as the initial default value for new instances of the type.
       // The type itself is protecting the reference to its storage via CoW semantics.
@@ -1832,6 +1845,7 @@ nonisolated extension Shared_Proto_Services_V1_DevicePreKeyBundle: SwiftProtobuf
       _verifyingKey = source._verifyingKey
       _hybridKtProof = source._hybridKtProof
       _treeHead = source._treeHead
+      _deviceCertificate = source._deviceCertificate
     }
   }
 
@@ -1857,6 +1871,7 @@ nonisolated extension Shared_Proto_Services_V1_DevicePreKeyBundle: SwiftProtobuf
         case 5: try { try decoder.decodeSingularBytesField(value: &_storage._verifyingKey) }()
         case 6: try { try decoder.decodeSingularMessageField(value: &_storage._hybridKtProof) }()
         case 7: try { try decoder.decodeSingularMessageField(value: &_storage._treeHead) }()
+        case 8: try { try decoder.decodeSingularBytesField(value: &_storage._deviceCertificate) }()
         default: break
         }
       }
@@ -1890,6 +1905,9 @@ nonisolated extension Shared_Proto_Services_V1_DevicePreKeyBundle: SwiftProtobuf
       try { if let v = _storage._treeHead {
         try visitor.visitSingularMessageField(value: v, fieldNumber: 7)
       } }()
+      try { if let v = _storage._deviceCertificate {
+        try visitor.visitSingularBytesField(value: v, fieldNumber: 8)
+      } }()
     }
     try unknownFields.traverse(visitor: &visitor)
   }
@@ -1906,6 +1924,7 @@ nonisolated extension Shared_Proto_Services_V1_DevicePreKeyBundle: SwiftProtobuf
         if _storage._verifyingKey != rhs_storage._verifyingKey {return false}
         if _storage._hybridKtProof != rhs_storage._hybridKtProof {return false}
         if _storage._treeHead != rhs_storage._treeHead {return false}
+        if _storage._deviceCertificate != rhs_storage._deviceCertificate {return false}
         return true
       }
       if !storagesAreEqual {return false}

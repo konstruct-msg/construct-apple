@@ -18,7 +18,7 @@ final class DeviceLinkViewModel {
 
     // MARK: - State (Device A)
 
-    /// QR content to display: "konstruct://link?token=<linkToken>"
+    /// QR content to display: "konstruct://link?token=<linkToken>&fp=<hex>&s=<hex>"
     var qrContent: String? = nil
     /// When the current link token expires.
     var tokenExpiresAt: Date? = nil
@@ -37,7 +37,7 @@ final class DeviceLinkViewModel {
     // MARK: - State (New Device → Join Request flow)
 
     /// QR content encoding this device's join request, e.g.:
-    /// "konstruct://link-to-me?id=<deviceId>&pubkey=<base64>&name=<name>&platform=<platform>"
+    /// "konstruct://link-to-me?id=<deviceId>&pubkey=<base64>&fp=<hex>&name=<name>&platform=<platform>"
     var joinRequestQRContent: String? = nil
     /// True while the new device is waiting for the existing device to approve the join request.
     var isWaitingForApproval: Bool = false
@@ -69,8 +69,13 @@ final class DeviceLinkViewModel {
                let hybrid = CryptoManager.shared.hybridIdentityPublicKey(),
                !hybrid.isEmpty {
                 let fp = historyQrFingerprint(identityPublic: identity, hybridPublic: hybrid)
-                url += "&fp=" + fp.map { String(format: "%02x", $0) }.joined()
+                url += "&fp=" + Self.hex(fp)
             }
+            // The secret the new device proves its keys under, so this device can vouch for them
+            // (device certificates). It is in the QR and nowhere else — never sent to the server.
+            let linkSecret = newDeviceLinkSecret()
+            url += "&s=" + Self.hex(linkSecret)
+            DeviceCertificateIssuer.shared.awaitLink(token: result.token, secret: linkSecret)
             qrContent = url
             tokenExpiresAt = Date(timeIntervalSince1970: TimeInterval(result.expiresAt))
             Log.info("Device link QR generated — expires \(result.expiresAt)", category: "DeviceLink")
@@ -103,11 +108,7 @@ final class DeviceLinkViewModel {
     func scanAndLink(scannedURL: String) async {
         if scannedURL.hasPrefix("konstruct://link-to-me") {
             // Parse join request and surface a confirmation dialog in the view.
-            guard let components = URLComponents(string: scannedURL),
-                  let name = components.queryItems?
-                      .first(where: { $0.name == "name" })?.value?
-                      .removingPercentEncoding
-            else {
+            guard let name = Self.joinRequestName(from: scannedURL) else {
                 errorMessage = NSLocalizedString("device_link_invalid_qr", comment: "")
                 return
             }
@@ -116,14 +117,16 @@ final class DeviceLinkViewModel {
             if let fp = Self.extractFp(from: scannedURL) {
                 DeviceLinkPendingPin.store(fp, forToken: token)
             }
-            await confirmLink(token: token)
+            await confirmLink(token: token, linkSecret: Self.extractHex32("s", from: scannedURL))
         } else {
             errorMessage = NSLocalizedString("device_link_invalid_qr", comment: "")
         }
     }
 
-    /// Called when Device B has a raw link token (e.g. from deep link).
-    func confirmLink(token: String) async {
+    /// Called when Device B has a raw link token (e.g. from deep link). `linkSecret`: the `s` of
+    /// the old device's QR — without it the old device cannot vouch for this one, and its peers
+    /// see an unvouched device.
+    func confirmLink(token: String, linkSecret: Data? = nil) async {
         isLinking = true
         errorMessage = nil
         defer { isLinking = false }
@@ -133,6 +136,7 @@ final class DeviceLinkViewModel {
             KeychainManager.shared.deleteDeviceKeys()
             let (deviceId, bundle) = try CryptoManager.shared.generateRegistrationBundle()
             KeychainManager.shared.saveDeviceID(deviceId)
+            let linkIdentity = try CryptoManager.shared.prepareLinkIdentity(linkSecret: linkSecret)
 
             var publicKeys = Shared_Proto_Services_V1_DevicePublicKeys()
             publicKeys.verifyingKey = bundle.verifyingKey
@@ -147,7 +151,8 @@ final class DeviceLinkViewModel {
             let result = try await AuthServiceClient.shared.confirmDeviceLink(
                 linkToken: token,
                 deviceId: deviceId,
-                publicKeys: publicKeys
+                publicKeys: publicKeys,
+                linkKeyProof: linkIdentity.keyProof ?? Data()
             )
 
             Log.info("Device B: link confirmed — userId=\(result.userId.prefix(8))…", category: "DeviceLink")
@@ -183,14 +188,18 @@ final class DeviceLinkViewModel {
             let (deviceId, bundle) = try CryptoManager.shared.generateRegistrationBundle()
             joinDeviceId = deviceId
             KeychainManager.shared.saveDeviceID(deviceId)
+            // The phone vouches for exactly the keys this fingerprint names, the hybrid key
+            // included — so the key exists, and is saved, before the QR does.
+            let linkIdentity = try CryptoManager.shared.prepareLinkIdentity(linkSecret: nil)
+            let fp = historyQrFingerprint(
+                identityPublic: linkIdentity.identityPublic,
+                hybridPublic: linkIdentity.hybridPublic
+            )
             let name = DeviceInfo.deviceName
             let platform = platformString()
-            let encoded = name.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? name
             let pubkeyB64 = bundle.identityPublic.base64EncodedString()
-            var queryValueAllowed = CharacterSet.alphanumerics
-            queryValueAllowed.insert(charactersIn: "-._~")
-            let pubkeyEncoded = pubkeyB64.addingPercentEncoding(withAllowedCharacters: queryValueAllowed) ?? pubkeyB64
-            let url = "konstruct://link-to-me?id=\(deviceId)&pubkey=\(pubkeyEncoded)&name=\(encoded)&platform=\(platform)"
+            let url = "konstruct://link-to-me?id=\(deviceId)&pubkey=\(Self.queryValue(pubkeyB64))"
+                + "&fp=\(Self.hex(fp))&name=\(Self.queryValue(name))&platform=\(platform)"
 
             try await AuthServiceClient.shared.submitJoinRequest(
                 deviceId: deviceId,
@@ -274,7 +283,7 @@ final class DeviceLinkViewModel {
         guard let components = URLComponents(string: scannedURL),
               let pendingId  = components.queryItems?.first(where: { $0.name == "id" })?.value,
               let pubkey     = components.queryItems?.first(where: { $0.name == "pubkey" })?.value,
-              let name       = components.queryItems?.first(where: { $0.name == "name" })?.value?.removingPercentEncoding,
+              let name       = Self.joinRequestName(from: scannedURL),
               let platform   = components.queryItems?.first(where: { $0.name == "platform" })?.value
         else {
             errorMessage = NSLocalizedString("device_link_invalid_qr", comment: "")
@@ -299,6 +308,14 @@ final class DeviceLinkViewModel {
             // base64 here is the QR text boundary, not application logic.
             if let identity = Data(base64Encoded: pubkey.removingPercentEncoding ?? pubkey) {
                 DeviceLinkPendingPin.storePeerIdentity(identity, forDeviceId: pendingId)
+            }
+            // The QR's `fp` names the new device's keys, its hybrid key included; the core signs
+            // them only if the directory serves exactly those. A QR without it (a client older than
+            // device certificates) leaves the device unvouched.
+            if let fp = Self.extractFp(from: scannedURL) {
+                DeviceCertificateIssuer.shared.vouch(deviceId: pendingId, evidence: .qrFingerprint(fp))
+            } else {
+                Log.info("device_cert device=\(pendingId.prefix(8))… QR names no fingerprint — not vouched", category: "DeviceLink")
             }
             if let userId = KeychainManager.shared.loadUserID() {
                 linkOutcome = DeviceLinkOutcome(
@@ -382,11 +399,35 @@ final class DeviceLinkViewModel {
         return item.value
     }
 
-    /// 64 hex chars → 32-byte Flow A pin. Missing `fp` is allowed (old QR); history
-    /// handshake then logs `qr_pin_absent` and refuses history, not the link.
+    /// 64 hex chars → 32-byte fingerprint. Flow A: the offering device's pin — missing is allowed
+    /// (old QR); history handshake then logs `qr_pin_absent` and refuses history, not the link.
+    /// Flow B: the new device's keys, which the phone vouches for.
+    /// RFC 3986 unreserved characters, ASCII only, for a value inside the link QR's query.
+    /// `.urlQueryAllowed` leaves `&`, `=` and `+` as they are, so a device named "Mac & iPad" cut
+    /// the query short; `.alphanumerics` is Unicode, so it would leave a Cyrillic name unescaped.
+    private static let queryValueAllowed = CharacterSet(
+        charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~"
+    )
+
+    static func queryValue(_ value: String) -> String {
+        value.addingPercentEncoding(withAllowedCharacters: queryValueAllowed) ?? value
+    }
+
+    /// The device name in a join-request QR. `queryItems` has already decoded it once; decoding
+    /// again turned a name with `%` in it into nil, and the QR read as invalid.
+    static func joinRequestName(from url: String) -> String? {
+        URLComponents(string: url)?.queryItems?.first(where: { $0.name == "name" })?.value
+    }
+
     static func extractFp(from url: String) -> Data? {
+        extractHex32("fp", from: url)
+    }
+
+    /// A 32-byte value carried in the QR as 64 hex characters (`fp`, `s`); nil when absent or
+    /// malformed. Hex here is the QR text boundary, not application logic.
+    static func extractHex32(_ name: String, from url: String) -> Data? {
         guard let components = URLComponents(string: url),
-              let value = components.queryItems?.first(where: { $0.name == "fp" })?.value,
+              let value = components.queryItems?.first(where: { $0.name == name })?.value,
               value.count == 64
         else { return nil }
         var data = Data()
@@ -401,6 +442,10 @@ final class DeviceLinkViewModel {
             idx = next
         }
         return data.count == 32 ? data : nil
+    }
+
+    static func hex(_ data: Data) -> String {
+        data.map { String(format: "%02x", $0) }.joined()
     }
 
     private func localizedError(_ error: Error) -> String {

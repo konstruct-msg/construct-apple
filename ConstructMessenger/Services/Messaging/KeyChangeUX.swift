@@ -49,6 +49,7 @@ enum KeyChangeUX {
         switch notice {
         case .none: return
         case .addressChanged: format = "address_change_toast_fmt"
+        case .unvouchedDevice: format = "unvouched_device_toast_fmt"
         }
         ErrorRouter.shared.presentNotice(
             String(format: NSLocalizedString(format, comment: ""), resolvedName(userId: userId, displayName: displayName)),
