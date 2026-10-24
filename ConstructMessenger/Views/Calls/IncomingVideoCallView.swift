@@ -71,7 +71,7 @@ struct IncomingVideoCallView: View {
     private var actions: some View {
         HStack(alignment: .top, spacing: Layout.actionSpacing) {
             action(systemImage: "phone.down.fill", label: "call_decline", background: Color.CT.danger) {
-                preview.stop(then: onDecline)
+                preview.stop { onDecline() }
             }
             action(systemImage: "video.slash.fill", label: "call_answer_without_video", background: Color.CT.mediaControl) {
                 preview.stop { onAnswer(false) }
@@ -114,13 +114,15 @@ final class IncomingCameraPreview: @unchecked Sendable {
 
     func start() {
         guard AVCaptureDevice.authorizationStatus(for: .video) == .authorized,
-              let device = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .front)
+              Self.frontCamera() != nil
         else { return }
         isAvailable = true
         queue.async { [self] in
             if !configured {
                 session.beginConfiguration()
-                if let input = try? AVCaptureDeviceInput(device: device), session.canAddInput(input) {
+                // Looked up again on the capture queue: `AVCaptureDevice` is not Sendable.
+                if let device = Self.frontCamera(),
+                   let input = try? AVCaptureDeviceInput(device: device), session.canAddInput(input) {
                     session.addInput(input)
                 }
                 session.commitConfiguration()
@@ -132,11 +134,15 @@ final class IncomingCameraPreview: @unchecked Sendable {
 
     /// Stops the camera, then runs `then` on the main actor — answering starts the call's
     /// capturer, which must find the camera free.
-    func stop(then: @escaping @MainActor () -> Void = {}) {
+    func stop(then: @escaping @MainActor @Sendable () -> Void = {}) {
         queue.async { [self] in
             if session.isRunning { session.stopRunning() }
             Task { @MainActor in then() }
         }
+    }
+
+    private static func frontCamera() -> AVCaptureDevice? {
+        AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .front)
     }
 }
 
