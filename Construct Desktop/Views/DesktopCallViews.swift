@@ -164,11 +164,14 @@ struct DesktopIncomingCallPanel: View {
                 }
             }
             HStack(spacing: CTLayout.chromeGap) {
+                // `.plain` hit-tests only what the label draws: without the shape, a click on the
+                // coloured fill around the text missed the button.
                 Button {
                     CallManager.shared.declineIncomingCall()
                 } label: {
                     Label(NSLocalizedString("call_decline", comment: ""), systemImage: "phone.down.fill")
                         .frame(maxWidth: .infinity, minHeight: CTLayout.hitTarget)
+                        .contentShape(CTShape.control())
                 }
                 .buttonStyle(.plain)
                 .font(CTFont.bodyEmphasis)
@@ -181,6 +184,7 @@ struct DesktopIncomingCallPanel: View {
                 } label: {
                     Label(NSLocalizedString("call_answer", comment: ""), systemImage: "phone.fill")
                         .frame(maxWidth: .infinity, minHeight: CTLayout.hitTarget)
+                        .contentShape(CTShape.control())
                 }
                 .buttonStyle(.plain)
                 .font(CTFont.bodyEmphasis)
