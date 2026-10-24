@@ -31,7 +31,7 @@ class AuthSessionManager {
     }
 
     /// Update the in-memory userId and persist it to Keychain without touching tokens or expiry.
-    /// Use this when the userId is recovered from a JWT claim or an auth response,
+    /// Use this when the userId is recovered from the token's `sub` claim or an auth response,
     /// and the session token itself does not need to change.
     func updateUserId(_ uid: String) {
         guard !uid.isEmpty else { return }
@@ -98,6 +98,11 @@ class AuthSessionManager {
         return Date().addingTimeInterval(bufferTime) < expires
     }
 
+    /// PASETO v4.public only — a legacy RS256 JWT is not accepted since 2026-10-24 (`TokenUtils`).
+    nonisolated static func isAcceptedCachedToken(_ token: String) -> Bool {
+        TokenUtils.format(of: token) == .paseto
+    }
+
     // Load token from keychain on init or when needed
     func loadSessionToken() {
         sessionToken = KeychainManager.shared.loadSessionToken()
@@ -105,11 +110,9 @@ class AuthSessionManager {
         userId = KeychainManager.shared.loadUserID()
 
         if let token = sessionToken {
-            // Dual-format during JWT → PASETO v4.public migration.
-            // Accept PASETO v4.public and legacy RS256 JWT; reject anything else.
-            let fmt = TokenUtils.format(of: token)
-            guard fmt == .paseto || fmt == .jwt else {
-                Log.error("Unsupported token format in cached token: \(fmt). Clearing session.", category: "SessionManager")
+            // Anything else is cleared, and the invalidation re-authenticates the device with its key.
+            guard Self.isAcceptedCachedToken(token) else {
+                Log.error("Unsupported token format in cached token: \(TokenUtils.format(of: token)). Clearing session.", category: "SessionManager")
                 clearSession()
                 isSessionInvalidated = true
                 return
