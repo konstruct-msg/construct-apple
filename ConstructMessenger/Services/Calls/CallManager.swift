@@ -243,7 +243,7 @@ final class CallManager: CallUIManaging {
             return
         }
         VoIPPushManager.shared.onIncomingPush = { [weak self] payload, reportedUUID in
-            Task { @MainActor in self?.handleIncomingPush(payload, reportedUUID: reportedUUID) }
+            self?.handleIncomingPush(payload, reportedUUID: reportedUUID)
         }
         CallKitProvider.shared.onAnswer = { [weak self] uuid in
             Task { @MainActor in self?.answer(callUUID: uuid) }

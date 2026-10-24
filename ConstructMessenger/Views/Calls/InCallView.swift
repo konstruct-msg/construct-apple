@@ -248,8 +248,9 @@ struct InCallView: View {
 
     private func startTimer() {
         guard timer == nil else { return }
+        // Scheduled on the main run loop, so the tick is on the main actor.
         timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { _ in
-            elapsed += 1
+            MainActor.assumeIsolated { elapsed += 1 }
         }
     }
 
