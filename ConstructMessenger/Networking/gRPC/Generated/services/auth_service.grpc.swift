@@ -6,7 +6,7 @@
 // Source: services/auth_service.proto
 //
 // For information on using the generated types, please see the documentation:
-//   https://github.com/grpc/grpc-swift
+//   https://github.com/grpc/grpc-swift-2
 
 import GRPCCore
 import GRPCProtobuf
@@ -252,9 +252,9 @@ extension Shared_Proto_Services_V1_AuthService {
         ///   - serializer: A serializer for `Shared_Proto_Services_V1_GetPowChallengeRequest` messages.
         ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_GetPowChallengeResponse` messages.
         ///   - options: Options to apply to this RPC.
-        ///   - handleResponse: A closure which handles the response, the result of which is
-        ///       returned to the caller. Returning from the closure will cancel the RPC if it
-        ///       hasn't already finished.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
         /// - Returns: The result of `handleResponse`.
         func getPowChallenge<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_GetPowChallengeRequest>,
@@ -275,9 +275,9 @@ extension Shared_Proto_Services_V1_AuthService {
         ///   - serializer: A serializer for `Shared_Proto_Services_V1_RegisterDeviceRequest` messages.
         ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_RegisterDeviceResponse` messages.
         ///   - options: Options to apply to this RPC.
-        ///   - handleResponse: A closure which handles the response, the result of which is
-        ///       returned to the caller. Returning from the closure will cancel the RPC if it
-        ///       hasn't already finished.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
         /// - Returns: The result of `handleResponse`.
         func registerDevice<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_RegisterDeviceRequest>,
@@ -298,9 +298,9 @@ extension Shared_Proto_Services_V1_AuthService {
         ///   - serializer: A serializer for `Shared_Proto_Services_V1_AuthenticateDeviceRequest` messages.
         ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_AuthenticateDeviceResponse` messages.
         ///   - options: Options to apply to this RPC.
-        ///   - handleResponse: A closure which handles the response, the result of which is
-        ///       returned to the caller. Returning from the closure will cancel the RPC if it
-        ///       hasn't already finished.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
         /// - Returns: The result of `handleResponse`.
         func authenticateDevice<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_AuthenticateDeviceRequest>,
@@ -321,9 +321,9 @@ extension Shared_Proto_Services_V1_AuthService {
         ///   - serializer: A serializer for `Shared_Proto_Services_V1_RefreshTokenRequest` messages.
         ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_RefreshTokenResponse` messages.
         ///   - options: Options to apply to this RPC.
-        ///   - handleResponse: A closure which handles the response, the result of which is
-        ///       returned to the caller. Returning from the closure will cancel the RPC if it
-        ///       hasn't already finished.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
         /// - Returns: The result of `handleResponse`.
         func refreshToken<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_RefreshTokenRequest>,
@@ -344,9 +344,9 @@ extension Shared_Proto_Services_V1_AuthService {
         ///   - serializer: A serializer for `Shared_Proto_Services_V1_VerifyTokenRequest` messages.
         ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_VerifyTokenResponse` messages.
         ///   - options: Options to apply to this RPC.
-        ///   - handleResponse: A closure which handles the response, the result of which is
-        ///       returned to the caller. Returning from the closure will cancel the RPC if it
-        ///       hasn't already finished.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
         /// - Returns: The result of `handleResponse`.
         func verifyToken<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_VerifyTokenRequest>,
@@ -367,9 +367,9 @@ extension Shared_Proto_Services_V1_AuthService {
         ///   - serializer: A serializer for `Shared_Proto_Services_V1_LogoutRequest` messages.
         ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_LogoutResponse` messages.
         ///   - options: Options to apply to this RPC.
-        ///   - handleResponse: A closure which handles the response, the result of which is
-        ///       returned to the caller. Returning from the closure will cancel the RPC if it
-        ///       hasn't already finished.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
         /// - Returns: The result of `handleResponse`.
         func logout<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_LogoutRequest>,
@@ -392,9 +392,9 @@ extension Shared_Proto_Services_V1_AuthService {
         ///   - serializer: A serializer for `Shared_Proto_Services_V1_SetRecoveryKeyRequest` messages.
         ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_SetRecoveryKeyResponse` messages.
         ///   - options: Options to apply to this RPC.
-        ///   - handleResponse: A closure which handles the response, the result of which is
-        ///       returned to the caller. Returning from the closure will cancel the RPC if it
-        ///       hasn't already finished.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
         /// - Returns: The result of `handleResponse`.
         func setRecoveryKey<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_SetRecoveryKeyRequest>,
@@ -416,9 +416,9 @@ extension Shared_Proto_Services_V1_AuthService {
         ///   - serializer: A serializer for `Shared_Proto_Services_V1_GetRecoveryStatusRequest` messages.
         ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_GetRecoveryStatusResponse` messages.
         ///   - options: Options to apply to this RPC.
-        ///   - handleResponse: A closure which handles the response, the result of which is
-        ///       returned to the caller. Returning from the closure will cancel the RPC if it
-        ///       hasn't already finished.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
         /// - Returns: The result of `handleResponse`.
         func getRecoveryStatus<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_GetRecoveryStatusRequest>,
@@ -441,9 +441,9 @@ extension Shared_Proto_Services_V1_AuthService {
         ///   - serializer: A serializer for `Shared_Proto_Services_V1_RecoverAccountRequest` messages.
         ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_RecoverAccountResponse` messages.
         ///   - options: Options to apply to this RPC.
-        ///   - handleResponse: A closure which handles the response, the result of which is
-        ///       returned to the caller. Returning from the closure will cancel the RPC if it
-        ///       hasn't already finished.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
         /// - Returns: The result of `handleResponse`.
         func recoverAccount<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_RecoverAccountRequest>,
@@ -465,9 +465,9 @@ extension Shared_Proto_Services_V1_AuthService {
         ///   - serializer: A serializer for `Shared_Proto_Services_V1_StoreRecoveryBundleRequest` messages.
         ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_StoreRecoveryBundleResponse` messages.
         ///   - options: Options to apply to this RPC.
-        ///   - handleResponse: A closure which handles the response, the result of which is
-        ///       returned to the caller. Returning from the closure will cancel the RPC if it
-        ///       hasn't already finished.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
         /// - Returns: The result of `handleResponse`.
         func storeRecoveryBundle<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_StoreRecoveryBundleRequest>,
@@ -489,9 +489,9 @@ extension Shared_Proto_Services_V1_AuthService {
         ///   - serializer: A serializer for `Shared_Proto_Services_V1_GetRecoveryBundleRequest` messages.
         ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_GetRecoveryBundleResponse` messages.
         ///   - options: Options to apply to this RPC.
-        ///   - handleResponse: A closure which handles the response, the result of which is
-        ///       returned to the caller. Returning from the closure will cancel the RPC if it
-        ///       hasn't already finished.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
         /// - Returns: The result of `handleResponse`.
         func getRecoveryBundle<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_GetRecoveryBundleRequest>,
@@ -515,9 +515,9 @@ extension Shared_Proto_Services_V1_AuthService {
         ///   - serializer: A serializer for `Shared_Proto_Services_V1_GetSenderCertificateRequest` messages.
         ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_GetSenderCertificateResponse` messages.
         ///   - options: Options to apply to this RPC.
-        ///   - handleResponse: A closure which handles the response, the result of which is
-        ///       returned to the caller. Returning from the closure will cancel the RPC if it
-        ///       hasn't already finished.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
         /// - Returns: The result of `handleResponse`.
         func getSenderCertificate<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_GetSenderCertificateRequest>,
@@ -542,9 +542,9 @@ extension Shared_Proto_Services_V1_AuthService {
         ///   - serializer: A serializer for `Shared_Proto_Services_V1_IssueTokensRequest` messages.
         ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_IssueTokensResponse` messages.
         ///   - options: Options to apply to this RPC.
-        ///   - handleResponse: A closure which handles the response, the result of which is
-        ///       returned to the caller. Returning from the closure will cancel the RPC if it
-        ///       hasn't already finished.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
         /// - Returns: The result of `handleResponse`.
         func issueTokens<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_IssueTokensRequest>,
@@ -567,9 +567,9 @@ extension Shared_Proto_Services_V1_AuthService {
         ///   - serializer: A serializer for `Shared_Proto_Services_V1_ApproveJoinRequestRequest` messages.
         ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_ApproveJoinRequestResponse` messages.
         ///   - options: Options to apply to this RPC.
-        ///   - handleResponse: A closure which handles the response, the result of which is
-        ///       returned to the caller. Returning from the closure will cancel the RPC if it
-        ///       hasn't already finished.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
         /// - Returns: The result of `handleResponse`.
         func approveJoinRequest<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_ApproveJoinRequestRequest>,
@@ -611,9 +611,9 @@ extension Shared_Proto_Services_V1_AuthService {
         ///   - serializer: A serializer for `Shared_Proto_Services_V1_GetPowChallengeRequest` messages.
         ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_GetPowChallengeResponse` messages.
         ///   - options: Options to apply to this RPC.
-        ///   - handleResponse: A closure which handles the response, the result of which is
-        ///       returned to the caller. Returning from the closure will cancel the RPC if it
-        ///       hasn't already finished.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
         /// - Returns: The result of `handleResponse`.
         public func getPowChallenge<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_GetPowChallengeRequest>,
@@ -645,9 +645,9 @@ extension Shared_Proto_Services_V1_AuthService {
         ///   - serializer: A serializer for `Shared_Proto_Services_V1_RegisterDeviceRequest` messages.
         ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_RegisterDeviceResponse` messages.
         ///   - options: Options to apply to this RPC.
-        ///   - handleResponse: A closure which handles the response, the result of which is
-        ///       returned to the caller. Returning from the closure will cancel the RPC if it
-        ///       hasn't already finished.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
         /// - Returns: The result of `handleResponse`.
         public func registerDevice<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_RegisterDeviceRequest>,
@@ -679,9 +679,9 @@ extension Shared_Proto_Services_V1_AuthService {
         ///   - serializer: A serializer for `Shared_Proto_Services_V1_AuthenticateDeviceRequest` messages.
         ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_AuthenticateDeviceResponse` messages.
         ///   - options: Options to apply to this RPC.
-        ///   - handleResponse: A closure which handles the response, the result of which is
-        ///       returned to the caller. Returning from the closure will cancel the RPC if it
-        ///       hasn't already finished.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
         /// - Returns: The result of `handleResponse`.
         public func authenticateDevice<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_AuthenticateDeviceRequest>,
@@ -713,9 +713,9 @@ extension Shared_Proto_Services_V1_AuthService {
         ///   - serializer: A serializer for `Shared_Proto_Services_V1_RefreshTokenRequest` messages.
         ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_RefreshTokenResponse` messages.
         ///   - options: Options to apply to this RPC.
-        ///   - handleResponse: A closure which handles the response, the result of which is
-        ///       returned to the caller. Returning from the closure will cancel the RPC if it
-        ///       hasn't already finished.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
         /// - Returns: The result of `handleResponse`.
         public func refreshToken<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_RefreshTokenRequest>,
@@ -747,9 +747,9 @@ extension Shared_Proto_Services_V1_AuthService {
         ///   - serializer: A serializer for `Shared_Proto_Services_V1_VerifyTokenRequest` messages.
         ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_VerifyTokenResponse` messages.
         ///   - options: Options to apply to this RPC.
-        ///   - handleResponse: A closure which handles the response, the result of which is
-        ///       returned to the caller. Returning from the closure will cancel the RPC if it
-        ///       hasn't already finished.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
         /// - Returns: The result of `handleResponse`.
         public func verifyToken<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_VerifyTokenRequest>,
@@ -781,9 +781,9 @@ extension Shared_Proto_Services_V1_AuthService {
         ///   - serializer: A serializer for `Shared_Proto_Services_V1_LogoutRequest` messages.
         ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_LogoutResponse` messages.
         ///   - options: Options to apply to this RPC.
-        ///   - handleResponse: A closure which handles the response, the result of which is
-        ///       returned to the caller. Returning from the closure will cancel the RPC if it
-        ///       hasn't already finished.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
         /// - Returns: The result of `handleResponse`.
         public func logout<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_LogoutRequest>,
@@ -817,9 +817,9 @@ extension Shared_Proto_Services_V1_AuthService {
         ///   - serializer: A serializer for `Shared_Proto_Services_V1_SetRecoveryKeyRequest` messages.
         ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_SetRecoveryKeyResponse` messages.
         ///   - options: Options to apply to this RPC.
-        ///   - handleResponse: A closure which handles the response, the result of which is
-        ///       returned to the caller. Returning from the closure will cancel the RPC if it
-        ///       hasn't already finished.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
         /// - Returns: The result of `handleResponse`.
         public func setRecoveryKey<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_SetRecoveryKeyRequest>,
@@ -852,9 +852,9 @@ extension Shared_Proto_Services_V1_AuthService {
         ///   - serializer: A serializer for `Shared_Proto_Services_V1_GetRecoveryStatusRequest` messages.
         ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_GetRecoveryStatusResponse` messages.
         ///   - options: Options to apply to this RPC.
-        ///   - handleResponse: A closure which handles the response, the result of which is
-        ///       returned to the caller. Returning from the closure will cancel the RPC if it
-        ///       hasn't already finished.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
         /// - Returns: The result of `handleResponse`.
         public func getRecoveryStatus<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_GetRecoveryStatusRequest>,
@@ -888,9 +888,9 @@ extension Shared_Proto_Services_V1_AuthService {
         ///   - serializer: A serializer for `Shared_Proto_Services_V1_RecoverAccountRequest` messages.
         ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_RecoverAccountResponse` messages.
         ///   - options: Options to apply to this RPC.
-        ///   - handleResponse: A closure which handles the response, the result of which is
-        ///       returned to the caller. Returning from the closure will cancel the RPC if it
-        ///       hasn't already finished.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
         /// - Returns: The result of `handleResponse`.
         public func recoverAccount<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_RecoverAccountRequest>,
@@ -923,9 +923,9 @@ extension Shared_Proto_Services_V1_AuthService {
         ///   - serializer: A serializer for `Shared_Proto_Services_V1_StoreRecoveryBundleRequest` messages.
         ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_StoreRecoveryBundleResponse` messages.
         ///   - options: Options to apply to this RPC.
-        ///   - handleResponse: A closure which handles the response, the result of which is
-        ///       returned to the caller. Returning from the closure will cancel the RPC if it
-        ///       hasn't already finished.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
         /// - Returns: The result of `handleResponse`.
         public func storeRecoveryBundle<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_StoreRecoveryBundleRequest>,
@@ -958,9 +958,9 @@ extension Shared_Proto_Services_V1_AuthService {
         ///   - serializer: A serializer for `Shared_Proto_Services_V1_GetRecoveryBundleRequest` messages.
         ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_GetRecoveryBundleResponse` messages.
         ///   - options: Options to apply to this RPC.
-        ///   - handleResponse: A closure which handles the response, the result of which is
-        ///       returned to the caller. Returning from the closure will cancel the RPC if it
-        ///       hasn't already finished.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
         /// - Returns: The result of `handleResponse`.
         public func getRecoveryBundle<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_GetRecoveryBundleRequest>,
@@ -995,9 +995,9 @@ extension Shared_Proto_Services_V1_AuthService {
         ///   - serializer: A serializer for `Shared_Proto_Services_V1_GetSenderCertificateRequest` messages.
         ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_GetSenderCertificateResponse` messages.
         ///   - options: Options to apply to this RPC.
-        ///   - handleResponse: A closure which handles the response, the result of which is
-        ///       returned to the caller. Returning from the closure will cancel the RPC if it
-        ///       hasn't already finished.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
         /// - Returns: The result of `handleResponse`.
         public func getSenderCertificate<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_GetSenderCertificateRequest>,
@@ -1033,9 +1033,9 @@ extension Shared_Proto_Services_V1_AuthService {
         ///   - serializer: A serializer for `Shared_Proto_Services_V1_IssueTokensRequest` messages.
         ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_IssueTokensResponse` messages.
         ///   - options: Options to apply to this RPC.
-        ///   - handleResponse: A closure which handles the response, the result of which is
-        ///       returned to the caller. Returning from the closure will cancel the RPC if it
-        ///       hasn't already finished.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
         /// - Returns: The result of `handleResponse`.
         public func issueTokens<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_IssueTokensRequest>,
@@ -1069,9 +1069,9 @@ extension Shared_Proto_Services_V1_AuthService {
         ///   - serializer: A serializer for `Shared_Proto_Services_V1_ApproveJoinRequestRequest` messages.
         ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_ApproveJoinRequestResponse` messages.
         ///   - options: Options to apply to this RPC.
-        ///   - handleResponse: A closure which handles the response, the result of which is
-        ///       returned to the caller. Returning from the closure will cancel the RPC if it
-        ///       hasn't already finished.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
         /// - Returns: The result of `handleResponse`.
         public func approveJoinRequest<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_ApproveJoinRequestRequest>,
@@ -1106,9 +1106,9 @@ extension Shared_Proto_Services_V1_AuthService.ClientProtocol {
     /// - Parameters:
     ///   - request: A request containing a single `Shared_Proto_Services_V1_GetPowChallengeRequest` message.
     ///   - options: Options to apply to this RPC.
-    ///   - handleResponse: A closure which handles the response, the result of which is
-    ///       returned to the caller. Returning from the closure will cancel the RPC if it
-    ///       hasn't already finished.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
     /// - Returns: The result of `handleResponse`.
     public func getPowChallenge<Result>(
         request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_GetPowChallengeRequest>,
@@ -1135,9 +1135,9 @@ extension Shared_Proto_Services_V1_AuthService.ClientProtocol {
     /// - Parameters:
     ///   - request: A request containing a single `Shared_Proto_Services_V1_RegisterDeviceRequest` message.
     ///   - options: Options to apply to this RPC.
-    ///   - handleResponse: A closure which handles the response, the result of which is
-    ///       returned to the caller. Returning from the closure will cancel the RPC if it
-    ///       hasn't already finished.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
     /// - Returns: The result of `handleResponse`.
     public func registerDevice<Result>(
         request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_RegisterDeviceRequest>,
@@ -1164,9 +1164,9 @@ extension Shared_Proto_Services_V1_AuthService.ClientProtocol {
     /// - Parameters:
     ///   - request: A request containing a single `Shared_Proto_Services_V1_AuthenticateDeviceRequest` message.
     ///   - options: Options to apply to this RPC.
-    ///   - handleResponse: A closure which handles the response, the result of which is
-    ///       returned to the caller. Returning from the closure will cancel the RPC if it
-    ///       hasn't already finished.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
     /// - Returns: The result of `handleResponse`.
     public func authenticateDevice<Result>(
         request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_AuthenticateDeviceRequest>,
@@ -1193,9 +1193,9 @@ extension Shared_Proto_Services_V1_AuthService.ClientProtocol {
     /// - Parameters:
     ///   - request: A request containing a single `Shared_Proto_Services_V1_RefreshTokenRequest` message.
     ///   - options: Options to apply to this RPC.
-    ///   - handleResponse: A closure which handles the response, the result of which is
-    ///       returned to the caller. Returning from the closure will cancel the RPC if it
-    ///       hasn't already finished.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
     /// - Returns: The result of `handleResponse`.
     public func refreshToken<Result>(
         request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_RefreshTokenRequest>,
@@ -1222,9 +1222,9 @@ extension Shared_Proto_Services_V1_AuthService.ClientProtocol {
     /// - Parameters:
     ///   - request: A request containing a single `Shared_Proto_Services_V1_VerifyTokenRequest` message.
     ///   - options: Options to apply to this RPC.
-    ///   - handleResponse: A closure which handles the response, the result of which is
-    ///       returned to the caller. Returning from the closure will cancel the RPC if it
-    ///       hasn't already finished.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
     /// - Returns: The result of `handleResponse`.
     public func verifyToken<Result>(
         request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_VerifyTokenRequest>,
@@ -1251,9 +1251,9 @@ extension Shared_Proto_Services_V1_AuthService.ClientProtocol {
     /// - Parameters:
     ///   - request: A request containing a single `Shared_Proto_Services_V1_LogoutRequest` message.
     ///   - options: Options to apply to this RPC.
-    ///   - handleResponse: A closure which handles the response, the result of which is
-    ///       returned to the caller. Returning from the closure will cancel the RPC if it
-    ///       hasn't already finished.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
     /// - Returns: The result of `handleResponse`.
     public func logout<Result>(
         request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_LogoutRequest>,
@@ -1282,9 +1282,9 @@ extension Shared_Proto_Services_V1_AuthService.ClientProtocol {
     /// - Parameters:
     ///   - request: A request containing a single `Shared_Proto_Services_V1_SetRecoveryKeyRequest` message.
     ///   - options: Options to apply to this RPC.
-    ///   - handleResponse: A closure which handles the response, the result of which is
-    ///       returned to the caller. Returning from the closure will cancel the RPC if it
-    ///       hasn't already finished.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
     /// - Returns: The result of `handleResponse`.
     public func setRecoveryKey<Result>(
         request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_SetRecoveryKeyRequest>,
@@ -1312,9 +1312,9 @@ extension Shared_Proto_Services_V1_AuthService.ClientProtocol {
     /// - Parameters:
     ///   - request: A request containing a single `Shared_Proto_Services_V1_GetRecoveryStatusRequest` message.
     ///   - options: Options to apply to this RPC.
-    ///   - handleResponse: A closure which handles the response, the result of which is
-    ///       returned to the caller. Returning from the closure will cancel the RPC if it
-    ///       hasn't already finished.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
     /// - Returns: The result of `handleResponse`.
     public func getRecoveryStatus<Result>(
         request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_GetRecoveryStatusRequest>,
@@ -1343,9 +1343,9 @@ extension Shared_Proto_Services_V1_AuthService.ClientProtocol {
     /// - Parameters:
     ///   - request: A request containing a single `Shared_Proto_Services_V1_RecoverAccountRequest` message.
     ///   - options: Options to apply to this RPC.
-    ///   - handleResponse: A closure which handles the response, the result of which is
-    ///       returned to the caller. Returning from the closure will cancel the RPC if it
-    ///       hasn't already finished.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
     /// - Returns: The result of `handleResponse`.
     public func recoverAccount<Result>(
         request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_RecoverAccountRequest>,
@@ -1373,9 +1373,9 @@ extension Shared_Proto_Services_V1_AuthService.ClientProtocol {
     /// - Parameters:
     ///   - request: A request containing a single `Shared_Proto_Services_V1_StoreRecoveryBundleRequest` message.
     ///   - options: Options to apply to this RPC.
-    ///   - handleResponse: A closure which handles the response, the result of which is
-    ///       returned to the caller. Returning from the closure will cancel the RPC if it
-    ///       hasn't already finished.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
     /// - Returns: The result of `handleResponse`.
     public func storeRecoveryBundle<Result>(
         request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_StoreRecoveryBundleRequest>,
@@ -1403,9 +1403,9 @@ extension Shared_Proto_Services_V1_AuthService.ClientProtocol {
     /// - Parameters:
     ///   - request: A request containing a single `Shared_Proto_Services_V1_GetRecoveryBundleRequest` message.
     ///   - options: Options to apply to this RPC.
-    ///   - handleResponse: A closure which handles the response, the result of which is
-    ///       returned to the caller. Returning from the closure will cancel the RPC if it
-    ///       hasn't already finished.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
     /// - Returns: The result of `handleResponse`.
     public func getRecoveryBundle<Result>(
         request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_GetRecoveryBundleRequest>,
@@ -1435,9 +1435,9 @@ extension Shared_Proto_Services_V1_AuthService.ClientProtocol {
     /// - Parameters:
     ///   - request: A request containing a single `Shared_Proto_Services_V1_GetSenderCertificateRequest` message.
     ///   - options: Options to apply to this RPC.
-    ///   - handleResponse: A closure which handles the response, the result of which is
-    ///       returned to the caller. Returning from the closure will cancel the RPC if it
-    ///       hasn't already finished.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
     /// - Returns: The result of `handleResponse`.
     public func getSenderCertificate<Result>(
         request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_GetSenderCertificateRequest>,
@@ -1468,9 +1468,9 @@ extension Shared_Proto_Services_V1_AuthService.ClientProtocol {
     /// - Parameters:
     ///   - request: A request containing a single `Shared_Proto_Services_V1_IssueTokensRequest` message.
     ///   - options: Options to apply to this RPC.
-    ///   - handleResponse: A closure which handles the response, the result of which is
-    ///       returned to the caller. Returning from the closure will cancel the RPC if it
-    ///       hasn't already finished.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
     /// - Returns: The result of `handleResponse`.
     public func issueTokens<Result>(
         request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_IssueTokensRequest>,
@@ -1499,9 +1499,9 @@ extension Shared_Proto_Services_V1_AuthService.ClientProtocol {
     /// - Parameters:
     ///   - request: A request containing a single `Shared_Proto_Services_V1_ApproveJoinRequestRequest` message.
     ///   - options: Options to apply to this RPC.
-    ///   - handleResponse: A closure which handles the response, the result of which is
-    ///       returned to the caller. Returning from the closure will cancel the RPC if it
-    ///       hasn't already finished.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
     /// - Returns: The result of `handleResponse`.
     public func approveJoinRequest<Result>(
         request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_ApproveJoinRequestRequest>,
@@ -1533,9 +1533,9 @@ extension Shared_Proto_Services_V1_AuthService.ClientProtocol {
     ///   - message: request message to send.
     ///   - metadata: Additional metadata to send, defaults to empty.
     ///   - options: Options to apply to this RPC, defaults to `.defaults`.
-    ///   - handleResponse: A closure which handles the response, the result of which is
-    ///       returned to the caller. Returning from the closure will cancel the RPC if it
-    ///       hasn't already finished.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
     /// - Returns: The result of `handleResponse`.
     public func getPowChallenge<Result>(
         _ message: Shared_Proto_Services_V1_GetPowChallengeRequest,
@@ -1566,9 +1566,9 @@ extension Shared_Proto_Services_V1_AuthService.ClientProtocol {
     ///   - message: request message to send.
     ///   - metadata: Additional metadata to send, defaults to empty.
     ///   - options: Options to apply to this RPC, defaults to `.defaults`.
-    ///   - handleResponse: A closure which handles the response, the result of which is
-    ///       returned to the caller. Returning from the closure will cancel the RPC if it
-    ///       hasn't already finished.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
     /// - Returns: The result of `handleResponse`.
     public func registerDevice<Result>(
         _ message: Shared_Proto_Services_V1_RegisterDeviceRequest,
@@ -1599,9 +1599,9 @@ extension Shared_Proto_Services_V1_AuthService.ClientProtocol {
     ///   - message: request message to send.
     ///   - metadata: Additional metadata to send, defaults to empty.
     ///   - options: Options to apply to this RPC, defaults to `.defaults`.
-    ///   - handleResponse: A closure which handles the response, the result of which is
-    ///       returned to the caller. Returning from the closure will cancel the RPC if it
-    ///       hasn't already finished.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
     /// - Returns: The result of `handleResponse`.
     public func authenticateDevice<Result>(
         _ message: Shared_Proto_Services_V1_AuthenticateDeviceRequest,
@@ -1632,9 +1632,9 @@ extension Shared_Proto_Services_V1_AuthService.ClientProtocol {
     ///   - message: request message to send.
     ///   - metadata: Additional metadata to send, defaults to empty.
     ///   - options: Options to apply to this RPC, defaults to `.defaults`.
-    ///   - handleResponse: A closure which handles the response, the result of which is
-    ///       returned to the caller. Returning from the closure will cancel the RPC if it
-    ///       hasn't already finished.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
     /// - Returns: The result of `handleResponse`.
     public func refreshToken<Result>(
         _ message: Shared_Proto_Services_V1_RefreshTokenRequest,
@@ -1665,9 +1665,9 @@ extension Shared_Proto_Services_V1_AuthService.ClientProtocol {
     ///   - message: request message to send.
     ///   - metadata: Additional metadata to send, defaults to empty.
     ///   - options: Options to apply to this RPC, defaults to `.defaults`.
-    ///   - handleResponse: A closure which handles the response, the result of which is
-    ///       returned to the caller. Returning from the closure will cancel the RPC if it
-    ///       hasn't already finished.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
     /// - Returns: The result of `handleResponse`.
     public func verifyToken<Result>(
         _ message: Shared_Proto_Services_V1_VerifyTokenRequest,
@@ -1698,9 +1698,9 @@ extension Shared_Proto_Services_V1_AuthService.ClientProtocol {
     ///   - message: request message to send.
     ///   - metadata: Additional metadata to send, defaults to empty.
     ///   - options: Options to apply to this RPC, defaults to `.defaults`.
-    ///   - handleResponse: A closure which handles the response, the result of which is
-    ///       returned to the caller. Returning from the closure will cancel the RPC if it
-    ///       hasn't already finished.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
     /// - Returns: The result of `handleResponse`.
     public func logout<Result>(
         _ message: Shared_Proto_Services_V1_LogoutRequest,
@@ -1733,9 +1733,9 @@ extension Shared_Proto_Services_V1_AuthService.ClientProtocol {
     ///   - message: request message to send.
     ///   - metadata: Additional metadata to send, defaults to empty.
     ///   - options: Options to apply to this RPC, defaults to `.defaults`.
-    ///   - handleResponse: A closure which handles the response, the result of which is
-    ///       returned to the caller. Returning from the closure will cancel the RPC if it
-    ///       hasn't already finished.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
     /// - Returns: The result of `handleResponse`.
     public func setRecoveryKey<Result>(
         _ message: Shared_Proto_Services_V1_SetRecoveryKeyRequest,
@@ -1767,9 +1767,9 @@ extension Shared_Proto_Services_V1_AuthService.ClientProtocol {
     ///   - message: request message to send.
     ///   - metadata: Additional metadata to send, defaults to empty.
     ///   - options: Options to apply to this RPC, defaults to `.defaults`.
-    ///   - handleResponse: A closure which handles the response, the result of which is
-    ///       returned to the caller. Returning from the closure will cancel the RPC if it
-    ///       hasn't already finished.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
     /// - Returns: The result of `handleResponse`.
     public func getRecoveryStatus<Result>(
         _ message: Shared_Proto_Services_V1_GetRecoveryStatusRequest,
@@ -1802,9 +1802,9 @@ extension Shared_Proto_Services_V1_AuthService.ClientProtocol {
     ///   - message: request message to send.
     ///   - metadata: Additional metadata to send, defaults to empty.
     ///   - options: Options to apply to this RPC, defaults to `.defaults`.
-    ///   - handleResponse: A closure which handles the response, the result of which is
-    ///       returned to the caller. Returning from the closure will cancel the RPC if it
-    ///       hasn't already finished.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
     /// - Returns: The result of `handleResponse`.
     public func recoverAccount<Result>(
         _ message: Shared_Proto_Services_V1_RecoverAccountRequest,
@@ -1836,9 +1836,9 @@ extension Shared_Proto_Services_V1_AuthService.ClientProtocol {
     ///   - message: request message to send.
     ///   - metadata: Additional metadata to send, defaults to empty.
     ///   - options: Options to apply to this RPC, defaults to `.defaults`.
-    ///   - handleResponse: A closure which handles the response, the result of which is
-    ///       returned to the caller. Returning from the closure will cancel the RPC if it
-    ///       hasn't already finished.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
     /// - Returns: The result of `handleResponse`.
     public func storeRecoveryBundle<Result>(
         _ message: Shared_Proto_Services_V1_StoreRecoveryBundleRequest,
@@ -1870,9 +1870,9 @@ extension Shared_Proto_Services_V1_AuthService.ClientProtocol {
     ///   - message: request message to send.
     ///   - metadata: Additional metadata to send, defaults to empty.
     ///   - options: Options to apply to this RPC, defaults to `.defaults`.
-    ///   - handleResponse: A closure which handles the response, the result of which is
-    ///       returned to the caller. Returning from the closure will cancel the RPC if it
-    ///       hasn't already finished.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
     /// - Returns: The result of `handleResponse`.
     public func getRecoveryBundle<Result>(
         _ message: Shared_Proto_Services_V1_GetRecoveryBundleRequest,
@@ -1906,9 +1906,9 @@ extension Shared_Proto_Services_V1_AuthService.ClientProtocol {
     ///   - message: request message to send.
     ///   - metadata: Additional metadata to send, defaults to empty.
     ///   - options: Options to apply to this RPC, defaults to `.defaults`.
-    ///   - handleResponse: A closure which handles the response, the result of which is
-    ///       returned to the caller. Returning from the closure will cancel the RPC if it
-    ///       hasn't already finished.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
     /// - Returns: The result of `handleResponse`.
     public func getSenderCertificate<Result>(
         _ message: Shared_Proto_Services_V1_GetSenderCertificateRequest,
@@ -1943,9 +1943,9 @@ extension Shared_Proto_Services_V1_AuthService.ClientProtocol {
     ///   - message: request message to send.
     ///   - metadata: Additional metadata to send, defaults to empty.
     ///   - options: Options to apply to this RPC, defaults to `.defaults`.
-    ///   - handleResponse: A closure which handles the response, the result of which is
-    ///       returned to the caller. Returning from the closure will cancel the RPC if it
-    ///       hasn't already finished.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
     /// - Returns: The result of `handleResponse`.
     public func issueTokens<Result>(
         _ message: Shared_Proto_Services_V1_IssueTokensRequest,
@@ -1978,9 +1978,9 @@ extension Shared_Proto_Services_V1_AuthService.ClientProtocol {
     ///   - message: request message to send.
     ///   - metadata: Additional metadata to send, defaults to empty.
     ///   - options: Options to apply to this RPC, defaults to `.defaults`.
-    ///   - handleResponse: A closure which handles the response, the result of which is
-    ///       returned to the caller. Returning from the closure will cancel the RPC if it
-    ///       hasn't already finished.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
     /// - Returns: The result of `handleResponse`.
     public func approveJoinRequest<Result>(
         _ message: Shared_Proto_Services_V1_ApproveJoinRequestRequest,
@@ -2102,6 +2102,19 @@ public enum Shared_Proto_Services_V1_DeviceService: Sendable {
                 type: .unary
             )
         }
+        /// Namespace for "PublishDeviceCertificate" metadata.
+        public enum PublishDeviceCertificate: Sendable {
+            /// Request type for "PublishDeviceCertificate".
+            public typealias Input = Shared_Proto_Services_V1_PublishDeviceCertificateRequest
+            /// Response type for "PublishDeviceCertificate".
+            public typealias Output = Shared_Proto_Services_V1_PublishDeviceCertificateResponse
+            /// Descriptor for "PublishDeviceCertificate".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.DeviceService"),
+                method: "PublishDeviceCertificate",
+                type: .unary
+            )
+        }
         /// Namespace for "InitiateDeviceLink" metadata.
         public enum InitiateDeviceLink: Sendable {
             /// Request type for "InitiateDeviceLink".
@@ -2115,6 +2128,19 @@ public enum Shared_Proto_Services_V1_DeviceService: Sendable {
                 type: .unary
             )
         }
+        /// Namespace for "GetDeviceLinkResult" metadata.
+        public enum GetDeviceLinkResult: Sendable {
+            /// Request type for "GetDeviceLinkResult".
+            public typealias Input = Shared_Proto_Services_V1_GetDeviceLinkResultRequest
+            /// Response type for "GetDeviceLinkResult".
+            public typealias Output = Shared_Proto_Services_V1_GetDeviceLinkResultResponse
+            /// Descriptor for "GetDeviceLinkResult".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.DeviceService"),
+                method: "GetDeviceLinkResult",
+                type: .unary
+            )
+        }
         /// Descriptors for all methods in the "shared.proto.services.v1.DeviceService" service.
         public static let descriptors: [GRPCCore.MethodDescriptor] = [
             ListDevices.descriptor,
@@ -2124,7 +2150,9 @@ public enum Shared_Proto_Services_V1_DeviceService: Sendable {
             VerifyDevice.descriptor,
             GetDeviceInfo.descriptor,
             SetDeviceMetadata.descriptor,
-            InitiateDeviceLink.descriptor
+            PublishDeviceCertificate.descriptor,
+            InitiateDeviceLink.descriptor,
+            GetDeviceLinkResult.descriptor
         ]
     }
 }
@@ -2159,9 +2187,9 @@ extension Shared_Proto_Services_V1_DeviceService {
         ///   - serializer: A serializer for `Shared_Proto_Services_V1_ListDevicesRequest` messages.
         ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_ListDevicesResponse` messages.
         ///   - options: Options to apply to this RPC.
-        ///   - handleResponse: A closure which handles the response, the result of which is
-        ///       returned to the caller. Returning from the closure will cancel the RPC if it
-        ///       hasn't already finished.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
         /// - Returns: The result of `handleResponse`.
         func listDevices<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_ListDevicesRequest>,
@@ -2182,9 +2210,9 @@ extension Shared_Proto_Services_V1_DeviceService {
         ///   - serializer: A serializer for `Shared_Proto_Services_V1_RevokeDeviceRequest` messages.
         ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_RevokeDeviceResponse` messages.
         ///   - options: Options to apply to this RPC.
-        ///   - handleResponse: A closure which handles the response, the result of which is
-        ///       returned to the caller. Returning from the closure will cancel the RPC if it
-        ///       hasn't already finished.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
         /// - Returns: The result of `handleResponse`.
         func revokeDevice<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_RevokeDeviceRequest>,
@@ -2205,9 +2233,9 @@ extension Shared_Proto_Services_V1_DeviceService {
         ///   - serializer: A serializer for `Shared_Proto_Services_V1_UpdatePushTokenRequest` messages.
         ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_UpdatePushTokenResponse` messages.
         ///   - options: Options to apply to this RPC.
-        ///   - handleResponse: A closure which handles the response, the result of which is
-        ///       returned to the caller. Returning from the closure will cancel the RPC if it
-        ///       hasn't already finished.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
         /// - Returns: The result of `handleResponse`.
         func updatePushToken<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_UpdatePushTokenRequest>,
@@ -2228,9 +2256,9 @@ extension Shared_Proto_Services_V1_DeviceService {
         ///   - serializer: A serializer for `Shared_Proto_Services_V1_UnregisterPushTokenRequest` messages.
         ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_UnregisterPushTokenResponse` messages.
         ///   - options: Options to apply to this RPC.
-        ///   - handleResponse: A closure which handles the response, the result of which is
-        ///       returned to the caller. Returning from the closure will cancel the RPC if it
-        ///       hasn't already finished.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
         /// - Returns: The result of `handleResponse`.
         func unregisterPushToken<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_UnregisterPushTokenRequest>,
@@ -2251,9 +2279,9 @@ extension Shared_Proto_Services_V1_DeviceService {
         ///   - serializer: A serializer for `Shared_Proto_Services_V1_VerifyDeviceRequest` messages.
         ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_VerifyDeviceResponse` messages.
         ///   - options: Options to apply to this RPC.
-        ///   - handleResponse: A closure which handles the response, the result of which is
-        ///       returned to the caller. Returning from the closure will cancel the RPC if it
-        ///       hasn't already finished.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
         /// - Returns: The result of `handleResponse`.
         func verifyDevice<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_VerifyDeviceRequest>,
@@ -2274,9 +2302,9 @@ extension Shared_Proto_Services_V1_DeviceService {
         ///   - serializer: A serializer for `Shared_Proto_Services_V1_GetDeviceInfoRequest` messages.
         ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_GetDeviceInfoResponse` messages.
         ///   - options: Options to apply to this RPC.
-        ///   - handleResponse: A closure which handles the response, the result of which is
-        ///       returned to the caller. Returning from the closure will cancel the RPC if it
-        ///       hasn't already finished.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
         /// - Returns: The result of `handleResponse`.
         func getDeviceInfo<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_GetDeviceInfoRequest>,
@@ -2299,9 +2327,9 @@ extension Shared_Proto_Services_V1_DeviceService {
         ///   - serializer: A serializer for `Shared_Proto_Services_V1_SetDeviceMetadataRequest` messages.
         ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_SetDeviceMetadataResponse` messages.
         ///   - options: Options to apply to this RPC.
-        ///   - handleResponse: A closure which handles the response, the result of which is
-        ///       returned to the caller. Returning from the closure will cancel the RPC if it
-        ///       hasn't already finished.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
         /// - Returns: The result of `handleResponse`.
         func setDeviceMetadata<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_SetDeviceMetadataRequest>,
@@ -2309,6 +2337,34 @@ extension Shared_Proto_Services_V1_DeviceService {
             deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_SetDeviceMetadataResponse>,
             options: GRPCCore.CallOptions,
             onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_SetDeviceMetadataResponse>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
+
+        /// Call the "PublishDeviceCertificate" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > PublishDeviceCertificate - Store a certificate by which the caller vouches for another
+        /// > device of its own account (construct-docs decisions/devices-of-an-account-sign-each-other.md).
+        /// > Authenticated. The server checks only that the subject is a device of the caller's account,
+        /// > that it is not the caller, and that the certificate names the caller as its signer; it does
+        /// > not verify the signature — the peers do, and a certificate the server drops or alters reads
+        /// > to them as an unsigned device, the safe side.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Shared_Proto_Services_V1_PublishDeviceCertificateRequest` message.
+        ///   - serializer: A serializer for `Shared_Proto_Services_V1_PublishDeviceCertificateRequest` messages.
+        ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_PublishDeviceCertificateResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        func publishDeviceCertificate<Result>(
+            request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_PublishDeviceCertificateRequest>,
+            serializer: some GRPCCore.MessageSerializer<Shared_Proto_Services_V1_PublishDeviceCertificateRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_PublishDeviceCertificateResponse>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_PublishDeviceCertificateResponse>) async throws -> Result
         ) async throws -> Result where Result: Sendable
 
         /// Call the "InitiateDeviceLink" method.
@@ -2323,9 +2379,9 @@ extension Shared_Proto_Services_V1_DeviceService {
         ///   - serializer: A serializer for `Shared_Proto_Services_V1_InitiateDeviceLinkRequest` messages.
         ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_InitiateDeviceLinkResponse` messages.
         ///   - options: Options to apply to this RPC.
-        ///   - handleResponse: A closure which handles the response, the result of which is
-        ///       returned to the caller. Returning from the closure will cancel the RPC if it
-        ///       hasn't already finished.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
         /// - Returns: The result of `handleResponse`.
         func initiateDeviceLink<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_InitiateDeviceLinkRequest>,
@@ -2333,6 +2389,32 @@ extension Shared_Proto_Services_V1_DeviceService {
             deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_InitiateDeviceLinkResponse>,
             options: GRPCCore.CallOptions,
             onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_InitiateDeviceLinkResponse>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
+
+        /// Call the "GetDeviceLinkResult" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > GetDeviceLinkResult - The device that issued a link token asks which device used it, and
+        /// > that device's proof of keys (Flow A). Authenticated; answers only the account that issued
+        /// > the token. The old device then fetches the new device's bundle, checks the proof against
+        /// > the secret in its own QR, and publishes a certificate.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Shared_Proto_Services_V1_GetDeviceLinkResultRequest` message.
+        ///   - serializer: A serializer for `Shared_Proto_Services_V1_GetDeviceLinkResultRequest` messages.
+        ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_GetDeviceLinkResultResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        func getDeviceLinkResult<Result>(
+            request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_GetDeviceLinkResultRequest>,
+            serializer: some GRPCCore.MessageSerializer<Shared_Proto_Services_V1_GetDeviceLinkResultRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_GetDeviceLinkResultResponse>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_GetDeviceLinkResultResponse>) async throws -> Result
         ) async throws -> Result where Result: Sendable
     }
 
@@ -2367,9 +2449,9 @@ extension Shared_Proto_Services_V1_DeviceService {
         ///   - serializer: A serializer for `Shared_Proto_Services_V1_ListDevicesRequest` messages.
         ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_ListDevicesResponse` messages.
         ///   - options: Options to apply to this RPC.
-        ///   - handleResponse: A closure which handles the response, the result of which is
-        ///       returned to the caller. Returning from the closure will cancel the RPC if it
-        ///       hasn't already finished.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
         /// - Returns: The result of `handleResponse`.
         public func listDevices<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_ListDevicesRequest>,
@@ -2399,9 +2481,9 @@ extension Shared_Proto_Services_V1_DeviceService {
         ///   - serializer: A serializer for `Shared_Proto_Services_V1_RevokeDeviceRequest` messages.
         ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_RevokeDeviceResponse` messages.
         ///   - options: Options to apply to this RPC.
-        ///   - handleResponse: A closure which handles the response, the result of which is
-        ///       returned to the caller. Returning from the closure will cancel the RPC if it
-        ///       hasn't already finished.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
         /// - Returns: The result of `handleResponse`.
         public func revokeDevice<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_RevokeDeviceRequest>,
@@ -2433,9 +2515,9 @@ extension Shared_Proto_Services_V1_DeviceService {
         ///   - serializer: A serializer for `Shared_Proto_Services_V1_UpdatePushTokenRequest` messages.
         ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_UpdatePushTokenResponse` messages.
         ///   - options: Options to apply to this RPC.
-        ///   - handleResponse: A closure which handles the response, the result of which is
-        ///       returned to the caller. Returning from the closure will cancel the RPC if it
-        ///       hasn't already finished.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
         /// - Returns: The result of `handleResponse`.
         public func updatePushToken<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_UpdatePushTokenRequest>,
@@ -2467,9 +2549,9 @@ extension Shared_Proto_Services_V1_DeviceService {
         ///   - serializer: A serializer for `Shared_Proto_Services_V1_UnregisterPushTokenRequest` messages.
         ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_UnregisterPushTokenResponse` messages.
         ///   - options: Options to apply to this RPC.
-        ///   - handleResponse: A closure which handles the response, the result of which is
-        ///       returned to the caller. Returning from the closure will cancel the RPC if it
-        ///       hasn't already finished.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
         /// - Returns: The result of `handleResponse`.
         public func unregisterPushToken<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_UnregisterPushTokenRequest>,
@@ -2501,9 +2583,9 @@ extension Shared_Proto_Services_V1_DeviceService {
         ///   - serializer: A serializer for `Shared_Proto_Services_V1_VerifyDeviceRequest` messages.
         ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_VerifyDeviceResponse` messages.
         ///   - options: Options to apply to this RPC.
-        ///   - handleResponse: A closure which handles the response, the result of which is
-        ///       returned to the caller. Returning from the closure will cancel the RPC if it
-        ///       hasn't already finished.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
         /// - Returns: The result of `handleResponse`.
         public func verifyDevice<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_VerifyDeviceRequest>,
@@ -2535,9 +2617,9 @@ extension Shared_Proto_Services_V1_DeviceService {
         ///   - serializer: A serializer for `Shared_Proto_Services_V1_GetDeviceInfoRequest` messages.
         ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_GetDeviceInfoResponse` messages.
         ///   - options: Options to apply to this RPC.
-        ///   - handleResponse: A closure which handles the response, the result of which is
-        ///       returned to the caller. Returning from the closure will cancel the RPC if it
-        ///       hasn't already finished.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
         /// - Returns: The result of `handleResponse`.
         public func getDeviceInfo<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_GetDeviceInfoRequest>,
@@ -2571,9 +2653,9 @@ extension Shared_Proto_Services_V1_DeviceService {
         ///   - serializer: A serializer for `Shared_Proto_Services_V1_SetDeviceMetadataRequest` messages.
         ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_SetDeviceMetadataResponse` messages.
         ///   - options: Options to apply to this RPC.
-        ///   - handleResponse: A closure which handles the response, the result of which is
-        ///       returned to the caller. Returning from the closure will cancel the RPC if it
-        ///       hasn't already finished.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
         /// - Returns: The result of `handleResponse`.
         public func setDeviceMetadata<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_SetDeviceMetadataRequest>,
@@ -2594,6 +2676,45 @@ extension Shared_Proto_Services_V1_DeviceService {
             )
         }
 
+        /// Call the "PublishDeviceCertificate" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > PublishDeviceCertificate - Store a certificate by which the caller vouches for another
+        /// > device of its own account (construct-docs decisions/devices-of-an-account-sign-each-other.md).
+        /// > Authenticated. The server checks only that the subject is a device of the caller's account,
+        /// > that it is not the caller, and that the certificate names the caller as its signer; it does
+        /// > not verify the signature — the peers do, and a certificate the server drops or alters reads
+        /// > to them as an unsigned device, the safe side.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Shared_Proto_Services_V1_PublishDeviceCertificateRequest` message.
+        ///   - serializer: A serializer for `Shared_Proto_Services_V1_PublishDeviceCertificateRequest` messages.
+        ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_PublishDeviceCertificateResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func publishDeviceCertificate<Result>(
+            request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_PublishDeviceCertificateRequest>,
+            serializer: some GRPCCore.MessageSerializer<Shared_Proto_Services_V1_PublishDeviceCertificateRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_PublishDeviceCertificateResponse>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_PublishDeviceCertificateResponse>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Shared_Proto_Services_V1_DeviceService.Method.PublishDeviceCertificate.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
+
         /// Call the "InitiateDeviceLink" method.
         ///
         /// > Source IDL Documentation:
@@ -2606,9 +2727,9 @@ extension Shared_Proto_Services_V1_DeviceService {
         ///   - serializer: A serializer for `Shared_Proto_Services_V1_InitiateDeviceLinkRequest` messages.
         ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_InitiateDeviceLinkResponse` messages.
         ///   - options: Options to apply to this RPC.
-        ///   - handleResponse: A closure which handles the response, the result of which is
-        ///       returned to the caller. Returning from the closure will cancel the RPC if it
-        ///       hasn't already finished.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
         /// - Returns: The result of `handleResponse`.
         public func initiateDeviceLink<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_InitiateDeviceLinkRequest>,
@@ -2622,6 +2743,43 @@ extension Shared_Proto_Services_V1_DeviceService {
             try await self.client.unary(
                 request: request,
                 descriptor: Shared_Proto_Services_V1_DeviceService.Method.InitiateDeviceLink.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
+
+        /// Call the "GetDeviceLinkResult" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > GetDeviceLinkResult - The device that issued a link token asks which device used it, and
+        /// > that device's proof of keys (Flow A). Authenticated; answers only the account that issued
+        /// > the token. The old device then fetches the new device's bundle, checks the proof against
+        /// > the secret in its own QR, and publishes a certificate.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Shared_Proto_Services_V1_GetDeviceLinkResultRequest` message.
+        ///   - serializer: A serializer for `Shared_Proto_Services_V1_GetDeviceLinkResultRequest` messages.
+        ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_GetDeviceLinkResultResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func getDeviceLinkResult<Result>(
+            request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_GetDeviceLinkResultRequest>,
+            serializer: some GRPCCore.MessageSerializer<Shared_Proto_Services_V1_GetDeviceLinkResultRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_GetDeviceLinkResultResponse>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_GetDeviceLinkResultResponse>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Shared_Proto_Services_V1_DeviceService.Method.GetDeviceLinkResult.descriptor,
                 serializer: serializer,
                 deserializer: deserializer,
                 options: options,
@@ -2643,9 +2801,9 @@ extension Shared_Proto_Services_V1_DeviceService.ClientProtocol {
     /// - Parameters:
     ///   - request: A request containing a single `Shared_Proto_Services_V1_ListDevicesRequest` message.
     ///   - options: Options to apply to this RPC.
-    ///   - handleResponse: A closure which handles the response, the result of which is
-    ///       returned to the caller. Returning from the closure will cancel the RPC if it
-    ///       hasn't already finished.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
     /// - Returns: The result of `handleResponse`.
     public func listDevices<Result>(
         request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_ListDevicesRequest>,
@@ -2670,9 +2828,9 @@ extension Shared_Proto_Services_V1_DeviceService.ClientProtocol {
     /// - Parameters:
     ///   - request: A request containing a single `Shared_Proto_Services_V1_RevokeDeviceRequest` message.
     ///   - options: Options to apply to this RPC.
-    ///   - handleResponse: A closure which handles the response, the result of which is
-    ///       returned to the caller. Returning from the closure will cancel the RPC if it
-    ///       hasn't already finished.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
     /// - Returns: The result of `handleResponse`.
     public func revokeDevice<Result>(
         request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_RevokeDeviceRequest>,
@@ -2699,9 +2857,9 @@ extension Shared_Proto_Services_V1_DeviceService.ClientProtocol {
     /// - Parameters:
     ///   - request: A request containing a single `Shared_Proto_Services_V1_UpdatePushTokenRequest` message.
     ///   - options: Options to apply to this RPC.
-    ///   - handleResponse: A closure which handles the response, the result of which is
-    ///       returned to the caller. Returning from the closure will cancel the RPC if it
-    ///       hasn't already finished.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
     /// - Returns: The result of `handleResponse`.
     public func updatePushToken<Result>(
         request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_UpdatePushTokenRequest>,
@@ -2728,9 +2886,9 @@ extension Shared_Proto_Services_V1_DeviceService.ClientProtocol {
     /// - Parameters:
     ///   - request: A request containing a single `Shared_Proto_Services_V1_UnregisterPushTokenRequest` message.
     ///   - options: Options to apply to this RPC.
-    ///   - handleResponse: A closure which handles the response, the result of which is
-    ///       returned to the caller. Returning from the closure will cancel the RPC if it
-    ///       hasn't already finished.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
     /// - Returns: The result of `handleResponse`.
     public func unregisterPushToken<Result>(
         request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_UnregisterPushTokenRequest>,
@@ -2757,9 +2915,9 @@ extension Shared_Proto_Services_V1_DeviceService.ClientProtocol {
     /// - Parameters:
     ///   - request: A request containing a single `Shared_Proto_Services_V1_VerifyDeviceRequest` message.
     ///   - options: Options to apply to this RPC.
-    ///   - handleResponse: A closure which handles the response, the result of which is
-    ///       returned to the caller. Returning from the closure will cancel the RPC if it
-    ///       hasn't already finished.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
     /// - Returns: The result of `handleResponse`.
     public func verifyDevice<Result>(
         request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_VerifyDeviceRequest>,
@@ -2786,9 +2944,9 @@ extension Shared_Proto_Services_V1_DeviceService.ClientProtocol {
     /// - Parameters:
     ///   - request: A request containing a single `Shared_Proto_Services_V1_GetDeviceInfoRequest` message.
     ///   - options: Options to apply to this RPC.
-    ///   - handleResponse: A closure which handles the response, the result of which is
-    ///       returned to the caller. Returning from the closure will cancel the RPC if it
-    ///       hasn't already finished.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
     /// - Returns: The result of `handleResponse`.
     public func getDeviceInfo<Result>(
         request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_GetDeviceInfoRequest>,
@@ -2817,9 +2975,9 @@ extension Shared_Proto_Services_V1_DeviceService.ClientProtocol {
     /// - Parameters:
     ///   - request: A request containing a single `Shared_Proto_Services_V1_SetDeviceMetadataRequest` message.
     ///   - options: Options to apply to this RPC.
-    ///   - handleResponse: A closure which handles the response, the result of which is
-    ///       returned to the caller. Returning from the closure will cancel the RPC if it
-    ///       hasn't already finished.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
     /// - Returns: The result of `handleResponse`.
     public func setDeviceMetadata<Result>(
         request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_SetDeviceMetadataRequest>,
@@ -2837,6 +2995,40 @@ extension Shared_Proto_Services_V1_DeviceService.ClientProtocol {
         )
     }
 
+    /// Call the "PublishDeviceCertificate" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > PublishDeviceCertificate - Store a certificate by which the caller vouches for another
+    /// > device of its own account (construct-docs decisions/devices-of-an-account-sign-each-other.md).
+    /// > Authenticated. The server checks only that the subject is a device of the caller's account,
+    /// > that it is not the caller, and that the certificate names the caller as its signer; it does
+    /// > not verify the signature — the peers do, and a certificate the server drops or alters reads
+    /// > to them as an unsigned device, the safe side.
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Shared_Proto_Services_V1_PublishDeviceCertificateRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func publishDeviceCertificate<Result>(
+        request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_PublishDeviceCertificateRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_PublishDeviceCertificateResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.publishDeviceCertificate(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Shared_Proto_Services_V1_PublishDeviceCertificateRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Shared_Proto_Services_V1_PublishDeviceCertificateResponse>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
     /// Call the "InitiateDeviceLink" method.
     ///
     /// > Source IDL Documentation:
@@ -2847,9 +3039,9 @@ extension Shared_Proto_Services_V1_DeviceService.ClientProtocol {
     /// - Parameters:
     ///   - request: A request containing a single `Shared_Proto_Services_V1_InitiateDeviceLinkRequest` message.
     ///   - options: Options to apply to this RPC.
-    ///   - handleResponse: A closure which handles the response, the result of which is
-    ///       returned to the caller. Returning from the closure will cancel the RPC if it
-    ///       hasn't already finished.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
     /// - Returns: The result of `handleResponse`.
     public func initiateDeviceLink<Result>(
         request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_InitiateDeviceLinkRequest>,
@@ -2862,6 +3054,38 @@ extension Shared_Proto_Services_V1_DeviceService.ClientProtocol {
             request: request,
             serializer: GRPCProtobuf.ProtobufSerializer<Shared_Proto_Services_V1_InitiateDeviceLinkRequest>(),
             deserializer: GRPCProtobuf.ProtobufDeserializer<Shared_Proto_Services_V1_InitiateDeviceLinkResponse>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "GetDeviceLinkResult" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > GetDeviceLinkResult - The device that issued a link token asks which device used it, and
+    /// > that device's proof of keys (Flow A). Authenticated; answers only the account that issued
+    /// > the token. The old device then fetches the new device's bundle, checks the proof against
+    /// > the secret in its own QR, and publishes a certificate.
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Shared_Proto_Services_V1_GetDeviceLinkResultRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func getDeviceLinkResult<Result>(
+        request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_GetDeviceLinkResultRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_GetDeviceLinkResultResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.getDeviceLinkResult(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Shared_Proto_Services_V1_GetDeviceLinkResultRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Shared_Proto_Services_V1_GetDeviceLinkResultResponse>(),
             options: options,
             onResponse: handleResponse
         )
@@ -2881,9 +3105,9 @@ extension Shared_Proto_Services_V1_DeviceService.ClientProtocol {
     ///   - message: request message to send.
     ///   - metadata: Additional metadata to send, defaults to empty.
     ///   - options: Options to apply to this RPC, defaults to `.defaults`.
-    ///   - handleResponse: A closure which handles the response, the result of which is
-    ///       returned to the caller. Returning from the closure will cancel the RPC if it
-    ///       hasn't already finished.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
     /// - Returns: The result of `handleResponse`.
     public func listDevices<Result>(
         _ message: Shared_Proto_Services_V1_ListDevicesRequest,
@@ -2912,9 +3136,9 @@ extension Shared_Proto_Services_V1_DeviceService.ClientProtocol {
     ///   - message: request message to send.
     ///   - metadata: Additional metadata to send, defaults to empty.
     ///   - options: Options to apply to this RPC, defaults to `.defaults`.
-    ///   - handleResponse: A closure which handles the response, the result of which is
-    ///       returned to the caller. Returning from the closure will cancel the RPC if it
-    ///       hasn't already finished.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
     /// - Returns: The result of `handleResponse`.
     public func revokeDevice<Result>(
         _ message: Shared_Proto_Services_V1_RevokeDeviceRequest,
@@ -2945,9 +3169,9 @@ extension Shared_Proto_Services_V1_DeviceService.ClientProtocol {
     ///   - message: request message to send.
     ///   - metadata: Additional metadata to send, defaults to empty.
     ///   - options: Options to apply to this RPC, defaults to `.defaults`.
-    ///   - handleResponse: A closure which handles the response, the result of which is
-    ///       returned to the caller. Returning from the closure will cancel the RPC if it
-    ///       hasn't already finished.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
     /// - Returns: The result of `handleResponse`.
     public func updatePushToken<Result>(
         _ message: Shared_Proto_Services_V1_UpdatePushTokenRequest,
@@ -2978,9 +3202,9 @@ extension Shared_Proto_Services_V1_DeviceService.ClientProtocol {
     ///   - message: request message to send.
     ///   - metadata: Additional metadata to send, defaults to empty.
     ///   - options: Options to apply to this RPC, defaults to `.defaults`.
-    ///   - handleResponse: A closure which handles the response, the result of which is
-    ///       returned to the caller. Returning from the closure will cancel the RPC if it
-    ///       hasn't already finished.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
     /// - Returns: The result of `handleResponse`.
     public func unregisterPushToken<Result>(
         _ message: Shared_Proto_Services_V1_UnregisterPushTokenRequest,
@@ -3011,9 +3235,9 @@ extension Shared_Proto_Services_V1_DeviceService.ClientProtocol {
     ///   - message: request message to send.
     ///   - metadata: Additional metadata to send, defaults to empty.
     ///   - options: Options to apply to this RPC, defaults to `.defaults`.
-    ///   - handleResponse: A closure which handles the response, the result of which is
-    ///       returned to the caller. Returning from the closure will cancel the RPC if it
-    ///       hasn't already finished.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
     /// - Returns: The result of `handleResponse`.
     public func verifyDevice<Result>(
         _ message: Shared_Proto_Services_V1_VerifyDeviceRequest,
@@ -3044,9 +3268,9 @@ extension Shared_Proto_Services_V1_DeviceService.ClientProtocol {
     ///   - message: request message to send.
     ///   - metadata: Additional metadata to send, defaults to empty.
     ///   - options: Options to apply to this RPC, defaults to `.defaults`.
-    ///   - handleResponse: A closure which handles the response, the result of which is
-    ///       returned to the caller. Returning from the closure will cancel the RPC if it
-    ///       hasn't already finished.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
     /// - Returns: The result of `handleResponse`.
     public func getDeviceInfo<Result>(
         _ message: Shared_Proto_Services_V1_GetDeviceInfoRequest,
@@ -3079,9 +3303,9 @@ extension Shared_Proto_Services_V1_DeviceService.ClientProtocol {
     ///   - message: request message to send.
     ///   - metadata: Additional metadata to send, defaults to empty.
     ///   - options: Options to apply to this RPC, defaults to `.defaults`.
-    ///   - handleResponse: A closure which handles the response, the result of which is
-    ///       returned to the caller. Returning from the closure will cancel the RPC if it
-    ///       hasn't already finished.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
     /// - Returns: The result of `handleResponse`.
     public func setDeviceMetadata<Result>(
         _ message: Shared_Proto_Services_V1_SetDeviceMetadataRequest,
@@ -3102,6 +3326,44 @@ extension Shared_Proto_Services_V1_DeviceService.ClientProtocol {
         )
     }
 
+    /// Call the "PublishDeviceCertificate" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > PublishDeviceCertificate - Store a certificate by which the caller vouches for another
+    /// > device of its own account (construct-docs decisions/devices-of-an-account-sign-each-other.md).
+    /// > Authenticated. The server checks only that the subject is a device of the caller's account,
+    /// > that it is not the caller, and that the certificate names the caller as its signer; it does
+    /// > not verify the signature — the peers do, and a certificate the server drops or alters reads
+    /// > to them as an unsigned device, the safe side.
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func publishDeviceCertificate<Result>(
+        _ message: Shared_Proto_Services_V1_PublishDeviceCertificateRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_PublishDeviceCertificateResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Shared_Proto_Services_V1_PublishDeviceCertificateRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.publishDeviceCertificate(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
     /// Call the "InitiateDeviceLink" method.
     ///
     /// > Source IDL Documentation:
@@ -3113,9 +3375,9 @@ extension Shared_Proto_Services_V1_DeviceService.ClientProtocol {
     ///   - message: request message to send.
     ///   - metadata: Additional metadata to send, defaults to empty.
     ///   - options: Options to apply to this RPC, defaults to `.defaults`.
-    ///   - handleResponse: A closure which handles the response, the result of which is
-    ///       returned to the caller. Returning from the closure will cancel the RPC if it
-    ///       hasn't already finished.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
     /// - Returns: The result of `handleResponse`.
     public func initiateDeviceLink<Result>(
         _ message: Shared_Proto_Services_V1_InitiateDeviceLinkRequest,
@@ -3130,6 +3392,42 @@ extension Shared_Proto_Services_V1_DeviceService.ClientProtocol {
             metadata: metadata
         )
         return try await self.initiateDeviceLink(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
+    /// Call the "GetDeviceLinkResult" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > GetDeviceLinkResult - The device that issued a link token asks which device used it, and
+    /// > that device's proof of keys (Flow A). Authenticated; answers only the account that issued
+    /// > the token. The old device then fetches the new device's bundle, checks the proof against
+    /// > the secret in its own QR, and publishes a certificate.
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func getDeviceLinkResult<Result>(
+        _ message: Shared_Proto_Services_V1_GetDeviceLinkResultRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_GetDeviceLinkResultResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Shared_Proto_Services_V1_GetDeviceLinkResultRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.getDeviceLinkResult(
             request: request,
             options: options,
             onResponse: handleResponse
@@ -3225,9 +3523,9 @@ extension Shared_Proto_Services_V1_DeviceLinkService {
         ///   - serializer: A serializer for `Shared_Proto_Services_V1_ConfirmDeviceLinkRequest` messages.
         ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_ConfirmDeviceLinkResponse` messages.
         ///   - options: Options to apply to this RPC.
-        ///   - handleResponse: A closure which handles the response, the result of which is
-        ///       returned to the caller. Returning from the closure will cancel the RPC if it
-        ///       hasn't already finished.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
         /// - Returns: The result of `handleResponse`.
         func confirmDeviceLink<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_ConfirmDeviceLinkRequest>,
@@ -3250,9 +3548,9 @@ extension Shared_Proto_Services_V1_DeviceLinkService {
         ///   - serializer: A serializer for `Shared_Proto_Services_V1_JoinRequestPayload` messages.
         ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_JoinRequestAck` messages.
         ///   - options: Options to apply to this RPC.
-        ///   - handleResponse: A closure which handles the response, the result of which is
-        ///       returned to the caller. Returning from the closure will cancel the RPC if it
-        ///       hasn't already finished.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
         /// - Returns: The result of `handleResponse`.
         func submitJoinRequest<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_JoinRequestPayload>,
@@ -3274,9 +3572,9 @@ extension Shared_Proto_Services_V1_DeviceLinkService {
         ///   - serializer: A serializer for `Shared_Proto_Services_V1_CheckJoinRequestStatusRequest` messages.
         ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_CheckJoinRequestStatusResponse` messages.
         ///   - options: Options to apply to this RPC.
-        ///   - handleResponse: A closure which handles the response, the result of which is
-        ///       returned to the caller. Returning from the closure will cancel the RPC if it
-        ///       hasn't already finished.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
         /// - Returns: The result of `handleResponse`.
         func checkJoinRequestStatus<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_CheckJoinRequestStatusRequest>,
@@ -3319,9 +3617,9 @@ extension Shared_Proto_Services_V1_DeviceLinkService {
         ///   - serializer: A serializer for `Shared_Proto_Services_V1_ConfirmDeviceLinkRequest` messages.
         ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_ConfirmDeviceLinkResponse` messages.
         ///   - options: Options to apply to this RPC.
-        ///   - handleResponse: A closure which handles the response, the result of which is
-        ///       returned to the caller. Returning from the closure will cancel the RPC if it
-        ///       hasn't already finished.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
         /// - Returns: The result of `handleResponse`.
         public func confirmDeviceLink<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_ConfirmDeviceLinkRequest>,
@@ -3355,9 +3653,9 @@ extension Shared_Proto_Services_V1_DeviceLinkService {
         ///   - serializer: A serializer for `Shared_Proto_Services_V1_JoinRequestPayload` messages.
         ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_JoinRequestAck` messages.
         ///   - options: Options to apply to this RPC.
-        ///   - handleResponse: A closure which handles the response, the result of which is
-        ///       returned to the caller. Returning from the closure will cancel the RPC if it
-        ///       hasn't already finished.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
         /// - Returns: The result of `handleResponse`.
         public func submitJoinRequest<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_JoinRequestPayload>,
@@ -3390,9 +3688,9 @@ extension Shared_Proto_Services_V1_DeviceLinkService {
         ///   - serializer: A serializer for `Shared_Proto_Services_V1_CheckJoinRequestStatusRequest` messages.
         ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_CheckJoinRequestStatusResponse` messages.
         ///   - options: Options to apply to this RPC.
-        ///   - handleResponse: A closure which handles the response, the result of which is
-        ///       returned to the caller. Returning from the closure will cancel the RPC if it
-        ///       hasn't already finished.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
         /// - Returns: The result of `handleResponse`.
         public func checkJoinRequestStatus<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_CheckJoinRequestStatusRequest>,
@@ -3428,9 +3726,9 @@ extension Shared_Proto_Services_V1_DeviceLinkService.ClientProtocol {
     /// - Parameters:
     ///   - request: A request containing a single `Shared_Proto_Services_V1_ConfirmDeviceLinkRequest` message.
     ///   - options: Options to apply to this RPC.
-    ///   - handleResponse: A closure which handles the response, the result of which is
-    ///       returned to the caller. Returning from the closure will cancel the RPC if it
-    ///       hasn't already finished.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
     /// - Returns: The result of `handleResponse`.
     public func confirmDeviceLink<Result>(
         request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_ConfirmDeviceLinkRequest>,
@@ -3459,9 +3757,9 @@ extension Shared_Proto_Services_V1_DeviceLinkService.ClientProtocol {
     /// - Parameters:
     ///   - request: A request containing a single `Shared_Proto_Services_V1_JoinRequestPayload` message.
     ///   - options: Options to apply to this RPC.
-    ///   - handleResponse: A closure which handles the response, the result of which is
-    ///       returned to the caller. Returning from the closure will cancel the RPC if it
-    ///       hasn't already finished.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
     /// - Returns: The result of `handleResponse`.
     public func submitJoinRequest<Result>(
         request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_JoinRequestPayload>,
@@ -3489,9 +3787,9 @@ extension Shared_Proto_Services_V1_DeviceLinkService.ClientProtocol {
     /// - Parameters:
     ///   - request: A request containing a single `Shared_Proto_Services_V1_CheckJoinRequestStatusRequest` message.
     ///   - options: Options to apply to this RPC.
-    ///   - handleResponse: A closure which handles the response, the result of which is
-    ///       returned to the caller. Returning from the closure will cancel the RPC if it
-    ///       hasn't already finished.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
     /// - Returns: The result of `handleResponse`.
     public func checkJoinRequestStatus<Result>(
         request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_CheckJoinRequestStatusRequest>,
@@ -3524,9 +3822,9 @@ extension Shared_Proto_Services_V1_DeviceLinkService.ClientProtocol {
     ///   - message: request message to send.
     ///   - metadata: Additional metadata to send, defaults to empty.
     ///   - options: Options to apply to this RPC, defaults to `.defaults`.
-    ///   - handleResponse: A closure which handles the response, the result of which is
-    ///       returned to the caller. Returning from the closure will cancel the RPC if it
-    ///       hasn't already finished.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
     /// - Returns: The result of `handleResponse`.
     public func confirmDeviceLink<Result>(
         _ message: Shared_Proto_Services_V1_ConfirmDeviceLinkRequest,
@@ -3559,9 +3857,9 @@ extension Shared_Proto_Services_V1_DeviceLinkService.ClientProtocol {
     ///   - message: request message to send.
     ///   - metadata: Additional metadata to send, defaults to empty.
     ///   - options: Options to apply to this RPC, defaults to `.defaults`.
-    ///   - handleResponse: A closure which handles the response, the result of which is
-    ///       returned to the caller. Returning from the closure will cancel the RPC if it
-    ///       hasn't already finished.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
     /// - Returns: The result of `handleResponse`.
     public func submitJoinRequest<Result>(
         _ message: Shared_Proto_Services_V1_JoinRequestPayload,
@@ -3593,9 +3891,9 @@ extension Shared_Proto_Services_V1_DeviceLinkService.ClientProtocol {
     ///   - message: request message to send.
     ///   - metadata: Additional metadata to send, defaults to empty.
     ///   - options: Options to apply to this RPC, defaults to `.defaults`.
-    ///   - handleResponse: A closure which handles the response, the result of which is
-    ///       returned to the caller. Returning from the closure will cancel the RPC if it
-    ///       hasn't already finished.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
     /// - Returns: The result of `handleResponse`.
     public func checkJoinRequestStatus<Result>(
         _ message: Shared_Proto_Services_V1_CheckJoinRequestStatusRequest,
