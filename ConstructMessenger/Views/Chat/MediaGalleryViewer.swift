@@ -75,7 +75,7 @@ final class MediaImageCache {
     /// the source belongs in `storeDisplay` or `storePoster`. Named `original` rather than `store`
     /// because the old neutral name is exactly how a 320px thumbnail and a 120px reply preview got
     /// in here: at the call site `store(img, …)` reads as "cache this", not "this is what the user
-    /// will save". See the header of this file's `saveCurrentImage`.
+    /// will save". See `MediaGalleryViewer.shareCurrent`.
     func storeOriginal(_ image: PlatformImage, for messageId: String, at index: Int = 0) {
         cache.setObject(image, forKey: Self.key(messageId, index), cost: Self.decodedBytes(image))
     }
@@ -239,10 +239,6 @@ struct MediaGalleryViewer: View {
     @Binding var isPresented: Bool
 
     @State private var currentEntryId: String
-    @State private var saveStatus: SaveStatus = .idle
-
-    enum SaveStatus { case idle, saving, saved, failed }
-
     @State private var dismissOffset: CGFloat = 0
     /// Video playback speed, remembered across videos and launches — a viewer's preference,
     /// like the system players keep it.
@@ -312,20 +308,20 @@ struct MediaGalleryViewer: View {
             // Top chrome: close / counter / save
             HStack(alignment: .center) {
                 Button { isPresented = false } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(CTFont.ui(20))
-                        .foregroundColor(Color.CT.onMedia.opacity(0.9))
+                    Image(systemName: "xmark.circle")
+                        .font(CTIcon.font(CTIcon.control))
+                        .foregroundStyle(Color.CT.onMedia)
                         .frame(width: CTLayout.hitTarget, height: CTLayout.hitTarget)
                         .contentShape(Rectangle())
-                        .lineLimit(1).fixedSize()
                 }
 
                 Spacer()
 
                 if entries.count > 1 {
                     Text("\(currentPosition) / \(entries.count)")
-                        .font(CTFont.mono(13, weight: .medium))
-                        .foregroundColor(Color.CT.onMediaDim)
+                        .font(CTFont.headline)
+                        .monospacedDigit()
+                        .foregroundStyle(Color.CT.onMediaDim)
                 }
 
                 Spacer()
@@ -333,20 +329,20 @@ struct MediaGalleryViewer: View {
                 if currentIsVideo { speedMenu }
 
                 Button { shareCurrent() } label: {
-                    Image(systemName: "ellipsis.circle.fill")
-                        .font(CTFont.ui(20))
-                        .foregroundColor(Color.CT.onMedia.opacity(0.9))
+                    Image(systemName: "ellipsis.circle")
+                        .font(CTIcon.font(CTIcon.control))
+                        .foregroundStyle(Color.CT.onMedia)
                         .frame(width: CTLayout.hitTarget, height: CTLayout.hitTarget)
                         .contentShape(Rectangle())
-                        .lineLimit(1).fixedSize()
                 }
             }
             .padding(.horizontal, CTLayout.sectionGap)
-            .padding(.top, 56)
-            .padding(.bottom, 24)
+            // Below the status bar by the safe area, not by a guessed 56.
+            .padding(.top, CTSpace.s)
+            .padding(.bottom, CTSpace.xl)
             .background(
                 LinearGradient(
-                    colors: [Color.black.opacity(0.55), .clear],
+                    colors: [Color.CT.mediaScrim, .clear],
                     startPoint: .top,
                     endPoint: .bottom
                 )
@@ -375,9 +371,9 @@ struct MediaGalleryViewer: View {
             }
         } label: {
             Text(GalleryVideoPage.label(for: videoRate))
-                .font(CTFont.ui(14, weight: .semibold))
+                .font(CTFont.headline)
                 .monospacedDigit()
-                .foregroundColor(Color.CT.onMedia.opacity(0.9))
+                .foregroundStyle(Color.CT.onMedia)
                 .frame(minWidth: CTLayout.hitTarget, minHeight: CTLayout.hitTarget)
                 .contentShape(Rectangle())
         }
@@ -400,40 +396,6 @@ struct MediaGalleryViewer: View {
         }
     }
     
-    private var saveStatusIcon: String {
-            switch saveStatus {
-            case .idle:    return "arrow.down.circle.fill"
-            case .saving:  return "arrow.down.circle.fill"
-            case .saved:   return "checkmark.circle.fill"
-            case .failed:  return "exclamationmark.circle.fill"
-            }
-        }
-
-    private var saveStatusColor: Color {
-        switch saveStatus {
-        case .saved:   return .green
-        case .failed:  return .red
-        default:       return .white.opacity(0.8)
-        }
-    }
-
-    private func saveCurrentImage() {
-        guard let entry = entries.first(where: { $0.id == currentEntryId }),
-              !Self.isVideoEntry(entry),
-              let img = MediaImageCache.shared.original(for: entry.message.id, at: entry.itemIndex) else { return }
-        saveStatus = .saving
-        Task { @MainActor in
-            saveStatus = await MediaSaver.save(img) ? .saved : .failed
-            resetSaveStatus()
-        }
-    }
-
-    private func resetSaveStatus() {
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-            saveStatus = .idle
-        }
-    }
-
     /// The system share sheet for what is on screen: the picture, or the clip's decrypted file —
     /// which is what gives a video "Save Video", AirDrop and the rest. Until 2026-10-20 the button
     /// did nothing on a video: this returned early for anything that was not a picture.
@@ -489,11 +451,11 @@ struct MediaGalleryPage: View {
                         .frame(width: geo.size.width, height: geo.size.height)
                         .scaleEffect(scale)
                         .offset(offset)
-                        .gesture(magnificationGesture)
+                        .gesture(magnificationGesture(image: img.size, in: geo.size))
                         // Pan only exists while zoomed (mask .none disables it at scale 1),
                         // so TabView owns horizontal paging when not zoomed and the pan
                         // beats paging when zoomed.
-                        .highPriorityGesture(panGesture, including: scale > 1.0 ? .all : .none)
+                        .highPriorityGesture(panGesture(image: img.size, in: geo.size), including: scale > 1.0 ? .all : .none)
                         // Vertical drag-to-dismiss (disabled while zoomed). The latched modifier
                         // avoids the old jitter where TabView reclaimed the drag mid-swipe.
                         .modifier(DragToDismiss(
@@ -520,12 +482,20 @@ struct MediaGalleryPage: View {
 
     // MARK: Gestures
 
-    private var magnificationGesture: some Gesture {
+    private func panLimit(image: CGSize, in container: CGSize) -> CGSize {
+        ZoomPanBounds.limit(
+            fitted: ZoomPanBounds.fittedSize(of: image, in: container), scale: scale, container: container)
+    }
+
+    private func magnificationGesture(image: CGSize, in container: CGSize) -> some Gesture {
         MagnificationGesture()
             .onChanged { value in
                 let delta = value / lastScale
                 lastScale = value
                 scale = min(max(scale * delta, 1.0), 5.0)
+                // Zooming out shrinks the room to pan: keep the image's edge at the screen's.
+                offset = ZoomPanBounds.clamped(offset, limit: panLimit(image: image, in: container))
+                lastOffset = offset
             }
             .onEnded { _ in
                 lastScale = 1.0
@@ -534,17 +504,22 @@ struct MediaGalleryPage: View {
     }
 
     /// Pan the zoomed image. Only attached (via gesture mask) while `scale > 1`.
-    private var panGesture: some Gesture {
+    private func panGesture(image: CGSize, in container: CGSize) -> some Gesture {
         DragGesture()
             .onChanged { value in
                 guard scale > 1.0 else { return }
-                offset = CGSize(
+                let raw = CGSize(
                     width: lastOffset.width + value.translation.width,
                     height: lastOffset.height + value.translation.height
                 )
+                offset = ZoomPanBounds.rubberBanded(
+                    raw, limit: panLimit(image: image, in: container), container: container)
             }
             .onEnded { _ in
                 if scale > 1.0 {
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+                        offset = ZoomPanBounds.clamped(offset, limit: panLimit(image: image, in: container))
+                    }
                     lastOffset = offset
                 } else {
                     offset = .zero
