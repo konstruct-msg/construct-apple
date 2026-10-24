@@ -398,15 +398,18 @@ struct LoopingVideoView: View {
         PlayerLayerView(player: player)
             .task(id: url) {
                 guard let item = await Self.silentItem(for: url) else { return }
+                // Scrolled away while the tracks loaded: onDisappear has already cleared up,
+                // and a looper made now would outlive it.
+                guard !Task.isCancelled else { return }
                 player.isMuted = true
                 player.preventsDisplaySleepDuringVideoPlayback = false
-                looper = AVPlayerLooper(player: player, templateItem: item)
+                looper = player.loop(item, replacing: looper)
                 player.play()
             }
             .onDisappear {
                 player.pause()
+                player.stopLooping(looper)
                 looper = nil
-                player.removeAllItems()
             }
     }
 
@@ -420,6 +423,26 @@ struct LoopingVideoView: View {
         else { return nil }
         copy.preferredTransform = (try? await track.load(.preferredTransform)) ?? .identity
         return AVPlayerItem(asset: composition)
+    }
+}
+
+extension AVQueuePlayer {
+    /// Starts looping `item`, ending whatever loop this player had first. A second
+    /// `AVPlayerLooper` over a queue still holding the first one's replicas throws
+    /// `NSInvalidArgumentException` ("An AVPlayerItem can occupy only one position in a player's
+    /// queue at a time") — the crash a video-note bubble hit from 0.22.5 to 0.26.16, when a
+    /// cancelled load and its successor both made a looper for one player.
+    func loop(_ item: AVPlayerItem, timeRange: CMTimeRange? = nil, replacing old: AVPlayerLooper?) -> AVPlayerLooper {
+        stopLooping(old)
+        if let timeRange {
+            return AVPlayerLooper(player: self, templateItem: item, timeRange: timeRange)
+        }
+        return AVPlayerLooper(player: self, templateItem: item)
+    }
+
+    func stopLooping(_ looper: AVPlayerLooper?) {
+        looper?.disableLooping()
+        removeAllItems()
     }
 }
 
