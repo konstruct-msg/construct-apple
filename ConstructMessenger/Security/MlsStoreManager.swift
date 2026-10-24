@@ -30,7 +30,9 @@ enum MlsStoreManagerError: Error {
     case persistFailed
 }
 
-final class MlsStoreManager {
+/// `@unchecked`: `store` is guarded by `lock`. The lock is recursive because `generateKeyPackages`
+/// holds it across `requireStore` and `persist`, which take it again — `Mutex` would deadlock.
+final class MlsStoreManager: @unchecked Sendable {
     static let shared = MlsStoreManager()
     private init() {}
 
