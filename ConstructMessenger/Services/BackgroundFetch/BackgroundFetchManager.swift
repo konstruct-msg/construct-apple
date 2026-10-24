@@ -13,11 +13,16 @@ import UIKit
 #endif
 import os.log
 import CoreData
+import Synchronization
 
 /// Manages background task scheduling and execution for message fetching
 /// Uses BGTaskScheduler for intelligent, energy-efficient background operations
+///
+/// Sendable by lock: the three observable values below are touched from the main thread (UI,
+/// notification observers), from BGTask handlers and from fetch completions, so they live in one
+/// `Mutex`. Everything else is immutable or `@MainActor`.
 @Observable
-class BackgroundFetchManager: NSObject {
+final class BackgroundFetchManager: NSObject, @unchecked Sendable {
     
     // MARK: - Task Identifiers
     
@@ -36,14 +41,30 @@ class BackgroundFetchManager: NSObject {
     
     // ✅ Using gRPC for fetching messages (WebSocket removed)
     
+    private struct FetchState {
+        var isEnabled = false
+        var lastFetchDate: Date?
+        var lastFetchResult: Result<Int, Error>?
+    }
+    @ObservationIgnored private let fetchState = Mutex(FetchState())
+
     /// Indicates if background fetch is enabled by user
-    private(set) var isBackgroundFetchEnabled = false
+    private(set) var isBackgroundFetchEnabled: Bool {
+        get { access(keyPath: \.isBackgroundFetchEnabled); return fetchState.withLock { $0.isEnabled } }
+        set { withMutation(keyPath: \.isBackgroundFetchEnabled) { fetchState.withLock { $0.isEnabled = newValue } } }
+    }
     
     /// Last successful fetch timestamp
-    private(set) var lastFetchDate: Date?
+    private(set) var lastFetchDate: Date? {
+        get { access(keyPath: \.lastFetchDate); return fetchState.withLock { $0.lastFetchDate } }
+        set { withMutation(keyPath: \.lastFetchDate) { fetchState.withLock { $0.lastFetchDate = newValue } } }
+    }
     
     /// Last fetch result
-    private(set) var lastFetchResult: Result<Int, Error>?
+    private(set) var lastFetchResult: Result<Int, Error>? {
+        get { access(keyPath: \.lastFetchResult); return fetchState.withLock { $0.lastFetchResult } }
+        set { withMutation(keyPath: \.lastFetchResult) { fetchState.withLock { $0.lastFetchResult = newValue } } }
+    }
     
     // MARK: - Initialization
     
@@ -190,26 +211,29 @@ class BackgroundFetchManager: NSObject {
             task.setTaskCompleted(success: false)
         }
         
-        // Check if we should perform fetch (battery, network, etc.)
-        guard energyMonitor.shouldPerformBackgroundFetch() else {
-            Log.info("Skipping background fetch due to energy conditions")
-            task.setTaskCompleted(success: true)
-            return
-        }
-        
-        // Perform the actual fetch with 20-second timeout
-        performQuickMessageFetch { result in
-            switch result {
-            case .success(let messageCount):
-                Log.info("Background fetch completed: \(messageCount) new messages")
-                self.lastFetchDate = Date()
-                self.lastFetchResult = .success(messageCount)
+        // The energy check reads UIDevice, which is main-actor API, hence the await.
+        Task {
+            // Check if we should perform fetch (battery, network, etc.)
+            guard await energyMonitor.shouldPerformBackgroundFetch() else {
+                Log.info("Skipping background fetch due to energy conditions")
                 task.setTaskCompleted(success: true)
-                
-            case .failure(let error):
-                Log.error("Background fetch failed: \(error)")
-                self.lastFetchResult = .failure(error)
-                task.setTaskCompleted(success: false)
+                return
+            }
+
+            // Perform the actual fetch with 20-second timeout
+            performQuickMessageFetch { result in
+                switch result {
+                case .success(let messageCount):
+                    Log.info("Background fetch completed: \(messageCount) new messages")
+                    self.lastFetchDate = Date()
+                    self.lastFetchResult = .success(messageCount)
+                    task.setTaskCompleted(success: true)
+
+                case .failure(let error):
+                    Log.error("Background fetch failed: \(error)")
+                    self.lastFetchResult = .failure(error)
+                    task.setTaskCompleted(success: false)
+                }
             }
         }
     }
@@ -237,7 +261,8 @@ class BackgroundFetchManager: NSObject {
     
     /// Perform quick message fetch with connect-fetch-disconnect pattern
     /// Target execution time: 2-5 seconds
-    private func performQuickMessageFetch(completion: @escaping (Result<Int, Error>) -> Void) {
+    /// `completion` is delivered on the main actor, once.
+    private func performQuickMessageFetch(completion: @escaping @MainActor @Sendable (Result<Int, Error>) -> Void) {
         Log.info("Starting quick message fetch", category: "BackgroundFetch")
 
         Task {
@@ -246,7 +271,7 @@ class BackgroundFetchManager: NSObject {
                 // Launch race, not a broken session: the cache is empty because restore
                 // has not run yet. INFO — this used to be ERROR and looked like an outage.
                 Log.info("Background fetch skipped — session token not yet restored", category: "BackgroundFetch")
-                completion(.failure(BackgroundFetchError.notAuthenticated))
+                await completion(.failure(BackgroundFetchError.notAuthenticated))
                 return
             }
 
@@ -338,7 +363,7 @@ class BackgroundFetchManager: NSObject {
                 }
             } catch {
                 Log.error("Failed to fetch offline messages: \(error.localizedDescription)", category: "BackgroundFetch")
-                DispatchQueue.main.async { completion(.failure(error)) }
+                await completion(.failure(error))
             }
         }
     }
@@ -357,7 +382,7 @@ class BackgroundFetchManager: NSObject {
     /// that concern is void — FRC/Observable updates fire exactly where they should. The decrypt
     /// already hopped to main anyway, since the Rust core is MainActor-isolated.
     @MainActor
-    private func processOfflineMessages(_ messages: [ChatMessage], completion: @escaping (Result<Int, Error>) -> Void) {
+    private func processOfflineMessages(_ messages: [ChatMessage], completion: @escaping @MainActor @Sendable (Result<Int, Error>) -> Void) {
         guard !messages.isEmpty else {
             completion(.success(0))
             return
@@ -403,7 +428,7 @@ class BackgroundFetchManager: NSObject {
     }
     
     /// Perform maintenance operations (cache cleanup, token minting, etc.)
-    private func performMaintenance(completion: @escaping (Bool) -> Void) {
+    private func performMaintenance(completion: @escaping @MainActor @Sendable (Bool) -> Void) {
         // Run all maintenance inside one @MainActor Task and call `completion` only after it
         // finishes, so the BGProcessingTask isn't marked complete (and the app suspended) before
         // the async work actually runs.
