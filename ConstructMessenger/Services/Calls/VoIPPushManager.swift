@@ -24,7 +24,7 @@ final class VoIPPushManager: NSObject {
     private var registeredDeviceId: String?
 
     /// Raw VoIP push payload callback. UUID is the one already reported to CallKit synchronously.
-    var onIncomingPush: (@Sendable ([AnyHashable: Any], UUID) -> Void)?
+    var onIncomingPush: (@MainActor ([AnyHashable: Any], UUID) -> Void)?
 
     private var registry: PKPushRegistry?
     private var sessionObserverTask: Task<Void, Never>?
@@ -141,10 +141,11 @@ final class VoIPPushManager: NSObject {
 
 extension VoIPPushManager: PKPushRegistryDelegate {
     nonisolated func pushRegistry(_ registry: PKPushRegistry, didUpdate pushCredentials: PKPushCredentials, for type: PKPushType) {
+        let token = pushCredentials.token
         Task { @MainActor in
             guard type == .voIP else { return }
 
-            let tokenString = hex(pushCredentials.token)
+            let tokenString = hex(token)
             if voipToken != tokenString {
                 isRegisteredWithServer = false
             }
@@ -206,9 +207,13 @@ extension VoIPPushManager: PKPushRegistryDelegate {
         Log.info("Incoming VoIP push — CallKit notified sync (uuid=\(reportedUUID.uuidString.prefix(8))…)", category: "Calls")
 
         // Dispatch remaining setup to MainActor after CallKit obligation is fulfilled.
+        // `nonisolated(unsafe)`: the payload is the property list PushKit handed over, which
+        // nothing mutates after this point, and PushKit's completion may be called from any thread.
+        nonisolated(unsafe) let payloadForMain = dict
+        nonisolated(unsafe) let completionForMain = completion
         Task { @MainActor in
-            onIncomingPush?(dict, reportedUUID)
-            completion()
+            onIncomingPush?(payloadForMain, reportedUUID)
+            completionForMain()
         }
     }
 }

@@ -349,7 +349,7 @@ final class WebRTCSession: NSObject, WebRTCSessionProtocol {
         capturingFacing = facing
         captureCounter = counter
         captureWatcher = CaptureSessionWatcher(session: capturer.captureSession, label: "camera \(facing)")
-        let start: @MainActor () -> Void = { [weak self] in
+        let start: @MainActor @Sendable () -> Void = { [weak self] in
             // A later flip or a hang-up replaced this run while the old one was stopping.
             guard let self, self.capturer === capturer else { return }
             capturer.startCapture(with: device, format: format, fps: fps)
@@ -489,16 +489,19 @@ final class WebRTCSession: NSObject, WebRTCSessionProtocol {
     private func createSessionDescription(
         _ build: @escaping (@Sendable @escaping (RTCSessionDescription?, Error?) -> Void) -> Void
     ) async throws -> RTCSessionDescription {
-        try await withCheckedThrowingContinuation { cont in
+        // The description crosses from WebRTC's signalling thread as its two plain fields;
+        // `RTCSessionDescription` is not Sendable.
+        let (type, sdp) = try await withCheckedThrowingContinuation { (cont: CheckedContinuation<(RTCSdpType, String), Error>) in
             build { sdp, error in
                 if let error { cont.resume(throwing: error); return }
                 guard let sdp else {
                     cont.resume(throwing: WebRTCSessionError.invalidState("Missing SDP"))
                     return
                 }
-                cont.resume(returning: sdp)
+                cont.resume(returning: (sdp.type, sdp.sdp))
             }
         }
+        return RTCSessionDescription(type: type, sdp: sdp)
     }
 
     private func setLocalDescription(_ sdp: RTCSessionDescription) async throws {
