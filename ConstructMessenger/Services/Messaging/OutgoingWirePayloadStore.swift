@@ -11,7 +11,9 @@ import Foundation
 /// say which — the tag in it is a MAC, unreadable by design. An entry written before 2026-09-22
 /// carries no device; a retry then falls back to the recipient's pinned device, which is the only
 /// device that path ever encrypted for.
-final class OutgoingWirePayloadStore {
+/// `@unchecked`: holds no state of its own — `UserDefaults` is thread-safe (not annotated in this
+/// SDK), and `queue` serialises the read-modify-write of each entry.
+final class OutgoingWirePayloadStore: @unchecked Sendable {
     static let shared = OutgoingWirePayloadStore()
 
     private let defaults = UserDefaults.standard

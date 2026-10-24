@@ -51,13 +51,13 @@ enum AccountSendTag {
     /// exercising the tagging. That is not hypothetical — the first version of these tests built
     /// the wire id by hand and asserted the round trip, and the mutation `return baseMessageId`
     /// survived it untouched.
-    struct Keys {
+    struct Keys: Sendable {
         /// Our side of the tag, held by the core (`SenderSyncDeviceTag.Tagger`).
-        var ourTagger: () -> SenderSyncDeviceTag.Tagger?
-        var pinnedIdentityPublic: (String) -> Data?
-        var pinnedDevice: (String) -> String?
+        var ourTagger: @Sendable () -> SenderSyncDeviceTag.Tagger?
+        var pinnedIdentityPublic: @Sendable (String) -> Data?
+        var pinnedDevice: @Sendable (String) -> String?
         /// The identity key of a named device — `PeerDevice`, then the pinned rows.
-        var deviceIdentityPublic: (String) -> Data?
+        var deviceIdentityPublic: @Sendable (String) -> Data?
 
         static let production = Keys(
             ourTagger: { SenderSyncDeviceTag.Tagger.current },

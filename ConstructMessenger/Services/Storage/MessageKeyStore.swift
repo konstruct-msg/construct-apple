@@ -41,7 +41,8 @@ import SQLite3
 // SQLITE_TRANSIENT is a C macro (-1 cast to destructor type) not imported by Swift.
 private let SQLITE_TRANSIENT = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
 
-final class MessageKeyStore {
+/// `@unchecked`: `db` is opened, used and closed only on `queue`.
+final class MessageKeyStore: @unchecked Sendable {
 
     static let shared = MessageKeyStore()
 

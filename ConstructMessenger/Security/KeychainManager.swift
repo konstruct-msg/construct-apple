@@ -8,7 +8,8 @@
 import Security
 import Foundation
 
-class KeychainManager {
+/// Holds no state of its own — every value lives in the Keychain, which is thread-safe.
+final class KeychainManager: Sendable {
     static let shared = KeychainManager()
     private init() {}
 
