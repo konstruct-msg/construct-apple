@@ -91,7 +91,21 @@ private final class WebRTCFactory {
         RTCPeerConnectionFactory.configureFieldTrials(WebRTCFieldTrials.configured)
         let encoderFactory = RTCDefaultVideoEncoderFactory()
         let decoderFactory = RTCDefaultVideoDecoderFactory()
+        #if os(macOS)
+        // The engine module, observed: the only way this WebRTC build lets a Mac call choose its
+        // microphone and output (`CallAudioRouting.swift`). VPIO would pin the system defaults.
+        self.factory = RTCPeerConnectionFactory(
+            audioDeviceModuleType: .audioEngine,
+            bypassVoiceProcessing: false,
+            encoderFactory: encoderFactory,
+            decoderFactory: decoderFactory,
+            audioProcessingModule: nil
+        )
+        factory.audioDeviceModule.setPlatformVoiceProcessingAllowed(false)
+        factory.audioDeviceModule.observer = CallAudioRouter.shared
+        #else
         self.factory = RTCPeerConnectionFactory(encoderFactory: encoderFactory, decoderFactory: decoderFactory)
+        #endif
     }
 }
 
@@ -112,9 +126,10 @@ enum WebRTCFieldTrials {
 }
 
 #if os(macOS)
-/// The Mac's audio devices as WebRTC's audio device module sees them. iOS routes audio through
-/// the audio session and CallKit instead, so this exists on macOS only. `nil` selects the
-/// system's current default and follows it when it changes.
+/// The Mac's microphones and outputs for a call, as CoreAudio lists them — WebRTC's module lists
+/// none (`CallAudioRouting.swift`). `nil` selects the system's current default and follows it when
+/// it changes. A choice is kept between calls, by device UID; a device that is not connected reads
+/// as `nil`.
 @MainActor
 enum WebRTCAudioDevices {
     struct Device: Identifiable, Equatable, Sendable {
@@ -122,31 +137,32 @@ enum WebRTCAudioDevices {
         let name: String
     }
 
-    private static var module: RTCAudioDeviceModule { WebRTCFactory.shared.factory.audioDeviceModule }
-
-    static var inputs: [Device] { module.inputDevices.filter { !$0.isDefault }.map(Device.init) }
-    static var outputs: [Device] { module.outputDevices.filter { !$0.isDefault }.map(Device.init) }
+    static var inputs: [Device] { CallAudioRouter.devices().filter(\.hasInput).map(Device.init) }
+    static var outputs: [Device] { CallAudioRouter.devices().filter(\.hasOutput).map(Device.init) }
 
     static var selectedInput: String? {
-        get { module.inputDevice.isDefault ? nil : module.inputDevice.deviceId }
-        set {
-            module.inputDevice = newValue.flatMap { id in module.inputDevices.first { $0.deviceId == id } }
-                ?? RTCIODevice.defaultDevice(with: .input)
-        }
+        get { selected(CallAudioRouter.inputKey, among: inputs) }
+        set { select(newValue, CallAudioRouter.inputKey) }
     }
 
     static var selectedOutput: String? {
-        get { module.outputDevice.isDefault ? nil : module.outputDevice.deviceId }
-        set {
-            module.outputDevice = newValue.flatMap { id in module.outputDevices.first { $0.deviceId == id } }
-                ?? RTCIODevice.defaultDevice(with: .output)
-        }
+        get { selected(CallAudioRouter.outputKey, among: outputs) }
+        set { select(newValue, CallAudioRouter.outputKey) }
+    }
+
+    private static func selected(_ key: String, among devices: [Device]) -> String? {
+        UserDefaults.standard.string(forKey: key).flatMap { uid in devices.contains { $0.id == uid } ? uid : nil }
+    }
+
+    private static func select(_ uid: String?, _ key: String) {
+        UserDefaults.standard.set(uid, forKey: key)
+        CallAudioRouter.shared.reapply(WebRTCFactory.shared.factory.audioDeviceModule)
     }
 }
 
 private extension WebRTCAudioDevices.Device {
-    init(_ device: RTCIODevice) {
-        self.init(id: device.deviceId, name: device.name)
+    init(_ device: CallAudioRoute.Device) {
+        self.init(id: device.uid, name: device.name)
     }
 }
 #endif
