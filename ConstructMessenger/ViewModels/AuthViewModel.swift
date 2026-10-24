@@ -246,19 +246,19 @@ class AuthViewModel {
         // Step 1: Try to restore existing session token
         AuthSessionManager.shared.loadSessionToken()
 
-        // Helper: recover userId from JWT payload when Keychain entry is missing.
-        // The server embeds the user ID in the `sub` claim of every issued JWT.
+        // Helper: recover userId from the session token when the Keychain entry is missing.
+        // The server puts the user ID in the `sub` claim of every token it issues.
         // Only touches userId — does NOT re-save tokens or overwrite session expiry.
         func recoverUserIdFromToken() -> String? {
             guard let token = AuthSessionManager.shared.sessionToken,
                   let uid = TokenUtils.extractUserId(from: token),
                   !uid.isEmpty else { return nil }
             AuthSessionManager.shared.updateUserId(uid)
-            Log.info("[Auth] userId recovered from JWT sub claim and re-saved to Keychain: \(uid.prefix(8))...", category: "Auth")
+            Log.info("[Auth] userId recovered from the token's sub claim and re-saved to Keychain: \(uid.prefix(8))...", category: "Auth")
             return uid
         }
 
-        // Resolve userId — prefer in-memory/Keychain, fall back to JWT extraction.
+        // Resolve userId — prefer in-memory/Keychain, fall back to the token's `sub`.
         func resolvedUserId() -> String? {
             if let uid = AuthSessionManager.shared.currentUserId { return uid }
             return recoverUserIdFromToken()

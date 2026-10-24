@@ -57,7 +57,7 @@ struct AuthInterceptor: ClientInterceptor {
             if let userId = snap.userId {
                 request.metadata.addString(userId, forKey: "x-user-id")
             } else {
-                // Rare recovery path: userId missing from cache, extract from JWT claim.
+                // Rare recovery path: userId missing from cache, extract from the token's `sub` claim.
                 if let recovered = TokenUtils.extractUserId(from: token) {
                     await MainActor.run { AuthSessionManager.shared.updateUserId(recovered) }
                     request.metadata.addString(recovered, forKey: "x-user-id")
