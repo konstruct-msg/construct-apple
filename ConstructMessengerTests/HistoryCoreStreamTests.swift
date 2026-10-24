@@ -2,8 +2,9 @@
 //  HistoryCoreStreamTests.swift
 //  ConstructMessengerTests
 //
-//  The platform half of a history transfer, between two real cores: records into Core Data,
-//  media onto disk in pieces, and what is left behind when a stream is cut. The protocol itself —
+//  The platform half of a history transfer, between two real cores: records into the store
+//  (Core Data here, the crate in `LocalStoreHistoryCoreStreamTests`), media onto disk in pieces,
+//  and what is left behind when a stream is cut. The protocol itself —
 //  framing, order, chunks, frames, checks — is tested in construct-core against the cross-client
 //  vectors; this file does not repeat it.
 //
@@ -14,7 +15,7 @@ import XCTest
 @testable import Construct_Messenger
 
 @MainActor
-final class HistoryCoreStreamTests: XCTestCase {
+class HistoryCoreStreamTests: XCTestCase {
 
     private nonisolated static let userId = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee"
     private var userId: String { Self.userId }
@@ -67,7 +68,7 @@ final class HistoryCoreStreamTests: XCTestCase {
 
     /// A receiving device's store, empty, with the repositories the importer writes through
     /// pointed at it until the test ends.
-    private func freshStore() -> NSManagedObjectContext {
+    func freshStore() {
         let container = PersistenceController(inMemory: true).container
         LocalRepositories.usePeerDevicesForTesting(CoreDataPeerDeviceStore(container: container))
         LocalRepositories.useContactsForTesting(container)
@@ -81,7 +82,10 @@ final class HistoryCoreStreamTests: XCTestCase {
             LocalRepositories.useMessagesForTesting(nil)
             LocalRepositories.useReactionsForTesting(nil)
         }
-        return container.viewContext
+    }
+
+    private func peopleCount() throws -> Int {
+        try LocalRepositories.contacts.everyContact(except: nil).count
     }
 
     /// A media file on this device's disk, as the encoder would find it.
@@ -144,12 +148,12 @@ final class HistoryCoreStreamTests: XCTestCase {
         // The new device does not have it yet.
         try FileManager.default.removeItem(at: MediaManager.onDiskURL(for: media.id))
 
-        let context = freshStore()
+        freshStore()
         let outcome = try await importFile(url, into: new, from: old)
 
         guard case .imported(let summary, let phase) = outcome else { return XCTFail("\(outcome)") }
         XCTAssertEqual(phase, 3)
-        XCTAssertEqual(try context.count(for: User.fetchRequest()), 3)
+        XCTAssertEqual(try peopleCount(), 3)
         XCTAssertEqual(summary.applied, 4, "three contacts and one media file")
         // Written sealed at rest, never in the clear (`AtRestFiles`); read back whole.
         XCTAssertTrue(SealedFile.isSealed(fileAt: MediaManager.onDiskURL(for: media.id)))
@@ -165,7 +169,7 @@ final class HistoryCoreStreamTests: XCTestCase {
         let url = try await writeFile(from: old, to: new, contactCount: 1, media: media)
         try Data("kept".utf8).write(to: MediaManager.onDiskURL(for: media.id))
 
-        let context = freshStore()
+        freshStore()
         guard case .imported(let summary, _) = try await importFile(url, into: new, from: old) else {
             return XCTFail("expected an import")
         }
@@ -184,7 +188,7 @@ final class HistoryCoreStreamTests: XCTestCase {
         let whole = try Data(contentsOf: url)
         try whole.prefix(whole.count - 30_000).write(to: url)
 
-        let context = freshStore()
+        freshStore()
         do {
             _ = try await importFile(url, into: new, from: old)
             XCTFail("a cut file must not import")
@@ -240,7 +244,7 @@ final class HistoryCoreStreamTests: XCTestCase {
     func testAPhase2DropKeepsPhase1Rows() async throws {
         let old = try device()
         let new = try device()
-        let context = freshStore()
+        freshStore()
         let sending = HistoryTransferCoordinator()
         let receiving = HistoryTransferCoordinator()
 
@@ -254,7 +258,7 @@ final class HistoryCoreStreamTests: XCTestCase {
         try await sent
         guard case .imported(_, 1) = first else { return XCTFail("\(first)") }
         XCTAssertEqual(sending.phase, .chatsTransferred)
-        XCTAssertEqual(try context.count(for: User.fetchRequest()), 40)
+        XCTAssertEqual(try peopleCount(), 40)
 
         let media = try mediaFile(bytes: 200_000)
         let phase2 = HistoryMemoryDuplex()
@@ -275,7 +279,15 @@ final class HistoryCoreStreamTests: XCTestCase {
         _ = await receiveTask.result
 
         XCTAssertEqual(sending.phase, .mediaIncomplete)
-        XCTAssertEqual(try context.count(for: User.fetchRequest()), 40, "phase-1 rows survive a phase-2 drop")
+        XCTAssertEqual(try peopleCount(), 40, "phase-1 rows survive a phase-2 drop")
         XCTAssertEqual(try partFiles(), [])
+    }
+}
+
+/// The same transfers into the crate: what a Desktop linked to a phone runs.
+final class LocalStoreHistoryCoreStreamTests: HistoryCoreStreamTests {
+    override func freshStore() {
+        LocalRepositories.useLocalStoreForTesting(.inMemoryForTesting())
+        addTeardownBlock { LocalRepositories.useLocalStoreForTesting(nil) }
     }
 }

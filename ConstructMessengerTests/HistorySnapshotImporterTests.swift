@@ -6,16 +6,19 @@
 //  change row counts or bodies. Chat identity is other_user_id, never the offering device's
 //  Chat.id. The merge rules themselves are tested in construct-core (history::project).
 //
+//  Everything is arranged and read through the repositories, so the same cases run on Core Data
+//  and on the crate (`LocalStoreHistorySnapshotImporterTests`) — a Desktop that links to a phone
+//  takes its history on the crate.
+//
 
 import CoreData
 import SwiftProtobuf
 import XCTest
 @testable import Construct_Messenger
 
-final class HistorySnapshotImporterTests: XCTestCase {
+class HistorySnapshotImporterTests: XCTestCase {
 
     private var container: NSPersistentContainer!
-    private var context: NSManagedObjectContext { container.viewContext }
 
     private let local = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee"
     private let peer = "11111111-2222-4333-8444-555555555555"
@@ -23,6 +26,12 @@ final class HistorySnapshotImporterTests: XCTestCase {
 
     override func setUp() {
         super.setUp()
+        installStores()
+        MessageDisplayCache.shared.evictAll()
+    }
+
+    /// The repositories the importer writes through. Core Data here; the crate in the subclass.
+    func installStores() {
         container = PersistenceController(inMemory: true).container
         LocalRepositories.usePeerDevicesForTesting(CoreDataPeerDeviceStore(container: container))
         LocalRepositories.useContactsForTesting(container)
@@ -30,7 +39,6 @@ final class HistorySnapshotImporterTests: XCTestCase {
         LocalRepositories.useMessagesForTesting(container)
         LocalRepositories.useReactionsForTesting(container)
         LocalRepositories.useCallsForTesting(container)
-        MessageDisplayCache.shared.evictAll()
     }
 
     override func tearDown() {
@@ -51,67 +59,49 @@ final class HistorySnapshotImporterTests: XCTestCase {
         let records = try transcript(text: "hello snapshot")
         let first = try importAll(records)
         XCTAssertEqual(first.applied, 3) // contact + chat + message
-        let body1 = try XCTUnwrap(payload(of: messageId))
-        let users1 = try count("User")
-        let chats1 = try count("Chat")
-        let messages1 = try count("Message")
+        let body1 = try XCTUnwrap(fetchMessage(messageId)).body
+        XCTAssertEqual(try counts(), Counts(people: 1, chats: 1, messages: 1))
 
         let second = try importAll(records)
         XCTAssertEqual(second.conflictKeepExisting, 1) // message
-        XCTAssertEqual(try count("User"), users1)
-        XCTAssertEqual(try count("Chat"), chats1)
-        XCTAssertEqual(try count("Message"), messages1)
-        XCTAssertEqual(try payload(of: messageId), body1)
+        XCTAssertEqual(try counts(), Counts(people: 1, chats: 1, messages: 1))
+        XCTAssertEqual(try fetchMessage(messageId)?.body, body1)
     }
 
     // MARK: - Chat upsert
 
+    /// A mute is not carried: no client reads one, and `ChatRecord` has no field for it.
     func testChatUpsertKeepsReceiverChatIdAndAppliesPin() throws {
-        let user = User(context: context)
-        user.id = peer
-        user.username = ""
+        var user = ContactRecord.new(id: peer, isContact: true, addedAt: Date())
         user.displayName = "Peer"
-        user.isContact = true
-        user.addedAt = Date()
-        let existing = Chat(context: context)
-        existing.id = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
-        existing.otherUser = user
-        existing.isPinned = false
-        existing.isMuted = false
-        existing.unreadCount = 0
-        try context.save()
+        try LocalRepositories.contacts.insert(user)
+        let existing = try LocalRepositories.chats.openChat(withPeer: peer, now: nil).chat
 
         var chat = Construct_Client_History_V1_HistoryChat()
         chat.otherUserID = try XCTUnwrap(HistoryAccountID.raw(peer))
         chat.isPinned = true
         chat.isMuted = true
         XCTAssertEqual(try importAll([record(HistoryRecordType.chat, try chat.serializedData())]).applied, 1)
-        context.refreshAllObjects()
 
-        let chats = try context.fetch(Chat.fetchRequest())
+        let chats = try LocalRepositories.chats.chats()
         XCTAssertEqual(chats.count, 1)
-        XCTAssertEqual(chats[0].id, "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb")
+        XCTAssertEqual(chats[0].id, existing.id)
         XCTAssertTrue(chats[0].isPinned)
-        XCTAssertFalse(chats[0].isMuted, "a mute is not carried: no client reads one")
         XCTAssertEqual(chats[0].unreadCount, 0)
-        XCTAssertNil(chats[0].sessionId)
     }
 
     // MARK: - Conflict
 
     func testLiveMessageIsNotOverwritten() throws {
         try LocalRepositories.contacts.insert(.new(id: peer, isContact: true, addedAt: nil))
-        _ = try LocalRepositories.chats.openChat(withPeer: peer, now: nil)
-        let live = Message(context: context)
-        live.id = messageId
-        live.fromUserId = local
-        live.toUserId = peer
-        live.timestamp = Date()
-        live.isSentByMe = true
-        live.retryCount = 0
-        live.encryptedContent = Data()
-        live.applyStoredEncryption(plaintext: "live body", contactId: peer)
-        try context.save()
+        let chat = try LocalRepositories.chats.openChat(withPeer: peer, now: nil).chat
+        _ = try LocalRepositories.messages.insert(MessageRecord(
+            id: messageId, chatId: chat.id, fromUserId: local, toUserId: peer, isSentByMe: true,
+            timestamp: Date(), orderKey: "k1", body: LocalMessagePayload.encodeText("live body"),
+            contentType: .regular, deliveryStatus: .sent, retryCount: 0, suiteId: 4, isEdited: false,
+            editedAt: nil, replyToMessageId: nil, replyQuote: nil, transcript: nil,
+            transcriptLanguage: nil, transcriptGeneratedAt: nil
+        ), searchText: "live body")
 
         var msg = try textMessage(id: messageId, text: "snapshot body")
         msg.isSentByMe = true
@@ -122,15 +112,12 @@ final class HistorySnapshotImporterTests: XCTestCase {
     // MARK: - Share flags
 
     func testShareFlagDoesNotClobberProfileTrue() throws {
-        let user = User(context: context)
-        user.id = peer
+        var user = ContactRecord.new(id: peer, isContact: true, addedAt: Date())
         user.username = ""
         user.displayName = "Peer"
         user.amISharingWith = true
         user.isSharingWithMe = true
-        user.isContact = true
-        user.addedAt = Date()
-        try context.save()
+        try LocalRepositories.contacts.insert(user)
 
         var contact = Construct_Client_History_V1_HistoryContact()
         contact.userID = try XCTUnwrap(HistoryAccountID.raw(peer))
@@ -140,9 +127,8 @@ final class HistorySnapshotImporterTests: XCTestCase {
         contact.isSharingWithMe = false
         contact.isContact = false
         _ = try importAll([record(HistoryRecordType.contact, try contact.serializedData())])
-        context.refreshAllObjects()
 
-        let row = try XCTUnwrap(context.fetch(User.fetchRequest()).first { $0.id == peer })
+        let row = try XCTUnwrap(LocalRepositories.contacts.contact(peer))
         XCTAssertTrue(row.amISharingWith)
         XCTAssertTrue(row.isSharingWithMe)
         XCTAssertTrue(row.isContact)
@@ -183,7 +169,7 @@ final class HistorySnapshotImporterTests: XCTestCase {
         XCTAssertEqual(
             try importAll([record(HistoryRecordType.reaction, try reaction.serializedData())]).skipped[.reactionTargetMissing], 1
         )
-        XCTAssertEqual(try context.fetch(Reaction.fetchRequest()).count, 0)
+        XCTAssertEqual(try LocalRepositories.reactions.allReactions().count, 0)
     }
 
     /// A reaction in the same stream as its message lands: the messages waiting are written
@@ -199,7 +185,7 @@ final class HistorySnapshotImporterTests: XCTestCase {
         records.append(record(HistoryRecordType.reaction, try reaction.serializedData()))
         let summary = try importAll(records)
         XCTAssertNil(summary.skipped[.reactionTargetMissing])
-        XCTAssertEqual(try context.fetch(Reaction.fetchRequest()).count, 1)
+        XCTAssertEqual(try LocalRepositories.reactions.allReactions().count, 1)
     }
 
     /// The chat's preview moves to the newest message imported, whatever the order. Mutation:
@@ -214,7 +200,7 @@ final class HistorySnapshotImporterTests: XCTestCase {
         records.append(record(HistoryRecordType.message, try older.serializedData()))
         records.append(record(HistoryRecordType.message, try newer.serializedData()))
         _ = try importAll(records)
-        let chat = try XCTUnwrap(context.fetch(Chat.fetchRequest()).first)
+        let chat = try XCTUnwrap(LocalRepositories.chats.chats().first)
         XCTAssertEqual(chat.lastMessageText, "newer")
     }
 
@@ -280,9 +266,7 @@ final class HistorySnapshotImporterTests: XCTestCase {
     }
 
     private func importAll(_ records: [HistoryRecord]) throws -> HistoryImportSummary {
-        let summary = try HistorySnapshotImporter(expectedUserId: local).importRecords(records)
-        context.refreshAllObjects()
-        return summary
+        try HistorySnapshotImporter(expectedUserId: local).importRecords(records)
     }
 
     private func textMessage(id: String, text: String) throws -> Construct_Client_History_V1_HistoryMessage {
@@ -299,23 +283,37 @@ final class HistorySnapshotImporterTests: XCTestCase {
         return msg
     }
 
-    private func count(_ entity: String) throws -> Int {
-        let req = NSFetchRequest<NSFetchRequestResult>(entityName: entity)
-        return try context.count(for: req)
+    private struct Counts: Equatable {
+        let people: Int
+        let chats: Int
+        let messages: Int
     }
 
-    private func fetchMessage(_ id: String) throws -> Construct_Messenger.Message? {
-        let req = Message.fetchRequest()
-        req.predicate = NSPredicate(format: "id == %@", id)
-        req.fetchLimit = 1
-        return try context.fetch(req).first
+    private func counts() throws -> Counts {
+        Counts(
+            people: try LocalRepositories.contacts.everyContact(except: nil).count,
+            chats: try LocalRepositories.chats.chats().count,
+            messages: try LocalRepositories.messages.allMessages(after: nil, limit: 1_000).count
+        )
     }
 
-    private func payload(of id: String) throws -> Data {
-        MessageDisplayCache.shared.payloadData(for: try XCTUnwrap(fetchMessage(id)))
+    private func fetchMessage(_ id: String) throws -> MessageRecord? {
+        try LocalRepositories.messages.message(id)
     }
 
-    private func payloadString(of id: String) throws -> String {
-        try XCTUnwrap(fetchMessage(id)).legacyBody
+    private func payloadString(of id: String) throws -> String? {
+        try XCTUnwrap(fetchMessage(id)).payload.plainText
+    }
+}
+
+/// The same cases on the crate: what a Desktop linked to a phone runs.
+final class LocalStoreHistorySnapshotImporterTests: HistorySnapshotImporterTests {
+    override func installStores() {
+        LocalRepositories.useLocalStoreForTesting(.inMemoryForTesting())
+    }
+
+    override func tearDown() {
+        LocalRepositories.useLocalStoreForTesting(nil)
+        super.tearDown()
     }
 }
