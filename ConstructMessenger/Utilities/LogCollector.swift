@@ -9,7 +9,7 @@
 import Foundation
 
 /// Collects logs to a rotating file buffer for debugging
-class LogCollector {
+class LogCollector: @unchecked Sendable {  // `recent` behind `recentLock`, file work on `queue`, the rest immutable
     static let shared = LogCollector()
     
     // MARK: - Configuration

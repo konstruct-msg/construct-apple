@@ -15,6 +15,7 @@
 
 import Foundation
 
+@MainActor
 final class AvatarRetryService {
     static let shared = AvatarRetryService()
     private init() {}
