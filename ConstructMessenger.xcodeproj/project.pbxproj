@@ -702,7 +702,7 @@
 				SDKROOT = iphoneos;
 				SKIP_INSTALL = YES;
 				SWIFT_OBJC_BRIDGING_HEADER = "ConstructNotifications/NotificationService-Bridging-Header.h";
-				SWIFT_VERSION = 5.7;
+				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Debug;
@@ -729,7 +729,7 @@
 				SDKROOT = iphoneos;
 				SKIP_INSTALL = YES;
 				SWIFT_OBJC_BRIDGING_HEADER = "ConstructNotifications/NotificationService-Bridging-Header.h";
-				SWIFT_VERSION = 5.7;
+				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				VALIDATE_PRODUCT = YES;
 			};
@@ -794,7 +794,7 @@
 				SDKROOT = iphoneos;
 				SKIP_INSTALL = YES;
 				SWIFT_OBJC_BRIDGING_HEADER = "ConstructNotifications/NotificationService-Bridging-Header.h";
-				SWIFT_VERSION = 5.7;
+				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				VALIDATE_PRODUCT = YES;
 			};
@@ -822,7 +822,7 @@
 				INFOPLIST_KEY_NSFaceIDUsageDescription = "Konstruct uses Face ID to unlock the app and to protect your recovery phrase.";
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Used to transfer your backup directly to a nearby device over WiFi.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Konstruct uses the microphone to record voice messages and make encrypted calls.";
-				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Construct saves photos and videos to your library when you choose to save them from a chat.";
+				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Konstruct saves photos and videos to your library when you choose to save them from a chat.";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Konstruct needs access to your photo library so you can attach photos and videos to messages.";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "To transcribe your voice messages into text on-device using Apple’s Speech Recognition. Audio never leaves your device.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -1009,7 +1009,7 @@
 				INFOPLIST_KEY_NSFaceIDUsageDescription = "Konstruct uses Face ID to unlock the app and to protect your recovery phrase.";
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Used to transfer your backup directly to a nearby device over WiFi.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Konstruct uses the microphone to record voice messages and make encrypted calls.";
-				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Construct saves photos and videos to your library when you choose to save them from a chat.";
+				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Konstruct saves photos and videos to your library when you choose to save them from a chat.";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Konstruct needs access to your photo library so you can attach photos and videos to messages.";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "To transcribe your voice messages into text on-device using Apple’s Speech Recognition. Audio never leaves your device.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -1063,7 +1063,7 @@
 				INFOPLIST_KEY_NSFaceIDUsageDescription = "Konstruct uses Face ID to unlock the app and to protect your recovery phrase.";
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Used to transfer your backup directly to a nearby device over WiFi.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Konstruct uses the microphone to record voice messages and make encrypted calls.";
-				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Construct saves photos and videos to your library when you choose to save them from a chat.";
+				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Konstruct saves photos and videos to your library when you choose to save them from a chat.";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Konstruct needs access to your photo library so you can attach photos and videos to messages.";
 				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "To transcribe your voice messages into text on-device using Apple’s Speech Recognition. Audio never leaves your device.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;

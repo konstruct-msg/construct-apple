@@ -21,7 +21,7 @@ import AVKit
 /// `MediaManager` already learned this — its own comment says "prefer `NSCache` over a
 /// `Dictionary`: it evicts under pressure and enforces `totalCostLimit`". The lesson was applied
 /// in one cache and not in the one holding objects twenty times larger.
-final class MediaImageCache {
+final class MediaImageCache: @unchecked Sendable {  // immutable stored properties; NSCache is thread-safe
     static let shared = MediaImageCache()
 
     /// Roughly four full-screen photos. Enough that scrolling back over a recent burst still
@@ -157,6 +157,7 @@ final class MediaImageCache {
     func paintable(for messageId: String) -> PlatformImage? { paintable(for: messageId, at: 0) }
 }
 
+@MainActor
 @Observable
 final class MediaVideoCache {
     static let shared = MediaVideoCache()

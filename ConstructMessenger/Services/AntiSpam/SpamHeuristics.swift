@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import Synchronization
 
 /// Heuristic spam scorer.  All analysis stays on device.
 ///
@@ -19,7 +20,7 @@ struct SpamHeuristics {
     // MARK: - Sliding window for duplicate detection
 
     /// Ring buffer of hashes of recent outgoing messages (last N).
-    private static var recentHashes: [Int] = []
+    private static let recentHashes = Mutex<[Int]>([])
     private static let windowSize = 10
 
     // MARK: - Public API
@@ -40,7 +41,7 @@ struct SpamHeuristics {
 
         // Flood detection — same message sent 5+ times in recent window
         let h = text.hashValue
-        let duplicates = SpamHeuristics.recentHashes.filter { $0 == h }.count
+        let duplicates = SpamHeuristics.recentHashes.withLock { $0.filter { $0 == h }.count }
         if duplicates >= 5 {
             total += 0.5
         } else if duplicates >= 3 {
@@ -64,9 +65,11 @@ struct SpamHeuristics {
 
     /// Call after a message was successfully queued for sending (updates duplicate window).
     static func recordSent(text: String) {
-        recentHashes.append(text.hashValue)
-        if recentHashes.count > windowSize {
-            recentHashes.removeFirst()
+        recentHashes.withLock { hashes in
+            hashes.append(text.hashValue)
+            if hashes.count > windowSize {
+                hashes.removeFirst()
+            }
         }
     }
 }
@@ -75,15 +78,15 @@ struct SpamHeuristics {
 
 /// Lightweight phishing/scam domain blocklist (client-only, no server lookup).
 /// Seeded with a curated starter list; can be extended via a bundled JSON file later.
-final class PhishingDomainList {
+final class PhishingDomainList: Sendable {
     static let shared = PhishingDomainList()
 
-    private var blocked: Set<String>
+    private let blocked: Set<String>
 
     private init() {
         // Starter list of commonly-abused domains from public phishing databases.
         // Extend by shipping a `phishing_domains.json` in the app bundle.
-        blocked = [
+        var list: Set<String> = [
             // Generic crypto/NFT scam patterns (exact low-level domains)
             "wallet-verify.com", "metamask-confirm.net", "token-claim.io",
             "airdrop-verify.com", "nft-mint-free.io", "crypto-giveaway.net",
@@ -99,9 +102,10 @@ final class PhishingDomainList {
         // Load bundle override if present
         if let url = Bundle.main.url(forResource: "phishing_domains", withExtension: "json"),
            let data = try? Data(contentsOf: url),
-           let list = try? JSONDecoder().decode([String].self, from: data) {
-            blocked.formUnion(list)
+           let extra = try? JSONDecoder().decode([String].self, from: data) {
+            list.formUnion(extra)
         }
+        blocked = list
     }
 
     func isBlocked(_ host: String) -> Bool {

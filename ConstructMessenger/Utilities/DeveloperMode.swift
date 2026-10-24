@@ -11,6 +11,7 @@ import Foundation
 import UIKit
 #endif
 
+@MainActor
 @Observable
 class DeveloperMode {
     static let shared = DeveloperMode()
