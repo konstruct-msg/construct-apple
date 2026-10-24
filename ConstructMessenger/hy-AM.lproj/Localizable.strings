@@ -1327,13 +1327,6 @@
 
 "backup_restore_required_title" = "Անհրաժեշտ է վերագործարկում";
 "backup_restore_required_message" = "Փակեք և նորից բացեք Konstruct-ը՝ այս պահուստի վերականգնումը ավարտելու համար։";
-"spam_warning_title" = "Ուղարկվում է…";
-"spam_warning_wait" = "Խնդրում ենք սպասել %d վայրկյան";
-"spam_strong_warning_title" = "Անսովոր ակտիվություն";
-"spam_strong_warning_body" = "Դուք հաղորդագրություններ եք ուղարկում սովորականից արագ։ Սպասեք մի պահ։";
-"spam_seconds" = "վրկ";
-"spam_force_send" = "Հասկանում եմ ռիսկը, ուղարկել միևնույն է";
-"spam_force_banned" = "Չեք կարող բաց թողնել սպասումը %d րոպե";
 "stt_error_no_model" = "Տառադարձման մոդել դեռ ներբեռնված չէ։";
 "stt_error_unavailable" = "Տառադարձումը հասանելի չէ այս սարքում։";
 "call_status_calling" = "Զանգ…";
