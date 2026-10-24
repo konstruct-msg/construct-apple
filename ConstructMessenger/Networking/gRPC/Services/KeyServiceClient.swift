@@ -127,7 +127,8 @@ final class KeyServiceClient: Sendable {
                     deviceId: deviceBundle.deviceID,
                     bundle: bundle,
                     platform: deviceBundle.platform,
-                    hybridIdentityKey: b.hasHybridIdentityKey ? b.hybridIdentityKey : Data()
+                    hybridIdentityKey: b.hasHybridIdentityKey ? b.hybridIdentityKey : Data(),
+                    deviceCertificate: deviceBundle.hasDeviceCertificate ? deviceBundle.deviceCertificate : nil
                 )
             }
             // Carried out of the closure beside the bundles, and deliberately not folded into
@@ -148,11 +149,17 @@ final class KeyServiceClient: Sendable {
         // which is what a seal or a teardown addressed to a specific device needs. Two stores, two
         // questions — "which devices does this account have right now" and "which devices have we
         // pinned a key for" — and the second is the one an envelope may be built against.
+        // Read before this answer is recorded: once it is, every device it names is pinned and
+        // none could be judged as new (`PeerDeviceVetting`).
+        let trustedBefore = SessionAddressing.deviceIds(ofPeer: userId)
         let pins = bundles.map { (deviceId: $0.deviceId, identityKey: $0.bundle.identityPublic) }
         // Written before returning, not fired off: the caller's next move is usually to act on
         // these devices, and a write that lands after that would leave the first use of a
         // newly-linked device reading an incomplete set. This function is not on the main actor.
         SessionAddressing.reconcileDevices(pins, activeSet: activeDevices, ofPeer: userId)
+        if deviceIds.isEmpty {
+            await PeerDeviceVetting.vet(accountId: userId, bundles: bundles, trustedBefore: trustedBefore)
+        }
         return bundles
     }
 

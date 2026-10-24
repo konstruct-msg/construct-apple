@@ -268,6 +268,43 @@ final class AuthServiceClient: Sendable {
         }
     }
 
+    /// What became of a link token this device issued (Flow A).
+    enum DeviceLinkResult: Equatable, Sendable {
+        case pending
+        /// A device linked with the token; `linkKeyProof` is empty from a client that predates
+        /// device certificates.
+        case confirmed(deviceId: String, linkKeyProof: Data)
+        case expired
+    }
+
+    func getDeviceLinkResult(linkToken: String) async throws -> DeviceLinkResult {
+        try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.initiateDeviceLink) { grpcClient in
+            let deviceClient = Shared_Proto_Services_V1_DeviceService.Client(wrapping: grpcClient)
+            var request = Shared_Proto_Services_V1_GetDeviceLinkResultRequest()
+            request.linkToken = linkToken
+            let response = try await deviceClient.getDeviceLinkResult(request: .init(message: request))
+            switch response.status {
+            case .confirmed: return .confirmed(deviceId: response.deviceID, linkKeyProof: response.linkKeyProof)
+            case .pending: return .pending
+            default: return .expired
+            }
+        }
+    }
+
+    /// Publish the certificate by which this device vouches for `subjectDeviceId`, a device of
+    /// the same account. The server stores it beside that device's bundle; peers verify it.
+    func publishDeviceCertificate(subjectDeviceId: String, certificate: Data) async throws {
+        try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.revokeDevice) { grpcClient in
+            let deviceClient = Shared_Proto_Services_V1_DeviceService.Client(wrapping: grpcClient)
+            var request = Shared_Proto_Services_V1_PublishDeviceCertificateRequest()
+            request.subjectDeviceID = subjectDeviceId
+            request.certificate = certificate
+            _ = try await deviceClient.publishDeviceCertificate(request: .init(message: request)) {
+                try $0.message
+            }
+        }
+    }
+
     // MARK: - Device Linking (Device B: new device, no JWT required)
 
     struct ConfirmLinkResult {
@@ -281,7 +318,9 @@ final class AuthServiceClient: Sendable {
     /// Device B calls this after scanning the QR code.
     /// Sends the new device's public keys; receives JWT for the new device.
     /// Does NOT require an existing JWT (`allowAuthRetry: false`).
-    func confirmDeviceLink(linkToken: String, deviceId: String, publicKeys: Shared_Proto_Services_V1_DevicePublicKeys) async throws -> ConfirmLinkResult {
+    /// `linkKeyProof`: the answer to the secret in the old device's QR (`deviceLinkKeyProof`), so
+    /// the old device can vouch for these keys; empty when the QR carried no secret.
+    func confirmDeviceLink(linkToken: String, deviceId: String, publicKeys: Shared_Proto_Services_V1_DevicePublicKeys, linkKeyProof: Data) async throws -> ConfirmLinkResult {
         return try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.confirmDeviceLink, allowAuthRetry: false) { grpcClient in
             let linkClient = Shared_Proto_Services_V1_DeviceLinkService.Client(wrapping: grpcClient)
 
@@ -289,6 +328,7 @@ final class AuthServiceClient: Sendable {
             request.linkToken = linkToken
             request.deviceID = deviceId
             request.publicKeys = publicKeys
+            request.linkKeyProof = linkKeyProof
 
             let response = try await linkClient.confirmDeviceLink(
                 request: .init(message: request)

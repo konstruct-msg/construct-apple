@@ -952,6 +952,9 @@
 "address_change_toast_fmt" = "%@ annonce une adresse différente de la précédente. Ouvrez le chat pour vérifier.";
 "security_notice_address_title" = "Adresse différente";
 "security_notice_address_body_fmt" = "%@ annonce une adresse différente de la précédente. Comparez les numéros de sécurité avant de faire confiance à ce chat.";
+"security_notice_device_title" = "Appareil non confirmé";
+"security_notice_device_body_fmt" = "%@ a un appareil qu’aucun de ses autres appareils n’a confirmé. S’il n’en a pas ajouté un récemment, comparez les numéros de sécurité avant de faire confiance à ce chat.";
+"unvouched_device_toast_fmt" = "%@ a un appareil qu’aucun de ses autres appareils n’a confirmé. Ouvrez le chat pour vérifier.";
 "security_notice_acknowledge" = "J’ai vérifié";
 "safety_numbers_device_fmt" = "Appareil %@";
 "key_change_toast_open" = "Ouvrir";
