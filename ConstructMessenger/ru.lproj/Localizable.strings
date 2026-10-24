@@ -1004,6 +1004,9 @@
 "address_change_toast_fmt" = "%@ называет другой адрес, чем раньше. Откройте чат, чтобы проверить.";
 "security_notice_address_title" = "Другой адрес";
 "security_notice_address_body_fmt" = "%@ называет другой адрес, чем раньше. Сверьте Safety Numbers, прежде чем доверять чату.";
+"security_notice_device_title" = "Неподтверждённое устройство";
+"security_notice_device_body_fmt" = "У %@ появилось устройство, которое не подтвердило ни одно другое устройство этого человека. Если он только что не добавлял устройство, сверьте Safety Numbers, прежде чем доверять чату.";
+"unvouched_device_toast_fmt" = "У %@ появилось устройство, которое не подтвердило ни одно другое его устройство. Откройте чат, чтобы проверить.";
 "security_notice_acknowledge" = "Проверено";
 "safety_numbers_device_fmt" = "Устройство %@";
 "key_change_toast_open" = "Открыть";

@@ -993,6 +993,9 @@
 "address_change_toast_fmt" = "%@ is now claiming a different address. Open the chat to verify.";
 "security_notice_address_title" = "Different address";
 "security_notice_address_body_fmt" = "%@ is claiming a different address than before. Compare Safety Numbers before you trust this chat.";
+"security_notice_device_title" = "Unconfirmed device";
+"security_notice_device_body_fmt" = "%@ has a device that none of their other devices confirmed. If they did not just add one, compare Safety Numbers before you trust this chat.";
+"unvouched_device_toast_fmt" = "%@ has a device none of their other devices confirmed. Open the chat to verify.";
 "security_notice_acknowledge" = "I've checked";
 "safety_numbers_device_fmt" = "Device %@";
 "key_change_toast_open" = "Open";

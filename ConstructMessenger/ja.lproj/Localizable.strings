@@ -1201,6 +1201,9 @@
 "address_change_toast_fmt" = "%@が以前とは異なるアドレスを名乗っています。チャットを開いて照合してください。";
 "security_notice_address_title" = "異なるアドレス";
 "security_notice_address_body_fmt" = "%@が以前とは異なるアドレスを名乗っています。このチャットを信頼する前に安全番号を照合してください。";
+"security_notice_device_title" = "未確認のデバイス";
+"security_notice_device_body_fmt" = "%@に、ほかのどのデバイスも確認していないデバイスがあります。本人が新しいデバイスを追加したばかりでなければ、このチャットを信頼する前に安全番号を照合してください。";
+"unvouched_device_toast_fmt" = "%@に、ほかのどのデバイスも確認していないデバイスがあります。チャットを開いて照合してください。";
 "security_notice_acknowledge" = "確認しました";
 "safety_numbers_device_fmt" = "デバイス %@";
 "key_change_toast_open" = "開く";
