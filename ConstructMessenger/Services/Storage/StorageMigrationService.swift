@@ -35,7 +35,7 @@ final class StorageMigrationService {
     private func performMigration(context: NSManagedObjectContext) async {
         let bgContext = NSManagedObjectContext(concurrencyType: .privateQueueConcurrencyType)
         bgContext.parent = context
-        bgContext.mergePolicy = NSMergeByPropertyObjectTrumpMergePolicy
+        bgContext.mergePolicy = NSMergePolicy.mergeByPropertyObjectTrump
 
         await bgContext.perform {
             self.migrateBatch(in: bgContext)

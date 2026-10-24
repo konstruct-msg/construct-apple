@@ -54,7 +54,8 @@ struct FanoutRetryEntry: Codable, Equatable {
     var key: String { "\(baseMessageId)|\(recipientUserId)" }
 }
 
-final class FanoutRetryQueue {
+/// `@unchecked`: every load-modify-save of the stored entries runs on `queue`; `store` is set once.
+final class FanoutRetryQueue: @unchecked Sendable {
 
     static let shared = FanoutRetryQueue()
 

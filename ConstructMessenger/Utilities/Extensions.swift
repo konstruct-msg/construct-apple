@@ -140,7 +140,9 @@ extension NSManagedObjectContext {
 /// Retry an async throwing closure up to `maxAttempts` times.
 /// Waits `backoff` seconds after the first failure, `backoff*2` after the second, etc.
 /// Only retries when `retryIf` returns true for the thrown error.
+/// Runs in the caller's isolation (`#isolation`), so `operation` is never sent anywhere.
 func withRetry<T>(
+    isolation: isolated (any Actor)? = #isolation,
     maxAttempts: Int,
     backoff: TimeInterval = 1.0,
     retryIf: (Error) -> Bool = { _ in true },

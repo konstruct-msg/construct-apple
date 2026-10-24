@@ -377,6 +377,8 @@ final class CoreDataContactStore: ContactStore, OwnProfileStore, @unchecked Send
 
     private func run<T>(_ body: (NSManagedObjectContext) throws -> T) throws -> T {
         let context = container.newBackgroundContext()
+        // `performAndWait` runs the body synchronously while this call waits, so it cannot outlive it.
+        nonisolated(unsafe) let body = body
         return try context.performAndWait { try body(context) }
     }
 }

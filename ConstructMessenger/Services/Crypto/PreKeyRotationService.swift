@@ -13,9 +13,10 @@
 //
 
 import Foundation
+import Synchronization
 
 /// Manages scheduled and on-demand atomic rotation of signed pre-keys.
-final class PreKeyRotationService {
+final class PreKeyRotationService: Sendable {
     static let shared = PreKeyRotationService()
     private init() {}
 
@@ -35,18 +36,51 @@ final class PreKeyRotationService {
     private static let spkMaxAgeDays: Double = 8
     /// Minimum interval between retry attempts when the stream was down during a previous try.
     /// Prevents hammering the server during rapid reconnect cycling.
-    private static let retryIntervalSeconds: TimeInterval = 120
+    static let retryIntervalSeconds: TimeInterval = 120
 
     // MARK: - Retry State
 
-    /// True when a rotation was attempted but failed due to a transient stream error.
-    /// Cleared on success or when rotation is no longer due.
+    struct RetryState: Equatable {
+        /// True when a rotation was attempted but failed due to a transient stream error.
+        /// Cleared on success or when rotation is no longer due.
+        var hasPendingRetry = false
+        /// Prevents concurrent rotation attempts (e.g. three startup callers firing in parallel).
+        var isRotating = false
+        /// Timestamp of the last rotation attempt (success or failure). Used to throttle retries.
+        var lastAttemptAt: TimeInterval = 0
+    }
+
+    /// `rotateIfNeeded` runs off the main actor and is called from launch, sign-in, background
+    /// fetch and every stream reconnect. Until 2026-10-25 these were plain properties, so two
+    /// callers could both read `isRotating == false` and run two rotations at once; the check and
+    /// the claim are one `withLock` now.
+    private let state = Mutex(RetryState())
+
     /// Used by ChatsViewModel to schedule a retry when the stream reconnects.
-    private(set) var hasPendingRetry = false
-    /// Prevents concurrent rotation attempts (e.g. three startup callers firing in parallel).
-    private var isRotating = false
-    /// Timestamp of the last rotation attempt (success or failure). Used to throttle retries.
-    private var lastAttemptAt: TimeInterval = 0
+    var hasPendingRetry: Bool { state.withLock { $0.hasPendingRetry } }
+
+    enum Gate: Equatable {
+        case busy, notDue, throttled(remaining: TimeInterval), claimed
+    }
+
+    /// Whether this call may rotate now, claiming the rotation when it may. Called under `state`'s
+    /// lock, so the check and the claim cannot be split by another caller.
+    static func gate(_ state: inout RetryState, isDue: Bool, now: TimeInterval) -> Gate {
+        guard !state.isRotating else { return .busy }
+        guard isDue else {
+            state.hasPendingRetry = false
+            return .notDue
+        }
+        // Throttle retries: if the previous attempt failed (stream was down), wait at
+        // least retryIntervalSeconds before trying again. This prevents hammering the
+        // server during rapid ICE reconnect cycling (dozens of attempts per minute).
+        if state.hasPendingRetry && now - state.lastAttemptAt < retryIntervalSeconds {
+            return .throttled(remaining: retryIntervalSeconds - (now - state.lastAttemptAt))
+        }
+        state.isRotating = true
+        state.lastAttemptAt = now
+        return .claimed
+    }
 
     // MARK: - Public API
 
@@ -64,33 +98,34 @@ final class PreKeyRotationService {
             Log.error("SPK rotation skipped — deviceId is empty (Keychain unavailable?)", category: "SPKRotation")
             return
         }
-        guard !isRotating else {
+        let gate = state.withLock {
+            Self.gate(&$0, isDue: isRotationDue(), now: Date().timeIntervalSince1970)
+        }
+        switch gate {
+        case .busy:
             Log.debug("SPK rotation already in progress — skipping duplicate call", category: "SPKRotation")
             return
-        }
-        guard isRotationDue() else {
-            hasPendingRetry = false
+        case .notDue:
             Log.debug("SPK rotation not due yet", category: "SPKRotation")
             return
-        }
-        // Throttle retries: if the previous attempt failed (stream was down), wait at
-        // least retryIntervalSeconds before trying again. This prevents hammering the
-        // server during rapid ICE reconnect cycling (dozens of attempts per minute).
-        let now = Date().timeIntervalSince1970
-        if hasPendingRetry && now - lastAttemptAt < Self.retryIntervalSeconds {
-            Log.debug("SPK rotation retry throttled (\(Int(Self.retryIntervalSeconds - (now - lastAttemptAt)))s remaining)", category: "SPKRotation")
+        case .throttled(let remaining):
+            Log.debug("SPK rotation retry throttled (\(Int(remaining))s remaining)", category: "SPKRotation")
             return
+        case .claimed:
+            break
         }
-        isRotating = true
-        lastAttemptAt = now
-        defer { isRotating = false }
         Log.info("SPK rotation due — starting atomic rotation", category: "SPKRotation")
+        let succeeded: Bool
         do {
             try await performAtomicRotation(deviceId: deviceId, reason: .scheduled)
-            hasPendingRetry = false
+            succeeded = true
         } catch {
-            hasPendingRetry = true
+            succeeded = false
             Log.error("SPK rotation failed: \(error)", category: "SPKRotation")
+        }
+        state.withLock {
+            $0.hasPendingRetry = !succeeded
+            $0.isRotating = false
         }
     }
 

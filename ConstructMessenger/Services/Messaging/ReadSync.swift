@@ -218,8 +218,8 @@ final class ReadSyncOutbox {
     /// Replaced in tests; sends the encoded markers to our other devices. True when nothing is
     /// owed any more; false keeps them for another try.
     var send: (Data) async -> Bool = { payload in
-        guard let userId = AuthSessionManager.shared.currentUserId,
-              let deviceId = AuthSessionManager.shared.currentDeviceId, !deviceId.isEmpty else { return false }
+        guard let userId = await AuthSessionManager.shared.currentUserId,
+              let deviceId = await AuthSessionManager.shared.currentDeviceId, !deviceId.isEmpty else { return false }
         return await MultiDeviceSendCoordinator.shared.sendReadMarkers(
             payload, senderUserId: userId, senderDeviceId: deviceId
         )
