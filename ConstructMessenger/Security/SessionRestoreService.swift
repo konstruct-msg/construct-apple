@@ -105,10 +105,12 @@ struct LiveSessionAccounts: Equatable {
     }
 }
 
+/// Main actor: it reads `viewContext`. Made by `CryptoManager` off it, hence the nonisolated init.
+@MainActor
 final class SessionRestoreService {
     private let persistence: PersistenceController
 
-    init(persistence: PersistenceController = .shared) {
+    nonisolated init(persistence: PersistenceController = .shared) {
         self.persistence = persistence
     }
 
@@ -119,7 +121,8 @@ final class SessionRestoreService {
                 Log.error("SessionRestoreService: CoreData store unavailable after \(retryCount) retries, giving up", category: "SessionRestore")
                 return
             }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+            Task { @MainActor [weak self] in
+                try? await Task.sleep(for: .milliseconds(500))
                 self?.restoreRecentSessions(limit: limit, restoreSession: restoreSession, retryCount: retryCount + 1)
             }
             return
