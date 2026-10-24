@@ -18,7 +18,7 @@ class KeychainManager {
     /// message arrives and OrchestratorCore must be (re)built. `ThisDeviceOnly` keeps the
     /// items non-exportable and out of iCloud backups. Matches session data / orchestrator
     /// state, which already use this class. See `migrateCryptoKeysAccessibility()`.
-    static let cryptoKeyAccessible = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+    nonisolated(unsafe) static let cryptoKeyAccessible = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
 
     /// Every Keychain account holding crypto material gated behind `cryptoKeyAccessible`.
     /// Used by the one-time accessibility migration for items created by older builds

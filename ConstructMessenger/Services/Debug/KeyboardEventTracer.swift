@@ -72,6 +72,7 @@ enum KeyboardTracePhase: String {
     case stoppingRecording
 }
 
+@MainActor
 final class KeyboardEventTracer {
 
     static let shared = KeyboardEventTracer()
@@ -123,23 +124,27 @@ final class KeyboardEventTracer {
         NotificationCenter.default.addObserver(
             forName: UIResponder.keyboardWillHideNotification, object: nil, queue: .main
         ) { [weak self] _ in
-            guard let self else { return }
-            let sincePhase = Int(Date().timeIntervalSince(self.phaseEnteredAt) * 1000)
-            let responder = MainActor.assumeIsolated { Self.firstResponderDescription() }
-            Log.info(
-                "KEYBOARD_TRACE: will HIDE — phase=\(self.phase.rawValue) (+\(sincePhase)ms into that phase) firstResponder=\(responder)",
-                category: "KeyboardTrace"
-            )
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                let sincePhase = Int(Date().timeIntervalSince(self.phaseEnteredAt) * 1000)
+                let responder = Self.firstResponderDescription()
+                Log.info(
+                    "KEYBOARD_TRACE: will HIDE — phase=\(self.phase.rawValue) (+\(sincePhase)ms into that phase) firstResponder=\(responder)",
+                    category: "KeyboardTrace"
+                )
+            }
         }
         NotificationCenter.default.addObserver(
             forName: UIResponder.keyboardWillShowNotification, object: nil, queue: .main
         ) { [weak self] _ in
-            guard let self else { return }
-            let responder = MainActor.assumeIsolated { Self.firstResponderDescription() }
-            Log.info(
-                "KEYBOARD_TRACE: will SHOW — phase=\(self.phase.rawValue) firstResponder=\(responder)",
-                category: "KeyboardTrace"
-            )
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                let responder = Self.firstResponderDescription()
+                Log.info(
+                    "KEYBOARD_TRACE: will SHOW — phase=\(self.phase.rawValue) firstResponder=\(responder)",
+                    category: "KeyboardTrace"
+                )
+            }
         }
         Log.info("KEYBOARD_TRACE: armed", category: "KeyboardTrace")
         #endif
