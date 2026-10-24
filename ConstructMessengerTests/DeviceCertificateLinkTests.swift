@@ -189,4 +189,18 @@ final class DeviceCertificateLinkTests: XCTestCase {
         XCTAssertEqual(DeviceLinkViewModel.extractFp(from: flowB), Data(repeating: 0xAB, count: 32))
         XCTAssertEqual(DeviceLinkViewModel.hex(Data([0x00, 0x0f, 0xff])), "000fff")
     }
+
+    /// A device name with query delimiters, `%` or Cyrillic in it comes out of the QR as it went in,
+    /// and does not take the fields after it with it.
+    func testADeviceNameSurvivesTheJoinRequestQR() {
+        let fp = String(repeating: "ab", count: 32)
+        for name in ["Mac & iPad", "a=b+c", "100% Mac", "Мой Mac"] {
+            let url = "konstruct://link-to-me?id=d&pubkey=p&fp=\(fp)&name=\(DeviceLinkViewModel.queryValue(name))&platform=desktop"
+            XCTAssertEqual(DeviceLinkViewModel.joinRequestName(from: url), name)
+            XCTAssertEqual(DeviceLinkViewModel.extractFp(from: url), Data(repeating: 0xAB, count: 32))
+            XCTAssertEqual(URLComponents(string: url)?.queryItems?.first { $0.name == "platform" }?.value, "desktop")
+        }
+        // A QR from before this change (`.urlQueryAllowed`) still reads.
+        XCTAssertEqual(DeviceLinkViewModel.joinRequestName(from: "konstruct://link-to-me?id=d&name=My%20Mac"), "My Mac")
+    }
 }
