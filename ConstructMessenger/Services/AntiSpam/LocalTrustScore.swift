@@ -15,6 +15,7 @@ import Foundation
 /// - `1.0` — long-standing trusted account
 ///
 /// Score is stored in `UserDefaults` and survives app restarts.
+@MainActor
 final class LocalTrustScore {
 
     static let shared = LocalTrustScore()

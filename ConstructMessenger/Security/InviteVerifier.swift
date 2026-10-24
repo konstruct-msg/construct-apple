@@ -24,7 +24,7 @@ struct VerifiedInvite: Equatable {
 /// let invite = try verifier.decode(encodedString)
 /// let verified = try await verifier.verify(invite)
 /// ```
-class InviteVerifier {
+class InviteVerifier: @unchecked Sendable {  // `usedJtis` behind `jtiLock`
 
     // MARK: - JTI deduplication
     private var usedJtis: Set<String> = []

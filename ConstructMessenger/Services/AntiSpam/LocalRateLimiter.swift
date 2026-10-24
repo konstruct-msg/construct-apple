@@ -15,6 +15,7 @@ import Foundation
 ///  - **Trusted account** (≥ 3 days): 200/hour, 1 000/day
 ///
 /// Counters reset automatically when the time window expires.
+@MainActor
 final class LocalRateLimiter {
 
     static let shared = LocalRateLimiter()
