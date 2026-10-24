@@ -8,14 +8,30 @@ import Foundation
 import CallKit
 import AVFoundation
 import UIKit
+import Synchronization
 
-final class CallKitProvider: NSObject, CXProviderDelegate {
+/// The delegate runs on CallKit's own queue (`setDelegate(_:queue: nil)`), never the main one.
+/// `@unchecked`: `provider` and `callController` are CallKit's thread-safe objects; the handlers,
+/// set from the main actor and read on that queue, live in a `Mutex`.
+final class CallKitProvider: NSObject, CXProviderDelegate, @unchecked Sendable {
     static let shared = CallKitProvider()
 
     private let provider: CXProvider
     private let callController = CXCallController()
-    var onAnswer: (@Sendable (UUID) -> Void)?
-    var onEnd: (@Sendable (UUID) -> Void)?
+
+    private struct Handlers {
+        var onAnswer: (@Sendable (UUID) -> Void)?
+        var onEnd: (@Sendable (UUID) -> Void)?
+    }
+    private let handlers = Mutex(Handlers())
+    var onAnswer: (@Sendable (UUID) -> Void)? {
+        get { handlers.withLock { $0.onAnswer } }
+        set { handlers.withLock { $0.onAnswer = newValue } }
+    }
+    var onEnd: (@Sendable (UUID) -> Void)? {
+        get { handlers.withLock { $0.onEnd } }
+        set { handlers.withLock { $0.onEnd = newValue } }
+    }
 
     private override init() {
         let config = CXProviderConfiguration()
@@ -170,14 +186,17 @@ final class CallKitProvider: NSObject, CXProviderDelegate {
     }
 
     nonisolated func provider(_ provider: CXProvider, perform action: CXEndCallAction) {
-        Log.info(
-            "CallKit end (uuid=\(action.callUUID.uuidString.prefix(8))…) \(Self.currentAppContext())",
-            category: "Calls"
-        )
+        // The app's state is UIKit's, readable only on the main actor; this runs on CallKit's
+        // queue, so the line is written from there a moment later.
+        let uuid = action.callUUID.uuidString.prefix(8)
+        Task { @MainActor in
+            Log.info("CallKit end (uuid=\(uuid)…) \(Self.currentAppContext())", category: "Calls")
+        }
         onEnd?(action.callUUID)
         action.fulfill()
     }
 
+    @MainActor
     private static func currentAppContext() -> String {
         let app = UIApplication.shared
         let sceneStates = app.connectedScenes
