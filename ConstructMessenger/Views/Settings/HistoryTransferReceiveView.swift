@@ -24,7 +24,13 @@ struct HistoryTransferReceiveView: View {
     @State private var errorMessage: String?
 
     var body: some View {
-        HistoryTransferLayout(screen: .of(phase: coordinator.phase, side: .receiving), side: .receiving) {
+        HistoryTransferLayout(
+            screen: .of(phase: coordinator.phase, side: .receiving, localNetworkDenied: coordinator.localNetworkDenied),
+            side: .receiving
+        ) {
+            if coordinator.localNetworkDenied, isWaiting {
+                HistoryLocalNetworkSettingsButton()
+            }
             if let onImportFile, isWaiting || coordinator.phase == .saveFileInstead {
                 CTSectionGroup {
                     ConstructButtonRow(

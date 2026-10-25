@@ -5,6 +5,7 @@
 //  What the transfer screens say for each phase: the picture, the title, the step under way.
 //
 
+import Network
 import XCTest
 @testable import Construct_Messenger
 
@@ -85,15 +86,46 @@ final class HistoryTransferStagesTests: XCTestCase {
         XCTAssertEqual(Screen.of(phase: .mediaIncomplete, side: .receiving).bodyKey, "history_sync_body_media_retry_other")
     }
 
+    /// Refused the local network, either side says so while it waits — and only while it
+    /// waits: once something moves, the network was there.
+    ///
+    /// Mutation: drop the `.idle where localNetworkDenied` case — the screen says "looking" and
+    /// the person never learns why; this reddens.
+    /// Mutation: put the case on every phase — a transfer under way shows the denial; this
+    /// reddens.
+    func testARefusedLocalNetworkIsSaidWhileWaiting() {
+        for side in [HistoryTransferSide.sending, .receiving] {
+            let waiting = Screen.of(phase: .idle, side: side, localNetworkDenied: true)
+            XCTAssertEqual(waiting.titleKey, "history_sync_title_local_network", "\(side)")
+            XCTAssertEqual(waiting.bodyKey, "history_sync_body_local_network", "\(side)")
+            XCTAssertEqual(waiting.picture, .notSeen)
+            XCTAssertEqual(Screen.of(phase: .transcript, side: side, localNetworkDenied: true).picture, .moving)
+        }
+    }
+
+    /// The system's refusal is told apart from the network's other troubles.
+    ///
+    /// Mutation: `isLocalNetworkDenied` answers true for any DNS error — this reddens.
+    func testOnlyThePolicyRefusalIsALocalNetworkDenial() {
+        XCTAssertTrue(NearbyWait.isLocalNetworkDenied(.dns(-65_570)))
+        XCTAssertFalse(NearbyWait.isLocalNetworkDenied(.dns(-65_537)), "an unknown DNS-SD error")
+        XCTAssertFalse(NearbyWait.isLocalNetworkDenied(.posix(.ENETDOWN)))
+    }
+
     /// Every line resolves in English, and none names the kind of device at the other end:
     /// the transfer runs phone to phone as well as phone to computer.
     func testEveryLineResolvesAndNoneNamesTheOtherDevicesKind() throws {
         let english = try XCTUnwrap(Bundle.main.path(forResource: "en", ofType: "lproj").flatMap(Bundle.init(path:)))
-        var keys: Set<String> = ["history_sync_device_this", "history_sync_device_other", "history_sync_step_of"]
+        var keys: Set<String> = [
+            "history_sync_device_this", "history_sync_device_other", "history_sync_step_of",
+            "history_sync_open_settings", "history_sync_body_local_network_mac",
+        ]
         for side in [HistoryTransferSide.sending, .receiving] {
             for phase in Self.phases {
                 for notSeen in [false, true] {
-                    keys.formUnion(Screen.of(phase: phase, side: side, peerNotSeen: notSeen).keys)
+                    for denied in [false, true] {
+                        keys.formUnion(Screen.of(phase: phase, side: side, peerNotSeen: notSeen, localNetworkDenied: denied).keys)
+                    }
                 }
             }
         }
