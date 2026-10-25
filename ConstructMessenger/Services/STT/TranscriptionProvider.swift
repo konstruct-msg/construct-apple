@@ -150,7 +150,10 @@ struct AppleSpeechProvider: TranscriptionProvider {
                 case .success:
                     task?.cancel()
                     if let result {
-                        continuation.resume(returning: result)
+                        // The recognizer's result is handed to this callback once; `gate` makes
+                        // `.success` fire a single time and nothing else reads it.
+                        nonisolated(unsafe) let delivered = result
+                        continuation.resume(returning: delivered)
                     } else {
                         continuation.resume(throwing: TranscriptionError.engineUnavailable)
                     }
