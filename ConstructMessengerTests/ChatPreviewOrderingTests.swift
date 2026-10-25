@@ -13,8 +13,8 @@ import CoreData
 final class ChatPreviewOrderingTests: XCTestCase {
     private var context: NSManagedObjectContext!
 
-    override func setUp() {
-        super.setUp()
+    override func setUp() async throws {
+        try await super.setUp()
         let container = PersistenceController(inMemory: true).container
         context = container.viewContext
         // The reconciler writes through `ChatStore` (chats B2); point it at this store.
@@ -22,11 +22,11 @@ final class ChatPreviewOrderingTests: XCTestCase {
         LocalRepositories.useMessagesForTesting(container)
     }
 
-    override func tearDown() {
+    override func tearDown() async throws {
         LocalRepositories.useChatsForTesting(nil)
         LocalRepositories.useMessagesForTesting(nil)
         context = nil
-        super.tearDown()
+        try await super.tearDown()
     }
 
     /// A chat the repository can find: saved, with its peer's row.

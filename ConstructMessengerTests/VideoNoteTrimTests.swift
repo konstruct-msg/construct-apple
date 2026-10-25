@@ -9,6 +9,7 @@ import XCTest
 import AVFoundation
 @testable import Construct_Messenger
 
+@MainActor
 final class VideoNoteTrimTests: XCTestCase {
     private let shortest = ChatUIConstants.VideoNote.trimMinimumDuration
 
@@ -42,7 +43,7 @@ final class VideoNoteTrimTests: XCTestCase {
 
     /// A 30 fps H.264 clip of `seconds`, one key frame at the start — so a cut at 0.5 s falls
     /// between key frames, where a passthrough cut could not land.
-    private static func writeClip(seconds: Int) async throws -> URL {
+    static func writeClip(seconds: Int) async throws -> URL {
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("clip-\(UUID().uuidString).mov")
         let writer = try AVAssetWriter(outputURL: url, fileType: .mov)
         let input = AVAssetWriterInput(mediaType: .video, outputSettings: [

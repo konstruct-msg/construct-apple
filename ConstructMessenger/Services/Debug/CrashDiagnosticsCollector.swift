@@ -291,7 +291,9 @@ final class CrashDiagnosticsCollector: NSObject {
 #if canImport(MetricKit) && os(iOS)
 extension CrashDiagnosticsCollector: MXMetricManagerSubscriber {
     nonisolated func didReceive(_ payloads: [MXDiagnosticPayload]) {
-        Task { @MainActor in self.ingest(payloads, source: "delivered") }
+        // MetricKit hands the array to this callback and keeps no reference; only `ingest` reads it.
+        nonisolated(unsafe) let delivered = payloads
+        Task { @MainActor in self.ingest(delivered, source: "delivered") }
     }
 
     /// Required by the protocol; we take no interest in the aggregate metric payloads (battery,

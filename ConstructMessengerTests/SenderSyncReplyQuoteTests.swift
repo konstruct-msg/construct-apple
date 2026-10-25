@@ -15,20 +15,20 @@ import XCTest
 final class SenderSyncReplyQuoteTests: XCTestCase {
     private var container: NSPersistentContainer!
 
-    override func setUp() {
-        super.setUp()
+    override func setUp() async throws {
+        try await super.setUp()
         container = PersistenceController(inMemory: true).container
         LocalRepositories.useContactsForTesting(container)
         LocalRepositories.useChatsForTesting(container)
         LocalRepositories.useMessagesForTesting(container)
     }
 
-    override func tearDown() {
+    override func tearDown() async throws {
         LocalRepositories.useContactsForTesting(nil)
         LocalRepositories.useChatsForTesting(nil)
         LocalRepositories.useMessagesForTesting(nil)
         container = nil
-        super.tearDown()
+        try await super.tearDown()
     }
 
     private func synced(_ text: String, quoting quoted: Shared_Proto_Messaging_V1_QuotedMessage?) throws -> MessageRecord? {
@@ -69,20 +69,20 @@ final class SenderSyncReplyQuoteTests: XCTestCase {
 final class IncomingRowRuleTests: XCTestCase {
     private var container: NSPersistentContainer!
 
-    override func setUp() {
-        super.setUp()
+    override func setUp() async throws {
+        try await super.setUp()
         container = PersistenceController(inMemory: true).container
         LocalRepositories.useContactsForTesting(container)
         LocalRepositories.useChatsForTesting(container)
         LocalRepositories.useMessagesForTesting(container)
     }
 
-    override func tearDown() {
+    override func tearDown() async throws {
         LocalRepositories.useContactsForTesting(nil)
         LocalRepositories.useChatsForTesting(nil)
         LocalRepositories.useMessagesForTesting(nil)
         container = nil
-        super.tearDown()
+        try await super.tearDown()
     }
 
     func testTheRowIdDropsEitherPerDeviceMarker() {

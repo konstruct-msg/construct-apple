@@ -81,7 +81,8 @@ enum HistoryOutbound {
 
 /// Where received bytes come from. `nil` is the end of the input: the socket closed or the file
 /// ended.
-protocol HistoryByteSource: AnyObject {
+/// Sendable: the stream reads it off the main actor (`HistoryImportSink` is an actor of its own).
+protocol HistoryByteSource: AnyObject, Sendable {
     func read(exactly count: Int) async throws -> Data?
 }
 
@@ -136,7 +137,7 @@ enum HistoryCoreStream {
     static func send<Items: AsyncSequence>(
         _ items: Items,
         through sender: HistorySender,
-        write: (Data) async throws -> Void
+        write: @Sendable (Data) async throws -> Void
     ) async throws where Items.Element == HistoryOutbound {
         var batch: [HistoryRecordOut] = []
         var batchBytes = 0
@@ -169,7 +170,7 @@ enum HistoryCoreStream {
     static func send(
         _ items: [HistoryOutbound],
         through sender: HistorySender,
-        write: (Data) async throws -> Void
+        write: @Sendable (Data) async throws -> Void
     ) async throws {
         let stream = AsyncStream<HistoryOutbound> { continuation in
             for item in items { continuation.yield(item) }
@@ -184,7 +185,7 @@ enum HistoryCoreStream {
         id: String,
         mime: String,
         through sender: HistorySender,
-        write: (Data) async throws -> Void
+        write: @Sendable (Data) async throws -> Void
     ) async throws {
         let url = MediaManager.onDiskURL(for: id)
         // Clear size and clear chunks: the file is sealed at rest (`AtRestFiles`), the core
@@ -223,8 +224,8 @@ enum HistoryCoreStream {
         into receiver: HistoryReceiver,
         sink: HistoryImportSink,
         pin: HistoryQRPin,
-        resolve: (_ deviceIdHex: String) async throws -> HistoryKnownKeys,
-        reply: ((Data) async throws -> Void)?
+        resolve: @Sendable (_ deviceIdHex: String) async throws -> HistoryKnownKeys,
+        reply: (@Sendable (Data) async throws -> Void)?
     ) async throws -> Outcome {
         do {
             return try await receiveLoop(from: source, into: receiver, sink: sink, pin: pin, resolve: resolve, reply: reply)
@@ -239,8 +240,8 @@ enum HistoryCoreStream {
         into receiver: HistoryReceiver,
         sink: HistoryImportSink,
         pin: HistoryQRPin,
-        resolve: (_ deviceIdHex: String) async throws -> HistoryKnownKeys,
-        reply: ((Data) async throws -> Void)?
+        resolve: @Sendable (_ deviceIdHex: String) async throws -> HistoryKnownKeys,
+        reply: (@Sendable (Data) async throws -> Void)?
     ) async throws -> Outcome {
         while true {
             // Nothing to read means the receiver has stopped — for keys, a skip or the end — and

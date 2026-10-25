@@ -231,6 +231,7 @@ struct MessageFilePreviewBar: View {
 
 // MARK: - Remove control
 
+@MainActor
 private func removeButton(action: @escaping () -> Void) -> some View {
     Button(action: action) {
         Image(systemName: "xmark.circle.fill")

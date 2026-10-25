@@ -16,7 +16,8 @@ import Foundation
 
 extension Message {
     /// Opened values, so a bubble re-rendering does not reopen the box each time.
-    private static let opened = NSCache<NSString, NSString>()
+    // NSCache is thread-safe; the reference is never reassigned.
+    nonisolated(unsafe) private static let opened = NSCache<NSString, NSString>()
 
     var transcript: String? {
         get { sealedText(encryptedTranscript, field: "transcript") ?? transcriptText }

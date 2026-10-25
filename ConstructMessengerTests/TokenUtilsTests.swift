@@ -31,8 +31,8 @@ final class TokenUtilsTests: XCTestCase {
         return "v4.public.\(payloadB64)"
     }()
 
-    /// A real RS256 JWT built from test keys is unnecessary — the client doesn't
-    /// verify signatures. We just need three base64url segments with a valid header/body.
+    /// A legacy RS256 JWT with a readable `sub`: well-formed, so a rejection is the format's,
+    /// not a parse failure's. Not accepted since 2026-10-24.
     private let jwtUserId = "22a44f12-1234-5678-9abc-def012345678"
 
     private lazy var jwtToken: String = {
@@ -56,8 +56,8 @@ final class TokenUtilsTests: XCTestCase {
         XCTAssertEqual(TokenUtils.format(of: pasetoToken), .paseto)
     }
 
-    func testFormat_JWT() {
-        XCTAssertEqual(TokenUtils.format(of: jwtToken), .jwt)
+    func testFormat_JWT_IsUnknown() {
+        XCTAssertEqual(TokenUtils.format(of: jwtToken), .unknown)
     }
 
     func testFormat_unknownEmpty() {
@@ -74,8 +74,8 @@ final class TokenUtilsTests: XCTestCase {
         XCTAssertEqual(TokenUtils.headerAlgorithm(from: pasetoToken), "v4.public")
     }
 
-    func testHeaderAlgorithm_JWT() {
-        XCTAssertEqual(TokenUtils.headerAlgorithm(from: jwtToken), "RS256")
+    func testHeaderAlgorithm_JWT_IsNil() {
+        XCTAssertNil(TokenUtils.headerAlgorithm(from: jwtToken))
     }
 
     // MARK: - extractUserId
@@ -84,17 +84,10 @@ final class TokenUtilsTests: XCTestCase {
         XCTAssertEqual(TokenUtils.extractUserId(from: pasetoToken), pasetoTokenUserId)
     }
 
-    func testExtractUserId_JWT() {
-        XCTAssertEqual(TokenUtils.extractUserId(from: jwtToken), jwtUserId)
-    }
-
-    func testExtractUserId_JWT_legacyUserIdClaim() {
-        // Some legacy JWTs used `user_id` instead of `sub`.
-        let claims: [String: Any] = ["user_id": jwtUserId]
-        let payloadB64 = base64URLEncode(try! JSONSerialization.data(withJSONObject: claims))
-        let headerB64 = base64URLEncode(Data("{}".utf8))
-        let token = "\(headerB64).\(payloadB64).sig"
-        XCTAssertEqual(TokenUtils.extractUserId(from: token), jwtUserId)
+    /// A JWT's `sub` is readable, and must not be read: a userId recovered from a token the
+    /// server no longer issues would name the account behind a session that cannot authenticate.
+    func testExtractUserId_JWT_IsNil() {
+        XCTAssertNil(TokenUtils.extractUserId(from: jwtToken))
     }
 
     func testExtractUserId_Unknown() {
@@ -121,8 +114,8 @@ final class TokenUtilsTests: XCTestCase {
         XCTAssertEqual(TokenUtils.extractIssuedAt(from: pasetoToken), 1_700_000_000)
     }
 
-    func testExtractIssuedAt_JWT() {
-        XCTAssertEqual(TokenUtils.extractIssuedAt(from: jwtToken), 1_700_000_000)
+    func testExtractIssuedAt_JWT_IsNil() {
+        XCTAssertNil(TokenUtils.extractIssuedAt(from: jwtToken))
     }
 
     func testExtractIssuedAt_Unknown() {
@@ -140,11 +133,14 @@ final class TokenUtilsTests: XCTestCase {
         XCTAssertNil(DeviceLinkStreamCursorPolicy.checkpointCursor(issuedAtSeconds: 0))
     }
 
-    // MARK: - JWT alg guard (migration compatibility)
+    // MARK: - Cached-token gate (AuthSessionManager.loadSessionToken)
 
-    func test_JWT_RS256_accepted() {
-        XCTAssertEqual(TokenUtils.format(of: jwtToken), .jwt)
-        XCTAssertEqual(TokenUtils.headerAlgorithm(from: jwtToken), "RS256")
+    /// A cached JWT is cleared and the device re-authenticates; only PASETO v4.public stays.
+    func testOnlyAPasetoTokenIsKeptFromTheKeychain() {
+        XCTAssertTrue(AuthSessionManager.isAcceptedCachedToken(pasetoToken))
+        XCTAssertTrue(AuthSessionManager.isAcceptedCachedToken(pasetoToken + ".Zm9vdGVy"))
+        XCTAssertFalse(AuthSessionManager.isAcceptedCachedToken(jwtToken))
+        XCTAssertFalse(AuthSessionManager.isAcceptedCachedToken("garbage"))
     }
 
     func test_Paseto_accepted() {

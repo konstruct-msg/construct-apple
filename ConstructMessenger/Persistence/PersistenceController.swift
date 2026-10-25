@@ -43,7 +43,8 @@ struct PersistenceController {
     /// `User(context:)`, which finds its entity by class across every loaded model, could take
     /// another store's — a save then failed with Cocoa 133010 or raised on a temporary object id
     /// (TODO 120).
-    private static let model: NSManagedObjectModel? = Bundle.main
+    /// `nonisolated(unsafe)`: loaded once and never mutated; Core Data only reads a model in use.
+    nonisolated(unsafe) private static let model: NSManagedObjectModel? = Bundle.main
         .url(forResource: "ConstructMessenger", withExtension: "momd")
         .flatMap(NSManagedObjectModel.init(contentsOf:))
 
@@ -114,7 +115,7 @@ struct PersistenceController {
         }
 
         c.viewContext.automaticallyMergesChangesFromParent = true
-        c.viewContext.mergePolicy = NSMergeByPropertyObjectTrumpMergePolicy
+        c.viewContext.mergePolicy = NSMergePolicy.mergeByPropertyObjectTrump
         container = c
 
         migrateExistingContactsToSynaps()

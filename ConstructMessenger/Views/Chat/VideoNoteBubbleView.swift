@@ -345,18 +345,43 @@ enum MediaVideoFile {
         return MediaManager.hasOnDiskFile(mediaId: mediaId)
     }
 
+    /// The fields of a media item that `fetch` reads, as plain values that can leave the main actor.
+    private struct Source: Sendable {
+        let mediaId: String?
+        let mediaUrl: String?
+        let mediaKey: Data?
+        let mediaType: String?
+
+        init(item: [String: Any]) {
+            mediaId = item["mediaId"] as? String
+            mediaUrl = item["mediaUrl"] as? String
+            mediaKey = (item["mediaKey"] as? String).flatMap { Data(base64Encoded: $0) }
+            mediaType = item["mediaType"] as? String
+        }
+    }
+
+    @MainActor
     static func fetch(
         item: [String: Any],
         messageId: String,
         itemIndex: Int,
         onProgress: (@Sendable (Int64) -> Void)? = nil
     ) async throws -> URL {
+        try await fetch(source: Source(item: item), messageId: messageId, itemIndex: itemIndex, onProgress: onProgress)
+    }
+
+    private static func fetch(
+        source: Source,
+        messageId: String,
+        itemIndex: Int,
+        onProgress: (@Sendable (Int64) -> Void)?
+    ) async throws -> URL {
         if let cached = await MainActor.run(body: { MediaVideoCache.shared.url(for: messageId, at: itemIndex) }) {
             return cached
         }
-        guard let mediaId = item["mediaId"] as? String,
-              let mediaUrl = item["mediaUrl"] as? String,
-              let mediaKey = (item["mediaKey"] as? String).flatMap({ Data(base64Encoded: $0) })
+        guard let mediaId = source.mediaId,
+              let mediaUrl = source.mediaUrl,
+              let mediaKey = source.mediaKey
         else { throw MediaUploadError.uploadFailed("Video descriptor incomplete") }
 
         let data = try await MediaManager.shared.downloadAndDecryptMedia(
@@ -364,7 +389,7 @@ enum MediaVideoFile {
         )
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString)
-            .appendingPathExtension(mediaFileExtension(for: item["mediaType"] as? String))
+            .appendingPathExtension(mediaFileExtension(for: source.mediaType))
         try data.write(to: url)
         await MainActor.run { MediaVideoCache.shared.store(url, for: messageId, at: itemIndex) }
         await GalleryVideoPage.cacheFirstFramePoster(from: url, messageId: messageId, itemIndex: itemIndex)
@@ -398,15 +423,18 @@ struct LoopingVideoView: View {
         PlayerLayerView(player: player)
             .task(id: url) {
                 guard let item = await Self.silentItem(for: url) else { return }
+                // Scrolled away while the tracks loaded: onDisappear has already cleared up,
+                // and a looper made now would outlive it.
+                guard !Task.isCancelled else { return }
                 player.isMuted = true
                 player.preventsDisplaySleepDuringVideoPlayback = false
-                looper = AVPlayerLooper(player: player, templateItem: item)
+                looper = player.loop(item, replacing: looper)
                 player.play()
             }
             .onDisappear {
                 player.pause()
+                player.stopLooping(looper)
                 looper = nil
-                player.removeAllItems()
             }
     }
 
@@ -420,6 +448,26 @@ struct LoopingVideoView: View {
         else { return nil }
         copy.preferredTransform = (try? await track.load(.preferredTransform)) ?? .identity
         return AVPlayerItem(asset: composition)
+    }
+}
+
+extension AVQueuePlayer {
+    /// Starts looping `item`, ending whatever loop this player had first. A second
+    /// `AVPlayerLooper` over a queue still holding the first one's replicas throws
+    /// `NSInvalidArgumentException` ("An AVPlayerItem can occupy only one position in a player's
+    /// queue at a time") — the crash a video-note bubble hit from 0.22.5 to 0.26.16, when a
+    /// cancelled load and its successor both made a looper for one player.
+    func loop(_ item: AVPlayerItem, timeRange: CMTimeRange? = nil, replacing old: AVPlayerLooper?) -> AVPlayerLooper {
+        stopLooping(old)
+        if let timeRange {
+            return AVPlayerLooper(player: self, templateItem: item, timeRange: timeRange)
+        }
+        return AVPlayerLooper(player: self, templateItem: item)
+    }
+
+    func stopLooping(_ looper: AVPlayerLooper?) {
+        looper?.disableLooping()
+        removeAllItems()
     }
 }
 

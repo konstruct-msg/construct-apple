@@ -1,4 +1,5 @@
 import Foundation
+import Synchronization
 
 /// Tracks message IDs that have permanently failed `initReceivingSession`.
 ///
@@ -7,12 +8,15 @@ import Foundation
 /// decryption failure. Persists across app launches via UserDefaults.
 ///
 /// Lifecycle: entries are cheap (UUID strings) and self-pruning at 200 entries.
-final class FailedInitMessageStore {
+/// `@unchecked`: `UserDefaults` is thread-safe but not annotated in this SDK; `lock` serialises `add`.
+final class FailedInitMessageStore: @unchecked Sendable {
     static let shared = FailedInitMessageStore()
 
     private let key: String
     private let maxEntries = 200
     private let defaults: UserDefaults
+    /// `add` reads, appends and writes back; two adds racing would drop one id.
+    private let lock = Mutex(())
 
     /// Production init — uses standard UserDefaults.
     convenience init() {
@@ -34,13 +38,15 @@ final class FailedInitMessageStore {
     // MARK: - Public API
 
     func add(_ messageId: String) {
-        var current = load()
-        guard !current.contains(messageId) else { return }
-        current.append(messageId)
-        if current.count > maxEntries {
-            current = Array(current.suffix(maxEntries / 2))
+        lock.withLock { _ in
+            var current = load()
+            guard !current.contains(messageId) else { return }
+            current.append(messageId)
+            if current.count > maxEntries {
+                current = Array(current.suffix(maxEntries / 2))
+            }
+            save(current)
         }
-        save(current)
     }
 
     func contains(_ messageId: String) -> Bool {
