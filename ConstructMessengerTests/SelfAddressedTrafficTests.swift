@@ -19,17 +19,17 @@ final class SelfAddressedTrafficTests: XCTestCase {
     private let peerAccount = "7574fdec-2c1a-4a0f-9d3e-1b0b6f2c9a41"
     private var context: NSManagedObjectContext!
 
-    override func setUp() {
-        super.setUp()
+    override func setUp() async throws {
+        try await super.setUp()
         context = PersistenceController(inMemory: true).container.viewContext
         SessionAddressing.ownAccountOverrideForTesting = ourAccount
     }
 
-    override func tearDown() {
+    override func tearDown() async throws {
         SessionAddressing.ownAccountOverrideForTesting = nil
         DeliveryReceiptBatcher.shared.discardForTesting()
         context = nil
-        super.tearDown()
+        try await super.tearDown()
     }
 
     // MARK: - The shape of an envelope that has no peer

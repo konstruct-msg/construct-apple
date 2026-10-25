@@ -10,6 +10,7 @@
 import XCTest
 @testable import Construct_Messenger
 
+@MainActor
 final class RegistrationResumeTests: XCTestCase {
 
     /// The incident: keys saved, the server never answered — the retry must run.

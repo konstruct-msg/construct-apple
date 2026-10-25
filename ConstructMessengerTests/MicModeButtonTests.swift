@@ -9,6 +9,7 @@
 import XCTest
 @testable import Construct_Messenger
 
+@MainActor
 final class MicModeButtonTests: XCTestCase {
     private let size: CGFloat = 42
     private var segment: CGFloat { ChatUIConstants.VideoNote.switchSegmentLength }

@@ -41,14 +41,14 @@ final class ProactiveInitCoalescingTests: XCTestCase {
         }
 
         let successes = Counter()
-        async let a: Void = call(peer: "peer-1", onSuccess: { await successes.increment() })
-        async let b: Void = call(peer: "peer-1", onSuccess: { await successes.increment() })
-        async let c: Void = call(peer: "peer-1", onSuccess: { await successes.increment() })
+        let a = Task { await call(peer: "peer-1", onSuccess: { await successes.increment() }) }
+        let b = Task { await call(peer: "peer-1", onSuccess: { await successes.increment() }) }
+        let c = Task { await call(peer: "peer-1", onSuccess: { await successes.increment() }) }
 
         // Let all three reach the coalescer before the single run completes.
         try? await Task.sleep(nanoseconds: 120_000_000)
         await gate.open()
-        _ = await (a, b, c)
+        _ = await (a.value, b.value, c.value)
 
         let runCount = await runs.value
         XCTAssertEqual(runCount, 1,
@@ -68,9 +68,9 @@ final class ProactiveInitCoalescingTests: XCTestCase {
             return true
         }
 
-        async let a: Void = call(peer: "peer-1", onSuccess: {})
-        async let b: Void = call(peer: "peer-2", onSuccess: {})
-        _ = await (a, b)
+        let a = Task { await call(peer: "peer-1", onSuccess: {}) }
+        let b = Task { await call(peer: "peer-2", onSuccess: {}) }
+        _ = await (a.value, b.value)
 
         let runCount = await runs.value
         XCTAssertEqual(runCount, 2, "distinct peers must not share a single-flight slot")
@@ -100,12 +100,12 @@ final class ProactiveInitCoalescingTests: XCTestCase {
         }
 
         let failures = Counter()
-        async let a: Void = call(peer: "peer-1", onSuccess: {}, onFailure: { await failures.increment() })
-        async let b: Void = call(peer: "peer-1", onSuccess: {}, onFailure: { await failures.increment() })
+        let a = Task { await call(peer: "peer-1", onSuccess: {}, onFailure: { await failures.increment() }) }
+        let b = Task { await call(peer: "peer-1", onSuccess: {}, onFailure: { await failures.increment() }) }
 
         try? await Task.sleep(nanoseconds: 120_000_000)
         await gate.open()
-        _ = await (a, b)
+        _ = await (a.value, b.value)
 
         let failureCount = await failures.value
         XCTAssertEqual(failureCount, 2, "both callers must see the shared failure")

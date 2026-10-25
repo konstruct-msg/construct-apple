@@ -35,19 +35,19 @@ final class IdentityKeyRetentionTests: XCTestCase {
     private let fetchedKey = Data(repeating: 0xA1, count: 32)
     private let pinnedKey = Data(repeating: 0xB2, count: 32)
 
-    override func setUpWithError() throws {
-        try super.setUpWithError()
+    override func setUp() async throws {
+        try await super.setUp()
         container = PersistenceController(inMemory: true).container
         LocalRepositories.useContactsForTesting(container)
         // The certificate verdict is the core's; unit tests do not start CryptoManager's.
         StealthSenderService.shared.verdictCoreForTesting = try makeTestDevice().core
     }
 
-    override func tearDown() {
+    override func tearDown() async throws {
         StealthSenderService.shared.verdictCoreForTesting = nil
         LocalRepositories.useContactsForTesting(nil)
         container = nil
-        super.tearDown()
+        try await super.tearDown()
     }
 
     @discardableResult

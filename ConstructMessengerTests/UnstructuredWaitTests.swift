@@ -33,6 +33,7 @@
 import XCTest
 @testable import Construct_Messenger
 
+@MainActor
 final class UnstructuredWaitTests: XCTestCase {
 
     private struct AcceptTimeout: Error {}

@@ -17,6 +17,7 @@ import AVFoundation
 import CoreVideo
 @testable import Construct_Messenger
 
+@MainActor
 final class VideoExportMetadataTests: XCTestCase {
 
     func testExportCarriesNoSourceMetadata() async throws {

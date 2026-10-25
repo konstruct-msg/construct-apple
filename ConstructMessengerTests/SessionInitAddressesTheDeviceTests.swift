@@ -17,6 +17,7 @@
 //  split invisible: the two halves of one fact sat next to each other and disagreed.
 //
 
+import Synchronization
 import XCTest
 @testable import Construct_Messenger
 
@@ -29,7 +30,7 @@ private final class RecordingCore: OrchestratorCore, @unchecked Sendable {
     /// RecordingCore.deinit`, before any assertion runs). `deinit` cannot be overridden away in
     /// Swift — a subclass's runs first and the superclass's follows — so the only way not to free
     /// handle 0 is never to deallocate. Bounded by the process; these are three small objects.
-    private static var kept: [RecordingCore] = []
+    private static let kept = Mutex<[RecordingCore]>([])
 
     var sessionExistsFor: Set<String> = []
     /// Set to make `reopenSession` refuse, the way the core does for a bundle it cannot trust.
@@ -40,7 +41,7 @@ private final class RecordingCore: OrchestratorCore, @unchecked Sendable {
 
     init() {
         super.init(noHandle: NoHandle())
-        Self.kept.append(self)
+        Self.kept.withLock { $0.append(self) }
     }
 
     /// Required by the generated superclass; a handle is never used here.
@@ -80,6 +81,7 @@ private final class RecordingCore: OrchestratorCore, @unchecked Sendable {
     }
 }
 
+@MainActor
 final class SessionInitAddressesTheDeviceTests: XCTestCase {
 
     /// A peer account, and a bundle key that is deliberately **not** the one this account has
@@ -146,8 +148,8 @@ final class SessionInitAddressesTheDeviceTests: XCTestCase {
         )
     }
 
-    override func setUp() {
-        super.setUp()
+    override func setUp() async throws {
+        try await super.setUp()
         // The pin would otherwise be read from Core Data. Overriding it is what lets the test
         // state the premise out loud: the contact list names a *different* device.
         SessionAddressing.pinnedIdentityKeyOverrideForTesting = { _ in
@@ -155,9 +157,9 @@ final class SessionInitAddressesTheDeviceTests: XCTestCase {
         }
     }
 
-    override func tearDown() {
+    override func tearDown() async throws {
         SessionAddressing.pinnedIdentityKeyOverrideForTesting = nil
-        super.tearDown()
+        try await super.tearDown()
     }
 
     func testRespondingInitPersistsUnderTheDeviceItOpened() throws {

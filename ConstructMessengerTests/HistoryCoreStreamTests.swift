@@ -249,13 +249,19 @@ class HistoryCoreStreamTests: XCTestCase {
         let receiving = HistoryTransferCoordinator()
 
         let phase1 = HistoryMemoryDuplex()
-        async let sent: Void = offer(
-            from: old, to: new,
-            items: { [self] snapshot in [.record(manifest(snapshotId: snapshot, phase: 1))] + contacts(40) },
-            over: phase1.left, coordinator: sending, media: false
-        )
+        // A main-actor Task, not `async let`: the test class is main-actor isolated, and the two
+        // halves interleave at their awaits on the duplex as before.
+        let sent = Task {
+            try await offer(
+                from: old, to: new,
+                items: { [self] snapshot in [.record(manifest(snapshotId: snapshot, phase: 1))] + contacts(40) },
+                over: phase1.left, coordinator: sending, media: false
+            )
+        }
+        // `async let` cancelled its child when the scope threw; keep that.
+        defer { sent.cancel() }
         let first = try await receive(into: new, from: old, over: phase1.right, coordinator: receiving)
-        try await sent
+        try await sent.value
         guard case .imported(_, 1) = first else { return XCTFail("\(first)") }
         XCTAssertEqual(sending.phase, .chatsTransferred)
         XCTAssertEqual(try peopleCount(), 40)
@@ -285,6 +291,7 @@ class HistoryCoreStreamTests: XCTestCase {
 }
 
 /// The same transfers into the crate: what a Desktop linked to a phone runs.
+@MainActor
 final class LocalStoreHistoryCoreStreamTests: HistoryCoreStreamTests {
     override func freshStore() {
         LocalRepositories.useLocalStoreForTesting(.inMemoryForTesting())
