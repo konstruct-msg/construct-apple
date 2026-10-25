@@ -17,7 +17,7 @@ final class IncomingMessageChatTests: XCTestCase {
     private var container: NSPersistentContainer!
     private let sender = "21111111-2222-4333-8444-555555555555"
 
-    override func setUpWithError() throws {
+    override func setUp() async throws {
         try CryptoCoreTestBootstrap.ensureCore(localUserId: "1a2b3c4d-0000-4000-8000-000000000001")
         container = PersistenceController(inMemory: true).container
         LocalRepositories.useContactsForTesting(container)
@@ -26,13 +26,13 @@ final class IncomingMessageChatTests: XCTestCase {
         LocalRepositories.useProcessedMessagesForTesting(CoreDataProcessedMessageStore(container: container))
     }
 
-    override func tearDown() {
+    override func tearDown() async throws {
         LocalRepositories.useContactsForTesting(nil)
         LocalRepositories.useChatsForTesting(nil)
         LocalRepositories.useMessagesForTesting(nil)
         LocalRepositories.useProcessedMessagesForTesting(nil)
         container = nil
-        super.tearDown()
+        try await super.tearDown()
     }
 
     private func receive(_ text: String, id: String, at seconds: UInt64) throws {

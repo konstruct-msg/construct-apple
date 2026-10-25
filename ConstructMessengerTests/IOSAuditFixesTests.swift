@@ -2,6 +2,7 @@ import XCTest
 import CoreData
 @testable import Construct_Messenger
 
+@MainActor
 final class IOSAuditFixesTests: XCTestCase {
 
     /// The ACK dedup cache lives in the orchestrator core (one cache, one durable store —
@@ -10,7 +11,7 @@ final class IOSAuditFixesTests: XCTestCase {
     /// suite happened to boot the shared `CryptoManager` first — green by test order, which is
     /// the same rot `CryptoCoreTestBootstrap` was written to prevent.
     @MainActor
-    override func setUpWithError() throws {
+    override func setUp() async throws {
         try CryptoCoreTestBootstrap.ensureCore(localUserId: "1a2b3c4d-0000-4000-8000-000000000001")
     }
 

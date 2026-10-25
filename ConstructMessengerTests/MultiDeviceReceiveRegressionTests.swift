@@ -18,20 +18,20 @@ final class MultiDeviceReceiveRegressionTests: XCTestCase {
 
     private var context: NSManagedObjectContext!
 
-    override func setUp() {
-        super.setUp()
+    override func setUp() async throws {
+        try await super.setUp()
         let container = PersistenceController(inMemory: true).container
         context = container.viewContext
         LocalRepositories.usePeerDevicesForTesting(CoreDataPeerDeviceStore(container: container))
         LocalRepositories.useContactsForTesting(container)
     }
 
-    override func tearDown() {
+    override func tearDown() async throws {
         LocalRepositories.usePeerDevicesForTesting(nil)
         LocalRepositories.useContactsForTesting(nil)
         context = nil
         SessionAddressing.pinnedIdentityKeyOverrideForTesting = nil
-        super.tearDown()
+        try await super.tearDown()
     }
 
     @discardableResult

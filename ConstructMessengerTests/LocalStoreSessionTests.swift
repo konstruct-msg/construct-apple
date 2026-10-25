@@ -9,18 +9,19 @@ import CryptoKit
 import XCTest
 @testable import Construct_Messenger
 
+@MainActor
 final class LocalStoreSessionTests: XCTestCase {
 
     private var dir: URL!
     private var url: URL { dir.appendingPathComponent("construct.db") }
     private let key = SymmetricKey(data: Data(repeating: 1, count: 32))
 
-    override func setUpWithError() throws {
+    override func setUp() async throws {
         dir = FileManager.default.temporaryDirectory.appendingPathComponent("session-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
     }
 
-    override func tearDownWithError() throws {
+    override func tearDown() async throws {
         try? FileManager.default.removeItem(at: dir)
     }
 

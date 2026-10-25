@@ -8,6 +8,7 @@
 import XCTest
 @testable import Construct_Messenger
 
+@MainActor
 final class GalleryPlaybackRateTests: XCTestCase {
     func testTheSpeedsAreOneOneAndAHalfAndTwo() {
         XCTAssertEqual(GalleryVideoPage.rates, [1, 1.5, 2])

@@ -9,6 +9,7 @@ import XCTest
 import AVFoundation
 @testable import Construct_Messenger
 
+@MainActor
 final class VideoNoteTrimTests: XCTestCase {
     private let shortest = ChatUIConstants.VideoNote.trimMinimumDuration
 

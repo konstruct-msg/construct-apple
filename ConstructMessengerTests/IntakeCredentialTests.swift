@@ -13,6 +13,7 @@
 import XCTest
 @testable import Construct_Messenger
 
+@MainActor
 final class IntakePublishingTests: XCTestCase {
 
     func testTheWindowStartsTodayNotTomorrow() {
@@ -69,6 +70,7 @@ final class IntakePublishingTests: XCTestCase {
 /// Until 2026-09-14 all four causes returned the same silent nil, so the device log said
 /// "sealed send WITH token" and nothing more. On 2026-09-13 the server counted 8 envelopes as
 /// `absent` and the device logs could not say which cause it was — the reason these are named.
+@MainActor
 final class IntakeTagAbsenceTests: XCTestCase {
 
     /// The ordinary rollout state, and the answer to "why did this pay". A peer's key arrives the
@@ -132,14 +134,14 @@ final class IntakeCredentialRejectionTests: XCTestCase {
     private let today = Date(timeIntervalSince1970: 1_789_392_535)
     private let tomorrow = Date(timeIntervalSince1970: 1_789_392_535 + 86_400)
 
-    override func setUp() {
-        super.setUp()
+    override func setUp() async throws {
+        try await super.setUp()
         UserDefaults.standard.removeObject(forKey: "construct.intake.rejected.v1")
     }
 
-    override func tearDown() {
+    override func tearDown() async throws {
         UserDefaults.standard.removeObject(forKey: "construct.intake.rejected.v1")
-        super.tearDown()
+        try await super.tearDown()
     }
 
     private func epoch(_ date: Date) -> UInt64 {
@@ -218,14 +220,14 @@ final class IntakeKeyDistributionTests: XCTestCase {
     private let a = "c6bfaaefcdd4e6ca0000000000000001"
     private let b = "b814c8ab96bc44960000000000000002"
 
-    override func setUp() {
-        super.setUp()
+    override func setUp() async throws {
+        try await super.setUp()
         service.forgetWhoHasOurKey()
     }
 
-    override func tearDown() {
+    override func tearDown() async throws {
         service.forgetWhoHasOurKey()
-        super.tearDown()
+        try await super.tearDown()
     }
 
     /// Mutation: mark by account again — `b` would read as served the moment `a` is, and this

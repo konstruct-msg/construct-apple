@@ -17,8 +17,8 @@ final class ChatRowWritesTests: XCTestCase {
     private var container: NSPersistentContainer!
     private var chats: CoreDataChatStore!
 
-    override func setUp() {
-        super.setUp()
+    override func setUp() async throws {
+        try await super.setUp()
         container = PersistenceController(inMemory: true).container
         LocalRepositories.useContactsForTesting(container)
         LocalRepositories.useChatsForTesting(container)
@@ -26,13 +26,13 @@ final class ChatRowWritesTests: XCTestCase {
         chats = CoreDataChatStore(container: container)
     }
 
-    override func tearDown() {
+    override func tearDown() async throws {
         LocalRepositories.useContactsForTesting(nil)
         LocalRepositories.useChatsForTesting(nil)
         LocalRepositories.useMessagesForTesting(nil)
         chats = nil
         container = nil
-        super.tearDown()
+        try await super.tearDown()
     }
 
     private func openChat() throws -> Chat {
