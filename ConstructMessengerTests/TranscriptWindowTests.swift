@@ -7,6 +7,7 @@
 //
 
 import CoreData
+import os
 import XCTest
 @testable import Construct_Messenger
 
@@ -139,16 +140,17 @@ final class TranscriptWindowTests: XCTestCase {
         let window = open()
         let entry = try XCTUnwrap(window.entries.first)
 
-        var listChanged = false
-        withObservationTracking { _ = window.entries } onChange: { listChanged = true }
+        // `onChange` is `@Sendable`; a lock rather than a captured `var`.
+        let listChanged = OSAllocatedUnfairLock(initialState: false)
+        withObservationTracking { _ = window.entries } onChange: { listChanged.withLock { $0 = true } }
         try store.setDeliveryStatus(id, .sent)
         await eventually { entry.row.deliveryStatus == .sent }
-        XCTAssertFalse(listChanged, "a status is one row's business")
+        XCTAssertFalse(listChanged.withLock { $0 }, "a status is one row's business")
         XCTAssertTrue(window.entries.first === entry)
 
         try add(3)
         await eventually { window.entries.count == 3 }
-        XCTAssertTrue(listChanged, "a new row is the list's")
+        XCTAssertTrue(listChanged.withLock { $0 }, "a new row is the list's")
     }
 
     /// A row carries no text: emptied as `UnsealedMemory` empties it, the text is read again from

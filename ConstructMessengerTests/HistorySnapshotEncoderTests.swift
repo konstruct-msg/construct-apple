@@ -44,8 +44,8 @@ final class HistorySnapshotEncoderTests: XCTestCase {
         )
     }
 
-    override func setUp() {
-        super.setUp()
+    override func setUp() async throws {
+        try await super.setUp()
         container = PersistenceController(inMemory: true).container
         LocalRepositories.usePeerDevicesForTesting(CoreDataPeerDeviceStore(container: container))
         useRepositories(container)
@@ -62,11 +62,11 @@ final class HistorySnapshotEncoderTests: XCTestCase {
         LocalRepositories.useCallsForTesting(container)
     }
 
-    override func tearDown() {
+    override func tearDown() async throws {
         useRepositories(nil)
         MessageDisplayCache.shared.evictAll()
         container = nil
-        super.tearDown()
+        try await super.tearDown()
     }
 
     // MARK: - Five fixture rows

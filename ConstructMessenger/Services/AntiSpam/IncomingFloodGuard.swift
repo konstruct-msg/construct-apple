@@ -37,7 +37,7 @@ enum FloodCheckResult {
 /// false alarm muted a contact until someone found the banner in their chat.
 ///
 /// Thread-safety: all mutations are protected by a serial queue.
-final class IncomingFloodGuard: ObservableObject {
+final class IncomingFloodGuard: ObservableObject, @unchecked Sendable {  // state behind `queue`; `suppressedSenders` written on main
 
     static let shared = IncomingFloodGuard()
 

@@ -4,11 +4,13 @@
 import Foundation
 
 /// Callback observer for PoW progress updates
+/// `@unchecked`: `lastProgress` is touched only by `onProgress`, which the core calls from the one
+/// thread computing the proof.
 final class PowProgressObserver: PowProgressCallback, @unchecked Sendable {
-    private let onProgress: (Float) -> Void
+    private let onProgress: @MainActor @Sendable (Float) -> Void
     private var lastProgress: Float = 0.0
     
-    init(onProgress: @escaping (Float) -> Void) {
+    init(onProgress: @escaping @MainActor @Sendable (Float) -> Void) {
         self.onProgress = onProgress
     }
     
@@ -18,9 +20,8 @@ final class PowProgressObserver: PowProgressCallback, @unchecked Sendable {
             lastProgress = estimatedProgress
             
             // Call on main thread for UI updates with smooth animation
-            DispatchQueue.main.async { [weak self] in
-                self?.onProgress(estimatedProgress)
-            }
+            let onProgress = onProgress
+            Task { @MainActor in onProgress(estimatedProgress) }
         }
     }
 }
@@ -44,7 +45,7 @@ class ProofOfWorkManager {
     static func computeWithProgress(
         challenge: String,
         difficulty: UInt32,
-        onProgress: @escaping (Float) -> Void
+        onProgress: @escaping @MainActor @Sendable (Float) -> Void
     ) async throws -> PowSolution {
         return try await Task.detached(priority: .userInitiated) {
             // Create progress observer

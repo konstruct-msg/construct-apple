@@ -124,6 +124,7 @@ extension CryptoManager {
         return true
     }
 
+    @MainActor
     func restoreRecentSessions(limit: Int = 10) {
         guard orchestratorCore != nil else {
             Log.error("Cannot restore sessions - core not initialized", category: "CryptoManager")

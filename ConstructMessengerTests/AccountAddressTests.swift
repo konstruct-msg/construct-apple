@@ -12,6 +12,7 @@ import SwiftProtobuf
 import CoreData
 @testable import Construct_Messenger
 
+@MainActor
 final class AccountAddressTests: XCTestCase {
 
     private let key = Data((0..<32).map { UInt8($0) })
@@ -123,14 +124,14 @@ final class SealedInnerRecipientAddressTests: XCTestCase {
     private let accountId = "14f28d31-0000-0000-0000-000000000002"
     private var savedLookup: ((String) -> Data?)!
 
-    override func setUp() {
-        super.setUp()
+    override func setUp() async throws {
+        try await super.setUp()
         savedLookup = StealthSenderService.shared.accountAddressLookup
     }
 
-    override func tearDown() {
+    override func tearDown() async throws {
         StealthSenderService.shared.accountAddressLookup = savedLookup
-        super.tearDown()
+        try await super.tearDown()
     }
 
     private func inner(address: Data?) async throws -> Shared_Proto_Core_V1_SealedInner {
@@ -159,6 +160,7 @@ final class SealedInnerRecipientAddressTests: XCTestCase {
 }
 
 /// Type 27 against `knst_contact_card.json`, the file Android reads the same way.
+@MainActor
 final class ContactCardPayloadTests: XCTestCase {
 
     private struct Vectors: Decodable {
@@ -200,6 +202,7 @@ final class ContactCardPayloadTests: XCTestCase {
 }
 
 /// The pin rule: an address never changes, so a different one is never an update.
+@MainActor
 final class AccountAddressPinTests: XCTestCase {
 
     private let a = Data(repeating: 0xA1, count: 32)
@@ -237,8 +240,8 @@ final class AccountAddressPinRowTests: XCTestCase {
     private let container = PersistenceController(inMemory: true).container
     private let id = "14f28d31-0000-0000-0000-000000000009"
 
-    override func setUp() {
-        super.setUp()
+    override func setUp() async throws {
+        try await super.setUp()
         LocalRepositories.useContactsForTesting(container)
         let ctx = container.viewContext
         let user = User(context: ctx)
@@ -248,9 +251,9 @@ final class AccountAddressPinRowTests: XCTestCase {
         try! ctx.save()
     }
 
-    override func tearDown() {
+    override func tearDown() async throws {
         LocalRepositories.useContactsForTesting(nil)
-        super.tearDown()
+        try await super.tearDown()
     }
 
     private var address: Data? { try! LocalRepositories.contacts.contact(id)?.accountAddress }

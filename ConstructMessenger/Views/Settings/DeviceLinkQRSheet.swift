@@ -265,8 +265,9 @@ struct DeviceLinkQRSheet: View {
     private func startCountdown() {
         stopCountdown()
         updateCountdown()
+        // Scheduled on the main run loop, so the tick is on the main actor.
         countdownTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { _ in
-            updateCountdown()
+            MainActor.assumeIsolated { updateCountdown() }
         }
     }
 

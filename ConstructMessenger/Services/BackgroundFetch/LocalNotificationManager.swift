@@ -6,7 +6,7 @@
 
 import Combine
 import Foundation
-import UserNotifications
+@preconcurrency import UserNotifications
 #if canImport(UIKit)
 import UIKit
 #endif
@@ -16,6 +16,9 @@ import AppKit
 
 /// Manages local notifications for background message delivery
 /// Shows user-friendly notifications when messages arrive in background
+/// Main-actor: every caller already runs there; the notification center's own callbacks
+/// (arbitrary queue) hop back before touching state.
+@MainActor
 class LocalNotificationManager: NSObject {
 
     // MARK: - Properties
@@ -39,17 +42,19 @@ class LocalNotificationManager: NSObject {
 
     /// Request notification authorization from user
     /// Call this when user wants to enable notifications
-    func requestAuthorization(completion: @escaping (Bool) -> Void) {
+    func requestAuthorization(completion: @escaping @MainActor @Sendable (Bool) -> Void) {
         notificationCenter.requestAuthorization(options: [.alert, .sound, .badge]) { granted, error in
             DispatchQueue.main.async {
-                self.isAuthorized = granted
+                MainActor.assumeIsolated {
+                    self.isAuthorized = granted
 
-                if let error = error {
-                    Log.error("Notification authorization error: \(error)")
+                    if let error = error {
+                        Log.error("Notification authorization error: \(error)")
+                    }
+
+                    Log.info("Notification authorization: \(granted ? "granted" : "denied")")
+                    completion(granted)
                 }
-
-                Log.info("Notification authorization: \(granted ? "granted" : "denied")")
-                completion(granted)
             }
         }
     }
@@ -57,15 +62,18 @@ class LocalNotificationManager: NSObject {
     /// Check current authorization status
     func checkAuthorizationStatus() {
         notificationCenter.getNotificationSettings { settings in
+            let status = settings.authorizationStatus
             DispatchQueue.main.async {
-                self.isAuthorized = settings.authorizationStatus == .authorized
-                Log.debug("Notification authorization status: \(settings.authorizationStatus.rawValue)")
+                MainActor.assumeIsolated {
+                    self.isAuthorized = status == .authorized
+                    Log.debug("Notification authorization status: \(status.rawValue)")
+                }
             }
         }
     }
 
     /// Get detailed notification settings
-    func getNotificationSettings(completion: @escaping (UNNotificationSettings) -> Void) {
+    func getNotificationSettings(completion: @escaping @Sendable (UNNotificationSettings) -> Void) {
         notificationCenter.getNotificationSettings(completionHandler: completion)
     }
 
@@ -258,7 +266,7 @@ class LocalNotificationManager: NSObject {
     }
 
     /// The one identifier a chat's "New message" banner carries, so a later read can take it back.
-    static func chatBannerId(_ chatId: String) -> String { "msg-chat-\(chatId)" }
+    nonisolated static func chatBannerId(_ chatId: String) -> String { "msg-chat-\(chatId)" }
 
     /// Take back the chat's banner once its messages were read on another device.
     func withdrawChatBanner(chatId: String) {
@@ -272,12 +280,12 @@ class LocalNotificationManager: NSObject {
     }
 
     /// Get all pending notification requests
-    func getPendingNotifications(completion: @escaping ([UNNotificationRequest]) -> Void) {
+    func getPendingNotifications(completion: @escaping @Sendable ([UNNotificationRequest]) -> Void) {
         notificationCenter.getPendingNotificationRequests(completionHandler: completion)
     }
 
     /// Get all delivered notifications
-    func getDeliveredNotifications(completion: @escaping ([UNNotification]) -> Void) {
+    func getDeliveredNotifications(completion: @escaping @Sendable ([UNNotification]) -> Void) {
         notificationCenter.getDeliveredNotifications(completionHandler: completion)
     }
 }
@@ -286,8 +294,10 @@ class LocalNotificationManager: NSObject {
 
 extension LocalNotificationManager: UNUserNotificationCenterDelegate {
 
-    /// Handle notification when app is in foreground
-    func userNotificationCenter(
+    /// Handle notification when app is in foreground.
+    /// The delegate methods touch no state of ours, so they stay nonisolated and run on whatever
+    /// thread the system calls them on, as before.
+    nonisolated func userNotificationCenter(
         _ center: UNUserNotificationCenter,
         willPresent notification: UNNotification,
         withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
@@ -302,7 +312,7 @@ extension LocalNotificationManager: UNUserNotificationCenterDelegate {
     }
 
     /// Handle notification tap
-    func userNotificationCenter(
+    nonisolated func userNotificationCenter(
         _ center: UNUserNotificationCenter,
         didReceive response: UNNotificationResponse,
         withCompletionHandler completionHandler: @escaping () -> Void
@@ -327,8 +337,10 @@ extension LocalNotificationManager: UNUserNotificationCenterDelegate {
                 case .ignore:
                     Log.info("Incoming call notification pressed for a call no longer ringing — ignored", category: "Calls")
                 }
-                completionHandler()
             }
+            // Before the task, not inside it: the system's handler is not Sendable, and it only
+            // needs to hear that the response was taken.
+            completionHandler()
             return
         }
         #endif
@@ -362,7 +374,7 @@ extension LocalNotificationManager: UNUserNotificationCenterDelegate {
     // MARK: - Deep Linking
 
     /// Handle opening specific chat
-    private func handleOpenChat(chatID: String) {
+    private nonisolated func handleOpenChat(chatID: String) {
         // TODO: Implement deep linking to specific chat
         // Post notification for ContentView to handle navigation
         NotificationCenter.default.post(
@@ -375,7 +387,7 @@ extension LocalNotificationManager: UNUserNotificationCenterDelegate {
     }
 
     /// Handle opening chats list
-    private func handleOpenChats() {
+    private nonisolated func handleOpenChats() {
         // TODO: Implement navigation to chats list
         NotificationCenter.default.post(
             name: .openChatsList,

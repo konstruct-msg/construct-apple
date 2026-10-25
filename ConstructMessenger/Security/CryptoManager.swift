@@ -15,25 +15,46 @@ import os.log
 
 /// Singleton wrapper around the Rust `construct-core` FFI.
 ///
-/// **Threading requirement**: All methods that touch `orchestratorCore` or `_bootstrapCore`
-/// must be called from the same thread (in practice `@MainActor`). The only known exception
-/// is `BackgroundFetchManager`, which dispatches crypto calls via `MainActor.run`.
-/// Do NOT call crypto methods from arbitrary background threads or Tasks.
-class CryptoManager {
+/// **Threading:** callable from any thread. Every stored property below is read and written under
+/// `coreLock` — the mutable ones through accessors that take it — so `@unchecked Sendable` names
+/// that lock. The Rust objects synchronise themselves. Until 2026-10-25 this comment required one
+/// thread "in practice `@MainActor`", which the class did not enforce and SPK rotation, OTPK
+/// replenishment, history and media decryption already broke; about fifty reads and writes ran
+/// without the lock.
+class CryptoManager: @unchecked Sendable {
     static let shared = CryptoManager()
 
     // Two-phase init: _bootstrapCore holds ClassicCryptoCore before userId is known;
     // orchestratorCore is created in setLocalUserId() once userId is available.
     // Works for both iOS and macOS Desktop (Strategy B: direct core path).
     // Internal access for InviteGenerator (needs to export keys)
-    internal var orchestratorCore: OrchestratorCore?
+    internal var orchestratorCore: OrchestratorCore? {
+        get { withCoreLock { orchestratorCoreStorage } }
+        set { withCoreLock { orchestratorCoreStorage = newValue } }
+    }
+    private var orchestratorCoreStorage: OrchestratorCore?
 
     /// True once OrchestratorCore has been successfully created from Keychain keys.
     var isInitialized: Bool {
         return orchestratorCore != nil
     }
-    private var _bootstrapCore: ClassicCryptoCore?
-    var _cachedUserId: String?
+    private var _bootstrapCore: ClassicCryptoCore? {
+        get { withCoreLock { bootstrapCoreStorage } }
+        set { withCoreLock { bootstrapCoreStorage = newValue } }
+    }
+    private var bootstrapCoreStorage: ClassicCryptoCore?
+    var _cachedUserId: String? {
+        get { withCoreLock { cachedUserIdStorage } }
+        set { withCoreLock { cachedUserIdStorage = newValue } }
+    }
+    private var cachedUserIdStorage: String?
+
+    /// Runs `body` with `coreLock` held. Recursive, so a locked section may call anything here.
+    func withCoreLock<T>(_ body: () throws -> T) rethrows -> T {
+        coreLock.lock()
+        defer { coreLock.unlock() }
+        return try body()
+    }
 
     /// Returns the local identity for Double Ratchet AEAD associated data: **this device's id**.
     ///
@@ -64,14 +85,22 @@ class CryptoManager {
     /// In this case next_otpk_id resets to 1,000,000, so any OTPKs the server holds
     /// from a previous session have different key material for overlapping IDs.
     /// The next OTPK upload MUST use replaceExisting=true to wipe stale server keys.
-    var needsFullOtpkReplacement = false
+    var needsFullOtpkReplacement: Bool {
+        get { withCoreLock { needsFullOtpkReplacementStorage } }
+        set { withCoreLock { needsFullOtpkReplacementStorage = newValue } }
+    }
+    private var needsFullOtpkReplacementStorage = false
 
     func clearNeedsFullOtpkReplacement() {
         needsFullOtpkReplacement = false
     }
 
     /// Guards against calling restoreRecentSessions() more than once per process lifetime.
-    private var hasRestoredSessions = false
+    private var hasRestoredSessions: Bool {
+        get { withCoreLock { hasRestoredSessionsStorage } }
+        set { withCoreLock { hasRestoredSessionsStorage = newValue } }
+    }
+    private var hasRestoredSessionsStorage = false
 
     // MARK: - Session Archive
     let archiveManager = SessionArchiveManager()
@@ -84,11 +113,12 @@ class CryptoManager {
     /// True when core was loaded from saved Keychain keys (not freshly generated).
     /// On startup the server's OTPK set may not match the restored core's state,
     /// so the startup OTPK check must replace all server keys instead of just replenishing.
-    private(set) var wasRestoredFromKeychain: Bool = false
+    let wasRestoredFromKeychain: Bool
     
     // MARK: - Garbage Collection
     
-    /// Timer for periodic archive cleanup (24 hours)
+    /// Timer for periodic archive cleanup (24 hours). Main thread only — it is created and
+    /// replaced from `DispatchQueue.main` and lives on the main run loop.
     private var gcTimer: Timer?
     
     /// GC interval (24 hours)
@@ -96,7 +126,7 @@ class CryptoManager {
 
     private init() {
         let (loadedCore, restoredFromKeychain) = coreProvider.loadCore()
-        self._bootstrapCore = loadedCore
+        self.bootstrapCoreStorage = loadedCore
         self.wasRestoredFromKeychain = restoredFromKeychain
         // The core loaded from the key record, so the raw copies older builds kept beside it
         // have nothing left to back up: nothing reads them since 2026-09-29.
@@ -221,6 +251,8 @@ class CryptoManager {
     /// Returns the device id and the public bundle. The keys stay in the core and in the key
     /// record saved here; until 2026-09-29 the secrets were returned too, for Keychain copies.
     func generateRegistrationBundle() throws -> (deviceId: String, bundle: RegistrationBundleFields) {
+        coreLock.lock()
+        defer { coreLock.unlock() }
         Log.info("Generating registration bundle...", category: "CryptoManager")
 
         // Always generate fresh keys for registration — never reuse an existing core
@@ -319,9 +351,11 @@ class CryptoManager {
     /// Wipes orchestrator coordination state and E2EE session archives before generating
     /// fresh device-link keys. Does not delete registration private keys (CFE).
     func prepareForDeviceLink() {
-        orchestratorCore = nil
-        _bootstrapCore = nil
-        hasRestoredSessions = false
+        withCoreLock {
+            orchestratorCore = nil
+            _bootstrapCore = nil
+            hasRestoredSessions = false
+        }
         KeychainManager.shared.deleteData(forKey: Self.orchestratorStateCFEKey)
         KeychainManager.shared.deleteAllE2EESessions()
         KeychainManager.shared.deleteOtpks()
@@ -337,9 +371,11 @@ class CryptoManager {
     /// Clears persisted orchestrator state so a newly linked device does not inherit
     /// ACK/healing/session metadata from a previous identity on this machine.
     func resetOrchestratorStateForDeviceLink() {
-        orchestratorCore = nil
-        _bootstrapCore = nil
-        hasRestoredSessions = false
+        withCoreLock {
+            orchestratorCore = nil
+            _bootstrapCore = nil
+            hasRestoredSessions = false
+        }
         KeychainManager.shared.deleteData(forKey: Self.orchestratorStateCFEKey)
         KeychainManager.shared.deleteAllE2EESessions()
         Log.info("Reset orchestrator state for fresh device link", category: "CryptoManager")
@@ -350,10 +386,15 @@ class CryptoManager {
     func deleteAllCryptoKeys() {
         Log.info("Deleting all cryptographic data from Keychain...", category: "CryptoManager")
 
-        // Nullify in-memory cores so next registration generates a fresh keypair
-        self.orchestratorCore = nil
-        self._bootstrapCore = nil
-        hasRestoredSessions = false
+        // Nullify in-memory cores so next registration generates a fresh keypair. Only these
+        // three under the lock: `MlsStoreManager.reset()` below takes its own lock, and
+        // `MlsStoreManager` takes that one before `coreLock` — holding `coreLock` across it would
+        // invert the order.
+        withCoreLock {
+            orchestratorCore = nil
+            _bootstrapCore = nil
+            hasRestoredSessions = false
+        }
 
         // Delete private keys JSON (identity, signed prekey, signing key)
         KeychainManager.shared.deletePrivateKeys()
@@ -424,6 +465,10 @@ class CryptoManager {
     /// reaches the core is this **device's** id, because that is what the peer will name us by.
     /// See `cryptoLocalUserId`.
     func setLocalUserId(_ userId: String) {
+        // Whole body: the check for an existing core and the creation of one must not interleave
+        // with another caller's, or two cores are built and one replaces the other.
+        coreLock.lock()
+        defer { coreLock.unlock() }
         _cachedUserId = userId
         let cryptoId = cryptoLocalUserId
 
@@ -490,7 +535,7 @@ class CryptoManager {
             // tick (Core Data is guaranteed to be loaded by this point).
             if !hasRestoredSessions {
                 hasRestoredSessions = true
-                DispatchQueue.main.async { [weak self] in
+                Task { @MainActor [weak self] in
                     self?.restoreRecentSessions(limit: 10)
                 }
             }

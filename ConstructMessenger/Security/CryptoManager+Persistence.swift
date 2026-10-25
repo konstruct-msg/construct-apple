@@ -64,6 +64,8 @@ extension CryptoManager {
     ///   should check the return value and roll back if `false`.
     @discardableResult
     func persistCoreState() -> Bool {
+        coreLock.lock()
+        defer { coreLock.unlock() }
         guard let core = orchestratorCore else {
             Log.error("persistCoreState: core not initialized", category: "CryptoManager")
             return false
@@ -89,6 +91,8 @@ extension CryptoManager {
     /// made by `rotateSignedPrekey()`, ensuring the core stays in sync with the
     /// Keychain (and thus with what the server has).
     func reloadCoreFromKeychain() {
+        coreLock.lock()
+        defer { coreLock.unlock() }
         guard _cachedUserId != nil else {
             Log.error("reloadCoreFromKeychain: no cached userId — cannot recreate OrchestratorCore", category: "CryptoManager")
             return

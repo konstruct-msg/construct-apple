@@ -17,8 +17,8 @@ final class ControlFrameRoutingTests: XCTestCase {
     private var context: NSManagedObjectContext!
     private var contact: User!
 
-    override func setUp() {
-        super.setUp()
+    override func setUp() async throws {
+        try await super.setUp()
         let container = PersistenceController(inMemory: true).container
         LocalRepositories.useContactsForTesting(container)
         context = container.viewContext
@@ -29,9 +29,9 @@ final class ControlFrameRoutingTests: XCTestCase {
         try! context.save()
     }
 
-    override func tearDown() {
+    override func tearDown() async throws {
         LocalRepositories.useContactsForTesting(nil)
-        super.tearDown()
+        try await super.tearDown()
     }
 
     private func profileFrame(_ name: String, editedAt: UInt64) throws -> CfeAction {

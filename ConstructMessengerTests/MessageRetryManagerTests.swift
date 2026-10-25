@@ -7,8 +7,8 @@ final class MessageRetryManagerTests: XCTestCase {
     private var context: NSManagedObjectContext!
     private var chat: Chat!
 
-    override func setUp() {
-        super.setUp()
+    override func setUp() async throws {
+        try await super.setUp()
         let container = PersistenceController(inMemory: true).container
         context = container.viewContext
         // The manager writes through the repository (messages B2); point it here.
@@ -17,11 +17,11 @@ final class MessageRetryManagerTests: XCTestCase {
         chat.id = UUID().uuidString
     }
 
-    override func tearDown() {
+    override func tearDown() async throws {
         LocalRepositories.useMessagesForTesting(nil)
         chat = nil
         context = nil
-        super.tearDown()
+        try await super.tearDown()
     }
 
     /// What the store holds for `message` — the manager writes there, not on the object it was given.

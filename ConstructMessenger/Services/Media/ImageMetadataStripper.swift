@@ -55,7 +55,7 @@ enum ImageMetadataStripper {
         return true
     }
 
-    private static let pictureKeys: Set<CFString> = [
+    nonisolated(unsafe) private static let pictureKeys: Set<CFString> = [
         kCGImagePropertyPixelWidth, kCGImagePropertyPixelHeight, kCGImagePropertyDepth,
         kCGImagePropertyColorModel, kCGImagePropertyProfileName, kCGImagePropertyHasAlpha,
         kCGImagePropertyOrientation, kCGImagePropertyDPIWidth, kCGImagePropertyDPIHeight,
@@ -65,13 +65,13 @@ enum ImageMetadataStripper {
         "Headroom" as CFString,
     ]
 
-    private static let resolution: Set<CFString> = [
+    nonisolated(unsafe) private static let resolution: Set<CFString> = [
         kCGImagePropertyTIFFOrientation, kCGImagePropertyTIFFXResolution,
         kCGImagePropertyTIFFYResolution, kCGImagePropertyTIFFResolutionUnit,
         kCGImagePropertyTIFFTileWidth, kCGImagePropertyTIFFTileLength,
     ]
 
-    private static let pictureKeysInside: [CFString: Set<CFString>] = [
+    nonisolated(unsafe) private static let pictureKeysInside: [CFString: Set<CFString>] = [
         kCGImagePropertyTIFFDictionary: resolution,
         kCGImagePropertyExifDictionary: [
             kCGImagePropertyExifPixelXDimension, kCGImagePropertyExifPixelYDimension,

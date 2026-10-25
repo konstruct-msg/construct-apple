@@ -148,8 +148,11 @@ struct ConstructCommands: Commands {
 /// outside the SwiftUI environment, so they can't access @Environment VMs directly.
 /// DesktopCommandBridge is owned by the App struct and passed both to Commands
 /// and to DesktopRootView via @Environment.
+@MainActor
 @Observable
 final class DesktopCommandBridge {
+    // Nonisolated so the environment key can build its default outside the main actor.
+    nonisolated init() {}
 
     // Callbacks set by DesktopRootView once it has access to the ViewModels
     var onNewConversation: (() -> Void)?

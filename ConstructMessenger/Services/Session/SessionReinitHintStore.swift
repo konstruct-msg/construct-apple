@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import Synchronization
 
 /// The "open the next session without a one-time prekey" hint, between the place it arrives and
 /// the init that acts on it.
@@ -20,26 +21,23 @@ import Foundation
 ///
 /// In-memory + process-lifetime is deliberate: recovery completes within a session.
 /// Thread-safe (touched from the MainActor session paths and the init path).
-final class SessionReinitHintStore {
+final class SessionReinitHintStore: Sendable {
     static let shared = SessionReinitHintStore()
     private init() {}
 
-    private let lock = NSLock()
-    private var forceThreeDHInit: Set<String> = []
+    private let forceThreeDHInit = Mutex<Set<String>>([])
 
     // MARK: - INITIATOR side (force 3-DH on next init)
 
     /// Mark that the next session init for `userId` must be 3-DH (no one-time-prekey),
     /// because the peer told us it could not reproduce our 4-DH OTPK.
     func requestThreeDHReinit(for userId: String) {
-        lock.lock(); defer { lock.unlock() }
-        forceThreeDHInit.insert(userId)
+        _ = forceThreeDHInit.withLock { $0.insert(userId) }
     }
 
     /// Consume the initiator-side marker. Returns `true` iff the next init for this peer
     /// must skip the one-time-prekey.
     func consumeThreeDHReinit(for userId: String) -> Bool {
-        lock.lock(); defer { lock.unlock() }
-        return forceThreeDHInit.remove(userId) != nil
+        forceThreeDHInit.withLock { $0.remove(userId) != nil }
     }
 }

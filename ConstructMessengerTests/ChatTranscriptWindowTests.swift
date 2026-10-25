@@ -31,16 +31,16 @@ final class ChatTranscriptWindowTests: XCTestCase {
     private var container: NSPersistentContainer!
     private var context: NSManagedObjectContext { container.viewContext }
 
-    override func setUp() {
-        super.setUp()
+    override func setUp() async throws {
+        try await super.setUp()
         container = PersistenceController(inMemory: true).container
         LocalRepositories.useMessagesForTesting(container)
     }
 
-    override func tearDown() {
+    override func tearDown() async throws {
         LocalRepositories.useMessagesForTesting(nil)
         container = nil
-        super.tearDown()
+        try await super.tearDown()
     }
 
     // MARK: - Fixtures
