@@ -10,6 +10,9 @@
 //
 
 import SwiftUI
+#if canImport(UIKit)
+import UIKit
+#endif
 
 enum HistoryTransferStage: CaseIterable {
     case chats
@@ -58,12 +61,14 @@ struct HistoryTransferScreen: Equatable {
     /// Said at the foot of the screen, above its actions.
     var footerKey: String?
 
-    /// `stages` narrows a Settings retry to the one it sends.
+    /// `stages` narrows a Settings retry to the one it sends. `localNetworkDenied`: the system
+    /// refuses this app the local network, so nothing is found until the person allows it.
     static func of(
         phase: HistoryTransferPhase,
         side: HistoryTransferSide,
         stages: [HistoryTransferStage] = HistoryTransferStage.allCases,
-        peerNotSeen: Bool = false
+        peerNotSeen: Bool = false,
+        localNetworkDenied: Bool = false
     ) -> HistoryTransferScreen {
         let chatsDone = stages.contains(.chats) ? "history_sync_chats_done" : nil
         func step(_ stage: HistoryTransferStage) -> Step? {
@@ -73,6 +78,11 @@ struct HistoryTransferScreen: Equatable {
         }
 
         switch phase {
+        case .idle where localNetworkDenied:
+            return HistoryTransferScreen(
+                picture: .notSeen, titleKey: "history_sync_title_local_network",
+                bodyKey: Self.localNetworkBodyKey
+            )
         case .idle:
             switch side {
             case .receiving:
@@ -122,10 +132,40 @@ struct HistoryTransferScreen: Equatable {
         }
     }
 
+    /// Where the Local Network switch is, named the way this system names it.
+    #if os(macOS)
+    static let localNetworkBodyKey = "history_sync_body_local_network_mac"
+    #else
+    static let localNetworkBodyKey = "history_sync_body_local_network"
+    #endif
+
     /// Every key this screen can show, for the tests that read them back.
     var keys: [String] {
         [titleKey, bodyKey, doneKey, step?.stage.titleKey, step?.nextKey, footerKey].compactMap { $0 }
     }
+}
+
+/// Opens where the Local Network permission is switched: this app's page in Settings on iOS,
+/// the Local Network list in System Settings on a Mac.
+struct HistoryLocalNetworkSettingsButton: View {
+    @Environment(\.openURL) private var openURL
+
+    var body: some View {
+        CTSectionGroup {
+            ConstructButtonRow(
+                systemImage: "gearshape",
+                title: LocalizedStringKey("history_sync_open_settings")
+            ) {
+                if let url = Self.settingsURL { openURL(url) }
+            }
+        }
+    }
+
+    #if os(macOS)
+    static let settingsURL = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_LocalNetwork")
+    #else
+    static let settingsURL = URL(string: UIApplication.openSettingsURLString)
+    #endif
 }
 
 /// The transfer screen's frame: the status in the middle, the footer and `actions` at the foot.
