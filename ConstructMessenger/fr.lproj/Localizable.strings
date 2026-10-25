@@ -1088,6 +1088,10 @@
 "history_sync_footer_file" = "Pas de réseau commun ? Vous pouvez transférer l’historique avec un fichier.";
 "history_sync_device_this" = "celui-ci";
 "history_sync_device_other" = "l’autre";
+"history_sync_title_local_network" = "Pas d’accès au réseau local";
+"history_sync_body_local_network" = "L’historique passe par le Wi‑Fi, et Konstruct n’a pas accès au réseau local. Activez « Réseau local » pour Konstruct dans Réglages.";
+"history_sync_body_local_network_mac" = "L’historique passe par le Wi‑Fi, et Konstruct n’a pas accès au réseau local. Activez Konstruct dans Réglages Système → Confidentialité et sécurité → Réseau local.";
+"history_sync_open_settings" = "Ouvrir les réglages";
 "history_sync_done" = "Historique transféré.";
 "history_sync_imported_done" = "Les discussions sont maintenant sur cet appareil.";
 "call_error_not_contacts" = "Vous ne pouvez appeler que des personnes avec qui vous êtes connecté.";
