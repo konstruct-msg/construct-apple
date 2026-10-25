@@ -19,8 +19,8 @@ final class UploadPlaceholderVisibilityTests: XCTestCase {
     private var container: NSPersistentContainer!
     private let service = MessagePersistenceService()
 
-    override func setUp() {
-        super.setUp()
+    override func setUp() async throws {
+        try await super.setUp()
         container = PersistenceController(inMemory: true).container
         context = container.viewContext
         // The placeholders are written through the repositories (messages B1); point them here.
@@ -28,12 +28,12 @@ final class UploadPlaceholderVisibilityTests: XCTestCase {
         LocalRepositories.useChatsForTesting(container)
     }
 
-    override func tearDown() {
+    override func tearDown() async throws {
         LocalRepositories.useMessagesForTesting(nil)
         LocalRepositories.useChatsForTesting(nil)
         context = nil
         container = nil
-        super.tearDown()
+        try await super.tearDown()
     }
 
     /// A saved chat: the repository finds it by id in its own context.

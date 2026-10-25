@@ -18,20 +18,20 @@ final class DeliveryReceiptPreferenceTests: XCTestCase {
     private var context: NSManagedObjectContext!
     private var saved: Any?
 
-    override func setUp() {
-        super.setUp()
+    override func setUp() async throws {
+        try await super.setUp()
         context = PersistenceController(inMemory: true).container.viewContext
         SessionAddressing.ownAccountOverrideForTesting = ourAccount
         saved = UserDefaults.standard.object(forKey: DeliveryReceiptPreference.key)
         DeliveryReceiptBatcher.shared.discardForTesting()
     }
 
-    override func tearDown() {
+    override func tearDown() async throws {
         UserDefaults.standard.set(saved, forKey: DeliveryReceiptPreference.key)
         SessionAddressing.ownAccountOverrideForTesting = nil
         DeliveryReceiptBatcher.shared.discardForTesting()
         context = nil
-        super.tearDown()
+        try await super.tearDown()
     }
 
     /// Mutation: default `sends` to `false` — this reddens; an install that never opened the

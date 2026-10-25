@@ -18,18 +18,18 @@ final class ChatsLiveTests: XCTestCase {
     private var chats: CoreDataChatStore!
     private var live: ChatsLive!
 
-    override func setUp() {
-        super.setUp()
+    override func setUp() async throws {
+        try await super.setUp()
         container = PersistenceController(inMemory: true).container
         chats = CoreDataChatStore(container: container)
         live = ChatsLive(store: chats)
     }
 
-    override func tearDown() {
+    override func tearDown() async throws {
         live = nil
         chats = nil
         container = nil
-        super.tearDown()
+        try await super.tearDown()
     }
 
     private func contact(_ id: String, name: String = "") throws {

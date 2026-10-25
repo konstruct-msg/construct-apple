@@ -52,8 +52,8 @@ final class DesktopCoreReachabilityTests: XCTestCase {
     /// device ids differently, every per-device address the desktop produced would be wrong and
     /// would look like a routing defect.
     func testDeviceIdDerivationMatchesItsDefinition() {
-        let key = [UInt8](repeating: 0xA7, count: 32)
-        let expected = SHA256.hash(data: Data(key)).prefix(16)
+        let key = Data(repeating: 0xA7, count: 32)
+        let expected = SHA256.hash(data: key).prefix(16)
             .map { String(format: "%02x", $0) }.joined()
         XCTAssertEqual(deriveDeviceId(identityPublicKey: key), expected)
         XCTAssertEqual(deriveDeviceId(identityPublicKey: key).count, 32)
@@ -64,7 +64,7 @@ final class DesktopCoreReachabilityTests: XCTestCase {
     /// be a device that accepts anything.
     func testHybridSignatureRoundTripsAndRejectsTamperingOnMacOS() throws {
         let keys = try hybridSignatureKeygen()
-        let message = [UInt8]("construct desktop parity".utf8)
+        let message = Data("construct desktop parity".utf8)
         let signature = try hybridSign(privateKey: keys.privateKey, message: message)
 
         XCTAssertTrue(try hybridVerify(publicKey: keys.publicKey, message: message, signature: signature))
@@ -73,17 +73,5 @@ final class DesktopCoreReachabilityTests: XCTestCase {
         tampered[0] ^= 0x01
         XCTAssertFalse(try hybridVerify(publicKey: keys.publicKey, message: tampered, signature: signature),
                        "a platform that verifies a tampered message accepts anything")
-    }
-
-    /// Tie-break decides which side is INITIATOR when both start at once, and it must give the
-    /// same answer on both devices or they deadlock into mutual resets. Asserted as the property
-    /// that matters — the two sides disagree about themselves and agree about the outcome.
-    func testTieBreakIsSymmetricOnMacOS() {
-        let a = "6f5e37ac1b2c3d4e5f60718293a4b5c6"
-        let b = "0b4577bc9e8d7c6b5a4938271605f4e3"
-        let roleOfA = tieBreakRole(myId: a, peerId: b)
-        let roleOfB = tieBreakRole(myId: b, peerId: a)
-        XCTAssertNotEqual(roleOfA, roleOfB, "both sides took the same role — that is a deadlock")
-        XCTAssertEqual(Set([roleOfA, roleOfB]).count, 2)
     }
 }

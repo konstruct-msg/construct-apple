@@ -113,7 +113,7 @@ func legacyCertPayload(userID: String, domain: String, ik: Data, deviceID: Strin
 
 /// Signs sender certificates the way `identity-service` does (Ed25519 over `legacyCertPayload`),
 /// for tests that open sessions from them.
-final class TestCertificateServer {
+final class TestCertificateServer: Sendable {
     static let shared = TestCertificateServer()
 
     let key = Curve25519.Signing.PrivateKey()

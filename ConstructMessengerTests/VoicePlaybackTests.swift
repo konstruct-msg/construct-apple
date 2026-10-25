@@ -15,17 +15,17 @@ final class VoicePlaybackTests: XCTestCase {
     private let player = AudioPlayerService.shared
     private var savedRate: Any?
 
-    override func setUp() {
-        super.setUp()
+    override func setUp() async throws {
+        try await super.setUp()
         savedRate = UserDefaults.standard.object(forKey: "voice.playbackRate")
         player.stop()
     }
 
-    override func tearDown() {
+    override func tearDown() async throws {
         player.stop()
         if let savedRate { UserDefaults.standard.set(savedRate, forKey: "voice.playbackRate") }
         else { UserDefaults.standard.removeObject(forKey: "voice.playbackRate") }
-        super.tearDown()
+        try await super.tearDown()
     }
 
     /// Two seconds of silence as a 16-bit mono WAV, enough for AVAudioPlayer to load and seek.

@@ -16,6 +16,7 @@ import SwiftProtobuf
 import XCTest
 @testable import Construct_Messenger
 
+@MainActor
 class HistorySnapshotImporterTests: XCTestCase {
 
     private var container: NSPersistentContainer!
@@ -24,8 +25,8 @@ class HistorySnapshotImporterTests: XCTestCase {
     private let peer = "11111111-2222-4333-8444-555555555555"
     private let messageId = "cccccccc-dddd-4eee-8fff-000000000001"
 
-    override func setUp() {
-        super.setUp()
+    override func setUp() async throws {
+        try await super.setUp()
         installStores()
         MessageDisplayCache.shared.evictAll()
     }
@@ -41,7 +42,7 @@ class HistorySnapshotImporterTests: XCTestCase {
         LocalRepositories.useCallsForTesting(container)
     }
 
-    override func tearDown() {
+    override func tearDown() async throws {
         LocalRepositories.usePeerDevicesForTesting(nil)
         LocalRepositories.useContactsForTesting(nil)
         LocalRepositories.useChatsForTesting(nil)
@@ -50,7 +51,7 @@ class HistorySnapshotImporterTests: XCTestCase {
         LocalRepositories.useCallsForTesting(nil)
         MessageDisplayCache.shared.evictAll()
         container = nil
-        super.tearDown()
+        try await super.tearDown()
     }
 
     // MARK: - Twice
@@ -307,13 +308,14 @@ class HistorySnapshotImporterTests: XCTestCase {
 }
 
 /// The same cases on the crate: what a Desktop linked to a phone runs.
+@MainActor
 final class LocalStoreHistorySnapshotImporterTests: HistorySnapshotImporterTests {
     override func installStores() {
         LocalRepositories.useLocalStoreForTesting(.inMemoryForTesting())
     }
 
-    override func tearDown() {
+    override func tearDown() async throws {
         LocalRepositories.useLocalStoreForTesting(nil)
-        super.tearDown()
+        try await super.tearDown()
     }
 }

@@ -22,10 +22,11 @@ import XCTest
 import CoreData
 @testable import Construct_Messenger
 
+@MainActor
 final class SingleAckCacheTests: XCTestCase {
 
     @MainActor
-    override func setUpWithError() throws {
+    override func setUp() async throws {
         try CryptoCoreTestBootstrap.ensureCore(localUserId: "1a2b3c4d-0000-4000-8000-000000000002")
     }
 

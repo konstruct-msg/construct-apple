@@ -60,8 +60,8 @@ final class SealedRoutingBoundaryTests: XCTestCase {
     /// A `CryptoDeviceId`: 32 hex characters, the space every session key lives in.
     private let senderDevice = "651e765cbbd33b4e48631fb802c2b3d2"
 
-    override func setUpWithError() throws {
-        try super.setUpWithError()
+    override func setUp() async throws {
+        try await super.setUp()
         savedUserId = AuthSessionManager.shared.currentUserId
         AuthSessionManager.shared.updateUserId(me)
         try CryptoCoreTestBootstrap.ensureCore(localUserId: me)
@@ -80,7 +80,7 @@ final class SealedRoutingBoundaryTests: XCTestCase {
         router.delegate = delegate
     }
 
-    override func tearDown() {
+    override func tearDown() async throws {
         if let savedUserId, !savedUserId.isEmpty {
             AuthSessionManager.shared.updateUserId(savedUserId)
         }
@@ -91,7 +91,7 @@ final class SealedRoutingBoundaryTests: XCTestCase {
         context = nil
         router = nil
         delegate = nil
-        super.tearDown()
+        try await super.tearDown()
     }
 
     // MARK: - A. Unseal boundary remaps the routing kind
@@ -305,6 +305,7 @@ final class SealedRoutingBoundaryTests: XCTestCase {
 /// there is invisible — nothing fails, the value is simply zero downstream. Two were in fact
 /// being dropped: `pqMessageEpoch` and `pqRatchetField`, read by the RESPONDER init to rebuild
 /// the AEAD associated data, and whose loss its own comment records as "the outage".
+@MainActor
 final class SealedRebuildFieldPreservationTests: XCTestCase {
 
     private let peer = "7574fdec-ca31-44ac-9d43-0e6e870fe4d5"

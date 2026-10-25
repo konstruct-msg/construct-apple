@@ -142,6 +142,7 @@ private func establishSession(alice: OrchestratorPeer,
 
 // MARK: - Tests
 
+@MainActor
 final class CallSignalE2EETests: XCTestCase {
 
     // MARK: 1. outgoingCallSignal sets contentType = 12
