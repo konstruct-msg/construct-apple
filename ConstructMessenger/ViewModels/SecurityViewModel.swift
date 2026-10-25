@@ -291,21 +291,23 @@ final class SecurityViewModel {
         }
     }
 
-    func authenticateWithBiometrics(reason: String, completion: @escaping (Bool, String?) -> Void) {
+    func authenticateWithBiometrics(reason: String, completion: @escaping @MainActor @Sendable (Bool, String?) -> Void) {
         let context = LAContext()
         context.localizedCancelTitle = NSLocalizedString("cancel", comment: "")
         var error: NSError?
 
         guard context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &error) else {
+            let message = error?.localizedDescription
             DispatchQueue.main.async {
-                completion(false, error?.localizedDescription)
+                MainActor.assumeIsolated { completion(false, message) }
             }
             return
         }
 
         context.evaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, localizedReason: reason) { success, evalError in
+            let message = evalError?.localizedDescription
             DispatchQueue.main.async {
-                completion(success, evalError?.localizedDescription)
+                MainActor.assumeIsolated { completion(success, message) }
             }
         }
     }

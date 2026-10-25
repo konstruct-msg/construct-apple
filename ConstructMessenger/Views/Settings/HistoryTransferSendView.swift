@@ -197,16 +197,25 @@ struct HistoryTransferSendView: View {
         let background = PersistenceController.shared.container.newBackgroundContext()
         let channel = self.channel
         let coordinator = self.coordinator
-        await withTaskGroup(of: Void.self) { group in
-            group.addTask { @MainActor in
-                try? await channel.offer(.skip, peer: peer, local: local, coordinator: coordinator, context: background)
-            }
-            group.addTask {
-                try? await Task.sleep(for: Self.skipWait)
-            }
-            await group.next()
-            group.cancelAll()
+        // Unstructured so the offer runs on the main actor (where `channel` lives) without a
+        // child task having to carry its non-Sendable arguments; the group only races the two.
+        let offer = Task { @MainActor in
+            try? await channel.offer(.skip, peer: peer, local: local, coordinator: coordinator, context: background)
         }
+        let wait = Task { try? await Task.sleep(for: Self.skipWait) }
+        await withTaskCancellationHandler {
+            await withTaskGroup(of: Void.self) { group in
+                group.addTask { await offer.value }
+                group.addTask { await wait.value }
+                await group.next()
+                group.cancelAll()
+            }
+        } onCancel: {
+            offer.cancel()
+            wait.cancel()
+        }
+        offer.cancel()
+        wait.cancel()
         channel.cancel()
         coordinator.markSkipped()
         DeviceLinkPendingPin.clearPeerIdentity(forDeviceId: peerDeviceId)
