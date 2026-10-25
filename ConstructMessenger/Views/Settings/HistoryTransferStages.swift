@@ -2,8 +2,10 @@
 //  HistoryTransferStages.swift
 //  Construct Messenger
 //
-//  What a history transfer shows while it runs, on either device: one line saying where it is,
-//  and the two stages — chats, then photos and files — each waiting, under way, done or stopped.
+//  What a history transfer shows while it runs, on either device: the two devices, one title
+//  saying where it is, and the step under way — what is done and what comes next said in
+//  words. Until 2026-10-25 each stage was a row with a mark, and a stage not yet begun was an
+//  empty circle, which reads as something to tap.
 //  The phase is `HistoryTransferCoordinator`'s; this file only reads it.
 //
 
@@ -13,34 +15,10 @@ enum HistoryTransferStage: CaseIterable {
     case chats
     case media
 
-    enum Status: Equatable {
-        case waiting
-        case active
-        case done
-        case stopped
-    }
-
     var titleKey: String {
         switch self {
         case .chats: return "history_sync_stage_chats"
         case .media: return "history_sync_stage_media"
-        }
-    }
-
-    /// A failure before media began is a failure of the chats: the coordinator records only
-    /// "save a file instead", and media never starts without the chats.
-    func status(in phase: HistoryTransferPhase) -> Status {
-        switch (self, phase) {
-        case (_, .idle), (_, .skipped): return .waiting
-        case (.chats, .transcript): return .active
-        case (.chats, .saveFileInstead): return .stopped
-        case (.chats, _): return .done
-        case (.media, .transcript), (.media, .saveFileInstead): return .waiting
-        // The receiver marks chats done and media started in one step; the sender opens the
-        // media connection right after the chats one closes.
-        case (.media, .chatsTransferred), (.media, .media): return .active
-        case (.media, .complete): return .done
-        case (.media, .mediaIncomplete): return .stopped
         }
     }
 }
@@ -48,81 +26,322 @@ enum HistoryTransferStage: CaseIterable {
 enum HistoryTransferSide {
     case sending
     case receiving
+}
 
-    func statusKey(in phase: HistoryTransferPhase) -> String {
+/// Everything the transfer screen says for one phase. Pure, so a test can walk every phase.
+struct HistoryTransferScreen: Equatable {
+    enum Picture: Equatable {
+        /// The other device has not answered yet.
+        case looking
+        /// …and has not for `HistoryTransferSendView.notSeenAfter`.
+        case notSeen
+        case moving
+        case done
+        /// Finished, but not everything arrived.
+        case incomplete
+        case stopped
+    }
+
+    struct Step: Equatable {
+        let stage: HistoryTransferStage
+        let number: Int
+        let count: Int
+        let nextKey: String?
+    }
+
+    var picture: Picture
+    var titleKey: String
+    var bodyKey: String?
+    /// A stage already finished, said above the one under way.
+    var doneKey: String?
+    var step: Step?
+    /// Said at the foot of the screen, above its actions.
+    var footerKey: String?
+
+    /// `stages` narrows a Settings retry to the one it sends.
+    static func of(
+        phase: HistoryTransferPhase,
+        side: HistoryTransferSide,
+        stages: [HistoryTransferStage] = HistoryTransferStage.allCases,
+        peerNotSeen: Bool = false
+    ) -> HistoryTransferScreen {
+        let chatsDone = stages.contains(.chats) ? "history_sync_chats_done" : nil
+        func step(_ stage: HistoryTransferStage) -> Step? {
+            guard let index = stages.firstIndex(of: stage) else { return nil }
+            let next = stage == .chats && stages.contains(.media) ? "history_sync_next_media" : nil
+            return Step(stage: stage, number: index + 1, count: stages.count, nextKey: next)
+        }
+
         switch phase {
         case .idle:
-            return self == .sending ? "history_sync_looking" : "history_sync_waiting_for_other_device"
-        case .transcript, .chatsTransferred, .media:
-            return self == .sending ? "history_sync_auto_sending" : "history_sync_auto_connecting"
-        case .complete: return "history_sync_done"
-        case .mediaIncomplete: return "history_sync_media_incomplete"
-        case .skipped: return "history_sync_skip_sending"
-        case .saveFileInstead: return "history_sync_save_file_instead"
+            switch side {
+            case .receiving:
+                return HistoryTransferScreen(
+                    picture: .looking, titleKey: "history_sync_title_waiting", bodyKey: "history_sync_body_waiting"
+                )
+            case .sending where peerNotSeen:
+                return HistoryTransferScreen(
+                    picture: .notSeen, titleKey: "history_sync_title_not_seen",
+                    bodyKey: "history_sync_body_not_seen", footerKey: "history_sync_footer_file"
+                )
+            case .sending:
+                return HistoryTransferScreen(
+                    picture: .looking, titleKey: "history_sync_looking", bodyKey: "history_sync_body_looking",
+                    footerKey: stages.count > 1 ? "history_sync_footer_order" : nil
+                )
+            }
+        case .transcript:
+            return HistoryTransferScreen(
+                picture: .moving,
+                titleKey: side == .sending ? "history_sync_title_sending_chats" : "history_sync_title_receiving_chats",
+                step: step(.chats), footerKey: "history_sync_footer_keep_open"
+            )
+        // The receiver marks chats done and media started in one step; the sender opens the
+        // media connection right after the chats one closes.
+        case .chatsTransferred, .media:
+            return HistoryTransferScreen(
+                picture: .moving,
+                titleKey: side == .sending ? "history_sync_title_sending_media" : "history_sync_title_receiving_media",
+                doneKey: chatsDone, step: step(.media), footerKey: "history_sync_footer_keep_open"
+            )
+        case .complete:
+            return HistoryTransferScreen(picture: .done, titleKey: "history_sync_done")
+        // The media retry lives on the device that has the history.
+        case .mediaIncomplete:
+            return HistoryTransferScreen(
+                picture: .incomplete, titleKey: "history_sync_title_media_incomplete",
+                bodyKey: side == .sending ? "history_sync_body_media_retry_here" : "history_sync_body_media_retry_other",
+                doneKey: chatsDone
+            )
+        case .saveFileInstead:
+            return HistoryTransferScreen(
+                picture: .stopped, titleKey: "history_sync_title_stopped", bodyKey: "history_sync_body_file"
+            )
+        case .skipped:
+            return HistoryTransferScreen(picture: .done, titleKey: "history_sync_skip_sending")
         }
+    }
+
+    /// Every key this screen can show, for the tests that read them back.
+    var keys: [String] {
+        [titleKey, bodyKey, doneKey, step?.stage.titleKey, step?.nextKey, footerKey].compactMap { $0 }
     }
 }
 
-/// The status line and the stage rows. `stages` narrows a Settings retry to the one it sends.
-struct HistoryTransferProgress: View {
-    let phase: HistoryTransferPhase
+/// The transfer screen's frame: the status in the middle, the footer and `actions` at the foot.
+/// Scrolls when the text outgrows the screen (large Dynamic Type).
+struct HistoryTransferLayout<Actions: View>: View {
+    let screen: HistoryTransferScreen
     let side: HistoryTransferSide
-    var stages: [HistoryTransferStage] = HistoryTransferStage.allCases
+    @ViewBuilder var actions: Actions
 
     var body: some View {
-        VStack(spacing: CTLayout.sectionGap) {
-            Text(NSLocalizedString(side.statusKey(in: phase), comment: ""))
-                .font(CTFont.body)
-                .foregroundStyle(Color.CT.text)
-                .multilineTextAlignment(.center)
-                .frame(maxWidth: .infinity)
-            if phase != .skipped {
-                CTSectionGroup {
-                    ForEach(Array(stages.enumerated()), id: \.element) { index, stage in
-                        if index > 0 { ConstructRowDivider(indent: CTLayout.edgePad) }
-                        StageRow(stage: stage, status: stage.status(in: phase))
+        GeometryReader { proxy in
+            ScrollView {
+                VStack(spacing: CTLayout.sectionGap) {
+                    Spacer(minLength: CTSpace.xl)
+                    HistoryTransferStatus(screen: screen, side: side)
+                    Spacer(minLength: CTSpace.xl)
+                    if let footer = screen.footerKey {
+                        Text(NSLocalizedString(footer, comment: ""))
+                            .font(CTFont.secondary)
+                            .foregroundStyle(Color.CT.textDim)
+                            .multilineTextAlignment(.center)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .frame(maxWidth: .infinity)
                     }
+                    actions
+                }
+                .padding(CTLayout.edgePad)
+                .frame(minHeight: proxy.size.height)
+            }
+        }
+        .background(Color.CT.bg.ignoresSafeArea())
+    }
+}
+
+/// The picture, the title and the step under way.
+private struct HistoryTransferStatus: View {
+    let screen: HistoryTransferScreen
+    let side: HistoryTransferSide
+
+    var body: some View {
+        VStack(spacing: CTSpace.xl) {
+            HistoryTransferPicture(picture: screen.picture, side: side)
+            VStack(spacing: CTSpace.s) {
+                Text(NSLocalizedString(screen.titleKey, comment: ""))
+                    .font(CTFont.title)
+                    .foregroundStyle(Color.CT.text)
+                if let body = screen.bodyKey {
+                    Text(NSLocalizedString(body, comment: ""))
+                        .font(CTFont.body)
+                        .foregroundStyle(Color.CT.textDim)
+                }
+            }
+            .multilineTextAlignment(.center)
+            .fixedSize(horizontal: false, vertical: true)
+            .accessibilityElement(children: .combine)
+            if screen.doneKey != nil || screen.step != nil {
+                stepBlock
+            }
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    /// Leading under a step; a done line with nothing under way stands centred like the title.
+    private var stepBlock: some View {
+        VStack(alignment: screen.step == nil ? .center : .leading, spacing: CTSpace.s) {
+            if let done = screen.doneKey {
+                Label {
+                    Text(NSLocalizedString(done, comment: ""))
+                } icon: {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundStyle(Color.CT.accent)
+                }
+                .font(CTFont.body)
+                .foregroundStyle(Color.CT.textDim)
+            }
+            if let step = screen.step {
+                HStack {
+                    Text(NSLocalizedString(step.stage.titleKey, comment: ""))
+                        .foregroundStyle(Color.CT.text)
+                    Spacer()
+                    if step.count > 1 {
+                        Text(String(format: NSLocalizedString("history_sync_step_of", comment: ""), step.number, step.count))
+                            .foregroundStyle(Color.CT.textDim)
+                    }
+                }
+                .font(CTFont.body)
+                .accessibilityElement(children: .combine)
+                HistoryTransferBar()
+                if let next = step.nextKey {
+                    Text(NSLocalizedString(next, comment: ""))
+                        .font(CTFont.secondary)
+                        .foregroundStyle(Color.CT.textDim)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
         }
+        .frame(maxWidth: .infinity, alignment: screen.step == nil ? .center : .leading)
+    }
+}
+
+/// The two devices with what is happening between them, or the outcome in their place. The
+/// sender is on the left on both screens, so the arrow always points the way history goes.
+private struct HistoryTransferPicture: View {
+    let picture: HistoryTransferScreen.Picture
+    let side: HistoryTransferSide
+
+    /// How far the other device fades while it has not been found.
+    private static let unseenOpacity = 0.4
+
+    var body: some View {
+        Group {
+            switch picture {
+            case .done:
+                outcome("checkmark.circle.fill", Color.CT.accent)
+            case .incomplete:
+                outcome("exclamationmark.circle.fill", Color.CT.warning)
+            case .stopped:
+                outcome("exclamationmark.circle.fill", Color.CT.danger)
+            case .looking, .notSeen, .moving:
+                HStack(alignment: .center, spacing: CTSpace.l) {
+                    if side == .sending { this; connector; other } else { other; connector; this }
+                }
+            }
+        }
+        .accessibilityHidden(true)
     }
 
-    private struct StageRow: View {
-        let stage: HistoryTransferStage
-        let status: HistoryTransferStage.Status
+    private func outcome(_ symbol: String, _ color: Color) -> some View {
+        Image(systemName: symbol)
+            .font(CTIcon.font(CTIcon.hero))
+            .foregroundStyle(color)
+    }
 
-        var body: some View {
-            HStack(spacing: CTLayout.edgePad) {
-                Text(NSLocalizedString(stage.titleKey, comment: ""))
-                    .font(CTFont.body)
-                    .foregroundStyle(status == .waiting ? Color.CT.textDim : Color.CT.text)
-                Spacer()
-                indicator
-                    .frame(minWidth: CTLayout.hitTarget, alignment: .trailing)
-            }
-            .padding(.horizontal, CTLayout.edgePad)
-            .frame(minHeight: CTLayout.controlHeight)
-            .accessibilityElement(children: .combine)
-        }
+    private var this: some View {
+        device(Self.thisSymbol, "history_sync_device_this", seen: true)
+    }
 
-        @ViewBuilder
-        private var indicator: some View {
-            switch status {
-            case .waiting:
-                Image(systemName: "circle")
-                    .font(CTIcon.font(CTIcon.row))
-                    .foregroundStyle(Color.CT.textDim)
-            case .active:
-                ProgressView()
-            case .done:
-                Image(systemName: "checkmark.circle.fill")
-                    .font(CTIcon.font(CTIcon.row))
-                    .foregroundStyle(Color.CT.accent)
-            case .stopped:
-                Image(systemName: "exclamationmark.circle.fill")
-                    .font(CTIcon.font(CTIcon.row))
-                    .foregroundStyle(Color.CT.danger)
+    private var other: some View {
+        device(Self.otherSymbol, "history_sync_device_other", seen: picture == .moving)
+    }
+
+    private func device(_ symbol: String, _ labelKey: String, seen: Bool) -> some View {
+        VStack(spacing: CTSpace.s) {
+            Image(systemName: symbol)
+                .font(CTIcon.font(CTIcon.hero, weight: .light))
+                .foregroundStyle(Color.CT.text)
+                .opacity(seen ? 1 : Self.unseenOpacity)
+            Text(NSLocalizedString(labelKey, comment: ""))
+                .font(CTFont.caption)
+                .foregroundStyle(Color.CT.textDim)
+        }
+    }
+
+    @ViewBuilder
+    private var connector: some View {
+        switch picture {
+        case .moving:
+            Image(systemName: "arrow.right")
+                .font(CTIcon.font(CTIcon.control))
+                .foregroundStyle(Color.CT.accent)
+                .symbolEffect(.pulse)
+        case .looking:
+            Image(systemName: "ellipsis")
+                .font(CTIcon.font(CTIcon.control))
+                .foregroundStyle(Color.CT.accent)
+                .symbolEffect(.variableColor.iterative)
+        default:
+            Image(systemName: "ellipsis")
+                .font(CTIcon.font(CTIcon.control))
+                .foregroundStyle(Color.CT.textDim)
+        }
+    }
+
+    #if os(macOS)
+    private static let thisSymbol = "laptopcomputer"
+    private static let otherSymbol = "iphone"
+    #else
+    private static let thisSymbol = "iphone"
+    /// Unknown: a phone, an iPad or a computer. A phone is the common case.
+    private static let otherSymbol = "iphone"
+    #endif
+}
+
+/// Progress with no amount: the transfer reports its phase, not how much of it is done. A
+/// segment runs along the track; with Reduce Motion it stands still.
+private struct HistoryTransferBar: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var position: CGFloat = Self.start
+
+    private static let height: CGFloat = 6
+    /// Share of the track the segment covers.
+    private static let segment: CGFloat = 0.35
+    private static let start: CGFloat = -segment
+    private static let still: CGFloat = 0.3
+    private static let lap: Double = 1.4
+
+    var body: some View {
+        GeometryReader { proxy in
+            Capsule()
+                .fill(Color.CT.noise)
+                .overlay(alignment: .leading) {
+                    Capsule()
+                        .fill(Color.CT.accent)
+                        .frame(width: proxy.size.width * Self.segment)
+                        .offset(x: proxy.size.width * position)
+                }
+                .clipShape(Capsule())
+        }
+        .frame(height: Self.height)
+        .onAppear {
+            if reduceMotion {
+                position = Self.still
+            } else {
+                withAnimation(.linear(duration: Self.lap).repeatForever(autoreverses: false)) { position = 1 }
             }
         }
+        .accessibilityHidden(true)
     }
 }
