@@ -1351,3 +1351,5 @@
 "call_studio" = "Studio";
 "call_studio_start" = "Démarrer Studio";
 "call_studio_stop" = "Quitter Studio";
+"studio_screen_window_title" = "Écran de l’hôte";
+"studio_screen_waiting" = "En attente de l’écran de l’hôte…";

@@ -1442,3 +1442,5 @@
 "call_studio" = "Студия";
 "call_studio_start" = "Начать Студию";
 "call_studio_stop" = "Выйти из Студии";
+"studio_screen_window_title" = "Экран ведущего";
+"studio_screen_waiting" = "Ждём экран ведущего…";
