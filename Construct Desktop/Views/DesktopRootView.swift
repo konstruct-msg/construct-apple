@@ -297,6 +297,9 @@ struct DesktopRootView: View {
             .onChange(of: callManager.state, initial: true) { _, state in
                 syncCall(state: state, quality: callManager.callQuality)
             }
+            .onChange(of: StudioScreenPresenter.shared.renderer != nil) { _, shown in
+                if shown { openWindow(id: DesktopWindowID.studioScreen) }
+            }
             .onChange(of: callManager.callQuality) { _, quality in
                 syncCall(state: callManager.state, quality: quality)
             }

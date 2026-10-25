@@ -20,6 +20,8 @@ final class StudioLink {
     var onInvite: (StudioInvite) -> Void = { _ in }
     /// Host: start the program in this format. Guest: play it.
     var onUseFormat: (StudioProgramFormat) -> Void = { _ in }
+    /// Guest: the host's screen was shown or hidden.
+    var onScreenShown: (Bool) -> Void = { _ in }
     /// The studio is over on this side; whatever ran for it stops. The call goes on.
     var onEnd: (StudioControlMachine.EndReason) -> Void = { _ in }
 
@@ -62,6 +64,7 @@ final class StudioLink {
             Log.error("Studio: a direct path was decided, and this build only runs relay", category: "Calls")
         case .screenShown(let shown):
             Log.info("Studio: host screen \(shown ? "shown" : "hidden")", category: "Calls")
+            onScreenShown(shown)
         case .qualityRequested(let codec):
             Log.info("Studio: guest asks for \(codec)", category: "Calls")
         case .roundTrip:
