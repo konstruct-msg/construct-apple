@@ -76,6 +76,22 @@ struct DesktopRootView: View {
                     }
                 }
                 .environment(authViewModel)
+            } else if showReceiveHistorySync {
+                // The whole window, not a banner over it: right after a link nothing else here is
+                // usable yet, and until 2026-10-25 the banner sat over the onboarding screen it
+                // had not replaced. Wi-Fi waits here; a file and Skip are the ways out.
+                NavigationStack {
+                    HistoryTransferOfferView(
+                        userId: authViewModel.currentUserId ?? "",
+                        localDeviceId: KeychainManager.shared.loadDeviceID() ?? "",
+                        onFinish: {
+                            authViewModel.clearDeviceLinkPhase()
+                            authViewModel.refreshDeviceKeyState()
+                            historySyncPendingDeviceId = nil
+                            showReceiveHistorySync = false
+                        }
+                    )
+                }
             } else if authViewModel.hasRegisteredDeviceKeys == nil {
                 SplashView()
             } else if authViewModel.deviceKeysUnavailable {
@@ -178,23 +194,6 @@ struct DesktopRootView: View {
             if case .historySyncReceive(let pendingId) = phase {
                 historySyncPendingDeviceId = pendingId
                 showReceiveHistorySync = true
-            }
-        }
-        .overlay(alignment: .top) {
-            if showReceiveHistorySync {
-                // Banner, not a sheet (desktop-interaction-is-not-ios): the window stays usable
-                // while the person decides. Wi-Fi opens the receive view; file uses the importer.
-                HistoryTransferOfferView(
-                    userId: authViewModel.currentUserId ?? "",
-                    localDeviceId: KeychainManager.shared.loadDeviceID() ?? "",
-                    onFinish: {
-                        authViewModel.clearDeviceLinkPhase()
-                        historySyncPendingDeviceId = nil
-                        showReceiveHistorySync = false
-                    }
-                )
-                .frame(maxHeight: 360)
-                .background(Color.CT.bg)
             }
         }
     }
