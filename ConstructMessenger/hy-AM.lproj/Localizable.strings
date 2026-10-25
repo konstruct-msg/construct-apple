@@ -1147,6 +1147,10 @@
 "history_sync_footer_file" = "Ընդհանուր ցանց չկա՞։ Պատմությունը կարող եք տեղափոխել ֆայլով։";
 "history_sync_device_this" = "այս մեկը";
 "history_sync_device_other" = "մյուսը";
+"history_sync_title_local_network" = "Տեղային ցանցի հասանելիություն չկա";
+"history_sync_body_local_network" = "Պատմությունը փոխանցվում է Wi‑Fi-ով, իսկ Konstruct-ին թույլատրված չէ օգտվել տեղային ցանցից։ Միացրեք «Տեղային ցանց»-ը Konstruct-ի համար Կարգավորումներում։";
+"history_sync_body_local_network_mac" = "Պատմությունը փոխանցվում է Wi‑Fi-ով, իսկ Konstruct-ին թույլատրված չէ օգտվել տեղային ցանցից։ Միացրեք Konstruct-ը՝ Համակարգի կարգավորումներ → Գաղտնիություն և անվտանգություն → Տեղային ցանց։";
+"history_sync_open_settings" = "Բացել կարգավորումները";
 "history_sync_done" = "Պատմությունը փոխանցված է։";
 "history_sync_imported_done" = "Զրույցներն այժմ այս սարքում են։";
 "call_error_not_contacts" = "Կարող եք զանգել միայն նրանց, ում հետ կապված եք։";

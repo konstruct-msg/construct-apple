@@ -1147,6 +1147,10 @@
 "history_sync_footer_file" = "No shared network? You can move the history with a file.";
 "history_sync_device_this" = "this one";
 "history_sync_device_other" = "other";
+"history_sync_title_local_network" = "No access to the local network";
+"history_sync_body_local_network" = "History moves over Wi‑Fi, and Konstruct is not allowed to use the local network. Turn on Local Network for Konstruct in Settings.";
+"history_sync_body_local_network_mac" = "History moves over Wi‑Fi, and Konstruct is not allowed to use the local network. Turn Konstruct on in System Settings → Privacy & Security → Local Network.";
+"history_sync_open_settings" = "Open Settings";
 "history_sync_done" = "History transferred.";
 "history_sync_imported_done" = "Chats are on this device now.";
 "call_error_not_contacts" = "You can only call people you are connected with.";

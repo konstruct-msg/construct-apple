@@ -27,6 +27,9 @@ enum HistoryTransferPhase: Equatable {
 @Observable
 final class HistoryTransferCoordinator {
     private(set) var phase: HistoryTransferPhase = .idle
+    /// The system refuses this app the local network (the Local Network permission is off), so
+    /// the two devices cannot find each other. Set from the listener or browser while waiting.
+    private(set) var localNetworkDenied = false
 
     /// How long a finished transfer shows its result before its screen closes itself. The
     /// outcomes that leave something to do — a file to save, media to retry — stay open.
@@ -106,6 +109,10 @@ final class HistoryTransferCoordinator {
 
     func markSaveFileInstead() {
         phase = .saveFileInstead
+    }
+
+    func markLocalNetwork(denied: Bool) {
+        localNetworkDenied = denied
     }
 
     private func withBackgroundTask(_ body: () async throws -> Void) async throws {

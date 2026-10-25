@@ -1158,6 +1158,10 @@
 "history_sync_footer_file" = "Нет общей сети? Историю можно перенести файлом.";
 "history_sync_device_this" = "это";
 "history_sync_device_other" = "другое";
+"history_sync_title_local_network" = "Нет доступа к локальной сети";
+"history_sync_body_local_network" = "История переносится по Wi‑Fi, а Konstruct не разрешено пользоваться локальной сетью. Включите «Локальная сеть» для Konstruct в Настройках.";
+"history_sync_body_local_network_mac" = "История переносится по Wi‑Fi, а Konstruct не разрешено пользоваться локальной сетью. Включите Konstruct в Системных настройках → Конфиденциальность и безопасность → Локальная сеть.";
+"history_sync_open_settings" = "Открыть настройки";
 "history_sync_done" = "История перенесена.";
 "history_sync_imported_done" = "Чаты теперь на этом устройстве.";
 "call_error_not_contacts" = "Звонить можно только тем, с кем вы уже связаны.";

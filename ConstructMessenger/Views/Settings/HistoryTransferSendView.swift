@@ -69,9 +69,15 @@ struct HistoryTransferSendView: View {
                 .background(Color.CT.bg.ignoresSafeArea())
             } else {
                 HistoryTransferLayout(
-                    screen: .of(phase: coordinator.phase, side: .sending, stages: stages, peerNotSeen: peerNotSeen),
+                    screen: .of(
+                        phase: coordinator.phase, side: .sending, stages: stages, peerNotSeen: peerNotSeen,
+                        localNetworkDenied: coordinator.localNetworkDenied
+                    ),
                     side: .sending
                 ) {
+                    if coordinator.localNetworkDenied, coordinator.phase == .idle {
+                        HistoryLocalNetworkSettingsButton()
+                    }
                     fileSection
                 }
             }
