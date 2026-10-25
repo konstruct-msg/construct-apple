@@ -108,6 +108,27 @@ final class StudioLinkTests: XCTestCase {
         XCTAssertEqual(hostEnds, [.remoteLeft])
     }
 
+    /// The host's screen hidden mid-studio reaches the guest's hook — what takes its window down.
+    /// Shown at the start is the invite's to say, not a message.
+    ///
+    /// Mutation: the link drops `.screenShown` instead of calling `onScreenShown` — this reddens.
+    func testTheHostHidingItsScreenReachesTheGuest() {
+        var shown: [Bool] = []
+        guest.onScreenShown = { shown.append($0) }
+        guest.onInvite = { [unowned self] _ in guest.handle(.accept(ownPath: .relay, veil: false)) }
+        var withScreen = invite(cookie: Data())
+        withScreen.screen = true
+        host.handle(.invite(withScreen, ownPath: .relay, veil: false))
+        pump()
+        XCTAssertTrue(guest.state.screenShown, "the invite said the screen comes")
+
+        host.handle(.setScreen(false))
+        pump()
+
+        XCTAssertEqual(shown, [false])
+        XCTAssertFalse(guest.state.screenShown)
+    }
+
     /// Bytes that are no control message change nothing.
     func testAMalformedControlMessageChangesNothing() {
         guest.receive(Data([0xFF, 0xFF, 0xFF, 0xFF]))
