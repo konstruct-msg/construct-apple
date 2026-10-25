@@ -12,6 +12,7 @@ enum DeepLinkType: Equatable {
     case openChat(chatId: String)
 }
 
+@MainActor
 @Observable
 class DeepLinkHandler {
     var deepLink: DeepLinkType?
@@ -79,7 +80,7 @@ class DeepLinkHandler {
 
     /// Extract the signed config blob from a `konstruct://veil-config?d=<blob>` URL,
     /// or nil if the URL is not a veil-config link.
-    static func veilConfigBlob(from url: URL) -> String? {
+    nonisolated static func veilConfigBlob(from url: URL) -> String? {
         guard url.scheme?.lowercased() == "konstruct" else { return nil }
         // Accept the marker as host (konstruct://veil-config?d=…) or first path
         // component (konstruct:///veil-config?d=…), to tolerate URL formatting.

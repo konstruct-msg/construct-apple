@@ -202,7 +202,7 @@ extension MediaManager {
     )
 
     /// `render` nil is passthrough; `timeRange` nil sends the whole asset.
-    static func transcodeVideo(
+    nonisolated static func transcodeVideo(
         asset: AVAsset,
         to outputURL: URL,
         render: VideoRender?,
@@ -238,9 +238,12 @@ extension MediaManager {
             export = passthrough
         }
 
+        // `states(updateInterval:)` is the API for observing an export while `export(to:)` runs;
+        // this task only reads progress from it and is cancelled when the export returns.
+        nonisolated(unsafe) let progressSource = export
         let progressTask: Task<Void, Never>? = onProgress.map { cb in
             Task {
-                for await state in export.states(updateInterval: 0.3) {
+                for await state in progressSource.states(updateInterval: 0.3) {
                     if case .exporting(let progress) = state {
                         cb(progress.fractionCompleted)
                     }
@@ -256,7 +259,7 @@ extension MediaManager {
 
     /// Most frames a second a compressed video keeps. A phone's 60 — or a slow-motion clip's 240 —
     /// is mostly bytes nobody sees in a chat.
-    static let maxSentFrameRate: Float = 30
+    nonisolated static let maxSentFrameRate: Float = 30
 
     /// How the picture is rendered for `.p720` / `.p1080` and video notes: upright, centre-cropped
     /// to `render.cropAspect` if it names one, scaled to fit `render.bounds` (never up), in Rec. 709
@@ -267,7 +270,7 @@ extension MediaManager {
     /// screen or a player that does not tone-map it the picture comes out washed out or blown out.
     /// The H.264 presets always converted; the HEVC ones keep HDR unless the composition says not to.
     /// Nil for a source with no video track — the preset then exports the audio as it would.
-    private static func sdrVideoComposition(
+    private nonisolated static func sdrVideoComposition(
         for source: AVComposition,
         render: VideoRender
     ) async throws -> AVVideoComposition? {
@@ -315,7 +318,7 @@ extension MediaManager {
     /// metadata. See `transcodeVideo`.
     /// `range` nil is the whole asset; a range keeps that stretch, starting at zero — a trim made
     /// here is exact to the frame, since every export but passthrough re-encodes.
-    private static func metadataFreeComposition(of asset: AVAsset, range: CMTimeRange? = nil) async throws -> AVComposition {
+    private nonisolated static func metadataFreeComposition(of asset: AVAsset, range: CMTimeRange? = nil) async throws -> AVComposition {
         let composition = AVMutableComposition()
         let whole = CMTimeRange(start: .zero, duration: try await asset.load(.duration))
         let range = range.map { $0.intersection(whole) } ?? whole
