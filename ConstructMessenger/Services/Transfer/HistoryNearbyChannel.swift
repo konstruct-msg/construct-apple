@@ -240,7 +240,7 @@ final class HistoryNearbyChannel {
     // MARK: - New device
 
     /// How the new device learns the offering device's keys: the directory, by default.
-    typealias PeerResolver = @MainActor (_ deviceIdHex: String) async throws -> HistoryPeer
+    typealias PeerResolver = @MainActor @Sendable (_ deviceIdHex: String) async throws -> HistoryPeer
 
     static func directoryResolver(ownUserId: String) -> PeerResolver {
         { deviceIdHex in

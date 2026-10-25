@@ -51,7 +51,7 @@ final class AccountRecoveryViewModel {
     /// The silent key's phrase waits in the vault until it is copied
     /// (`decisions/recovery-key-backup-is-deferred-not-skipped.md`).
     private(set) var backupPending = false
-    private let phraseStore: RecoveryPhraseStore = RecoveryPhraseVault.shared
+    private let phraseStore: any RecoveryPhraseStore & Sendable = RecoveryPhraseVault.shared
     private let marks = RecoveryBackupMarks()
 
     /// What the chat list should say about the copy (`RecoveryReminder.decide`). Recomputed with

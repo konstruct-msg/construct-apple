@@ -15,6 +15,7 @@
 //
 
 import Foundation
+import Synchronization
 
 enum CensoredNetworkDetector {
 
@@ -51,7 +52,11 @@ enum CensoredNetworkDetector {
     }
 
     #if DEBUG
-    static var _testOverride: Bool? = nil
+    private static let testOverrideBox = Mutex<Bool?>(nil)
+    static var _testOverride: Bool? {
+        get { testOverrideBox.withLock { $0 } }
+        set { testOverrideBox.withLock { $0 = newValue } }
+    }
     #endif
 
     private static func detectFromTimezone() -> Bool {

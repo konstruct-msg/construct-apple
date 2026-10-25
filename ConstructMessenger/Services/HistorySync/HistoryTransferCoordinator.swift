@@ -68,8 +68,8 @@ final class HistoryTransferCoordinator {
         into receiver: HistoryReceiver,
         pin: HistoryQRPin,
         expectedUserId: String,
-        resolve: (_ deviceIdHex: String) async throws -> HistoryKnownKeys,
-        reply: ((Data) async throws -> Void)?
+        resolve: @Sendable (_ deviceIdHex: String) async throws -> HistoryKnownKeys,
+        reply: (@Sendable (Data) async throws -> Void)?
     ) async throws -> HistoryCoreStream.Outcome {
         let sink = HistoryImportSink(expectedUserId: expectedUserId)
         return try await HistoryCoreStream.receive(

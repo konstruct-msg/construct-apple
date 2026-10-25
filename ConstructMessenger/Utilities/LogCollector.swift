@@ -202,7 +202,8 @@ class LogCollector: @unchecked Sendable {  // `recent` behind `recentLock`, file
         return files.sorted { $0.lastPathComponent > $1.lastPathComponent }
     }
     
-    /// Create combined log archive for sharing
+    /// Create combined log archive for sharing. Main actor: the header names the vendor id.
+    @MainActor
     func createLogArchive() throws -> URL {
         let tempDir = FileManager.default.temporaryDirectory
         let archiveName = "construct-logs-\(Date().timeIntervalSince1970).txt"
@@ -259,10 +260,10 @@ class LogCollector: @unchecked Sendable {  // `recent` behind `recentLock`, file
     ///
     /// Note it can never read zero: `writeSystemInfo()` re-creates the header immediately, so a
     /// few hundred bytes is the floor and the correct "empty" reading.
-    func clearLogs(completion: (() -> Void)? = nil) {
+    func clearLogs(completion: (@MainActor @Sendable () -> Void)? = nil) {
         queue.async { [weak self] in
             guard let self = self else {
-                if let completion { DispatchQueue.main.async(execute: completion) }
+                if let completion { Task { @MainActor in completion() } }
                 return
             }
 
@@ -277,7 +278,7 @@ class LogCollector: @unchecked Sendable {  // `recent` behind `recentLock`, file
             // After writeSystemInfo, so the line lands in the fresh file rather than in the one
             // being deleted — it used to be logged first and was itself erased.
             Log.info("All logs cleared", category: "LogCollector")
-            if let completion { DispatchQueue.main.async(execute: completion) }
+            if let completion { Task { @MainActor in completion() } }
         }
     }
     

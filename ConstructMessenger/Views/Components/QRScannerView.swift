@@ -360,6 +360,7 @@ private struct ScannerCornerBrackets: Shape {
 }
 
 // MARK: - QR Code Scanner Logic
+@MainActor
 @Observable
 class QRCodeScanner: NSObject, AVCaptureMetadataOutputObjectsDelegate {
     var scannedCode: String?
@@ -412,8 +413,11 @@ class QRCodeScanner: NSObject, AVCaptureMetadataOutputObjectsDelegate {
         }
 
         // Only startRunning() is async - setup is sync
+        // startRunning() blocks, so Apple has it run off the main thread; this block is the
+        // only thing handed the session, and stopScanning() calls stopRunning(), which AVFoundation allows from any thread.
+        nonisolated(unsafe) let sessionToStart = session
         DispatchQueue.global(qos: .userInitiated).async {
-            session.startRunning()
+            sessionToStart.startRunning()
             Log.debug("Camera session started")
         }
     }
@@ -422,15 +426,23 @@ class QRCodeScanner: NSObject, AVCaptureMetadataOutputObjectsDelegate {
         captureSession?.stopRunning()
     }
 
-    func metadataOutput(_ output: AVCaptureMetadataOutput, didOutput metadataObjects: [AVMetadataObject], from connection: AVCaptureConnection) {
+    nonisolated func metadataOutput(_ output: AVCaptureMetadataOutput, didOutput metadataObjects: [AVMetadataObject], from connection: AVCaptureConnection) {
+        // Delivered on DispatchQueue.main (see setMetadataObjectsDelegate). The AVFoundation
+        // objects are read here; only the plain values cross into the main actor.
+        let readable = metadataObjects.first as? AVMetadataMachineReadableCodeObject
+        let isCode = readable != nil
+        let value = readable?.stringValue
+        MainActor.assumeIsolated { handleMetadata(isCode: isCode, stringValue: value) }
+    }
+
+    private func handleMetadata(isCode: Bool, stringValue: String?) {
         guard scannedCode == nil else { return }
-        guard let metadataObject = metadataObjects.first,
-              let readableObject = metadataObject as? AVMetadataMachineReadableCodeObject else { return }
+        guard isCode else { return }
 
         // Prefer stringValue (UTF-8 text / base64url invite QR). For legacy byte-mode
         // CIv1 codes, AVFoundation may still surface a Latin-1 stringValue — recovery
         // happens in handleScannedCode. If both are nil, the frame is a no-op.
-        guard let stringValue = readableObject.stringValue, !stringValue.isEmpty else {
+        guard let stringValue, !stringValue.isEmpty else {
             #if DEBUG
             Log.debug(
                 "QRScanner: QR detected but stringValue nil/empty (byte-mode without Latin-1 surface?)",

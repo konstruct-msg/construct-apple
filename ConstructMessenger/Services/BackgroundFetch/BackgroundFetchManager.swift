@@ -6,7 +6,9 @@
 
 import Foundation
 #if os(iOS)
-import BackgroundTasks
+// `@preconcurrency`: `BGTask` is not annotated, and Apple documents `setTaskCompleted` and
+// `expirationHandler` as callable from any thread.
+@preconcurrency import BackgroundTasks
 #endif
 #if os(iOS)
 import UIKit
