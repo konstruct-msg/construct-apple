@@ -59,6 +59,44 @@ final class NWConnectionTransport: HistoryByteTransport, @unchecked Sendable {
     }
 }
 
+// MARK: - Waiting on the network
+
+/// Why the listener or the browser is not getting anywhere. Until 2026-10-25 neither said
+/// anything before a connection: a refused Local Network permission, a VPN that keeps the
+/// devices apart, and a slow network all looked the same — two devices waiting in silence.
+enum NearbyWait {
+    /// `kDNSServiceErr_PolicyDenied`: the system refuses this app the local network.
+    static let policyDenied: DNSServiceErrorType = -65_570
+
+    static func isLocalNetworkDenied(_ error: NWError) -> Bool {
+        if case .dns(let code) = error { return code == policyDenied }
+        return false
+    }
+
+    /// A line for the log.
+    static func describe(_ state: NWListener.State) -> String {
+        switch state {
+        case .setup: return "setup"
+        case .waiting(let error): return "waiting(\(error)\(isLocalNetworkDenied(error) ? ", local network denied" : ""))"
+        case .ready: return "ready"
+        case .failed(let error): return "failed(\(error))"
+        case .cancelled: return "cancelled"
+        @unknown default: return "unknown"
+        }
+    }
+
+    static func describe(_ state: NWBrowser.State) -> String {
+        switch state {
+        case .setup: return "setup"
+        case .waiting(let error): return "waiting(\(error)\(isLocalNetworkDenied(error) ? ", local network denied" : ""))"
+        case .ready: return "ready"
+        case .failed(let error): return "failed(\(error))"
+        case .cancelled: return "cancelled"
+        @unknown default: return "unknown"
+        }
+    }
+}
+
 // MARK: - Channel
 
 @MainActor
@@ -134,7 +172,9 @@ final class HistoryNearbyChannel {
     ) async throws {
         let tag = historyDiscoveryTag(userIdDashed: local.userIdDashed, deviceIdHex: peer.deviceIdHex)
         let instanceName = historyDiscoveryInstanceName(tag: tag)
-        let conn = try await acceptConnection(instanceName: instanceName)
+        let conn = try await acceptConnection(instanceName: instanceName) { denied in
+            coordinator.markLocalNetwork(denied: denied)
+        }
         let transport = NWConnectionTransport(conn)
         self.transport = transport
         defer { transport.close(); self.transport = nil }
@@ -201,7 +241,10 @@ final class HistoryNearbyChannel {
         )
     }
 
-    private func acceptConnection(instanceName: String) async throws -> NWConnection {
+    private func acceptConnection(
+        instanceName: String,
+        onLocalNetwork: @escaping @MainActor @Sendable (_ denied: Bool) -> Void
+    ) async throws -> NWConnection {
         let params = NWParameters.tcp
         params.includePeerToPeer = true
         let listener = try NWListener(using: params)
@@ -210,7 +253,13 @@ final class HistoryNearbyChannel {
         let conn = try await withCheckedThrowingContinuation { (cont: CheckedContinuation<NWConnection, Error>) in
             let flag = ResumeOnce()
             listener.stateUpdateHandler = { state in
+                Log.info("history_listen state=\(NearbyWait.describe(state))", category: "HistorySync")
                 switch state {
+                case .waiting(let error):
+                    let denied = NearbyWait.isLocalNetworkDenied(error)
+                    Task { @MainActor in onLocalNetwork(denied) }
+                case .ready:
+                    Task { @MainActor in onLocalNetwork(false) }
                 case .failed(let error):
                     guard !flag.done else { return }
                     flag.done = true
@@ -221,6 +270,15 @@ final class HistoryNearbyChannel {
                     cont.resume(throwing: CancellationError())
                 default:
                     break
+                }
+            }
+            // Whether the offer is on the network at all: the listener can be ready and still
+            // not advertised.
+            listener.serviceRegistrationUpdateHandler = { change in
+                switch change {
+                case .add: Log.info("history_listen advertised", category: "HistorySync")
+                case .remove: Log.info("history_listen withdrawn", category: "HistorySync")
+                @unknown default: break
                 }
             }
             listener.newConnectionHandler = { connection in
@@ -256,7 +314,9 @@ final class HistoryNearbyChannel {
     ) async throws -> ReceiveOutcome {
         let tag = historyDiscoveryTag(userIdDashed: local.userIdDashed, deviceIdHex: local.deviceIdHex)
         let instanceName = historyDiscoveryInstanceName(tag: tag)
-        let conn = try await connect(instanceName: instanceName)
+        let conn = try await connect(instanceName: instanceName) { denied in
+            coordinator.markLocalNetwork(denied: denied)
+        }
         let transport = NWConnectionTransport(conn)
         self.transport = transport
         defer { transport.close(); self.transport = nil }
@@ -308,7 +368,10 @@ final class HistoryNearbyChannel {
         }
     }
 
-    private func connect(instanceName: String) async throws -> NWConnection {
+    private func connect(
+        instanceName: String,
+        onLocalNetwork: @escaping @MainActor @Sendable (_ denied: Bool) -> Void
+    ) async throws -> NWConnection {
         let params = NWParameters.tcp
         params.includePeerToPeer = true
         let endpoint = try await withCheckedThrowingContinuation { (cont: CheckedContinuation<NWEndpoint, Error>) in
@@ -317,17 +380,27 @@ final class HistoryNearbyChannel {
             self.browser = browser
             browser.browseResultsChangedHandler = { results, _ in
                 guard !flag.done else { return }
-                if let match = results.first(where: {
+                let match = results.first(where: {
                     if case .service(let name, _, _, _) = $0.endpoint { return name == instanceName }
                     return false
-                }) {
+                })
+                // Other devices' offers are counted, never named: an instance name is a tag of
+                // an account and a device.
+                Log.info("history_browse results=\(results.count) ours=\(match != nil)", category: "HistorySync")
+                if let match {
                     flag.done = true
                     cont.resume(returning: match.endpoint)
                 }
             }
             browser.stateUpdateHandler = { state in
                 guard !flag.done else { return }
+                Log.info("history_browse state=\(NearbyWait.describe(state))", category: "HistorySync")
                 switch state {
+                case .waiting(let error):
+                    let denied = NearbyWait.isLocalNetworkDenied(error)
+                    Task { @MainActor in onLocalNetwork(denied) }
+                case .ready:
+                    Task { @MainActor in onLocalNetwork(false) }
                 case .failed(let error):
                     flag.done = true
                     cont.resume(throwing: error)

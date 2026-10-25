@@ -1018,6 +1018,10 @@
 "history_sync_footer_file" = "共通のネットワークがない場合は、ファイルで履歴を移せます。";
 "history_sync_device_this" = "このデバイス";
 "history_sync_device_other" = "もう一方";
+"history_sync_title_local_network" = "ローカルネットワークにアクセスできません";
+"history_sync_body_local_network" = "履歴は Wi‑Fi で転送されますが、Konstruct にローカルネットワークの使用が許可されていません。設定で Konstruct の「ローカルネットワーク」をオンにしてください。";
+"history_sync_body_local_network_mac" = "履歴は Wi‑Fi で転送されますが、Konstruct にローカルネットワークの使用が許可されていません。システム設定 → プライバシーとセキュリティ → ローカルネットワーク で Konstruct をオンにしてください。";
+"history_sync_open_settings" = "設定を開く";
 "history_sync_done" = "履歴を転送しました。";
 "history_sync_imported_done" = "チャットはこの端末で使えます。";
 "history_sync_auto_connecting" = "履歴を受信中…";
