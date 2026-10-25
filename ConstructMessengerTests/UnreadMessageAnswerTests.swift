@@ -18,8 +18,8 @@ final class UnreadMessageAnswerTests: XCTestCase {
 
     private var savedKey: Data?
 
-    override func setUpWithError() throws {
-        try super.setUpWithError()
+    override func setUp() async throws {
+        try await super.setUp()
         if !CryptoManager.shared.isInitialized {
             CryptoManager.shared.setLocalUserId(UUID().uuidString)
             _ = try CryptoManager.shared.generateRegistrationBundle()
@@ -30,9 +30,9 @@ final class UnreadMessageAnswerTests: XCTestCase {
         UserDefaults.standard.set(TestCertificateServer.shared.verifyingKey, forKey: VeilCertFetcher.cachedBundleSigningKeyKey)
     }
 
-    override func tearDown() {
+    override func tearDown() async throws {
         UserDefaults.standard.set(savedKey, forKey: VeilCertFetcher.cachedBundleSigningKeyKey)
-        super.tearDown()
+        try await super.tearDown()
     }
 
     /// Mutation: hand the keys over only in `openReceiving` again — no error is produced.

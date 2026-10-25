@@ -24,32 +24,27 @@ struct HistoryTransferReceiveView: View {
     @State private var errorMessage: String?
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: CTLayout.sectionGap) {
-                HistoryTransferProgress(phase: coordinator.phase, side: .receiving)
-                if let onImportFile, isWaiting || coordinator.phase == .saveFileInstead {
-                    CTSectionGroup {
-                        ConstructButtonRow(
-                            systemImage: "folder",
-                            title: LocalizedStringKey("history_sync_import_file"),
-                            action: onImportFile
-                        )
-                        ConstructRowDivider(indent: CTLayout.edgePad)
-                        ConstructButtonRow(
-                            systemImage: "forward",
-                            title: LocalizedStringKey("history_sync_offer_skip")
-                        ) { onDone(); dismiss() }
-                    }
-                    Text(NSLocalizedString("history_sync_empty_explanation", comment: ""))
-                        .font(CTFont.secondary)
-                        .foregroundStyle(Color.CT.textDim)
-                        .multilineTextAlignment(.center)
-                        .frame(maxWidth: .infinity)
+        HistoryTransferLayout(screen: .of(phase: coordinator.phase, side: .receiving), side: .receiving) {
+            if let onImportFile, isWaiting || coordinator.phase == .saveFileInstead {
+                CTSectionGroup {
+                    ConstructButtonRow(
+                        systemImage: "folder",
+                        title: LocalizedStringKey("history_sync_import_file"),
+                        action: onImportFile
+                    )
+                    ConstructRowDivider(indent: CTLayout.edgePad)
+                    ConstructButtonRow(
+                        systemImage: "forward",
+                        title: LocalizedStringKey("history_sync_offer_skip")
+                    ) { onDone(); dismiss() }
                 }
+                Text(NSLocalizedString("history_sync_empty_explanation", comment: ""))
+                    .font(CTFont.secondary)
+                    .foregroundStyle(Color.CT.textDim)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: .infinity)
             }
-            .padding(CTLayout.edgePad)
         }
-        .background(Color.CT.bg.ignoresSafeArea())
         .screenTitle(NSLocalizedString("history_sync_receive_title", comment: ""))
         // Its own close, not `sheetNavigation`'s: leaving also tells the caller (`onDone`).
         .toolbar {

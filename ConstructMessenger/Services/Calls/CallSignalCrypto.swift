@@ -102,7 +102,7 @@ enum CallSignalFrame {
 // MARK: - Service
 
 /// Encrypts/decrypts the WebRTC ICE candidate using the peer's Double Ratchet session.
-final class CallSignalCrypto {
+final class CallSignalCrypto: Sendable {
     static let shared = CallSignalCrypto()
     private init() {}
 

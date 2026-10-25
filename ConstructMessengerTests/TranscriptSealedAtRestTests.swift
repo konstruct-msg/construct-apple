@@ -12,11 +12,12 @@ import XCTest
 import CoreData
 @testable import Construct_Messenger
 
+@MainActor
 final class TranscriptSealedAtRestTests: XCTestCase {
     private var context: NSManagedObjectContext!
 
-    override func setUp() {
-        super.setUp()
+    override func setUp() async throws {
+        try await super.setUp()
         context = PersistenceController(inMemory: true).container.viewContext
     }
 

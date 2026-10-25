@@ -15,17 +15,17 @@ final class StudioIsOnTests: XCTestCase {
 
     private let manager = CallManager.shared
 
-    override func setUp() {
-        super.setUp()
+    override func setUp() async throws {
+        try await super.setUp()
         LocalRepositories.useCallsForTesting(PersistenceController(inMemory: true).container)
     }
 
-    override func tearDown() {
+    override func tearDown() async throws {
         manager.studioCallId = nil
         manager.endActiveCall(reason: .local("test"), reportToCallKit: false)
         manager.dismissEndedCall()
         LocalRepositories.useCallsForTesting(nil)
-        super.tearDown()
+        try await super.tearDown()
     }
 
     private func begin(_ id: String) {

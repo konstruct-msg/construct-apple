@@ -167,8 +167,8 @@ final class ProfileShareTests: XCTestCase {
     /// this test's context would still show what it held before them.
     private var contact: ContactRecord { try! LocalRepositories.contacts.contact(row.id)! }
 
-    override func setUp() {
-        super.setUp()
+    override func setUp() async throws {
+        try await super.setUp()
         let container = PersistenceController(inMemory: true).container
         LocalRepositories.useContactsForTesting(container)
         context = container.viewContext
@@ -180,9 +180,9 @@ final class ProfileShareTests: XCTestCase {
         try! context.save()
     }
 
-    override func tearDown() {
+    override func tearDown() async throws {
         LocalRepositories.useContactsForTesting(nil)
-        super.tearDown()
+        try await super.tearDown()
     }
 
     private func apply(_ profile: ProfileShare) -> [String] {

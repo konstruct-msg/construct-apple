@@ -13,6 +13,7 @@ import XCTest
 import CoreData
 @testable import Construct_Messenger
 
+@MainActor
 class ReactionStoreTests: XCTestCase {
 
     /// The store, a way to hold a target message under the id given as given, and the number of
@@ -50,16 +51,16 @@ class ReactionStoreTests: XCTestCase {
     private let t0: Int64 = 1_700_000_000_000
     private let t1: Int64 = 1_700_000_000_500
 
-    override func setUp() {
-        super.setUp()
+    override func setUp() async throws {
+        try await super.setUp()
         (store, holdMessage, messageCount) = makeStore()
     }
 
-    override func tearDown() {
+    override func tearDown() async throws {
         store = nil
         holdMessage = nil
         messageCount = nil
-        super.tearDown()
+        try await super.tearDown()
     }
 
     @discardableResult
@@ -217,6 +218,7 @@ class ReactionStoreTests: XCTestCase {
 
 /// The same cases on the crate. A target is held through the repositories the app will use, which
 /// lowercase a message id on the way in.
+@MainActor
 final class LocalStoreReactionStoreTests: ReactionStoreTests {
     override func makeStore() -> (
         reactions: any ReactionStore, holdMessage: (String) throws -> Void, messageCount: () throws -> Int

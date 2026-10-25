@@ -122,6 +122,7 @@ private enum TestError: Error {
 
 // MARK: - Tests
 
+@MainActor
 final class SessionInitFlowTests: XCTestCase {
 
     // MARK: 1. Ping as msgNum=0 — the correct fix
@@ -435,6 +436,7 @@ final class SessionInitFlowTests: XCTestCase {
 ///      and re-established, the peer's already-encrypted in-flight (old-ratchet) message can
 ///      no longer be decrypted. Destroying a healthy session therefore loses data — which is
 ///      exactly what the prewarm-vs-restore race did.
+@MainActor
 final class SessionEpochCharacterizationTests: XCTestCase {
 
     private func establish(_ initiator: SessionPeer, _ responder: SessionPeer) throws {

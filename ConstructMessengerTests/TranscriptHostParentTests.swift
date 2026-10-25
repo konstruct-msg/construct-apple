@@ -14,10 +14,10 @@ final class TranscriptHostParentTests: XCTestCase {
 
     private var window: UIWindow?
 
-    override func tearDown() {
+    override func tearDown() async throws {
         window?.isHidden = true
         window = nil
-        super.tearDown()
+        try await super.tearDown()
     }
 
     /// The transcript on screen, inside a screen controller the way SwiftUI puts it there.

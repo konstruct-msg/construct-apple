@@ -16,18 +16,18 @@ final class ProfileRebroadcastTests: XCTestCase {
     private var savedUserId: String?
     private let me = UUID().uuidString
 
-    override func setUp() {
-        super.setUp()
+    override func setUp() async throws {
+        try await super.setUp()
         savedUserId = AuthSessionManager.shared.currentUserId
         AuthSessionManager.shared.updateUserId(me)
     }
 
-    override func tearDown() {
+    override func tearDown() async throws {
         LocalRepositories.useContactsForTesting(nil)
         if let savedUserId, !savedUserId.isEmpty {
             AuthSessionManager.shared.updateUserId(savedUserId)
         }
-        super.tearDown()
+        try await super.tearDown()
     }
 
     func testRebroadcastReachesEverySharedContactFromAThrowawayViewModel() async {

@@ -19,19 +19,19 @@ final class ContactLinkDeletedFlagTests: XCTestCase {
     private let peer = "14f28d31-0000-0000-0000-0000000000bb"
     private var context: NSManagedObjectContext!
 
-    override func setUp() {
-        super.setUp()
+    override func setUp() async throws {
+        try await super.setUp()
         let container = PersistenceController(inMemory: true).container
         LocalRepositories.useContactsForTesting(container)
         context = container.viewContext
         DeletedContactsStore.shared.remove(peer)
     }
 
-    override func tearDown() {
+    override func tearDown() async throws {
         DeletedContactsStore.shared.remove(peer)
         LocalRepositories.useContactsForTesting(nil)
         context = nil
-        super.tearDown()
+        try await super.tearDown()
     }
 
     func testMakingAPrunedPeerAContactStopsShieldingThem() throws {

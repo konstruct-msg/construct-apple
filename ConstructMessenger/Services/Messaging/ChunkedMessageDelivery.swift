@@ -17,7 +17,7 @@ struct ChunkedMessagePlan {
     }
 }
 
-final class ChunkedMessageSender {
+final class ChunkedMessageSender: Sendable {
     static let shared = ChunkedMessageSender()
 
     private init() {}
@@ -34,11 +34,11 @@ final class ChunkedMessageSender {
     // pinned key named and left the rest to a fan-out with different guarantees; see the pipeline.
 }
 
-final class ChunkedMessageReassembler {
+final class ChunkedMessageReassembler: Sendable {
 
     /// Shared instance used by both MessageRouter (live stream) and
-    /// BackgroundFetchManager (silent-push path).  Both paths run their
-    /// reassembler interactions on the main thread, so no extra locking is needed.
+    /// BackgroundFetchManager (silent-push path). It holds no state; partial messages live in
+    /// `PendingReassemblyStore`, which serialises its own access.
     static let shared = ChunkedMessageReassembler()
 
     /// Partial reassembly lives in `PendingReassemblyStore` — on disk, encrypted, surviving a

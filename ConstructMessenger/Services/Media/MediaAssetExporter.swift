@@ -89,7 +89,9 @@ enum MediaAssetExporter {
                     cont.resume(throwing: MediaAssetExportError.noData)
                     return
                 }
-                cont.resume(returning: asset)
+                // PHImageManager hands the asset to this one callback and keeps no reference.
+                nonisolated(unsafe) let delivered = asset
+                cont.resume(returning: delivered)
             }
         }
 

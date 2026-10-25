@@ -86,7 +86,7 @@ enum ThumbnailKey {
     }
 }
 
-final class ThumbnailStore {
+final class ThumbnailStore: @unchecked Sendable {  // immutable stored properties; NSCache is thread-safe
 
     static let shared = ThumbnailStore()
 

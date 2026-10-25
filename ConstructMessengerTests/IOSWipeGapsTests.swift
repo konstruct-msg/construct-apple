@@ -10,6 +10,7 @@
 import XCTest
 @testable import Construct_Messenger
 
+@MainActor
 final class SQLiteRecoveryFilesTests: XCTestCase {
 
     /// Mutation: name the sidecars with `appendingPathExtension` again — the WAL and SHM stay and
@@ -35,8 +36,8 @@ final class OwnershipGateServiceRowsTests: XCTestCase {
     private var suites: [String] = []
     private var roots: [URL] = []
 
-    override func setUp() {
-        super.setUp()
+    override func setUp() async throws {
+        try await super.setUp()
         LocalRepositories.useIssuedInvitesForTesting(DefaultsIssuedInviteStore(defaults: suite()))
         LocalRepositories.useKeyValueForTesting(DefaultsKeyValueStore(defaults: suite()))
         let root = FileManager.default.temporaryDirectory.appendingPathComponent("gate-chunks-\(UUID().uuidString)")
@@ -44,14 +45,14 @@ final class OwnershipGateServiceRowsTests: XCTestCase {
         LocalRepositories.usePendingChunksForTesting(FilePendingChunkStore(root: root))
     }
 
-    override func tearDown() {
+    override func tearDown() async throws {
         LocalRepositories.useIssuedInvitesForTesting(nil)
         LocalRepositories.useKeyValueForTesting(nil)
         LocalRepositories.usePendingChunksForTesting(nil)
         InviteJournal.shared.reload()
         suites.forEach { UserDefaults().removePersistentDomain(forName: $0) }
         roots.forEach { try? FileManager.default.removeItem(at: $0) }
-        super.tearDown()
+        try await super.tearDown()
     }
 
     private func suite() -> UserDefaults {

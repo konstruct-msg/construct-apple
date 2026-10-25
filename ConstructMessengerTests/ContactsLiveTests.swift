@@ -16,16 +16,16 @@ final class ContactsLiveTests: XCTestCase {
     private var container: NSPersistentContainer!
     private var store: CoreDataContactStore!
 
-    override func setUp() {
-        super.setUp()
+    override func setUp() async throws {
+        try await super.setUp()
         container = PersistenceController(inMemory: true).container
         store = CoreDataContactStore(container: container)
     }
 
-    override func tearDown() {
+    override func tearDown() async throws {
         store = nil
         container = nil
-        super.tearDown()
+        try await super.tearDown()
     }
 
     private func seed(_ id: String, name: String) throws {

@@ -13,7 +13,8 @@ import CoreData
 /// or from legacy `decryptedContent` for unmigrated rows.
 ///
 /// UI text edge: `plaintext(for:)` decodes via `LocalMessagePayload` (E1/E2).
-final class MessageDisplayCache {
+/// `@unchecked`: the only state is `cache`, and `NSCache` is thread-safe (not annotated in this SDK).
+final class MessageDisplayCache: @unchecked Sendable {
 
     static let shared = MessageDisplayCache()
 
@@ -158,7 +159,8 @@ final class MessageDisplayCache {
 /// `evictAll` (which `UnsealedMemory` calls when the app leaves the screen) and under memory
 /// pressure. `NSCache` frees an `NSData` without zeroing it, which left message text readable in
 /// released memory. Only this copy is wiped: a reader that took the bytes keeps its own.
-final class WipedOnRelease {
+/// `@unchecked`: `data` is written only by `init` and `deinit`, when nothing else holds the object.
+final class WipedOnRelease: @unchecked Sendable {
     private(set) var data: Data
 
     init(_ data: Data) {

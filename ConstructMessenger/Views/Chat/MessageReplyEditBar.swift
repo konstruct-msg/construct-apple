@@ -99,6 +99,7 @@ struct MessageEditBar: View {
 
 // MARK: - Cancel control
 
+@MainActor
 private func cancelButton(action: @escaping () -> Void) -> some View {
     Button(action: action) {
         Image(systemName: "xmark.circle.fill")

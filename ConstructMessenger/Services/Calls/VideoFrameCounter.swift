@@ -52,10 +52,11 @@ final class VideoFrameCounter: NSObject, RTCVideoCapturerDelegate, RTCVideoRende
 
     private func count(_ frame: RTCVideoFrame) {
         let now = Date()
+        let size = "\(frame.width)x\(frame.height)"
         let line: String? = state.withLock { s in
             s.total += 1
             s.sinceReport += 1
-            s.size = "\(frame.width)x\(frame.height)"
+            s.size = size
             guard let last = s.lastReport else {
                 s.lastReport = now
                 s.sinceReport = 0
