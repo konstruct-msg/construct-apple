@@ -56,24 +56,26 @@ struct HistoryTransferSendView: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: CTLayout.sectionGap) {
-                if isSkip {
+        Group {
+            if isSkip {
+                ScrollView {
                     Text(NSLocalizedString("history_sync_skip_sending", comment: ""))
                         .font(CTFont.body)
                         .foregroundStyle(Color.CT.text)
                         .multilineTextAlignment(.center)
-                } else {
-                    HistoryTransferProgress(phase: coordinator.phase, side: .sending, stages: stages)
-                    if coordinator.phase == .idle, peerNotSeen {
-                        hint("history_sync_not_seen_hint")
-                    }
+                        .frame(maxWidth: .infinity)
+                        .padding(CTLayout.edgePad)
+                }
+                .background(Color.CT.bg.ignoresSafeArea())
+            } else {
+                HistoryTransferLayout(
+                    screen: .of(phase: coordinator.phase, side: .sending, stages: stages, peerNotSeen: peerNotSeen),
+                    side: .sending
+                ) {
                     fileSection
                 }
             }
-            .padding(CTLayout.edgePad)
         }
-        .background(Color.CT.bg.ignoresSafeArea())
         .screenTitle(NSLocalizedString(isSkip ? "history_sync_skip_title" : "history_sync_send_title", comment: ""))
         .task { await run() }
         .task {
