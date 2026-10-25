@@ -14,6 +14,7 @@ import UserNotifications
 enum DesktopWindowID {
     static let synaps = "synaps"
     static let call = "call"
+    static let studioScreen = "studio-screen"
 }
 
 @main
@@ -94,6 +95,7 @@ struct Construct_DesktopApp: App {
                         WebRTCRuntime.bootstrap()
                         CallManager.makeStudioCapture = StudioProcessTap.make
                         CallManager.makeStudioOutput = StudioPlayoutOutput.make
+                        CallManager.makeStudioScreen = StudioWindowCapture.make
                         #endif
                         DesktopIncomingCallRinger.shared.start()
                     }
@@ -132,6 +134,14 @@ struct Construct_DesktopApp: App {
         .defaultSize(width: 440, height: 600)
         .windowResizability(.contentMinSize)
         .defaultPosition(.topTrailing)
+
+        // Guest: the host's DAW windows while Studio shows them. Opened by DesktopRootView,
+        // closes itself when the screen is hidden or the studio ends.
+        Window(LocalizedStringKey("studio_screen_window_title"), id: DesktopWindowID.studioScreen) {
+            DesktopStudioScreenView()
+                .frame(minWidth: 480, minHeight: 270)
+        }
+        .defaultSize(width: 1280, height: 760)
 
         // MARK: - macOS Settings window (⌘,)
         Settings {

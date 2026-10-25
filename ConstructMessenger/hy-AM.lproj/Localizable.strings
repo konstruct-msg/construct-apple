@@ -1431,3 +1431,5 @@
 "call_studio" = "Studio";
 "call_studio_start" = "Սկսել Studio";
 "call_studio_stop" = "Դուրս գալ Studio-ից";
+"studio_screen_window_title" = "Հյուրընկալողի էկրանը";
+"studio_screen_waiting" = "Սպասում ենք հյուրընկալողի էկրանին…";

@@ -8,13 +8,20 @@
 //  decoder cookie; when the guest accepts, the host's capture runs into `studio-program` and the
 //  guest plays it through its ring and drift loop.
 //
+//  The host's DAW windows go with the program as a send-only video section, made with the same
+//  offer as the channels; the guest holds each frame for the program's buffer depth
+//  (`StudioScreenRenderer`, step 5).
+//
 //  Behind `StudioFeature`, on by default on a Mac while the Desktop build goes only to its testers:
-//  no invite screen, no path choice (always relay), no screen — those are steps 5–6.
+//  no invite screen, no path choice (always relay) — those are step 6.
 //
 
 import Foundation
 import SwiftProtobuf
 import Synchronization
+#if canImport(WebRTC)
+import WebRTC
+#endif
 
 /// Studio mode, while it is built. On by default on a Mac since 2026-10-23: the Desktop build is
 /// handed only to the testers who asked for Studio. Off by hand:
@@ -57,6 +64,18 @@ protocol StudioProgramOutput: AnyObject {
     func stop()
 }
 
+#if canImport(WebRTC)
+/// What captures the DAW's windows on this machine — the Desktop's ScreenCaptureKit stream.
+/// Started and stopped on the main actor; writes frames into `feed` on its own queue.
+@MainActor
+protocol StudioScreenCapture: AnyObject {
+    /// A line for the log: what is being captured, at what size.
+    var sourceDescription: String { get }
+    func start(into feed: StudioScreenFeed) async throws
+    func stop()
+}
+#endif
+
 /// The program receiver the `studio-program` channel feeds, swapped on the main actor when the
 /// format changes and read on WebRTC's thread for every packet.
 final class StudioProgramRoute: Sendable {
@@ -81,12 +100,25 @@ final class StudioRun {
     /// Guest: the depth the invite asked for.
     var bufferMs = StudioBuffer.defaultMs
     var inviteTimeout: Task<Void, Never>?
+    #if canImport(WebRTC)
+    /// Host: the screen's section feed, and what captures into it.
+    var screenFeed: StudioScreenFeed?
+    var screenCapture: (any StudioScreenCapture)?
+    /// Guest: the host's screen while it is shown, and the track it is attached through.
+    var screenRenderer: StudioScreenRenderer?
+    var screenTrack: RTCVideoTrack?
+    #endif
 
     init(link: StudioLink) { self.link = link }
 
     func stop() {
         inviteTimeout?.cancel()
         inviteTimeout = nil
+        #if canImport(WebRTC)
+        screenCapture?.stop()
+        screenCapture = nil
+        hideScreen()
+        #endif
         capture?.stop()
         capture = nil
         output?.stop()
@@ -107,6 +139,18 @@ final class StudioRun {
         sender = nil
         receiver = nil
     }
+
+    #if canImport(WebRTC)
+    /// Guest: take the host's screen off, and its window with it.
+    func hideScreen() {
+        guard let screenRenderer else { return }
+        screenTrack?.remove(screenRenderer)
+        screenRenderer.stop()
+        StudioScreenPresenter.shared.hide(screenRenderer)
+        self.screenRenderer = nil
+        screenTrack = nil
+    }
+    #endif
 }
 
 /// The program's buffer depth until question 5 of the decision (fixed or adaptive) is settled.
@@ -126,6 +170,9 @@ extension CallManager {
     nonisolated(unsafe) static var makeStudioCapture: (() throws -> any StudioProgramCapture)?
     /// What plays the program on this machine; set by the Desktop app at launch.
     nonisolated(unsafe) static var makeStudioOutput: ((StudioPlayout) throws -> any StudioProgramOutput)?
+    /// What captures the DAW's windows on this machine; set by the Desktop app at launch. Without
+    /// it a studio carries the program alone.
+    nonisolated(unsafe) static var makeStudioScreen: (() -> any StudioScreenCapture)?
 
     /// How long the host waits for the guest's answer.
     static let studioInviteTimeout: Duration = .seconds(30)
@@ -147,6 +194,9 @@ extension CallManager {
             return
         }
         let run = makeStudioRun(role: .host, on: webrtc, for: active)
+        if Self.makeStudioScreen != nil {
+            run.screenFeed = webrtc.addStudioScreen()
+        }
         do {
             // The call is named by its id: `ActiveCall` is the main actor's and does not cross
             // to WebRTC's thread, where this is called.
@@ -222,6 +272,10 @@ extension CallManager {
             case .guest: self.playStudioProgram(format, run: run, for: active)
             }
         }
+        run.link.onScreenShown = { [weak self, weak run, weak active] shown in
+            guard let self, let run, let active, role == .guest else { return }
+            self.showStudioScreen(shown, run: run, for: active)
+        }
         run.link.onEnd = { [weak self, weak run, weak active] reason in
             Log.info("Studio ended: \(reason)", category: "Calls")
             guard let self, let run, let active else { return }
@@ -238,9 +292,11 @@ extension CallManager {
             var invite = StudioInvite()
             invite.program = StudioAudioFormat.lossless.program(magicCookie: sender.magicCookie)
             invite.bufferMs = StudioBuffer.defaultMs
+            invite.screen = run.screenFeed != nil
+            invite.screenHeight = invite.screen ? UInt32(StudioScreen.maxHeight) : 0
             // Relay: the path choice comes with the invite screen (step 6).
             run.link.handle(.invite(invite, ownPath: .relay, veil: false))
-            Log.info("Studio invite sent (FLAC 48/24, \(invite.bufferMs) ms)", category: "Calls")
+            Log.info("Studio invite sent (FLAC 48/24, \(invite.bufferMs) ms, screen \(invite.screen))", category: "Calls")
             run.inviteTimeout = Task { [weak run] in
                 try? await Task.sleep(for: Self.studioInviteTimeout)
                 guard !Task.isCancelled else { return }
@@ -283,6 +339,7 @@ extension CallManager {
             try capture.start(into: packetizer)
             run.capture = capture
             Log.info("Studio program: capturing \(capture.sourceDescription) → FLAC 48/24", category: "Calls")
+            startStudioScreen(run)
         } catch {
             Log.error("Studio program not started: \(error)", category: "Calls")
             run.link.handle(.leave)
@@ -303,11 +360,53 @@ extension CallManager {
             run.output = output
             run.receiver = receiver
             run.route.use(receiver)
+            if run.link.state.screenShown { showStudioScreen(true, run: run, for: active) }
             Log.info("Studio program: playing \(format.codec) \(format.sampleRate / 1_000) kHz, buffer \(Int(StudioBuffer.targetSeconds(invite: run.bufferMs) * 1_000)) ms", category: "Calls")
         } catch {
             Log.error("Studio program not played: \(error)", category: "Calls")
             run.link.handle(.leave)
         }
+    }
+
+    /// Host: capture the DAW's windows into the screen's section. The program does not wait for
+    /// it, and does not stop with it: a screen that cannot be captured (no permission, the DAW
+    /// has no window) is said hidden to the guest, and the studio goes on as sound.
+    private func startStudioScreen(_ run: StudioRun) {
+        guard let feed = run.screenFeed, run.screenCapture == nil, let make = Self.makeStudioScreen else { return }
+        let capture = make()
+        run.screenCapture = capture
+        Task { [weak run] in
+            do {
+                try await capture.start(into: feed)
+                Log.info("Studio screen: capturing \(capture.sourceDescription)", category: "Calls")
+            } catch {
+                Log.error("Studio screen not captured: \(error)", category: "Calls")
+                guard let run, run.screenCapture === capture else { return }
+                run.screenCapture = nil
+                run.link.handle(.setScreen(false))
+            }
+        }
+    }
+
+    /// Guest: show or hide the host's screen, held for the program's buffer depth.
+    private func showStudioScreen(_ shown: Bool, run: StudioRun, for active: ActiveCall) {
+        guard shown else {
+            run.hideScreen()
+            (active.webrtc as? WebRTCSession)?.releaseStudioScreenTrack()
+            return
+        }
+        guard run.screenRenderer == nil, let webrtc = active.webrtc as? WebRTCSession else { return }
+        guard let track = webrtc.studioScreenTrack() else {
+            Log.error("Studio: the host shows a screen, and the offer has no screen section", category: "Calls")
+            return
+        }
+        let renderer = StudioScreenRenderer(delay: StudioBuffer.targetSeconds(invite: run.bufferMs))
+        track.add(renderer)
+        renderer.start()
+        run.screenRenderer = renderer
+        run.screenTrack = track
+        StudioScreenPresenter.shared.show(renderer)
+        Log.info("Studio screen: shown, held \(Int(renderer.delay * 1_000)) ms to match the program", category: "Calls")
     }
 
     private func endStudio(_ run: StudioRun, for active: ActiveCall) {
@@ -320,6 +419,7 @@ extension CallManager {
         webrtc.setStudioReceiver(nil)
         webrtc.onStudioChannelsOpen = nil
         webrtc.closeStudioChannels()
+        webrtc.releaseStudioScreenTrack()
     }
 }
 #else

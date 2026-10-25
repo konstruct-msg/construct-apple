@@ -263,6 +263,13 @@ final class WebRTCSession: NSObject, WebRTCSessionProtocol {
     private var studioOpenAnnounced = false
     /// Who receives Studio's messages (`setStudioReceiver`). Called on WebRTC's thread.
     private let studioReceiver = Mutex<(@Sendable (StudioChannel, Data) -> Void)?>(nil)
+    /// Host: the screen's send-only section, made with Studio's offer and kept for the rest of the
+    /// call, so a second Studio on it adds no section.
+    private var studioScreenTransceiver: RTCRtpTransceiver?
+    private var studioScreenFeed: StudioScreenFeed?
+    /// Guest: the host's screen track, held while it is shown — a renderer is attached through
+    /// it, and a wrapper read anew drops its renderers (see `countedTrack`).
+    private var heldStudioScreenTrack: RTCVideoTrack?
 
     convenience init(role: WebRTCSessionRole, turn: Shared_Proto_Signaling_V1_TurnCredentials?, video: Bool,
                      veilOn: Bool) throws {
@@ -344,6 +351,8 @@ final class WebRTCSession: NSObject, WebRTCSessionProtocol {
 
     func close() {
         closeStudioChannels()
+        studioScreenFeed = nil
+        heldStudioScreenTrack = nil
         stopCapture()
         if videoTransceiver != nil { Log.info(receiveCounter.summary(), category: "Calls") }
         peerConnection.close()
@@ -465,8 +474,11 @@ final class WebRTCSession: NSObject, WebRTCSessionProtocol {
     /// this side could watch but never send. An offer with no video section (an audio-only
     /// client) leaves `canSendVideo` false.
     private func adoptOfferedVideo() {
+        // Not Studio's screen section: that one is the host's DAW, sent only, and taken up as a
+        // camera this side would answer it sendrecv and show the host's windows as the face.
+        let screenMid = peerConnection.remoteDescription.flatMap { StudioOffer.screenMid(sdp: $0.sdp) }
         guard videoEnabled, videoTransceiver == nil,
-              let offered = peerConnection.transceivers.first(where: { $0.mediaType == .video })
+              let offered = peerConnection.transceivers.first(where: { $0.mediaType == .video && $0.mid != screenMid })
         else { return }
         var error: NSError?
         offered.setDirection(.sendRecv, error: &error)
@@ -645,6 +657,51 @@ final class WebRTCSession: NSObject, WebRTCSessionProtocol {
         studioChannels.removeAll()
         studioOpenAnnounced = false
         Log.info("Studio channels closed", category: "Calls")
+    }
+
+    /// Host: the screen's section, made on the first call — before Studio's offer, which then
+    /// carries it — and the feed the capture writes frames into. Send-only: the guest sends no
+    /// screen back.
+    func addStudioScreen() -> StudioScreenFeed {
+        if let studioScreenFeed { return studioScreenFeed }
+        let source = factory.videoSource(forScreenCast: true)
+        let track = factory.videoTrack(with: source, trackId: StudioScreen.trackId)
+        let initValue = RTCRtpTransceiverInit()
+        initValue.direction = .sendOnly
+        initValue.streamIds = [StudioScreen.streamId]
+        let encoding = RTCRtpEncodingParameters()
+        encoding.maxBitrateBps = NSNumber(value: StudioScreen.maxBitrateBps)
+        encoding.maxFramerate = NSNumber(value: StudioScreen.maxFps)
+        initValue.sendEncodings = [encoding]
+        let transceiver = peerConnection.addTransceiver(with: track, init: initValue)
+        if let sender = transceiver?.sender {
+            // Frames go before pixels: a DAW's text and meters have to stay readable.
+            let parameters = sender.parameters
+            parameters.degradationPreference = NSNumber(value: RTCDegradationPreference.maintainResolution.rawValue)
+            sender.parameters = parameters
+        }
+        studioScreenTransceiver = transceiver
+        let feed = StudioScreenFeed(source: source)
+        studioScreenFeed = feed
+        Log.info("Studio screen section added (send-only, ≤\(StudioScreen.maxBitrateBps / 1_000_000) Mbit/s, maintain resolution)", category: "Calls")
+        return feed
+    }
+
+    /// Guest: the host's screen track, from the section the offer names as the screen. Nil when the
+    /// offer has none. Held, so a renderer attached to it stays attached.
+    func studioScreenTrack() -> RTCVideoTrack? {
+        if let heldStudioScreenTrack { return heldStudioScreenTrack }
+        guard let sdp = peerConnection.remoteDescription?.sdp, let mid = StudioOffer.screenMid(sdp: sdp),
+              let transceiver = peerConnection.transceivers.first(where: { $0.mid == mid }),
+              let track = transceiver.receiver.track as? RTCVideoTrack
+        else { return nil }
+        heldStudioScreenTrack = track
+        return track
+    }
+
+    /// Guest: the screen is no longer shown; the track is let go.
+    func releaseStudioScreenTrack() {
+        heldStudioScreenTrack = nil
     }
 
     private func studioChannelChanged() {
@@ -826,6 +883,24 @@ extension WebRTCSession: RTCDataChannelDelegate {
         guard let channel = StudioChannel(rawValue: dataChannel.channelId) else { return }
         let data = buffer.data
         studioReceiver.withLock { $0 }?(channel, data)
+    }
+}
+
+/// Where the host's capture writes the screen's frames, from its own thread: `RTCVideoSource`
+/// takes frames from any thread, and nothing else is held.
+final class StudioScreenFeed: @unchecked Sendable {
+    private let source: RTCVideoSource
+    private let capturer: RTCVideoCapturer
+
+    init(source: RTCVideoSource) {
+        self.source = source
+        self.capturer = RTCVideoCapturer(delegate: source)
+    }
+
+    /// One frame of the screen; `timeNs` on the host's clock.
+    func deliver(_ pixelBuffer: CVPixelBuffer, timeNs: Int64) {
+        let frame = RTCVideoFrame(buffer: RTCCVPixelBuffer(pixelBuffer: pixelBuffer), rotation: ._0, timeStampNs: timeNs)
+        source.capturer(capturer, didCapture: frame)
     }
 }
 
