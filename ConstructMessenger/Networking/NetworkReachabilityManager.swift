@@ -7,22 +7,57 @@
 
 import Foundation
 import Network
+import Synchronization
 import os.log
 
-/// Manages network reachability monitoring
+/// Manages network reachability monitoring.
+///
+/// Read from every isolation (the transport actor, the QUIC channel, SwiftUI) and written from
+/// the main queue, so the state sits behind one `Mutex` and the observable properties are
+/// computed over it, reporting to the Observation registry by hand.
 @Observable
-class NetworkReachabilityManager {
+final class NetworkReachabilityManager: @unchecked Sendable {
     static let shared = NetworkReachabilityManager()
-    
-    var isReachable = true
-    var connectionType: ConnectionType = .unknown
+
+    private struct State {
+        var isReachable = true
+        var connectionType: ConnectionType = .wifi
+        var isExpensive = false
+        var isConstrained = false
+        var monitor: NWPathMonitor?
+        var queue: DispatchQueue?
+        /// Tracks the previous connection type to detect interface changes (e.g. WiFi → cellular).
+        var prevConnectionType: ConnectionType = .unknown
+        /// Fingerprint of the previous NWPath interface set (sorted interface names, e.g. "en0,utun3").
+        /// Detects VPN on/off, interface additions/removals that don't change the high-level
+        /// ConnectionType but still invalidate existing TCP connections.
+        var prevPathFingerprint: String = ""
+        var currentNetworkIdentity: String = ""
+    }
+
+    @ObservationIgnored private let state = Mutex(State())
+
+    var isReachable: Bool {
+        get { access(keyPath: \.isReachable); return state.withLock { $0.isReachable } }
+        set { withMutation(keyPath: \.isReachable) { state.withLock { $0.isReachable = newValue } } }
+    }
+    var connectionType: ConnectionType {
+        get { access(keyPath: \.connectionType); return state.withLock { $0.connectionType } }
+        set { withMutation(keyPath: \.connectionType) { state.withLock { $0.connectionType = newValue } } }
+    }
 
     /// Cellular or a personal hotspot — the system's own answer, which also covers cases
     /// `connectionType` cannot see, such as Wi-Fi tethered to a phone.
-    var isExpensive = false
+    var isExpensive: Bool {
+        get { access(keyPath: \.isExpensive); return state.withLock { $0.isExpensive } }
+        set { withMutation(keyPath: \.isExpensive) { state.withLock { $0.isExpensive = newValue } } }
+    }
     /// Low Data Mode. Treated as metered even on Wi-Fi: the user has told the system to hold back
     /// on speculative transfers, and media prefetch is exactly that (see MediaAutoDownloadPolicy).
-    var isConstrained = false
+    var isConstrained: Bool {
+        get { access(keyPath: \.isConstrained); return state.withLock { $0.isConstrained } }
+        set { withMutation(keyPath: \.isConstrained) { state.withLock { $0.isConstrained = newValue } } }
+    }
 
     enum ConnectionType: Equatable {
         case wifi
@@ -61,20 +96,11 @@ class NetworkReachabilityManager {
         case pathTopology
     }
 
-    private var monitor: NWPathMonitor?
-    private var queue: DispatchQueue?
-    /// Tracks the previous connection type to detect interface changes (e.g. WiFi → cellular).
-    private var prevConnectionType: ConnectionType = .unknown
-    /// Fingerprint of the previous NWPath interface set (sorted interface names, e.g. "en0,utun3").
-    /// Detects VPN on/off, interface additions/removals that don't change the high-level
-    /// ConnectionType but still invalidate existing TCP connections.
-    private var prevPathFingerprint: String = ""
-
     /// Current NWPath interface fingerprint (sorted interface names, e.g. "en0,utun3"). A stable
     /// "same network" identifier — used to scope persisted transport state (the QUIC-unhealthy
     /// suppression) so it only re-applies after a cold start on the SAME network, never on a
     /// different one. Empty until the monitor's first path callback.
-    var currentPathFingerprint: String { prevPathFingerprint }
+    var currentPathFingerprint: String { state.withLock { $0.prevPathFingerprint } }
 
     /// Identity of the network we are attached to, for keying *long-lived* per-network memory
     /// (the QUIC suppression ladder). Empty until the monitor's first path callback.
@@ -89,13 +115,23 @@ class NetworkReachabilityManager {
     /// a gateway address (192.168.1.1 is everywhere) still collide; the cost of that collision
     /// is that we stay on H2 where QUIC would have worked, which is slower, not broken — the
     /// opposite error costs a 3s handshake timeout before every connect.
-    private(set) var currentNetworkIdentity: String = ""
+    ///
+    /// Not observed: nothing in the UI reads it, it only keys persisted transport memory.
+    private(set) var currentNetworkIdentity: String {
+        get { state.withLock { $0.currentNetworkIdentity } }
+        set { state.withLock { $0.currentNetworkIdentity = newValue } }
+    }
+
+    private var prevConnectionType: ConnectionType {
+        get { state.withLock { $0.prevConnectionType } }
+        set { state.withLock { $0.prevConnectionType = newValue } }
+    }
+    private var prevPathFingerprint: String {
+        get { state.withLock { $0.prevPathFingerprint } }
+        set { state.withLock { $0.prevPathFingerprint = newValue } }
+    }
 
     private init() {
-        // Always set default values first
-        isReachable = true
-        connectionType = .wifi
-        
         // Start monitoring (will skip if in preview)
         startMonitoring()
     }
@@ -194,15 +230,19 @@ class NetworkReachabilityManager {
         }
         
         newMonitor.start(queue: newQueue)
-        self.monitor = newMonitor
-        self.queue = newQueue
+        state.withLock {
+            $0.monitor = newMonitor
+            $0.queue = newQueue
+        }
         Log.info("Network reachability monitoring started", category: "NetworkReachability")
     }
     
     func stopMonitoring() {
-        monitor?.cancel()
-        monitor = nil
-        queue = nil
+        state.withLock {
+            $0.monitor?.cancel()
+            $0.monitor = nil
+            $0.queue = nil
+        }
         Log.info("Network reachability monitoring stopped", category: "NetworkReachability")
     }
     

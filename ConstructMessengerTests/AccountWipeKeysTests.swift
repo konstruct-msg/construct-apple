@@ -8,6 +8,7 @@
 import XCTest
 @testable import Construct_Messenger
 
+@MainActor
 final class AccountWipeKeysTests: XCTestCase {
 
     /// Repo root, derived from this file's compile-time path.

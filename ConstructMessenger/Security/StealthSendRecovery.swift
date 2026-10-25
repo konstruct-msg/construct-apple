@@ -62,6 +62,7 @@ enum StealthSendRecovery {
     /// identical `missing_token` refusals, with the message marked failed at the end of it. A
     /// Privacy Pass refusal is proof the credential was not honoured, so the retry pays.
     static func sendSealed<R>(
+        isolation: isolated (any Actor)? = #isolation,
         _ sealedInner: Data,
         rebuild: (_ afterCredentialRejection: Bool) async throws -> Data?,
         send: (Data) async throws -> R

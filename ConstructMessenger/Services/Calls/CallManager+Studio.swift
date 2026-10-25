@@ -148,10 +148,14 @@ extension CallManager {
         }
         let run = makeStudioRun(role: .host, on: webrtc, for: active)
         do {
-            webrtc.onStudioChannelsOpen = { [weak self, weak active] in
-                DispatchQueue.main.async {
+            // The call is named by its id: `ActiveCall` is the main actor's and does not cross
+            // to WebRTC's thread, where this is called.
+            let callId = active.session.id
+            webrtc.onStudioChannelsOpen = { [weak self] in
+                DispatchQueue.main.async { [weak self] in
                     MainActor.assumeIsolated {
-                        guard let self, let active, self.active === active, active.studio === run else { return }
+                        guard let self, let active = self.active, active.session.id == callId,
+                              active.studio === run else { return }
                         self.inviteToStudio(run, on: webrtc, for: active)
                     }
                 }
@@ -202,7 +206,7 @@ extension CallManager {
         webrtc.setStudioReceiver { [weak run] channel, data in
             switch channel {
             case .control:
-                DispatchQueue.main.async { MainActor.assumeIsolated { run?.link.receive(data) } }
+                DispatchQueue.main.async { [weak run] in MainActor.assumeIsolated { run?.link.receive(data) } }
             case .program:
                 route.deliver(data)
             }

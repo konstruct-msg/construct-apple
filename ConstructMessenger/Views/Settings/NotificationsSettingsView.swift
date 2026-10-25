@@ -263,8 +263,9 @@ struct NotificationsSettingsView: View {
     // MARK: - Methods
     private func checkNotificationAuthorization() {
         notificationCenter.getNotificationSettings { settings in
+            let status = settings.authorizationStatus
             Task { @MainActor in
-                authorizationStatus = settings.authorizationStatus
+                authorizationStatus = status
             }
         }
     }

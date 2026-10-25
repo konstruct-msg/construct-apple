@@ -37,6 +37,8 @@
 //
 
 import Foundation
+// DispatchWorkItem is documented thread-safe (cancel() may be called from any thread).
+@preconcurrency import Dispatch
 import Network
 import Security
 import CryptoKit
@@ -478,16 +480,17 @@ final class VeilFrontExternalDialer: @unchecked Sendable {
 /// One accepted gRPC connection bridged to one native NWConnection. Owns the
 /// NWConnection and our socketpair end; pumps bytes both ways. When either side
 /// EOFs it tears down and calls `onClosed` so the dialer forgets it.
-private final class Session {
+/// `@unchecked Sendable`: `channel` / `swiftFD` / `closed` are guarded by `lock`; the rest are `let`.
+private final class Session: @unchecked Sendable {
     private let queue = DispatchQueue(label: "veil.front.external.session", qos: .userInitiated)
     private let lock = NSLock()
     private let conn: NWConnection
     private var channel: DispatchIO?
     private var swiftFD: Int32
     private var closed = false
-    private let onClosed: (Session) -> Void
+    private let onClosed: @Sendable (Session) -> Void
 
-    init(conn: NWConnection, swiftFD: Int32, onClosed: @escaping (Session) -> Void) {
+    init(conn: NWConnection, swiftFD: Int32, onClosed: @escaping @Sendable (Session) -> Void) {
         self.conn = conn
         self.swiftFD = swiftFD
         self.onClosed = onClosed
@@ -496,7 +499,10 @@ private final class Session {
     /// Begin pumping: Rust→relay (socketpair→NWConnection) and relay→Rust
     /// (NWConnection→socketpair). Called once.
     func startPump() {
-        let ch = DispatchIO(type: .stream, fileDescriptor: swiftFD, queue: queue) { [weak self] _ in
+        lock.lock()
+        let fd = swiftFD
+        lock.unlock()
+        let ch = DispatchIO(type: .stream, fileDescriptor: fd, queue: queue) { [weak self] _ in
             // Cleanup handler: the channel is done with the fd — close it here (the
             // one place swiftFD is closed once a channel exists) and end the session.
             guard let self else { return }

@@ -230,6 +230,8 @@ private struct Snapshot {
     let residentMB: UInt64?
     let footprintMB: UInt64?
 
+    /// Main actor: the application state is UIKit's.
+    @MainActor
     static func capture() -> Snapshot {
         let processInfo = ProcessInfo.processInfo
         return Snapshot(

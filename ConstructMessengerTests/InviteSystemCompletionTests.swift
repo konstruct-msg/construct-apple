@@ -18,16 +18,16 @@ final class InviteSystemCompletionTests: XCTestCase {
 
     private var container: NSPersistentContainer!
 
-    override func setUp() {
-        super.setUp()
+    override func setUp() async throws {
+        try await super.setUp()
         container = PersistenceController(inMemory: true).container
         LocalRepositories.useContactsForTesting(container)
     }
 
-    override func tearDown() {
+    override func tearDown() async throws {
         LocalRepositories.useContactsForTesting(nil)
         container = nil
-        super.tearDown()
+        try await super.tearDown()
     }
 
     private func validSig() -> String {

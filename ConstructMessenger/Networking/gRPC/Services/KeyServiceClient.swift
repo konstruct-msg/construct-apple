@@ -18,7 +18,7 @@ import GRPCNIOTransportHTTP2
 /// Reset logic: after `successesNeededToReset` consecutive successful verifications
 /// the `failureCount` is cleared — this prevents permanent red state after a
 /// transient outage or misconfiguration that has since been resolved.
-final class KTStore {
+final class KTStore: Sendable {
     static let shared = KTStore()
     private init() {}
 

@@ -9,6 +9,7 @@
 //
 
 import CoreData
+import Synchronization
 import XCTest
 @testable import Construct_Messenger
 
@@ -24,15 +25,15 @@ class ChatStoreTests: XCTestCase {
     private var store: (any ChatStore)!
     private var contacts: (any ContactStore)!
 
-    override func setUp() {
-        super.setUp()
+    override func setUp() async throws {
+        try await super.setUp()
         (store, contacts) = makeStores()
     }
 
-    override func tearDown() {
+    override func tearDown() async throws {
         store = nil
         contacts = nil
-        super.tearDown()
+        try await super.tearDown()
     }
 
     private func contact(_ id: String) throws {
@@ -127,13 +128,12 @@ class ChatStoreTests: XCTestCase {
         for peer in peers { try contact(peer) }
         let store = self.store!
         for peer in peers {
-            let lock = NSLock()
-            var opened: [Result<String, Error>] = []
+            let opened = Mutex<[Result<String, Error>]>([])
             DispatchQueue.concurrentPerform(iterations: 6) { _ in
                 let result = Result { try store.openChat(withPeer: peer, now: nil).chat.id }
-                lock.lock(); opened.append(result); lock.unlock()
+                opened.withLock { $0.append(result) }
             }
-            let ids = try opened.map { try $0.get() }
+            let ids = try opened.withLock { $0 }.map { try $0.get() }
             XCTAssertEqual(Set(ids).count, 1, peer)
         }
         let byPeer = Dictionary(grouping: try store.chats(), by: \.peerId)
@@ -218,6 +218,7 @@ class ChatStoreTests: XCTestCase {
 }
 
 /// The same cases on the crate.
+@MainActor
 final class LocalStoreChatStoreTests: ChatStoreTests {
     override func makeStores() -> (chats: any ChatStore, contacts: any ContactStore) {
         let session = LocalStoreSession.inMemoryForTesting()
@@ -235,18 +236,18 @@ final class CoreDataChatStoreTests: XCTestCase {
     private var store: CoreDataChatStore!
     private var contacts: CoreDataContactStore!
 
-    override func setUp() {
-        super.setUp()
+    override func setUp() async throws {
+        try await super.setUp()
         container = PersistenceController(inMemory: true).container
         store = CoreDataChatStore(container: container)
         contacts = CoreDataContactStore(container: container)
     }
 
-    override func tearDown() {
+    override func tearDown() async throws {
         store = nil
         contacts = nil
         container = nil
-        super.tearDown()
+        try await super.tearDown()
     }
 
     private func contact(_ id: String) throws {

@@ -9,10 +9,11 @@ import Foundation
 import UIKit
 #endif
 import Network
+import Synchronization
 
 /// Monitors device energy state and network conditions to optimize background fetch
 /// Implements battery-aware execution to minimize energy impact
-class EnergyMonitor {
+final class EnergyMonitor: @unchecked Sendable {
 
     // MARK: - Properties
 
@@ -22,9 +23,15 @@ class EnergyMonitor {
     /// Network monitoring queue
     private let monitorQueue = DispatchQueue(label: "com.construct.networkmonitor")
 
-    /// Current network path
-    private var currentPath: NWPath?
-    private var lastPathStatus: NWPath.Status?
+    /// Current network path. Written on `monitorQueue`, read from whichever thread asks, so
+    /// every access goes through the lock.
+    private struct PathState {
+        var current: NWPath?
+        var lastStatus: NWPath.Status?
+    }
+    private let pathState = Mutex(PathState())
+
+    private var currentPath: NWPath? { pathState.withLock { $0.current } }
 
     // MARK: - Initialization
 
@@ -41,10 +48,14 @@ class EnergyMonitor {
     private func setupNetworkMonitoring() {
         pathMonitor.pathUpdateHandler = { [weak self] path in
             guard let self else { return }
-            self.currentPath = path
-            // NWPathMonitor may call this repeatedly with the same status; avoid log spam.
-            if self.lastPathStatus != path.status {
-                self.lastPathStatus = path.status
+            let changed = self.pathState.withLock { state in
+                state.current = path
+                // NWPathMonitor may call this repeatedly with the same status; avoid log spam.
+                let changed = state.lastStatus != path.status
+                if changed { state.lastStatus = path.status }
+                return changed
+            }
+            if changed {
                 Log.debug("Network status changed: \(path.status)", category: "EnergyMonitor")
             }
         }
@@ -58,7 +69,7 @@ class EnergyMonitor {
     /// - Battery is below 20% and not charging
     /// - Low Power Mode is enabled
     /// - No network connectivity
-    func shouldPerformBackgroundFetch() -> Bool {
+    func shouldPerformBackgroundFetch() async -> Bool {
         // Check network availability first (fastest check)
         guard isNetworkAvailable() else {
             Log.debug("Network not available, skipping fetch")
@@ -72,7 +83,8 @@ class EnergyMonitor {
         }
 
         // Check battery level
-        if isBatteryLow() && !isCharging() {
+        // UIDevice is main-actor API; the BGTask handler that asks is not on main.
+        if await isBatteryLow(), await !isCharging() {
             Log.debug("Battery low and not charging, skipping fetch")
             return false
         }
@@ -84,6 +96,7 @@ class EnergyMonitor {
     // MARK: - Battery Checks
 
     /// Check if battery level is below threshold (20%)
+    @MainActor
     func isBatteryLow() -> Bool {
         #if os(iOS)
         UIDevice.current.isBatteryMonitoringEnabled = true
@@ -96,6 +109,7 @@ class EnergyMonitor {
     }
 
     /// Check if device is currently charging
+    @MainActor
     func isCharging() -> Bool {
         #if os(iOS)
         UIDevice.current.isBatteryMonitoringEnabled = true
@@ -107,6 +121,7 @@ class EnergyMonitor {
     }
 
     /// Get current battery level as percentage (0-100)
+    @MainActor
     func batteryLevelPercentage() -> Int {
         #if os(iOS)
         UIDevice.current.isBatteryMonitoringEnabled = true
@@ -172,7 +187,7 @@ class EnergyMonitor {
     // MARK: - Recommendations
 
     /// Get fetch strategy recommendation based on current conditions
-    func getFetchStrategy() -> FetchStrategy {
+    func getFetchStrategy() async -> FetchStrategy {
         if !isNetworkAvailable() {
             return .skip
         }
@@ -181,7 +196,7 @@ class EnergyMonitor {
             return .skip
         }
 
-        if isBatteryLow() && !isCharging() {
+        if await isBatteryLow(), await !isCharging() {
             return .skip
         }
 
@@ -193,15 +208,15 @@ class EnergyMonitor {
     }
 
     /// Get energy impact description for UI
-    func energyStatusDescription() -> String {
+    func energyStatusDescription() async -> String {
         var components: [String] = []
 
-        let battery = batteryLevelPercentage()
+        let battery = await batteryLevelPercentage()
         if battery >= 0 {
             components.append("Battery: \(battery)%")
         }
 
-        if isCharging() {
+        if await isCharging() {
             components.append("Charging")
         }
 

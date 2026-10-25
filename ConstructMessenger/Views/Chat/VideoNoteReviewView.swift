@@ -24,20 +24,21 @@ struct TrimmedLoopPlayer: View {
         PlayerLayerView(player: player)
             .task(id: TaskKey(url: url, range: range)) {
                 let item = AVPlayerItem(asset: AVURLAsset(url: url))
-                looper = AVPlayerLooper(
-                    player: player,
-                    templateItem: item,
+                // Every move of a trim handle lands here with the previous loop still queued.
+                looper = player.loop(
+                    item,
                     timeRange: CMTimeRange(
                         start: CMTime(seconds: range.lowerBound, preferredTimescale: 600),
                         end: CMTime(seconds: range.upperBound, preferredTimescale: 600)
-                    )
+                    ),
+                    replacing: looper
                 )
                 player.play()
             }
             .onDisappear {
                 player.pause()
+                player.stopLooping(looper)
                 looper = nil
-                player.removeAllItems()
             }
     }
 

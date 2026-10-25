@@ -12,6 +12,7 @@ import Foundation
 import XCTest
 @testable import Construct_Messenger
 
+@MainActor
 final class VeilProxyStartTests: XCTestCase {
 
     private func relay(_ address: String) -> VeilRelay { VeilRelay(address: address, bridgeCert: "") }

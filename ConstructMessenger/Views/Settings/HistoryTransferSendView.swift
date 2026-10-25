@@ -56,24 +56,26 @@ struct HistoryTransferSendView: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: CTLayout.sectionGap) {
-                if isSkip {
+        Group {
+            if isSkip {
+                ScrollView {
                     Text(NSLocalizedString("history_sync_skip_sending", comment: ""))
                         .font(CTFont.body)
                         .foregroundStyle(Color.CT.text)
                         .multilineTextAlignment(.center)
-                } else {
-                    HistoryTransferProgress(phase: coordinator.phase, side: .sending, stages: stages)
-                    if coordinator.phase == .idle, peerNotSeen {
-                        hint("history_sync_not_seen_hint")
-                    }
+                        .frame(maxWidth: .infinity)
+                        .padding(CTLayout.edgePad)
+                }
+                .background(Color.CT.bg.ignoresSafeArea())
+            } else {
+                HistoryTransferLayout(
+                    screen: .of(phase: coordinator.phase, side: .sending, stages: stages, peerNotSeen: peerNotSeen),
+                    side: .sending
+                ) {
                     fileSection
                 }
             }
-            .padding(CTLayout.edgePad)
         }
-        .background(Color.CT.bg.ignoresSafeArea())
         .screenTitle(NSLocalizedString(isSkip ? "history_sync_skip_title" : "history_sync_send_title", comment: ""))
         .task { await run() }
         .task {
@@ -197,16 +199,25 @@ struct HistoryTransferSendView: View {
         let background = PersistenceController.shared.container.newBackgroundContext()
         let channel = self.channel
         let coordinator = self.coordinator
-        await withTaskGroup(of: Void.self) { group in
-            group.addTask { @MainActor in
-                try? await channel.offer(.skip, peer: peer, local: local, coordinator: coordinator, context: background)
-            }
-            group.addTask {
-                try? await Task.sleep(for: Self.skipWait)
-            }
-            await group.next()
-            group.cancelAll()
+        // Unstructured so the offer runs on the main actor (where `channel` lives) without a
+        // child task having to carry its non-Sendable arguments; the group only races the two.
+        let offer = Task { @MainActor in
+            try? await channel.offer(.skip, peer: peer, local: local, coordinator: coordinator, context: background)
         }
+        let wait = Task { try? await Task.sleep(for: Self.skipWait) }
+        await withTaskCancellationHandler {
+            await withTaskGroup(of: Void.self) { group in
+                group.addTask { await offer.value }
+                group.addTask { await wait.value }
+                await group.next()
+                group.cancelAll()
+            }
+        } onCancel: {
+            offer.cancel()
+            wait.cancel()
+        }
+        offer.cancel()
+        wait.cancel()
         channel.cancel()
         coordinator.markSkipped()
         DeviceLinkPendingPin.clearPeerIdentity(forDeviceId: peerDeviceId)

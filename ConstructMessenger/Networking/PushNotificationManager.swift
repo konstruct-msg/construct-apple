@@ -411,6 +411,8 @@ enum TokenRegistrationRetry {
 import Foundation
 import UserNotifications
 
+// Main-actor like the iOS class, so callers on both platforms are isolated the same way.
+@MainActor
 final class PushNotificationManager {
     static let shared = PushNotificationManager()
     private init() {}

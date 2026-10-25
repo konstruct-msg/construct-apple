@@ -39,17 +39,17 @@ final class HangupUnderFloodTests: XCTestCase {
 
     private let manager = CallManager.shared
 
-    override func setUp() {
-        super.setUp()
+    override func setUp() async throws {
+        try await super.setUp()
         // The hang-up records the call; not in the simulator's app store.
         LocalRepositories.useCallsForTesting(PersistenceController(inMemory: true).container)
     }
 
-    override func tearDown() {
+    override func tearDown() async throws {
         manager.endActiveCall(reason: .local("test"), reportToCallKit: false)
         manager.dismissEndedCall()
         LocalRepositories.useCallsForTesting(nil)
-        super.tearDown()
+        try await super.tearDown()
     }
 
     /// The peer sends as fast as it can for 1.5 s; this side hangs up 0.2 s in. The media is

@@ -27,8 +27,8 @@ class MessageStoreTests: XCTestCase {
     private var contacts: (any ContactStore)!
     private var chatId = ""
 
-    override func setUp() {
-        super.setUp()
+    override func setUp() async throws {
+        try await super.setUp()
         let stores = makeStores()
         store = stores.messages
         chats = stores.chats
@@ -37,11 +37,11 @@ class MessageStoreTests: XCTestCase {
         chatId = try! stores.chats.openChat(withPeer: "peer").chat.id
     }
 
-    override func tearDown() {
+    override func tearDown() async throws {
         store = nil
         chats = nil
         contacts = nil
-        super.tearDown()
+        try await super.tearDown()
     }
 
     private func record(_ id: String, key: String, body: String = "hello", mine: Bool = true) -> MessageRecord {
@@ -273,6 +273,7 @@ class MessageStoreTests: XCTestCase {
 }
 
 /// The same cases on the crate.
+@MainActor
 final class LocalStoreMessageStoreTests: MessageStoreTests {
     override func makeStores() -> (messages: any MessageStore, chats: any ChatStore, contacts: any ContactStore) {
         let session = LocalStoreSession.inMemoryForTesting()
@@ -290,18 +291,18 @@ final class CoreDataMessageStoreTests: XCTestCase {
     private var store: CoreDataMessageStore!
     private var chatId = ""
 
-    override func setUp() {
-        super.setUp()
+    override func setUp() async throws {
+        try await super.setUp()
         container = PersistenceController(inMemory: true).container
         store = CoreDataMessageStore(container: container)
         try! CoreDataContactStore(container: container).insert(.new(id: "peer", isContact: true, addedAt: nil))
         chatId = try! CoreDataChatStore(container: container).openChat(withPeer: "peer").chat.id
     }
 
-    override func tearDown() {
+    override func tearDown() async throws {
         store = nil
         container = nil
-        super.tearDown()
+        try await super.tearDown()
     }
 
     private func record(_ id: String, key: String, body: String) -> MessageRecord {

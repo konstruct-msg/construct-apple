@@ -124,6 +124,7 @@ private func establishSession(initiator: ReconnPeer, responder: ReconnPeer) thro
 
 // MARK: - Tests
 
+@MainActor
 final class ReconnectionIntegrationTests: XCTestCase {
 
     // MARK: 1. Multiple END_SESSION cycles

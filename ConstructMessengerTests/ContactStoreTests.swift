@@ -12,6 +12,7 @@ import CoreData
 import XCTest
 @testable import Construct_Messenger
 
+@MainActor
 class ContactStoreTests: XCTestCase {
 
     typealias Store = any ContactStore & OwnProfileStore
@@ -22,14 +23,14 @@ class ContactStoreTests: XCTestCase {
 
     private var store: Store!
 
-    override func setUp() {
-        super.setUp()
+    override func setUp() async throws {
+        try await super.setUp()
         store = makeStore()
     }
 
-    override func tearDown() {
+    override func tearDown() async throws {
         store = nil
-        super.tearDown()
+        try await super.tearDown()
     }
 
     private func record(_ id: String) -> ContactRecord {
@@ -308,6 +309,7 @@ class ContactStoreTests: XCTestCase {
 }
 
 /// The same cases on the crate.
+@MainActor
 final class LocalStoreContactStoreTests: ContactStoreTests {
     override func makeStore() -> Store {
         LocalStoreContactStore(session: .inMemoryForTesting())
@@ -317,21 +319,22 @@ final class LocalStoreContactStoreTests: ContactStoreTests {
 /// What only the Core Data implementation has: its columns, the `User` object screens still
 /// hold, and the chat cascade through its relationships (the crate's is `delete_contact`, tested
 /// there).
+@MainActor
 final class CoreDataContactStoreTests: XCTestCase {
 
     private var container: NSPersistentContainer!
     private var store: CoreDataContactStore!
 
-    override func setUp() {
-        super.setUp()
+    override func setUp() async throws {
+        try await super.setUp()
         container = PersistenceController(inMemory: true).container
         store = CoreDataContactStore(container: container)
     }
 
-    override func tearDown() {
+    override func tearDown() async throws {
         store = nil
         container = nil
-        super.tearDown()
+        try await super.tearDown()
     }
 
     @discardableResult

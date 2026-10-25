@@ -577,22 +577,26 @@ private struct FileTab: View {
         errorMessage = nil
         for provider in providers {
             if provider.hasItemConformingToTypeIdentifier("public.file-url") {
+                // The provider answers on a background queue: scan there, finish on main.
                 provider.loadItem(forTypeIdentifier: "public.file-url") { item, _ in
-                    guard let data = item as? Data,
-                          let url = URL(dataRepresentation: data, relativeTo: nil) else {
-                        DispatchQueue.main.async { self.errorMessage = NSLocalizedString("desktop_add_cannot_read_file", comment: ""); self.isProcessing = false }
-                        return
+                    let outcome: ScanOutcome
+                    if let data = item as? Data, let url = URL(dataRepresentation: data, relativeTo: nil) {
+                        outcome = Self.scan(contentsOf: url)
+                    } else {
+                        outcome = .failed(NSLocalizedString("desktop_add_cannot_read_file", comment: ""))
                     }
-                    detectQR(in: url)
+                    Task { @MainActor in finish(outcome) }
                 }
                 return true
             } else if provider.hasItemConformingToTypeIdentifier("public.image") {
                 provider.loadDataRepresentation(forTypeIdentifier: "public.image") { data, _ in
-                    guard let data, let ciImage = CIImage(data: data) else {
-                        DispatchQueue.main.async { self.errorMessage = NSLocalizedString("desktop_add_cannot_decode_image", comment: ""); self.isProcessing = false }
-                        return
+                    let outcome: ScanOutcome
+                    if let data, let ciImage = CIImage(data: data) {
+                        outcome = Self.scan(ciImage)
+                    } else {
+                        outcome = .failed(NSLocalizedString("desktop_add_cannot_decode_image", comment: ""))
                     }
-                    detectQRFromCIImage(ciImage)
+                    Task { @MainActor in finish(outcome) }
                 }
                 return true
             }
@@ -611,37 +615,42 @@ private struct FileTab: View {
             guard response == .OK, let url = panel.url else { return }
             isProcessing = true
             errorMessage = nil
-            detectQR(in: url)
-        }
-    }
-
-    private func detectQR(in url: URL) {
-        guard let ciImage = CIImage(contentsOf: url) else {
-            DispatchQueue.main.async { errorMessage = NSLocalizedString("desktop_add_cannot_load_image", comment: ""); isProcessing = false }
-            return
-        }
-        detectQRFromCIImage(ciImage)
-    }
-
-    private func detectQRFromCIImage(_ ciImage: CIImage) {
-        let request = VNDetectBarcodesRequest { req, err in
-            DispatchQueue.main.async {
-                isProcessing = false
-                if let obs = req.results?.compactMap({ $0 as? VNBarcodeObservation })
-                                 .filter({ $0.symbology == .qr })
-                                 .first,
-                   let payload = obs.payloadStringValue {
-                    onScanned(payload)
-                } else {
-                    errorMessage = NSLocalizedString("desktop_add_no_qr_in_image", comment: "")
-                }
+            DispatchQueue.global(qos: .userInitiated).async {
+                let outcome = Self.scan(contentsOf: url)
+                Task { @MainActor in finish(outcome) }
             }
         }
-        request.symbologies = [.qr]
-        let handler = VNImageRequestHandler(ciImage: ciImage, options: [:])
-        DispatchQueue.global(qos: .userInitiated).async {
-            try? handler.perform([request])
+    }
+
+    private enum ScanOutcome: Sendable {
+        case payload(String)
+        case failed(String)
+    }
+
+    private func finish(_ outcome: ScanOutcome) {
+        isProcessing = false
+        switch outcome {
+        case .payload(let payload): onScanned(payload)
+        case .failed(let message): errorMessage = message
         }
+    }
+
+    nonisolated private static func scan(contentsOf url: URL) -> ScanOutcome {
+        guard let ciImage = CIImage(contentsOf: url) else {
+            return .failed(NSLocalizedString("desktop_add_cannot_load_image", comment: ""))
+        }
+        return scan(ciImage)
+    }
+
+    /// Blocks the calling queue: Vision's `perform` is synchronous. Never call it on main.
+    nonisolated private static func scan(_ ciImage: CIImage) -> ScanOutcome {
+        let request = VNDetectBarcodesRequest()
+        request.symbologies = [.qr]
+        try? VNImageRequestHandler(ciImage: ciImage, options: [:]).perform([request])
+        if let payload = request.results?.first(where: { $0.symbology == .qr })?.payloadStringValue {
+            return .payload(payload)
+        }
+        return .failed(NSLocalizedString("desktop_add_no_qr_in_image", comment: ""))
     }
 }
 

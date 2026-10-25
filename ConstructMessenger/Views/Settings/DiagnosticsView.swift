@@ -458,7 +458,7 @@ struct DiagnosticsView: View {
     /// This is not a claimed fix for the reported crash on leaving Diagnostics — that has no
     /// diagnosis yet and needs the crash report. It is a disproportionate read, fixed on its
     /// own merits.
-    private static func readLogPreview(from url: URL, lineLimit: Int) -> String {
+    nonisolated private static func readLogPreview(from url: URL, lineLimit: Int) -> String {
         guard let handle = try? FileHandle(forReadingFrom: url) else { return "" }
         defer { try? handle.close() }
         guard let end = try? handle.seekToEnd() else { return "" }

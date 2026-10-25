@@ -11,16 +11,17 @@ import CoreData
 import XCTest
 @testable import Construct_Messenger
 
+@MainActor
 final class LocalStoreSwitchTests: XCTestCase {
 
     @MainActor
-    override func setUpWithError() throws {
+    override func setUp() async throws {
         try CryptoCoreTestBootstrap.ensureCore(localUserId: "1a2b3c4d-0000-4000-8000-000000000001")
     }
 
-    override func tearDown() {
+    override func tearDown() async throws {
         LocalRepositories.useLocalStoreForTesting(nil)
-        super.tearDown()
+        try await super.tearDown()
     }
 
     /// A received message lands whole on the crate: the sender becomes a row, their chat is opened
@@ -157,6 +158,7 @@ final class LocalStoreSwitchTests: XCTestCase {
 }
 
 /// The files Core Data builds left go; the store that replaced them and anything else stay.
+@MainActor
 final class LegacyStoreRemovalTests: XCTestCase {
 
     /// Mutation: drop the `-wal` name — the transcript's latest writes stay on disk and this
