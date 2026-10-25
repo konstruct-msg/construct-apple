@@ -48,18 +48,18 @@ final class StealthSenderServiceTests: XCTestCase {
         return makeCert(userId: userId, ik: ik, issued: now - 60, expires: now + 3_600)
     }
 
-    override func setUpWithError() throws {
-        try super.setUpWithError()
+    override func setUp() async throws {
+        try await super.setUp()
         // The verdict is the core's; unit tests do not start CryptoManager's, so ask a test one.
         StealthSenderService.shared.verdictCoreForTesting = try makeTestDevice().core
     }
 
-    override func tearDown() {
+    override func tearDown() async throws {
         StealthSenderService.shared.verdictCoreForTesting = nil
         UserDefaults.standard.removeObject(forKey: VeilCertFetcher.cachedBundleSigningKeyKey)
         StealthSenderService.shared.extraTrustedBundleKeysForTesting = []
         StealthSenderService.shared.ktLookupOverrideForTesting = nil
-        super.tearDown()
+        try await super.tearDown()
     }
 
     // MARK: - Signature attestation (fetched key)
@@ -230,6 +230,7 @@ final class StealthSenderServiceTests: XCTestCase {
 /// leaves only as a `SendSealedMessageRequest`, which has no field for the sender, the
 /// conversation, the content type or the device; the identified `Envelope` has no field for a
 /// seal. The invariant is structural now, and these tests pin what each door does carry.
+@MainActor
 final class SealedSenderEnvelopeTests: XCTestCase {
 
     /// The request carries the seal, the timestamp and the attempt id — nothing that names anyone.

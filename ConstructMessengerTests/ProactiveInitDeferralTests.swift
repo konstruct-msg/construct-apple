@@ -30,11 +30,11 @@ final class ProactiveInitDeferralTests: XCTestCase {
     private let peer = "14f28d31-0000-0000-0000-00000000beef"
     private var service: SessionInitializationService { SessionInitializationService.shared }
 
-    override func tearDown() {
+    override func tearDown() async throws {
         service.proactiveInitOverrideForTests = nil
         service.peerInitInFlight = nil
         SessionAddressing.pinnedIdentityKeyOverrideForTesting = nil
-        super.tearDown()
+        try await super.tearDown()
     }
 
     /// Runs one call and reports whether the init run was reached and what came back.

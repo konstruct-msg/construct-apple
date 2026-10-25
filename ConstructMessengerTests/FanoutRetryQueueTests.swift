@@ -11,24 +11,25 @@ import XCTest
 /// These cover the queue itself, which is where the decisions live: what an empty owed set means,
 /// what a repeated failure does to an existing entry, and when the queue stops trying. The
 /// send path around it needs a network and belongs to the two-simulator stand.
+@MainActor
 final class FanoutRetryQueueTests: XCTestCase {
 
     private var defaults: UserDefaults!
     private var queue: FanoutRetryQueue!
     private let suiteName = "construct.tests.fanoutRetryQueue"
 
-    override func setUp() {
-        super.setUp()
+    override func setUp() async throws {
+        try await super.setUp()
         UserDefaults().removePersistentDomain(forName: suiteName)
         defaults = UserDefaults(suiteName: suiteName)
         queue = FanoutRetryQueue(defaults: defaults)
     }
 
-    override func tearDown() {
+    override func tearDown() async throws {
         UserDefaults().removePersistentDomain(forName: suiteName)
         queue = nil
         defaults = nil
-        super.tearDown()
+        try await super.tearDown()
     }
 
     private func enqueue(_ id: String = "msg-1", peer: String = "peer-1", owed: [String] = []) {
@@ -216,18 +217,18 @@ final class FanoutRetryDrainScheduleTests: XCTestCase {
     private let suiteName = "construct.tests.fanoutRetryDrain"
     private let coordinator = MultiDeviceSendCoordinator.shared
 
-    override func setUp() {
-        super.setUp()
+    override func setUp() async throws {
+        try await super.setUp()
         UserDefaults().removePersistentDomain(forName: suiteName)
         LocalRepositories.useKeyValueForTesting(DefaultsKeyValueStore(defaults: UserDefaults(suiteName: suiteName)!))
     }
 
-    override func tearDown() {
+    override func tearDown() async throws {
         FanoutRetryQueue.shared.removeAll()
         coordinator.scheduleDrain()   // nothing owed: cancels whatever a test scheduled
         LocalRepositories.useKeyValueForTesting(nil)
         UserDefaults().removePersistentDomain(forName: suiteName)
-        super.tearDown()
+        try await super.tearDown()
     }
 
     func testTheQueueKnowsWhenItsNextEntryIsDue() throws {

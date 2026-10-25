@@ -14,21 +14,21 @@ final class ContactTrustAlertTests: XCTestCase {
     private let me = "14f28d31-0000-0000-0000-00000000000a"
     private let peer = "14f28d31-0000-0000-0000-00000000000b"
 
-    override func setUp() {
-        super.setUp()
+    override func setUp() async throws {
+        try await super.setUp()
         container = PersistenceController(inMemory: true).container
         LocalRepositories.usePeerDevicesForTesting(CoreDataPeerDeviceStore(container: container))
         LocalRepositories.useContactsForTesting(container)
         SessionAddressing.ownAccountOverrideForTesting = me
     }
 
-    override func tearDown() {
+    override func tearDown() async throws {
         LocalRepositories.usePeerDevicesForTesting(nil)
         LocalRepositories.useContactsForTesting(nil)
         SessionAddressing.ownAccountOverrideForTesting = nil
         KeyChangeUX.setActiveChatContact(nil)
         container = nil
-        super.tearDown()
+        try await super.tearDown()
     }
 
     private func device(_ byte: UInt8) -> (deviceId: String, identityKey: Data) {

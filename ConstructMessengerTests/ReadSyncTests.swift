@@ -103,8 +103,8 @@ final class ReadSyncTests: XCTestCase {
     private var container: NSPersistentContainer!
     private var defaultsSuite: String!
 
-    override func setUp() {
-        super.setUp()
+    override func setUp() async throws {
+        try await super.setUp()
         container = PersistenceController(inMemory: true).container
         LocalRepositories.useChatsForTesting(container)
         LocalRepositories.useMessagesForTesting(container)
@@ -112,12 +112,12 @@ final class ReadSyncTests: XCTestCase {
         LocalRepositories.useKeyValueForTesting(DefaultsKeyValueStore(defaults: UserDefaults(suiteName: defaultsSuite)!))
     }
 
-    override func tearDown() {
+    override func tearDown() async throws {
         LocalRepositories.useChatsForTesting(nil)
         LocalRepositories.useMessagesForTesting(nil)
         LocalRepositories.useKeyValueForTesting(nil)
         UserDefaults().removePersistentDomain(forName: defaultsSuite)
-        super.tearDown()
+        try await super.tearDown()
     }
 
     private let partner = "14f28d31-0c4e-4b7a-9f3e-2a5d6c7b8e90"

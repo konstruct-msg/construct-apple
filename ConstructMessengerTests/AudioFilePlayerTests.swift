@@ -11,9 +11,9 @@ final class AudioFilePlayerTests: XCTestCase {
 
     private let player = AudioPlayerService.shared
 
-    override func tearDown() {
+    override func tearDown() async throws {
         player.stop()
-        super.tearDown()
+        try await super.tearDown()
     }
 
     /// `seconds` of silence, 8 kHz 16-bit mono.
@@ -78,12 +78,12 @@ final class NowPlayingBannerTests: XCTestCase {
     private let screen = ChatOnScreen.shared
     private let a = PlaybackSource(chatId: "chat-a", messageId: "msg-1", fileName: "song.wav")
 
-    override func tearDown() {
+    override func tearDown() async throws {
         player.stop()
         screen.disappeared(screen.chatId ?? "")
         _ = screen.takeFocus(in: a.chatId)
         _ = screen.takeJump(in: a.chatId)
-        super.tearDown()
+        try await super.tearDown()
     }
 
     /// In the track's own chat the banner scrolls to the message; elsewhere it opens the chat.

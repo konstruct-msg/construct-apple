@@ -10,6 +10,7 @@
 import XCTest
 @testable import Construct_Messenger
 
+@MainActor
 final class AudioFileMessageTests: XCTestCase {
 
     private func item(_ mime: String, _ filename: String) -> Shared_Proto_Messaging_V1_MediaMessage {

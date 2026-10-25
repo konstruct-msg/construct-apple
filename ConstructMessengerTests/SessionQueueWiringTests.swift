@@ -61,8 +61,8 @@ final class SessionQueueWiringTests: XCTestCase {
     // ServerUserId space: everything handed to the session layer is a bare 36-char UUID.
     private let me = UUID().uuidString
 
-    override func setUpWithError() throws {
-        try super.setUpWithError()
+    override func setUp() async throws {
+        try await super.setUp()
         // MessageRouter reads AuthSessionManager.shared.currentUserId at the top of
         // routeIncomingMessage; set a known local id and restore it afterwards.
         savedUserId = AuthSessionManager.shared.currentUserId
@@ -98,7 +98,7 @@ final class SessionQueueWiringTests: XCTestCase {
         router.delegate = delegate
     }
 
-    override func tearDown() {
+    override func tearDown() async throws {
         if let savedUserId, !savedUserId.isEmpty {
             AuthSessionManager.shared.updateUserId(savedUserId)
         }
@@ -109,7 +109,7 @@ final class SessionQueueWiringTests: XCTestCase {
         context = nil
         router = nil
         delegate = nil
-        super.tearDown()
+        try await super.tearDown()
     }
 
     /// A device id in the crypto space, as a sender certificate names one.

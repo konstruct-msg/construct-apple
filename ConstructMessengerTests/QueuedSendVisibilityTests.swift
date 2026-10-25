@@ -30,19 +30,19 @@ final class QueuedSendVisibilityTests: XCTestCase {
     private let me = "8f2c1d55-0000-4000-8000-000000000001"
     private var peer = ""
 
-    override func setUp() {
-        super.setUp()
+    override func setUp() async throws {
+        try await super.setUp()
         container = PersistenceController(inMemory: true).container
         // Messages and the chat's row are written through the repositories; point them here.
         LocalRepositories.useMessagesForTesting(container)
         LocalRepositories.useChatsForTesting(container)
     }
 
-    override func tearDown() {
+    override func tearDown() async throws {
         LocalRepositories.useMessagesForTesting(nil)
         LocalRepositories.useChatsForTesting(nil)
         container = nil
-        super.tearDown()
+        try await super.tearDown()
     }
 
     private func makeCoordinator() -> (ChatSendCoordinator, Chat) {

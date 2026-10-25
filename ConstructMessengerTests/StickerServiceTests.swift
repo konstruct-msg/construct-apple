@@ -19,20 +19,21 @@ final class StickerServiceTests: XCTestCase {
 
     private static let signingKey = Curve25519.Signing.PrivateKey()
 
-    private var fixtureDir: URL {
+    // Reads the fixture from disk only; the mock calls it from the service's own task.
+    nonisolated private static var fixtureDir: URL {
         URL(fileURLWithPath: #filePath).deletingLastPathComponent().appendingPathComponent("Fixtures/Stickers/pack")
     }
 
     /// The fixture manifest, signed by this test's key. Same pack_id: the signature is outside
     /// the canonical bytes.
     private func signedManifest() throws -> (bytes: Data, id: StickerPackID) {
-        var m = try Shared_Proto_Messaging_V1_StickerPackManifest(serializedBytes: Data(contentsOf: fixtureDir.appendingPathComponent("manifest.pb")))
+        var m = try Shared_Proto_Messaging_V1_StickerPackManifest(serializedBytes: Data(contentsOf: Self.fixtureDir.appendingPathComponent("manifest.pb")))
         m.signature = try Self.signingKey.signature(for: try StickerPack.canonicalBytes(of: m))
         return (try m.serializedData(), StickerPackID(m.packID)!)
     }
 
-    private func blob(_ sha: Data) throws -> Data {
-        try Data(contentsOf: fixtureDir.appendingPathComponent(sha.map { String(format: "%02x", $0) }.joined() + ".webp"))
+    nonisolated private static func blob(_ sha: Data) throws -> Data {
+        try Data(contentsOf: Self.fixtureDir.appendingPathComponent(sha.map { String(format: "%02x", $0) }.joined() + ".webp"))
     }
 
     /// Answers from the fixture, with knobs for lying. Counts calls.
@@ -43,11 +44,11 @@ final class StickerServiceTests: XCTestCase {
         var manifestCalls = 0
         var blobCalls = 0
         var blobsServed = 0
-        let blobReader: (Data) throws -> Data
+        let blobReader: @Sendable (Data) throws -> Data
         let entries: [Data]
         private let lock = NSLock()
 
-        init(manifest: Data, entries: [Data], blobReader: @escaping (Data) throws -> Data) {
+        init(manifest: Data, entries: [Data], blobReader: @escaping @Sendable (Data) throws -> Data) {
             self.manifest = manifest; self.entries = entries; self.blobReader = blobReader
         }
 
@@ -88,7 +89,7 @@ final class StickerServiceTests: XCTestCase {
     private func mock() throws -> (Mock, StickerPackID) {
         let (bytes, id) = try signedManifest()
         let entries = try StickerPack.verify(manifestBytes: bytes, trustedKeys: [Self.signingKey.publicKey]).stickers.map(\.sha256)
-        return (Mock(manifest: bytes, entries: entries, blobReader: blob), id)
+        return (Mock(manifest: bytes, entries: entries, blobReader: Self.blob), id)
     }
 
     // MARK: - Happy path
@@ -116,7 +117,7 @@ final class StickerServiceTests: XCTestCase {
     func testAlreadyHeldBlobsAreNotRefetched() async throws {
         let (mock, id) = try mock()
         let service = makeService(mock)
-        for sha in mock.entries.prefix(2) { try service.store.blobs.put(try blob(sha), expecting: sha) }
+        for sha in mock.entries.prefix(2) { try service.store.blobs.put(try Self.blob(sha), expecting: sha) }
 
         let present1 = await service.ensurePresent(id)
         XCTAssertTrue(present1)
@@ -127,7 +128,7 @@ final class StickerServiceTests: XCTestCase {
 
     func testUnsignedManifestIsRefused() async throws {
         let (mock, id) = try mock()
-        mock.manifest = try Data(contentsOf: fixtureDir.appendingPathComponent("manifest.pb"))   // signature empty
+        mock.manifest = try Data(contentsOf: Self.fixtureDir.appendingPathComponent("manifest.pb"))   // signature empty
         let service = makeService(mock)
         let present1 = await service.ensurePresent(id)
         XCTAssertFalse(present1)
