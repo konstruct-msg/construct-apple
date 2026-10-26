@@ -443,6 +443,9 @@
 "recovery_gate_setup_note" = "Takes about a minute: you write down 12 words and confirm three of them.";
 "recovery_gate_setup_action" = "Set up recovery phrase";
 "recovery_gate_confirm_note" = "Your account already has a recovery phrase, but this device hasn't seen it. Enter it once. The phrase stays on this device and is never sent.";
+"recovery_upgrade_title" = "Check your recovery phrase";
+"recovery_upgrade_why" = "Your recovery key is getting stronger protection, including against future quantum computers. Enter your 12 words once. They stay on this device and are never sent, and you will know your copy is right.";
+"recovery_upgrade_needed" = "Enter it once to strengthen it";
 "recovery_gate_later" = "Later";
 "recovery_confirm_placeholder" = "12 words, separated by spaces";
 "recovery_confirm_action" = "Confirm";
