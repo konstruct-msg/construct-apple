@@ -52,6 +52,9 @@ struct RecoveryGateView: View {
         case afterRegistration
         /// The user reached for an invite. Nothing else on the screen until it is done.
         case contacts
+        /// The account's recovery key is Ed25519 alone and no phrase on this device can complete
+        /// it: the phrase is entered once (`AccountRecoveryViewModel.upgradeNeeded`).
+        case upgrade
     }
 
     let reason: Reason
@@ -71,11 +74,17 @@ struct RecoveryGateView: View {
                         .foregroundStyle(Color.CT.accent)
                         .accessibilityHidden(true)
 
-                    Text(NSLocalizedString("recovery_gate_title", comment: ""))
+                    Text(NSLocalizedString(
+                        reason == .upgrade ? "recovery_upgrade_title" : "recovery_gate_title",
+                        comment: ""
+                    ))
                         .font(CTFont.title)
                         .foregroundColor(Color.CT.text)
 
-                    Text(NSLocalizedString("recovery_gate_why", comment: ""))
+                    Text(NSLocalizedString(
+                        reason == .upgrade ? "recovery_upgrade_why" : "recovery_gate_why",
+                        comment: ""
+                    ))
                         .font(CTFont.body)
                         .foregroundColor(Color.CT.textDim)
                         .fixedSize(horizontal: false, vertical: true)
@@ -179,6 +188,13 @@ struct RecoveryGateView: View {
 
     private func checkReady() {
         Task { await vm.refreshStatus() }
+        if reason == .upgrade {
+            // A confirm that reached `.done` has completed the key.
+            vm.resetConfirm()
+            onReady()
+            dismiss()
+            return
+        }
         guard AccountAddress.own() != nil else { return }
         vm.resetConfirm()
         onReady()

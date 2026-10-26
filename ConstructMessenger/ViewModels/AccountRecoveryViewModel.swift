@@ -12,6 +12,10 @@
 //  (`AccountAddress.rememberOwn`): the address is the recovery public key, and the phrase is the
 //  only source of it this app trusts.
 //
+//  The key is hybrid Ed25519 + ML-DSA-65 (`RecoveryKey`). An account set up before that has the
+//  Ed25519 key alone, and every flow that has the phrase in hand completes it (`upgrade`); one
+//  whose phrase is nowhere on the device asks for it once (`upgradeNeeded`, the gate's `.upgrade`).
+//
 
 import Foundation
 import GRPCCore
@@ -70,9 +74,16 @@ final class AccountRecoveryViewModel {
     /// Settings asks for a copy while there is no key or the silent one is not copied yet.
     var needsBackup: Bool { statusLoaded && (!isSetup || backupPending) }
 
+    /// The account's key is Ed25519 alone and no phrase on this device can complete it: the
+    /// person enters it once. A held phrase completes it when it is copied instead.
+    var upgradeNeeded: Bool { statusLoaded && isSetup && !isHybrid && !backupPending }
+
     // MARK: - Recovery status state
 
     var isSetup: Bool = false
+    /// The account's key has its ML-DSA-65 half. Taken as true until the server says otherwise,
+    /// so nothing asks for the phrase on a status that never loaded.
+    var isHybrid: Bool = true
     var fingerprint: String? = nil
     var lastUsedAt: Int64? = nil
     var statusLoaded: Bool = false
@@ -209,7 +220,16 @@ final class AccountRecoveryViewModel {
         }
         if setupMode == .backupHeld {
             // The key is on the server already; copying it is all that was left. The phrase
-            // leaves the device now, and the rule "never stored" applies again.
+            // leaves the device now, and the rule "never stored" applies again — so a key still
+            // Ed25519 alone is completed first, while the phrase is in hand. A failure does not
+            // hold the copy back: `upgradeNeeded` asks for the phrase later.
+            if isSetup && !isHybrid {
+                do {
+                    try await upgrade(phrase: mnemonic.joined(separator: " "), userId: userId)
+                } catch {
+                    logFailure("upgrade", error)
+                }
+            }
             phraseStore.forgetHeld()
             marks.markCopied()
             refreshBackupPending()
@@ -219,25 +239,16 @@ final class AccountRecoveryViewModel {
         }
         setupStep = .uploading
         do {
-            let seed = try mnemonicToSeed(mnemonic: mnemonic.joined(separator: " "))
-            let keypair = try deriveRecoveryKeypair(seed: seed)
-
-            let timestamp = Int64(Date().timeIntervalSince1970)
-            let message = "CONSTRUCT_RECOVERY_SETUP:\(userId):\(timestamp)"
-            let sigBytes = try signRecoveryChallenge(
-                privateKey: keypair.privateKey,
-                message: message
+            let signed = try RecoveryKey.setup(
+                phrase: mnemonic.joined(separator: " "),
+                accountId: userId
             )
-
-            let result = try await AuthServiceClient.shared.setRecoveryKey(
-                publicKey: keypair.publicKey,
-                signature: Data(sigBytes),
-                timestamp: timestamp
-            )
+            let result = try await AuthServiceClient.shared.setRecoveryKey(signed)
 
             isSetup = true
+            isHybrid = true
             fingerprint = result.fingerprint
-            AccountAddress.rememberOwn(keypair.publicKey)
+            AccountAddress.rememberOwn(signed.address)
             UserDefaults.standard.set(true, forKey: Self.udKeyIsSetup)
             setupStep = .done(fingerprint: result.fingerprint)
             mnemonic = []   // clear sensitive data after switching away from display view
@@ -272,6 +283,7 @@ final class AccountRecoveryViewModel {
             do {
                 let status = try await AuthServiceClient.shared.getRecoveryStatus()
                 isSetup = status.isSetup
+                isHybrid = status.isHybrid
                 fingerprint = status.fingerprint
                 lastUsedAt = status.lastUsedAt
                 if status.isSetup {
@@ -302,6 +314,7 @@ final class AccountRecoveryViewModel {
         UserDefaults.standard.removeObject(forKey: Self.udKeyIsSetup)
         UserDefaults.standard.removeObject(forKey: "recovery_banner_dismissed")
         isSetup = false
+        isHybrid = true
         fingerprint = nil
         lastUsedAt = nil
         statusLoaded = false
@@ -327,19 +340,17 @@ final class AccountRecoveryViewModel {
         guard enteredMnemonicValid, !recoverIdentifier.isEmpty else { return }
         recoverStep = .recovering
         do {
-            // 1. Derive keypair from entered phrase
-            let seed = try mnemonicToSeed(mnemonic: enteredMnemonic)
-            let keypair = try deriveRecoveryKeypair(seed: seed)
-
-            // 2. Client-generated challenge (timestamp string)
-            let challenge = String(Int64(Date().timeIntervalSince1970))
-            let sigBytes = try signRecoveryChallenge(
-                privateKey: keypair.privateKey,
-                message: challenge
-            )
-
-            // 3. Generate fresh device keys
+            // 1. Generate fresh device keys
             let (deviceId, bundle) = try CryptoManager.shared.generateRegistrationBundle()
+
+            // 2. The phrase's key hands the account to exactly these keys: the claim names them,
+            // so a request seen on the way cannot be replayed with others.
+            let claim = try RecoveryKey.claim(
+                phrase: enteredMnemonic,
+                deviceId: deviceId,
+                verifyingKey: bundle.verifyingKey,
+                identityPublic: bundle.identityPublic
+            )
 
             var publicKeys = Shared_Proto_Services_V1_DevicePublicKeys()
             publicKeys.verifyingKey = bundle.verifyingKey
@@ -348,7 +359,7 @@ final class AccountRecoveryViewModel {
             publicKeys.signedPrekeySignature = bundle.signature
             publicKeys.cryptoSuite = "Curve25519+Ed25519"
 
-            // 4. Call RecoverAccount (no auth header).
+            // 3. Call RecoverAccount (no auth header).
             // Normalize the identifier to match registration (server hashes
             // `username.trim().to_lowercase()`); a UUID is unaffected by lowercasing.
             // Defense-in-depth: the server now normalizes too, but this makes recovery work
@@ -356,14 +367,13 @@ final class AccountRecoveryViewModel {
             let identifier = recoverIdentifier.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
             let response = try await AuthServiceClient.shared.recoverAccount(
                 identifier: identifier,
-                challenge: challenge,
-                recoverySignature: Data(sigBytes),
+                claim: claim,
                 deviceId: deviceId,
                 deviceName: DeviceInfo.deviceName,
                 publicKeys: publicKeys
             )
 
-            // 5. Persist the device id and tokens (the keys are in the record the bundle saved)
+            // 4. Persist the device id and tokens (the keys are in the record the bundle saved)
             KeychainManager.shared.saveDeviceID(deviceId)
             AuthSessionManager.shared.saveTokens(
                 accessToken: response.accessToken,
@@ -373,8 +383,9 @@ final class AccountRecoveryViewModel {
             )
             VeilProxyManager.shared.configureFromServer(cert: response.veilBridgeCert ?? "")
             // The server just accepted a signature by this key as the account's, so it is the
-            // account's recovery key — and therefore its address.
-            AccountAddress.rememberOwn(keypair.publicKey)
+            // account's recovery key — and therefore its address. A recovered Ed25519 account is
+            // hybrid now: the server kept the claim's ML-DSA half.
+            AccountAddress.rememberOwn(claim.address)
 
             Task {
                 _ = try? await OtpkReplenishmentService.generateAndUpload(
@@ -409,6 +420,9 @@ final class AccountRecoveryViewModel {
     /// The key is derived here and compared with the fingerprint the server reports for the
     /// account. The phrase never leaves the device, and the server can only make the comparison
     /// fail — it cannot make this device adopt a key the phrase did not produce.
+    ///
+    /// An account whose key is Ed25519 alone is completed with the same input (`upgrade`): this
+    /// is the one place a phrase that is nowhere on the device can do it.
     func submitConfirm() async {
         let phrase = confirmPhrase
             .split(whereSeparator: { $0.isWhitespace })
@@ -420,18 +434,21 @@ final class AccountRecoveryViewModel {
         }
         confirmStep = .checking
         do {
-            let keypair = try deriveRecoveryKeypair(seed: try mnemonicToSeed(mnemonic: phrase))
+            let key = try RecoveryKey.address(phrase: phrase)
             let status = try await AuthServiceClient.shared.getRecoveryStatus()
             guard status.isSetup, let fingerprint = status.fingerprint else {
                 confirmStep = .failed(NSLocalizedString("recovery_error_not_configured", comment: ""))
                 return
             }
-            let key = keypair.publicKey
             guard AccountAddress.matchesServerFingerprint(key, fingerprint: fingerprint) else {
                 confirmStep = .failed(NSLocalizedString("recovery_confirm_other_account", comment: ""))
                 return
             }
             AccountAddress.rememberOwn(key)
+            isHybrid = status.isHybrid
+            if !status.isHybrid, let userId = AuthSessionManager.shared.currentUserId {
+                try await upgrade(phrase: phrase, userId: userId)
+            }
             confirmPhrase = ""
             confirmStep = .done
         } catch {
@@ -449,6 +466,17 @@ final class AccountRecoveryViewModel {
         recoverStep = .idle
         enteredWords = Array(repeating: "", count: 12)
         recoverIdentifier = ""
+    }
+
+    // MARK: - Upgrade
+
+    /// Completes the account's Ed25519 key with the phrase's ML-DSA-65 half. The server takes it
+    /// only when the key's Ed25519 half is the one it holds, signed by both halves.
+    private func upgrade(phrase: String, userId: String) async throws {
+        let signed = try RecoveryKey.setup(phrase: phrase, accountId: userId)
+        _ = try await AuthServiceClient.shared.setRecoveryKey(signed)
+        isHybrid = true
+        Log.info("Recovery key: completed to hybrid", category: "Recovery")
     }
 
     // MARK: - Helpers
