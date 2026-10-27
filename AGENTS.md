@@ -187,35 +187,12 @@ the same change, or is removed; a handler no producer reaches is wired up or del
   A separate preview package shares the theme file, never copies it
   (`~/Code/construct-docs/decisions/one-theme-file-shared-not-copied.md`).
 
-## Design system
+## UI
 
-**Affordance is native, identity is ours.** Controls and state (buttons, toggles, navigation,
-selection, status, disclosure) look like the platform's. Structure and rhythm (grid, hairlines,
-section headers, palette, dark default, circular identicons, monospace chrome) are ours. Message
-text is the reader's. The test: does a person have to learn this app to know what it does? Then
-it is a control and looks native.
-
-- **No new ASCII control or status, anywhere.** SF Symbols and native controls for anything
-  interactive or stateful (`CTStatusBadge`, `Toggle`, `chevron.*`); ASCII only as structure
-  (`> TITLE`, separators, keycap hints, debug surfaces). Never regress a converted control. A new
-  surface is built this way from the start; a missing token lands first.
-- **Tokens only** — `ConstructMessenger/Utilities/ConstructTheme.swift`: `Color.CT.*`,
-  `CTFont.*`, `CTRadius` via `CTShape.*()`, `CTLayout`, `CTSpace`, `.glassCapsule()`. No magic
-  numbers; when editing a file with a literal, migrate that call site. Background `Color.CT.bg`
-  via `.ctBackground()`.
-- **Two surface languages, never mixed on one control:** form/card (`CTRadius.card`, solid) vs
-  composer/glass (`pill`, `.glassCapsule()`).
-- **Fonts.** The chrome is monospace (`CTFont.title … micro`, `CTFont.ui`; `CTFont.mono` for
-  machine output). Message text — bubbles, composer, captions — is `CTFont.message`, the one
-  face and size the reader chooses (system by default); nothing else gains a preference — the
-  product is designed, not configurable. No `.system(...)` or `.monospaced` at a
-  call site. JetBrains Mono is bundled (`ConstructMessenger/Fonts/`); `UIAppFonts` lists bare
-  file names, and `ThemeTypographyTests` asserts the faces resolve.
-- **Bars are the system's.** `.navigationTitle` + `inlineNavTitle()`, `.toolbar` items with a
-  symbol and a title; a sheet with a title or action is wrapped in `.sheetNavigation()` at the
-  presenting site. A conversation hides the tab bar with `.hidesTabBar()`. Moving chrome into the
-  bar: check every host, the iPad split view included.
-- **Debug-only UI**: `Color.CT.debug` under `#if DEBUG`.
+**Affordance is native, identity is ours**: controls and state look like the platform's; grid,
+palette, dark ground and monospace chrome are ours; message text is the reader's. No new ASCII
+control or status; tokens from `ConstructTheme.swift`, never literals. Before touching UI, read
+`~/Code/construct-docs/client/ios/DESIGN_SYSTEM_RULES.md` — its "Hard rules" section is short.
 
 ## Localization
 
