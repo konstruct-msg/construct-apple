@@ -9,6 +9,9 @@
 //    → the phrase leaves the device. Nothing is sent.
 //  - alreadySet: the account has its key and this device has no phrase to show. The screen says
 //    so; it does not offer a new phrase the server would refuse.
+//  - confirm: the account has its key and this device does not know its address: enter the
+//    phrase once.
+//  - unavailable: the status did not load, so whether there is a key is unknown: try again.
 //
 
 import SwiftUI
@@ -26,10 +29,13 @@ struct RecoverySetupView: View {
                     if !vm.statusLoaded {
                         ProgressView()
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    } else if vm.setupMode == .alreadySet {
-                        alreadySetView
                     } else {
-                        introView
+                        switch vm.setupMode {
+                        case .create, .backupHeld: introView
+                        case .alreadySet: alreadySetView
+                        case .confirm: confirmView
+                        case .unavailable: unavailableView
+                        }
                     }
                 case .displayWords:
                     wordDisplayView
@@ -53,6 +59,7 @@ struct RecoverySetupView: View {
                 ToolbarItem(placement: .cancellationAction) {
                     Button(NSLocalizedString("cancel", comment: "")) {
                         vm.resetSetup()
+                        vm.resetConfirm()
                         dismiss()
                     }
                     .barItem()
@@ -63,6 +70,12 @@ struct RecoverySetupView: View {
         .task {
             await vm.loadStatus()
             if case .idle = vm.setupStep { vm.prepareSetup() }
+        }
+        .onChange(of: vm.confirmStep) { _, step in
+            guard step == .done else { return }
+            vm.resetConfirm()
+            Task { await vm.refreshStatus() }
+            dismiss()
         }
     }
 
@@ -102,7 +115,7 @@ struct RecoverySetupView: View {
                 switch vm.setupMode {
                 case .create: vm.startSetup()
                 case .backupHeld: Task { await vm.startBackup() }
-                case .alreadySet: break   // `alreadySetView` stands in for this screen
+                case .alreadySet, .confirm, .unavailable: break   // their own views stand in
                 }
             } label: {
                 Text(NSLocalizedString(
@@ -160,6 +173,54 @@ struct RecoverySetupView: View {
                     .padding(.vertical, 12)
                     .background(Color.CT.bgMsg)
                     .overlay(CTShape.card().stroke(Color.CT.accent, lineWidth: 1))
+            }
+            .padding(.horizontal)
+            .padding(.bottom)
+        }
+    }
+
+    // MARK: - Confirm
+
+    private var confirmView: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: CTLayout.sectionGap) {
+                Image(systemName: "key.fill")
+                    .font(CTFont.title)
+                    .foregroundStyle(Color.CT.accent)
+                    .accessibilityHidden(true)
+                Text(NSLocalizedString("recovery_set_title", comment: ""))
+                    .font(CTFont.title)
+                    .foregroundColor(Color.CT.text)
+                RecoveryPhraseConfirmForm()
+            }
+            .padding(CTLayout.edgePad)
+        }
+    }
+
+    // MARK: - Unavailable
+
+    private var unavailableView: some View {
+        VStack(spacing: 24) {
+            Spacer()
+            Image(systemName: "wifi.exclamationmark")
+                .font(CTIcon.font(CTIcon.hero, weight: .regular))
+                .foregroundStyle(Color.CT.warning)
+                .accessibilityHidden(true)
+            Text(NSLocalizedString("recovery_status_unavailable_title", comment: ""))
+                .font(CTFont.title)
+                .foregroundColor(Color.CT.text)
+                .multilineTextAlignment(.center)
+            Text(NSLocalizedString("recovery_status_unavailable_body", comment: ""))
+                .font(CTFont.body)
+                .foregroundColor(Color.CT.textDim)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal)
+            Spacer()
+            CTButton(label: NSLocalizedString("try_again", comment: "")) {
+                Task {
+                    await vm.refreshStatus()
+                    vm.prepareSetup()
+                }
             }
             .padding(.horizontal)
             .padding(.bottom)

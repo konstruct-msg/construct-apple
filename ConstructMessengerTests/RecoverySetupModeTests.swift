@@ -14,29 +14,66 @@ import XCTest
 @MainActor
 final class RecoverySetupModeTests: XCTestCase {
 
-    /// Mutation: ignore `isSetup` (the defect) — a set-up account is offered a new phrase.
-    func testAnAccountWithAKeyIsNotOfferedANewPhrase() {
-        XCTAssertEqual(AccountRecoveryViewModel.setupMode(held: false, isSetup: true), .alreadySet)
+    private func mode(
+        held: Bool = false,
+        isSetup: Bool = false,
+        answered: Bool = true,
+        knowsAddress: Bool = true,
+        phraseLost: Bool = false
+    ) -> AccountRecoveryViewModel.SetupMode {
+        AccountRecoveryViewModel.setupMode(
+            held: held,
+            isSetup: isSetup,
+            answered: answered,
+            knowsAddress: knowsAddress,
+            phraseLost: phraseLost
+        )
     }
 
-    /// Mutation: always `.alreadySet` without a held phrase — a new account cannot set one up.
+    /// Mutation: ignore `isSetup` (the defect) — a set-up account is offered a new phrase.
+    func testAnAccountWithAKeyIsNotOfferedANewPhrase() {
+        XCTAssertEqual(mode(isSetup: true), .alreadySet)
+    }
+
+    /// Mutation: `.alreadySet` in place of `.create` — a new account cannot set one up.
     func testAnAccountWithoutAKeyMakesOne() {
-        XCTAssertEqual(AccountRecoveryViewModel.setupMode(held: false, isSetup: false), .create)
+        XCTAssertEqual(mode(isSetup: false), .create)
     }
 
     /// Mutation: check `isSetup` before `held` — the silent key, which is set on the server, could
     /// never be copied.
     func testAHeldPhraseIsShownForCopying() {
-        XCTAssertEqual(AccountRecoveryViewModel.setupMode(held: true, isSetup: true), .backupHeld)
-        XCTAssertEqual(AccountRecoveryViewModel.setupMode(held: true, isSetup: false), .backupHeld)
+        XCTAssertEqual(mode(held: true, isSetup: true), .backupHeld)
+        XCTAssertEqual(mode(held: true, isSetup: false, answered: false), .backupHeld)
+    }
+
+    /// Mutation: drop `answered` — a status that never loaded reads as "no key" and a new phrase
+    /// is offered, which the server refuses if there is one.
+    func testAnUnansweredStatusOffersNothing() {
+        XCTAssertEqual(mode(isSetup: false, answered: false), .unavailable)
+    }
+
+    /// Mutation: drop `knowsAddress` — a device without the account's address is only told the
+    /// key exists, and invites stay closed to it.
+    func testADeviceWithoutTheAddressEntersThePhrase() {
+        XCTAssertEqual(mode(isSetup: true, knowsAddress: false), .confirm)
+        // A key cached from an earlier answer is still a key.
+        XCTAssertEqual(mode(isSetup: true, answered: false, knowsAddress: false), .confirm)
+    }
+
+    /// Mutation: drop `phraseLost` — someone whose phrase is gone is asked to type it.
+    func testALostPhraseIsNotAskedFor() {
+        XCTAssertEqual(mode(isSetup: true, knowsAddress: false, phraseLost: true), .alreadySet)
     }
 
     /// Mutation: drop the guard in `startSetup` — the already-set screen can still mint a phrase.
     func testStartSetupMakesNoPhraseOutsideCreate() {
         let vm = AccountRecoveryViewModel()
-        vm.setupMode = .alreadySet
-        vm.startSetup()
-        XCTAssertTrue(vm.mnemonic.isEmpty)
-        guard case .idle = vm.setupStep else { return XCTFail("setup step moved: \(vm.setupStep)") }
+        for mode: AccountRecoveryViewModel.SetupMode in [.alreadySet, .confirm, .unavailable] {
+            vm.setupMode = mode
+            vm.startSetup()
+            XCTAssertTrue(vm.mnemonic.isEmpty, "\(mode)")
+            guard case .idle = vm.setupStep else { return XCTFail("setup step moved in \(mode)") }
+        }
     }
 }
