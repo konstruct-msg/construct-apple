@@ -98,14 +98,22 @@ final class MessageStreamManager {
     /// Build 587 heated the phone by treating only `retryCount == 0` as "connecting": after the
     /// first open failure the loop was still alive (sleeping or mid-open) but foreground settle
     /// saw `isActivelyConnecting == false` and called `forceReconnect`, killing the in-flight
-    /// loop and starting another. Pure form: ``isActivelyConnecting(hasStreamTask:isConnected:)``.
+    /// loop and starting another. Pure form:
+    /// ``isActivelyConnecting(hasStreamTask:isConnected:isInDegradedMode:)``.
+    ///
+    /// A loop asleep in degraded mode is not connecting: it waits ten minutes between attempts.
+    /// Counting it as connecting kept a Desktop with no push deaf for 50 minutes on 2026-10-27,
+    /// with the window in front — every activation logged "stream is connecting, skipping".
     var isActivelyConnecting: Bool {
-        Self.isActivelyConnecting(hasStreamTask: streamTask != nil, isConnected: isConnected)
+        Self.isActivelyConnecting(hasStreamTask: streamTask != nil, isConnected: isConnected,
+                                  isInDegradedMode: isInDegradedMode)
     }
 
-    /// Pure form of ``isActivelyConnecting`` — any live connectLoop owns the stream until accept.
-    nonisolated static func isActivelyConnecting(hasStreamTask: Bool, isConnected: Bool) -> Bool {
-        hasStreamTask && !isConnected
+    /// Pure form of ``isActivelyConnecting`` — a live connectLoop owns the stream until accept,
+    /// unless it is sleeping out a degraded-mode backoff.
+    nonisolated static func isActivelyConnecting(hasStreamTask: Bool, isConnected: Bool,
+                                                 isInDegradedMode: Bool) -> Bool {
+        hasStreamTask && !isConnected && !isInDegradedMode
     }
 
     /// What to do after `openStream` throws the open-timeout sentinel (`retrying with VEIL`).
@@ -304,7 +312,10 @@ final class MessageStreamManager {
     // MARK: - Low-power degraded mode (P3: battery optimisation for prolonged offline)
 
     /// Wall-clock timestamp when the connect loop first entered a continuous-failure streak.
-    /// Reset on any success, clean disconnect, or network path change.
+    /// Reset on an accepted stream (``noteStreamAccepted()``), a clean end, a disconnect, or a
+    /// network path change. Until 2026-10-27 an accepted stream did not reset it: the server ends
+    /// a stream with an error every few minutes, so the "streak" ran from the first drop of the
+    /// session and one ordinary drop five minutes later meant a ten-minute sleep.
     private var continuousFailureStreakStart: Date?
 
     /// After this many minutes of uninterrupted failures, the loop switches to low-power mode:
@@ -334,6 +345,12 @@ final class MessageStreamManager {
     /// (the per-reconnect thrash the suppression ladder itself exists to stop). Mirrors the clear an
     /// explicit transport toggle does in `performTransportReconnect`.
     /// Reconnect is owned by `scheduleReconnectAfterRoutingChange` (StreamLifecycle + grpcServerChanged).
+    /// The stream was accepted: whatever failed before, the failures are no longer continuous.
+    func noteStreamAccepted() {
+        continuousFailureStreakStart = nil
+        isInDegradedMode = false
+    }
+
     func resetDegradedModeOnNetworkChange() {
         continuousFailureStreakStart = nil
         isInDegradedMode = false
