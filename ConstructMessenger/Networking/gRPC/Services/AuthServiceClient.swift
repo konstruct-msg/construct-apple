@@ -171,14 +171,15 @@ final class AuthServiceClient: Sendable {
         let fingerprint: String
     }
 
-    func setRecoveryKey(publicKey: Data, signature: Data, timestamp: Int64) async throws -> RecoveryKeyResult {
+    /// Sets the hybrid recovery key, or upgrades the account's Ed25519 key to it.
+    func setRecoveryKey(_ signed: RecoveryKey.Signed) async throws -> RecoveryKeyResult {
         try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.recovery) { grpcClient in
             let authClient = Shared_Proto_Services_V1_AuthService.Client(wrapping: grpcClient)
 
             var request = Shared_Proto_Services_V1_SetRecoveryKeyRequest()
-            request.recoveryPublicKey = publicKey
-            request.setupSignature = signature
-            request.timestamp = timestamp
+            request.recoveryPublicKey = signed.publicKey
+            request.setupSignature = signed.signature
+            request.timestamp = signed.timestamp
 
             let response = try await authClient.setRecoveryKey(
                 request: .init(message: request)
@@ -193,6 +194,9 @@ final class AuthServiceClient: Sendable {
         let isSetup: Bool
         let fingerprint: String?
         let lastUsedAt: Int64?
+        /// The key has its ML-DSA-65 half. An account set up before construct-core 0.59.0 has
+        /// not, until the phrase is entered once on some device (`AccountRecoveryViewModel`).
+        let isHybrid: Bool
     }
 
     func getRecoveryStatus() async throws -> RecoveryStatus {
@@ -205,17 +209,19 @@ final class AuthServiceClient: Sendable {
             return RecoveryStatus(
                 isSetup: response.isSetup,
                 fingerprint: response.hasFingerprint ? response.fingerprint : nil,
-                lastUsedAt: response.hasLastUsedAt ? response.lastUsedAt : nil
+                lastUsedAt: response.hasLastUsedAt ? response.lastUsedAt : nil,
+                isHybrid: response.isHybrid
             )
         }
     }
 
     // MARK: - Recover Account
 
+    /// `claim` must name `deviceId` and `publicKeys`' verifying and identity keys: the server
+    /// checks the signature over exactly these.
     func recoverAccount(
         identifier: String,
-        challenge: String,
-        recoverySignature: Data,
+        claim: RecoveryKey.Signed,
         deviceId: String,
         deviceName: String,
         publicKeys: Shared_Proto_Services_V1_DevicePublicKeys
@@ -231,8 +237,10 @@ final class AuthServiceClient: Sendable {
 
             var request = Shared_Proto_Services_V1_RecoverAccountRequest()
             request.identifier = identifier
-            request.challenge = challenge
-            request.recoverySignature = recoverySignature
+            // The hybrid claim; `challenge` (the legacy one) stays empty.
+            request.recoveryPublicKey = claim.publicKey
+            request.timestamp = claim.timestamp
+            request.recoverySignature = claim.signature
             request.newDevice = newDevice
 
             let response = try await authClient.recoverAccount(

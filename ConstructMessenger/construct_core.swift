@@ -7872,6 +7872,62 @@ public func FfiConverterTypeRecoveryKeypair_lower(_ value: RecoveryKeypair) -> R
 }
 
 
+/**
+ * A hybrid recovery key's public half (Ed25519 ‖ ML-DSA-65, 1984 bytes) and its signature over
+ * one recovery message (3373 bytes). The bytes signed are `construct_server_trust::recovery`'s.
+ */
+public struct RecoverySigned: Equatable, Hashable {
+    public var publicKey: Data
+    public var signature: Data
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(publicKey: Data, signature: Data) {
+        self.publicKey = publicKey
+        self.signature = signature
+    }
+
+    
+}
+
+#if compiler(>=6)
+extension RecoverySigned: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeRecoverySigned: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> RecoverySigned {
+        return
+            try RecoverySigned(
+                publicKey: FfiConverterData.read(from: &buf), 
+                signature: FfiConverterData.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: RecoverySigned, into buf: inout [UInt8]) {
+        FfiConverterData.write(value.publicKey, into: &buf)
+        FfiConverterData.write(value.signature, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRecoverySigned_lift(_ buf: RustBuffer) throws -> RecoverySigned {
+    return try FfiConverterTypeRecoverySigned.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRecoverySigned_lower(_ value: RecoverySigned) -> RustBuffer {
+    return FfiConverterTypeRecoverySigned.lower(value)
+}
+
+
 public struct RegistrationBundleFields: Equatable, Hashable {
     public var identityPublic: Data
     public var signedPrekeyPublic: Data
@@ -13592,6 +13648,16 @@ public func recommendedSendDelayMs(isHighPriority: Bool, batteryLevel: Float) ->
 })
 }
 /**
+ * The hybrid recovery public key the mnemonic determines.
+ */
+public func recoveryPublicKey(mnemonic: String)throws  -> Data  {
+    return try  FfiConverterData.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_func_recovery_public_key(
+        FfiConverterString.lower(mnemonic),$0
+    )
+})
+}
+/**
  * The public registration bundle of a key record.
  */
 public func registrationBundleFieldsFromKeys(keys: Data)throws  -> RegistrationBundleFields  {
@@ -13683,6 +13749,33 @@ public func signRecoveryChallenge(privateKey: Data, message: String)throws  -> D
     uniffi_construct_core_fn_func_sign_recovery_challenge(
         FfiConverterData.lower(privateKey),
         FfiConverterString.lower(message),$0
+    )
+})
+}
+/**
+ * The recovery key handing its account to the device these keys name.
+ */
+public func signRecoveryClaim(mnemonic: String, timestamp: Int64, deviceId: String, verifyingKey: Data, identityPublic: Data)throws  -> RecoverySigned  {
+    return try  FfiConverterTypeRecoverySigned_lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_func_sign_recovery_claim(
+        FfiConverterString.lower(mnemonic),
+        FfiConverterInt64.lower(timestamp),
+        FfiConverterString.lower(deviceId),
+        FfiConverterData.lower(verifyingKey),
+        FfiConverterData.lower(identityPublic),$0
+    )
+})
+}
+/**
+ * The recovery key signing its setup on `account_id` — or the upgrade of the Ed25519 key
+ * already set there, which is the same message.
+ */
+public func signRecoverySetup(mnemonic: String, accountId: String, timestamp: Int64)throws  -> RecoverySigned  {
+    return try  FfiConverterTypeRecoverySigned_lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_func_sign_recovery_setup(
+        FfiConverterString.lower(mnemonic),
+        FfiConverterString.lower(accountId),
+        FfiConverterInt64.lower(timestamp),$0
     )
 })
 }
@@ -13957,6 +14050,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_construct_core_checksum_func_recommended_send_delay_ms() != 24315) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_construct_core_checksum_func_recovery_public_key() != 59962) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_construct_core_checksum_func_registration_bundle_fields_from_keys() != 32194) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -13976,6 +14072,12 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_func_sign_recovery_challenge() != 4321) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_func_sign_recovery_claim() != 54757) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_func_sign_recovery_setup() != 54513) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_func_sr_create_recovery_shares() != 18198) {

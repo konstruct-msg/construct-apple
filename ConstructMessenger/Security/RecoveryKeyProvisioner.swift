@@ -50,7 +50,8 @@ final class RecoveryKeyProvisioner {
         /// Whether the server holds a key for the account. Throws when it cannot be asked.
         var serverHasKey: () async throws -> Bool
         var generatePhrase: () throws -> String
-        /// Derives, signs and calls `SetRecoveryKey`; returns the public key on success.
+        /// Derives, signs and calls `SetRecoveryKey` with the hybrid key; returns the account's
+        /// address (the key's Ed25519 half) on success.
         var upload: (_ phrase: String, _ userId: String) async throws -> Data
         /// True when the server refused because another key is set.
         var isOtherKeySet: (Error) -> Bool
@@ -108,9 +109,9 @@ final class RecoveryKeyProvisioner {
         }
         guard let phrase else { return .deferred }
 
-        let publicKey: Data
+        let address: Data
         do {
-            publicKey = try await d.upload(phrase, userId)
+            address = try await d.upload(phrase, userId)
         } catch where d.isOtherKeySet(error) {
             // Not ours, and never will be: the phrase names nothing.
             d.store.forgetPending()
@@ -121,7 +122,7 @@ final class RecoveryKeyProvisioner {
             return .deferred
         }
 
-        d.rememberAddress(publicKey)
+        d.rememberAddress(address)
         d.markSilent(userId)
         if !d.store.promotePending(account: userId) {
             // The key is set and the address known, but the phrase could not move behind
@@ -140,19 +141,9 @@ extension RecoveryKeyProvisioner.Dependencies {
             serverHasKey: { try await AuthServiceClient.shared.getRecoveryStatus().isSetup },
             generatePhrase: { try generateMnemonic(wordCount: 12) },
             upload: { phrase, userId in
-                let seed = try mnemonicToSeed(mnemonic: phrase)
-                let keypair = try deriveRecoveryKeypair(seed: seed)
-                let timestamp = Int64(Date().timeIntervalSince1970)
-                let signature = try signRecoveryChallenge(
-                    privateKey: keypair.privateKey,
-                    message: "CONSTRUCT_RECOVERY_SETUP:\(userId):\(timestamp)"
-                )
-                _ = try await AuthServiceClient.shared.setRecoveryKey(
-                    publicKey: keypair.publicKey,
-                    signature: Data(signature),
-                    timestamp: timestamp
-                )
-                return keypair.publicKey
+                let signed = try RecoveryKey.setup(phrase: phrase, accountId: userId)
+                _ = try await AuthServiceClient.shared.setRecoveryKey(signed)
+                return signed.address
             },
             isOtherKeySet: { ($0 as? RPCError)?.code == .alreadyExists },
             rememberAddress: { AccountAddress.rememberOwn($0) },
