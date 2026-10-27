@@ -45,23 +45,38 @@ final class AccountRecoveryViewModel {
     var quizOptions: [Int: [String]] = [:]
 
     /// What the setup screen is doing: making a key and setting it (no passcode on this device,
-    /// or no key yet), showing one that was made silently so the person can copy it, or saying
-    /// that the account has its key and this device has nothing to show.
+    /// or no key yet), showing one that was made silently so the person can copy it, or one of
+    /// the answers for an account that has its key already.
     enum SetupMode: Equatable {
         case create
         case backupHeld
         /// The server holds the account's key and the phrase is not on this device. The key cannot
         /// be replaced, so a new phrase would only be refused after the person had copied it.
         case alreadySet
+        /// The account has its key and this device does not know the address it gives: the
+        /// person enters the phrase once (`submitConfirm`), as the invite gate asks.
+        case confirm
+        /// Nobody has said whether the account has a key — the status did not load and none was
+        /// cached. Offering a new phrase here is the guess the server refuses.
+        case unavailable
     }
     var setupMode: SetupMode = .create
 
     /// The whole rule for which flow the setup screen opens on. A held phrase wins: it is the
-    /// account's key, waiting to be copied. Without one, the server's answer decides — a new
-    /// phrase is offered only to an account that has no key.
-    static func setupMode(held: Bool, isSetup: Bool) -> SetupMode {
+    /// account's key, waiting to be copied. Without one, a key the server has reported decides:
+    /// a device that knows its address, or whose phrase is lost and cannot be entered, is told
+    /// so; any other enters the phrase. A new phrase is offered only once the server has said
+    /// there is no key.
+    static func setupMode(
+        held: Bool,
+        isSetup: Bool,
+        answered: Bool,
+        knowsAddress: Bool,
+        phraseLost: Bool
+    ) -> SetupMode {
         if held { return .backupHeld }
-        return isSetup ? .alreadySet : .create
+        if isSetup { return knowsAddress || phraseLost ? .alreadySet : .confirm }
+        return answered ? .create : .unavailable
     }
 
     /// The silent key's phrase waits in the vault until it is copied
@@ -99,6 +114,9 @@ final class AccountRecoveryViewModel {
     var fingerprint: String? = nil
     var lastUsedAt: Int64? = nil
     var statusLoaded: Bool = false
+    /// The server answered the last status request. `statusLoaded` turns true on a failure too
+    /// (the banner should stop waiting); this is what says `isSetup == false` means "no key".
+    private(set) var statusAnswered = false
     private var statusLoadTask: Task<Void, Never>? = nil
 
     private static let udKeyIsSetup = "recovery_is_setup"
@@ -135,7 +153,13 @@ final class AccountRecoveryViewModel {
     /// Which flow the screen opens on. Called when it appears.
     func prepareSetup() {
         refreshBackupPending()
-        setupMode = Self.setupMode(held: backupPending, isSetup: isSetup)
+        setupMode = Self.setupMode(
+            held: backupPending,
+            isSetup: isSetup,
+            answered: statusAnswered,
+            knowsAddress: AccountAddress.own() != nil,
+            phraseLost: phraseLost
+        )
     }
 
     func refreshBackupPending() {
@@ -300,6 +324,7 @@ final class AccountRecoveryViewModel {
                 isHybrid = status.isHybrid
                 fingerprint = status.fingerprint
                 lastUsedAt = status.lastUsedAt
+                statusAnswered = true
                 if status.isSetup {
                     UserDefaults.standard.set(true, forKey: Self.udKeyIsSetup)
                 }
@@ -332,6 +357,7 @@ final class AccountRecoveryViewModel {
         fingerprint = nil
         lastUsedAt = nil
         statusLoaded = false
+        statusAnswered = false
     }
 
     // MARK: - Recover Flow
