@@ -112,7 +112,12 @@ final class StudioProcessTap: StudioProgramCapture {
         try Self.check(AudioDeviceCreateIOProcIDWithBlock(&procID, aggregateID, queue) { [weak self] _, input, _, _, _ in
             guard let self, let packetizer = self.packetizer else { return }
             let list = UnsafeMutableAudioBufferListPointer(UnsafeMutablePointer(mutating: input))
-            guard let first = list.first, let base = first.mData else { return }
+            // The aggregate's input is the main sub-device's own inputs first, then the tap. On an
+            // output device with inputs (any audio interface) `list.first` is the preamp's noise
+            // floor — measured on a Scarlett 2i4, 2026-10-27: −100 dBFS sent while the DAW played.
+            let tapIndex = list.count - (interleaved ? 1 : channels)
+            guard tapIndex >= 0, let base = list[tapIndex].mData else { return }
+            let first = list[tapIndex]
             if interleaved {
                 let samples = UnsafeBufferPointer(start: base.assumingMemoryBound(to: Float.self),
                                                   count: Int(first.mDataByteSize) / 4)
@@ -120,7 +125,7 @@ final class StudioProcessTap: StudioProgramCapture {
             } else {
                 let frames = Int(first.mDataByteSize) / 4
                 let left = UnsafeBufferPointer(start: base.assumingMemoryBound(to: Float.self), count: frames)
-                let right = list.count > 1 ? list[1].mData.map {
+                let right = channels > 1 ? list[tapIndex + 1].mData.map {
                     UnsafeBufferPointer(start: $0.assumingMemoryBound(to: Float.self), count: frames)
                 } : nil
                 packetizer.ingest(left: left, right: right)
