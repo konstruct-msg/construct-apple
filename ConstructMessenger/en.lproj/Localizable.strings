@@ -1370,6 +1370,8 @@
 "recovery_backup_pending" = "Not saved yet";
 "recovery_reminder_lost_title" = "Recovery key can no longer be shown";
 "recovery_reminder_lost_body" = "The device passcode was turned off before the key was saved, and iOS deleted it. Your account works on this device, but if you lose it or sign out, the account cannot be recovered.";
+"recovery_set_title" = "Recovery phrase is set up";
+"recovery_set_body" = "Your account has its recovery phrase. Konstruct does not keep it: it is wherever you wrote the 12 words down, and it cannot be shown again. The account’s key cannot be replaced, so there is no new phrase to make.";
 "logout_backup_pending_message" = "Your recovery key is on this device and has not been saved. Signing out deletes it, and the account cannot be recovered without it.";
 "qr_scanning_unavailable_mac" = "QR scanning is not available on Mac";
 "qr_scanning_unavailable_mac_hint" = "Ask your contact to share their invite link instead.";

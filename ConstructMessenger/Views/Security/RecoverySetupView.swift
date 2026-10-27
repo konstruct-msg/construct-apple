@@ -7,6 +7,8 @@
 //    could not be made silently (no passcode on the device).
 //  - backupHeld: the key was made silently at registration; unlock the phrase → show it → pick 3
 //    → the phrase leaves the device. Nothing is sent.
+//  - alreadySet: the account has its key and this device has no phrase to show. The screen says
+//    so; it does not offer a new phrase the server would refuse.
 //
 
 import SwiftUI
@@ -21,7 +23,14 @@ struct RecoverySetupView: View {
             Group {
                 switch vm.setupStep {
                 case .idle:
-                    introView
+                    if !vm.statusLoaded {
+                        ProgressView()
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    } else if vm.setupMode == .alreadySet {
+                        alreadySetView
+                    } else {
+                        introView
+                    }
                 case .displayWords:
                     wordDisplayView
                 case .quiz:
@@ -50,7 +59,9 @@ struct RecoverySetupView: View {
                 }
             }
         }
-        .onAppear {
+        // The mode reads the server's answer, so it waits for it.
+        .task {
+            await vm.loadStatus()
             if case .idle = vm.setupStep { vm.prepareSetup() }
         }
     }
@@ -91,6 +102,7 @@ struct RecoverySetupView: View {
                 switch vm.setupMode {
                 case .create: vm.startSetup()
                 case .backupHeld: Task { await vm.startBackup() }
+                case .alreadySet: break   // `alreadySetView` stands in for this screen
                 }
             } label: {
                 Text(NSLocalizedString(
@@ -106,6 +118,65 @@ struct RecoverySetupView: View {
             }
             .padding(.horizontal)
             .padding(.bottom)
+        }
+    }
+
+    // MARK: - Already set
+
+    private var alreadySetView: some View {
+        VStack(spacing: 24) {
+            Spacer()
+            Image(systemName: vm.phraseLost ? "exclamationmark.triangle.fill" : "checkmark.shield.fill")
+                .font(CTIcon.font(CTIcon.hero, weight: .regular))
+                .foregroundStyle(vm.phraseLost ? Color.CT.danger : Color.CT.accent)
+                .accessibilityHidden(true)
+            Text(NSLocalizedString(
+                vm.phraseLost ? "recovery_reminder_lost_title" : "recovery_set_title",
+                comment: ""
+            ))
+                .font(CTFont.title)
+                .foregroundColor(Color.CT.text)
+                .multilineTextAlignment(.center)
+            Text(NSLocalizedString(
+                vm.phraseLost ? "recovery_reminder_lost_body" : "recovery_set_body",
+                comment: ""
+            ))
+                .font(CTFont.body)
+                .foregroundColor(Color.CT.textDim)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal)
+            if let fingerprint = vm.fingerprint, !fingerprint.isEmpty {
+                fingerprintBlock(fingerprint)
+            }
+            Spacer()
+            Button {
+                vm.resetSetup()
+                dismiss()
+            } label: {
+                Text(NSLocalizedString("done", comment: ""))
+                    .font(CTFont.body)
+                    .foregroundColor(Color.CT.text)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(Color.CT.bgMsg)
+                    .overlay(CTShape.card().stroke(Color.CT.accent, lineWidth: 1))
+            }
+            .padding(.horizontal)
+            .padding(.bottom)
+        }
+    }
+
+    private func fingerprintBlock(_ fingerprint: String) -> some View {
+        VStack(spacing: 4) {
+            Text(NSLocalizedString("recovery_fingerprint", comment: ""))
+                .font(CTFont.caption)
+                .foregroundColor(Color.CT.textDim)
+            Text(fingerprint)
+                .font(CTFont.mono(12))
+                .foregroundColor(Color.CT.text)
+                .padding(8)
+                .background(Color.CT.bgMsg)
+                .overlay(CTShape.card().stroke(Color.CT.noise, lineWidth: 1))
         }
     }
 
@@ -253,17 +324,7 @@ struct RecoverySetupView: View {
                 .multilineTextAlignment(.center)
                 .padding(.horizontal)
             if !fingerprint.isEmpty {
-                VStack(spacing: 4) {
-                    Text(NSLocalizedString("recovery_fingerprint", comment: ""))
-                        .font(CTFont.caption)
-                        .foregroundColor(Color.CT.textDim)
-                    Text(fingerprint)
-                        .font(CTFont.mono(12))
-                        .foregroundColor(Color.CT.text)
-                        .padding(8)
-                        .background(Color.CT.bgMsg)
-                        .overlay(CTShape.card().stroke(Color.CT.noise, lineWidth: 1))
-                }
+                fingerprintBlock(fingerprint)
             }
             Spacer()
             Button {
@@ -368,6 +429,7 @@ private func makePreviewVM(step: AccountRecoveryViewModel.SetupStep) -> AccountR
     vm.mnemonic = words
     vm.quizIndices = [0, 5, 11]
     vm.setupStep = step
+    vm.statusLoaded = true
     return vm
 }
 
@@ -378,6 +440,18 @@ private func makePreviewVM(step: AccountRecoveryViewModel.SetupStep) -> AccountR
     authVM.configureMockAuth()
     return RecoverySetupView()
         .environment(makePreviewVM(step: .idle))
+        .environment(authVM)
+}
+
+#Preview("Already set") {
+    let container = PreviewHelpers.createPreviewContainer()
+    let authVM = AuthViewModel(context: container.viewContext)
+    authVM.configureMockAuth()
+    let vm = makePreviewVM(step: .idle)
+    vm.isSetup = true
+    vm.fingerprint = "A1B2:C3D4:E5F6:7890"
+    return RecoverySetupView()
+        .environment(vm)
         .environment(authVM)
 }
 
