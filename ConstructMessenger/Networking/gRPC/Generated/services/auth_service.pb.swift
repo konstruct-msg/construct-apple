@@ -1113,13 +1113,19 @@ public nonisolated struct Shared_Proto_Services_V1_SetRecoveryKeyRequest: Sendab
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  /// Recovery public key (Ed25519, 32 bytes)
-  /// Derived from BIP39 seed phrase on client
-  /// Path: m/44'/0'/0'/0/0 or custom derivation
+  /// Recovery public key, derived from the BIP39 seed phrase on the client (construct-core).
+  /// Its length names its kind:
+  /// - 32 bytes: Ed25519 (SLIP-0010 m/44'/0'/0'/0'/0'), the key accounts had before 0.59.0;
+  /// - 1984 bytes: hybrid Ed25519 (32) ‖ ML-DSA-65 (1952). Its Ed25519 half is the Ed25519 key
+  ///   above. Sent to an account whose Ed25519 key is that half, it upgrades the account.
+  /// The account's address is the Ed25519 key, or the hybrid key's Ed25519 half — the same key.
   public var recoveryPublicKey: Data = Data()
 
-  /// Signature proving possession of private key
-  /// Signs: "CONSTRUCT_RECOVERY_SETUP:{user_id}:{timestamp}"
+  /// Signature proving possession of the private key:
+  /// - Ed25519 key: 64 bytes over "CONSTRUCT_RECOVERY_SETUP:{user_id}:{timestamp}";
+  /// - hybrid key: 3373 bytes (Ed25519 64 ‖ ML-DSA-65 3309) over
+  ///   `construct_server_trust::recovery::setup_signable(user_id, timestamp, recovery_public_key)`;
+  ///   both halves must verify.
   public var setupSignature: Data = Data()
 
   /// Timestamp used in signature
@@ -1228,6 +1234,10 @@ public nonisolated struct Shared_Proto_Services_V1_GetRecoveryStatusResponse: Se
   /// Has encrypted backup?
   public var hasBackup_p: Bool = false
 
+  /// Is the recovery key hybrid (Ed25519 + ML-DSA-65)? A client holding the phrase upgrades an
+  /// account where this is false and is_setup is true (SetRecoveryKey with the hybrid key).
+  public var isHybrid: Bool = false
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -1238,35 +1248,64 @@ public nonisolated struct Shared_Proto_Services_V1_GetRecoveryStatusResponse: Se
 }
 
 /// RecoverAccountRequest - Recover account with seed phrase
-public nonisolated struct Shared_Proto_Services_V1_RecoverAccountRequest: Sendable {
+public nonisolated struct Shared_Proto_Services_V1_RecoverAccountRequest: @unchecked Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
   /// Username or user ID to recover
-  public var identifier: String = String()
+  public var identifier: String {
+    get {_storage._identifier}
+    set {_uniqueStorage()._identifier = newValue}
+  }
 
-  /// Recovery challenge (obtained from GetRecoveryChallenge or embedded)
-  public var challenge: String = String()
+  /// Legacy claim: a decimal timestamp the Ed25519 recovery key signs. Empty in a hybrid claim.
+  /// It bound nothing — not the time, not the new device — so a request seen once could be
+  /// replayed with other device keys; accepted only from an account without a hybrid key.
+  public var challenge: String {
+    get {_storage._challenge}
+    set {_uniqueStorage()._challenge = newValue}
+  }
 
-  /// Signature over challenge using recovery private key
-  public var recoverySignature: Data = Data()
+  /// Legacy claim: Ed25519, 64 bytes over `challenge`.
+  /// Hybrid claim: 3373 bytes over `construct_server_trust::recovery::claim_signable(
+  ///   recovery_public_key, timestamp, new_device.device_id, new_device.public_keys.verifying_key,
+  ///   new_device.public_keys.identity_public)`; both halves must verify.
+  public var recoverySignature: Data {
+    get {_storage._recoverySignature}
+    set {_uniqueStorage()._recoverySignature = newValue}
+  }
 
   /// New device registration (recovery creates new device)
   public var newDevice: Shared_Proto_Services_V1_NewDeviceForRecovery {
-    get {_newDevice ?? Shared_Proto_Services_V1_NewDeviceForRecovery()}
-    set {_newDevice = newValue}
+    get {_storage._newDevice ?? Shared_Proto_Services_V1_NewDeviceForRecovery()}
+    set {_uniqueStorage()._newDevice = newValue}
   }
   /// Returns true if `newDevice` has been explicitly set.
-  public var hasNewDevice: Bool {self._newDevice != nil}
+  public var hasNewDevice: Bool {_storage._newDevice != nil}
   /// Clears the value of `newDevice`. Subsequent reads from it will return its default value.
-  public mutating func clearNewDevice() {self._newDevice = nil}
+  public mutating func clearNewDevice() {_uniqueStorage()._newDevice = nil}
+
+  /// Hybrid claim: the hybrid recovery key (1984 bytes). Its Ed25519 half must be the account's
+  /// key; an account without an ML-DSA-65 key yet is upgraded to it by the claim. Empty in a
+  /// legacy claim.
+  public var recoveryPublicKey: Data {
+    get {_storage._recoveryPublicKey}
+    set {_uniqueStorage()._recoveryPublicKey = newValue}
+  }
+
+  /// Hybrid claim: the signing time, Unix seconds; within ten minutes of the server's clock
+  /// (`construct_server_trust::recovery::MAX_SKEW_SECS`) and after the account's last recovery.
+  public var timestamp: Int64 {
+    get {_storage._timestamp}
+    set {_uniqueStorage()._timestamp = newValue}
+  }
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
 
-  fileprivate var _newDevice: Shared_Proto_Services_V1_NewDeviceForRecovery? = nil
+  fileprivate var _storage = _StorageClass.defaultInstance
 }
 
 /// NewDeviceForRecovery - New device info during recovery
@@ -3373,7 +3412,7 @@ nonisolated extension Shared_Proto_Services_V1_GetRecoveryStatusRequest: SwiftPr
 
 nonisolated extension Shared_Proto_Services_V1_GetRecoveryStatusResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".GetRecoveryStatusResponse"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}is_setup\0\u{1}fingerprint\0\u{3}setup_at\0\u{3}last_used_at\0\u{3}has_backup\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}is_setup\0\u{1}fingerprint\0\u{3}setup_at\0\u{3}last_used_at\0\u{3}has_backup\0\u{3}is_hybrid\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -3386,6 +3425,7 @@ nonisolated extension Shared_Proto_Services_V1_GetRecoveryStatusResponse: SwiftP
       case 3: try { try decoder.decodeSingularInt64Field(value: &self._setupAt) }()
       case 4: try { try decoder.decodeSingularInt64Field(value: &self._lastUsedAt) }()
       case 5: try { try decoder.decodeSingularBoolField(value: &self.hasBackup_p) }()
+      case 6: try { try decoder.decodeSingularBoolField(value: &self.isHybrid) }()
       default: break
       }
     }
@@ -3411,6 +3451,9 @@ nonisolated extension Shared_Proto_Services_V1_GetRecoveryStatusResponse: SwiftP
     if self.hasBackup_p != false {
       try visitor.visitSingularBoolField(value: self.hasBackup_p, fieldNumber: 5)
     }
+    if self.isHybrid != false {
+      try visitor.visitSingularBoolField(value: self.isHybrid, fieldNumber: 6)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -3420,6 +3463,7 @@ nonisolated extension Shared_Proto_Services_V1_GetRecoveryStatusResponse: SwiftP
     if lhs._setupAt != rhs._setupAt {return false}
     if lhs._lastUsedAt != rhs._lastUsedAt {return false}
     if lhs.hasBackup_p != rhs.hasBackup_p {return false}
+    if lhs.isHybrid != rhs.isHybrid {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -3427,48 +3471,104 @@ nonisolated extension Shared_Proto_Services_V1_GetRecoveryStatusResponse: SwiftP
 
 nonisolated extension Shared_Proto_Services_V1_RecoverAccountRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".RecoverAccountRequest"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}identifier\0\u{1}challenge\0\u{3}recovery_signature\0\u{3}new_device\0\u{c}\u{5}\u{6}")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}identifier\0\u{1}challenge\0\u{3}recovery_signature\0\u{3}new_device\0\u{4}\u{7}recovery_public_key\0\u{1}timestamp\0\u{c}\u{5}\u{6}")
+
+  fileprivate class _StorageClass {
+    var _identifier: String = String()
+    var _challenge: String = String()
+    var _recoverySignature: Data = Data()
+    var _newDevice: Shared_Proto_Services_V1_NewDeviceForRecovery? = nil
+    var _recoveryPublicKey: Data = Data()
+    var _timestamp: Int64 = 0
+
+      // This property is used as the initial default value for new instances of the type.
+      // The type itself is protecting the reference to its storage via CoW semantics.
+      // This will force a copy to be made of this reference when the first mutation occurs;
+      // hence, it is safe to mark this as `nonisolated(unsafe)`.
+      static nonisolated(unsafe) let defaultInstance = _StorageClass()
+
+    private init() {}
+
+    init(copying source: _StorageClass) {
+      _identifier = source._identifier
+      _challenge = source._challenge
+      _recoverySignature = source._recoverySignature
+      _newDevice = source._newDevice
+      _recoveryPublicKey = source._recoveryPublicKey
+      _timestamp = source._timestamp
+    }
+  }
+
+  fileprivate mutating func _uniqueStorage() -> _StorageClass {
+    if !isKnownUniquelyReferenced(&_storage) {
+      _storage = _StorageClass(copying: _storage)
+    }
+    return _storage
+  }
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
-    while let fieldNumber = try decoder.nextFieldNumber() {
-      // The use of inline closures is to circumvent an issue where the compiler
-      // allocates stack space for every case branch when no optimizations are
-      // enabled. https://github.com/apple/swift-protobuf/issues/1034
-      switch fieldNumber {
-      case 1: try { try decoder.decodeSingularStringField(value: &self.identifier) }()
-      case 2: try { try decoder.decodeSingularStringField(value: &self.challenge) }()
-      case 3: try { try decoder.decodeSingularBytesField(value: &self.recoverySignature) }()
-      case 4: try { try decoder.decodeSingularMessageField(value: &self._newDevice) }()
-      default: break
+    _ = _uniqueStorage()
+    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
+      while let fieldNumber = try decoder.nextFieldNumber() {
+        // The use of inline closures is to circumvent an issue where the compiler
+        // allocates stack space for every case branch when no optimizations are
+        // enabled. https://github.com/apple/swift-protobuf/issues/1034
+        switch fieldNumber {
+        case 1: try { try decoder.decodeSingularStringField(value: &_storage._identifier) }()
+        case 2: try { try decoder.decodeSingularStringField(value: &_storage._challenge) }()
+        case 3: try { try decoder.decodeSingularBytesField(value: &_storage._recoverySignature) }()
+        case 4: try { try decoder.decodeSingularMessageField(value: &_storage._newDevice) }()
+        case 11: try { try decoder.decodeSingularBytesField(value: &_storage._recoveryPublicKey) }()
+        case 12: try { try decoder.decodeSingularInt64Field(value: &_storage._timestamp) }()
+        default: break
+        }
       }
     }
   }
 
   public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    // The use of inline closures is to circumvent an issue where the compiler
-    // allocates stack space for every if/case branch local when no optimizations
-    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
-    // https://github.com/apple/swift-protobuf/issues/1182
-    if !self.identifier.isEmpty {
-      try visitor.visitSingularStringField(value: self.identifier, fieldNumber: 1)
+    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every if/case branch local when no optimizations
+      // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+      // https://github.com/apple/swift-protobuf/issues/1182
+      if !_storage._identifier.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._identifier, fieldNumber: 1)
+      }
+      if !_storage._challenge.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._challenge, fieldNumber: 2)
+      }
+      if !_storage._recoverySignature.isEmpty {
+        try visitor.visitSingularBytesField(value: _storage._recoverySignature, fieldNumber: 3)
+      }
+      try { if let v = _storage._newDevice {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 4)
+      } }()
+      if !_storage._recoveryPublicKey.isEmpty {
+        try visitor.visitSingularBytesField(value: _storage._recoveryPublicKey, fieldNumber: 11)
+      }
+      if _storage._timestamp != 0 {
+        try visitor.visitSingularInt64Field(value: _storage._timestamp, fieldNumber: 12)
+      }
     }
-    if !self.challenge.isEmpty {
-      try visitor.visitSingularStringField(value: self.challenge, fieldNumber: 2)
-    }
-    if !self.recoverySignature.isEmpty {
-      try visitor.visitSingularBytesField(value: self.recoverySignature, fieldNumber: 3)
-    }
-    try { if let v = self._newDevice {
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 4)
-    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Shared_Proto_Services_V1_RecoverAccountRequest, rhs: Shared_Proto_Services_V1_RecoverAccountRequest) -> Bool {
-    if lhs.identifier != rhs.identifier {return false}
-    if lhs.challenge != rhs.challenge {return false}
-    if lhs.recoverySignature != rhs.recoverySignature {return false}
-    if lhs._newDevice != rhs._newDevice {return false}
+    if lhs._storage !== rhs._storage {
+      let storagesAreEqual: Bool = withExtendedLifetime((lhs._storage, rhs._storage)) { (_args: (_StorageClass, _StorageClass)) in
+        let _storage = _args.0
+        let rhs_storage = _args.1
+        if _storage._identifier != rhs_storage._identifier {return false}
+        if _storage._challenge != rhs_storage._challenge {return false}
+        if _storage._recoverySignature != rhs_storage._recoverySignature {return false}
+        if _storage._newDevice != rhs_storage._newDevice {return false}
+        if _storage._recoveryPublicKey != rhs_storage._recoveryPublicKey {return false}
+        if _storage._timestamp != rhs_storage._timestamp {return false}
+        return true
+      }
+      if !storagesAreEqual {return false}
+    }
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
