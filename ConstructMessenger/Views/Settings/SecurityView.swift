@@ -17,6 +17,7 @@ struct SecurityView: View {
     @State private var showingPinSetup = false
     @State private var showingDisablePinSheet = false
     @State private var showingRecoverySetup = false
+    @State private var showingRecoveryUpgrade = false
     @State private var showingDuressPinSetup = false
     @State private var showingDisableDuressAlert = false
     @State private var showingDiscoverableConfirm = false
@@ -90,7 +91,13 @@ struct SecurityView: View {
                     CTSectionGroup {
 
                         // MARK: - Account Recovery
-                        Button { showingRecoverySetup = true } label: {
+                        Button {
+                            if recoveryVM.upgradeNeeded {
+                                showingRecoveryUpgrade = true
+                            } else {
+                                showingRecoverySetup = true
+                            }
+                        } label: {
                             HStack(spacing: SecuritySettingsLayout.rowContentSpacing) {
                                 VStack(alignment: .leading, spacing: SecuritySettingsLayout.recoveryStatusSpacing) {
                                     Text(LocalizedStringKey("account_recovery_seed"))
@@ -102,6 +109,10 @@ struct SecurityView: View {
                                             .foregroundStyle(Color.CT.danger)
                                     } else if recoveryVM.isSetup && recoveryVM.backupPending {
                                         Text(NSLocalizedString("recovery_backup_pending", comment: ""))
+                                            .font(CTFont.caption)
+                                            .foregroundStyle(Color.CT.warning)
+                                    } else if recoveryVM.upgradeNeeded {
+                                        Text(NSLocalizedString("recovery_upgrade_needed", comment: ""))
                                             .font(CTFont.caption)
                                             .foregroundStyle(Color.CT.warning)
                                     } else if recoveryVM.isSetup, let fp = recoveryVM.fingerprint {
@@ -363,6 +374,12 @@ struct SecurityView: View {
         .sheet(isPresented: $showingDisablePinSheet) {
             PinDisableView()
                 .environment(securityViewModel)
+        }
+        .sheet(isPresented: $showingRecoveryUpgrade) {
+            NavigationStack {
+                RecoveryGateView(reason: .upgrade)
+            }
+            .environment(recoveryVM)
         }
         .sheet(isPresented: $showingRecoverySetup) {
             RecoverySetupView()

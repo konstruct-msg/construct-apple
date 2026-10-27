@@ -413,6 +413,9 @@
 "recovery_gate_setup_note" = "約1分で終わります。12語を書き留め、そのうち3語を確認します。";
 "recovery_gate_setup_action" = "復旧フレーズを設定";
 "recovery_gate_confirm_note" = "このアカウントにはすでに復旧フレーズがありますが、このデバイスはまだ知りません。一度だけ入力してください。フレーズはこのデバイスに残り、送信されることはありません。";
+"recovery_upgrade_title" = "復旧フレーズを確認してください";
+"recovery_upgrade_why" = "復旧キーの保護が強化されます。将来の量子コンピューターへの対策も含まれます。12語を一度だけ入力してください。フレーズはこのデバイスに残り、送信されることはありません。控えが正しいことも確認できます。";
+"recovery_upgrade_needed" = "一度入力して保護を強化";
 "recovery_gate_later" = "後で";
 "recovery_confirm_placeholder" = "12語をスペースで区切って入力";
 "recovery_confirm_action" = "確認";
