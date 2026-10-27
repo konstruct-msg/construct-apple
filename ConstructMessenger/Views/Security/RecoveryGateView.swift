@@ -93,7 +93,8 @@ struct RecoveryGateView: View {
                         ProgressView()
                             .frame(maxWidth: .infinity)
                     } else if vm.isSetup {
-                        confirmSection
+                        // The account has one, this device has not seen it: enter the phrase.
+                        RecoveryPhraseConfirmForm()
                     } else {
                         setupSection
                     }
@@ -139,8 +140,33 @@ struct RecoveryGateView: View {
         }
     }
 
-    /// The account has one, this device has not seen it: enter the phrase.
-    private var confirmSection: some View {
+    // MARK: - Actions
+
+    private func checkReady() {
+        Task { await vm.refreshStatus() }
+        if reason == .upgrade {
+            // A confirm that reached `.done` has completed the key.
+            vm.resetConfirm()
+            onReady()
+            dismiss()
+            return
+        }
+        guard AccountAddress.own() != nil else { return }
+        vm.resetConfirm()
+        onReady()
+        if reason == .afterRegistration { dismiss() }
+    }
+}
+
+// MARK: - Confirm form
+
+/// The phrase entered on a device that does not know the account's address
+/// (`AccountRecoveryViewModel.submitConfirm`). Shared by the gate and the setup screen, which
+/// watch `confirmStep` for `.done` themselves.
+struct RecoveryPhraseConfirmForm: View {
+    @Environment(AccountRecoveryViewModel.self) private var vm
+
+    var body: some View {
         @Bindable var vm = vm
         return VStack(alignment: .leading, spacing: CTLayout.sectionGap) {
             Text(NSLocalizedString("recovery_gate_confirm_note", comment: ""))
@@ -182,22 +208,5 @@ struct RecoveryGateView: View {
                 }
             }
         }
-    }
-
-    // MARK: - Actions
-
-    private func checkReady() {
-        Task { await vm.refreshStatus() }
-        if reason == .upgrade {
-            // A confirm that reached `.done` has completed the key.
-            vm.resetConfirm()
-            onReady()
-            dismiss()
-            return
-        }
-        guard AccountAddress.own() != nil else { return }
-        vm.resetConfirm()
-        onReady()
-        if reason == .afterRegistration { dismiss() }
     }
 }
