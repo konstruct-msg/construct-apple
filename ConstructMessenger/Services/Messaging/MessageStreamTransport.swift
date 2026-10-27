@@ -349,6 +349,7 @@ extension MessageStreamManager {
                 self.lastActiveTransport = label
                 self.activeRoutingKey = metricsLabel
                 self.lastHeartbeatDate = Date()
+                self.noteStreamAccepted()
                 // NOT `fastUdpFailedThisSession = false` here: an accept is not delivery. On a
                 // DPI'd network the QUIC handshake is allowed through and the connection then goes
                 // silent, so re-arming on accept would re-probe every reconnect. Only
