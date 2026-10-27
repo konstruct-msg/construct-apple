@@ -225,6 +225,6 @@ control or status; tokens from `ConstructTheme.swift`, never literals. Before to
 The vault (`~/Code/construct-docs`) holds everything that is not a file in this repo; its
 `AGENTS.md` is authoritative. Search it before an architectural decision. After work, progress
 goes into the task note (`todo/NNN-*.md`, "Ход"); a decision that constrains future work goes
-into `decisions/`; one line goes into `log.md`. A session log only for a root cause found the hard
+into `decisions/`; one line goes into `~/Code/construct-docs/log.md`. A session log only for a root cause found the hard
 way or a choice with rejected alternatives. Repo-local `docs/` holds only what documents a file
 here.
