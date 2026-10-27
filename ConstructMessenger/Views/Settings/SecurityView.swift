@@ -33,6 +33,57 @@ struct SecurityView: View {
                 VStack(spacing: 0) {
                     CTSectionGroup {
 
+                        // MARK: - Account Recovery
+                        Button {
+                            if recoveryVM.upgradeNeeded {
+                                showingRecoveryUpgrade = true
+                            } else {
+                                showingRecoverySetup = true
+                            }
+                        } label: {
+                            HStack(spacing: SecuritySettingsLayout.rowContentSpacing) {
+                                VStack(alignment: .leading, spacing: SecuritySettingsLayout.recoveryStatusSpacing) {
+                                    Text(LocalizedStringKey("account_recovery_seed"))
+                                        .font(CTFont.body)
+                                        .foregroundStyle(Color.CT.text)
+                                    if recoveryVM.phraseLost {
+                                        Text(NSLocalizedString("recovery_reminder_lost_title", comment: ""))
+                                            .font(CTFont.caption)
+                                            .foregroundStyle(Color.CT.danger)
+                                    } else if recoveryVM.isSetup && recoveryVM.backupPending {
+                                        Text(NSLocalizedString("recovery_backup_pending", comment: ""))
+                                            .font(CTFont.caption)
+                                            .foregroundStyle(Color.CT.warning)
+                                    } else if recoveryVM.upgradeNeeded {
+                                        Text(NSLocalizedString("recovery_upgrade_needed", comment: ""))
+                                            .font(CTFont.caption)
+                                            .foregroundStyle(Color.CT.warning)
+                                    } else if recoveryVM.isSetup, let fp = recoveryVM.fingerprint {
+                                        Text(fp)
+                                            .font(CTFont.mono(11))
+                                            .foregroundStyle(Color.CT.textDim)
+                                            .lineLimit(1)
+                                            .truncationMode(.middle)
+                                    } else if recoveryVM.statusLoaded && !recoveryVM.isSetup {
+                                        Text(NSLocalizedString("recovery_not_configured", comment: ""))
+                                            .font(CTFont.caption)
+                                            .foregroundStyle(Color.CT.warning)
+                                    }
+                                }
+                                Spacer()
+                                Image(systemName: "chevron.right").font(CTFont.secondary).foregroundStyle(Color.CT.textDim)
+                            }
+                            .securityRowInsets()
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    CTSectionFooter("account_recovery_seed_hint")
+                }
+                
+                VStack(spacing: 0) {
+                    CTSectionGroup {
+
                         // MARK: - PIN Code
                         Button { showingPinSetup = true } label: {
                             HStack(spacing: SecuritySettingsLayout.rowContentSpacing) {
@@ -84,62 +135,6 @@ struct SecurityView: View {
                             }
                             .buttonStyle(.plain)
                         }
-                    }
-                }
-
-                VStack(spacing: 0) {
-                    CTSectionGroup {
-
-                        // MARK: - Account Recovery
-                        Button {
-                            if recoveryVM.upgradeNeeded {
-                                showingRecoveryUpgrade = true
-                            } else {
-                                showingRecoverySetup = true
-                            }
-                        } label: {
-                            HStack(spacing: SecuritySettingsLayout.rowContentSpacing) {
-                                VStack(alignment: .leading, spacing: SecuritySettingsLayout.recoveryStatusSpacing) {
-                                    Text(LocalizedStringKey("account_recovery_seed"))
-                                        .font(CTFont.body)
-                                        .foregroundStyle(Color.CT.text)
-                                    if recoveryVM.phraseLost {
-                                        Text(NSLocalizedString("recovery_reminder_lost_title", comment: ""))
-                                            .font(CTFont.caption)
-                                            .foregroundStyle(Color.CT.danger)
-                                    } else if recoveryVM.isSetup && recoveryVM.backupPending {
-                                        Text(NSLocalizedString("recovery_backup_pending", comment: ""))
-                                            .font(CTFont.caption)
-                                            .foregroundStyle(Color.CT.warning)
-                                    } else if recoveryVM.upgradeNeeded {
-                                        Text(NSLocalizedString("recovery_upgrade_needed", comment: ""))
-                                            .font(CTFont.caption)
-                                            .foregroundStyle(Color.CT.warning)
-                                    } else if recoveryVM.isSetup, let fp = recoveryVM.fingerprint {
-                                        Text(fp)
-                                            .font(CTFont.mono(11))
-                                            .foregroundStyle(Color.CT.textDim)
-                                            .lineLimit(1)
-                                            .truncationMode(.middle)
-                                    } else if recoveryVM.statusLoaded && !recoveryVM.isSetup {
-                                        Text(NSLocalizedString("recovery_not_configured", comment: ""))
-                                            .font(CTFont.caption)
-                                            .foregroundStyle(Color.CT.warning)
-                                    }
-                                }
-                                Spacer()
-                                Image(systemName: "chevron.right").font(CTFont.secondary).foregroundStyle(Color.CT.textDim)
-                            }
-                            .securityRowInsets()
-                            .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                    }
-                    CTSectionFooter("account_recovery_seed_hint")
-                }
-
-                VStack(spacing: 0) {
-                    CTSectionGroup {
 
                         // MARK: - Duress PIN
                         if securityViewModel.isDuresspinEnabled {
@@ -229,49 +224,6 @@ struct SecurityView: View {
                         .securityRowInsets(vertical: SecuritySettingsLayout.compactRowVerticalPadding)
                     }
                     CTSectionFooter("lockdown_mode_hint")
-                }
-
-                VStack(spacing: 0) {
-                    let stealthOn = StealthPolicy.shared.isEnabled
-                    CTSectionGroup {
-
-                        // MARK: - Stealth
-                        //
-                        // A statement, not a setting. stealth-sealed-sender-v2 Phase 4 made this
-                        // always on with no toggle, and the row kept the shape of the switch it used
-                        // to be — a title reading "stealth mode" beside a state nobody chose.
-                        //
-                        // The token wallet balance was removed from here on 2026-08-16. It answered
-                        // a question the user cannot act on: an empty wallet costs them nothing,
-                        // because `StealthSenderService` seals and sends regardless ("anti-abuse
-                        // degraded, anonymity intact — the invariant we deliberately preserve").
-                        // Whether issuance is keeping up is an operator's question, and the operator's
-                        // view of it already exists in Diagnostics, with the two numbers that make it
-                        // legible — token-less sends and the last issuance outcome — which this row
-                        // never had. If server-side enforce ever lands, an unsendable message must
-                        // say so on the message, not as a counter three screens away.
-                        //
-                        // Reads `StealthPolicy.shared.isEnabled` rather than assuming true, so the
-                        // DEBUG developer override shows honestly.
-                        HStack(spacing: SecuritySettingsLayout.rowContentSpacing) {
-                            CTRowIcon(sf: "eye.slash.fill", color: stealthOn ? Color.CT.accent : Color.CT.danger)
-                            Text(LocalizedStringKey("stealth_title"))
-                                .font(CTFont.body)
-                                .foregroundStyle(Color.CT.text)
-                            Spacer()
-                            CTStatusBadge(status: stealthOn ? .on : .error, size: 11)
-                        }
-                        .securityRowInsets(vertical: SecuritySettingsLayout.compactRowVerticalPadding)
-
-                        // The off branch used to show the on copy — it described the protection as
-                        // active while it was overridden away. Reachable only in DEBUG, and still a
-                        // sentence that was false on screen.
-                    }
-                    CTSectionFooter(stealthOn ? "stealth_always_on_hint" : "stealth_off_hint", color: stealthOn ? Color.CT.textDim : Color.CT.danger)
-
-                    // (Scope selector removed 2026-07-15: per-message is the only token model —
-                    // per-stream is incompatible with server-side enforce. See
-                    // decisions/sealed-sender-anti-abuse-economics.md.)
                 }
 
                 VStack(spacing: 0) {
@@ -483,8 +435,6 @@ private struct KTStatusSection: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            CTSettingsSectionHeader(title: NSLocalizedString("kt_section", comment: ""))
-
             CTSectionGroup {
                 HStack(spacing: SecuritySettingsLayout.rowContentSpacing) {
                     CTRowIcon(sf: "number", color: statusColor)
