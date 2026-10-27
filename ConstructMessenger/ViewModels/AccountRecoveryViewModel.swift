@@ -45,12 +45,24 @@ final class AccountRecoveryViewModel {
     var quizOptions: [Int: [String]] = [:]
 
     /// What the setup screen is doing: making a key and setting it (no passcode on this device,
-    /// or no key yet), or showing one that was made silently so the person can copy it.
+    /// or no key yet), showing one that was made silently so the person can copy it, or saying
+    /// that the account has its key and this device has nothing to show.
     enum SetupMode: Equatable {
         case create
         case backupHeld
+        /// The server holds the account's key and the phrase is not on this device. The key cannot
+        /// be replaced, so a new phrase would only be refused after the person had copied it.
+        case alreadySet
     }
     var setupMode: SetupMode = .create
+
+    /// The whole rule for which flow the setup screen opens on. A held phrase wins: it is the
+    /// account's key, waiting to be copied. Without one, the server's answer decides — a new
+    /// phrase is offered only to an account that has no key.
+    static func setupMode(held: Bool, isSetup: Bool) -> SetupMode {
+        if held { return .backupHeld }
+        return isSetup ? .alreadySet : .create
+    }
 
     /// The silent key's phrase waits in the vault until it is copied
     /// (`decisions/recovery-key-backup-is-deferred-not-skipped.md`).
@@ -123,7 +135,7 @@ final class AccountRecoveryViewModel {
     /// Which flow the screen opens on. Called when it appears.
     func prepareSetup() {
         refreshBackupPending()
-        setupMode = backupPending ? .backupHeld : .create
+        setupMode = Self.setupMode(held: backupPending, isSetup: isSetup)
     }
 
     func refreshBackupPending() {
@@ -162,6 +174,7 @@ final class AccountRecoveryViewModel {
     }
 
     func startSetup() {
+        guard setupMode == .create else { return }
         do {
             beginQuiz(with: try generateMnemonic(wordCount: 12))
         } catch {
@@ -237,6 +250,7 @@ final class AccountRecoveryViewModel {
             mnemonic = []
             return
         }
+        guard setupMode == .create else { return }
         setupStep = .uploading
         do {
             let signed = try RecoveryKey.setup(
