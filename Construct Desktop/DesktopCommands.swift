@@ -137,6 +137,10 @@ struct ConstructCommands: Commands {
                     call.toggleStudio()
                 }
                 .disabled(!live)
+                Toggle(NSLocalizedString("studio_talkback_always_menu", comment: ""), isOn: Binding(
+                    get: { call.talkback.mode == .alwaysOn },
+                    set: { call.setTalkbackMode($0 ? .alwaysOn : .holdToTalk) }
+                ))
             }
         }
     }

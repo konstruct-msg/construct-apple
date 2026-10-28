@@ -1441,6 +1441,14 @@
 "call_device_system" = "Ինչպես համակարգում";
 "call_studio" = "Studio";
 "call_studio_start" = "Սկսել Studio";
+"studio_talkback" = "Խոսափողը Studio-ում";
+"studio_talkback_hold" = "Սեղմած պահելով";
+"studio_talkback_always" = "Միշտ միացված";
+"studio_talkback_always_menu" = "Խոսափողը Studio-ում միշտ միացված";
+"studio_talk" = "Խոսել";
+"studio_talk_hint" = "Պահեք կոճակը կամ %@ ցանկացած հավելվածում։ Եթե երկուսդ էլ ականջակալներով եք, ընտրեք «Միշտ միացված»։";
+"studio_talking" = "Ձեզ լսում են";
+"studio_talk_waiting" = "Խոսելու համար սեղմեք";
 "call_studio_stop" = "Դուրս գալ Studio-ից";
 "studio_screen_window_title" = "Հյուրընկալողի էկրանը";
 "studio_screen_waiting" = "Սպասում ենք հյուրընկալողի էկրանին…";

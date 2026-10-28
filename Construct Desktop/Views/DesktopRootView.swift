@@ -302,6 +302,10 @@ struct DesktopRootView: View {
             .onChange(of: callManager.callQuality) { _, quality in
                 syncCall(state: callManager.state, quality: quality)
             }
+            // Studio on or off changes what opens the microphone (talkback).
+            .onChange(of: callManager.studioIsOn) { _, _ in
+                DesktopCallModel.shared.applyMicrophone()
+            }
             // Add Contact sheet (⌘⌥N)
             .sheet(isPresented: $showAddContact) {
                 DesktopAddContactView()

@@ -24,8 +24,12 @@ final class DesktopCallModel {
     private(set) var connectedSince: Date?
     private(set) var muted = false
     private(set) var micAccess: AVAuthorizationStatus = .notDetermined
+    /// Talkback while Studio is on: hold to talk or always on. The mode outlives the call.
+    private(set) var talkback = StudioTalkback(mode: .stored())
 
-    private init() {}
+    private init() {
+        StudioTalkKey.shared.onChange = { [weak self] held in self?.setTalkHeld(held) }
+    }
 
     /// Follow the call manager. Called on every change of its state or quality.
     func sync(state: CallState, quality: CallQuality) {
@@ -56,7 +60,33 @@ final class DesktopCallModel {
 
     func toggleMute() {
         muted.toggle()
-        CallManager.shared.setMuted(muted)
+        applyMicrophone()
+    }
+
+    /// Whether the other side hears this microphone now.
+    var microphoneOpen: Bool { talkback.microphoneOpen(muted: muted, studioOn: studioOn) }
+
+    /// Hold-to-talk is what the microphone waits for now: Studio on, not muted, key not held.
+    var waitsForTalkKey: Bool { studioOn && talkback.mode == .holdToTalk && !muted }
+
+    func setTalkbackMode(_ mode: StudioTalkbackMode) {
+        mode.store()
+        talkback.mode = mode
+        talkback.held = false
+        applyMicrophone()
+    }
+
+    func setTalkHeld(_ held: Bool) {
+        guard talkback.held != held else { return }
+        talkback.held = held
+        applyMicrophone()
+    }
+
+    /// The microphone as mute, Studio and talkback together say. Called on each of their changes;
+    /// the talk key is taken only while it is what opens the microphone.
+    func applyMicrophone() {
+        StudioTalkKey.shared.isRegistered = studioOn && talkback.mode == .holdToTalk && phase?.isLive == true
+        CallManager.shared.setMuted(!microphoneOpen)
     }
 
     func end() {
@@ -99,6 +129,8 @@ final class DesktopCallModel {
         phase = nil
         connectedSince = nil
         muted = false
+        talkback.held = false
+        StudioTalkKey.shared.isRegistered = false
     }
 }
 
