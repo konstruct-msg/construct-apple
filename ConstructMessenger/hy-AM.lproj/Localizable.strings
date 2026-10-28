@@ -1441,6 +1441,14 @@
 "call_device_system" = "Ինչպես համակարգում";
 "call_studio" = "Studio";
 "call_studio_start" = "Սկսել Studio";
+"studio_source" = "Ձայնը և էկրանը՝";
+"studio_source_none" = "DAW-ը գործարկված չէ";
+"studio_source_hint" = "Բացեք DAW-ը. Studio-ն փոխանցում է դրա ձայնը և պատուհանը։";
+"studio_send_screen" = "Ցույց տալ DAW-ի պատուհանը";
+"studio_problem_program" = "Studio-ն կանգնեց. %@-ից ձայն վերցնել չհաջողվեց։ Մեկ անգամ որևէ բան նվագարկեք և նորից սկսեք։";
+"studio_problem_screen" = "%@-ի պատուհանը չի ցուցադրվում. թույլ տվեք Konstruct-ին ձայնագրել էկրանը և պատուհանը բաց պահեք։ Ձայնը շարունակվում է։";
+"studio_open_screen_settings" = "Բացել էկրանի ձայնագրման կարգավորումները";
+"studio_source_generic" = "DAW";
 "studio_talkback" = "Խոսափողը Studio-ում";
 "studio_talkback_hold" = "Սեղմած պահելով";
 "studio_talkback_always" = "Միշտ միացված";

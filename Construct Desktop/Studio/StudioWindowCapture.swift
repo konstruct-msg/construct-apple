@@ -32,8 +32,7 @@ final class StudioWindowCapture: StudioScreenCapture {
 
     /// The DAW whose windows are shown — the one whose sound is the program.
     static func make() -> any StudioScreenCapture {
-        let bundleID = UserDefaults.standard.string(forKey: StudioProcessTap.sourceDefaultsKey) ?? StudioProcessTap.defaultSource
-        return StudioWindowCapture(bundleIdentifier: bundleID)
+        StudioWindowCapture(bundleIdentifier: StudioSource.stored() ?? "")
     }
 
     init(bundleIdentifier: String) {
