@@ -1318,6 +1318,7 @@
 "desktop_close_chat" = "Close Chat";
 "desktop_new_conversation" = "New Conversation";
 "desktop_sync_messages" = "Sync Messages";
+"desktop_check_for_updates" = "Check for Updates…";
 "desktop_menu_navigate" = "Navigate";
 "desktop_next_chat" = "Next Chat";
 "desktop_previous_chat" = "Previous Chat";

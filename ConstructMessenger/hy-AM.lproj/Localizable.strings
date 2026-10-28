@@ -1318,6 +1318,7 @@
 "desktop_close_chat" = "Փակել զրույցը";
 "desktop_new_conversation" = "Նոր զրույց";
 "desktop_sync_messages" = "Համաժամեցնել հաղորդագրությունները";
+"desktop_check_for_updates" = "Ստուգել թարմացումները…";
 "desktop_menu_navigate" = "Նավարկում";
 "desktop_next_chat" = "Հաջորդ զրույց";
 "desktop_previous_chat" = "Նախորդ զրույց";
