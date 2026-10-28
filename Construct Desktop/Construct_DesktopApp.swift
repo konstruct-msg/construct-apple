@@ -123,6 +123,7 @@ struct Construct_DesktopApp: App {
                 .environment(authViewModel)
                 .environment(deepLinkHandler)
                 .frame(minWidth: 560, minHeight: 440)
+                .desktopTheme()
         }
         .defaultSize(width: 720, height: 560)
         .windowToolbarStyle(.unified)
@@ -131,6 +132,7 @@ struct Construct_DesktopApp: App {
         // DesktopRootView when a call starts or is answered; closes itself when the call is over.
         Window(LocalizedStringKey("call_window_title"), id: DesktopWindowID.call) {
             DesktopCallWindowView(model: DesktopCallModel.shared)
+                .desktopTheme()
         }
         .defaultSize(width: 440, height: 600)
         .windowResizability(.contentMinSize)
@@ -141,6 +143,7 @@ struct Construct_DesktopApp: App {
         Window(LocalizedStringKey("studio_screen_window_title"), id: DesktopWindowID.studioScreen) {
             DesktopStudioScreenView()
                 .frame(minWidth: 480, minHeight: 270)
+                .desktopTheme()
         }
         .defaultSize(width: 1280, height: 760)
 
@@ -149,6 +152,7 @@ struct Construct_DesktopApp: App {
         Window(LocalizedStringKey("studio_check_window_title"), id: DesktopWindowID.studioCheck) {
             DesktopStudioCheckView()
                 .frame(minWidth: 460, minHeight: 520)
+                .desktopTheme()
         }
         .defaultSize(width: 520, height: 720)
 
@@ -159,6 +163,7 @@ struct Construct_DesktopApp: App {
                 .environment(authViewModel)
                 .environment(securityViewModel)
                 .environment(recoveryViewModel)
+                .desktopTheme()
         }
     }
 }
