@@ -20,6 +20,7 @@ struct MessageInputView: View {
     let editingMessage: TranscriptRow?
     let onSend: ([MediaAttachment], [URL]) -> Void
     var onSendVoice: ((URL, TimeInterval, [Float]) -> Void)? = nil
+    var onSendSticker: ((StickerReference) -> Void)? = nil
     let onCancelReply: () -> Void
     let onCancelEdit: () -> Void
 
@@ -33,6 +34,7 @@ struct MessageInputView: View {
             editingMessage: editingMessage,
             onSend: onSend,
             onSendVoice: onSendVoice,
+            onSendSticker: onSendSticker,
             onCancelReply: onCancelReply,
             onCancelEdit: onCancelEdit
         )
@@ -46,6 +48,7 @@ struct MessageInputView: View {
             editingMessage: editingMessage,
             onSend: onSend,
             onSendVoice: onSendVoice,
+            onSendSticker: onSendSticker,
             onCancelReply: onCancelReply,
             onCancelEdit: onCancelEdit
         )
