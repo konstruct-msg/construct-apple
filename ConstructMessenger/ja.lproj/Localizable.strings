@@ -945,6 +945,7 @@
 
 "backup_error_invalid_mnemonic" = "復旧フレーズが無効です。12語すべてを確認して、もう一度お試しください。";
 "backup_error_invalid_file" = "これは有効なKonstruct バックアップではないか、復旧フレーズが正しくありません。";
+"backup_error_unsupported_version" = "このバックアップは、このバージョンのKonstructでは読み込めないバージョンで作成されています。この端末のデータは変更されていません。";
 
 // Transfer (P2P nearby)
 "transfer_send_nearby" = "近くのデバイスに送信";

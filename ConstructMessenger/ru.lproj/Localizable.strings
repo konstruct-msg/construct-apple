@@ -1081,6 +1081,7 @@
 
 "backup_error_invalid_mnemonic" = "Неверная фраза восстановления. Проверьте все 12 слов и попробуйте снова.";
 "backup_error_invalid_file" = "Это не резервная копия Konstruct или фраза восстановления неверна.";
+"backup_error_unsupported_version" = "Эту резервную копию сделала версия Konstruct, которую эта версия прочитать не может. Данные на устройстве не изменились.";
 
 // Transfer (P2P nearby)
 "transfer_send_nearby" = "Отправить на соседнее устройство";
