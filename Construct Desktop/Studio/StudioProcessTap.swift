@@ -20,6 +20,8 @@ import Foundation
 final class StudioProcessTap: StudioProgramCapture {
     struct Failure: Error, CustomStringConvertible {
         let description: String
+        /// What the check before a call says about it.
+        var finding: StudioCheckFinding = .captureFailed
     }
 
     let sourceDescription: String
@@ -52,7 +54,8 @@ final class StudioProcessTap: StudioProgramCapture {
                                                   UInt32(MemoryLayout<pid_t>.size), &pid, &size, &processObject),
                        "translate pid")
         guard processObject != kAudioObjectUnknown else {
-            throw Failure(description: "\(sourceDescription) has no audio process object — has it played anything yet?")
+            throw Failure(description: "\(sourceDescription) has no audio process object — has it played anything yet?",
+                          finding: .sourceNeverPlayed)
         }
 
         let description = CATapDescription(stereoMixdownOfProcesses: [processObject])
@@ -75,7 +78,8 @@ final class StudioProcessTap: StudioProgramCapture {
         // would be sent as if it were 48 kHz. Refused until resampling exists.
         guard asbd.mSampleRate == StudioAudioFormat.lossless.sampleRate else {
             AudioHardwareDestroyProcessTap(tapID)
-            throw Failure(description: "the output device runs at \(Int(asbd.mSampleRate)) Hz; Studio needs 48000")
+            throw Failure(description: "the output device runs at \(Int(asbd.mSampleRate)) Hz; Studio needs 48000",
+                          finding: .sampleRate(Int(asbd.mSampleRate)))
         }
         tapFormat = asbd
 
