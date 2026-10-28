@@ -30,7 +30,6 @@ struct DesktopRootView: View {
     @Environment(\.openSettings) private var openSettings
     @Environment(\.openWindow) private var openWindow
     @Environment(\.dismissWindow) private var dismissWindow
-    @AppStorage("appTheme") private var appTheme: AppTheme = .dark
     @AppStorage(OrientationStore.completedUserIdsKey) private var orientationCompletedUserIds = ""
 
     @State private var showAddContact = false
@@ -117,7 +116,7 @@ struct DesktopRootView: View {
             }
         }
         .errorToast()
-        .preferredColorScheme(appTheme.colorScheme)
+        .desktopTheme()
         // The People window outlives a sign-out and its @FetchRequest keeps faults into the store
         // that was just replaced; the next redraw raises. Close it with the data it was showing.
         .onReceive(NotificationCenter.default.publisher(for: .localStoreReplaced).receive(on: DispatchQueue.main)) { _ in
