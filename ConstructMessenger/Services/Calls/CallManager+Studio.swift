@@ -339,6 +339,9 @@ extension CallManager {
         guard let sender = run.sender, format.epoch == sender.epoch, let make = Self.makeStudioCapture else { return }
         do {
             let capture = try make()
+            // The sender is the capture thread's from here on: it is fed only there, and read on
+            // this actor again only after the capture has stopped (`StudioRun.stop`).
+            nonisolated(unsafe) let sender = sender
             let packetizer = StudioCapturePacketizer(format: sender.format) { samples, firstFrame in
                 do { try sender.submit(samples, firstFrame: firstFrame) } catch {
                     Log.error("Studio program not encoded: \(error)", category: "Calls")
