@@ -1441,6 +1441,14 @@
 "call_device_system" = "システムのデフォルト";
 "call_studio" = "Studio";
 "call_studio_start" = "Studio を開始";
+"studio_talkback" = "Studio 中のマイク";
+"studio_talkback_hold" = "押して話す";
+"studio_talkback_always" = "常にオン";
+"studio_talkback_always_menu" = "Studio 中はマイクを常にオン";
+"studio_talk" = "話す";
+"studio_talk_hint" = "ボタンまたはどのアプリでも %@ を押し続けます。双方がヘッドホンなら「常にオン」を選んでください。";
+"studio_talking" = "送話中";
+"studio_talk_waiting" = "押して話す";
 "call_studio_stop" = "Studio を終了";
 "studio_screen_window_title" = "ホストの画面";
 "studio_screen_waiting" = "ホストの画面を待っています…";

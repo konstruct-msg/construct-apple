@@ -1441,6 +1441,14 @@
 "call_device_system" = "System default";
 "call_studio" = "Studio";
 "call_studio_start" = "Start Studio";
+"studio_talkback" = "Microphone in Studio";
+"studio_talkback_hold" = "Hold to talk";
+"studio_talkback_always" = "Always on";
+"studio_talkback_always_menu" = "Studio Microphone Always On";
+"studio_talk" = "Talk";
+"studio_talk_hint" = "Hold the button or %@ in any app. In headphones on both sides, choose “Always on”.";
+"studio_talking" = "Talking";
+"studio_talk_waiting" = "Hold to talk";
 "call_studio_stop" = "Leave Studio";
 "studio_screen_window_title" = "Host’s screen";
 "studio_screen_waiting" = "Waiting for the host’s screen…";

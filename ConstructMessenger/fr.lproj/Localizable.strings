@@ -1361,6 +1361,14 @@
 "call_device_system" = "Par défaut du système";
 "call_studio" = "Studio";
 "call_studio_start" = "Démarrer Studio";
+"studio_talkback" = "Micro pendant Studio";
+"studio_talkback_hold" = "Maintenir pour parler";
+"studio_talkback_always" = "Toujours ouvert";
+"studio_talkback_always_menu" = "Micro toujours ouvert pendant Studio";
+"studio_talk" = "Parler";
+"studio_talk_hint" = "Maintenez le bouton ou %@ dans n’importe quelle app. Si chacun porte un casque, choisissez « Toujours ouvert ».";
+"studio_talking" = "On vous entend";
+"studio_talk_waiting" = "Maintenir pour parler";
 "call_studio_stop" = "Quitter Studio";
 "studio_screen_window_title" = "Écran de l’hôte";
 "studio_screen_waiting" = "En attente de l’écran de l’hôte…";

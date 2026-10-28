@@ -1452,6 +1452,14 @@
 "call_device_system" = "Как в системе";
 "call_studio" = "Студия";
 "call_studio_start" = "Начать Студию";
+"studio_talkback" = "Микрофон в Студии";
+"studio_talkback_hold" = "По кнопке";
+"studio_talkback_always" = "Всегда включён";
+"studio_talkback_always_menu" = "Микрофон в Студии всегда включён";
+"studio_talk" = "Говорить";
+"studio_talk_hint" = "Удерживайте кнопку или %@ в любом приложении. Если оба в наушниках, выберите «Всегда включён».";
+"studio_talking" = "Вас слышно";
+"studio_talk_waiting" = "Говорить — по кнопке";
 "call_studio_stop" = "Выйти из Студии";
 "studio_screen_window_title" = "Экран ведущего";
 "studio_screen_waiting" = "Ждём экран ведущего…";
