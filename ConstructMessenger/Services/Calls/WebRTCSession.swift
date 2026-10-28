@@ -270,7 +270,7 @@ final class WebRTCSession: NSObject, WebRTCSessionProtocol {
     private var closingStudioChannels: [RTCDataChannel] = []
     private var studioClosedWaiters: [CheckedContinuation<Void, Never>] = []
     /// Who receives Studio's messages (`setStudioReceiver`). Called on WebRTC's thread.
-    private let studioReceiver = Mutex<(@Sendable (StudioChannel, Data) -> Void)?>(nil)
+    private let studioReceiver = Mutex<StudioReceiver?>(nil)
     /// Host: the screen's send-only section, made with Studio's offer and kept for the rest of the
     /// call, so a second Studio on it adds no section.
     private var studioScreenTransceiver: RTCRtpTransceiver?
@@ -673,7 +673,7 @@ final class WebRTCSession: NSObject, WebRTCSessionProtocol {
     /// signalling thread, never the main actor: the program goes into a ring buffer from there
     /// (`StudioPlayout`), and a hop per packet would put the main thread on the audio path.
     nonisolated func setStudioReceiver(_ receiver: (@Sendable (StudioChannel, Data) -> Void)?) {
-        studioReceiver.withLock { $0 = receiver }
+        studioReceiver.withLock { $0 = receiver.map(StudioReceiver.init) }
     }
 
     func closeStudioChannels() {
@@ -910,6 +910,14 @@ extension WebRTCSession: RTCPeerConnectionDelegate {
     }
 }
 
+/// The receiver, in a struct of its own inside the lock. A bare closure as the `Mutex`'s generic
+/// value is reabstracted on every read through `withLock`'s `inout` and written back wrapped in one
+/// more thunk: the closure grew a layer per message until the signalling thread's stack ran out
+/// (Desktop 0.3.18, 2026-10-28, ~5,600 packets in). A struct's field keeps the closure as it is.
+private struct StudioReceiver: Sendable {
+    let receive: @Sendable (StudioChannel, Data) -> Void
+}
+
 extension WebRTCSession: RTCDataChannelDelegate {
     nonisolated func dataChannelDidChangeState(_ dataChannel: RTCDataChannel) {
         Log.info("Studio channel \(dataChannel.label) (id \(dataChannel.channelId)) → state \(dataChannel.readyState.rawValue)", category: "Calls")
@@ -919,7 +927,7 @@ extension WebRTCSession: RTCDataChannelDelegate {
     nonisolated func dataChannel(_ dataChannel: RTCDataChannel, didReceiveMessageWith buffer: RTCDataBuffer) {
         guard dataChannel.readyState == .open, let channel = StudioChannel(rawValue: dataChannel.channelId) else { return }
         let data = buffer.data
-        studioReceiver.withLock { $0 }?(channel, data)
+        studioReceiver.withLock { $0 }?.receive(channel, data)
     }
 }
 
