@@ -1329,6 +1329,7 @@
 "desktop_close_chat" = "Закрыть чат";
 "desktop_new_conversation" = "Новый чат";
 "desktop_sync_messages" = "Синхронизировать сообщения";
+"desktop_check_for_updates" = "Проверить обновления…";
 "desktop_menu_navigate" = "Переход";
 "desktop_next_chat" = "Следующий чат";
 "desktop_previous_chat" = "Предыдущий чат";

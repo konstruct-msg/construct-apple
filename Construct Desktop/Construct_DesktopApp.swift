@@ -29,6 +29,7 @@ struct Construct_DesktopApp: App {
 
     // Command bridge — owned here, wired up in DesktopRootView
     @State private var commandBridge = DesktopCommandBridge()
+    @State private var updater = DesktopUpdater()
 
     init() {
         // Every front this install knows leaves the logs before the first line could name one.
@@ -112,7 +113,7 @@ struct Construct_DesktopApp: App {
         // glass chat nav sat flush to the traffic lights; the toolbar now owns that slot.
         .windowToolbarStyle(.unified)
         .commands {
-            ConstructCommands(bridge: commandBridge)
+            ConstructCommands(bridge: commandBridge, updater: updater)
         }
 
         // Synapses is its own window — not a tab that replaces the open chat (D2).

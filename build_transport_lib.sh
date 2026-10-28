@@ -10,6 +10,10 @@
 #   ./build_transport_lib.sh              # iOS device + Simulator (default)
 #   ./build_transport_lib.sh --mac        # macOS native arm64 (Desktop)
 #   ./build_transport_lib.sh --all        # iOS + Simulator + macOS
+#   ./build_transport_lib.sh --dist       # macOS arm64 + x86_64 (Intel DMG); with --all too
+#
+# CONSTRUCT_TRANSPORT_PATH: another checkout (a git worktree of construct-transport) to build
+# from. The result is written into this checkout, whichever worktree it is.
 #   ./build_transport_lib.sh --bindings   # regenerate Swift bindings only
 #   ./build_transport_lib.sh --clean      # cargo clean before build
 #   ./build_transport_lib.sh --debug      # debug profile
@@ -31,7 +35,7 @@ warn() { echo -e "${YELLOW}⚠️${NC}  $1"; }
 hdr()  { echo -e "\n${BOLD}━━━  $1  ━━━${NC}"; }
 
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-TRANSPORT_PATH="$HOME/Code/construct-transport"
+TRANSPORT_PATH="${CONSTRUCT_TRANSPORT_PATH:-$HOME/Code/construct-transport}"
 
 [ -d "$TRANSPORT_PATH" ] || TRANSPORT_PATH="$PROJECT_ROOT/../construct-transport"
 [ -d "$TRANSPORT_PATH" ] || \
@@ -46,9 +50,9 @@ ANY_TARGET=false
 
 for arg in "$@"; do
   case "$arg" in
-    --ios|--sim|--mac|--bindings|--clean|--debug)
+    --ios|--sim|--mac|--dist|--bindings|--clean|--debug)
       FORWARD+=("$arg")
-      case "$arg" in --ios|--sim|--mac) ANY_TARGET=true ;; esac
+      case "$arg" in --ios|--sim|--mac|--dist) ANY_TARGET=true ;; esac
       ;;
     --all)
       FORWARD+=(--ios --sim --mac)
@@ -68,4 +72,4 @@ hdr "construct-transport"
 info "Repo: $TRANSPORT_PATH"
 info "Messenger: $PROJECT_ROOT"
 
-exec bash "$BUILD_SCRIPT" "${FORWARD[@]}"
+MESSENGER_ROOT="$PROJECT_ROOT" exec bash "$BUILD_SCRIPT" "${FORWARD[@]}"
