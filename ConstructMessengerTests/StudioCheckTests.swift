@@ -3,6 +3,7 @@
 //  ConstructMessengerTests
 //
 
+import Synchronization
 import XCTest
 @testable import Construct_Messenger
 
@@ -99,5 +100,43 @@ final class StudioCheckTests: XCTestCase {
                                             sendsScreen: true, microphoneAllowed: true), [.screenNoWindow])
         XCTAssertEqual(StudioCheck.findings(source: daw, capture: .notStarted, screen: .permissionMissing,
                                             sendsScreen: false, microphoneAllowed: true), [])
+    }
+
+    /// The packetizer's callback runs on the capture's thread: Core Audio's I/O thread, never the
+    /// main actor. A callback made in a main-actor method, with a lock taken inside it as the
+    /// check's meter does, was isolated to the main actor, and Swift 6 trapped on the first packet
+    /// (Desktop 0.3.17, 2026-10-28: the check crashed as soon as Reaper played).
+    ///
+    /// Mutation: drop `@Sendable` from `onPacket` — this test traps.
+    @MainActor
+    func testPacketizerCallbackRunsOffTheMainActor() async {
+        let delivered = expectation(description: "packet")
+        let owner = MainActorPacketizerOwner(delivered: delivered)
+        nonisolated(unsafe) let fed: StudioCapturePacketizer = owner.packetizer
+        let frames = Int(StudioAudioFormat.lossless.framesPerPacket)
+        DispatchQueue(label: "studio.test.tap").async {
+            let samples = [Float](repeating: 0.25, count: frames * 2)
+            samples.withUnsafeBufferPointer { fed.ingest(interleaved: $0, channels: 2) }
+        }
+        await fulfillment(of: [delivered], timeout: 5)
+        XCTAssertEqual(owner.meter.value.withLock { $0.heardAnything }, true)
+    }
+}
+
+/// Builds a packetizer the way `StudioCheckModel` does: in a main-actor method, into a meter
+/// behind a lock.
+@MainActor
+private final class MainActorPacketizerOwner {
+    final class Box: Sendable { let value = Mutex(StudioMeter()) }
+    let meter = Box()
+    var packetizer: StudioCapturePacketizer!
+
+    init(delivered: XCTestExpectation) {
+        let box = meter
+        nonisolated(unsafe) let delivered = delivered
+        packetizer = StudioCapturePacketizer(format: .lossless) { samples, _ in
+            box.value.withLock { $0.ingest(samples) }
+            delivered.fulfill()
+        }
     }
 }
