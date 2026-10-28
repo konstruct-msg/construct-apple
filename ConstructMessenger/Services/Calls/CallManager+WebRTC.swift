@@ -213,7 +213,7 @@ extension CallManager {
             }
             try await webrtc.setRemoteOffer(sdp: sdp)
             applyCamera()
-            joinStudioIfOffered(sdp: sdp, on: webrtc)
+            await joinStudioIfOffered(sdp: sdp, on: webrtc)
             let answerSdp = try await webrtc.createAnswer()
             guard !answerSdp.isEmpty else {
                 throw WebRTCSessionError.invalidState("createAnswer returned empty SDP")

@@ -258,9 +258,17 @@ final class WebRTCSession: NSObject, WebRTCSessionProtocol {
     /// Studio's channels while a studio runs; empty otherwise. A call that never starts Studio
     /// makes none, so its SDP has no `m=application` and is what it always was.
     private var studioChannels: [StudioChannel: RTCDataChannel] = [:]
-    /// Fires once, when both of Studio's channels are open.
+    /// Fires once, when both of Studio's channels are open — on the side that offered Studio, not
+    /// before the answer: until then the other side has not made its channels, and what is sent
+    /// on ours is lost.
     var onStudioChannelsOpen: (@Sendable () -> Void)?
     private var studioOpenAnnounced = false
+    /// This side made the channels to offer them, and the answer is not in yet.
+    private var studioAwaitingAnswer = false
+    /// Channels of the studio before, still closing: their ids are not free until they are closed,
+    /// and a channel made on such an id is not made (`studioChannelsClosed()`).
+    private var closingStudioChannels: [RTCDataChannel] = []
+    private var studioClosedWaiters: [CheckedContinuation<Void, Never>] = []
     /// Who receives Studio's messages (`setStudioReceiver`). Called on WebRTC's thread.
     private let studioReceiver = Mutex<(@Sendable (StudioChannel, Data) -> Void)?>(nil)
     /// Host: the screen's send-only section, made with Studio's offer and kept for the rest of the
@@ -356,6 +364,10 @@ final class WebRTCSession: NSObject, WebRTCSessionProtocol {
         stopCapture()
         if videoTransceiver != nil { Log.info(receiveCounter.summary(), category: "Calls") }
         peerConnection.close()
+        // A start waiting for the studio before to close waits no more: there is no call.
+        closingStudioChannels.removeAll()
+        studioClosedWaiters.forEach { $0.resume() }
+        studioClosedWaiters.removeAll()
         // Do NOT deactivate the audio session here. A raw
         // `AVAudioSession.setActive(false)` bypasses RTCAudioSession and desyncs its
         // internal active-state from the real session. With `useManualAudio`, that
@@ -541,6 +553,10 @@ final class WebRTCSession: NSObject, WebRTCSessionProtocol {
     func setRemoteAnswer(sdp: String) async throws {
         let desc = RTCSessionDescription(type: .answer, sdp: sdp)
         try await setRemoteDescription(desc)
+        if studioAwaitingAnswer {
+            studioAwaitingAnswer = false
+            studioChannelChanged()
+        }
         await onRemoteDescriptionSet()
     }
 
@@ -610,7 +626,19 @@ final class WebRTCSession: NSObject, WebRTCSessionProtocol {
             dataChannel.delegate = self
             studioChannels[channel] = dataChannel
         }
+        studioAwaitingAnswer = peerConnection.signalingState == .stable
         Log.info("Studio channels made (negotiated, ids \(StudioChannel.allCases.map(\.rawValue)))", category: "Calls")
+        // On a call whose data section is already negotiated (a second studio), a channel can be
+        // open as it is made, and no change of state follows to say so.
+        studioChannelChanged()
+    }
+
+    /// Returns once the channels of the studio before are closed; at once when there are none.
+    func studioChannelsClosed() async {
+        closingStudioChannels.removeAll { $0.readyState == .closed }
+        guard !closingStudioChannels.isEmpty else { return }
+        Log.info("Studio: waiting for the channels of the studio before to close", category: "Calls")
+        await withCheckedContinuation { studioClosedWaiters.append($0) }
     }
 
     var studioChannelsOpen: Bool {
@@ -651,11 +679,14 @@ final class WebRTCSession: NSObject, WebRTCSessionProtocol {
     func closeStudioChannels() {
         guard !studioChannels.isEmpty else { return }
         for dataChannel in studioChannels.values {
-            dataChannel.delegate = nil
             dataChannel.close()
+            // Kept with this side as delegate until closed: its messages are dropped (it is not
+            // open), its closing is watched.
+            closingStudioChannels.append(dataChannel)
         }
         studioChannels.removeAll()
         studioOpenAnnounced = false
+        studioAwaitingAnswer = false
         Log.info("Studio channels closed", category: "Calls")
     }
 
@@ -705,7 +736,13 @@ final class WebRTCSession: NSObject, WebRTCSessionProtocol {
     }
 
     private func studioChannelChanged() {
-        guard !studioOpenAnnounced, studioChannelsOpen else { return }
+        closingStudioChannels.removeAll { $0.readyState == .closed }
+        if closingStudioChannels.isEmpty, !studioClosedWaiters.isEmpty {
+            let waiters = studioClosedWaiters
+            studioClosedWaiters.removeAll()
+            waiters.forEach { $0.resume() }
+        }
+        guard !studioOpenAnnounced, !studioAwaitingAnswer, studioChannelsOpen else { return }
         studioOpenAnnounced = true
         Log.info("Studio channels open", category: "Calls")
         onStudioChannelsOpen?()
@@ -880,7 +917,7 @@ extension WebRTCSession: RTCDataChannelDelegate {
     }
 
     nonisolated func dataChannel(_ dataChannel: RTCDataChannel, didReceiveMessageWith buffer: RTCDataBuffer) {
-        guard let channel = StudioChannel(rawValue: dataChannel.channelId) else { return }
+        guard dataChannel.readyState == .open, let channel = StudioChannel(rawValue: dataChannel.channelId) else { return }
         let data = buffer.data
         studioReceiver.withLock { $0 }?(channel, data)
     }

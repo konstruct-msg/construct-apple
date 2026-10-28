@@ -160,4 +160,58 @@ final class StudioDataChannelTests: XCTestCase {
         XCTAssertFalse(caller.studioChannelsOpen)
         XCTAssertFalse(caller.sendStudio(Data([1]), on: .program))
     }
+    /// Both sides leave the studio, as `endStudio` does.
+    private func leaveStudio() {
+        caller.onStudioChannelsOpen = nil
+        callee.onStudioChannelsOpen = nil
+        caller.closeStudioChannels()
+        callee.closeStudioChannels()
+    }
+
+    /// A second studio in the same call, once the first one's channels are closed: the data
+    /// section is negotiated already, the channels are open as they are made, and the open is
+    /// still announced — the host invites on it (2026-10-28: the second press sent an offer and
+    /// Studio never started).
+    ///
+    /// Mutation: drop the `studioChannelChanged()` at the end of `openStudioChannels` — this
+    /// reddens. Not covered: `studioChannelsClosed` waiting — in one process the old channels are
+    /// closed before the next line runs, so a start at once does not fail here; over a network it
+    /// did (2026-10-27, `Studio channel studio-control not created` the same second as leaving).
+    func testASecondStudioInTheSameCallOpens() async throws {
+        _ = try await connectCall()
+        _ = try await startStudio()
+        leaveStudio()
+        await caller.studioChannelsClosed()
+        await callee.studioChannelsClosed()
+        _ = try await startStudio()
+        XCTAssertTrue(caller.studioChannelsOpen)
+        XCTAssertTrue(callee.studioChannelsOpen)
+        XCTAssertTrue(caller.sendStudio(Data([1]), on: .control))
+    }
+
+    /// The side that offers a second studio announces its channels only after the answer: before
+    /// it the other side has made none, and an invite sent then is lost.
+    ///
+    /// Mutation: drop `!studioAwaitingAnswer` from the announcement — this reddens.
+    func testASecondStudioIsAnnouncedOnlyAfterTheAnswer() async throws {
+        _ = try await connectCall()
+        _ = try await startStudio()
+        leaveStudio()
+        await caller.studioChannelsClosed()
+        await callee.studioChannelsClosed()
+
+        let early = expectation(description: "announced before the answer")
+        early.isInverted = true
+        caller.onStudioChannelsOpen = { early.fulfill() }
+        try caller.openStudioChannels()
+        let offer = try await caller.createOffer()
+        await fulfillment(of: [early], timeout: 0.5)
+
+        let open = expectation(description: "announced")
+        caller.onStudioChannelsOpen = { open.fulfill() }
+        try await callee.setRemoteOffer(sdp: offer)
+        try callee.openStudioChannels()
+        try await caller.setRemoteAnswer(sdp: try await callee.createAnswer())
+        await fulfillment(of: [open], timeout: 10)
+    }
 }
