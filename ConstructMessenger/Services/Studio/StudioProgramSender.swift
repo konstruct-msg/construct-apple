@@ -27,9 +27,12 @@ final class StudioCapturePacketizer {
     private var pending: [Int32]
     private var filled = 0
     private var nextFrame: UInt64 = 0
-    private let onPacket: ([Int32], UInt64) -> Void
+    /// Called on the capture's thread — Core Audio's I/O thread. `@Sendable`, so a callback made
+    /// in a main-actor method is not isolated to the main actor: Swift 6 traps when an isolated
+    /// closure runs off its actor (Desktop 0.3.17 crashed on the first packet, 2026-10-28).
+    private let onPacket: @Sendable ([Int32], UInt64) -> Void
 
-    init(format: StudioAudioFormat, onPacket: @escaping ([Int32], UInt64) -> Void) {
+    init(format: StudioAudioFormat, onPacket: @escaping @Sendable ([Int32], UInt64) -> Void) {
         precondition(format.channels == 2, "the program is stereo")
         self.format = format
         self.onPacket = onPacket

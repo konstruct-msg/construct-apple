@@ -7,6 +7,7 @@
 //
 
 import SwiftProtobuf
+import Synchronization
 import XCTest
 @testable import Construct_Messenger
 
@@ -15,10 +16,10 @@ final class StudioProgramSenderTests: XCTestCase {
     private let format = StudioAudioFormat.lossless
 
     private func packetize(_ feed: (StudioCapturePacketizer) -> Void) -> (StudioCapturePacketizer, [([Int32], UInt64)]) {
-        var out: [([Int32], UInt64)] = []
-        let packetizer = StudioCapturePacketizer(format: format) { out.append(($0, $1)) }
+        let out = Mutex<[([Int32], UInt64)]>([])
+        let packetizer = StudioCapturePacketizer(format: format) { samples, frame in out.withLock { $0.append((samples, frame)) } }
         feed(packetizer)
-        return (packetizer, out)
+        return (packetizer, out.withLock { $0 })
     }
 
     /// A ramp a packet and a half long, then the rest: packets come out whole, numbered by the
