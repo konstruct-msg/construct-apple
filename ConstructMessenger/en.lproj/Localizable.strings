@@ -1441,6 +1441,14 @@
 "call_device_system" = "System default";
 "call_studio" = "Studio";
 "call_studio_start" = "Start Studio";
+"studio_source" = "Sound and screen from";
+"studio_source_none" = "No DAW running";
+"studio_source_hint" = "Open your DAW: Studio sends its sound and window.";
+"studio_send_screen" = "Show the DAW window";
+"studio_problem_program" = "Studio stopped: no sound could be taken from %@. Play something in it once, then start again.";
+"studio_problem_screen" = "The %@ window is not shown: allow Konstruct to record the screen, and keep the window open. The sound goes on.";
+"studio_open_screen_settings" = "Open Screen Recording settings";
+"studio_source_generic" = "DAW";
 "studio_talkback" = "Microphone in Studio";
 "studio_talkback_hold" = "Hold to talk";
 "studio_talkback_always" = "Always on";

@@ -120,8 +120,71 @@ private struct CallStudioButton: View {
                 .background(model.studioOn ? Color.CT.accent : Color.CT.noise, in: Circle())
         }
         .buttonStyle(.plain)
+        .disabled(!model.studioOn && model.studioSource == nil)
         .help(NSLocalizedString(key, comment: ""))
         .accessibilityLabel(NSLocalizedString(key, comment: ""))
+    }
+}
+
+/// Before Studio starts: the application whose sound and windows it takes, and whether the
+/// windows go too.
+private struct StudioSetupControls: View {
+    let model: DesktopCallModel
+
+    var body: some View {
+        VStack(spacing: CTSpace.m) {
+            Picker(NSLocalizedString("studio_source", comment: ""), selection: Binding(
+                get: { model.studioSource },
+                set: { if let source = $0 { model.setStudioSource(source) } }
+            )) {
+                if model.studioSource == nil {
+                    Text(NSLocalizedString("studio_source_none", comment: "")).tag(StudioSource?.none)
+                }
+                ForEach(model.studioSources, id: \.self) { source in
+                    Text(source.name).tag(Optional(source))
+                }
+            }
+            .pickerStyle(.menu)
+            .frame(maxWidth: 320)
+
+            Toggle(NSLocalizedString("studio_send_screen", comment: ""), isOn: Binding(
+                get: { model.studioSendsScreen },
+                set: { model.setStudioSendsScreen($0) }
+            ))
+            .toggleStyle(.switch)
+            .frame(maxWidth: 320, alignment: .leading)
+
+            if model.studioSource == nil {
+                Text(NSLocalizedString("studio_source_hint", comment: ""))
+                    .font(CTFont.caption)
+                    .foregroundStyle(Color.CT.textDim)
+                    .multilineTextAlignment(.center)
+            }
+        }
+    }
+}
+
+/// What went wrong with Studio on this side, and where to fix it.
+private struct StudioProblemNotice: View {
+    let model: DesktopCallModel
+    let problem: StudioProblem
+
+    var body: some View {
+        VStack(spacing: CTSpace.s) {
+            let name = model.studioSource?.name ?? NSLocalizedString("studio_source_generic", comment: "")
+            switch problem {
+            case .programNotCaptured:
+                Text(String(format: NSLocalizedString("studio_problem_program", comment: ""), name))
+            case .screenNotCaptured:
+                Text(String(format: NSLocalizedString("studio_problem_screen", comment: ""), name))
+                Button(NSLocalizedString("studio_open_screen_settings", comment: ""), action: model.openScreenRecordingSettings)
+                    .controlSize(.small)
+            }
+        }
+        .font(CTFont.caption)
+        .foregroundStyle(Color.CT.textDim)
+        .multilineTextAlignment(.center)
+        .frame(maxWidth: 320)
     }
 }
 
@@ -384,6 +447,15 @@ struct DesktopCallWindowView: View {
             if model.studioOn {
                 StudioTalkbackControls(model: model)
                     .padding(.top, CTSpace.l)
+                    .padding(.horizontal, CTSpace.xl)
+            } else if model.studioAvailable {
+                StudioSetupControls(model: model)
+                    .padding(.top, CTSpace.l)
+                    .padding(.horizontal, CTSpace.xl)
+            }
+            if model.studioAvailable, let problem = model.studioProblem {
+                StudioProblemNotice(model: model, problem: problem)
+                    .padding(.top, CTSpace.m)
                     .padding(.horizontal, CTSpace.xl)
             }
         default:
