@@ -1452,6 +1452,14 @@
 "call_device_system" = "Как в системе";
 "call_studio" = "Студия";
 "call_studio_start" = "Начать Студию";
+"studio_source" = "Звук и экран из";
+"studio_source_none" = "DAW не запущен";
+"studio_source_hint" = "Откройте DAW: Студия передаёт его звук и окно.";
+"studio_send_screen" = "Показывать окно DAW";
+"studio_problem_program" = "Студия остановлена: из %@ не удалось взять звук. Воспроизведите в нём что-нибудь и начните снова.";
+"studio_problem_screen" = "Окно %@ не показывается: разрешите Konstruct запись экрана и держите окно открытым. Звук продолжает идти.";
+"studio_open_screen_settings" = "Открыть настройки записи экрана";
+"studio_source_generic" = "DAW";
 "studio_talkback" = "Микрофон в Студии";
 "studio_talkback_hold" = "По кнопке";
 "studio_talkback_always" = "Всегда включён";

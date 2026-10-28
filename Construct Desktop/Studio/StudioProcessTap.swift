@@ -22,11 +22,6 @@ final class StudioProcessTap: StudioProgramCapture {
         let description: String
     }
 
-    /// The DAW whose output is the program; Reaper unless set:
-    /// `defaults write <bundle id> StudioSourceBundleID <the DAW's bundle id>`.
-    static let sourceDefaultsKey = "StudioSourceBundleID"
-    static let defaultSource = "com.cockos.reaper"
-
     let sourceDescription: String
     private var tapID = AudioObjectID(kAudioObjectUnknown)
     private var aggregateID = AudioObjectID(kAudioObjectUnknown)
@@ -36,7 +31,8 @@ final class StudioProcessTap: StudioProgramCapture {
     private var packetizer: StudioCapturePacketizer?
 
     static func make() throws -> any StudioProgramCapture {
-        let bundleID = UserDefaults.standard.string(forKey: sourceDefaultsKey) ?? defaultSource
+        // The DAW chosen in the call window, which stores it before Studio starts.
+        guard let bundleID = StudioSource.stored() else { throw Failure(description: "no source chosen") }
         return try StudioProcessTap(bundleIdentifier: bundleID)
     }
 
