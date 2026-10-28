@@ -36,7 +36,7 @@ final class AppErrorTests: XCTestCase {
             ContactLinkError.verificationFailed(NSError(domain: secret, code: 1)),
             ContactLinkError.recoveryKeyRequired,
             BackupError.invalidMnemonic, BackupError.fileNotFound(secret), BackupError.invalidFile,
-            BackupError.decryptionFailed, BackupError.userIdMismatch,
+            BackupError.decryptionFailed, BackupError.userIdMismatch, BackupError.unsupportedVersion,
             BackupEncryptionError.invalidPassword, BackupEncryptionError.encryptionFailed,
             BackupEncryptionError.decryptionFailed, BackupEncryptionError.invalidBackupFormat,
             BackupEncryptionError.keyDerivationFailed, BackupEncryptionError.dataCorrupted,

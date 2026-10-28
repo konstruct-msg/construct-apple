@@ -121,9 +121,18 @@ final class LocalBackupService {
         try? fm.removeItem(at: stagingDir)
         try fm.createDirectory(at: stagingDir, withIntermediateDirectories: true)
 
-        try coreSQLData.write(to: stagingDir.appendingPathComponent("ConstructMessenger.sqlite"))
+        let stagedCoreSQL = stagingDir.appendingPathComponent("ConstructMessenger.sqlite")
+        try coreSQLData.write(to: stagedCoreSQL)
         if !coreWALData.isEmpty {
             try coreWALData.write(to: stagingDir.appendingPathComponent("ConstructMessenger.sqlite-wal"))
+        }
+        // A store of a model version this build no longer carries (model versions before 15
+        // were removed on 2026-10-28) would be applied at the next launch, fail to open, and
+        // be deleted by the store's recovery — the restore would erase the device's data and
+        // say nothing. Refused here, before anything on the device is touched.
+        guard PersistenceController.canOpenStore(at: stagedCoreSQL) else {
+            try? fm.removeItem(at: stagingDir)
+            throw BackupError.unsupportedVersion
         }
         try keyStoreData.write(to: stagingDir.appendingPathComponent("message_keys.sqlite"))
 
@@ -293,6 +302,8 @@ enum BackupError: LocalizedError, UserFacingError {
     case invalidFile
     case decryptionFailed
     case userIdMismatch
+    /// The backup's store is of a model version this build cannot open.
+    case unsupportedVersion
 
     /// `fileNotFound`'s path is for the log.
     var userText: UserText {
@@ -302,6 +313,7 @@ enum BackupError: LocalizedError, UserFacingError {
         case .invalidFile:       return UserText("backup_error_invalid_file")
         case .decryptionFailed:  return UserText("backup_error_invalid_file")
         case .userIdMismatch:    return UserText("history_sync_user_mismatch")
+        case .unsupportedVersion: return UserText("backup_error_unsupported_version")
         }
     }
 

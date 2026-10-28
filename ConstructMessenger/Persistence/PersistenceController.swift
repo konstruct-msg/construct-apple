@@ -299,6 +299,21 @@ struct PersistenceController {
         return container.viewContext
     }
 
+    /// Whether this build can open the SQLite store at `url`: its schema is one of the model
+    /// versions the bundle carries. One that matches none fails `loadPersistentStores`, and the
+    /// recovery there deletes it — so a restore asks this before it replaces anything.
+    static func canOpenStore(at url: URL) -> Bool {
+        guard let metadata = try? NSPersistentStoreCoordinator.metadataForPersistentStore(
+                  ofType: NSSQLiteStoreType, at: url, options: nil),
+              let momd = Bundle.main.url(forResource: "ConstructMessenger", withExtension: "momd"),
+              let files = try? FileManager.default.contentsOfDirectory(at: momd, includingPropertiesForKeys: nil)
+        else { return false }
+        return files.lazy
+            .filter { $0.pathExtension == "mom" }
+            .compactMap(NSManagedObjectModel.init(contentsOf:))
+            .contains { $0.isConfiguration(withName: nil, compatibleWithStoreMetadata: metadata) }
+    }
+
     /// Default SQLite store URL (Application Support directory, matches NSPersistentContainer default).
     static var defaultStoreURL: URL {
         FileManager.default
