@@ -632,6 +632,8 @@
 "sticker_catalog_failed" = "Չհաջողվեց բեռնել փաթեթները։";
 "sticker_catalog_retry" = "Կրկնել";
 "sticker_pack_remove" = "Հեռացնել փաթեթը";
+"sticker_pack_add" = "Ավելացնել փաթեթը";
+"sticker_pack_unavailable" = "Այս փաթեթը հիմա հասանելի չէ։";
 
 // MARK: - Attachments
 "attach" = "Կցել";

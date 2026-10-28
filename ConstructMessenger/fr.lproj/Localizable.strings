@@ -602,6 +602,8 @@
 "sticker_catalog_failed" = "Impossible de charger les packs.";
 "sticker_catalog_retry" = "Réessayer";
 "sticker_pack_remove" = "Retirer le pack";
+"sticker_pack_add" = "Ajouter le pack";
+"sticker_pack_unavailable" = "Ce pack n’est pas disponible pour le moment.";
 
 // MARK: - Attachments
 "attach" = "Joindre";
