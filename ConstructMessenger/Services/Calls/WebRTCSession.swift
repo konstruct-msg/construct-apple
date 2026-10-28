@@ -269,6 +269,11 @@ final class WebRTCSession: NSObject, WebRTCSessionProtocol {
     /// and a channel made on such an id is not made (`studioChannelsClosed()`).
     private var closingStudioChannels: [RTCDataChannel] = []
     private var studioClosedWaiters: [CheckedContinuation<Void, Never>] = []
+    /// The other side's DTLS certificate, as its last description named it (`PeerInstance`).
+    private var remoteFingerprint: String?
+    /// The other side is a new instance of the app: it restarted and answered this call's ICE
+    /// restart. What rode on the instance before — Studio's channels — went with it.
+    var onPeerRestarted: (() -> Void)?
     /// Who receives Studio's messages (`setStudioReceiver`). Called on WebRTC's thread.
     private let studioReceiver = Mutex<StudioReceiver?>(nil)
     /// Host: the screen's send-only section, made with Studio's offer and kept for the rest of the
@@ -778,12 +783,33 @@ final class WebRTCSession: NSObject, WebRTCSessionProtocol {
     }
 
     private func setRemoteDescription(_ sdp: RTCSessionDescription) async throws {
+        let text = sdp.sdp
         try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
             peerConnection.setRemoteDescription(sdp) { error in
                 if let error { cont.resume(throwing: error); return }
                 cont.resume()
             }
         }
+        guard let fingerprint = PeerInstance.fingerprint(sdp: text) else { return }
+        defer { remoteFingerprint = fingerprint }
+        if PeerInstance.isNew(fingerprint, before: remoteFingerprint) { peerRestarted() }
+    }
+
+    /// The instance before is gone without a word — it crashed or was quit — and its channels
+    /// with it: a channel closed now is never answered, and a studio waiting for it would wait
+    /// for good (2026-10-28: the guest crashed, came back into the call, and every press of
+    /// Studio on the host waited for the channels of the studio before).
+    private func peerRestarted() {
+        Log.info("WebRTC: the other side is a new instance (its DTLS certificate changed)", category: "Calls")
+        onPeerRestarted?()
+        for dataChannel in studioChannels.values { dataChannel.close() }
+        studioChannels.removeAll()
+        studioOpenAnnounced = false
+        studioAwaitingAnswer = false
+        closingStudioChannels.removeAll()
+        let waiters = studioClosedWaiters
+        studioClosedWaiters.removeAll()
+        waiters.forEach { $0.resume() }
     }
 
     private static func makeLocalAudioTrack(factory: RTCPeerConnectionFactory) -> RTCAudioTrack {
@@ -907,6 +933,22 @@ extension WebRTCSession: RTCPeerConnectionDelegate {
             "TRACKS[\(label)] senders=[\(senders.joined(separator: " | "))] receivers=[\(receivers.joined(separator: " | "))]",
             category: "Calls"
         )
+    }
+}
+
+/// Which instance of the other app this call talks to. Each instance makes its own DTLS
+/// certificate, and every description it sends names it (`a=fingerprint`, RFC 8122): the same
+/// fingerprint is the same instance across ICE restarts; another one is the app started again.
+enum PeerInstance {
+    static func fingerprint(sdp: String) -> String? {
+        sdp.split(whereSeparator: \.isNewline)
+            .first { $0.hasPrefix("a=fingerprint:") }
+            .map { $0.dropFirst("a=fingerprint:".count).trimmingCharacters(in: .whitespaces).lowercased() }
+    }
+
+    /// A first description names no instance before it.
+    static func isNew(_ fingerprint: String, before: String?) -> Bool {
+        before.map { $0 != fingerprint } ?? false
     }
 }
 

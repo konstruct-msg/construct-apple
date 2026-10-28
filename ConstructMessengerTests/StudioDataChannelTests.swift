@@ -211,6 +211,64 @@ final class StudioDataChannelTests: XCTestCase {
         XCTAssertTrue(caller.sendStudio(Data([1]), on: .control))
     }
 
+    /// The guest's app crashes and comes back into the call: it answers the host's ICE restart as a
+    /// new instance, with none of Studio's channels. The host learns it from the answer, and the
+    /// channels of the studio before keep no new studio waiting (2026-10-28: every press of Studio
+    /// waited for them, and only hanging up helped).
+    ///
+    /// Mutation: drop the `peerRestarted()` call — this reddens. Not covered: the wait itself. In
+    /// one process the guest closes its channels as it goes, which a crash does not, so the host's
+    /// are closed already and nothing is left to wait for; dropping the `closingStudioChannels`
+    /// reset in `peerRestarted` stays green here.
+    func testAGuestThatCameBackIsANewInstance() async throws {
+        _ = try await connectCall()
+        _ = try await startStudio()
+        callee.onStudioChannelsOpen = nil
+        callee.close()
+        let restarted = try WebRTCSession(loopbackRole: .callee, video: false)
+        callee = restarted
+        let caller = caller!
+        caller.onLocalIceCandidate = { candidate in
+            Task { @MainActor in try? await restarted.addRemoteIceCandidate(candidate) }
+        }
+        restarted.onLocalIceCandidate = { candidate in
+            Task { @MainActor in try? await caller.addRemoteIceCandidate(candidate) }
+        }
+        var peerRestarted = 0
+        caller.onPeerRestarted = { peerRestarted += 1 }
+
+        let offer = try await caller.restartIce()
+        try await restarted.setRemoteOffer(sdp: offer)
+        XCTAssertEqual(peerRestarted, 0, "the offerer's own restart says nothing yet")
+        caller.closeStudioChannels()
+        try await caller.setRemoteAnswer(sdp: try await restarted.createAnswer())
+        XCTAssertEqual(peerRestarted, 1)
+
+        let waited = expectation(description: "nothing to wait for")
+        Task { await caller.studioChannelsClosed(); waited.fulfill() }
+        await fulfillment(of: [waited], timeout: 2)
+    }
+
+    /// An ICE restart answered by the same instance is not a new one.
+    func testARestartByTheSameGuestIsNotANewInstance() async throws {
+        _ = try await connectCall()
+        var peerRestarted = 0
+        caller.onPeerRestarted = { peerRestarted += 1 }
+        let restart = try await caller.restartIce()
+        try await callee.setRemoteOffer(sdp: restart)
+        try await caller.setRemoteAnswer(sdp: try await callee.createAnswer())
+        XCTAssertEqual(peerRestarted, 0)
+    }
+
+    func testPeerInstanceReadsTheFingerprint() {
+        let sdp = "v=0\r\na=group:BUNDLE 0\r\na=fingerprint:sha-256 AB:CD:EF\r\na=setup:actpass\r\n"
+        XCTAssertEqual(PeerInstance.fingerprint(sdp: sdp), "sha-256 ab:cd:ef")
+        XCTAssertNil(PeerInstance.fingerprint(sdp: "v=0\r\n"))
+        XCTAssertFalse(PeerInstance.isNew("sha-256 ab", before: nil), "the first description")
+        XCTAssertFalse(PeerInstance.isNew("sha-256 ab", before: "sha-256 ab"))
+        XCTAssertTrue(PeerInstance.isNew("sha-256 cd", before: "sha-256 ab"))
+    }
+
     /// The side that offers a second studio announces its channels only after the answer: before
     /// it the other side has made none, and an invite sent then is lost.
     ///
