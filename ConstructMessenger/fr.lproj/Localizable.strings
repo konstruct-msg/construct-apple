@@ -1238,6 +1238,7 @@
 "desktop_close_chat" = "Fermer la discussion";
 "desktop_new_conversation" = "Nouvelle discussion";
 "desktop_sync_messages" = "Synchroniser les messages";
+"desktop_check_for_updates" = "Rechercher des mises à jour…";
 "desktop_menu_navigate" = "Navigation";
 "desktop_next_chat" = "Discussion suivante";
 "desktop_previous_chat" = "Discussion précédente";

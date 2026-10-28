@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		5A1E00012FF0000000C0FFEE /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = 5A1E00022FF0000000C0FFEE /* Sparkle */; };
 		068895AE2C1F0AADFF68BB17 /* GRPCCore in Frameworks */ = {isa = PBXBuildFile; productRef = EDA879377E8BAF2452B5BF6B /* GRPCCore */; };
 		0B30150B2702D505361B1132 /* envelope.pb.swift in Sources */ = {isa = PBXBuildFile; fileRef = EFE05E5D0228AA8842AFB44B /* envelope.pb.swift */; };
 		0FC5363023189B3889CE3C0C /* identity.pb.swift in Sources */ = {isa = PBXBuildFile; fileRef = 80B493D3DD2C627D27FA9D63 /* identity.pb.swift */; };
@@ -244,6 +245,7 @@
 				BF3DE8762F62C2000058C1AA /* GRPCNIOTransportHTTP2 in Frameworks */,
 				BF3DE8782F62C2000058C1AA /* SwiftProtobuf in Frameworks */,
 				BFCB6D962F7C4C4800C59B83 /* WebRTC in Frameworks */,
+				5A1E00012FF0000000C0FFEE /* Sparkle in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -396,6 +398,7 @@
 				BF3DE8752F62C2000058C1AA /* GRPCNIOTransportHTTP2 */,
 				BF3DE8772F62C2000058C1AA /* SwiftProtobuf */,
 				BFCB6D952F7C4C4800C59B83 /* WebRTC */,
+				5A1E00022FF0000000C0FFEE /* Sparkle */,
 			);
 			productName = "Construct Desktop";
 			productReference = BF3DE8302F62C1C30058C1AA /* Construct Desktop.app */;
@@ -537,6 +540,7 @@
 				BFF6FCFE2F4C4E5300A31F36 /* XCRemoteSwiftPackageReference "swift-protobuf" */,
 				BFCB6D912F7C4C4800C59B83 /* XCLocalSwiftPackageReference "Packages/WebRTC" */,
 				BF0A1D212FCF418600D0597C /* XCRemoteSwiftPackageReference "argmax-oss-swift" */,
+				5A1E00032FF0000000C0FFEE /* XCRemoteSwiftPackageReference "Sparkle" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = BF103A702EED889800324CEA /* Products */;
@@ -1107,13 +1111,14 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 30;
+				CURRENT_PROJECT_VERSION = 31;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = PK2473XF3P;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_INCOMING_NETWORK_CONNECTIONS = YES;
 				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
+				DESKTOP_UPDATES_ENABLED = NO;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = NO;
 				ENABLE_RESOURCE_ACCESS_BLUETOOTH = NO;
@@ -1136,7 +1141,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 0.3.20;
+				MARKETING_VERSION = 0.3.21;
 				PRODUCT_BUNDLE_IDENTIFIER = "maximeliseyev.construct-desktop";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
@@ -1159,13 +1164,14 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 30;
+				CURRENT_PROJECT_VERSION = 31;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = PK2473XF3P;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_INCOMING_NETWORK_CONNECTIONS = YES;
 				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
+				DESKTOP_UPDATES_ENABLED = YES;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = NO;
 				ENABLE_RESOURCE_ACCESS_BLUETOOTH = NO;
@@ -1188,7 +1194,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 0.3.20;
+				MARKETING_VERSION = 0.3.21;
 				PRODUCT_BUNDLE_IDENTIFIER = "maximeliseyev.construct-desktop";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
@@ -1211,13 +1217,14 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 30;
+				CURRENT_PROJECT_VERSION = 31;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = PK2473XF3P;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_INCOMING_NETWORK_CONNECTIONS = YES;
 				ENABLE_OUTGOING_NETWORK_CONNECTIONS = YES;
+				DESKTOP_UPDATES_ENABLED = NO;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = NO;
 				ENABLE_RESOURCE_ACCESS_BLUETOOTH = NO;
@@ -1240,7 +1247,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 0.3.20;
+				MARKETING_VERSION = 0.3.21;
 				PRODUCT_BUNDLE_IDENTIFIER = "maximeliseyev.construct-desktop";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
@@ -1655,9 +1662,22 @@
 				minimumVersion = 2.2.1;
 			};
 		};
+		5A1E00032FF0000000C0FFEE /* XCRemoteSwiftPackageReference "Sparkle" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/sparkle-project/Sparkle";
+			requirement = {
+				kind = exactVersion;
+				version = 2.10.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		5A1E00022FF0000000C0FFEE /* Sparkle */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 5A1E00032FF0000000C0FFEE /* XCRemoteSwiftPackageReference "Sparkle" */;
+			productName = Sparkle;
+		};
 		294D54FD21A4550FBEE9D6E7 /* SwiftProtobuf */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = BFF6FCFE2F4C4E5300A31F36 /* XCRemoteSwiftPackageReference "swift-protobuf" */;

@@ -1320,6 +1320,7 @@
 "desktop_close_chat" = "チャットを閉じる";
 "desktop_new_conversation" = "新しいチャット";
 "desktop_sync_messages" = "メッセージを同期";
+"desktop_check_for_updates" = "アップデートを確認…";
 "desktop_menu_navigate" = "移動";
 "desktop_next_chat" = "次のチャット";
 "desktop_previous_chat" = "前のチャット";
