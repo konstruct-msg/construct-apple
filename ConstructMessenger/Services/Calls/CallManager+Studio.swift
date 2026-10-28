@@ -284,6 +284,9 @@ extension CallManager {
             guard let self, let run, let active, role == .guest else { return }
             self.showStudioScreen(shown, run: run, for: active)
         }
+        // A guest that crashed and came back into the call has none of this studio's channels:
+        // the host's program and screen would go nowhere, the guest would never say it left.
+        webrtc.onPeerRestarted = { [weak run] in run?.link.handle(.channelClosed) }
         run.link.onEnd = { [weak self, weak run, weak active] reason in
             Log.info("Studio ended: \(reason)", category: "Calls")
             guard let self, let run, let active else { return }
@@ -431,6 +434,7 @@ extension CallManager {
         guard let webrtc = active.webrtc as? WebRTCSession else { return }
         webrtc.setStudioReceiver(nil)
         webrtc.onStudioChannelsOpen = nil
+        webrtc.onPeerRestarted = nil
         webrtc.closeStudioChannels()
         webrtc.releaseStudioScreenTrack()
     }
