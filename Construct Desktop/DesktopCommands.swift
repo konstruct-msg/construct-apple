@@ -32,6 +32,7 @@ import AppKit
 struct ConstructCommands: Commands {
 
     let bridge: DesktopCommandBridge
+    @Environment(\.openWindow) private var openWindow
 
     var body: some Commands {
 
@@ -141,6 +142,10 @@ struct ConstructCommands: Commands {
                     get: { call.talkback.mode == .alwaysOn },
                     set: { call.setTalkbackMode($0 ? .alwaysOn : .holdToTalk) }
                 ))
+                Button(NSLocalizedString("studio_check_menu", comment: "")) {
+                    openWindow(id: DesktopWindowID.studioCheck)
+                }
+                .disabled(live)
             }
         }
     }
