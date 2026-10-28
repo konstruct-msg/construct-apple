@@ -32,6 +32,8 @@ final class DesktopCallModel {
     private(set) var studioSource: StudioSource?
     /// Studio sends the DAW's windows besides its sound. Kept per Mac.
     private(set) var studioSendsScreen = StudioScreenChoice.stored()
+    /// The Studio check window is open: the talk key is taken there too, to be tried.
+    private(set) var studioCheckOpen = false
 
     private init() {
         StudioTalkKey.shared.onChange = { [weak self] held in self?.setTalkHeld(held) }
@@ -98,7 +100,8 @@ final class DesktopCallModel {
     /// The microphone as mute, Studio and talkback together say. Called on each of their changes;
     /// the talk key is taken only while it is what opens the microphone.
     func applyMicrophone() {
-        StudioTalkKey.shared.isRegistered = studioOn && talkback.mode == .holdToTalk && phase?.isLive == true
+        let inStudio = studioOn && phase?.isLive == true
+        StudioTalkKey.shared.isRegistered = talkback.mode == .holdToTalk && (inStudio || studioCheckOpen)
         CallManager.shared.setMuted(!microphoneOpen)
     }
 
@@ -129,6 +132,12 @@ final class DesktopCallModel {
     func setStudioSource(_ source: StudioSource) {
         source.store()
         studioSource = source
+    }
+
+    func setStudioCheckOpen(_ open: Bool) {
+        studioCheckOpen = open
+        if !open { talkback.held = false }
+        applyMicrophone()
     }
 
     func setStudioSendsScreen(_ sends: Bool) {
@@ -176,7 +185,7 @@ final class DesktopCallModel {
         connectedSince = nil
         muted = false
         talkback.held = false
-        StudioTalkKey.shared.isRegistered = false
+        StudioTalkKey.shared.isRegistered = talkback.mode == .holdToTalk && studioCheckOpen
     }
 }
 

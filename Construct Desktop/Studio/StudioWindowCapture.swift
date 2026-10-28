@@ -20,10 +20,6 @@ import WebRTC
 
 @MainActor
 final class StudioWindowCapture: StudioScreenCapture {
-    struct Failure: Error, CustomStringConvertible {
-        let description: String
-    }
-
     private let bundleIdentifier: String
     private(set) var sourceDescription: String
     private var stream: SCStream?
@@ -40,20 +36,57 @@ final class StudioWindowCapture: StudioScreenCapture {
         self.sourceDescription = bundleIdentifier
     }
 
-    func start(into feed: StudioScreenFeed) async throws {
-        let content = try await SCShareableContent.excludingDesktopWindows(true, onScreenWindowsOnly: true)
+    /// What is captured: the DAW, its windows on screen, and the display its largest one is on.
+    struct Target {
+        let app: SCRunningApplication
+        let windows: [SCWindow]
+        let display: SCDisplay
+    }
+
+    /// Why there is no target, for the check before a call.
+    enum Unavailable: Error, CustomStringConvertible {
+        case permissionMissing
+        case notRunning(String)
+        case noWindow(String)
+        case noDisplay
+
+        var description: String {
+            switch self {
+            case .permissionMissing: "no screen-recording permission"
+            case .notRunning(let id): "\(id) is not running"
+            case .noWindow(let name): "\(name) has no window on screen"
+            case .noDisplay: "no display to capture"
+            }
+        }
+    }
+
+    static func target(bundleIdentifier: String) async throws -> Target {
+        // Asked for, not checked first: the first call is what makes the system ask the person.
+        let content: SCShareableContent
+        do {
+            content = try await SCShareableContent.excludingDesktopWindows(true, onScreenWindowsOnly: true)
+        } catch {
+            if !CGPreflightScreenCaptureAccess() { throw Unavailable.permissionMissing }
+            throw error
+        }
         guard let app = content.applications.first(where: { $0.bundleIdentifier == bundleIdentifier }) else {
-            throw Failure(description: "\(bundleIdentifier) is not running")
+            throw Unavailable.notRunning(bundleIdentifier)
         }
         let windows = content.windows.filter { $0.owningApplication?.bundleIdentifier == bundleIdentifier && $0.isOnScreen }
-        guard let main = windows.max(by: { Self.area($0.frame) < Self.area($1.frame) }) else {
-            throw Failure(description: "\(app.applicationName) has no window on screen")
+        guard let main = windows.max(by: { area($0.frame) < area($1.frame) }) else {
+            throw Unavailable.noWindow(app.applicationName)
         }
         guard let display = content.displays.max(by: {
-            Self.area($0.frame.intersection(main.frame)) < Self.area($1.frame.intersection(main.frame))
+            area($0.frame.intersection(main.frame)) < area($1.frame.intersection(main.frame))
         }) else {
-            throw Failure(description: "no display to capture")
+            throw Unavailable.noDisplay
         }
+        return Target(app: app, windows: windows, display: display)
+    }
+
+    func start(into feed: StudioScreenFeed) async throws {
+        let target = try await Self.target(bundleIdentifier: bundleIdentifier)
+        let (app, windows, display) = (target.app, target.windows, target.display)
 
         let filter = SCContentFilter(display: display, including: [app], exceptingWindows: [])
         let scale = CGFloat(filter.pointPixelScale)
