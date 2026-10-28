@@ -20,6 +20,9 @@ struct DesktopMessageInputView: View {
     let editingMessage: TranscriptRow?
     let onSend: ([MediaAttachment], [URL]) -> Void
     var onSendVoice: ((URL, TimeInterval, [Float]) -> Void)? = nil
+    /// A tap in the sticker popover sends at once, as the iOS picker's Stickers tab does.
+    /// nil hides the button.
+    var onSendSticker: ((StickerReference) -> Void)? = nil
     let onCancelReply: () -> Void
     let onCancelEdit: () -> Void
 
@@ -27,6 +30,8 @@ struct DesktopMessageInputView: View {
     @State private var showAttachmentMenu = false
     @State private var showPhotoPicker = false
     @State private var showFilePicker = false
+    @State private var showStickers = false
+    @State private var stickers = StickerLibrary()
     @StateObject private var attachments = MessageInputAttachmentStore()
     @StateObject private var audioRecorder = AudioRecorderService.shared
     @State private var showMicPermissionAlert = false
@@ -160,7 +165,8 @@ struct DesktopMessageInputView: View {
                 onSend: sendMessage,
                 onStartVoice: startVoiceRecording,
                 onPasteAttachment: attachFromClipboard,
-                focusOnAppear: true
+                focusOnAppear: true,
+                accessory: stickerButton
             )
         }
         .padding(.horizontal, 16)
@@ -199,6 +205,33 @@ struct DesktopMessageInputView: View {
             selection: $selectedPhotos,
             maxSelectionCount: 99,
             matching: .images
+        )
+    }
+
+    /// Stickers have their own button on Desktop: a click away, where on iOS they share the
+    /// attachment sheet. Hidden while editing — an edit changes text, it cannot become a sticker.
+    private var stickerButton: AnyView? {
+        guard let onSendSticker, editingMessage == nil else { return nil }
+        return AnyView(
+            Button { showStickers = true } label: {
+                Image(systemName: "face.smiling")
+                    .font(CTIcon.font(CTIcon.nav, weight: .regular))
+                    .foregroundColor(Color.CT.textDim)
+                    .frame(width: ChatUIConstants.InputBar.height, height: ChatUIConstants.InputBar.height)
+                    .contentShape(Circle())
+            }
+            .buttonStyle(.plain)
+            .help(NSLocalizedString("media_picker_tab_stickers", comment: ""))
+            .accessibilityLabel(Text(LocalizedStringKey("media_picker_tab_stickers")))
+            .accessibilityIdentifier(A11y.Chat.stickers)
+            .popover(isPresented: $showStickers, arrowEdge: .top) {
+                StickerPickerView(library: stickers) { ref in
+                    showStickers = false
+                    onSendSticker(ref)
+                }
+                .padding(.top, CTLayout.inlinePad)
+                .frame(width: 360, height: 420)
+            }
         )
     }
 
