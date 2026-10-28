@@ -1070,6 +1070,7 @@
 
 "backup_error_invalid_mnemonic" = "Invalid recovery phrase. Check all 12 words and try again.";
 "backup_error_invalid_file" = "This is not a valid Konstruct backup, or the recovery phrase is incorrect.";
+"backup_error_unsupported_version" = "This backup was made by a version of Konstruct that this one cannot read. Nothing on this device has changed.";
 
 // Transfer (P2P nearby)
 "transfer_send_nearby" = "Send to a nearby device";

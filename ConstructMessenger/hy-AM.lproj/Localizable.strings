@@ -1070,6 +1070,7 @@
 
 "backup_error_invalid_mnemonic" = "Անվավեր վերականգնման արտահայտություն։ Ստուգեք բոլոր 12 բառերը և փորձեք նորից։";
 "backup_error_invalid_file" = "Սա վավեր Konstruct պահուստ չէ, կամ վերականգնման արտահայտությունը սխալ է։";
+"backup_error_unsupported_version" = "Այս պահուստը ստեղծվել է Konstruct-ի այնպիսի տարբերակով, որը այս տարբերակը չի կարող կարդալ։ Այս սարքում ոչինչ չի փոխվել։";
 
 // Transfer (P2P nearby)
 "transfer_send_nearby" = "Ուղարկել մոտակա սարքին";
