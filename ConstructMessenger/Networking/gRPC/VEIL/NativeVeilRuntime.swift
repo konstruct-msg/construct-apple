@@ -120,7 +120,7 @@ final class NativeVeilRuntime: VeilProxyRuntime {
             // Surface the real failing stage (Rust collapses everything to rc=-1).
             var errBuf = [CChar](repeating: 0, count: 256)
             let errLen = veil_last_error(&errBuf, errBuf.count)
-            let reason = errLen > 0 ? String(cString: errBuf) : nil
+            let reason = errLen > 0 ? String(decoding: errBuf.prefix { $0 != 0 }.map(UInt8.init(bitPattern:)), as: UTF8.self) : nil
             Log.error("VEIL FFI start failed rc=\(rc) port=\(out.port) → \(reason ?? "(no detail)")", category: "VEIL")
             return .failure(rc == 2 ? .networkUnreachable : .startFailed(code: rc, reason: reason))
         }
