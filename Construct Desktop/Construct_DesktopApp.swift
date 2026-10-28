@@ -15,6 +15,7 @@ enum DesktopWindowID {
     static let synaps = "synaps"
     static let call = "call"
     static let studioScreen = "studio-screen"
+    static let studioCheck = "studio-check"
 }
 
 @main
@@ -142,6 +143,14 @@ struct Construct_DesktopApp: App {
                 .frame(minWidth: 480, minHeight: 270)
         }
         .defaultSize(width: 1280, height: 760)
+
+        // Studio's check before a call: the DAW's sound, windows and the talkback microphone, on
+        // this Mac alone. Opened from the Call menu.
+        Window(LocalizedStringKey("studio_check_window_title"), id: DesktopWindowID.studioCheck) {
+            DesktopStudioCheckView()
+                .frame(minWidth: 460, minHeight: 520)
+        }
+        .defaultSize(width: 520, height: 720)
 
         // MARK: - macOS Settings window (⌘,)
         Settings {
