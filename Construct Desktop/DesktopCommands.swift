@@ -33,8 +33,18 @@ struct ConstructCommands: Commands {
 
     let bridge: DesktopCommandBridge
     @Environment(\.openWindow) private var openWindow
+    let updater: DesktopUpdater
 
     var body: some Commands {
+
+        if updater.isEnabled {
+            CommandGroup(after: .appInfo) {
+                Button(NSLocalizedString("desktop_check_for_updates", comment: "")) {
+                    updater.checkForUpdates()
+                }
+                .disabled(!updater.canCheckForUpdates)
+            }
+        }
 
         // Replace the default "New Window" File menu
         CommandGroup(replacing: .newItem) {

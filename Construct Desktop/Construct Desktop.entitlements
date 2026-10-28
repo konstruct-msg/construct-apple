@@ -8,5 +8,11 @@
 	<array>
 		<string>$(AppIdentifierPrefix)maximeliseyev.construct-desktop</string>
 	</array>
+	<!-- Sparkle's installer XPC services, reached from the sandbox. -->
+	<key>com.apple.security.temporary-exception.mach-lookup.global-name</key>
+	<array>
+		<string>$(PRODUCT_BUNDLE_IDENTIFIER)-spks</string>
+		<string>$(PRODUCT_BUNDLE_IDENTIFIER)-spki</string>
+	</array>
 </dict>
 </plist>
