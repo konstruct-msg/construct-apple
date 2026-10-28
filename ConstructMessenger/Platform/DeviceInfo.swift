@@ -43,7 +43,7 @@ enum DeviceInfo {
         sysctlbyname(name, nil, &size, nil, 0)
         var value = [CChar](repeating: 0, count: size)
         sysctlbyname(name, &value, &size, nil, 0)
-        return String(cString: value)
+        return String(decoding: value.prefix { $0 != 0 }.map(UInt8.init(bitPattern:)), as: UTF8.self)
     }
 
     /// Stable per-install identifier (UIDevice on iOS/Catalyst; nil on macOS — use Keychain).
