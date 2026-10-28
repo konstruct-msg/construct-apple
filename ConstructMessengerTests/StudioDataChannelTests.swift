@@ -120,6 +120,28 @@ final class StudioDataChannelTests: XCTestCase {
         XCTAssertTrue(program.allSatisfy { $0.count == 4_096 })
     }
 
+    /// A long studio: every message reaches the same receiver at the same depth. Read out of its
+    /// lock as a bare closure, the receiver came back wrapped in one more reabstraction thunk per
+    /// message, and the guest's signalling thread ran out of stack after ~5,600 packets — two
+    /// minutes of program (Desktop 0.3.18, 2026-10-28).
+    ///
+    /// Mutation: keep the receiver as a bare optional closure in the `Mutex` — this crashes.
+    func testALongStudioKeepsReceiving() async throws {
+        _ = try await connectCall()
+        _ = try await startStudio()
+
+        let messages = 20_000
+        let count = Mutex(0)
+        let all = expectation(description: "all received")
+        callee.setStudioReceiver { _, _ in
+            if count.withLock({ $0 += 1; return $0 }) == messages { all.fulfill() }
+        }
+        for n in 0..<messages {
+            XCTAssertTrue(caller.sendStudio(Data([UInt8(n & 0xFF)]), on: .program))
+        }
+        await fulfillment(of: [all], timeout: 60)
+    }
+
     /// The guest answers on the same channels.
     func testTheCalleeCanSendBack() async throws {
         _ = try await connectCall()
