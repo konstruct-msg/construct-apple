@@ -58,6 +58,7 @@ struct ChatView: View {
     @State var forwardFailed = false
     @Environment(ChatsViewModel.self) var chatsViewModel
     @State var galleryStartItem: GalleryStartItem?  // media gallery presenter
+    @State var stickerPackPreview: StickerPackPreviewItem?
 
     // Drop target for drag-and-drop from Finder (macOS) over the whole chat area
     @State private var chatDropImages: [PlatformImage] = []
@@ -322,6 +323,17 @@ struct ChatView: View {
                 setComposeReplyFocus(messageId: msg.id)
             }
             .sheetNavigation()
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
+        }
+        .sheet(item: $stickerPackPreview) { item in
+            StickerPackPreviewView(packID: item.pack) { ref in
+                viewModel.sendSticker(ref, replyTo: replyingTo)
+                replyingTo = nil
+                replyQuoteText = nil
+                clearReplyFocus(animated: true)
+                viewport.followExplicitly()
+            }
             .presentationDetents([.medium, .large])
             .presentationDragIndicator(.visible)
         }

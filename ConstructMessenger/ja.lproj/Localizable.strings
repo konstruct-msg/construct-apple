@@ -574,6 +574,8 @@
 "sticker_catalog_failed" = "パックを読み込めませんでした。";
 "sticker_catalog_retry" = "再試行";
 "sticker_pack_remove" = "パックを削除";
+"sticker_pack_add" = "パックを追加";
+"sticker_pack_unavailable" = "このパックは現在利用できません。";
 
 // MARK: - Attachments
 "attach" = "添付";

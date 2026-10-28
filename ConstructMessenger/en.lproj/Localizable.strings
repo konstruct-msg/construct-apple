@@ -632,6 +632,8 @@
 "sticker_catalog_failed" = "Could not load packs.";
 "sticker_catalog_retry" = "Retry";
 "sticker_pack_remove" = "Remove pack";
+"sticker_pack_add" = "Add pack";
+"sticker_pack_unavailable" = "This pack is not available right now.";
 
 // MARK: - Attachments
 "attach" = "Attach";

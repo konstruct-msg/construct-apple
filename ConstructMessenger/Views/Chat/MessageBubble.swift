@@ -21,6 +21,8 @@ struct MessageBubble: View {
     let onEnterSelectMode: ((TranscriptRow) -> Void)?
     /// Media open — second argument is the album tile index (0 for single-item).
     let onTapMedia: ((TranscriptRow, Int) -> Void)?
+    /// A tap on a sticker: the host opens its pack (`StickerPackPreviewView`).
+    let onTapSticker: ((StickerReference) -> Void)?
     let onEdit: ((TranscriptRow) -> Void)?
     /// Called when the user chooses "Quote & Reply" — provides the message and the selected quote text.
     let onReplyWithQuote: ((TranscriptRow, String) -> Void)?
@@ -44,6 +46,7 @@ struct MessageBubble: View {
         onSelect: ((TranscriptRow) -> Void)? = nil,
         onEnterSelectMode: ((TranscriptRow) -> Void)? = nil,
         onTapMedia: ((TranscriptRow, Int) -> Void)? = nil,
+        onTapSticker: ((StickerReference) -> Void)? = nil,
         onEdit: ((TranscriptRow) -> Void)? = nil,
         onReplyWithQuote: ((TranscriptRow, String) -> Void)? = nil,
         onJumpToReply: ((TranscriptRow) -> Void)? = nil,
@@ -60,6 +63,7 @@ struct MessageBubble: View {
         self.onSelect = onSelect
         self.onEnterSelectMode = onEnterSelectMode
         self.onTapMedia = onTapMedia
+        self.onTapSticker = onTapSticker
         self.onEdit = onEdit
         self.onReplyWithQuote = onReplyWithQuote
         self.onJumpToReply = onJumpToReply

@@ -310,6 +310,9 @@ extension ChatView {
                             onTapMedia: { msg, itemIndex in
                                 galleryStartItem = GalleryStartItem(id: msg.id, itemIndex: itemIndex)
                             },
+                            onTapSticker: { ref in
+                                stickerPackPreview = StickerPackPreviewItem(pack: ref.pack)
+                            },
                             onEdit: { msg in
                                 viewModel.editingMessage = msg
                             },
