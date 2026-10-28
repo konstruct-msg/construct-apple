@@ -194,6 +194,9 @@ extension CallManager {
             Log.error("Studio: nothing on this machine can capture the program", category: "Calls")
             return
         }
+        // A second studio in this call makes its channels on the ids of the first.
+        await webrtc.studioChannelsClosed()
+        guard self.active === active, active.studio == nil else { return }
         studioProblemInCall = nil
         let run = makeStudioRun(role: .host, on: webrtc, for: active)
         if screen, Self.makeStudioScreen != nil {
@@ -225,9 +228,12 @@ extension CallManager {
 
     /// Guest: the peer offered Studio; make our channels before the answer, so the answer accepts
     /// them. The invite follows on `studio-control`.
-    func joinStudioIfOffered(sdp: String, on webrtc: any WebRTCSessionProtocol) {
+    func joinStudioIfOffered(sdp: String, on webrtc: any WebRTCSessionProtocol) async {
         guard StudioFeature.isEnabled, StudioOffer.carriesStudio(sdp: sdp), let active,
-              let webrtc = webrtc as? WebRTCSession, !webrtc.studioChannelsOpen, active.studio == nil else { return }
+              let webrtc = webrtc as? WebRTCSession else { return }
+        // A second studio in this call: the channels of the first may still be closing.
+        await webrtc.studioChannelsClosed()
+        guard self.active === active, !webrtc.studioChannelsOpen, active.studio == nil else { return }
         let run = makeStudioRun(role: .guest, on: webrtc, for: active)
         do {
             webrtc.onStudioChannelsOpen = { Log.info("Studio: channels open as guest", category: "Calls") }
@@ -428,6 +434,6 @@ extension CallManager {
 }
 #else
 extension CallManager {
-    func joinStudioIfOffered(sdp: String, on webrtc: any WebRTCSessionProtocol) {}
+    func joinStudioIfOffered(sdp: String, on webrtc: any WebRTCSessionProtocol) async {}
 }
 #endif
