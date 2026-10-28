@@ -5,7 +5,12 @@
 //  `Chat.messages` named `Chat` as its inverse's entity from model 9 to 11, so it had no inverse
 //  at all: adding a message to a chat's set left `message.chat` unset, and momc warned on every
 //  build. A model version already on devices cannot be edited — the entity hash changes and the
-//  store stops opening — so the fix is version 12, and old versions keep the warning.
+//  store stops opening — so the fix was version 12.
+//
+//  Versions 1–14 were removed on 2026-10-28, when every install was on 15 (since build 695,
+//  2026-10-04). What could still carry an older store is a `.ctbackup` file or a Nearby
+//  transfer; staging refuses those (`LocalBackupService.stageTransferPayload`), because applied,
+//  such a store fails to open and the store's recovery deletes it.
 //
 
 import CoreData
@@ -14,13 +19,16 @@ import XCTest
 
 final class CoreDataModelTests: XCTestCase {
 
-    private var modelBundle: URL {
-        get throws { try XCTUnwrap(Bundle.main.url(forResource: "ConstructMessenger", withExtension: "momd")) }
+    private var scratch: URL!
+
+    override func setUpWithError() throws {
+        scratch = FileManager.default.temporaryDirectory
+            .appendingPathComponent("CoreDataModelTests-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: scratch, withIntermediateDirectories: true)
     }
 
-    private func model(_ version: String) throws -> NSManagedObjectModel {
-        let url = try modelBundle.appendingPathComponent("\(version).mom")
-        return try XCTUnwrap(NSManagedObjectModel(contentsOf: url), version)
+    override func tearDownWithError() throws {
+        try? FileManager.default.removeItem(at: scratch)
     }
 
     /// Every relationship of the current model has an inverse that names it back.
@@ -35,38 +43,74 @@ final class CoreDataModelTests: XCTestCase {
         }
     }
 
-    /// Model 14 adds the profile version to `User` (`profileEditedAtMs` with a default,
-    /// `pendingAvatarRef`, `pendingAvatarSince` optional): a store written by 13 opens under it
-    /// without a mapping model.
-    /// 15 adds the sealed transcript (TODO 115); a 14 store must open without a mapping model.
-    func testVersion14MigratesLightweight() throws {
-        let current = PersistenceController(inMemory: true).container.managedObjectModel
-        XCTAssertNoThrow(
-            try NSMappingModel.inferredMappingModel(forSourceModel: model("ConstructMessenger 14"), destinationModel: current)
+    /// Writes an SQLite store of `model` with no WAL, so the file alone is the store.
+    private func writeStore(of model: NSManagedObjectModel, named name: String) throws -> URL {
+        let url = scratch.appendingPathComponent("\(name).sqlite")
+        let coordinator = NSPersistentStoreCoordinator(managedObjectModel: model)
+        let store = try coordinator.addPersistentStore(
+            ofType: NSSQLiteStoreType, configurationName: nil, at: url,
+            options: [NSSQLitePragmasOption: ["journal_mode": "DELETE"]]
         )
+        try coordinator.remove(store)
+        return url
     }
 
-    func testVersion13MigratesLightweight() throws {
-        let current = PersistenceController(inMemory: true).container.managedObjectModel
-        XCTAssertNoThrow(
-            try NSMappingModel.inferredMappingModel(forSourceModel: model("ConstructMessenger 13"), destinationModel: current)
-        )
+    /// A schema the bundle does not carry — what a pre-15 backup is to this build.
+    private var foreignModel: NSManagedObjectModel {
+        let entity = NSEntityDescription()
+        entity.name = "Chat"
+        let attribute = NSAttributeDescription()
+        attribute.name = "legacyOnly"
+        attribute.attributeType = .stringAttributeType
+        attribute.isOptional = true
+        entity.properties = [attribute]
+        let model = NSManagedObjectModel()
+        model.entities = [entity]
+        return model
     }
 
-    /// Model 13 adds `ServerMessageId` and nothing else: a store written by 12 opens under it
-    /// without a mapping model.
-    func testVersion12MigratesLightweight() throws {
+    func testCanOpenStore_CurrentModel() throws {
         let current = PersistenceController(inMemory: true).container.managedObjectModel
-        XCTAssertNoThrow(
-            try NSMappingModel.inferredMappingModel(forSourceModel: model("ConstructMessenger 12"), destinationModel: current)
-        )
+        XCTAssertTrue(PersistenceController.canOpenStore(at: try writeStore(of: current, named: "current")))
     }
 
-    /// A store written by version 11 opens under the current model without a mapping model.
-    func testVersion11MigratesLightweight() throws {
-        let current = PersistenceController(inMemory: true).container.managedObjectModel
-        XCTAssertNoThrow(
-            try NSMappingModel.inferredMappingModel(forSourceModel: model("ConstructMessenger 11"), destinationModel: current)
-        )
+    func testCanOpenStore_ModelTheBundleDoesNotCarry() throws {
+        XCTAssertFalse(PersistenceController.canOpenStore(at: try writeStore(of: foreignModel, named: "foreign")))
+    }
+
+    func testCanOpenStore_NotAStore() throws {
+        let url = scratch.appendingPathComponent("garbage.sqlite")
+        try Data("not a database".utf8).write(to: url)
+        XCTAssertFalse(PersistenceController.canOpenStore(at: url))
+    }
+
+    /// Staging a backup whose store this build cannot open throws, and leaves no restore pending:
+    /// otherwise the next launch would replace the device's store with it and then delete both.
+    @MainActor
+    func testStagingRefusesStoreOfUnknownVersion() throws {
+        let defaults = UserDefaults.standard
+        let key = LocalBackupService.pendingRestoreKey
+        XCTAssertFalse(defaults.bool(forKey: key), "a restore is already pending in the test host")
+
+        let store = try Data(contentsOf: try writeStore(of: foreignModel, named: "backup"))
+        let manifest = try JSONSerialization.data(withJSONObject: [
+            "version": 1, "createdAt": 0, "coreSQLiteSize": store.count, "keyStoreSQLiteSize": 1,
+        ])
+        var payload = Data()
+        for blob in [manifest, store, Data(), Data([0])] {
+            var length = UInt64(blob.count).littleEndian
+            payload.append(Data(bytes: &length, count: 8))
+            payload.append(blob)
+        }
+
+        XCTAssertThrowsError(try LocalBackupService.shared.stageTransferPayload(payload)) {
+            guard case BackupError.unsupportedVersion = $0 else {
+                return XCTFail("expected unsupportedVersion, got \($0)")
+            }
+        }
+        XCTAssertFalse(defaults.bool(forKey: key))
+        let staging = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("ct_restore")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: staging.path))
     }
 }

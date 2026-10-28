@@ -1019,6 +1019,7 @@
 "backup_restore_success_message" = "Votre sauvegarde a été vérifiée et préparée. Fermez et rouvrez l’app pour terminer la restauration.";
 "backup_error_invalid_mnemonic" = "Phrase de récupération invalide. Vérifiez les 12 mots et réessayez.";
 "backup_error_invalid_file" = "Ce n’est pas une sauvegarde Konstruct valide, ou la phrase de récupération est incorrecte.";
+"backup_error_unsupported_version" = "Cette sauvegarde a été créée par une version de Konstruct que celle-ci ne peut pas lire. Rien n’a été modifié sur cet appareil.";
 "transfer_send_nearby" = "Envoyer à un appareil proche";
 "transfer_receive_nearby" = "Recevoir d’un appareil proche";
 "transfer_send_title" = "Envoyer la sauvegarde";
