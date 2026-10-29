@@ -41,7 +41,7 @@
 # ./build_transport_lib.sh --all --dist); an x86_64 DMG needs both.
 #
 # Updates (Sparkle, Beta only for now): --publish puts the DMGs in a pre-release
-# desktop-v<version>-<build> of konstruct-msg/construct-ios and adds them to the feeds,
+# desktop-v<version>-<build> of konstruct-msg/construct-apple and adds them to the feeds,
 # appcast-<arch>.xml, assets of the fixed release desktop-beta-feed
 # (DesktopUpdateFeed.swift reads them). Each enclosure carries the EdDSA signature
 # sign_update makes with the key in the login keychain, account konstruct-desktop
@@ -62,7 +62,7 @@ SCHEME="Construct Desktop"
 PRODUCT="Construct Desktop"
 OUT="build/desktop"
 STAGING="$OUT/dmg-staging"
-REPO="konstruct-msg/construct-ios"
+REPO="konstruct-msg/construct-apple"
 FEED_TAG="desktop-beta-feed"
 SPARKLE_ACCOUNT="konstruct-desktop"
 

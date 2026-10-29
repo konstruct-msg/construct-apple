@@ -19,8 +19,10 @@ enum DesktopUpdateFeed {
         case x86_64
     }
 
-    /// The release that carries the feeds. Its tag never changes; its assets do.
-    static let feedRelease = "https://github.com/konstruct-msg/construct-ios/releases/download/desktop-beta-feed"
+    /// The release that carries the feeds. Its tag never changes; its assets do. The repository
+    /// was construct-ios until 2026-10-29; 0.3.21 still asks there and GitHub redirects it, so
+    /// no repository may ever take that name again.
+    static let feedRelease = "https://github.com/konstruct-msg/construct-apple/releases/download/desktop-beta-feed"
 
     static func url(for arch: Arch) -> URL {
         URL(string: "\(feedRelease)/appcast-\(arch.rawValue).xml")!
