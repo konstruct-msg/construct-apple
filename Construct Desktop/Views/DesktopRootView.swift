@@ -30,7 +30,6 @@ struct DesktopRootView: View {
     @Environment(\.openSettings) private var openSettings
     @Environment(\.openWindow) private var openWindow
     @Environment(\.dismissWindow) private var dismissWindow
-    @AppStorage("appTheme") private var appTheme: AppTheme = .dark
     @AppStorage(OrientationStore.completedUserIdsKey) private var orientationCompletedUserIds = ""
 
     @State private var showAddContact = false
@@ -117,7 +116,7 @@ struct DesktopRootView: View {
             }
         }
         .errorToast()
-        .preferredColorScheme(appTheme.colorScheme)
+        .desktopTheme()
         // The People window outlives a sign-out and its @FetchRequest keeps faults into the store
         // that was just replaced; the next redraw raises. Close it with the data it was showing.
         .onReceive(NotificationCenter.default.publisher(for: .localStoreReplaced).receive(on: DispatchQueue.main)) { _ in
@@ -265,6 +264,14 @@ struct DesktopRootView: View {
                         chatsViewModel.chatToOpen = source.chatId
                     }
                 }
+                // The call, while it holds the microphone — above the media banner.
+                .safeAreaInset(edge: .top, spacing: 0) {
+                    if CallsFeature.isEnabled {
+                        DesktopCallBar(model: DesktopCallModel.shared) {
+                            openWindow(id: DesktopWindowID.call)
+                        }
+                    }
+                }
         }
         .navigationSplitViewStyle(.balanced)
         .background(Color.CT.bg)
@@ -277,25 +284,26 @@ struct DesktopRootView: View {
             .onReceive(NotificationCenter.default.publisher(for: .openSynapsTab)) { _ in
                 openWindow(id: DesktopWindowID.synaps)
             }
-            // Incoming call banner — bottom-center
-            .overlay(alignment: .bottom) {
+            // Incoming call panel — top-trailing, over everything
+            .overlay(alignment: .topTrailing) {
                 if CallsFeature.isEnabled, case .incoming(let session) = callManager.state {
-                    DesktopIncomingCallView(session: session)
+                    DesktopIncomingCallPanel(session: session)
                         .zIndex(100)
-                        .animation(.spring(response: 0.35, dampingFraction: 0.85), value: isIncomingState)
                 }
             }
-            // In-call controls strip — bottom-right
-            .overlay(alignment: .bottomTrailing) {
-                if CallsFeature.isEnabled, isActiveOrConnecting, let session = activeCallSession {
-                    DesktopInCallView(
-                        session: session,
-                        isConnecting: isConnectingState,
-                        endReason: callEndReason
-                    )
-                    .zIndex(100)
-                    .animation(.spring(response: 0.35, dampingFraction: 0.85), value: isActiveOrConnecting)
-                }
+            .animation(.spring(response: 0.35, dampingFraction: 0.85), value: isIncomingState)
+            .onChange(of: callManager.state, initial: true) { _, state in
+                syncCall(state: state, quality: callManager.callQuality)
+            }
+            .onChange(of: StudioScreenPresenter.shared.renderer != nil) { _, shown in
+                if shown { openWindow(id: DesktopWindowID.studioScreen) }
+            }
+            .onChange(of: callManager.callQuality) { _, quality in
+                syncCall(state: callManager.state, quality: quality)
+            }
+            // Studio on or off changes what opens the microphone (talkback).
+            .onChange(of: callManager.studioIsOn) { _, _ in
+                DesktopCallModel.shared.applyMicrophone()
             }
             // Add Contact sheet (⌘⌥N)
             .sheet(isPresented: $showAddContact) {
@@ -399,31 +407,15 @@ struct DesktopRootView: View {
         return false
     }
 
-    private var isActiveOrConnecting: Bool {
-        switch callManager.state {
-        case .dialing, .active, .connecting, .ringing, .ended: return true
-        default: return false
+    /// Feed the call model and open the call window when a call starts here or is answered.
+    private func syncCall(state: CallState, quality: CallQuality) {
+        guard CallsFeature.isEnabled else { return }
+        let before = DesktopCallModel.shared.phase
+        DesktopCallModel.shared.sync(state: state, quality: quality)
+        let after = DesktopCallModel.shared.phase
+        if before?.isLive != true, after?.isLive == true {
+            openWindow(id: DesktopWindowID.call)
         }
-    }
-
-    private var isConnectingState: Bool {
-        switch callManager.state {
-        case .dialing, .connecting, .ringing: return true
-        default: return false
-        }
-    }
-
-    private var activeCallSession: CallSession? {
-        switch callManager.state {
-        case .dialing(let s), .active(let s), .connecting(let s), .ringing(let s): return s
-        case .ended(let s, _): return s
-        default: return nil
-        }
-    }
-
-    private var callEndReason: CallEndReason? {
-        if case .ended(_, let reason) = callManager.state { return reason }
-        return nil
     }
 
     // MARK: - Drag & Drop into chat
