@@ -12,9 +12,9 @@ import XCTest
 
 final class MacOnScreenTests: XCTestCase {
 
-    private func window(main: Bool = true, visible: Bool = true, minimised: Bool = false,
+    private func window(chats: Bool = true, visible: Bool = true, minimised: Bool = false,
                         unoccluded: Bool = true) -> MacOnScreen.Window {
-        .init(canBecomeMain: main, isVisible: visible, isMiniaturized: minimised, isUnoccluded: unoccluded)
+        .init(showsChats: chats, isVisible: visible, isMiniaturized: minimised, isUnoccluded: unoccluded)
     }
 
     func testFrontmostWithAShownWindowIsOnScreen() {
@@ -35,11 +35,13 @@ final class MacOnScreenTests: XCTestCase {
         XCTAssertFalse(MacOnScreen.isOnScreen(appIsActive: true, windows: []))
     }
 
-    /// A panel that cannot become main (a popover, the ringer) does not show a chat.
-    func testAPanelAloneIsNotOnScreen() {
-        XCTAssertFalse(MacOnScreen.isOnScreen(appIsActive: true, windows: [window(main: false)]))
+    /// The call or Studio window in front, the chats window minimised: the chat is not seen.
+    /// Mutation: drop `$0.showsChats &&` — this reddens.
+    func testAnotherWindowOfTheAppDoesNotShowTheChat() {
+        XCTAssertFalse(MacOnScreen.isOnScreen(appIsActive: true,
+                                              windows: [window(chats: false), window(minimised: true)]))
         XCTAssertTrue(MacOnScreen.isOnScreen(appIsActive: true,
-                                             windows: [window(main: false), window(minimised: true), window()]))
+                                             windows: [window(chats: false), window(minimised: true), window()]))
     }
 
     /// The banner decision with the Mac's answer: the open chat makes a banner once it is hidden.

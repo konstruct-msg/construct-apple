@@ -101,7 +101,9 @@ struct DesktopSettingsView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .ctBackground()
         }
-        .frame(width: 720, height: 560)
+        // Grows with the window; 720×560 is the floor, not the size (vault todo 107, C10).
+        .frame(minWidth: 720, idealWidth: 720, maxWidth: .infinity,
+               minHeight: 560, idealHeight: 560, maxHeight: .infinity)
     }
 
     private func sidebarRow(_ section: Section) -> some View {
