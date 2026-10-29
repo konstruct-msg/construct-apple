@@ -117,6 +117,38 @@ enum IntakePublishing {
         // reason about the window at all, and publishing is cheap where being wrong is not.
         return last != currentEpoch
     }
+
+    /// How often a running process asks `shouldPublish` again. A process that lives for days —
+    /// Konstruct Desktop keeps running with its window closed (0.3.23+) — published once at its
+    /// first stream start until 2026-10-29, and after a week its window had lapsed: every contact
+    /// holding its key was "unrecognised" on the server. An hour is far below the epoch and costs
+    /// nothing in between, because the RPC runs only when the epoch has changed.
+    static let recheckInterval: Duration = .seconds(3600)
+}
+
+/// What to do with this device's own intake key, given what the Keychain answered.
+///
+/// Until 2026-10-29 any nil from the Keychain minted a fresh key: an unreadable item (locked
+/// device, protected data not yet available, the Mac's move to the data protection keychain on
+/// 2026-10-13) replaced a key every contact already held. The new key was never handed out — the
+/// "sent to" list still named every device — and the old one was never published again, so those
+/// contacts stayed unrecognised for good.
+enum IntakeOwnKey {
+    enum Decision: Equatable {
+        case use(Data)
+        /// Definitely absent, or present and damaged: a new key, then hand it out and publish it.
+        case mint
+        /// Could not read it. It may well exist; this send pays a token and the next one asks again.
+        case skip
+    }
+
+    static func decide(_ read: KeychainRead) -> Decision {
+        switch read {
+        case .found(let key): key.count == intakeKeyLength ? .use(key) : .mint
+        case .absent: .mint
+        case .unreadable: .skip
+        }
+    }
 }
 
 @MainActor
@@ -148,23 +180,44 @@ final class IntakeCredentialService {
     /// refused in. Not persisted beyond UserDefaults and not secret — same reasoning as `sentToKey`.
     private static let rejectedKey = "construct.intake.rejected.v1"
 
+    private var isPublishing = false
+
     private init() {}
 
     // MARK: - Our own key
 
-    /// This device's intake key for our account, minted on first use.
+    /// This device's intake key for our account, minted on first use; nil when the Keychain could
+    /// not be read (`IntakeOwnKey`).
     ///
     /// Minting here rather than at registration is deliberate: an account created before this
     /// shipped has no key either, so the two cases are one, and there is no migration that has to
     /// find every existing install.
-    func ownIntakeKey() -> Data {
-        if let existing = keychain.loadOwnIntakeKey(), existing.count == intakeKeyLength {
-            return existing
+    ///
+    /// A mint makes every copy our contacts hold stale: the "sent to" list and the publish marker
+    /// go with it, so the new key's tags go up now and each contact gets the new card on the next
+    /// exchange.
+    func ownIntakeKey() -> Data? {
+        let read = keychain.readOwnIntakeKey()
+        switch IntakeOwnKey.decide(read) {
+        case .use(let key):
+            return key
+        case .skip:
+            Log.error("Intake: own key unreadable (\(read.description)) — not minting; this send pays a token", category: "Intake")
+            return nil
+        case .mint:
+            let fresh = generateIntakeKey()
+            guard keychain.saveOwnIntakeKey(fresh) else {
+                // Returning it unsaved would mint again on the next call and hand out a key
+                // nothing keeps.
+                Log.error("Intake: minted key could not be saved — not used", category: "Intake")
+                return nil
+            }
+            forgetWhoHasOurKey()
+            defaults.removeObject(forKey: Self.lastPublishedEpochKey)
+            Log.info("Intake: minted this account's intake key (was \(read.description))", category: "Intake")
+            Task { await self.publishTagWindowIfNeeded() }
+            return fresh
         }
-        let fresh = generateIntakeKey()
-        keychain.saveOwnIntakeKey(fresh)
-        Log.info("Intake: minted this account's intake key", category: "Intake")
-        return fresh
     }
 
     // MARK: - Publishing
@@ -175,6 +228,10 @@ final class IntakeCredentialService {
     /// contacts' envelopes fall back to paying, exactly as they did before this existed.
     func publishTagWindowIfNeeded(now: Date = Date()) async {
         guard let accountId = AuthSessionManager.shared.currentUserId, !accountId.isEmpty else { return }
+        // A stream start and the hourly recheck can land together; one RPC is enough.
+        guard !isPublishing else { return }
+        isPublishing = true
+        defer { isPublishing = false }
 
         let currentEpoch = intakeEpoch(unixSeconds: UInt64(now.timeIntervalSince1970))
         let last = defaults.object(forKey: Self.lastPublishedEpochKey) as? NSNumber
@@ -182,7 +239,7 @@ final class IntakeCredentialService {
             lastPublishedEpoch: last?.uint64Value, currentEpoch: currentEpoch
         ) else { return }
 
-        let key = ownIntakeKey()
+        guard let key = ownIntakeKey() else { return }
         var entries: [(epoch: UInt64, tag: Data)] = []
         for epoch in IntakePublishing.epochsToPublish(currentEpoch: currentEpoch) {
             guard let tag = try? intakeTag(

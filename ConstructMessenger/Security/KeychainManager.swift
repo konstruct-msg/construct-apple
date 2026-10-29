@@ -174,21 +174,23 @@ final class KeychainManager: Sendable {
 
     // MARK: - Intake credentials
 
-    /// This account's own `intake_key` — the secret every vouched contact is given so their
+    /// This device's own `intake_key` — the secret every vouched contact is given so their
     /// envelopes to us owe no Privacy Pass token.
     ///
-    /// One per account, so all our devices must hold the same bytes; a device that minted its own
-    /// would leave half our contacts presenting a credential the server does not recognise.
+    /// One per device: each device of the account mints its own and publishes its own tags, and
+    /// the server keeps every device's tags as a set (construct-server `7fd850b`).
     ///
     /// `cryptoKeyAccessible` for the same reason as the reassembly key: a reply built during a
     /// background push decrypt needs it, and under `WhenUnlocked*` it would be missing exactly
     /// then — the send would still go, just paying a token nobody can see it paid.
-    func saveOwnIntakeKey(_ key: Data) {
-        _ = save(key, forKey: "construct.intake.own", accessible: Self.cryptoKeyAccessible)
+    @discardableResult
+    func saveOwnIntakeKey(_ key: Data) -> Bool {
+        save(key, forKey: "construct.intake.own", accessible: Self.cryptoKeyAccessible)
     }
 
-    func loadOwnIntakeKey() -> Data? {
-        return load(forKey: "construct.intake.own")
+    /// `read`, not `load`: "absent" mints a new key, "could not read" must not (`IntakeOwnKey`).
+    func readOwnIntakeKey() -> KeychainRead {
+        read(forKey: "construct.intake.own")
     }
 
     /// The `intake_key` a peer handed us, so our envelopes to *them* carry a tag instead of a

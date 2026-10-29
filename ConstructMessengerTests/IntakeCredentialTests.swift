@@ -255,3 +255,30 @@ final class IntakeKeyDistributionTests: XCTestCase {
         XCTAssertNil(UserDefaults.standard.stringArray(forKey: "construct.intake.sentTo.v1"), "dropped on first read")
     }
 }
+
+/// Whether this device mints a new intake key. A mint makes every copy our contacts hold stale,
+/// so it must follow only from a Keychain that said "not there" (or held a damaged item), never
+/// from one that could not answer (2026-10-29: ~30% of sealed envelopes unrecognised in prod).
+final class IntakeOwnKeyTests: XCTestCase {
+
+    func testAStoredKeyIsUsed() {
+        let key = Data(repeating: 7, count: 32)
+        XCTAssertEqual(IntakeOwnKey.decide(.found(key)), .use(key))
+    }
+
+    func testNoKeyMints() {
+        XCTAssertEqual(IntakeOwnKey.decide(.absent), .mint)
+    }
+
+    /// Locked device, protected data not available, the Mac's keychain move: the key may exist.
+    /// Mutation: `.unreadable: .mint` — this reddens.
+    func testAnUnreadableKeychainDoesNotMint() {
+        XCTAssertEqual(IntakeOwnKey.decide(.unreadable(errSecInteractionNotAllowed)), .skip)
+    }
+
+    /// A stored item of the wrong size is damaged, not unreadable: nothing could ever use it.
+    /// Mutation: `.use(key)` for any length — this reddens.
+    func testADamagedKeyMints() {
+        XCTAssertEqual(IntakeOwnKey.decide(.found(Data(repeating: 7, count: 16))), .mint)
+    }
+}
