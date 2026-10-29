@@ -205,6 +205,7 @@ struct DesktopRootView: View {
         commandBridge.onFocusSearch     = { focusSidebarSearch() }
         commandBridge.onFind            = { findInCurrentContext() }
         commandBridge.onOpenPeople      = { openWindow(id: DesktopWindowID.synaps) }
+        commandBridge.onOpenCalls       = { openWindow(id: DesktopWindowID.calls) }
         commandBridge.onSelectNext      = {
             NotificationCenter.default.post(name: .desktopSelectNextChat, object: nil)
         }
@@ -378,26 +379,36 @@ struct DesktopRootView: View {
             .environment(chatsViewModel)
             .background(Color.CT.bg)
             .navigationTitle(NSLocalizedString("chats", comment: ""))
-            .safeAreaInset(edge: .bottom, spacing: 0) { synapsesBar }
+            .safeAreaInset(edge: .bottom, spacing: 0) { windowsBar }
     }
 
     /// The door to Synapses, under the chats — where iOS keeps its tab, with the tab's symbol
     /// and name. Synapses stays its own window (D2); until 2026-10-13 the door was an unlabeled
     /// `person.2` in the sidebar's title bar, a symbol iOS uses nowhere for it.
-    private var synapsesBar: some View {
+    /// Recent calls beside it, with the iOS tab's symbol and name (2026-10-29).
+    private var windowsBar: some View {
+        HStack(spacing: CTLayout.edgePad) {
+            windowDoor("synapses", symbol: "circle.grid.cross", id: DesktopWindowID.synaps)
+            if CallsFeature.isEnabled {
+                windowDoor("calls_recents", symbol: "phone", id: DesktopWindowID.calls)
+            }
+        }
+        .padding(.horizontal, CTLayout.edgePad)
+        .padding(.vertical, CTLayout.navVPad)
+        .ctBorderTop()
+    }
+
+    private func windowDoor(_ title: String, symbol: String, id: String) -> some View {
         Button {
-            openWindow(id: DesktopWindowID.synaps)
+            openWindow(id: id)
         } label: {
-            Label(NSLocalizedString("synapses", comment: ""), systemImage: "circle.grid.cross")
+            Label(NSLocalizedString(title, comment: ""), systemImage: symbol)
                 .font(CTFont.body)
                 .foregroundStyle(Color.CT.text)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .padding(.horizontal, CTLayout.edgePad)
-        .padding(.vertical, CTLayout.navVPad)
-        .ctBorderTop()
     }
 
     // MARK: - Call state helpers

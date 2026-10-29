@@ -5,9 +5,8 @@
 //  Writes a call to the log when it ends (`CallManager.endActiveCall`), through the call store
 //  (`LocalRepositories.calls`).
 //
-//  macOS: calls not yet implemented.
+//  iOS and Desktop alike (Desktop since 2026-10-29; calls there since 2026-10-21).
 //
-#if os(iOS)
 
 import Foundation
 
@@ -67,4 +66,3 @@ final class CallHistoryService {
     }
 }
 
-#endif // os(iOS)
