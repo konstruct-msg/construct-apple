@@ -13,6 +13,7 @@ import UserNotifications
 /// Scene identifiers for secondary Desktop windows (D2).
 enum DesktopWindowID {
     static let synaps = "synaps"
+    static let calls = "calls"
     static let call = "call"
     static let studioScreen = "studio-screen"
     static let studioCheck = "studio-check"
@@ -129,6 +130,15 @@ struct Construct_DesktopApp: App {
                 .desktopTheme()
         }
         .defaultSize(width: 720, height: 560)
+        .windowToolbarStyle(.unified)
+
+        // Recent calls, as the iOS Calls tab — its own window, like Synapses (D2).
+        Window(LocalizedStringKey("calls_recents"), id: DesktopWindowID.calls) {
+            CallHistoryView()
+                .frame(minWidth: 380, minHeight: 420)
+                .desktopTheme()
+        }
+        .defaultSize(width: 440, height: 600)
         .windowToolbarStyle(.unified)
 
         // The call's own window (design: claude.ai/artifact/NjvFrSAuKZxc43tqxRJHdj). Opened by

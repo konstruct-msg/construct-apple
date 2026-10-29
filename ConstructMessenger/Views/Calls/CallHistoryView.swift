@@ -2,12 +2,12 @@
 //  CallHistoryView.swift
 //  Construct Messenger
 //
-//  Recent calls screen — Construct Terminal design.
+//  Recent calls screen — Construct Terminal design. The iOS Calls tab, and Desktop's Calls window
+//  (DesktopWindowID.calls, since 2026-10-29).
 //
 
 import SwiftUI
 
-#if os(iOS)
 struct CallHistoryView: View {
     /// The log as last read from the call store, read again on each of its changes.
     @State private var records: [CallRecord] = []
@@ -276,6 +276,17 @@ private struct CallHistoryRow: View {
             }
             .tint(Color.CT.accent)
         }
+        #if os(macOS)
+        // A Mac has no swipe without a trackpad: the same two actions on a right click.
+        .contextMenu {
+            Button(action: onCallBack) {
+                Label(NSLocalizedString("call_call_back", comment: ""), systemImage: "phone")
+            }
+            Button(role: .destructive, action: onDelete) {
+                Label(NSLocalizedString("delete", comment: ""), systemImage: "trash")
+            }
+        }
+        #endif
     }
 
     private var directionSymbol: String {
@@ -325,4 +336,3 @@ private struct CallHistoryRow: View {
     CallHistoryView()
         .preferredColorScheme(.dark)
 }
-#endif
