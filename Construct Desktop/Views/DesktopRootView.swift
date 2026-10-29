@@ -142,6 +142,7 @@ struct DesktopRootView: View {
             RecoveryGateView(reason: .afterRegistration).sheetNavigation(closes: false)
                 .frame(minWidth: 460, minHeight: 560)
         }
+        .background(ChatWindowMark())
         .onAppear {
             authViewModel.refreshDeviceKeyState()
             chatsViewModel.setContext(viewContext)

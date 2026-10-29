@@ -85,8 +85,7 @@ struct Construct_DesktopApp: App {
                     Task.detached(priority: .utility) { MediaManager.sealClearFiles() }
                     Log.debug("Desktop launch bootstrap — storage migration complete", category: "Desktop")
 
-                    // Direct path (Strategy B): construct-core (UniFFI) + gRPC-Swift + VEIL from core.
-                    // Engine layer is paused for Desktop.
+                    // Direct path: construct-core (UniFFI) + gRPC-Swift + VEIL from core.
                     await VeilProxyManager.shared.startIfNeeded()
                     await TransportRouter.shared.bootstrap()
 
@@ -178,5 +177,7 @@ struct Construct_DesktopApp: App {
                 .environment(recoveryViewModel)
                 .desktopTheme()
         }
+        .defaultSize(width: 720, height: 560)
+        .windowResizability(.contentMinSize)
     }
 }

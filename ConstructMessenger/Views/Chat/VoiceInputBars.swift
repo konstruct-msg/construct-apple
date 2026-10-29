@@ -4,7 +4,8 @@
 //
 //  Full-width accent-pill bars shown instead of the text input while the user
 //  is recording or reviewing a voice message before sending.
-//  iOS only — macOS doesn't support voice messages via AVAudioRecorder.
+//  iOS input bar; Konstruct Desktop records with the same `AudioRecorderService` and draws its
+//  own rows in `MessageInputView+macOS`.
 //
 
 import SwiftUI
