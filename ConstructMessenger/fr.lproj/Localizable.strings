@@ -1242,6 +1242,10 @@
 "desktop_new_conversation" = "Nouvelle discussion";
 "desktop_sync_messages" = "Synchroniser les messages";
 "desktop_check_for_updates" = "Rechercher des mises à jour…";
+"desktop_background_section" = "En arrière-plan";
+"desktop_open_at_login" = "Ouvrir à la connexion";
+"desktop_open_at_login_footer" = "Fenêtre fermée, Konstruct continue de fonctionner et de recevoir les messages. Ouvrez-le à la connexion pour qu’il le fasse aussi après un redémarrage.";
+"desktop_login_item_needs_approval" = "Autorisez Konstruct dans Réglages Système → Ouverture.";
 "desktop_menu_navigate" = "Navigation";
 "desktop_next_chat" = "Discussion suivante";
 "desktop_previous_chat" = "Discussion précédente";

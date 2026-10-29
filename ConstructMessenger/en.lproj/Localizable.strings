@@ -1322,6 +1322,10 @@
 "desktop_new_conversation" = "New Conversation";
 "desktop_sync_messages" = "Sync Messages";
 "desktop_check_for_updates" = "Check for Updates…";
+"desktop_background_section" = "In the background";
+"desktop_open_at_login" = "Open at login";
+"desktop_open_at_login_footer" = "With its window closed Konstruct keeps running and receiving messages. Open it at login so it does after a restart too.";
+"desktop_login_item_needs_approval" = "Allow Konstruct in System Settings → Login Items.";
 "desktop_menu_navigate" = "Navigate";
 "desktop_next_chat" = "Next Chat";
 "desktop_previous_chat" = "Previous Chat";

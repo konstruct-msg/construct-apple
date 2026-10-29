@@ -187,10 +187,42 @@ private struct DesktopDevicesSettingsTab: View {
 private struct DesktopGeneralSettingsTab: View {
     @AppStorage("desktopSendOnEnter") private var sendOnEnter: Bool = true
     @AppStorage("desktopShowTimestamps") private var showTimestamps: Bool = true
+    @State private var loginItem = DesktopLoginItemController()
 
     var body: some View {
         ScrollView {
             VStack(spacing: 0) {
+                // In the background: the window closes, the app keeps receiving.
+                CTSettingsSectionHeader(title: NSLocalizedString("desktop_background_section", comment: ""))
+                HStack {
+                    Text(NSLocalizedString("desktop_open_at_login", comment: ""))
+                        .font(CTFont.body)
+                        .foregroundStyle(Color.CT.text)
+                    Spacer()
+                    Toggle("", isOn: Binding(get: { loginItem.row.isOn }, set: { loginItem.setOn($0) }))
+                        .labelsHidden()
+                        .tint(Color.CT.accent)
+                }
+                .padding(.horizontal, 12).padding(.vertical, 10)
+                if loginItem.row.needsApproval {
+                    HStack {
+                        Text(NSLocalizedString("desktop_login_item_needs_approval", comment: ""))
+                            .font(CTFont.caption)
+                            .foregroundStyle(Color.CT.textDim)
+                        Spacer()
+                        Button(NSLocalizedString("open_settings", comment: "")) { loginItem.openSystemSettings() }
+                            .controlSize(.small)
+                    }
+                    .padding(.horizontal, 12).padding(.bottom, 10)
+                }
+                Text(NSLocalizedString("desktop_open_at_login_footer", comment: ""))
+                    .font(CTFont.caption)
+                    .foregroundStyle(Color.CT.textDim)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 12).padding(.bottom, 10)
+
+                CTSep(style: .thick)
+
                 // Composing
                 CTSettingsSectionHeader(title: NSLocalizedString("composing", comment: ""))
                 HStack {
@@ -224,6 +256,8 @@ private struct DesktopGeneralSettingsTab: View {
             .padding(.bottom, 24)
         }
         .background(Color.CT.bg)
+        // System Settings may have changed it while the tab was away.
+        .onAppear { loginItem.refresh() }
     }
 }
 
