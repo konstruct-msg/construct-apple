@@ -85,6 +85,18 @@ extension MessageRouter {
             applyReadMarkers(frame.payload, myUserId: myUserId, fromOwnAccount: true)
             return
         }
+        // The account's intake key from one of our devices — same envelope, same one check.
+        if let frame = ChunkedMessageCodec.controlFrame(plaintext),
+           ContentTypeRouting.framedSideChannel(for: frame.contentType) == .contactCard {
+            if let card = ContactCardPayload.read(frame.payload), let key = card.intakeKey {
+                IntakeCredentialService.shared.receiveOwnKeyFromSibling(
+                    IntakeKeyState(generation: card.intakeGeneration, key: key)
+                )
+            } else {
+                Log.error("SENDER_SYNC: own contact card did not decode", category: "MessageRouter")
+            }
+            return
+        }
         switch chunkReassembler.assemble(data: plaintext, senderId: original.from) {
         case .incomplete:
             Log.debug("SENDER_SYNC: chunk incomplete — waiting for more", category: "MessageRouter")

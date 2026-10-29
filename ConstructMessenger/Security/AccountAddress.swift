@@ -142,6 +142,9 @@ enum AccountAddress {
 struct ContactCardPayload: Equatable {
     var intakeKey: Data?
     var accountAddress: Data?
+    /// The generation of `intakeKey` (construct-core `IntakeKeyState`); 0 for a card from before
+    /// 2026-10-29 or a bare key. decisions/intake-key-is-the-accounts-not-the-devices.md
+    var intakeGeneration: UInt32 = 0
 
     static let legacyIntakeKeyLength = 32
 
@@ -154,7 +157,8 @@ struct ContactCardPayload: Equatable {
         }
         return ContactCardPayload(
             intakeKey: card.intakeKey.count == legacyIntakeKeyLength ? card.intakeKey : nil,
-            accountAddress: card.accountAddress.count == AccountAddress.length ? card.accountAddress : nil
+            accountAddress: card.accountAddress.count == AccountAddress.length ? card.accountAddress : nil,
+            intakeGeneration: card.intakeGeneration
         )
     }
 
@@ -162,6 +166,7 @@ struct ContactCardPayload: Equatable {
         var card = Shared_Proto_Core_V1_ContactCard()
         if let intakeKey { card.intakeKey = intakeKey }
         if let accountAddress { card.accountAddress = accountAddress }
+        card.intakeGeneration = intakeGeneration
         return try card.serializedData()
     }
 }

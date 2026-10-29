@@ -1090,6 +1090,15 @@ public nonisolated struct Shared_Proto_Core_V1_ContactCard: Sendable {
   /// 32 bytes: the account's Ed25519 recovery public key (route_id = SHA-256(0x0001 || key)).
   public var accountAddress: Data = Data()
 
+  /// The generation of `intake_key` (construct-core `IntakeKeyState`). A holder replaces its key
+  /// only with a higher generation (`intake_offer`). 0 — absent — is a key from before
+  /// 2026-10-29, when each device minted its own; every generation minted since is above it.
+  ///
+  /// One meaning, two readers: a card from a contact is their account's key; a card from our own
+  /// account, opened by a session with one of our devices (inside SENDER_SYNC), is our account's
+  /// key. construct-docs decisions/intake-key-is-the-accounts-not-the-devices.md.
+  public var intakeGeneration: UInt32 = 0
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -1980,7 +1989,7 @@ nonisolated extension Shared_Proto_Core_V1_ReadMarker: SwiftProtobuf.Message, Sw
 
 nonisolated extension Shared_Proto_Core_V1_ContactCard: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ContactCard"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}intake_key\0\u{3}account_address\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}intake_key\0\u{3}account_address\0\u{3}intake_generation\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -1990,6 +1999,7 @@ nonisolated extension Shared_Proto_Core_V1_ContactCard: SwiftProtobuf.Message, S
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularBytesField(value: &self.intakeKey) }()
       case 2: try { try decoder.decodeSingularBytesField(value: &self.accountAddress) }()
+      case 3: try { try decoder.decodeSingularUInt32Field(value: &self.intakeGeneration) }()
       default: break
       }
     }
@@ -2002,12 +2012,16 @@ nonisolated extension Shared_Proto_Core_V1_ContactCard: SwiftProtobuf.Message, S
     if !self.accountAddress.isEmpty {
       try visitor.visitSingularBytesField(value: self.accountAddress, fieldNumber: 2)
     }
+    if self.intakeGeneration != 0 {
+      try visitor.visitSingularUInt32Field(value: self.intakeGeneration, fieldNumber: 3)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Shared_Proto_Core_V1_ContactCard, rhs: Shared_Proto_Core_V1_ContactCard) -> Bool {
     if lhs.intakeKey != rhs.intakeKey {return false}
     if lhs.accountAddress != rhs.accountAddress {return false}
+    if lhs.intakeGeneration != rhs.intakeGeneration {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
