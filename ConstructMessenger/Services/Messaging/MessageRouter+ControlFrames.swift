@@ -61,8 +61,14 @@ extension MessageRouter {
             // tag is derived over the recipient's account id — a key filed under a device id
             // would never be found, and a missing credential is a token spent, not an error.
             if let card = ContactCardPayload.read(body) {
-                if let key = card.intakeKey {
-                    IntakeCredentialService.shared.recordPeerIntakeKey(key, from: otherUserId)
+                // Our own account's card comes only inside SENDER_SYNC, opened by a session with
+                // one of our devices (`routeOpenedSenderSync`). One that reaches this path under
+                // our own id is filed nowhere: as a contact's key it would be a key for writing
+                // to ourselves, and as our own it would skip the own-device check.
+                if let key = card.intakeKey, otherUserId.lowercased() != AuthSessionManager.shared.currentUserId?.lowercased() {
+                    IntakeCredentialService.shared.recordPeerIntakeKey(
+                        IntakeKeyState(generation: card.intakeGeneration, key: key), from: otherUserId
+                    )
                 }
                 if let address = card.accountAddress {
                     Self.pinCardAddress(address, of: otherUserId)

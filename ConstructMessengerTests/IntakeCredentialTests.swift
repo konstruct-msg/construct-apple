@@ -256,30 +256,100 @@ final class IntakeKeyDistributionTests: XCTestCase {
     }
 }
 
-/// Whether this device mints a new intake key. A mint makes every copy our contacts hold stale,
-/// so it must follow only from a Keychain that said "not there" (or held a damaged item), never
-/// from one that could not answer (2026-10-29: ~30% of sealed envelopes unrecognised in prod).
-final class IntakeOwnKeyTests: XCTestCase {
+/// The Keychain item: 32 bytes is a key from before generations (generation 0), 36 bytes the
+/// generation and the key. A wrong reading would either re-mint over a key contacts hold or keep
+/// presenting a key at the wrong generation.
+final class IntakeKeyRecordTests: XCTestCase {
+    private let key = Data(repeating: 7, count: 32)
 
-    func testAStoredKeyIsUsed() {
-        let key = Data(repeating: 7, count: 32)
-        XCTAssertEqual(IntakeOwnKey.decide(.found(key)), .use(key))
+    func testRoundTrip() {
+        let state = IntakeKeyState(generation: 300, key: key)
+        XCTAssertEqual(IntakeKeyRecord.decode(IntakeKeyRecord.encode(state)), state)
     }
 
-    func testNoKeyMints() {
-        XCTAssertEqual(IntakeOwnKey.decide(.absent), .mint)
+    /// Mutation: decode the 32-byte case as nil — this reddens.
+    func testAnItemFromBeforeGenerationsIsGenerationZero() {
+        XCTAssertEqual(IntakeKeyRecord.decode(key), IntakeKeyState(generation: 0, key: key))
+    }
+
+    /// Big-endian, so 300 is not read back as 11265.
+    func testTheGenerationIsBigEndian() {
+        XCTAssertEqual(IntakeKeyRecord.encode(IntakeKeyState(generation: 300, key: key)).prefix(4),
+                       Data([0, 0, 1, 44]))
+    }
+
+    func testAnyOtherLengthIsDamaged() {
+        XCTAssertNil(IntakeKeyRecord.decode(Data(repeating: 7, count: 16)))
+        XCTAssertNil(IntakeKeyRecord.decode(Data(repeating: 7, count: 37)))
+    }
+}
+
+/// What the Keychain said. Minting is never decided here any more — only whether the key is
+/// there, missing, or unreadable.
+final class IntakeOwnKeyTests: XCTestCase {
+    private let key = Data(repeating: 7, count: 32)
+
+    func testAStoredKeyIsUsed() {
+        let state = IntakeKeyState(generation: 2, key: key)
+        XCTAssertEqual(IntakeOwnKey.decide(.found(IntakeKeyRecord.encode(state))), .use(state))
+    }
+
+    func testNoKeyIsAbsent() {
+        XCTAssertEqual(IntakeOwnKey.decide(.absent), .absent)
     }
 
     /// Locked device, protected data not available, the Mac's keychain move: the key may exist.
-    /// Mutation: `.unreadable: .mint` — this reddens.
-    func testAnUnreadableKeychainDoesNotMint() {
+    /// Mutation: `.unreadable: .absent` — this reddens.
+    func testAnUnreadableKeychainIsSkipped() {
         XCTAssertEqual(IntakeOwnKey.decide(.unreadable(errSecInteractionNotAllowed)), .skip)
     }
 
-    /// A stored item of the wrong size is damaged, not unreadable: nothing could ever use it.
-    /// Mutation: `.use(key)` for any length — this reddens.
-    func testADamagedKeyMints() {
-        XCTAssertEqual(IntakeOwnKey.decide(.found(Data(repeating: 7, count: 16))), .mint)
+    func testADamagedItemIsAbsent() {
+        XCTAssertEqual(IntakeOwnKey.decide(.found(Data(repeating: 7, count: 16))), .absent)
+    }
+}
+
+/// When a device uses, promotes, mints or waits (decisions/intake-key-is-the-accounts-not-the-
+/// devices.md, plan, «Когда устройство создаёт поколение»). A device that mints while the
+/// account has a live key splits the account's contacts across two keys again.
+final class IntakeOwnKeyNextTests: XCTestCase {
+    private let key = Data(repeating: 7, count: 32)
+
+    func testAKeyOfAGenerationIsUsedWithoutAsking() {
+        let held = IntakeKeyState(generation: 3, key: key)
+        XCTAssertEqual(IntakeOwnKey.next(held: held, serverGeneration: 9, serverHasLiveTags: true), .use(held))
+    }
+
+    /// The migration: the first updated device keeps its key and calls it generation 1.
+    /// Mutation: `.promote` → `.mint(above: 0)` — this reddens.
+    func testAPerDeviceKeyIsPromotedWhileTheAccountHasNoGeneration() {
+        let held = IntakeKeyState(generation: 0, key: key)
+        XCTAssertEqual(IntakeOwnKey.next(held: held, serverGeneration: 0, serverHasLiveTags: true),
+                       .promote(IntakeKeyState(generation: 1, key: key)))
+    }
+
+    /// Another device already moved the account on: ours is stale, theirs is on its way.
+    func testAPerDeviceKeyWaitsOnceTheAccountHasALiveGeneration() {
+        let held = IntakeKeyState(generation: 0, key: key)
+        XCTAssertEqual(IntakeOwnKey.next(held: held, serverGeneration: 2, serverHasLiveTags: true), .wait)
+    }
+
+    /// A new device linked to a live account must not mint.
+    /// Mutation: no key → always `.mint` — this reddens.
+    func testNoKeyWaitsWhileTheAccountIsLive() {
+        XCTAssertEqual(IntakeOwnKey.next(held: nil, serverGeneration: 4, serverHasLiveTags: true), .wait)
+    }
+
+    /// Restored onto a new device with the old ones gone: nothing is published any more.
+    /// Mutation: `serverGeneration > 0 && serverHasLiveTags` → `serverGeneration > 0` — this reddens.
+    func testNoKeyMintsAboveTheServerWhenNothingIsLive() {
+        XCTAssertEqual(IntakeOwnKey.next(held: nil, serverGeneration: 4, serverHasLiveTags: false), .mint(above: 4))
+    }
+
+    /// The account's first device, or one migrating with siblings still on old builds.
+    func testNoKeyOnAnAccountWithoutAGenerationMintsTheFirst() {
+        XCTAssertEqual(IntakeOwnKey.next(held: nil, serverGeneration: 0, serverHasLiveTags: false), .mint(above: 0))
+        XCTAssertEqual(IntakeOwnKey.next(held: nil, serverGeneration: 0, serverHasLiveTags: true), .mint(above: 0))
     }
 }
 
