@@ -1111,7 +1111,7 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 32;
+				CURRENT_PROJECT_VERSION = 33;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = PK2473XF3P;
 				ENABLE_APP_SANDBOX = YES;
@@ -1141,7 +1141,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 0.3.22;
+				MARKETING_VERSION = 0.3.23;
 				PRODUCT_BUNDLE_IDENTIFIER = "maximeliseyev.construct-desktop";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
@@ -1164,7 +1164,7 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 32;
+				CURRENT_PROJECT_VERSION = 33;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = PK2473XF3P;
 				ENABLE_APP_SANDBOX = YES;
@@ -1194,7 +1194,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 0.3.22;
+				MARKETING_VERSION = 0.3.23;
 				PRODUCT_BUNDLE_IDENTIFIER = "maximeliseyev.construct-desktop";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
@@ -1217,7 +1217,7 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 32;
+				CURRENT_PROJECT_VERSION = 33;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = PK2473XF3P;
 				ENABLE_APP_SANDBOX = YES;
@@ -1247,7 +1247,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 0.3.22;
+				MARKETING_VERSION = 0.3.23;
 				PRODUCT_BUNDLE_IDENTIFIER = "maximeliseyev.construct-desktop";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
