@@ -138,20 +138,30 @@ final class MessageStreamReconnectPolicyTests: XCTestCase {
     /// A connectLoop mid-backoff still owns the stream — foreground must not forceReconnect.
     func testConnectLoopInBackoff_IsStillActivelyConnecting() {
         XCTAssertTrue(
-            MessageStreamManager.isActivelyConnecting(hasStreamTask: true, isConnected: false),
+            MessageStreamManager.isActivelyConnecting(hasStreamTask: true, isConnected: false, isInDegradedMode: false),
             "retryCount must not gate this — backoff is still a live connectLoop"
         )
     }
 
     func testLiveStream_IsNotActivelyConnecting() {
         XCTAssertFalse(
-            MessageStreamManager.isActivelyConnecting(hasStreamTask: true, isConnected: true)
+            MessageStreamManager.isActivelyConnecting(hasStreamTask: true, isConnected: true, isInDegradedMode: false)
+        )
+    }
+
+    /// 2026-10-27, Desktop (no push): a loop asleep for ten minutes in degraded mode counted as
+    /// connecting, so bringing the window forward skipped the reconnect for 50 minutes.
+    /// Mutation: drop `!isInDegradedMode`.
+    func testConnectLoopAsleepInDegradedMode_IsNotActivelyConnecting() {
+        XCTAssertFalse(
+            MessageStreamManager.isActivelyConnecting(hasStreamTask: true, isConnected: false, isInDegradedMode: true),
+            "a degraded-mode sleep must yield to an activation's reconnect"
         )
     }
 
     func testIdle_IsNotActivelyConnecting() {
         XCTAssertFalse(
-            MessageStreamManager.isActivelyConnecting(hasStreamTask: false, isConnected: false)
+            MessageStreamManager.isActivelyConnecting(hasStreamTask: false, isConnected: false, isInDegradedMode: false)
         )
     }
 }

@@ -117,7 +117,12 @@ public final class ProcessTapSource {
     }
 
     private func ingest(_ list: UnsafeMutableAudioBufferListPointer, channels: Int, interleaved: Bool) {
-        guard let first = list.first, let base = first.mData else { return }
+        // The aggregate's input is the main sub-device's own inputs first, then the tap. An output
+        // device with inputs (any audio interface) puts its preamp noise in `list.first`; the tap's
+        // buffers are the last ones.
+        let tapIndex = list.count - (interleaved ? 1 : channels)
+        guard tapIndex >= 0, let base = list[tapIndex].mData else { return }
+        let first = list[tapIndex]
         let peak = Float((1 << 23) - 1)
         func quantise(_ x: Float) -> Int32 {
             if x > 1 || x < -1 { clippedSamples += 1 }
@@ -133,7 +138,7 @@ public final class ProcessTapSource {
         } else {
             let frames = Int(first.mDataByteSize) / 4
             let l = base.assumingMemoryBound(to: Float.self)
-            let r = (list.count > 1 ? list[1].mData : base)!.assumingMemoryBound(to: Float.self)
+            let r = (channels > 1 ? list[tapIndex + 1].mData : base)!.assumingMemoryBound(to: Float.self)
             for f in 0..<frames {
                 pending.append(quantise(l[f]))
                 pending.append(quantise(r[f]))
