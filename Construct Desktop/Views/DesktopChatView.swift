@@ -10,6 +10,7 @@
 import SwiftUI
 import CoreData
 import UniformTypeIdentifiers
+import AppKit
 
 struct DesktopChatView: View {
     @Environment(\.managedObjectContext) private var viewContext
@@ -38,6 +39,8 @@ struct DesktopChatView: View {
     @State private var showingForwardPicker = false
     @State private var forwardFailed = false
     @State private var galleryStartItem: GalleryStartItem?
+    /// Whether this chat was on screen at the last window or app change (`markReadWhenSeenAgain`).
+    @State private var wasOnScreen = true
     @State private var stickerPackPreview: StickerPackPreviewItem?
 
     @State private var chatDropImages: [PlatformImage] = []
@@ -226,6 +229,15 @@ struct DesktopChatView: View {
                       changedId == peerId else { return }
                 loadContactKTStatus()
             }
+            // Messages that arrive while this chat's window is minimised, covered or behind another
+            // app count as unread (#411). Bringing the window back shows them in this chat, and
+            // appear does not fire again — so the count stayed on the list after the reading
+            // (0.3.23, 2026-10-29). iOS does the same on scenePhase .active (ChatView).
+            .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in markReadWhenSeenAgain() }
+            .onReceive(NotificationCenter.default.publisher(for: NSApplication.didResignActiveNotification)) { _ in markReadWhenSeenAgain() }
+            .onReceive(NotificationCenter.default.publisher(for: NSWindow.didDeminiaturizeNotification)) { _ in markReadWhenSeenAgain() }
+            .onReceive(NotificationCenter.default.publisher(for: NSWindow.didMiniaturizeNotification)) { _ in markReadWhenSeenAgain() }
+            .onReceive(NotificationCenter.default.publisher(for: NSWindow.didChangeOcclusionStateNotification)) { _ in markReadWhenSeenAgain() }
             .onDisappear {
                 replyFocusPeekTask?.cancel()
                 replyFocusPeekTask = nil
@@ -635,6 +647,14 @@ struct DesktopChatView: View {
     }
 
     // MARK: - Actions
+
+    /// Read on the change from hidden to shown only: occlusion changes on every window move, and
+    /// each read asks the store for the chat's newest messages.
+    private func markReadWhenSeenAgain() {
+        let onScreen = InAppNotificationService.isChatVisible(viewModel.conversation.chatId)
+        defer { wasOnScreen = onScreen }
+        if MacOnScreen.cameBack(wasOnScreen: wasOnScreen, isOnScreen: onScreen) { markChatAsRead() }
+    }
 
     private func markChatAsRead() {
         let chatId = viewModel.conversation.chatId

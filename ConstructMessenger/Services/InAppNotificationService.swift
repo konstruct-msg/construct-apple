@@ -155,6 +155,12 @@ enum MacOnScreen {
         let isUnoccluded: Bool
     }
 
+    /// The open chat came back on screen: what arrived while it was hidden has now been seen,
+    /// and the list's unread count must go. Only on the change, not on every window event.
+    static func cameBack(wasOnScreen: Bool, isOnScreen: Bool) -> Bool {
+        isOnScreen && !wasOnScreen
+    }
+
     static func isOnScreen(appIsActive: Bool, windows: [Window]) -> Bool {
         appIsActive && windows.contains {
             $0.canBecomeMain && $0.isVisible && !$0.isMiniaturized && $0.isUnoccluded
