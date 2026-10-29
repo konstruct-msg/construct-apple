@@ -747,6 +747,34 @@ final class MultiDeviceSendCoordinator {
         }
     }
 
+    /// The account's intake key, as a contact card (27), to our own devices that are not in
+    /// `skipping`. Returns the devices it reached — all of them, or none if any copy failed, so
+    /// the next publish tries the rest. Same envelope as read markers.
+    func sendOwnContactCard(
+        _ card: Data, skipping: Set<String>, senderUserId: String, senderDeviceId: String
+    ) async -> [String] {
+        do {
+            let owed = try await fetchOwnOtherDevices(myUserId: senderUserId, myDeviceId: senderDeviceId)
+                .filter { !skipping.contains($0.deviceId.lowercased()) }
+            guard !owed.isEmpty else { return [] }
+            let id = UUID()
+            let plan = ChunkedMessageSender.shared.buildPlan(
+                plaintext: card, messageId: id,
+                contentType: UInt8(Shared_Proto_Core_V1_ContentType.contactCard.rawValue)
+            )
+            guard !plan.payloads.isEmpty else { return [] }
+            let sent = await sendToOwnDevices(
+                plan: plan, messageId: id.uuidString.lowercased(), otherDevices: owed,
+                senderUserId: senderUserId, senderDeviceId: senderDeviceId,
+                timestamp: UInt64(Date().timeIntervalSince1970)
+            )
+            return sent ? owed.map(\.deviceId) : []
+        } catch {
+            Log.info("Intake: own-device fetch failed: \(error) — the card goes on the next publish", category: "MultiDevice")
+            return []
+        }
+    }
+
     // MARK: - Private helpers
 
     /// One device did not get its copy — count it and say why.

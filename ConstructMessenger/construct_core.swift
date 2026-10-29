@@ -5824,6 +5824,65 @@ public func FfiConverterTypeInitiationContext_lower(_ value: InitiationContext) 
 }
 
 
+/**
+ * A parsed KNST frame. `message_id` is the dashed lowercase UUID; `payload` is everything after
+ * the header — for a control frame (`total_chunks == 1`) the body is its first
+ * `plaintext_length` bytes.
+ * See `seal_media`.
+ * The account's intake key at a generation. `key` is 32 bytes.
+ */
+public struct IntakeKeyState: Equatable, Hashable {
+    public var generation: UInt32
+    public var key: Data
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(generation: UInt32, key: Data) {
+        self.generation = generation
+        self.key = key
+    }
+
+    
+}
+
+#if compiler(>=6)
+extension IntakeKeyState: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeIntakeKeyState: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> IntakeKeyState {
+        return
+            try IntakeKeyState(
+                generation: FfiConverterUInt32.read(from: &buf), 
+                key: FfiConverterData.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: IntakeKeyState, into buf: inout [UInt8]) {
+        FfiConverterUInt32.write(value.generation, into: &buf)
+        FfiConverterData.write(value.key, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeIntakeKeyState_lift(_ buf: RustBuffer) throws -> IntakeKeyState {
+    return try FfiConverterTypeIntakeKeyState.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeIntakeKeyState_lower(_ value: IntakeKeyState) -> RustBuffer {
+    return FfiConverterTypeIntakeKeyState.lower(value)
+}
+
+
 public struct KnstFrame: Equatable, Hashable {
     public var contentType: UInt8
     public var messageId: String
@@ -8123,12 +8182,6 @@ public func FfiConverterTypeRotatedSpkBundle_lower(_ value: RotatedSpkBundle) ->
 }
 
 
-/**
- * A parsed KNST frame. `message_id` is the dashed lowercase UUID; `payload` is everything after
- * the header — for a control frame (`total_chunks == 1`) the body is its first
- * `plaintext_length` bytes.
- * See `seal_media`.
- */
 public struct SealedMedia: Equatable, Hashable {
     public var key: Data
     public var blob: Data
@@ -10515,6 +10568,71 @@ public func FfiConverterTypeInitiationDecision_lower(_ value: InitiationDecision
 // Note that we don't yet support `indirect` for enums.
 // See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
 
+public enum IntakeOffer: Equatable, Hashable {
+    
+    case adopt
+    case keep
+
+
+
+}
+
+#if compiler(>=6)
+extension IntakeOffer: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeIntakeOffer: FfiConverterRustBuffer {
+    typealias SwiftType = IntakeOffer
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> IntakeOffer {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .adopt
+        
+        case 2: return .keep
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: IntakeOffer, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case .adopt:
+            writeInt(&buf, Int32(1))
+        
+        
+        case .keep:
+            writeInt(&buf, Int32(2))
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeIntakeOffer_lift(_ buf: RustBuffer) throws -> IntakeOffer {
+    return try FfiConverterTypeIntakeOffer.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeIntakeOffer_lower(_ value: IntakeOffer) -> RustBuffer {
+    return FfiConverterTypeIntakeOffer.lower(value)
+}
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+
 public enum KtVerdict: Equatable, Hashable {
     
     case verified
@@ -12089,6 +12207,30 @@ fileprivate struct FfiConverterOptionTypeEnvelopeOpened: FfiConverterRustBuffer 
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterOptionTypeIntakeKeyState: FfiConverterRustBuffer {
+    typealias SwiftType = IntakeKeyState?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeIntakeKeyState.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeIntakeKeyState.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterOptionTypeKnstFrame: FfiConverterRustBuffer {
     typealias SwiftType = KnstFrame?
 
@@ -13396,6 +13538,21 @@ public func intakeEpoch(unixSeconds: UInt64) -> UInt64  {
     )
 })
 }
+public func intakeMint(aboveGeneration: UInt32)throws  -> IntakeKeyState  {
+    return try  FfiConverterTypeIntakeKeyState_lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_func_intake_mint(
+        FfiConverterUInt32.lower(aboveGeneration),$0
+    )
+})
+}
+public func intakeOffer(held: IntakeKeyState?, offered: IntakeKeyState)throws  -> IntakeOffer  {
+    return try  FfiConverterTypeIntakeOffer_lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
+    uniffi_construct_core_fn_func_intake_offer(
+        FfiConverterOptionTypeIntakeKeyState.lower(held),
+        FfiConverterTypeIntakeKeyState_lower(offered),$0
+    )
+})
+}
 public func intakeTag(intakeKey: Data, recipientAccountId: String, epoch: UInt64)throws  -> Data  {
     return try  FfiConverterData.lift(try rustCallWithError(FfiConverterTypeCryptoError_lift) {
     uniffi_construct_core_fn_func_intake_tag(
@@ -13985,6 +14142,12 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_func_intake_epoch() != 2449) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_func_intake_mint() != 50104) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_construct_core_checksum_func_intake_offer() != 15257) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_construct_core_checksum_func_intake_tag() != 36931) {

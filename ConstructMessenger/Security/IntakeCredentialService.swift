@@ -29,6 +29,7 @@
 
 import Foundation
 import SwiftProtobuf
+import GRPCCore
 
 /// Why an envelope is carrying no intake credential, and therefore paying a token.
 ///
@@ -141,28 +142,83 @@ enum IntakeVerdictReaction {
     }
 }
 
-/// What to do with this device's own intake key, given what the Keychain answered.
+/// How an intake key is kept in the Keychain: the key and its generation (construct-core
+/// `IntakeKeyState`), our own and each contact's.
+///
+/// 36 bytes — the generation big-endian, then the key. 32 bytes is an item written before
+/// 2026-10-29, which had no generation: it reads as generation 0, so nothing needs migrating.
+/// Anything else is damaged.
+enum IntakeKeyRecord {
+    static let keyLength = 32
+    private static let length = 4 + keyLength
+
+    static func encode(_ state: IntakeKeyState) -> Data {
+        var g = state.generation.bigEndian
+        return Data(bytes: &g, count: 4) + state.key
+    }
+
+    static func decode(_ data: Data) -> IntakeKeyState? {
+        switch data.count {
+        case keyLength:
+            return IntakeKeyState(generation: 0, key: data)
+        case length:
+            let generation = data.prefix(4).reduce(UInt32(0)) { $0 << 8 | UInt32($1) }
+            return IntakeKeyState(generation: generation, key: Data(data.suffix(keyLength)))
+        default:
+            return nil
+        }
+    }
+}
+
+/// This device's own intake key: what the Keychain says, then what to do about it.
 ///
 /// Until 2026-10-29 any nil from the Keychain minted a fresh key: an unreadable item (locked
 /// device, protected data not yet available, the Mac's move to the data protection keychain on
-/// 2026-10-13) replaced a key every contact already held. The new key was never handed out — the
-/// "sent to" list still named every device — and the old one was never published again, so those
-/// contacts stayed unrecognised for good.
+/// 2026-10-13) replaced a key every contact already held. And every device minted its own, so a
+/// contact held whichever device's key reached it last, and a key of a gone or week-dark device
+/// stayed unrecognised for good. The key is the account's now, with a generation
+/// (decisions/intake-key-is-the-accounts-not-the-devices.md): a device mints only when the
+/// account has no live key, and otherwise waits for one from its own devices.
 enum IntakeOwnKey {
     enum Decision: Equatable {
-        case use(Data)
-        /// Definitely absent, or present and damaged: a new key, then hand it out and publish it.
-        case mint
+        case use(IntakeKeyState)
+        /// Definitely absent, or present and damaged: what to do depends on the account (`next`).
+        case absent
         /// Could not read it. It may well exist; this send pays a token and the next one asks again.
         case skip
     }
 
     static func decide(_ read: KeychainRead) -> Decision {
         switch read {
-        case .found(let key): key.count == intakeKeyLength ? .use(key) : .mint
-        case .absent: .mint
+        case .found(let data): IntakeKeyRecord.decode(data).map { .use($0) } ?? .absent
+        case .absent: .absent
         case .unreadable: .skip
         }
+    }
+
+    enum Next: Equatable {
+        case use(IntakeKeyState)
+        /// Our per-device key from before generations becomes the account's generation 1: the
+        /// contacts that hold it stay valid. Only while the account has no generation yet.
+        case promote(IntakeKeyState)
+        /// No live key anywhere on the account: a new one above what the server last saw.
+        case mint(above: UInt32)
+        /// The account has a live key and this device does not hold it: it is due from one of
+        /// our own devices. Nothing is published meanwhile, and our contacts pass on theirs.
+        case wait
+    }
+
+    /// `held` is this device's key (nil if none); `serverGeneration` and `serverHasLiveTags` are
+    /// `GetIntakeState` for our account. Each case is named by state — never by a key being late.
+    static func next(held: IntakeKeyState?, serverGeneration: UInt32, serverHasLiveTags: Bool) -> Next {
+        if let held, held.generation > 0 { return .use(held) }
+        let accountIsLive = serverGeneration > 0 && serverHasLiveTags
+        if let held {
+            // Generation 0: the migration.
+            if serverGeneration == 0 { return .promote(IntakeKeyState(generation: 1, key: held.key)) }
+            return accountIsLive ? .wait : .mint(above: serverGeneration)
+        }
+        return accountIsLive ? .wait : .mint(above: serverGeneration)
     }
 }
 
@@ -208,38 +264,91 @@ final class IntakeCredentialService {
 
     // MARK: - Our own key
 
-    /// This device's intake key for our account, minted on first use; nil when the Keychain could
-    /// not be read (`IntakeOwnKey`).
-    ///
-    /// Minting here rather than at registration is deliberate: an account created before this
-    /// shipped has no key either, so the two cases are one, and there is no migration that has to
-    /// find every existing install.
-    ///
-    /// A mint makes every copy our contacts hold stale: the "sent to" list and the publish marker
-    /// go with it, so the new key's tags go up now and each contact gets the new card on the next
-    /// exchange.
-    func ownIntakeKey() -> Data? {
+    /// The account's key as this device holds it, if it has one of a generation (≥ 1). What a
+    /// contact card carries; no network, no minting.
+    func currentOwnKey() -> IntakeKeyState? {
+        guard case .use(let state) = IntakeOwnKey.decide(keychain.readOwnIntakeKey()),
+              state.generation > 0 else { return nil }
+        return state
+    }
+
+    /// The account's key, settled with the server when this device holds none of a generation:
+    /// promoted, minted, or nil to wait for one from our own devices. Called from publishing only,
+    /// so the server is asked at most as often as we publish.
+    private func resolveOwnKey() async -> IntakeKeyState? {
         let read = keychain.readOwnIntakeKey()
+        let held: IntakeKeyState?
         switch IntakeOwnKey.decide(read) {
-        case .use(let key):
-            return key
         case .skip:
             Log.error("Intake: own key unreadable (\(read.description)) — not minting; this send pays a token", category: "Intake")
             return nil
-        case .mint:
-            let fresh = generateIntakeKey()
-            guard keychain.saveOwnIntakeKey(fresh) else {
-                // Returning it unsaved would mint again on the next call and hand out a key
-                // nothing keeps.
-                Log.error("Intake: minted key could not be saved — not used", category: "Intake")
-                return nil
-            }
-            forgetWhoHasOurKey()
-            defaults.removeObject(forKey: Self.lastPublishedEpochKey)
-            Log.info("Intake: minted this account's intake key (was \(read.description))", category: "Intake")
-            Task { await self.publishTagWindowIfNeeded() }
-            return fresh
+        case .use(let state) where state.generation > 0:
+            return state
+        case .use(let state):
+            held = state
+        case .absent:
+            held = nil
         }
+        let server: (generation: UInt32, hasLiveTags: Bool)
+        do {
+            server = try await MessagingServiceClient.shared.getIntakeState()
+        } catch let error as RPCError where error.code == .unimplemented {
+            // A server from before generations: it keeps no generation and ignores the one we
+            // publish, so the account is at 0 as far as it can tell. Without this, every device
+            // on an old key would stop publishing until the server caught up.
+            server = (0, false)
+        } catch {
+            Log.info("Intake: account state unavailable (\(error.localizedDescription)) — asked again on the next publish", category: "Intake")
+            return nil
+        }
+        switch IntakeOwnKey.next(held: held, serverGeneration: server.generation, serverHasLiveTags: server.hasLiveTags) {
+        case .use(let state):
+            return state
+        case .promote(let state):
+            return adoptAsOwn(state, why: "promoted this device's key to generation 1")
+        case .mint(let above):
+            guard let state = try? intakeMint(aboveGeneration: above) else { return nil }
+            return adoptAsOwn(state, why: "minted generation \(state.generation) (was \(read.description), account at \(server.generation))")
+        case .wait:
+            Log.info("Intake: the account's key (generation \(server.generation)) is due from our own devices — not publishing", category: "Intake")
+            return nil
+        }
+    }
+
+    /// Makes `state` this device's key. Every copy our contacts hold of the previous one is stale,
+    /// so the "sent to" list and the publish marker go: the new key is published at the next
+    /// publish and each device — ours and our contacts' — gets the card on the next exchange.
+    @discardableResult
+    private func adoptAsOwn(_ state: IntakeKeyState, why: String) -> IntakeKeyState? {
+        guard keychain.saveOwnIntakeKey(IntakeKeyRecord.encode(state)) else {
+            // Returning it unsaved would decide again on the next call and hand out a key
+            // nothing keeps.
+            Log.error("Intake: own key could not be saved — not used", category: "Intake")
+            return nil
+        }
+        forgetWhoHasOurKey()
+        defaults.removeObject(forKey: Self.lastPublishedEpochKey)
+        Log.info("Intake: \(why)", category: "Intake")
+        return state
+    }
+
+    /// One of our own devices handed us the account's key (a card inside SENDER_SYNC).
+    func receiveOwnKeyFromSibling(_ offered: IntakeKeyState) {
+        let held: IntakeKeyState?
+        switch IntakeOwnKey.decide(keychain.readOwnIntakeKey()) {
+        case .use(let state): held = state
+        case .absent: held = nil
+        // Unreadable: adopting would overwrite a key we cannot see. The sibling sends again on
+        // its next publish.
+        case .skip: return
+        }
+        guard let offer = try? intakeOffer(held: held, offered: offered) else {
+            Log.error("Intake: own device sent a malformed key — ignored", category: "Intake")
+            return
+        }
+        guard offer == .adopt else { return }
+        guard adoptAsOwn(offered, why: "took generation \(offered.generation) from our own device") != nil else { return }
+        Task { await self.publishTagWindowIfNeeded() }
     }
 
     // MARK: - Publishing
@@ -261,22 +370,29 @@ final class IntakeCredentialService {
             lastPublishedEpoch: last?.uint64Value, currentEpoch: currentEpoch
         ) else { return }
 
-        guard let key = ownIntakeKey() else { return }
+        guard let own = await resolveOwnKey() else { return }
         var entries: [(epoch: UInt64, tag: Data)] = []
         for epoch in IntakePublishing.epochsToPublish(currentEpoch: currentEpoch) {
             guard let tag = try? intakeTag(
-                intakeKey: key, recipientAccountId: accountId, epoch: epoch
+                intakeKey: own.key, recipientAccountId: accountId, epoch: epoch
             ) else { continue }
             entries.append((epoch, Data(tag)))
         }
         guard !entries.isEmpty else { return }
 
         do {
-            let accepted = try await MessagingServiceClient.shared.publishIntakeTags(entries)
+            let result = try await MessagingServiceClient.shared.publishIntakeTags(entries, generation: own.generation)
+            guard result.currentGeneration <= own.generation else {
+                // Refused as stale: the account moved on and the newer key is due from one of
+                // our own devices. Not marked, so the next publish asks again.
+                Log.info("Intake: publish of generation \(own.generation) refused — the account is at \(result.currentGeneration)", category: "Intake")
+                return
+            }
             // Recorded only on success. Recording the attempt would mean one failed publish costs
             // a whole epoch of tokens, because nothing would try again until tomorrow.
             defaults.set(NSNumber(value: currentEpoch), forKey: Self.lastPublishedEpochKey)
-            Log.info("Intake: published \(accepted)/\(entries.count) tag(s) for epoch \(currentEpoch)+", category: "Intake")
+            Log.info("Intake: published \(result.accepted)/\(entries.count) tag(s), generation \(own.generation), for epoch \(currentEpoch)+", category: "Intake")
+            await offerOwnKeyToOwnDevices(own)
         } catch {
             Log.info("Intake: tag publish failed (\(error.localizedDescription)) — contacts keep paying tokens until it lands", category: "Intake")
         }
@@ -284,14 +400,37 @@ final class IntakeCredentialService {
 
     // MARK: - Peer keys
 
-    /// A peer handed us the key their account accepts.
-    func recordPeerIntakeKey(_ key: Data, from accountId: String) {
-        guard key.count == intakeKeyLength else {
-            Log.error("Intake: peer \(accountId.prefix(8))… sent a \(key.count)-byte key — ignored", category: "Intake")
+    /// A peer handed us the key their account accepts. Kept only if its generation is above the
+    /// one we hold (`intakeOffer`): a late card, or an old build's per-device key, does not
+    /// replace the account's current one.
+    func recordPeerIntakeKey(_ offered: IntakeKeyState, from accountId: String) {
+        let held = keychain.loadPeerIntakeKey(forAccount: accountId).flatMap(IntakeKeyRecord.decode)
+        guard let offer = try? intakeOffer(held: held, offered: offered) else {
+            Log.error("Intake: peer \(accountId.prefix(8))… sent a \(offered.key.count)-byte key — ignored", category: "Intake")
             return
         }
-        keychain.savePeerIntakeKey(key, forAccount: accountId)
-        Log.info("Intake: stored intake key from \(accountId.prefix(8))…", category: "Intake")
+        guard offer == .adopt else {
+            Log.debug("Intake: kept generation \(held?.generation ?? 0) from \(accountId.prefix(8))… over \(offered.generation)", category: "Intake")
+            return
+        }
+        keychain.savePeerIntakeKey(IntakeKeyRecord.encode(offered), forAccount: accountId)
+        Log.info("Intake: stored intake key generation \(offered.generation) from \(accountId.prefix(8))…", category: "Intake")
+    }
+
+    /// Hand the account's key to our own devices that do not have it yet — a device linked since,
+    /// or every one of them after a change. In SENDER_SYNC, like read markers.
+    private func offerOwnKeyToOwnDevices(_ own: IntakeKeyState) async {
+        guard let myUserId = AuthSessionManager.shared.currentUserId, !myUserId.isEmpty,
+              let myDeviceId = AuthSessionManager.shared.currentDeviceId, !myDeviceId.isEmpty,
+              let card = try? ContactCardPayload(intakeKey: own.key, accountAddress: nil,
+                                                 intakeGeneration: own.generation).encoded() else { return }
+        let sent = await MultiDeviceSendCoordinator.shared.sendOwnContactCard(
+            card, skipping: sentTo(), senderUserId: myUserId, senderDeviceId: myDeviceId
+        )
+        if !sent.isEmpty {
+            markOurKeySent(to: sent)
+            Log.info("Intake: generation \(own.generation) handed to \(sent.count) own device(s)", category: "Intake")
+        }
     }
 
     /// The sealed tag to attach to an envelope for `accountId`, or nil when we hold no key for
@@ -313,7 +452,7 @@ final class IntakeCredentialService {
             return nil
         }
 
-        let stored = keychain.loadPeerIntakeKey(forAccount: accountId)
+        let stored = keychain.loadPeerIntakeKey(forAccount: accountId).map { IntakeKeyRecord.decode($0)?.key ?? $0 }
         if let reason = IntakeTagAbsence.forStoredKey(stored) {
             reason.log(peer: accountId)
             return nil
