@@ -6,7 +6,7 @@
 // Source: services/messaging_service.proto
 //
 // For information on using the generated types, please see the documentation:
-//   https://github.com/grpc/grpc-swift
+//   https://github.com/grpc/grpc-swift-2
 
 import GRPCCore
 import GRPCProtobuf
@@ -69,6 +69,19 @@ public enum Shared_Proto_Services_V1_MessagingService: Sendable {
             public static let descriptor = GRPCCore.MethodDescriptor(
                 service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.MessagingService"),
                 method: "PublishIntakeTags",
+                type: .unary
+            )
+        }
+        /// Namespace for "GetIntakeState" metadata.
+        public enum GetIntakeState: Sendable {
+            /// Request type for "GetIntakeState".
+            public typealias Input = Shared_Proto_Services_V1_GetIntakeStateRequest
+            /// Response type for "GetIntakeState".
+            public typealias Output = Shared_Proto_Services_V1_GetIntakeStateResponse
+            /// Descriptor for "GetIntakeState".
+            public static let descriptor = GRPCCore.MethodDescriptor(
+                service: GRPCCore.ServiceDescriptor(fullyQualifiedService: "shared.proto.services.v1.MessagingService"),
+                method: "GetIntakeState",
                 type: .unary
             )
         }
@@ -143,6 +156,7 @@ public enum Shared_Proto_Services_V1_MessagingService: Sendable {
             SendMessage.descriptor,
             SendSealedMessage.descriptor,
             PublishIntakeTags.descriptor,
+            GetIntakeState.descriptor,
             EditMessage.descriptor,
             AddReaction.descriptor,
             RemoveReaction.descriptor,
@@ -185,9 +199,9 @@ extension Shared_Proto_Services_V1_MessagingService {
         ///   - serializer: A serializer for `Shared_Proto_Services_V1_MessageStreamRequest` messages.
         ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_MessageStreamResponse` messages.
         ///   - options: Options to apply to this RPC.
-        ///   - handleResponse: A closure which handles the response, the result of which is
-        ///       returned to the caller. Returning from the closure will cancel the RPC if it
-        ///       hasn't already finished.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
         /// - Returns: The result of `handleResponse`.
         func messageStream<Result>(
             request: GRPCCore.StreamingClientRequest<Shared_Proto_Services_V1_MessageStreamRequest>,
@@ -209,9 +223,9 @@ extension Shared_Proto_Services_V1_MessagingService {
         ///   - serializer: A serializer for `Shared_Proto_Services_V1_SendMessageRequest` messages.
         ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_SendMessageResponse` messages.
         ///   - options: Options to apply to this RPC.
-        ///   - handleResponse: A closure which handles the response, the result of which is
-        ///       returned to the caller. Returning from the closure will cancel the RPC if it
-        ///       hasn't already finished.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
         /// - Returns: The result of `handleResponse`.
         func sendMessage<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_SendMessageRequest>,
@@ -236,9 +250,9 @@ extension Shared_Proto_Services_V1_MessagingService {
         ///   - serializer: A serializer for `Shared_Proto_Services_V1_SendSealedMessageRequest` messages.
         ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_SendMessageResponse` messages.
         ///   - options: Options to apply to this RPC.
-        ///   - handleResponse: A closure which handles the response, the result of which is
-        ///       returned to the caller. Returning from the closure will cancel the RPC if it
-        ///       hasn't already finished.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
         /// - Returns: The result of `handleResponse`.
         func sendSealedMessage<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_SendSealedMessageRequest>,
@@ -264,15 +278,20 @@ extension Shared_Proto_Services_V1_MessagingService {
         /// > 
         /// > Publish a window of future epochs, not just today's: a device that has been offline
         /// > for a day would otherwise break its own incoming traffic.
+        /// > 
+        /// > The tags belong to a generation of the account's key (PublishIntakeTagsRequest.generation):
+        /// > a higher generation replaces the account's set for those epochs, an equal one adds to it, a
+        /// > lower one is refused. There is no publishing-device id, on purpose: with it the server
+        /// > would know which contacts hold which device's key.
         ///
         /// - Parameters:
         ///   - request: A request containing a single `Shared_Proto_Services_V1_PublishIntakeTagsRequest` message.
         ///   - serializer: A serializer for `Shared_Proto_Services_V1_PublishIntakeTagsRequest` messages.
         ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_PublishIntakeTagsResponse` messages.
         ///   - options: Options to apply to this RPC.
-        ///   - handleResponse: A closure which handles the response, the result of which is
-        ///       returned to the caller. Returning from the closure will cancel the RPC if it
-        ///       hasn't already finished.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
         /// - Returns: The result of `handleResponse`.
         func publishIntakeTags<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_PublishIntakeTagsRequest>,
@@ -280,6 +299,32 @@ extension Shared_Proto_Services_V1_MessagingService {
             deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_PublishIntakeTagsResponse>,
             options: GRPCCore.CallOptions,
             onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_PublishIntakeTagsResponse>) async throws -> Result
+        ) async throws -> Result where Result: Sendable
+
+        /// Call the "GetIntakeState" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > GetIntakeState - the caller's own account: the generation the server holds and whether any
+        /// > tag is published for the current epoch. A device that holds no key and whose own devices
+        /// > never sent one mints a generation above this only when nothing is live (an account restored
+        /// > onto a new device with every old device gone). AUTHENTICATED, own account only.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Shared_Proto_Services_V1_GetIntakeStateRequest` message.
+        ///   - serializer: A serializer for `Shared_Proto_Services_V1_GetIntakeStateRequest` messages.
+        ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_GetIntakeStateResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        func getIntakeState<Result>(
+            request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_GetIntakeStateRequest>,
+            serializer: some GRPCCore.MessageSerializer<Shared_Proto_Services_V1_GetIntakeStateRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_GetIntakeStateResponse>,
+            options: GRPCCore.CallOptions,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_GetIntakeStateResponse>) async throws -> Result
         ) async throws -> Result where Result: Sendable
 
         /// Call the "EditMessage" method.
@@ -295,9 +340,9 @@ extension Shared_Proto_Services_V1_MessagingService {
         ///   - serializer: A serializer for `Shared_Proto_Services_V1_EditMessageRequest` messages.
         ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_EditMessageResponse` messages.
         ///   - options: Options to apply to this RPC.
-        ///   - handleResponse: A closure which handles the response, the result of which is
-        ///       returned to the caller. Returning from the closure will cancel the RPC if it
-        ///       hasn't already finished.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
         /// - Returns: The result of `handleResponse`.
         func editMessage<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_EditMessageRequest>,
@@ -320,9 +365,9 @@ extension Shared_Proto_Services_V1_MessagingService {
         ///   - serializer: A serializer for `Shared_Proto_Services_V1_AddReactionRequest` messages.
         ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_AddReactionResponse` messages.
         ///   - options: Options to apply to this RPC.
-        ///   - handleResponse: A closure which handles the response, the result of which is
-        ///       returned to the caller. Returning from the closure will cancel the RPC if it
-        ///       hasn't already finished.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
         /// - Returns: The result of `handleResponse`.
         func addReaction<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_AddReactionRequest>,
@@ -344,9 +389,9 @@ extension Shared_Proto_Services_V1_MessagingService {
         ///   - serializer: A serializer for `Shared_Proto_Services_V1_RemoveReactionRequest` messages.
         ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_RemoveReactionResponse` messages.
         ///   - options: Options to apply to this RPC.
-        ///   - handleResponse: A closure which handles the response, the result of which is
-        ///       returned to the caller. Returning from the closure will cancel the RPC if it
-        ///       hasn't already finished.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
         /// - Returns: The result of `handleResponse`.
         func removeReaction<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_RemoveReactionRequest>,
@@ -369,9 +414,9 @@ extension Shared_Proto_Services_V1_MessagingService {
         ///   - serializer: A serializer for `Shared_Proto_Services_V1_GetPendingMessagesRequest` messages.
         ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_GetPendingMessagesResponse` messages.
         ///   - options: Options to apply to this RPC.
-        ///   - handleResponse: A closure which handles the response, the result of which is
-        ///       returned to the caller. Returning from the closure will cancel the RPC if it
-        ///       hasn't already finished.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
         /// - Returns: The result of `handleResponse`.
         func getPendingMessages<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_GetPendingMessagesRequest>,
@@ -394,9 +439,9 @@ extension Shared_Proto_Services_V1_MessagingService {
         ///   - serializer: A serializer for `Shared_Proto_Services_V1_RequestKeySyncRequest` messages.
         ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_RequestKeySyncResponse` messages.
         ///   - options: Options to apply to this RPC.
-        ///   - handleResponse: A closure which handles the response, the result of which is
-        ///       returned to the caller. Returning from the closure will cancel the RPC if it
-        ///       hasn't already finished.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
         /// - Returns: The result of `handleResponse`.
         func requestKeySync<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_RequestKeySyncRequest>,
@@ -441,9 +486,9 @@ extension Shared_Proto_Services_V1_MessagingService {
         ///   - serializer: A serializer for `Shared_Proto_Services_V1_MessageStreamRequest` messages.
         ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_MessageStreamResponse` messages.
         ///   - options: Options to apply to this RPC.
-        ///   - handleResponse: A closure which handles the response, the result of which is
-        ///       returned to the caller. Returning from the closure will cancel the RPC if it
-        ///       hasn't already finished.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
         /// - Returns: The result of `handleResponse`.
         public func messageStream<Result>(
             request: GRPCCore.StreamingClientRequest<Shared_Proto_Services_V1_MessageStreamRequest>,
@@ -474,9 +519,9 @@ extension Shared_Proto_Services_V1_MessagingService {
         ///   - serializer: A serializer for `Shared_Proto_Services_V1_SendMessageRequest` messages.
         ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_SendMessageResponse` messages.
         ///   - options: Options to apply to this RPC.
-        ///   - handleResponse: A closure which handles the response, the result of which is
-        ///       returned to the caller. Returning from the closure will cancel the RPC if it
-        ///       hasn't already finished.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
         /// - Returns: The result of `handleResponse`.
         public func sendMessage<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_SendMessageRequest>,
@@ -512,9 +557,9 @@ extension Shared_Proto_Services_V1_MessagingService {
         ///   - serializer: A serializer for `Shared_Proto_Services_V1_SendSealedMessageRequest` messages.
         ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_SendMessageResponse` messages.
         ///   - options: Options to apply to this RPC.
-        ///   - handleResponse: A closure which handles the response, the result of which is
-        ///       returned to the caller. Returning from the closure will cancel the RPC if it
-        ///       hasn't already finished.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
         /// - Returns: The result of `handleResponse`.
         public func sendSealedMessage<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_SendSealedMessageRequest>,
@@ -551,15 +596,20 @@ extension Shared_Proto_Services_V1_MessagingService {
         /// > 
         /// > Publish a window of future epochs, not just today's: a device that has been offline
         /// > for a day would otherwise break its own incoming traffic.
+        /// > 
+        /// > The tags belong to a generation of the account's key (PublishIntakeTagsRequest.generation):
+        /// > a higher generation replaces the account's set for those epochs, an equal one adds to it, a
+        /// > lower one is refused. There is no publishing-device id, on purpose: with it the server
+        /// > would know which contacts hold which device's key.
         ///
         /// - Parameters:
         ///   - request: A request containing a single `Shared_Proto_Services_V1_PublishIntakeTagsRequest` message.
         ///   - serializer: A serializer for `Shared_Proto_Services_V1_PublishIntakeTagsRequest` messages.
         ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_PublishIntakeTagsResponse` messages.
         ///   - options: Options to apply to this RPC.
-        ///   - handleResponse: A closure which handles the response, the result of which is
-        ///       returned to the caller. Returning from the closure will cancel the RPC if it
-        ///       hasn't already finished.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
         /// - Returns: The result of `handleResponse`.
         public func publishIntakeTags<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_PublishIntakeTagsRequest>,
@@ -580,6 +630,43 @@ extension Shared_Proto_Services_V1_MessagingService {
             )
         }
 
+        /// Call the "GetIntakeState" method.
+        ///
+        /// > Source IDL Documentation:
+        /// >
+        /// > GetIntakeState - the caller's own account: the generation the server holds and whether any
+        /// > tag is published for the current epoch. A device that holds no key and whose own devices
+        /// > never sent one mints a generation above this only when nothing is live (an account restored
+        /// > onto a new device with every old device gone). AUTHENTICATED, own account only.
+        ///
+        /// - Parameters:
+        ///   - request: A request containing a single `Shared_Proto_Services_V1_GetIntakeStateRequest` message.
+        ///   - serializer: A serializer for `Shared_Proto_Services_V1_GetIntakeStateRequest` messages.
+        ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_GetIntakeStateResponse` messages.
+        ///   - options: Options to apply to this RPC.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
+        /// - Returns: The result of `handleResponse`.
+        public func getIntakeState<Result>(
+            request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_GetIntakeStateRequest>,
+            serializer: some GRPCCore.MessageSerializer<Shared_Proto_Services_V1_GetIntakeStateRequest>,
+            deserializer: some GRPCCore.MessageDeserializer<Shared_Proto_Services_V1_GetIntakeStateResponse>,
+            options: GRPCCore.CallOptions = .defaults,
+            onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_GetIntakeStateResponse>) async throws -> Result = { response in
+                try response.message
+            }
+        ) async throws -> Result where Result: Sendable {
+            try await self.client.unary(
+                request: request,
+                descriptor: Shared_Proto_Services_V1_MessagingService.Method.GetIntakeState.descriptor,
+                serializer: serializer,
+                deserializer: deserializer,
+                options: options,
+                onResponse: handleResponse
+            )
+        }
+
         /// Call the "EditMessage" method.
         ///
         /// > Source IDL Documentation:
@@ -593,9 +680,9 @@ extension Shared_Proto_Services_V1_MessagingService {
         ///   - serializer: A serializer for `Shared_Proto_Services_V1_EditMessageRequest` messages.
         ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_EditMessageResponse` messages.
         ///   - options: Options to apply to this RPC.
-        ///   - handleResponse: A closure which handles the response, the result of which is
-        ///       returned to the caller. Returning from the closure will cancel the RPC if it
-        ///       hasn't already finished.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
         /// - Returns: The result of `handleResponse`.
         public func editMessage<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_EditMessageRequest>,
@@ -629,9 +716,9 @@ extension Shared_Proto_Services_V1_MessagingService {
         ///   - serializer: A serializer for `Shared_Proto_Services_V1_AddReactionRequest` messages.
         ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_AddReactionResponse` messages.
         ///   - options: Options to apply to this RPC.
-        ///   - handleResponse: A closure which handles the response, the result of which is
-        ///       returned to the caller. Returning from the closure will cancel the RPC if it
-        ///       hasn't already finished.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
         /// - Returns: The result of `handleResponse`.
         public func addReaction<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_AddReactionRequest>,
@@ -664,9 +751,9 @@ extension Shared_Proto_Services_V1_MessagingService {
         ///   - serializer: A serializer for `Shared_Proto_Services_V1_RemoveReactionRequest` messages.
         ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_RemoveReactionResponse` messages.
         ///   - options: Options to apply to this RPC.
-        ///   - handleResponse: A closure which handles the response, the result of which is
-        ///       returned to the caller. Returning from the closure will cancel the RPC if it
-        ///       hasn't already finished.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
         /// - Returns: The result of `handleResponse`.
         public func removeReaction<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_RemoveReactionRequest>,
@@ -700,9 +787,9 @@ extension Shared_Proto_Services_V1_MessagingService {
         ///   - serializer: A serializer for `Shared_Proto_Services_V1_GetPendingMessagesRequest` messages.
         ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_GetPendingMessagesResponse` messages.
         ///   - options: Options to apply to this RPC.
-        ///   - handleResponse: A closure which handles the response, the result of which is
-        ///       returned to the caller. Returning from the closure will cancel the RPC if it
-        ///       hasn't already finished.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
         /// - Returns: The result of `handleResponse`.
         public func getPendingMessages<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_GetPendingMessagesRequest>,
@@ -736,9 +823,9 @@ extension Shared_Proto_Services_V1_MessagingService {
         ///   - serializer: A serializer for `Shared_Proto_Services_V1_RequestKeySyncRequest` messages.
         ///   - deserializer: A deserializer for `Shared_Proto_Services_V1_RequestKeySyncResponse` messages.
         ///   - options: Options to apply to this RPC.
-        ///   - handleResponse: A closure which handles the response, the result of which is
-        ///       returned to the caller. Returning from the closure will cancel the RPC if it
-        ///       hasn't already finished.
+        ///   - handleResponse: A closure which handles the response and returns its result to
+        ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+        ///       already finished.
         /// - Returns: The result of `handleResponse`.
         public func requestKeySync<Result>(
             request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_RequestKeySyncRequest>,
@@ -775,9 +862,9 @@ extension Shared_Proto_Services_V1_MessagingService.ClientProtocol {
     /// - Parameters:
     ///   - request: A streaming request producing `Shared_Proto_Services_V1_MessageStreamRequest` messages.
     ///   - options: Options to apply to this RPC.
-    ///   - handleResponse: A closure which handles the response, the result of which is
-    ///       returned to the caller. Returning from the closure will cancel the RPC if it
-    ///       hasn't already finished.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
     /// - Returns: The result of `handleResponse`.
     public func messageStream<Result>(
         request: GRPCCore.StreamingClientRequest<Shared_Proto_Services_V1_MessageStreamRequest>,
@@ -803,9 +890,9 @@ extension Shared_Proto_Services_V1_MessagingService.ClientProtocol {
     /// - Parameters:
     ///   - request: A request containing a single `Shared_Proto_Services_V1_SendMessageRequest` message.
     ///   - options: Options to apply to this RPC.
-    ///   - handleResponse: A closure which handles the response, the result of which is
-    ///       returned to the caller. Returning from the closure will cancel the RPC if it
-    ///       hasn't already finished.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
     /// - Returns: The result of `handleResponse`.
     public func sendMessage<Result>(
         request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_SendMessageRequest>,
@@ -836,9 +923,9 @@ extension Shared_Proto_Services_V1_MessagingService.ClientProtocol {
     /// - Parameters:
     ///   - request: A request containing a single `Shared_Proto_Services_V1_SendSealedMessageRequest` message.
     ///   - options: Options to apply to this RPC.
-    ///   - handleResponse: A closure which handles the response, the result of which is
-    ///       returned to the caller. Returning from the closure will cancel the RPC if it
-    ///       hasn't already finished.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
     /// - Returns: The result of `handleResponse`.
     public func sendSealedMessage<Result>(
         request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_SendSealedMessageRequest>,
@@ -872,13 +959,18 @@ extension Shared_Proto_Services_V1_MessagingService.ClientProtocol {
     /// > 
     /// > Publish a window of future epochs, not just today's: a device that has been offline
     /// > for a day would otherwise break its own incoming traffic.
+    /// > 
+    /// > The tags belong to a generation of the account's key (PublishIntakeTagsRequest.generation):
+    /// > a higher generation replaces the account's set for those epochs, an equal one adds to it, a
+    /// > lower one is refused. There is no publishing-device id, on purpose: with it the server
+    /// > would know which contacts hold which device's key.
     ///
     /// - Parameters:
     ///   - request: A request containing a single `Shared_Proto_Services_V1_PublishIntakeTagsRequest` message.
     ///   - options: Options to apply to this RPC.
-    ///   - handleResponse: A closure which handles the response, the result of which is
-    ///       returned to the caller. Returning from the closure will cancel the RPC if it
-    ///       hasn't already finished.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
     /// - Returns: The result of `handleResponse`.
     public func publishIntakeTags<Result>(
         request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_PublishIntakeTagsRequest>,
@@ -896,6 +988,38 @@ extension Shared_Proto_Services_V1_MessagingService.ClientProtocol {
         )
     }
 
+    /// Call the "GetIntakeState" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > GetIntakeState - the caller's own account: the generation the server holds and whether any
+    /// > tag is published for the current epoch. A device that holds no key and whose own devices
+    /// > never sent one mints a generation above this only when nothing is live (an account restored
+    /// > onto a new device with every old device gone). AUTHENTICATED, own account only.
+    ///
+    /// - Parameters:
+    ///   - request: A request containing a single `Shared_Proto_Services_V1_GetIntakeStateRequest` message.
+    ///   - options: Options to apply to this RPC.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func getIntakeState<Result>(
+        request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_GetIntakeStateRequest>,
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_GetIntakeStateResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        try await self.getIntakeState(
+            request: request,
+            serializer: GRPCProtobuf.ProtobufSerializer<Shared_Proto_Services_V1_GetIntakeStateRequest>(),
+            deserializer: GRPCProtobuf.ProtobufDeserializer<Shared_Proto_Services_V1_GetIntakeStateResponse>(),
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
     /// Call the "EditMessage" method.
     ///
     /// > Source IDL Documentation:
@@ -907,9 +1031,9 @@ extension Shared_Proto_Services_V1_MessagingService.ClientProtocol {
     /// - Parameters:
     ///   - request: A request containing a single `Shared_Proto_Services_V1_EditMessageRequest` message.
     ///   - options: Options to apply to this RPC.
-    ///   - handleResponse: A closure which handles the response, the result of which is
-    ///       returned to the caller. Returning from the closure will cancel the RPC if it
-    ///       hasn't already finished.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
     /// - Returns: The result of `handleResponse`.
     public func editMessage<Result>(
         request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_EditMessageRequest>,
@@ -938,9 +1062,9 @@ extension Shared_Proto_Services_V1_MessagingService.ClientProtocol {
     /// - Parameters:
     ///   - request: A request containing a single `Shared_Proto_Services_V1_AddReactionRequest` message.
     ///   - options: Options to apply to this RPC.
-    ///   - handleResponse: A closure which handles the response, the result of which is
-    ///       returned to the caller. Returning from the closure will cancel the RPC if it
-    ///       hasn't already finished.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
     /// - Returns: The result of `handleResponse`.
     public func addReaction<Result>(
         request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_AddReactionRequest>,
@@ -968,9 +1092,9 @@ extension Shared_Proto_Services_V1_MessagingService.ClientProtocol {
     /// - Parameters:
     ///   - request: A request containing a single `Shared_Proto_Services_V1_RemoveReactionRequest` message.
     ///   - options: Options to apply to this RPC.
-    ///   - handleResponse: A closure which handles the response, the result of which is
-    ///       returned to the caller. Returning from the closure will cancel the RPC if it
-    ///       hasn't already finished.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
     /// - Returns: The result of `handleResponse`.
     public func removeReaction<Result>(
         request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_RemoveReactionRequest>,
@@ -999,9 +1123,9 @@ extension Shared_Proto_Services_V1_MessagingService.ClientProtocol {
     /// - Parameters:
     ///   - request: A request containing a single `Shared_Proto_Services_V1_GetPendingMessagesRequest` message.
     ///   - options: Options to apply to this RPC.
-    ///   - handleResponse: A closure which handles the response, the result of which is
-    ///       returned to the caller. Returning from the closure will cancel the RPC if it
-    ///       hasn't already finished.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
     /// - Returns: The result of `handleResponse`.
     public func getPendingMessages<Result>(
         request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_GetPendingMessagesRequest>,
@@ -1030,9 +1154,9 @@ extension Shared_Proto_Services_V1_MessagingService.ClientProtocol {
     /// - Parameters:
     ///   - request: A request containing a single `Shared_Proto_Services_V1_RequestKeySyncRequest` message.
     ///   - options: Options to apply to this RPC.
-    ///   - handleResponse: A closure which handles the response, the result of which is
-    ///       returned to the caller. Returning from the closure will cancel the RPC if it
-    ///       hasn't already finished.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
     /// - Returns: The result of `handleResponse`.
     public func requestKeySync<Result>(
         request: GRPCCore.ClientRequest<Shared_Proto_Services_V1_RequestKeySyncRequest>,
@@ -1065,11 +1189,11 @@ extension Shared_Proto_Services_V1_MessagingService.ClientProtocol {
     /// - Parameters:
     ///   - metadata: Additional metadata to send, defaults to empty.
     ///   - options: Options to apply to this RPC, defaults to `.defaults`.
-    ///   - producer: A closure producing request messages to send to the server. The request
-    ///       stream is closed when the closure returns.
-    ///   - handleResponse: A closure which handles the response, the result of which is
-    ///       returned to the caller. Returning from the closure will cancel the RPC if it
-    ///       hasn't already finished.
+    ///   - producer: A closure producing request messages to send to the server. Returning
+    ///       from the closure closes the request stream.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
     /// - Returns: The result of `handleResponse`.
     public func messageStream<Result>(
         metadata: GRPCCore.Metadata = [:],
@@ -1099,9 +1223,9 @@ extension Shared_Proto_Services_V1_MessagingService.ClientProtocol {
     ///   - message: request message to send.
     ///   - metadata: Additional metadata to send, defaults to empty.
     ///   - options: Options to apply to this RPC, defaults to `.defaults`.
-    ///   - handleResponse: A closure which handles the response, the result of which is
-    ///       returned to the caller. Returning from the closure will cancel the RPC if it
-    ///       hasn't already finished.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
     /// - Returns: The result of `handleResponse`.
     public func sendMessage<Result>(
         _ message: Shared_Proto_Services_V1_SendMessageRequest,
@@ -1136,9 +1260,9 @@ extension Shared_Proto_Services_V1_MessagingService.ClientProtocol {
     ///   - message: request message to send.
     ///   - metadata: Additional metadata to send, defaults to empty.
     ///   - options: Options to apply to this RPC, defaults to `.defaults`.
-    ///   - handleResponse: A closure which handles the response, the result of which is
-    ///       returned to the caller. Returning from the closure will cancel the RPC if it
-    ///       hasn't already finished.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
     /// - Returns: The result of `handleResponse`.
     public func sendSealedMessage<Result>(
         _ message: Shared_Proto_Services_V1_SendSealedMessageRequest,
@@ -1175,14 +1299,19 @@ extension Shared_Proto_Services_V1_MessagingService.ClientProtocol {
     /// > 
     /// > Publish a window of future epochs, not just today's: a device that has been offline
     /// > for a day would otherwise break its own incoming traffic.
+    /// > 
+    /// > The tags belong to a generation of the account's key (PublishIntakeTagsRequest.generation):
+    /// > a higher generation replaces the account's set for those epochs, an equal one adds to it, a
+    /// > lower one is refused. There is no publishing-device id, on purpose: with it the server
+    /// > would know which contacts hold which device's key.
     ///
     /// - Parameters:
     ///   - message: request message to send.
     ///   - metadata: Additional metadata to send, defaults to empty.
     ///   - options: Options to apply to this RPC, defaults to `.defaults`.
-    ///   - handleResponse: A closure which handles the response, the result of which is
-    ///       returned to the caller. Returning from the closure will cancel the RPC if it
-    ///       hasn't already finished.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
     /// - Returns: The result of `handleResponse`.
     public func publishIntakeTags<Result>(
         _ message: Shared_Proto_Services_V1_PublishIntakeTagsRequest,
@@ -1203,6 +1332,42 @@ extension Shared_Proto_Services_V1_MessagingService.ClientProtocol {
         )
     }
 
+    /// Call the "GetIntakeState" method.
+    ///
+    /// > Source IDL Documentation:
+    /// >
+    /// > GetIntakeState - the caller's own account: the generation the server holds and whether any
+    /// > tag is published for the current epoch. A device that holds no key and whose own devices
+    /// > never sent one mints a generation above this only when nothing is live (an account restored
+    /// > onto a new device with every old device gone). AUTHENTICATED, own account only.
+    ///
+    /// - Parameters:
+    ///   - message: request message to send.
+    ///   - metadata: Additional metadata to send, defaults to empty.
+    ///   - options: Options to apply to this RPC, defaults to `.defaults`.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
+    /// - Returns: The result of `handleResponse`.
+    public func getIntakeState<Result>(
+        _ message: Shared_Proto_Services_V1_GetIntakeStateRequest,
+        metadata: GRPCCore.Metadata = [:],
+        options: GRPCCore.CallOptions = .defaults,
+        onResponse handleResponse: @Sendable @escaping (GRPCCore.ClientResponse<Shared_Proto_Services_V1_GetIntakeStateResponse>) async throws -> Result = { response in
+            try response.message
+        }
+    ) async throws -> Result where Result: Sendable {
+        let request = GRPCCore.ClientRequest<Shared_Proto_Services_V1_GetIntakeStateRequest>(
+            message: message,
+            metadata: metadata
+        )
+        return try await self.getIntakeState(
+            request: request,
+            options: options,
+            onResponse: handleResponse
+        )
+    }
+
     /// Call the "EditMessage" method.
     ///
     /// > Source IDL Documentation:
@@ -1215,9 +1380,9 @@ extension Shared_Proto_Services_V1_MessagingService.ClientProtocol {
     ///   - message: request message to send.
     ///   - metadata: Additional metadata to send, defaults to empty.
     ///   - options: Options to apply to this RPC, defaults to `.defaults`.
-    ///   - handleResponse: A closure which handles the response, the result of which is
-    ///       returned to the caller. Returning from the closure will cancel the RPC if it
-    ///       hasn't already finished.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
     /// - Returns: The result of `handleResponse`.
     public func editMessage<Result>(
         _ message: Shared_Proto_Services_V1_EditMessageRequest,
@@ -1250,9 +1415,9 @@ extension Shared_Proto_Services_V1_MessagingService.ClientProtocol {
     ///   - message: request message to send.
     ///   - metadata: Additional metadata to send, defaults to empty.
     ///   - options: Options to apply to this RPC, defaults to `.defaults`.
-    ///   - handleResponse: A closure which handles the response, the result of which is
-    ///       returned to the caller. Returning from the closure will cancel the RPC if it
-    ///       hasn't already finished.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
     /// - Returns: The result of `handleResponse`.
     public func addReaction<Result>(
         _ message: Shared_Proto_Services_V1_AddReactionRequest,
@@ -1284,9 +1449,9 @@ extension Shared_Proto_Services_V1_MessagingService.ClientProtocol {
     ///   - message: request message to send.
     ///   - metadata: Additional metadata to send, defaults to empty.
     ///   - options: Options to apply to this RPC, defaults to `.defaults`.
-    ///   - handleResponse: A closure which handles the response, the result of which is
-    ///       returned to the caller. Returning from the closure will cancel the RPC if it
-    ///       hasn't already finished.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
     /// - Returns: The result of `handleResponse`.
     public func removeReaction<Result>(
         _ message: Shared_Proto_Services_V1_RemoveReactionRequest,
@@ -1319,9 +1484,9 @@ extension Shared_Proto_Services_V1_MessagingService.ClientProtocol {
     ///   - message: request message to send.
     ///   - metadata: Additional metadata to send, defaults to empty.
     ///   - options: Options to apply to this RPC, defaults to `.defaults`.
-    ///   - handleResponse: A closure which handles the response, the result of which is
-    ///       returned to the caller. Returning from the closure will cancel the RPC if it
-    ///       hasn't already finished.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
     /// - Returns: The result of `handleResponse`.
     public func getPendingMessages<Result>(
         _ message: Shared_Proto_Services_V1_GetPendingMessagesRequest,
@@ -1354,9 +1519,9 @@ extension Shared_Proto_Services_V1_MessagingService.ClientProtocol {
     ///   - message: request message to send.
     ///   - metadata: Additional metadata to send, defaults to empty.
     ///   - options: Options to apply to this RPC, defaults to `.defaults`.
-    ///   - handleResponse: A closure which handles the response, the result of which is
-    ///       returned to the caller. Returning from the closure will cancel the RPC if it
-    ///       hasn't already finished.
+    ///   - handleResponse: A closure which handles the response and returns its result to
+    ///       the caller. Returning from the closure will cancel the RPC if it hasn't
+    ///       already finished.
     /// - Returns: The result of `handleResponse`.
     public func requestKeySync<Result>(
         _ message: Shared_Proto_Services_V1_RequestKeySyncRequest,

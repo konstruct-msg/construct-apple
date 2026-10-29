@@ -177,8 +177,10 @@ final class KeychainManager: Sendable {
     /// This device's own `intake_key` — the secret every vouched contact is given so their
     /// envelopes to us owe no Privacy Pass token.
     ///
-    /// One per device: each device of the account mints its own and publishes its own tags, and
-    /// the server keeps every device's tags as a set (construct-server `7fd850b`).
+    /// One per account, with its generation (`IntakeKeyRecord`): every device of the account holds
+    /// the same key, handed between them in SENDER_SYNC. Until 2026-10-29 each device minted its
+    /// own (decisions/intake-key-is-the-accounts-not-the-devices.md); such an item is 32 bytes and
+    /// reads as generation 0.
     ///
     /// `cryptoKeyAccessible` for the same reason as the reassembly key: a reply built during a
     /// background push decrypt needs it, and under `WhenUnlocked*` it would be missing exactly

@@ -1684,6 +1684,16 @@ int8_t uniffi_construct_core_fn_func_hybrid_verify(RustBuffer public_key, RustBu
 uint64_t uniffi_construct_core_fn_func_intake_epoch(uint64_t unix_seconds, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_INTAKE_MINT
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_INTAKE_MINT
+RustBuffer uniffi_construct_core_fn_func_intake_mint(uint32_t above_generation, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_INTAKE_OFFER
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_INTAKE_OFFER
+RustBuffer uniffi_construct_core_fn_func_intake_offer(RustBuffer held, RustBuffer offered, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_INTAKE_TAG
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_FN_FUNC_INTAKE_TAG
 RustBuffer uniffi_construct_core_fn_func_intake_tag(RustBuffer intake_key, RustBuffer recipient_account_id, uint64_t epoch, RustCallStatus *_Nonnull out_status
@@ -2355,6 +2365,18 @@ uint16_t uniffi_construct_core_checksum_func_hybrid_verify(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_INTAKE_EPOCH
 #define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_INTAKE_EPOCH
 uint16_t uniffi_construct_core_checksum_func_intake_epoch(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_INTAKE_MINT
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_INTAKE_MINT
+uint16_t uniffi_construct_core_checksum_func_intake_mint(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_INTAKE_OFFER
+#define UNIFFI_FFIDEF_UNIFFI_CONSTRUCT_CORE_CHECKSUM_FUNC_INTAKE_OFFER
+uint16_t uniffi_construct_core_checksum_func_intake_offer(void
     
 );
 #endif

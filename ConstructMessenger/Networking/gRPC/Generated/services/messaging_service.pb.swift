@@ -1278,6 +1278,12 @@ public nonisolated struct Shared_Proto_Services_V1_PublishIntakeTagsRequest: Sen
   /// already past its grace, and caps how many one call may carry.
   public var tags: [Shared_Proto_Services_V1_IntakeTagEntry] = []
 
+  /// The generation of the key these tags are derived from. Above the account's: the set for
+  /// these epochs is replaced (the old key stops being accepted — a rotation takes effect now,
+  /// not when the old window runs out). Equal: added to the set. Below: nothing is stored.
+  /// 0 is a build from before generations and behaves as it did: added while the account is at 0.
+  public var generation: UInt32 = 0
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -1292,6 +1298,37 @@ public nonisolated struct Shared_Proto_Services_V1_PublishIntakeTagsResponse: Se
   /// already expired, a tag of the wrong length, or a window longer than the cap are all
   /// dropped individually rather than failing the call.
   public var accepted: UInt32 = 0
+
+  /// The account's generation after this call. Above the one sent means the publish was refused
+  /// as stale: the caller's key is behind, and the newer one is due from its own devices.
+  public var currentGeneration: UInt32 = 0
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Shared_Proto_Services_V1_GetIntakeStateRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Shared_Proto_Services_V1_GetIntakeStateResponse: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// The highest generation the account has published; 0 if none, or only pre-generation tags.
+  public var generation: UInt32 = 0
+
+  /// Whether the account has any tag for the current epoch. False with a non-zero generation
+  /// means no device of the account is publishing.
+  public var hasTagsForCurrentEpoch_p: Bool = false
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -2710,7 +2747,7 @@ nonisolated extension Shared_Proto_Services_V1_IntakeTagEntry: SwiftProtobuf.Mes
 
 nonisolated extension Shared_Proto_Services_V1_PublishIntakeTagsRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".PublishIntakeTagsRequest"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}tags\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}tags\0\u{1}generation\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -2719,6 +2756,7 @@ nonisolated extension Shared_Proto_Services_V1_PublishIntakeTagsRequest: SwiftPr
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
       case 1: try { try decoder.decodeRepeatedMessageField(value: &self.tags) }()
+      case 2: try { try decoder.decodeSingularUInt32Field(value: &self.generation) }()
       default: break
       }
     }
@@ -2728,11 +2766,15 @@ nonisolated extension Shared_Proto_Services_V1_PublishIntakeTagsRequest: SwiftPr
     if !self.tags.isEmpty {
       try visitor.visitRepeatedMessageField(value: self.tags, fieldNumber: 1)
     }
+    if self.generation != 0 {
+      try visitor.visitSingularUInt32Field(value: self.generation, fieldNumber: 2)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Shared_Proto_Services_V1_PublishIntakeTagsRequest, rhs: Shared_Proto_Services_V1_PublishIntakeTagsRequest) -> Bool {
     if lhs.tags != rhs.tags {return false}
+    if lhs.generation != rhs.generation {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -2740,7 +2782,7 @@ nonisolated extension Shared_Proto_Services_V1_PublishIntakeTagsRequest: SwiftPr
 
 nonisolated extension Shared_Proto_Services_V1_PublishIntakeTagsResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".PublishIntakeTagsResponse"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}accepted\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}accepted\0\u{3}current_generation\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -2749,6 +2791,7 @@ nonisolated extension Shared_Proto_Services_V1_PublishIntakeTagsResponse: SwiftP
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularUInt32Field(value: &self.accepted) }()
+      case 2: try { try decoder.decodeSingularUInt32Field(value: &self.currentGeneration) }()
       default: break
       }
     }
@@ -2758,11 +2801,69 @@ nonisolated extension Shared_Proto_Services_V1_PublishIntakeTagsResponse: SwiftP
     if self.accepted != 0 {
       try visitor.visitSingularUInt32Field(value: self.accepted, fieldNumber: 1)
     }
+    if self.currentGeneration != 0 {
+      try visitor.visitSingularUInt32Field(value: self.currentGeneration, fieldNumber: 2)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Shared_Proto_Services_V1_PublishIntakeTagsResponse, rhs: Shared_Proto_Services_V1_PublishIntakeTagsResponse) -> Bool {
     if lhs.accepted != rhs.accepted {return false}
+    if lhs.currentGeneration != rhs.currentGeneration {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Shared_Proto_Services_V1_GetIntakeStateRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".GetIntakeStateRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap()
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    // Load everything into unknown fields
+    while try decoder.nextFieldNumber() != nil {}
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Shared_Proto_Services_V1_GetIntakeStateRequest, rhs: Shared_Proto_Services_V1_GetIntakeStateRequest) -> Bool {
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Shared_Proto_Services_V1_GetIntakeStateResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".GetIntakeStateResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}generation\0\u{3}has_tags_for_current_epoch\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularUInt32Field(value: &self.generation) }()
+      case 2: try { try decoder.decodeSingularBoolField(value: &self.hasTagsForCurrentEpoch_p) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if self.generation != 0 {
+      try visitor.visitSingularUInt32Field(value: self.generation, fieldNumber: 1)
+    }
+    if self.hasTagsForCurrentEpoch_p != false {
+      try visitor.visitSingularBoolField(value: self.hasTagsForCurrentEpoch_p, fieldNumber: 2)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Shared_Proto_Services_V1_GetIntakeStateResponse, rhs: Shared_Proto_Services_V1_GetIntakeStateResponse) -> Bool {
+    if lhs.generation != rhs.generation {return false}
+    if lhs.hasTagsForCurrentEpoch_p != rhs.hasTagsForCurrentEpoch_p {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

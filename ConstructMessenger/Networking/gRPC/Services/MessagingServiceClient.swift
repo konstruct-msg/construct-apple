@@ -247,10 +247,14 @@ final class MessagingServiceClient: Sendable {
     /// Returns how many entries landed. Fewer than sent is not an error: an epoch already past its
     /// grace or a window longer than the server's cap is dropped entry by entry, and a partly
     /// usable publish beats a refused one.
-    func publishIntakeTags(_ entries: [(epoch: UInt64, tag: Data)]) async throws -> UInt32 {
+    /// `currentGeneration` above `generation` means the publish was refused as stale.
+    func publishIntakeTags(
+        _ entries: [(epoch: UInt64, tag: Data)], generation: UInt32
+    ) async throws -> (accepted: UInt32, currentGeneration: UInt32) {
         try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.sendMessage) { grpcClient in
             let msgClient = Shared_Proto_Services_V1_MessagingService.Client(wrapping: grpcClient)
             var request = Shared_Proto_Services_V1_PublishIntakeTagsRequest()
+            request.generation = generation
             request.tags = entries.map { entry in
                 var e = Shared_Proto_Services_V1_IntakeTagEntry()
                 e.epoch = entry.epoch
@@ -258,7 +262,16 @@ final class MessagingServiceClient: Sendable {
                 return e
             }
             let response = try await msgClient.publishIntakeTags(request: .init(message: request))
-            return response.accepted
+            return (response.accepted, response.currentGeneration)
+        }
+    }
+
+    /// Our account's intake generation on the server and whether any tag is live this epoch.
+    func getIntakeState() async throws -> (generation: UInt32, hasLiveTags: Bool) {
+        try await GRPCChannelManager.shared.performRPC(timeout: GRPCTimeouts.sendMessage) { grpcClient in
+            let msgClient = Shared_Proto_Services_V1_MessagingService.Client(wrapping: grpcClient)
+            let response = try await msgClient.getIntakeState(request: .init(message: .init()))
+            return (response.generation, response.hasTagsForCurrentEpoch_p)
         }
     }
 

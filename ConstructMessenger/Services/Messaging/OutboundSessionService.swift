@@ -385,14 +385,16 @@ final class OutboundSessionService {
         let owed = IntakeCredentialService.shared.devicesNeedingOurKey(among: Self.sessionDevices(of: contactId))
         guard !owed.isEmpty else { return }
 
-        // Unreadable own key: no card now, the devices stay owed and the next exchange retries.
-        guard let ownKey = IntakeCredentialService.shared.ownIntakeKey() else { return }
+        // No key of a generation yet (unreadable, or due from our own devices): no card now, the
+        // devices stay owed and the next exchange retries.
+        guard let ownKey = IntakeCredentialService.shared.currentOwnKey() else { return }
         let ownAddress = await AccountAddress.confirmedOwn()
         let card: Data
         do {
             card = try ContactCardPayload(
-                intakeKey: ownKey,
-                accountAddress: ownAddress
+                intakeKey: ownKey.key,
+                accountAddress: ownAddress,
+                intakeGeneration: ownKey.generation
             ).encoded()
         } catch {
             Log.error("Contact card did not encode: \(error)", category: "Intake")

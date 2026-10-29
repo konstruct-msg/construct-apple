@@ -170,6 +170,7 @@ final class ContactCardPayloadTests: XCTestCase {
             let reads_as: String
             let intake_key: String?
             let account_address: String?
+            let intake_generation: UInt32
         }
         let cases: [Case]
     }
@@ -190,7 +191,16 @@ final class ContactCardPayloadTests: XCTestCase {
             let card = try XCTUnwrap(ContactCardPayload.read(try XCTUnwrap(hex(c.payload))), c.name)
             XCTAssertEqual(card.intakeKey, hex(c.intake_key), c.name)
             XCTAssertEqual(card.accountAddress, hex(c.account_address), c.name)
+            XCTAssertEqual(card.intakeGeneration, c.intake_generation, c.name)
         }
+    }
+
+    /// The generation goes out as the vector says (two varint bytes for 300).
+    func testACardWithAGenerationEncodesAsTheVector() throws {
+        let c = try XCTUnwrap(try vectors().first { $0.name == "key_address_generation" })
+        let card = ContactCardPayload(intakeKey: hex(c.intake_key), accountAddress: hex(c.account_address),
+                                      intakeGeneration: c.intake_generation)
+        XCTAssertEqual(try card.encoded(), hex(c.payload))
     }
 
     /// What we send is what the vector says a card with both fields is.
