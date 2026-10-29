@@ -22,7 +22,7 @@ closest to the issue:
 |------|-----------|-------------|
 | Cryptographic core (X3DH, Double Ratchet, PQXDH, hybrid signatures, key management) | `konstruct-msg/construct-core` | `…/security/advisories/new` |
 | Obfuscation / anti-censorship transport (VEIL) | `konstruct-msg/construct-veil` | `…/security/advisories/new` |
-| iOS / macOS client | `naminohi/construct-ios` | `…/security/advisories/new` |
+| iOS / macOS client | `konstruct-msg/construct-apple` | `…/security/advisories/new` |
 
 If you are unsure which repo applies — especially for anything touching the cryptographic
 protocol — default to **`construct-core`**. Cross-cutting protocol issues are best filed there.

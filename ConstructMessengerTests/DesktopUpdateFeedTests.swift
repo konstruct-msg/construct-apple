@@ -22,7 +22,7 @@ final class DesktopUpdateFeedTests: XCTestCase {
     /// The feed is an asset of the fixed release `build_desktop_dmg.sh --publish` writes to.
     func testTheFeedIsTheFixedRelease() {
         XCTAssertEqual(DesktopUpdateFeed.url(for: .arm64).absoluteString,
-                       "https://github.com/konstruct-msg/construct-ios/releases/download/desktop-beta-feed/appcast-arm64.xml")
+                       "https://github.com/konstruct-msg/construct-apple/releases/download/desktop-beta-feed/appcast-arm64.xml")
     }
 
     /// Only an explicit YES turns updates on; an unexpanded build setting does not.
