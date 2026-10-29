@@ -351,7 +351,6 @@ final class CallManager: CallUIManaging {
     /// camera off and says why.
     func setCameraOn(_ on: Bool) {
         guard CallsFeature.isVideoEnabled, active != nil else { return }
-        #if os(iOS)
         if on {
             switch AVCaptureDevice.authorizationStatus(for: .video) {
             case .authorized:
@@ -367,7 +366,6 @@ final class CallManager: CallUIManaging {
                 return
             }
         }
-        #endif
         let wasSending = video.canSend && video.localCameraOn
         updateCamera { $0.localCameraOn = on }
         #if os(iOS)

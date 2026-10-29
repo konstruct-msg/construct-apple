@@ -1134,7 +1134,7 @@
 				INFOPLIST_FILE = "Construct Desktop/Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = Konstruct;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.social-networking";
-				INFOPLIST_KEY_NSCameraUsageDescription = "Konstruct needs access to your camera to scan QR codes and add contacts.";
+				INFOPLIST_KEY_NSCameraUsageDescription = "Konstruct uses the camera to scan invite QR codes and for video calls.";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -1187,7 +1187,7 @@
 				INFOPLIST_FILE = "Construct Desktop/Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = Konstruct;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.social-networking";
-				INFOPLIST_KEY_NSCameraUsageDescription = "Konstruct needs access to your camera to scan QR codes and add contacts.";
+				INFOPLIST_KEY_NSCameraUsageDescription = "Konstruct uses the camera to scan invite QR codes and for video calls.";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -1240,7 +1240,7 @@
 				INFOPLIST_FILE = "Construct Desktop/Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = Konstruct;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.social-networking";
-				INFOPLIST_KEY_NSCameraUsageDescription = "Konstruct needs access to your camera to scan QR codes and add contacts.";
+				INFOPLIST_KEY_NSCameraUsageDescription = "Konstruct uses the camera to scan invite QR codes and for video calls.";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",

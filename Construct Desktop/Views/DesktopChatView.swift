@@ -519,6 +519,23 @@ struct DesktopChatView: View {
                 }
                 .help(NSLocalizedString("call_voice", comment: ""))
             }
+            if CallsFeature.isVideoEnabled {
+                ToolbarItem(placement: .primaryAction) {
+                    Button {
+                        Task {
+                            await callManager.startOutgoingCall(
+                                to: peerId,
+                                displayName: ContactsLive.shared.contact(peerId)?.resolvedDisplayName
+                                    ?? DisplayNameGenerator.generate(from: peerId),
+                                hasVideo: true
+                            )
+                        }
+                    } label: {
+                        Image(systemName: "video")
+                    }
+                    .help(NSLocalizedString("call_video", comment: ""))
+                }
+            }
         }
     }
 

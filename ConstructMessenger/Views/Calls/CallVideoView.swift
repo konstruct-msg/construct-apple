@@ -6,10 +6,11 @@
 //  it is on screen at all is `CallVideoState`'s decision, made by the caller of this view.
 //
 
-#if os(iOS) && canImport(WebRTC)
+#if canImport(WebRTC)
 import SwiftUI
 import WebRTC
 
+#if os(iOS)
 struct CallVideoView: UIViewRepresentable {
     let side: CallVideoSide
 
@@ -30,8 +31,33 @@ struct CallVideoView: UIViewRepresentable {
     }
 
     func makeCoordinator() -> Coordinator { Coordinator() }
+}
+#elseif os(macOS)
+/// On macOS the webrtc-sdk build ships `RTCMTLVideoView` as an `NSView` (as the Studio screen
+/// window uses it); it fits the frame into the view, letterboxed, where iOS fills and crops.
+struct CallVideoView: NSViewRepresentable {
+    let side: CallVideoSide
 
-    private func track() -> RTCVideoTrack? {
+    func makeNSView(context: Context) -> RTCMTLVideoView {
+        let view = RTCMTLVideoView()
+        context.coordinator.attach(track(), to: view)
+        return view
+    }
+
+    func updateNSView(_ view: RTCMTLVideoView, context: Context) {
+        context.coordinator.attach(track(), to: view)
+    }
+
+    static func dismantleNSView(_ view: RTCMTLVideoView, coordinator: Coordinator) {
+        coordinator.attach(nil, to: view)
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
+}
+#endif
+
+extension CallVideoView {
+    fileprivate func track() -> RTCVideoTrack? {
         guard let session = CallManager.shared.activeWebRTC as? WebRTCSession else { return nil }
         switch side {
         case .local: return session.localVideoTrack

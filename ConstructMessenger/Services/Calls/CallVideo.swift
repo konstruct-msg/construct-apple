@@ -119,6 +119,23 @@ enum CallVideoSignal {
     }
 }
 
+/// Which camera to capture from. A phone's cameras have a position, front or back; a Mac's
+/// built-in camera, a USB one or an iPhone as Continuity Camera usually reports `unspecified`,
+/// and a Mac asked for the front camera by position found none (2026-10-29).
+enum CallCameraChoice {
+    enum Position: Equatable { case front, back, unspecified }
+
+    /// The camera facing `facing`; on a Mac, where positions mostly say nothing, the system's
+    /// default camera (`defaultIndex`) or else the first one.
+    static func device(positions: [Position], facing: CameraFacing, defaultIndex: Int?, anyPosition: Bool) -> Int? {
+        let wanted: Position = facing == .front ? .front : .back
+        if let match = positions.firstIndex(of: wanted) { return match }
+        guard anyPosition, !positions.isEmpty else { return nil }
+        if let defaultIndex, positions.indices.contains(defaultIndex) { return defaultIndex }
+        return 0
+    }
+}
+
 /// Which capture format to ask the camera for.
 enum CallVideoCapture {
     /// 720p: enough for a phone screen, and what the design budgets the uplink for. WebRTC scales
