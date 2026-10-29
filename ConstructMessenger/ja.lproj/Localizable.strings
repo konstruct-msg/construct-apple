@@ -1324,6 +1324,10 @@
 "desktop_new_conversation" = "新しいチャット";
 "desktop_sync_messages" = "メッセージを同期";
 "desktop_check_for_updates" = "アップデートを確認…";
+"desktop_background_section" = "バックグラウンド";
+"desktop_open_at_login" = "ログイン時に開く";
+"desktop_open_at_login_footer" = "ウインドウを閉じてもKonstructは動作し続け、メッセージを受信します。再起動後もそうなるよう、ログイン時に開いてください。";
+"desktop_login_item_needs_approval" = "システム設定 → ログイン項目でKonstructを許可してください。";
 "desktop_menu_navigate" = "移動";
 "desktop_next_chat" = "次のチャット";
 "desktop_previous_chat" = "前のチャット";
