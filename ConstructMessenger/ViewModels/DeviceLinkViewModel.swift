@@ -175,9 +175,22 @@ final class DeviceLinkViewModel {
 
     // MARK: - New Device Join Request (Desktop onboarding — laptop shows QR for phone to scan)
 
+    /// A join request deletes this device's keys and makes new ones, so it may start only on a
+    /// device that holds no account. On macOS 15 the onboarding sheets were built again after
+    /// `completeDeviceLink` signed the device in, and the new screen's `.task` started a second
+    /// request: the keys the phone had just approved were deleted, and the Mac was left as a
+    /// device its account does not have (tester log 2026-10-29, Intel Mac on macOS 15.8).
+    nonisolated static func joinRequestMayStart(isAuthenticated: Bool) -> Bool {
+        !isAuthenticated
+    }
+
     /// Generates a one-time key pair and encodes a "join request" QR.
     /// The phone scans this and calls `approveJoinRequest(from:)` to approve.
-    func generateJoinRequestQR() async {
+    func generateJoinRequestQR(isAuthenticated: Bool) async {
+        guard Self.joinRequestMayStart(isAuthenticated: isAuthenticated) else {
+            Log.error("generateJoinRequestQR refused: this device is already signed in", category: "DeviceLink")
+            return
+        }
         isGenerating = true
         errorMessage = nil
         joinRequestQRContent = nil
